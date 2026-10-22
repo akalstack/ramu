@@ -10,7 +10,7 @@ const cleanup: (() => Promise<void>)[] = []
 afterEach(async () => {
   for (const close of cleanup.splice(0)) await close()
 })
-async function setup(approve: () => Promise<boolean> = async () => true, shared?: ComputerService) {
+async function setup(approve: () => Promise<boolean> = async () => true, shared?: ComputerService, automatic = false) {
   const computer =
     shared ??
     new ComputerService({
@@ -20,7 +20,13 @@ async function setup(approve: () => Promise<boolean> = async () => true, shared?
       releaseInput: vi.fn(),
     })
   let active = true
-  const source = { id: 'run', taskId: 'thread', provider: 'codex', state: 'running' } as AgentSessionInfo
+  const source = {
+    id: 'run',
+    taskId: 'thread',
+    provider: 'codex',
+    state: 'running',
+    settings: { access: 'full' },
+  } as AgentSessionInfo
   const request = vi.fn(async (_detail: string, _signal?: AbortSignal) => approve())
   const grant = vi.fn(async (app?: string) => {
     computer.grant('thread', {
@@ -38,7 +44,7 @@ async function setup(approve: () => Promise<boolean> = async () => true, shared?
     source,
     () => source,
     () => active,
-    { request, grant },
+    { request, grant, enabled: () => automatic },
   )
   const client = new Client({ name: 'test', version: 'test' })
   const [a, b] = InMemoryTransport.createLinkedPair()
@@ -50,6 +56,7 @@ async function setup(approve: () => Promise<boolean> = async () => true, shared?
     await server.close()
   })
   return {
+    source,
     client,
     computer,
     request,
@@ -118,4 +125,66 @@ it('keeps a refusal across fresh MCP connections for the same run', async () => 
   expect((await next.client.callTool({ name: 'computer_open', arguments: {} })).isError).toBe(true)
   expect(next.request).not.toHaveBeenCalled()
   expect(next.grant).not.toHaveBeenCalled()
+})
+
+it('opens apps automatically after host computer access is enabled', async () => {
+  const s = await setup(
+    async () => {
+      throw new Error('Must not prompt')
+    },
+    undefined,
+    true,
+  )
+  for (const app of ['Calculator', 'Notes']) {
+    expect((await s.client.callTool({ name: 'computer_open', arguments: { app } })).isError).not.toBe(true)
+    expect(s.computer.session('thread')?.target.name).toBe(app)
+  }
+  expect(s.request).not.toHaveBeenCalled()
+})
+
+it('opens apps without asking in any access mode once host access is enabled', async () => {
+  const s = await setup(
+    async () => {
+      throw new Error('Must not prompt')
+    },
+    undefined,
+    true,
+  )
+  s.source.settings.access = 'edits'
+  expect((await s.client.callTool({ name: 'computer_open', arguments: { app: 'Notes' } })).isError).not.toBe(true)
+  expect(s.request).not.toHaveBeenCalled()
+  expect(s.computer.session('thread')?.target.name).toBe('Notes')
+})
+it('still asks when host computer access is not enabled', async () => {
+  const s = await setup(async () => false)
+  s.source.settings.access = 'edits'
+  expect((await s.client.callTool({ name: 'computer_open', arguments: { app: 'Notes' } })).isError).toBe(true)
+  expect(s.request).toHaveBeenCalledOnce()
+  expect(s.grant).not.toHaveBeenCalled()
+})
+it('respects Stop across reconnects instead of automatically reopening another app', async () => {
+  const first = await setup(async () => true, undefined, true)
+  await first.client.callTool({ name: 'computer_open', arguments: { app: 'Notes' } })
+  first.computer.revoke('thread')
+  const next = await setup(async () => true, first.computer, true)
+  expect((await next.client.callTool({ name: 'computer_open', arguments: { app: 'Calculator' } })).isError).toBe(true)
+  expect(next.grant).not.toHaveBeenCalled()
+  expect(next.request).not.toHaveBeenCalled()
+})
+
+it('does not replace a human-controlled target when another app is requested', async () => {
+  const s = await setup(async () => true, undefined, true)
+  await s.client.callTool({ name: 'computer_open', arguments: { app: 'Notes' } })
+  s.computer.session('thread')!.takeControl('local', { local: true })
+  expect((await s.client.callTool({ name: 'computer_open', arguments: { app: 'Calculator' } })).isError).toBe(true)
+  expect(s.computer.session('thread')?.target.name).toBe('Notes')
+  expect(s.grant).toHaveBeenCalledTimes(1)
+})
+
+it('does not give helpers automatic computer access', async () => {
+  const s = await setup(async () => false, undefined, true)
+  s.source.parentId = 'parent'
+  expect((await s.client.callTool({ name: 'computer_open', arguments: { app: 'Notes' } })).isError).toBe(true)
+  expect(s.request).toHaveBeenCalledOnce()
+  expect(s.grant).not.toHaveBeenCalled()
 })

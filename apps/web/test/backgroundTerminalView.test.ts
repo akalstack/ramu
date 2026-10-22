@@ -58,6 +58,7 @@ vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ invoke: cont
 vi.mock('../src/workspace/workspace', () => ({
   useWorkspace: () => ({ workspaceOf: () => 'task' }),
   useHostRuntime: () => ({
+    on: () => () => {},
     terminals: {
       allShells: () => [],
       beginOpening: () => () => {},

@@ -24,3 +24,33 @@ export function mergeTranscript(
 export function transcriptRows(rows: ReadonlyMap<number, AgentEvent>): { seq: number; event: AgentEvent }[] {
   return [...rows].sort(([a], [b]) => a - b).map(([seq, event]) => ({ seq, event }))
 }
+
+/** Streaming content is published with the transcript batch; only control state needs an immediate store update. */
+export function updateThreadMetadata(chat: import('./types').Chat, event: AgentEvent): import('./types').Chat {
+  if (event.kind === 'state')
+    return {
+      ...chat,
+      executionState: event.state,
+      status:
+        event.state === 'running' || event.state === 'starting'
+          ? 'running'
+          : event.state === 'needs-input'
+            ? 'needs-input'
+            : event.state === 'failed'
+              ? 'failed'
+              : ['running', 'needs-input', 'ready-for-review'].includes(chat.status)
+                ? 'ready-for-review'
+                : 'idle',
+    }
+  if (event.kind === 'queue') return { ...chat, queue: event.messages, queuePaused: !!event.paused }
+  if (event.kind === 'goal') return { ...chat, goal: event.goal }
+  if (event.kind === 'settings')
+    return {
+      ...chat,
+      provider: event.settings.provider,
+      model: event.settings.model,
+      effort: event.settings.effort ?? '',
+      settings: event.settings,
+    }
+  return chat
+}

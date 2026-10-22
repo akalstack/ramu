@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mergeTranscript, transcriptRows } from '../src/runtime/transcriptChanges.ts'
+import { mergeTranscript, transcriptRows, updateThreadMetadata } from '../src/runtime/transcriptChanges.ts'
 
 const text = (value) => ({ kind: 'text', text: value })
 
@@ -57,4 +57,18 @@ test('rows come out in sequence order whatever order they arrived in', () => {
     transcriptRows(rows).map((row) => row.seq),
     [1, 3],
   )
+})
+
+test('streamed content keeps thread metadata stable while control events update immediately', () => {
+  const chat = { status: 'running', preview: 'Previous', queue: [], queuePaused: false }
+  for (let token = 0; token < 100; token++) assert.equal(updateThreadMetadata(chat, text('Reply ' + token)), chat)
+  assert.equal(chat.preview, 'Previous')
+  const waiting = updateThreadMetadata(chat, { kind: 'state', state: 'needs-input' })
+  assert.equal(waiting.status, 'needs-input')
+  assert.equal(waiting.executionState, 'needs-input')
+  const finished = updateThreadMetadata(chat, { kind: 'state', state: 'done' })
+  assert.equal(finished.status, 'ready-for-review')
+  const queued = updateThreadMetadata(chat, { kind: 'queue', messages: [{ id: 'next' }], paused: true })
+  assert.equal(queued.queue[0].id, 'next')
+  assert.equal(queued.queuePaused, true)
 })

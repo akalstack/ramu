@@ -804,6 +804,7 @@ const mcpHttp = createServer(async (req, res) => {
       () => agents.get(source.id),
       () => browserTokens.get(source.id) === token,
       {
+        enabled: () => workspace.getAppState<boolean>('computer:enabled', false) === true,
         request: (detail, signal) => agents.requestPermission(source.id, 'Computer use', detail, signal),
         grant: async (app) => {
           await origin.run({ network: false }, () => dispatcher.invoke('computer.setEnabled', [true]))

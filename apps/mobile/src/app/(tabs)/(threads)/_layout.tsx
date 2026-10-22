@@ -4,5 +4,15 @@ import { useTheme } from '../../../theme'
 
 export default function TabStack() {
   const { c } = useTheme()
-  return <Stack screenOptions={{ headerShown: Platform.OS !== 'web', contentStyle: { backgroundColor: c.window } }} />
+  return (
+    <Stack
+      screenOptions={{
+        title: '',
+        headerBackButtonDisplayMode: 'minimal',
+        headerShown: Platform.OS !== 'web',
+        headerStyle: { backgroundColor: c.window },
+        contentStyle: { backgroundColor: c.window },
+      }}
+    />
+  )
 }

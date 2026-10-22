@@ -96,3 +96,17 @@ it('reports its owner so a new desktop can replace one that is gone', () => {
   broker.ready('replacement', token)
   expect(broker.status().available).toBe(true)
 })
+
+it('sends a paired device’s view to the desktop as a viewer, never as an agent run, and caps it apart from agents', async () => {
+  const { broker, messages, token } = setup()
+  const operation = { kind: 'viewer' as const, device: 'phone', operation: { op: 'list' as const } }
+  const views = [1, 2, 3].map(() => broker.view('thread', operation))
+  expect(messages).toHaveLength(3)
+  expect(messages[0]).toMatchObject({ threadId: 'thread', runId: 'viewer', command: operation })
+  await expect(broker.view('thread', operation)).rejects.toThrow('busy')
+  const agent = broker.request('thread', 'run', { kind: 'list' })
+  expect(messages).toHaveLength(4)
+  for (const message of messages) broker.reply('desktop', token, message.requestId, [])
+  await Promise.all([...views, agent])
+  broker.detach('desktop')
+})

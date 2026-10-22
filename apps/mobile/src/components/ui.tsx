@@ -5,6 +5,7 @@ import {
   Easing,
   Modal,
   KeyboardAvoidingView,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -396,24 +397,28 @@ function SheetBody({
   children,
   scroll = true,
   handle,
-}: Omit<SheetProps, 'open' | 'onClose'> & { handle: boolean }) {
+  drag,
+}: Omit<SheetProps, 'open' | 'onClose'> & { handle: boolean; drag?: object }) {
   const { c } = useTheme()
   return (
     <>
-      {handle ? (
-        <View style={{ alignItems: 'center', paddingTop: space.s }}>
-          <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: c.lineStrong }} />
-        </View>
-      ) : null}
-      {title ? (
-        <T
-          size={font.heading}
-          weight="600"
-          style={{ paddingHorizontal: space.l + 4, paddingTop: space.m, paddingBottom: space.s }}
-        >
-          {title}
-        </T>
-      ) : null}
+      {/* The handle and title are the drag area: swiping them down dismisses a floating sheet. */}
+      <View {...drag}>
+        {handle ? (
+          <View style={{ alignItems: 'center', paddingTop: space.s, paddingBottom: space.xs }}>
+            <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: c.lineStrong }} />
+          </View>
+        ) : null}
+        {title ? (
+          <T
+            size={font.heading}
+            weight="600"
+            style={{ paddingHorizontal: space.l + 4, paddingTop: space.m, paddingBottom: space.s }}
+          >
+            {title}
+          </T>
+        ) : null}
+      </View>
       {scroll ? (
         <ScrollView
           keyboardShouldPersistTaps="handled"
@@ -509,13 +514,29 @@ function SheetPanel({ children }: { children: ReactNode }) {
 }
 
 function FloatingSheet({ open, onClose, title, children, scroll }: SheetProps) {
+  const [mounted, setMounted] = useState(open)
+  const progress = useRef(new Animated.Value(0)).current
+  const dragY = useRef(new Animated.Value(0)).current
+  const close = useRef(onClose)
+  close.current = onClose
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 4 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderMove: (_, gesture) => dragY.setValue(Math.max(0, gesture.dy)),
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dy > 90 || gesture.vy > 0.9) close.current()
+        else Animated.spring(dragY, { toValue: 0, damping: 26, stiffness: 260, mass: 1, useNativeDriver: true }).start()
+      },
+      onPanResponderTerminate: () =>
+        Animated.spring(dragY, { toValue: 0, damping: 26, stiffness: 260, mass: 1, useNativeDriver: true }).start(),
+    }),
+  ).current
   const body = (
-    <SheetBody title={title} scroll={scroll} handle>
+    <SheetBody title={title} scroll={scroll} handle drag={pan.panHandlers}>
       {children}
     </SheetBody>
   )
-  const [mounted, setMounted] = useState(open)
-  const progress = useRef(new Animated.Value(0)).current
   const rise = () =>
     Animated.spring(progress, { toValue: 1, damping: 26, stiffness: 260, mass: 1, useNativeDriver: true }).start()
   useEffect(() => {
@@ -530,13 +551,19 @@ function FloatingSheet({ open, onClose, title, children, scroll }: SheetProps) {
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }).start(({ finished }) => {
-        if (finished) setMounted(false)
+        if (finished) {
+          setMounted(false)
+          dragY.setValue(0)
+        }
       })
   }, [open])
-  const translateY = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [Dimensions.get('window').height * 0.6, 0],
-  })
+  const translateY = Animated.add(
+    progress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [Dimensions.get('window').height * 0.6, 0],
+    }),
+    dragY,
+  )
   return (
     <Modal
       visible={mounted}

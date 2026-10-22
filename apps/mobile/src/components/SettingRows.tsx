@@ -1,3 +1,5 @@
+import { RowLabel } from './SettingRowContent'
+export { RowLabel, Hint } from './SettingRowContent'
 import { useState, type ReactNode } from 'react'
 import { translate } from '@ramu/shared/i18n'
 import { ModelFlowRow } from './ModelFlowRow'
@@ -19,22 +21,6 @@ import type { useHostSettings } from '../runtime/useHostSettings'
 import { Button, Card, Divider, Row, SectionLabel, Sheet, T, Toggle, tap } from './ui'
 
 type Host = ReturnType<typeof useHostSettings>
-
-/** Title with its explanation underneath; the left half of every settings row. */
-export function RowLabel({ title, help }: { title: string; help?: string }) {
-  return (
-    <View style={{ flex: 1, gap: 4 }}>
-      <T weight="500" style={{ lineHeight: 22 }}>
-        {title}
-      </T>
-      {help ? (
-        <T size={font.caption} tone="muted" style={{ lineHeight: 18 }}>
-          {help}
-        </T>
-      ) : null}
-    </View>
-  )
-}
 
 export function ToggleRow({
   title,
@@ -285,13 +271,5 @@ export function HostGroups({ section, host, name }: { section: SettingsSection; 
         </View>
       ))}
     </>
-  )
-}
-
-export function Hint({ children }: { children: ReactNode }) {
-  return (
-    <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s, lineHeight: 18 }}>
-      {children}
-    </T>
   )
 }

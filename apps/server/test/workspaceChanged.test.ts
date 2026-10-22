@@ -15,6 +15,7 @@ it('tells every client once when threads or projects change, and stays quiet for
       native: async () => null,
     },
     {
+      agents: { helperSummaries: () => new Map() },
       workspace: {
         getAppState: (_key: string, fallback: unknown) => fallback,
         setAppState: () => {},

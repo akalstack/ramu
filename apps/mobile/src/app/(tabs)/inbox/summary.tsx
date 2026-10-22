@@ -1,3 +1,4 @@
+import { goBackOrHome } from '../../../runtime/navigation'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, TextInput, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -75,7 +76,7 @@ export default function SummaryScreen() {
     setBusy(true)
     try {
       await auto.dismissSummary(computer, id)
-      router.back()
+      goBackOrHome(router)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)

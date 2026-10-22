@@ -1,3 +1,4 @@
+import { goBackOrHome } from '../runtime/navigation'
 import { Alert, Pressable, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Check, Laptop, Plus, Server } from 'lucide-react-native'
@@ -26,7 +27,7 @@ export default function Computers() {
                 <Row
                   onPress={() => {
                     select(pc.id)
-                    router.back()
+                    goBackOrHome(router)
                   }}
                   style={{ paddingVertical: space.m }}
                 >

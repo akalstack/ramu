@@ -519,7 +519,15 @@ function TurnSummary({ label, children }: { label: string; children: ReactNode }
           toggled()
           setOpen((o) => !o)
         }}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 2 }}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+          paddingTop: 6,
+          paddingBottom: 8,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: c.line,
+        }}
       >
         <T size={font.control} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
           {label}

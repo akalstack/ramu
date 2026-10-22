@@ -272,6 +272,8 @@ export interface RamuMethods {
   'hostBrowser.status'(): {
     available: boolean
     enabled?: boolean
+    /** A paired device can see and control the browser agents use here: the host Chromium or the attached desktop's. */
+    viewable?: boolean
     location?: 'execution-host-chromium'
     reason?: string
   }

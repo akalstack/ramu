@@ -3079,7 +3079,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Save the server first, then add its credentials here.": "Simpan server dulu, lalu tambahkan kredensialnya di sini.",
 
   "Shared MCP is not ready on this login: {servers}.": "MCP bersama belum siap di login ini: {servers}.",
-  "Review access": "Tinjau akses",
   "Approval needed": "Perlu persetujuan",
   "Unsupported": "Tidak didukung",
   "OAuth sign-in": "Login OAuth",
@@ -3250,4 +3249,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Microphone": "Mikrofon",
   "System default unless you choose one.": "Bawaan sistem kecuali Anda memilih yang lain.",
   "System default": "Bawaan sistem",
+  "No browser is running for this thread yet. Open Ramu on the computer, or turn on Host browser in Settings → Browser.": "Belum ada browser yang berjalan untuk thread ini. Buka Ramu di komputer, atau aktifkan Browser host di Pengaturan → Browser.",
+  "Could not check the host browser. Update Ramu on the host and try again.": "Tidak dapat memeriksa browser host. Perbarui Ramu di host lalu coba lagi.",
 }

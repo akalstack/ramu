@@ -804,6 +804,13 @@ export function Composer({
       textInput.current?.setNativeProps?.({ text })
     }
     try {
+      // Keep the saved draft intact while showing immediate feedback. Let the native field paint before synchronous outbox persistence.
+      textInput.current?.clear()
+      setText('')
+      setCaret(0)
+      setForced(undefined)
+      clearedVisually = true
+      if (origin.current !== submittedOwner) return
       const sent = text.trim()
       // A mention counts only while its badge is still in the message, as on the desktop.
       const used = mentions.filter((m) => sent.includes((m.token ?? m.insertion).trim()))
@@ -832,12 +839,6 @@ export function Composer({
           throw new Error(t.savedAttachmentMissing)
         if (origin.current !== submittedOwner) return
       }
-      // Keep the saved draft intact while showing immediate feedback. Let the native field paint before synchronous outbox persistence.
-      textInput.current?.clear()
-      setText('')
-      setCaret(0)
-      setForced(undefined)
-      clearedVisually = true
       await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
       if (origin.current !== submittedOwner) return
       const accepted = await onSend(

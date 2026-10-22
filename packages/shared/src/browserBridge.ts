@@ -46,8 +46,25 @@ export interface BrowserDiagnostics {
   truncated: boolean
 }
 
+/** A paired device's own view of a desktop browser tab, answered by the same runtime that serves the agent. */
+export type BrowserViewerOperation =
+  | { op: 'list' }
+  | { op: 'dialog'; tabId: string }
+  | { op: 'frame'; tabId: string }
+  | { op: 'read'; tabId: string }
+  | { op: 'take'; tabId: string }
+  | { op: 'release'; tabId: string; runId?: string }
+  | { op: 'input'; tabId: string; generation: number; input: BrowserHumanInput }
+  | { op: 'navigate'; tabId: string; url: string }
+  | { op: 'history'; tabId: string; direction: 'back' | 'forward' | 'reload' }
+  | { op: 'close'; tabId: string }
+  | { op: 'open'; url: string; profileId?: string }
+  | { op: 'answerDialog'; tabId: string; dialogId: string; accept: boolean; text?: string }
+  | { op: 'disconnect' }
+
 /** Private local-desktop broker messages. The execution server supplies thread/run identity. */
 export type BrowserBridgeCommand =
+  | { kind: 'viewer'; device: string; operation: BrowserViewerOperation }
   | { kind: 'download-prepare'; tabId: string }
   | { kind: 'downloads'; tabId: string }
   | { kind: 'download-read'; tabId: string; downloadId: string; offset: number }

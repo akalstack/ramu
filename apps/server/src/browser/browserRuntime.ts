@@ -419,9 +419,15 @@ export class BrowserRuntime {
     }
   }
 
-  back(id: string) { return this.historyAsHuman(id, 'back') }
-  forward(id: string) { return this.historyAsHuman(id, 'forward') }
-  reload(id: string) { return this.historyAsHuman(id, 'reload') }
+  back(id: string) {
+    return this.historyAsHuman(id, 'back')
+  }
+  forward(id: string) {
+    return this.historyAsHuman(id, 'forward')
+  }
+  reload(id: string) {
+    return this.historyAsHuman(id, 'reload')
+  }
   private async historyAsHuman(id: string, direction: 'back' | 'forward' | 'reload') {
     const tab = this.tab(id)
     this.requireHuman(tab)
@@ -429,8 +435,16 @@ export class BrowserRuntime {
     if (direction === 'reload') tab.crashed = false
     tab.replacing = true
     this.syncInput(tab)
-    try { await tab.page[direction]() }
-    finally { if (this.tabs.get(id) === tab) { tab.replacing = false; this.invalidate(tab); this.syncInput(tab); this.changed() } }
+    try {
+      await tab.page[direction]()
+    } finally {
+      if (this.tabs.get(id) === tab) {
+        tab.replacing = false
+        this.invalidate(tab)
+        this.syncInput(tab)
+        this.changed()
+      }
+    }
   }
 
   /** Shows a tab where the pane is; the renderer reports the pane's rectangle. */
@@ -767,7 +781,13 @@ export class BrowserRuntime {
     }
   }
 
-  async handleDialogAsHuman(id: string, dialogId: string, accept: boolean, text?: string, deviceId = 'local'): Promise<void> {
+  async handleDialogAsHuman(
+    id: string,
+    dialogId: string,
+    accept: boolean,
+    text?: string,
+    deviceId = 'local',
+  ): Promise<void> {
     const tab = this.tab(id)
     if (tab.lease.controller.kind !== 'human' || tab.lease.controller.deviceId !== deviceId || tab.lease.paused)
       throw new BrowserError('not-controller', 'Take control before answering the website dialog.')
@@ -900,18 +920,41 @@ export class BrowserRuntime {
   }
 
   /** A run ended or was stopped: its leases are revoked, its temporary tabs close and user-opened tabs stay. */
-  async inputAsHuman(id: string, deviceId: string, generation: number, owner: Pick<BrowserOwner, 'hostId' | 'threadId'>, input: BrowserHumanInput): Promise<void> {
-    return this.humanAction(id, deviceId, generation, owner, async page => {
+  async inputAsHuman(
+    id: string,
+    deviceId: string,
+    generation: number,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+    input: BrowserHumanInput,
+  ): Promise<void> {
+    return this.humanAction(id, deviceId, generation, owner, async (page) => {
       if (!page.input) throw new BrowserError('unavailable', 'Remote input is unavailable.')
       await page.input(input)
     })
   }
-  async uploadAsHuman(id: string, deviceId: string, generation: number, owner: Pick<BrowserOwner, 'hostId' | 'threadId'>, snapshot: number, ref: number, file: { name: string; data: string }) {
+  async uploadAsHuman(
+    id: string,
+    deviceId: string,
+    generation: number,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+    snapshot: number,
+    ref: number,
+    file: { name: string; data: string },
+  ) {
     const tab = this.tab(id)
-    if (snapshot !== tab.snapshot) throw new BrowserError('stale-snapshot', 'Read the page again before choosing an upload input.')
-    return this.humanAction(id, deviceId, generation, owner, page => page.act({ kind: 'upload', snapshot, ref, ...file }))
+    if (snapshot !== tab.snapshot)
+      throw new BrowserError('stale-snapshot', 'Read the page again before choosing an upload input.')
+    return this.humanAction(id, deviceId, generation, owner, (page) =>
+      page.act({ kind: 'upload', snapshot, ref, ...file }),
+    )
   }
-  private async humanAction<T>(id: string, deviceId: string, generation: number, owner: Pick<BrowserOwner, 'hostId' | 'threadId'>, work: (page: GuestPage) => Promise<T>): Promise<T> {
+  private async humanAction<T>(
+    id: string,
+    deviceId: string,
+    generation: number,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+    work: (page: GuestPage) => Promise<T>,
+  ): Promise<T> {
     const tab = this.tab(id)
     this.assertOwner(tab, owner)
     const admitted = admitHumanInput(tab.lease, deviceId, generation)
@@ -920,8 +963,9 @@ export class BrowserRuntime {
       throw new BrowserError('busy', 'Wait for the current browser action to finish.')
     tab.lease = { ...tab.lease, inFlight: tab.lease.inFlight + 1 }
     this.invalidate(tab)
-    try { return await work(tab.page) }
-    finally {
+    try {
+      return await work(tab.page)
+    } finally {
       if (this.tabs.get(id) === tab) {
         tab.lease = settleAgentAction(tab.lease, generation)
         this.syncInput(tab)

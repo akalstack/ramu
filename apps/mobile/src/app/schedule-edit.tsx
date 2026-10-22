@@ -1,3 +1,4 @@
+import { goBackOrHome } from '../runtime/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -111,7 +112,7 @@ export default function ScheduleEdit() {
     setError(null)
     try {
       await auto.saveSchedule(computerId, input, existing?.id)
-      router.back()
+      goBackOrHome(router)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)

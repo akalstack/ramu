@@ -3,6 +3,10 @@ import type { RegisterHandlers } from '../types'
 import { id } from '../schemas'
 import { saveBrowserDownload } from '../../browser/download'
 import { readBrowserUpload } from '../../browser/upload'
+import { DesktopBrowserViewer, type BrowserViewerBackend } from '../../browser/desktopViewer'
+
+const NO_TRANSFERS =
+  'The desktop browser cannot send or receive files from a phone yet. Use the browser on the computer for file transfers.'
 
 const tab = z.string().uuid()
 const input = z.discriminatedUnion('kind', [
@@ -36,6 +40,7 @@ const input = z.discriminatedUnion('kind', [
 ])
 export const registerHostBrowserHandlers: RegisterHandlers = ({
   hostBrowser,
+  browser,
   host,
   workspace,
   agents,
@@ -45,6 +50,18 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
   const ready = () => {
     if (!hostBrowser) throw new Error('Update this host for remote browser viewing.')
     return hostBrowser
+  }
+  // Paired devices view whichever browser the agent uses: the host-managed Chromium, or the attached desktop's.
+  const desktop = browser ? new DesktopBrowserViewer(browser) : undefined
+  const viewer = (): BrowserViewerBackend => {
+    if (hostBrowser?.selected()) return hostBrowser
+    if (desktop && browser?.isReady()) return desktop
+    return ready()
+  }
+  // File transfers need the host-managed browser's storage; the desktop's stay on the computer.
+  const transfers = () => {
+    if (!hostBrowser?.selected()) throw new Error(NO_TRANSFERS)
+    return ready()
   }
   const admin = () => {
     if (!host.canAdministerIntegrations?.())
@@ -65,7 +82,15 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
   return {
     'hostBrowser.status': {
       args: z.tuple([]),
-      run: () => hostBrowser?.status() ?? { available: false, reason: 'Update this host for remote browser viewing.' },
+      run: () => {
+        const status = hostBrowser?.status() ?? {
+          available: false,
+          reason: 'Update this host for remote browser viewing.',
+        }
+        // viewable: a paired device can see and control the browser the agent uses, whichever one that is.
+        const viewable = !!hostBrowser?.selected() || (!!browser?.isReady() && !hostBrowser?.selected())
+        return { ...status, viewable }
+      },
     },
     'hostBrowser.profiles': { args: z.tuple([]), run: () => (device(), ready().catalog()) },
     'hostBrowser.profileCreate': {
@@ -112,8 +137,8 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
       run: async (taskId: string) => {
         const who = device()
         const id = thread(taskId)
-        await ready().prepare()
-        return ready().list(who, id)
+        if (hostBrowser?.selected()) await hostBrowser.prepare()
+        return viewer().list(who, id)
       },
     },
     'hostBrowser.open': {
@@ -128,34 +153,34 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
       run: async (taskId: string, url: string, profileId?: string) => {
         const who = device()
         const id = thread(taskId)
-        await ready().prepare()
-        return ready().open(who, id, url, profileId)
+        if (hostBrowser?.selected()) await hostBrowser.prepare()
+        return viewer().open(who, id, url, profileId)
       },
     },
     'hostBrowser.close': {
       args: z.tuple([id, tab]),
-      run: (taskId: string, tabId: string) => ready().closeTab(device(), thread(taskId), tabId),
+      run: (taskId: string, tabId: string) => viewer().closeTab(device(), thread(taskId), tabId),
     },
     'hostBrowser.history': {
       args: z.tuple([id, tab, z.enum(['back', 'forward', 'reload'])]),
-      run: (taskId, tabId, direction) => ready().history(device(), thread(taskId), tabId, direction),
+      run: (taskId, tabId, direction) => viewer().history(device(), thread(taskId), tabId, direction),
     },
     'hostBrowser.dialog': {
       args: z.tuple([id, tab]),
-      run: (taskId, tabId) => ready().dialog(device(), thread(taskId), tabId),
+      run: (taskId, tabId) => viewer().dialog(device(), thread(taskId), tabId),
     },
     'hostBrowser.answerDialog': {
       args: z.tuple([id, tab, tab, z.boolean(), z.string().max(20000).optional()]),
       run: (taskId, tabId, dialogId, accept, text) =>
-        ready().answerDialog(device(), thread(taskId), tabId, dialogId, accept, text),
+        viewer().answerDialog(device(), thread(taskId), tabId, dialogId, accept, text),
     },
     'hostBrowser.frame': {
       args: z.tuple([id, tab]),
-      run: (taskId: string, tabId: string) => ready().frame(device(), thread(taskId), tabId),
+      run: (taskId: string, tabId: string) => viewer().frame(device(), thread(taskId), tabId),
     },
     'hostBrowser.read': {
       args: z.tuple([id, tab]),
-      run: (taskId: string, tabId: string) => ready().read(device(), thread(taskId), tabId),
+      run: (taskId: string, tabId: string) => viewer().read(device(), thread(taskId), tabId),
     },
     'hostBrowser.upload': {
       args: z.tuple([
@@ -170,12 +195,12 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
       run: async (taskId, tabId, generation, snapshot, ref, path, rootIndex) => {
         const identity = device()
         thread(taskId)
-        ready().list(identity, taskId)
+        transfers().list(identity, taskId)
         const scope = workspace.agentScope(taskId)
         const file = await readBrowserUpload(scope, path, rootIndex)
         if (JSON.stringify(workspace.agentScope(taskId)) !== JSON.stringify(scope))
           throw new Error('The upload workspace changed. Review it again.')
-        return ready().upload(identity, taskId, tabId, generation, snapshot, ref, {
+        return transfers().upload(identity, taskId, tabId, generation, snapshot, ref, {
           name: file.name,
           data: file.data.toString('base64'),
         })
@@ -183,21 +208,22 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
     },
     'hostBrowser.downloads': {
       args: z.tuple([id]),
-      run: (taskId: string) => ready().downloads(device(), thread(taskId)),
+      run: (taskId: string) => (hostBrowser?.selected() ? ready().downloads(device(), thread(taskId)) : []),
     },
     'hostBrowser.allowDownload': {
       args: z.tuple([id, tab]),
-      run: (taskId, tabId) => ready().allowDownload(device(), thread(taskId), tabId),
+      run: (taskId, tabId) => transfers().allowDownload(device(), thread(taskId), tabId),
     },
     'hostBrowser.cancelDownload': {
       args: z.tuple([id, tab]),
-      run: (taskId, downloadId) => ready().cancelDownload(device(), thread(taskId), downloadId),
+      run: (taskId, downloadId) => transfers().cancelDownload(device(), thread(taskId), downloadId),
     },
     'hostBrowser.saveDownload': {
       args: z.tuple([id, tab, z.string().min(1).max(4000), z.number().int().min(0).max(100).default(0)]),
       run: (taskId, downloadId, path, rootIndex) => {
         const identity = device()
         thread(taskId)
+        transfers()
         const scope = workspace.agentScope(taskId)
         const active = () => {
           ready().downloads(identity, taskId)
@@ -216,7 +242,7 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
     },
     'hostBrowser.take': {
       args: z.tuple([id, tab]),
-      run: (taskId: string, tabId: string) => ready().take(device(), thread(taskId), tabId),
+      run: (taskId: string, tabId: string) => viewer().take(device(), thread(taskId), tabId),
     },
     'hostBrowser.release': {
       args: z.tuple([id, tab]),
@@ -224,17 +250,17 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
         const active = agents
           .list(thread(taskId))
           .findLast((session) => !session.parentId && ['running', 'starting', 'needs-input'].includes(session.state))
-        return ready().release(device(), taskId, tabId, active?.id)
+        return viewer().release(device(), taskId, tabId, active?.id)
       },
     },
     'hostBrowser.input': {
       args: z.tuple([id, tab, z.number().int().nonnegative(), input]),
-      run: (taskId, tabId, generation, action) => ready().input(device(), thread(taskId), tabId, generation, action),
+      run: (taskId, tabId, generation, action) => viewer().input(device(), thread(taskId), tabId, generation, action),
     },
     'hostBrowser.navigate': {
       args: z.tuple([id, tab, z.string().url().max(4000)]),
-      run: (taskId: string, tabId: string, url: string) => ready().navigate(device(), thread(taskId), tabId, url),
+      run: (taskId: string, tabId: string, url: string) => viewer().navigate(device(), thread(taskId), tabId, url),
     },
-    'hostBrowser.disconnect': { args: z.tuple([]), run: () => ready().disconnect(device()) },
+    'hostBrowser.disconnect': { args: z.tuple([]), run: () => viewer().disconnect(device()) },
   }
 }

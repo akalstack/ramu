@@ -34,7 +34,9 @@ export function rmsLevel(samples: Float32Array): number {
   return Math.min(1, Math.sqrt(sum / samples.length) * 8)
 }
 
-export function createDesktopVoiceEngine(bridge: VoiceBridge | undefined = window.ramu?.voice): VoiceEngine {
+export function createDesktopVoiceEngine(
+  bridge: VoiceBridge | undefined = typeof window === 'undefined' ? undefined : window.ramu?.voice,
+): VoiceEngine {
   if (!bridge) return UNAVAILABLE_VOICE_ENGINE
   return {
     capture: {
@@ -144,7 +146,8 @@ export function createDesktopVoiceEngine(bridge: VoiceBridge | undefined = windo
       },
     },
     transcriber: {
-      capability: (language) => bridge.capability(language).catch(() => ({ readiness: 'unsupported', languages: [], onDevice: false })),
+      capability: (language) =>
+        bridge.capability(language).catch(() => ({ readiness: 'unsupported', languages: [], onDevice: false })),
       // Apple's models come with the system; there is nothing Ramu downloads on this platform.
       prepare: () => Promise.reject(new VoiceError('model')),
       async transcribe(audio, language, { signal }) {

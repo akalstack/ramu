@@ -7,7 +7,7 @@ import { space } from '../theme'
 import { useStore } from '../runtime/store'
 import { useModelFlow } from '../runtime/useModelFlow'
 import { Row, Segmented, T } from './ui'
-import { Hint, RowLabel } from './SettingRows'
+import { Hint, RowLabel } from './SettingRowContent'
 
 const deviceKind = (): DeviceKind =>
   Platform.OS === 'web' ? 'unknown' : Platform.OS === 'ios' && Platform.isPad ? 'tablet' : 'phone'

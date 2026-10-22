@@ -72,7 +72,7 @@ it('returns bounded identity/origin summaries through agent lists and task RPC w
       getAppState: (_key: string, fallback: unknown) => fallback,
       listTasks: () => [{ id: 't', title: 'Thread' }],
     },
-    agents: { list: (task: string) => store.list(task), goalOf: () => null },
+    agents: { helperSummaries: () => new Map(), list: (task: string) => store.list(task), goalOf: () => null },
   } as unknown as Services)
   try {
     const [task] = (await dispatcher.invoke('tasks.list', [])) as {
@@ -107,7 +107,7 @@ it('exposes bounded verification context without leaking command output into tas
   }
   const dispatcher = createDispatcher({ userData: '/tmp/ramu-goal-summary', native: async () => null, send() {} }, {
     workspace: { getAppState: (_key: string, fallback: unknown) => fallback, listTasks: () => [{ id: 't' }] },
-    agents: { list: (task: string) => store.list(task), goalOf: () => goal },
+    agents: { helperSummaries: () => new Map(), list: (task: string) => store.list(task), goalOf: () => goal },
   } as unknown as Services)
   try {
     const [task] = (await dispatcher.invoke('tasks.list', [])) as Task[]

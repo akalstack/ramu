@@ -678,7 +678,8 @@ export function parseRepositories(raw: RawRepository[]): ForgeRepositorySummary[
     let cloneUrl: string
     try {
       const url = new URL(repository.url ?? '')
-      if (url.protocol !== 'https:' || url.username || url.password) continue
+      if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.port || url.username || url.password)
+        continue
       cloneUrl = `${url.origin}/${fullName}.git`
     } catch {
       continue

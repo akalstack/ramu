@@ -1,3 +1,4 @@
+import { goBackOrHome } from '../../../runtime/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, FlatList, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -17,7 +18,6 @@ import {
   SquareTerminal,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
-import { useThreadToolActivity } from '../../../runtime/useThreadToolActivity'
 import { useChat, useStore } from '../../../runtime/store'
 import { foldTurns } from '../../../runtime/turns'
 import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
@@ -31,6 +31,8 @@ import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
 import { BrowserActivity } from '../../../components/BrowserActivity'
+import { BrowserNotice } from '../../../components/BrowserNotice'
+import { useThreadToolActivity } from '../../../runtime/useThreadToolActivity'
 import { ComputerActivity } from '../../../components/ComputerActivity'
 import { translate } from '@ramu/shared/i18n'
 import { Composer } from '../../../components/Composer'
@@ -559,7 +561,6 @@ export default function ChatScreen() {
   return (
     <Screen>
       <Header
-        scrollEdge
         align="left"
         title={chat.title}
         subtitle={
@@ -910,34 +911,17 @@ export default function ChatScreen() {
                 <Composer
                   activity={
                     <>
-                      <ComputerUseNotice chat={chat} />
                       <ThreadActivity
                         chat={chat}
+                        leading={
+                          <>
+                            <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
+                            <BrowserNotice chat={chat} onOpen={() => setTool('browser')} />
+                          </>
+                        }
                         actions={[
-                          ...(toolActivity.browser
-                            ? [
-                                {
-                                  label: translate(store.language, 'Browser'),
-                                  icon: Globe,
-                                  onPress: () => setTool('browser'),
-                                },
-                              ]
-                            : []),
-                          ...(toolActivity.computer
-                            ? [
-                                {
-                                  label: translate(store.language, 'Computer'),
-                                  icon: Monitor,
-                                  onPress: () => setTool('computer'),
-                                },
-                              ]
-                            : []),
                           ...(toolActivity.terminal
                             ? [{ label: 'Terminal', icon: SquareTerminal, onPress: openTerminal }]
-                            : []),
-                          ...(toolActivity.usage ||
-                          (store.usage[chat.computerId] ?? []).some((reading) => reading.provider === chat.provider)
-                            ? [{ label: 'Usage', icon: GitCompareArrows, onPress: () => setUsageOpen(true) }]
                             : []),
                         ]}
                       >
@@ -1103,7 +1087,7 @@ export default function ChatScreen() {
         <ChatActionsSheet
           chat={chat}
           extras={chatExtras}
-          onGone={() => router.back()}
+          onGone={() => goBackOrHome(router)}
           open={actions !== 'closed'}
           rename={actions === 'rename'}
           onClose={() => setActions('closed')}

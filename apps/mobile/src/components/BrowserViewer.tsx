@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppState, Image, Modal, Pressable, ScrollView, TextInput, View } from 'react-native'
+import { AppState, Image, Modal, PanResponder, ScrollView, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import type {
   BrowserDialog,
@@ -13,7 +13,7 @@ import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
 import { Button, T } from './ui'
-import { CONTROL_TEXT, controlState, profileLabel, viewerMessage } from '../runtime/browserViewerState'
+import { CONTROL_TEXT, controlState, frameGesture, profileLabel, viewerMessage } from '../runtime/browserViewerState'
 
 /** The phone views the owning host's browser; it never substitutes a phone WebView or copies credentials. */
 export function BrowserViewer({
@@ -32,11 +32,13 @@ export function BrowserViewer({
   const [selected, setSelected] = useState('')
   const [owned, setOwned] = useState<number | null>(null)
   const [frame, setFrame] = useState('')
+  const [frameSize, setFrameSize] = useState({ width: 4, height: 3 })
   const [address, setAddress] = useState('')
   const [text, setText] = useState('')
   const [privateText, setPrivateText] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [newTab, setNewTab] = useState(false)
   const [dialog, setDialog] = useState<BrowserDialog | null>(null)
   const [dialogText, setDialogText] = useState('')
   const [pageText, setPageText] = useState('')
@@ -95,6 +97,7 @@ export function BrowserViewer({
             const image = await io.current.invoke(chat.computerId, 'hostBrowser.frame', chat.taskId!, tab.id)
             if (!mounted) return
             setFrame(`data:${image.mimeType};base64,${image.data}`)
+            if (image.width > 0 && image.height > 0) setFrameSize({ width: image.width, height: image.height })
           }
         } else {
           setFrame('')
@@ -130,6 +133,36 @@ export function BrowserViewer({
     if (!own || !tab || !chat.taskId) return
     void act(() => invoke(chat.computerId, 'hostBrowser.input', chat.taskId!, tab.id, tab.generation, input))
   }
+  const aspect = frameSize.width / frameSize.height
+  const touch = useRef({ at: 0, lastTap: 0 })
+  const gestureState = useRef({ input, width, aspect, pageWidth: frameSize.width, enabled: false })
+  gestureState.current = { input, width, aspect, pageWidth: frameSize.width, enabled: own && !busy }
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => gestureState.current.enabled,
+      onPanResponderGrant: () => {
+        touch.current.at = Date.now()
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderRelease: (event, gesture) => {
+        const now = Date.now()
+        const current = gestureState.current
+        const result = frameGesture(
+          {
+            x: event.nativeEvent.locationX,
+            y: event.nativeEvent.locationY,
+            dx: gesture.dx,
+            dy: gesture.dy,
+            ms: now - touch.current.at,
+            afterTapMs: touch.current.lastTap ? now - touch.current.lastTap : null,
+          },
+          { width: current.width, aspect: current.aspect, pageWidth: current.pageWidth },
+        )
+        touch.current.lastTap = result.kind === 'click' && result.button === 'left' ? now : 0
+        current.input(result)
+      },
+    }),
+  ).current
   const inputStyle = {
     color: theme.text,
     borderWidth: 1,
@@ -203,17 +236,40 @@ export function BrowserViewer({
             void act(async () => {
               if (!chat.taskId) return
               const url = /^https?:\/\//i.test(address) ? address : `https://${address}`
-              if (tab) await invoke(chat.computerId, 'hostBrowser.navigate', chat.taskId, tab.id, url)
+              if (tab && !newTab) await invoke(chat.computerId, 'hostBrowser.navigate', chat.taskId, tab.id, url)
               else {
                 const result = await invoke(chat.computerId, 'hostBrowser.open', chat.taskId, url)
                 setSelected(result.tab.id)
                 setOwned(result.tab.generation)
+                setNewTab(false)
               }
             })
           }
         />
         {tab && (
           <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
+            <Button
+              kind="ghost"
+              title={newTab ? t('Cancel') : t('New tab')}
+              disabled={busy}
+              onPress={() => {
+                setNewTab(!newTab)
+                setAddress('')
+              }}
+            />
+            <Button
+              kind="ghost"
+              title={t('Close tab')}
+              disabled={busy || !chat.taskId}
+              onPress={() =>
+                void act(async () => {
+                  await invoke(chat.computerId, 'hostBrowser.close', chat.taskId!, tab.id)
+                  setSelected('')
+                  setOwned(null)
+                  setFrame('')
+                })
+              }
+            />
             <Button
               title={controlled ? t('Give control to agent') : t('Take control')}
               disabled={busy || !active}
@@ -276,23 +332,15 @@ export function BrowserViewer({
           </View>
         )}
         {frame ? (
-          <Pressable
-            disabled={!own || busy}
-            accessibilityRole="button"
+          <View
+            {...pan.panHandlers}
+            accessibilityRole="image"
             accessibilityLabel={t('Browser page on the execution host')}
+            accessibilityHint={own ? t('Tap to click, hold to right-click, drag to scroll') : undefined}
             onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-            onPress={(event) =>
-              input({
-                kind: 'click',
-                x: Math.max(0, Math.min(1, event.nativeEvent.locationX / width)),
-                y: Math.max(0, Math.min(1, event.nativeEvent.locationY / (width * 0.75))),
-                button: 'left',
-                clickCount: 1,
-              })
-            }
           >
-            <Image source={{ uri: frame }} resizeMode="contain" style={{ width: '100%', aspectRatio: 4 / 3 }} />
-          </Pressable>
+            <Image source={{ uri: frame }} resizeMode="contain" style={{ width: '100%', aspectRatio: aspect }} />
+          </View>
         ) : (
           <T tone="muted">{t('Choose a tab or enter an address to open a page.')}</T>
         )}
@@ -443,7 +491,7 @@ export function BrowserViewer({
               }
             />
             <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
-              {['Enter', 'Tab', 'Backspace', 'Escape'].map((key) => (
+              {['Enter', 'Tab', 'Backspace', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].map((key) => (
                 <Button
                   key={key}
                   kind="ghost"

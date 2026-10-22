@@ -35,11 +35,12 @@ export function createCanUseTool({ settings, pending, record, setState, restrict
       if (/^mcp__shared_mcp__/.test(toolName)) return resolve({ behavior: 'allow', updatedInput: toolInput })
       // Browser handlers enforce their own run-scoped approval, including deferred calls. Asking twice would grant
       // nothing extra; the browser approval never authorizes another app tool or a native provider browser.
+      // Computer tools do the same: enabling computer use is the grant, and their handlers ask on their own when it is off.
       if (
-        /^mcp__ramu__browser_/.test(toolName) ||
+        /^mcp__ramu__(browser|computer)_/.test(toolName) ||
         (toolName === 'mcp__ramu__tool_invoke' &&
           typeof toolInput.name === 'string' &&
-          /^browser_/.test(toolInput.name))
+          /^(browser|computer)_/.test(toolInput.name))
       )
         return resolve({ behavior: 'allow', updatedInput: toolInput })
       // These scoped tools only manage questions; they never authorize file or command access.

@@ -12,6 +12,7 @@ export class DesktopBrowserBroker {
       clientId: string
       threadId: string
       runId: string
+      viewer: boolean
       timer: NodeJS.Timeout
       resolve(value: unknown): void
       reject(error: Error): void
@@ -73,10 +74,25 @@ export class DesktopBrowserBroker {
     const route = this.routes.get(key) ?? (this.hosted?.selected() ? 'host' : 'desktop')
     this.routes.set(key, route)
     if (route === 'host') return this.hosted!.request(threadId, runId, command)
+    return this.dispatch(threadId, runId, command, false)
+  }
+
+  /** A paired device's view of the attached desktop's tabs. Never routed to the host runtime and never an agent run. */
+  view(threadId: string, command: BrowserBridgeCommand): Promise<unknown> {
+    return this.dispatch(threadId, 'viewer', command, true)
+  }
+
+  /** Whether a desktop is attached and ready to answer. */
+  isReady(): boolean {
+    return this.attachment?.ready === true
+  }
+
+  private dispatch(threadId: string, runId: string, command: BrowserBridgeCommand, viewer: boolean): Promise<unknown> {
     const attachment = this.attachment
     if (!attachment?.ready)
       return Promise.reject(new Error('Open Ramu on the execution host to use its integrated browser.'))
-    if (this.pending.size >= 8)
+    const viewing = [...this.pending.values()].filter((operation) => operation.viewer).length
+    if (viewer ? viewing >= 3 : this.pending.size - viewing >= 8)
       return Promise.reject(new Error('The browser is busy. Wait for the current operations to finish.'))
     const requestId = randomUUID()
     return new Promise((resolve, reject) => {
@@ -87,7 +103,7 @@ export class DesktopBrowserBroker {
         )
       }, this.timeoutMs)
       timer.unref?.()
-      this.pending.set(requestId, { clientId: attachment.clientId, threadId, runId, timer, resolve, reject })
+      this.pending.set(requestId, { clientId: attachment.clientId, threadId, runId, viewer, timer, resolve, reject })
       try {
         if (
           !this.send(attachment.clientId, {

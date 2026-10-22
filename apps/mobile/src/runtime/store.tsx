@@ -38,7 +38,7 @@ import { transcript, visibleText } from './transcript'
 import { isOutdated, type Language } from './settingsModel'
 import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } from './pushCategories'
 import { GOAL_VERIFY_METHOD, isMethodMissing } from './goalVerify'
-import { mergeTranscript, transcriptRows } from './transcriptChanges'
+import { mergeTranscript, transcriptRows, updateThreadMetadata } from './transcriptChanges'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
 
 export type { Language }
@@ -322,7 +322,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...registerCategories(ref.current.drafts[PUSH_MUTED_KEY]),
     )
   const rebuilds = useRef(new Map<string, ReturnType<typeof setTimeout>>())
-  // Tokens arrive far faster than a phone can re-fold the transcript; rebuild it at most once per frame.
+  // Coalesce streaming tokens before publishing to React; leave time for typing and native input between updates.
   const rebuild = (computerId: string, sessionId: string) => {
     const key = scoped(computerId, sessionId)
     if (rebuilds.current.has(key)) return
@@ -333,10 +333,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const rows = eventRows.current.get(key)
         if (!rows) return
         const ordered = [...rows.entries()].sort((a, b) => a[0] - b[0])
+        const events = ordered.map((x) => x[1])
         const items = transcript(
-          ordered.map((x) => x[1]),
+          events,
           ordered.map((x) => x[0]),
         )
+        const preview = events.findLast((event) => event.kind === 'text' && !event.agentId)
         change((s) => ({
           ...s,
           chats: s.chats.map((chat) =>
@@ -344,21 +346,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               ? {
                   ...chat,
                   items,
+                  preview: preview?.kind === 'text' ? preview.text.slice(-140) : chat.preview,
                   inputSummary: ['stopped', 'failed'].includes(chat.executionState ?? '')
                     ? null
-                    : inputSummary(
-                        ordered.map((x) => x[1]),
-                        sessionId,
-                      ),
+                    : inputSummary(events, sessionId),
                   compacting:
-                    chat.executionState !== 'stopped' &&
-                    chat.executionState !== 'failed' &&
-                    isCompacting(ordered.map((x) => x[1])),
+                    chat.executionState !== 'stopped' && chat.executionState !== 'failed' && isCompacting(events),
                 }
               : chat,
           ),
         }))
-      }, 16),
+      }, 50),
     )
   }
   const applyEvent = (computerId: string, payload: PushEvents['agent:event']) => {
@@ -366,41 +364,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const rows = eventRows.current.get(key)
     if (!rows) return
     if (payload.seq != null) rows.set(payload.seq, payload.event)
-    const e = payload.event
-    change((s) => ({
-      ...s,
-      chats: s.chats.map((chat) => {
-        if (chat.computerId !== computerId || chat.sessionId !== payload.sessionId) return chat
-        return {
-          ...chat,
-          executionState: e.kind === 'state' ? e.state : chat.executionState,
-          preview: e.kind === 'text' ? e.text.slice(-140) : chat.preview,
-          status:
-            e.kind === 'state'
-              ? e.state === 'running' || e.state === 'starting'
-                ? 'running'
-                : e.state === 'needs-input'
-                  ? 'needs-input'
-                  : e.state === 'failed'
-                    ? 'failed'
-                    : chat.status === 'running' || chat.status === 'needs-input' || chat.status === 'ready-for-review'
-                      ? 'ready-for-review'
-                      : 'idle'
-              : chat.status,
-          queue: e.kind === 'queue' ? e.messages : chat.queue,
-          queuePaused: e.kind === 'queue' ? !!e.paused : chat.queuePaused,
-          goal: e.kind === 'goal' ? e.goal : chat.goal,
-          ...(e.kind === 'settings'
-            ? {
-                provider: e.settings.provider,
-                model: e.settings.model,
-                effort: e.settings.effort ?? '',
-                settings: e.settings,
-              }
-            : {}),
-        }
-      }),
-    }))
+    const chat = ref.current.chats.find(
+      (chat) => chat.computerId === computerId && chat.sessionId === payload.sessionId,
+    )
+    if (chat) {
+      const updated = updateThreadMetadata(chat, payload.event)
+      if (updated !== chat) change((s) => ({ ...s, chats: s.chats.map((entry) => (entry === chat ? updated : entry)) }))
+    }
     rebuild(computerId, payload.sessionId)
   }
   const receive = (id: string, channel: keyof PushEvents, payload: any) => {
@@ -731,7 +701,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       outbox: s.outbox.filter((o) => o.id !== item.id),
       chats: s.chats.map((c) => (c.id === chat.id ? { ...c, sessionId, pending: false } : c)),
     }))
-    await refresh(item.computerId)
+    // The event stream keeps transcripts current; do not hold the next queued message behind a full host refresh.
+    void refresh(item.computerId).catch(report)
   }
   const flush = async (id: string) => {
     if (flushing.current.has(id)) return
@@ -741,6 +712,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const item = ref.current.outbox.find((o) => o.computerId === id)
         if (!item || item.state === 'uncertain' || item.state === 'sending' || item.state === 'review') break
         change((s) => ({ ...s, outbox: s.outbox.map((o) => (o.id === item.id ? { ...o, state: 'sending' } : o)) }))
+        // Let the tap, composer clear and sending state paint before the synchronous full-state persist below.
+        await new Promise((resolve) => setTimeout(resolve, 0))
         try {
           writeLocal({ ...ref.current, ready: undefined, error: undefined, usage: undefined, catalogs: undefined })
           await deliver(item)
@@ -1269,14 +1242,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setMissingMethods((m) => ({ ...m, [chat.computerId]: [...(m[chat.computerId] ?? []), GOAL_VERIFY_METHOD] }))
         throw error
       }
-      await refresh(chat.computerId)
+      void refresh(chat.computerId).catch(report)
     },
     retryLimitNow: async (id) => {
       const chat = ref.current.chats.find((c) => c.id === id)
       if (!chat?.sessionId) return null
       try {
         const result = (await invoke(chat.computerId, 'agent.retryLimitNow', chat.sessionId)) as LimitRetryResult
-        await refresh(chat.computerId)
+        void refresh(chat.computerId).catch(report)
         return result
       } catch (error) {
         report(error)

@@ -6,7 +6,11 @@ import { resolveInRoot } from '../workspace/files'
 import { MAX_BROWSER_UPLOAD_BYTES } from '@ramu/shared/browserBridge'
 
 /** Read one regular file from the run's actual checked-out scope, never an arbitrary agent-supplied absolute path. */
-export async function readBrowserUpload(session: Pick<AgentSessionInfo, 'cwd' | 'additionalDirs'>, path: string, rootIndex = 0) {
+export async function readBrowserUpload(
+  session: Pick<AgentSessionInfo, 'cwd' | 'additionalDirs'>,
+  path: string,
+  rootIndex = 0,
+) {
   const roots = [session.cwd, ...session.additionalDirs]
   if (!Number.isInteger(rootIndex) || rootIndex < 0 || rootIndex >= roots.length)
     throw new Error('Unknown browser upload workspace root.')

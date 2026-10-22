@@ -69,7 +69,12 @@ export async function saveBrowserDownload(
     } while (offset < size)
     active()
     const atPath = await lstat(target)
-    if ((await resolveInRoot(root, path)) !== target || (await realpath(root)) !== root || atPath.ino !== created.ino || atPath.dev !== created.dev)
+    if (
+      (await resolveInRoot(root, path)) !== target ||
+      (await realpath(root)) !== root ||
+      atPath.ino !== created.ino ||
+      atPath.dev !== created.dev
+    )
       throw new Error('Download destination changed.')
     await handle.sync()
     complete = true

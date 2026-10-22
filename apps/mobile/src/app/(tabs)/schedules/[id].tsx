@@ -1,3 +1,4 @@
+import { goBackOrHome } from '../../../runtime/navigation'
 import { View } from 'react-native'
 import type { Schedule } from '@ramu/shared/types'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -161,7 +162,7 @@ function Detail({
           icon={Trash2}
           kind="danger"
           disabled={!online}
-          onPress={() => commands.remove(() => router.back())}
+          onPress={() => commands.remove(() => goBackOrHome(router))}
         />
       </PageScrollView>
     </Screen>

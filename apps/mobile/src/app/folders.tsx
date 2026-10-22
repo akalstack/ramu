@@ -1,3 +1,4 @@
+import { goBackOrHome } from '../runtime/navigation'
 import { useEffect, useState } from 'react'
 import { TextInput } from 'react-native'
 import { useRouter } from 'expo-router'
@@ -75,7 +76,7 @@ export default function HostFolders() {
                 void run(async () => {
                   await store.invoke(computerId, 'folders.addProject', listing.path)
                   await store.refresh(computerId)
-                  router.back()
+                  goBackOrHome(router)
                 })
               }
             />

@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom'
 import { Spinner } from '@/components/ui/spinner'
 import { ComposerInput, type ComposerInputHandle } from './ComposerInput'
 import { errorText } from '../lib/errors'
@@ -86,6 +87,7 @@ export function Composer({
   const suggestions = useComposerSuggestions(value, caret, scopeId, chat)
   const [submitting, setSubmitting] = useState(false)
   const submissionPending = useRef(false)
+  const submissionOrigin = useRef<{ host: string; scope: string | null } | null>(null)
   const [uploading, setUploading] = useState(false)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   // Notices about files that did not fit go away on their own.
@@ -168,7 +170,8 @@ export function Composer({
       const root = rootRef.current
       if (!micVisible || !root || !root.checkVisibility()) return
       const focused = root.contains(document.activeElement)
-      if (!focused && [...document.querySelectorAll('.composer')].filter((el) => el.checkVisibility()).length > 1) return
+      if (!focused && [...document.querySelectorAll('.composer')].filter((el) => el.checkVisibility()).length > 1)
+        return
       toggleRef.current()
     }
     window.addEventListener('ramu:dictate', onCommand)
@@ -288,7 +291,8 @@ export function Composer({
     // Lock immediately: repeated Enter presses can arrive before React renders the disabled button.
     if (submissionPending.current) return
     submissionPending.current = true
-    setSubmitting(true)
+    submissionOrigin.current = currentScope.current
+    flushSync(() => setSubmitting(true))
     setAttachmentError(null)
     setSubmissionFailure(null)
     const origin = currentScope.current
@@ -540,9 +544,15 @@ export function Composer({
         )}
         <ComposerInput
           ref={ref}
-          readOnly={dictating}
+          readOnly={dictating || submitting}
           autoFocus={autoFocus}
-          value={value}
+          value={
+            submitting &&
+            submissionOrigin.current?.host === checkpointHost &&
+            submissionOrigin.current?.scope === suggestions.scope
+              ? ''
+              : value
+          }
           placeholder={t(placeholder)}
           onPaste={(event) => {
             if (!onAttachmentsChange) return
@@ -652,7 +662,9 @@ export function Composer({
               disabled={
                 mic.kind === 'blocked' && mic.reason === 'language-unsupported'
                   ? true
-                  : dictating && dictation.snapshot.state.phase !== 'recording' && dictation.snapshot.state.phase !== 'limit'
+                  : dictating &&
+                    dictation.snapshot.state.phase !== 'recording' &&
+                    dictation.snapshot.state.phase !== 'limit'
               }
               title={
                 mic.kind === 'blocked'

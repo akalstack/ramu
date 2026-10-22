@@ -48,6 +48,12 @@ vi.mock('react', async (original) => ({
     ]
   },
 }))
+vi.mock('../src/voice/useDictation', () => ({
+  useVoiceSettings: () => [{}],
+  useVoiceCapability: () => undefined,
+  useMicControl: () => ({ kind: 'hidden' }),
+  useDictation: () => ({ snapshot: { state: { phase: 'idle' } }, session: { interrupt() {} } }),
+}))
 vi.mock('../src/i18n', () => ({ useLanguage() {}, t: (value: string) => value }))
 vi.mock('../src/lib/errors', () => ({ errorText: (error: Error) => error.message }))
 vi.mock('../src/ipc', () => ({ ramu: {}, invoke() {} }))
@@ -203,4 +209,26 @@ it('does not show an old host’s submission failure in the newly selected compo
   await settled()
   expect(find(RenderComposer(submit), (props) => props.role === 'alert')).toBeUndefined()
   expect(state.cleared).not.toHaveBeenCalled()
+})
+
+it('clears the visible input before submission completes and restores it on rejection', async () => {
+  let reject!: (error: Error) => void
+  const submit = () =>
+    new Promise<void>((_resolve, fail) => {
+      reject = fail
+    })
+  send(RenderComposer(submit))
+  const pending = find(RenderComposer(submit), (props) => typeof props.onKeyDown === 'function')
+  expect(pending?.value).toBe('')
+  expect(pending?.readOnly).toBe(true)
+  reject(new Error('Offline'))
+  await settled()
+  expect(find(RenderComposer(submit), (props) => typeof props.onKeyDown === 'function')?.value).toBe('Please inspect')
+})
+
+it('does not hide the new host draft while the previous host is sending', () => {
+  const submit = () => new Promise<void>(() => {})
+  send(RenderComposer(submit))
+  state.host = 'b'
+  expect(find(RenderComposer(submit), (props) => typeof props.onKeyDown === 'function')?.value).toBe('Please inspect')
 })

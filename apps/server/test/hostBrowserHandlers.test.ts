@@ -6,9 +6,17 @@ const THREAD = 'thread-1'
 const TAB = '11111111-1111-4111-8111-111111111111'
 
 function setup(
-  options: { admin?: boolean; deviceId?: string | undefined; eligible?: boolean; running?: boolean } = {},
+  options: {
+    admin?: boolean
+    deviceId?: string | undefined
+    eligible?: boolean
+    running?: boolean
+    hostSelected?: boolean
+    desktop?: { ready: boolean; view?: ReturnType<typeof vi.fn> }
+  } = {},
 ) {
   const hostBrowser = {
+    selected: () => options.hostSelected ?? true,
     status: vi.fn(() => ({ available: true })),
     setup: vi.fn(),
     prepare: vi.fn(async () => {}),
@@ -22,6 +30,7 @@ function setup(
   }
   const ctx = {
     hostBrowser,
+    browser: options.desktop && { isReady: () => options.desktop!.ready, view: options.desktop.view ?? vi.fn() },
     host: {
       canAdministerIntegrations: () => options.admin ?? false,
       browserDevice: () => ('deviceId' in options ? options.deviceId : 'phone'),
@@ -101,5 +110,30 @@ describe('host browser handlers', () => {
       methods['hostBrowser.input']!.args.safeParse([THREAD, 'not-a-uuid', 3, { kind: 'key', key: 'Tab' }]).success,
     ).toBe(false)
     expect(methods['hostBrowser.navigate']!.args.safeParse([THREAD, TAB, 'not a url']).success).toBe(false)
+  })
+
+  it('shows a paired device the desktop browser when the host browser is off', async () => {
+    const view = vi.fn(async (_thread: string, command: { operation: { op: string } }) =>
+      command.operation.op === 'list' ? [{ id: TAB }] : null,
+    )
+    const desktop = setup({ hostSelected: false, desktop: { ready: true, view } })
+    await expect(desktop.call('hostBrowser.list', THREAD)).resolves.toEqual([{ id: TAB }])
+    expect(view).toHaveBeenCalledWith(THREAD, { kind: 'viewer', device: 'phone', operation: { op: 'list' } })
+    expect(desktop.hostBrowser.list).not.toHaveBeenCalled()
+    expect(desktop.hostBrowser.prepare).not.toHaveBeenCalled()
+    expect(desktop.call('hostBrowser.status')).toMatchObject({ viewable: true })
+    expect(setup({ hostSelected: false, desktop: { ready: false } }).call('hostBrowser.status')).toMatchObject({
+      viewable: false,
+    })
+    expect(setup().call('hostBrowser.status')).toMatchObject({ viewable: true })
+  })
+
+  it('keeps file transfers on the host browser, and lists no desktop downloads', async () => {
+    const desktop = setup({ hostSelected: false, desktop: { ready: true } })
+    expect(desktop.call('hostBrowser.downloads', THREAD)).toEqual([])
+    expect(() => desktop.call('hostBrowser.allowDownload', THREAD, TAB)).toThrow(/cannot send or receive files/)
+    await expect(desktop.call('hostBrowser.upload', THREAD, TAB, 1, 1, 1, 'a.txt', 0)).rejects.toThrow(
+      /cannot send or receive files/,
+    )
   })
 })

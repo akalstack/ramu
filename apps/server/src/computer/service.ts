@@ -5,6 +5,12 @@ import { ComputerSession } from './session'
 /** Sessions keyed by thread. A grant is bound to one target; a different target needs a new matching grant. */
 export class ComputerService {
   private sessions = new Map<string, ComputerSession>()
+  private accessRuns = new Map<string, Set<string>>()
+  rememberAccessRun(threadId: string, runId: string) {
+    const runs = this.accessRuns.get(threadId) ?? new Set<string>()
+    runs.add(runId)
+    this.accessRuns.set(threadId, runs)
+  }
   private accessRequests = new Map<string, 'pending' | 'denied'>()
   accessRequest(runId: string) {
     return this.accessRequests.get(runId)
@@ -28,7 +34,7 @@ export class ComputerService {
     return this.backend.status()
   }
 
-  /** Called from an approved person action (never from a tool). Replaces and revokes any earlier grant. */
+  /** Called after explicit approval or the enabled host’s Full access policy. Replaces and revokes any earlier grant. */
   grant(
     threadId: string,
     grant: ComputerGrant,
@@ -78,6 +84,8 @@ export class ComputerService {
   }
 
   revoke(threadId: string) {
+    for (const run of this.accessRuns.get(threadId) ?? []) this.accessRequests.set(run, 'denied')
+    this.accessRuns.delete(threadId)
     this.sessions.get(threadId)?.revoke()
     this.sessions.delete(threadId)
     this.viewers.delete(threadId)
@@ -87,6 +95,7 @@ export class ComputerService {
   /** The run exited or Stop was pressed: revoke its lease and queued actions; the grant stays for the next run. */
   endRun(threadId: string, runId: string) {
     this.accessRequests.delete(runId)
+    this.accessRuns.get(threadId)?.delete(runId)
     this.sessions.get(threadId)?.stop(runId)
     void this.evidence.clear(threadId)
   }

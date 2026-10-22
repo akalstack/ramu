@@ -14,6 +14,7 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
   const store = useStore()
   const t = (key: string) => translate(store.language, key)
   const [hosted, setHosted] = useState(false)
+  const [hostReason, setHostReason] = useState('')
   const [tabs, setTabs] = useState<BrowserTabInfo[]>([])
   const [externalURLs, setExternalURLs] = useState<string[]>([])
   const [status, setStatus] = useState('')
@@ -28,10 +29,19 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
     void io.current
       .invoke(chat.computerId, 'hostBrowser.status')
       .then((status) => {
-        if (active) setHosted(status.enabled ?? status.available)
+        if (!active) return
+        const viewable = status.viewable ?? status.enabled ?? status.available
+        setHosted(viewable)
+        setHostReason(
+          !viewable
+            ? 'No browser is running for this thread yet. Open Ramu on the computer, or turn on Host browser in Settings → Browser.'
+            : '',
+        )
       })
       .catch(() => {
-        if (active) setHosted(false)
+        if (!active) return
+        setHosted(false)
+        setHostReason('Could not check the host browser. Update Ramu on the host and try again.')
       })
     void io.current.invoke(chat.computerId, 'browser.activity', chat.taskId).then(
       (result) => {
@@ -65,6 +75,7 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
                 'Website sign-ins and local addresses stay on this host. Paired owner devices can view its browser through the existing connection.',
               )}
             </T>
+            {hostReason ? <T tone="muted">{t(hostReason)}</T> : null}
             {!online ? (
               <T tone="muted">{t('Offline · last-known activity')}</T>
             ) : status ? (

@@ -1,3 +1,4 @@
+import { goBackOrHome } from '../src/runtime/navigation.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -125,6 +126,7 @@ function load(file, os, overrides = {}, globals = {}) {
             useProjectDefault() {},
           }),
         }
+      if (id.endsWith('/navigation')) return { goBackOrHome }
       if (id.endsWith('/composerDrafts')) return explorerDrafts
       if (id.endsWith('/routingChoices')) return routingChoices
       if (id.endsWith('/explorerNavigation')) return explorerNavigation
@@ -510,8 +512,8 @@ test('iOS composite titles use a bounded leading item in the native bar', () => 
   assert.equal(options.header, undefined)
   const title = nodes(tree).find((node) => node.props?.children === 'A long thread title')
   const subtitle = nodes(tree).find((node) => node.props?.children === 'host · project')
-  assert.equal(title.props.size, 14)
-  assert.equal(title.props.numberOfLines, 1)
+  assert.equal(title.props.size, 13)
+  assert.equal(title.props.numberOfLines, 2)
   assert.equal(subtitle.props.numberOfLines, 1)
   assert.equal(title.props.style.textAlign, 'left')
   assert.equal(subtitle.props.style.textAlign, 'left')
@@ -556,17 +558,16 @@ test('native chat toolbar actions receive taps and keep their supplied symbols',
   find(menu, 'ToolbarMenuAction').props.onPress()
   assert.equal(opened, true)
   const options = find(tree, 'StackScreen').props.options
-  assert.equal(options.headerTransparent, true)
-  assert.ok(nodes(tree).some((node) => node.props?.transparent === true))
+  assert.equal(options.headerTransparent, false)
+  assert.ok(nodes(tree).some((node) => node.props?.transparent === false))
   assert.ok(
     nodes(tree).some(
-      (node) =>
-        node.props?.blurEffect === 'systemChromeMaterial' && node.props?.largeStyle?.backgroundColor === 'transparent',
+      (node) => node.props?.transparent === false && node.props?.largeStyle?.backgroundColor === 'window',
     ),
   )
   assert.equal(options.headerStyle.backgroundColor, 'window')
   assert.equal(options.scrollEdgeEffects.top, 'hard')
-  assert.ok(nodes(tree).some((node) => node.props?.style?.width > 0 && node.props.style.width <= 160))
+  assert.ok(nodes(tree).some((node) => node.props?.style?.width >= 140 && node.props.style.width <= 220))
 })
 
 test('computer video does not evaluate WebRTC exports when its native module is absent', () => {
@@ -655,7 +656,13 @@ test('appearance overrides reach native controls and System releases the overrid
       memo: (component) => component,
       createContext: () => ({ Provider: 'ThemeProvider' }),
       useState: (initial) => [
-        initial === undefined ? undefined : typeof initial === 'function' && initial.name === 'readAppearance' ? preference : typeof initial === 'function' ? initial() : initial,
+        initial === undefined
+          ? undefined
+          : typeof initial === 'function' && initial.name === 'readAppearance'
+            ? preference
+            : typeof initial === 'function'
+              ? initial()
+              : initial,
         (next) => {
           preference = next
         },
@@ -669,7 +676,14 @@ test('appearance overrides reach native controls and System releases the overrid
       useColorScheme: () => 'light',
       Appearance: { setColorScheme: (scheme) => nativeSchemes.push(scheme) },
     },
-    '../storage': { readAppearance: () => preference, saveAppearance: (value) => saved.push(value) },
+    '@ramu/shared/theme': { DEFAULT_THEME: { id: 'default' } },
+    '../storage': {
+      readAppearance: () => preference,
+      readTextSize: () => 'normal',
+      readSelectedThemeId: () => '',
+      readThemeLibraryText: () => '[]',
+      saveAppearance: (value) => saved.push(value),
+    },
   })
   const dark = ThemeProvider({})
   assert.equal(dark.props.value.scheme, 'dark')
@@ -2383,9 +2397,17 @@ for (const scenario of ['offline', 'missing', 'old-host', 'available', 'changed-
     }
     const render = () => hooks.render(() => Composer(props))
     let tree = render()
+    let nativeClears = 0
+    find(tree, 'TextInput').props.ref.current = {
+      clear() {
+        nativeClears++
+      },
+    }
     nodes(tree)
       .find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Send')
       .props.onPress()
+    assert.equal(nativeClears, 1, 'native input clears before attachment validation finishes')
+    assert.equal(store.drafts[key], 'Review the image', 'the recovery draft remains until acceptance')
     if (scenario === 'changed-owner') {
       store.drafts['b:chat:task'] = 'New host request'
       props = { ...props, computerId: 'b', draftKey: 'b:chat:task' }
@@ -4606,16 +4628,14 @@ test('the thread usage chip follows the host-reported next route and keeps the s
   }
 })
 
-test('Threads, Inbox and Schedules give UIKit separate material and transparent scroll-edge appearances', () => {
+test('Threads, Inbox and Schedules use native scroll edges without stacking a blur effect', () => {
   const screen = load('components/Screen.tsx', 'ios')
   for (const title of ['Threads', 'Inbox', 'Schedules']) {
     const tree = screen.Header({ title, large: true, back: false })
     assert.ok(nodes(tree).some((node) => node.props?.transparent === true))
     assert.ok(
       nodes(tree).some(
-        (node) =>
-          node.props?.blurEffect === 'systemChromeMaterial' &&
-          node.props?.largeStyle?.backgroundColor === 'transparent',
+        (node) => node.props?.blurEffect === undefined && node.props?.largeStyle?.backgroundColor === 'transparent',
       ),
     )
     assert.equal(find(tree, 'StackScreen').props.options.scrollEdgeEffects.top, 'hard')
@@ -4758,18 +4778,41 @@ test('mobile composer tools remain reachable in a horizontal row without a gener
   hooks.dispose()
 })
 
-test('native headers distinguish their normal dark surface from the transparent scroll-edge appearance', () => {
+test('compact native headers reserve an opaque surface even when scroll underlap was requested', () => {
   const screen = load('components/Screen.tsx', 'ios')
-  for (const props of [
-    { title: 'Chat', scrollEdge: true },
-    { title: 'Threads', large: true, back: false },
-  ]) {
-    const tree = screen.Header(props)
-    const appearance = nodes(tree).find((node) => node.props?.largeStyle?.backgroundColor === 'transparent')
-    assert.ok(appearance)
-    assert.equal(appearance.props.style.backgroundColor, 'window')
-    assert.equal(appearance.props.blurEffect, 'systemChromeMaterial')
-  }
+  const tree = screen.Header({ title: 'Chat', scrollEdge: true })
+  assert.equal(find(tree, 'StackScreen').props.options.headerTransparent, false)
+  const appearance = nodes(tree).find((node) => node.props?.largeStyle?.backgroundColor === 'window')
+  assert.ok(appearance)
+  assert.equal(appearance.props.transparent, false)
+  assert.equal(appearance.props.style.backgroundColor, 'window')
+  assert.equal(appearance.props.blurEffect, undefined)
+})
+
+test('compact thread titles use the available width, wrap, and reveal the complete title on tap', () => {
+  const opened = []
+  const screen = load('components/Screen.tsx', 'ios', {
+    'react-native': { Alert: { alert: (title) => opened.push(title) } },
+  })
+  const { jsx, jsxs } = require('react/jsx-runtime')
+  const title = 'Try Using the Computer to Finish the Requested Task'
+  const tree = screen.Header({
+    title,
+    subtitle: 'ramu',
+    right: jsxs(require('react').Fragment, {
+      children: [
+        jsx(screen.HeaderButton, { icon: 'GitBranch', label: 'Source Control' }),
+        jsx(screen.HeaderMenu, { label: 'Thread actions', actions: [], onPress() {} }),
+      ],
+    }),
+  })
+  const leading = nodes(tree).find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === title)
+  // Back button (56) and both trailing actions (2 × 52) plus the window margins keep their room beside the title.
+  assert.ok(leading.props.style.width >= 140, 'a 400-point screen leaves at least 140 points for the title')
+  assert.ok(leading.props.style.width <= 400 - 96 - 56 - 2 * 52, 'the title never pushes a trailing action off the bar')
+  assert.equal(nodes(tree).find((node) => node.props?.children === title).props.numberOfLines, 2)
+  leading.props.onPress()
+  assert.deepEqual(opened, [title])
 })
 
 test('tool activity shortcuts follow actual tabs and sessions and ignore late reads after navigation', async () => {
@@ -4901,16 +4944,40 @@ test('computer-use stop revokes only the displayed thread and refreshes the shar
       }),
     },
   })
-  const tree = hooks.render(() => ComputerUseNotice({ chat: { computerId: 'a', taskId: 'one' } }))
+  let opened = 0
+  const tree = hooks.render(() =>
+    ComputerUseNotice({
+      chat: { computerId: 'a', taskId: 'one' },
+      onOpen: () => {
+        opened++
+      },
+    }),
+  )
   assert.ok(JSON.stringify(nodes(tree).map((node) => node.props?.children)).includes('Chrome'))
-  find(tree, 'Pressable').props.onPress({
-    stopPropagation() {
-      stoppedPropagation = true
-    },
-  })
+  nodes(tree)
+    .find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Open computer')
+    .props.onPress()
+  assert.equal(opened, 1)
+  nodes(tree)
+    .find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Stop computer use')
+    .props.onPress({
+      stopPropagation() {
+        stoppedPropagation = true
+      },
+    })
   await settle()
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['a', 'computer.revoke', 'one']])
   assert.equal(refreshed, 1)
   assert.equal(stoppedPropagation, true)
   hooks.dispose()
+})
+
+test('tab and Settings stacks have blank initial titles and no generated back labels', () => {
+  for (const layout of ['(tabs)/(threads)', '(tabs)/inbox', '(tabs)/schedules', '(tabs)/search', 'settings']) {
+    const { default: Layout } = load('app/' + layout + '/_layout.tsx', 'ios')
+    const options = Layout().props.screenOptions
+    assert.equal(options.title, '')
+    assert.equal(options.headerBackButtonDisplayMode, 'minimal')
+    assert.equal(options.headerStyle.backgroundColor, 'window')
+  }
 })

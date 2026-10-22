@@ -317,7 +317,7 @@ describe('repositories offered for cloning', () => {
       {
         fullName: 'o/r',
         description: 'A repo',
-        isPrivate: true,
+        private: true,
         cloneUrl: 'https://github.com/o/r.git',
         updatedAt: Date.parse('2026-01-02T00:00:00Z'),
       },

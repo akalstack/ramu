@@ -99,3 +99,15 @@ it('uses Claude SDK command suggestions and preserves the native once-only restr
   ;[...pending.values()][0]!.resolve({ behavior: 'deny', message: 'Declined' })
   await result
 })
+
+it('edits does not prompt again for computer or browser tools', async () => {
+  const { call, pending, events } = fixture('edits')
+  for (const [tool, input] of [
+    ['computer_observe', {}],
+    ['browser_navigate', { url: 'https://example.com' }],
+    ['tool_invoke', { name: 'computer_click', arguments: {} }],
+  ] as const)
+    expect(await call(`mcp__ramu__${tool}`, input)).toEqual({ behavior: 'allow', updatedInput: input })
+  expect(pending.size).toBe(0)
+  expect(events).toEqual([])
+})

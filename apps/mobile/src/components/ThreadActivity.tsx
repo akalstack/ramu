@@ -14,10 +14,13 @@ import { LimitTray } from './LimitTray'
 export function ThreadActivity({
   chat,
   actions = [],
+  leading,
   children,
 }: {
   chat: Chat
   children?: ReactNode
+  /** Status pills (computer, browser) that sit first in the row and manage their own visibility. */
+  leading?: ReactNode
   actions?: { label: string; icon: Icon; onPress(): void }[]
 }) {
   const { c } = useTheme()
@@ -27,7 +30,7 @@ export function ThreadActivity({
   const activity = mobileThreadActivity(chat, online)
   const [opened, setOpened] = useState<ActivityKind | 'more' | null>(null)
   const primary = activity.model.primary
-  if (!primary && !actions.length && !children) return null
+  if (!primary && !actions.length && !children && !leading) return null
   const label = (kind: ActivityKind | 'more'): string =>
     ({
       connection: id ? 'Terputus · aktivitas terakhir' : 'Offline · last-known activity',
@@ -75,8 +78,9 @@ export function ThreadActivity({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ alignItems: 'center', paddingHorizontal: space.s }}
         accessibilityLabel={id ? 'Aktivitas thread' : 'Thread activity'}
-        style={{ flexGrow: 0 }}
+        style={{ flexGrow: 0, marginTop: space.xs }}
       >
+        {leading ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>{leading}</View> : null}
         {actions.map(({ label, icon: I, onPress }) => (
           <Pressable
             key={label}

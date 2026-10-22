@@ -1,3 +1,4 @@
+import { goBackOrHome } from '../runtime/navigation'
 import {
   Children,
   Fragment,
@@ -9,6 +10,7 @@ import {
   type Ref,
 } from 'react'
 import {
+  Alert,
   Platform,
   UIManager,
   Pressable,
@@ -126,8 +128,8 @@ function ButtonGroup({ children }: { children: ReactNode }) {
 }
 
 /**
- * UIKit uses a clear scroll-edge appearance at the top and a material background
- * after scrolling. The scroll view owns the automatic inset below the native bar.
+ * Compact native bars reserve an opaque surface so scrolling content stays below their controls.
+ * Native large-title screens retain UIKit's scroll-edge transition.
  * Android/web use the shared header spacing below.
  */
 export function Header({
@@ -152,7 +154,7 @@ export function Header({
   collapsed?: boolean
   /** Titles and subtitles share the leading edge unless a screen explicitly opts into centering. */
   align?: 'left' | 'center'
-  /** Native material appears over scrolling content; forms keep a reserved opaque bar. */
+  /** Enables native underlap on large-title screens; compact bars always reserve their height. */
   scrollEdge?: boolean
 }) {
   const router = useRouter()
@@ -161,7 +163,7 @@ export function Header({
   const { width } = useWindowDimensions()
   // Centered between the back button and up to two trailing items (one glass capsule).
   const titleWidth = Math.max(120, Math.min(220, width - 220))
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/'))
+  const close = () => goBackOrHome(router)
   const nativeItems = (children: ReactNode): ReactNode[] =>
     Children.toArray(children).flatMap<ReactNode>((child, index) => {
       if (!isValidElement(child)) return []
@@ -222,13 +224,14 @@ export function Header({
         const props = child.props as { children?: ReactNode }
         return total + (child.type === Fragment || child.type === View ? count(props.children) : 1)
       }, 0)
+    // Reserve the window margins and every trailing button so the title never pushes one off the bar.
     const available = Math.max(48, Math.min(220, width - 96 - (back || modal ? BAR + 12 : 0) - count(right) * 52))
     return (
       <>
         <Stack.Screen
           options={{
             headerShown: true,
-            headerTransparent: scrollEdge,
+            headerTransparent: false,
             headerTitle: '',
             headerBackVisible: false,
             headerStyle: { backgroundColor: c.window },
@@ -237,14 +240,11 @@ export function Header({
             headerShadowVisible: false,
           }}
         />
-        {scrollEdge ? (
-          <Stack.Header
-            transparent
-            blurEffect="systemChromeMaterial"
-            style={{ backgroundColor: c.window, color: c.text, shadowColor: 'transparent' }}
-            largeStyle={{ backgroundColor: 'transparent', shadowColor: 'transparent' }}
-          />
-        ) : null}
+        <Stack.Header
+          transparent={false}
+          style={{ backgroundColor: c.window, color: c.text, shadowColor: 'transparent' }}
+          largeStyle={{ backgroundColor: c.window, shadowColor: 'transparent' }}
+        />
         <Stack.Title>{''}</Stack.Title>
         <Stack.Toolbar placement="left">
           {back || modal ? (
@@ -258,11 +258,21 @@ export function Header({
             </Stack.Toolbar.Button>
           ) : null}
           <Stack.Toolbar.View hidesSharedBackground>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, width: available }}>
+            <Pressable
+              accessibilityRole={typeof title === 'string' ? 'button' : undefined}
+              accessibilityLabel={typeof title === 'string' ? title : undefined}
+              onPress={typeof title === 'string' ? () => Alert.alert(title) : undefined}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, width: available }}
+            >
               {left}
-              <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start', gap: 1 }}>
+              <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start' }}>
                 {typeof title === 'string' ? (
-                  <T size={14} weight="600" numberOfLines={1} style={{ width: '100%', textAlign: 'left' }}>
+                  <T
+                    size={13}
+                    weight="600"
+                    numberOfLines={2}
+                    style={{ width: '100%', textAlign: 'left', lineHeight: 15 }}
+                  >
                     {title}
                   </T>
                 ) : (
@@ -276,7 +286,7 @@ export function Header({
                   subtitle
                 )}
               </View>
-            </View>
+            </Pressable>
           </Stack.Toolbar.View>
         </Stack.Toolbar>
         {right ? <Stack.Toolbar placement="right">{nativeItems(right)}</Stack.Toolbar> : null}
@@ -350,7 +360,6 @@ export function Header({
         />
         <Stack.Header
           transparent={underlap}
-          blurEffect={underlap ? 'systemChromeMaterial' : undefined}
           style={{ backgroundColor: background, color: c.text, shadowColor: 'transparent' }}
           largeStyle={{ backgroundColor: 'transparent', shadowColor: 'transparent' }}
         />
@@ -406,7 +415,7 @@ export function Header({
       <HeaderButton
         icon={modal ? X : ChevronLeft}
         label={modal ? 'Close' : 'Back'}
-        onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+        onPress={() => goBackOrHome(router)}
       />
     ) : null)
   return (

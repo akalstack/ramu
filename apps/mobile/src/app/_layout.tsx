@@ -51,7 +51,15 @@ function Navigator() {
       <LiveActivityMonitor />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <NavigationThemeProvider value={navigationTheme}>
-        <Stack screenOptions={{ headerShown: Platform.OS !== 'web', contentStyle: { backgroundColor: c.window } }}>
+        <Stack
+          screenOptions={{
+            title: '',
+            headerBackButtonDisplayMode: 'minimal',
+            headerShown: Platform.OS !== 'web',
+            headerStyle: { backgroundColor: c.window },
+            contentStyle: { backgroundColor: c.window },
+          }}
+        >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="activity" />
           <Stack.Screen name="explorer" />

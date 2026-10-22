@@ -1,5 +1,5 @@
 import type { BrowserProfileCatalog } from '@ramu/shared/types/browser'
-import type { BrowserBridgeRequest } from '@ramu/shared/browserBridge'
+import type { BrowserBridgeRequest, BrowserViewerOperation } from '@ramu/shared/browserBridge'
 import { BrowserRuntime } from './browserRuntime'
 
 /** Private messages from the local server, not renderer IPC. No caller can supply a different execution host. */
@@ -14,6 +14,8 @@ export async function executeBrowserBridge(
   const { threadId, runId, command } = request
   if (!threadId || !runId || threadId.length > 200 || runId.length > 200) throw new Error('Invalid browser owner')
   const owner = { hostId, threadId }
+  // A paired device's view acts as that device, never as an agent run, so it must not adopt released tabs.
+  if (command.kind === 'viewer') return executeViewer(runtime, owner, command.device, command.operation)
   const tabId = 'tabId' in command ? command.tabId : null
   if (tabId && !runtime.list(owner).some((tab) => tab.id === tabId))
     throw new Error('That tab belongs to another thread or is closed.')
@@ -82,5 +84,54 @@ export async function executeBrowserBridge(
     case 'end':
       runtime.endRun({ ...owner, runId })
       return null
+  }
+}
+
+type Owner = { hostId: string; threadId: string }
+
+async function executeViewer(
+  runtime: BrowserRuntime,
+  owner: Owner,
+  device: string,
+  operation: BrowserViewerOperation,
+): Promise<unknown> {
+  if (!device || device.length > 200) throw new Error('Invalid browser device')
+  if (operation.op === 'disconnect') {
+    runtime.controllerDisconnected(device)
+    return null
+  }
+  if (operation.op === 'list') return runtime.list(owner)
+  if (operation.op === 'open')
+    return runtime.open(owner, operation.url, operation.profileId, { kind: 'human', deviceId: device })
+  const tabId = operation.tabId
+  if (!runtime.list(owner).some((tab) => tab.id === tabId))
+    throw new Error('That tab belongs to another thread or is closed.')
+  switch (operation.op) {
+    case 'dialog':
+      return runtime.dialogForAgent(tabId, owner)
+    case 'frame':
+      return runtime.captureForViewer(tabId, owner)
+    case 'read':
+      return runtime.inspectForAgent(tabId, 'viewer', owner)
+    case 'take':
+      return runtime.takeControl(tabId, device, { local: false })
+    case 'release':
+      return operation.runId
+        ? runtime.giveToAgent(tabId, device, operation.runId)
+        : runtime.releaseForNextRun(tabId, device)
+    case 'input':
+      return runtime.inputAsHuman(tabId, device, operation.generation, owner, operation.input)
+    case 'navigate':
+      runtime.requireHumanDevice(tabId, device, owner)
+      return runtime.navigate(tabId, operation.url)
+    case 'history':
+      runtime.requireHumanDevice(tabId, device, owner)
+      return runtime[operation.direction](tabId)
+    case 'close':
+      runtime.requireHumanDevice(tabId, device, owner)
+      return runtime.close(tabId)
+    case 'answerDialog':
+      runtime.requireHumanDevice(tabId, device, owner)
+      return runtime.handleDialogAsHuman(tabId, operation.dialogId, operation.accept, operation.text, device)
   }
 }
