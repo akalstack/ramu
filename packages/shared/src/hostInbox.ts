@@ -1,5 +1,5 @@
 import type { ChatGoal, LibrarySummary, RecapItem, TaskStatus, ThreadInputSummary } from './types'
-import { goalContinues } from './chat/goalHold'
+import { goalContinues } from '@ramu/shared/chat/goalHold'
 
 // Shared desktop/mobile inbox: what needs you, what is running, recaps, learning, and finished work.
 // Keep derivation independent of rendering and apply host scope before limits or counts.

@@ -287,7 +287,7 @@ describe('page observations and native input', () => {
     let finish!: (value: { ok: boolean }) => void
     page.act = vi.fn(
       () =>
-        new Promise((resolve) => {
+        new Promise<{ ok: boolean }>((resolve) => {
           finish = resolve
         }),
     )
@@ -301,7 +301,7 @@ describe('page observations and native input', () => {
       inputReady: false,
     })
     expect(page.setHumanInput).toHaveBeenLastCalledWith(false)
-    expect(() => runtime.reload(tab.id)).toThrow('wait for the agent action')
+    await expect(runtime.reload(tab.id)).rejects.toThrow('wait for the agent action')
     finish({ ok: true })
     await pending
     expect(runtime.list()[0]!.inputReady).toBe(true)
@@ -328,7 +328,7 @@ describe('page observations and native input', () => {
     const result = { url: 'https://a.test/', title: 'A', text: 'read', elements: [], truncated: false }
     created[0]!.page.inspect = vi.fn(
       () =>
-        new Promise((resolve) => {
+        new Promise<Awaited<ReturnType<GuestPage['inspect']>>>((resolve) => {
           finish = resolve
         }),
     )
@@ -356,7 +356,7 @@ describe('page observations and native input', () => {
     let finish!: (value: Awaited<ReturnType<GuestPage['inspect']>>) => void
     created[0]!.page.inspect = vi.fn(
       () =>
-        new Promise((resolve) => {
+        new Promise<Awaited<ReturnType<GuestPage['inspect']>>>((resolve) => {
           finish = resolve
         }),
     )
@@ -588,7 +588,7 @@ describe('extended browser operations', () => {
     })
     page.act = vi.fn(
       () =>
-        new Promise((resolve) => {
+        new Promise<{ ok: boolean }>((resolve) => {
           finish = resolve
         }),
     )
@@ -620,7 +620,7 @@ describe('extended browser operations', () => {
     })
     page.act = vi.fn(
       () =>
-        new Promise((resolve) => {
+        new Promise<{ ok: boolean }>((resolve) => {
           finish = resolve
         }),
     )

@@ -81,6 +81,7 @@ function load(file, os, overrides = {}, globals = {}) {
     clearTimeout,
     requestAnimationFrame: (callback) => setTimeout(callback, 0),
     cancelAnimationFrame: clearTimeout,
+    Error,
     ...globals,
     exports: module.exports,
     require: (id) => {
@@ -168,7 +169,10 @@ for (const os of ['ios', 'android']) {
     button('Browser').props.onPress()
     render()
     await settle()
-    assert.deepEqual(calls, [['a', 'browser.activity', 'thread']])
+    assert.deepEqual(calls, [
+      ['a', 'hostBrowser.status'],
+      ['a', 'browser.activity', 'thread'],
+    ])
     const external = nodes(render()).filter(
       (node) => node.type === 'Button' && node.props.title === 'Open in system browser',
     )
@@ -362,7 +366,13 @@ for (const os of ['ios', 'android']) {
     button.props.onPress()
     button.props.onPress()
     assert.equal(calls.length, 1)
-    assert.deepEqual(calls[0], ['remote', 'projects.setRouting', 'project', ['Storefront', 'Payments'], ''])
+    assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), [
+      'remote',
+      'projects.setRouting',
+      'project',
+      ['Storefront', 'Payments'],
+      '',
+    ])
     finish()
     await settle()
     assert.equal(closed, 0)
