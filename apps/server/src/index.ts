@@ -274,6 +274,7 @@ const agents = new AgentService(
   fake?.fakeCodex,
 )
 const threadTitles = new ThreadTitles(db, workspace, agents, () => send('workspace:changed', {}))
+agents.onProviderTitle = (sessionId, title) => void threadTitles.acceptProviderTitle(sessionId, title)
 const mobileLiveActivities = new MobileLiveActivities(
   join(userData, 'mobile-live-activities.json'),
   () => devices.list(),

@@ -82,6 +82,7 @@ export interface SessionProcessHost
   providerQuery: QueryFn
   runnerFactory(provider: AgentProvider): AgentRunnerFactory
   usesRunner(provider: AgentProvider): boolean
+  providerTitle(sessionId: string, title: string): void
   sessionCheckpoint(): AgentService['sessionCheckpoint']
   shutdown(): AgentService['shutdown']
   toolConnection(): AgentService['toolConnection']
@@ -400,6 +401,8 @@ export class SessionProcess {
               else this.host.setState(id, event.isError ? 'failed' : 'idle')
             }
           }
+        }, false, (title) => {
+          if (this.host.runners.get(id) === runner) this.host.providerTitle(id, title)
         })
         if (connection) runner.setTools?.(connection)
         this.host.runners.set(id, runner)

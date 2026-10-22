@@ -5,7 +5,7 @@ import type { Workspace } from '../workspace/workspace'
 import { cleanTitle } from './text'
 
 const PLACEHOLDER =
-  /^(?:new (?:thread|chat|session|conversation)|untitled(?: thread| chat| session)?|chat title|conversation)$/i
+  /^(?:(?:new|child) (?:thread|chat|session|conversation)(?: - .*)?|untitled(?: thread| chat| session)?|chat title|conversation)$/i
 
 type Kind = 'automatic' | 'refinement' | 'manual'
 interface TitleJob {
@@ -43,13 +43,19 @@ export class ThreadTitles {
     private readonly agents: Pick<AgentService, 'get' | 'list' | 'events' | 'draftTitleResult'>,
     private readonly changed: () => void,
     private readonly deadlineMs = 15_000,
-    /** Providers verified to supply titles are given time before the fallback runs; none are verified yet. */
-    private readonly suppliesTitles: (session: AgentSessionInfo) => boolean = () => false,
+    /**
+     * Providers known to supply titles are given time before the fallback runs. By default a provider counts once one of
+     * its sessions has delivered a title in this process, so the first thread of a run uses the fallback and later ones
+     * wait; a provider that never sends one is never waited for.
+     */
+    private readonly suppliesTitles: (session: AgentSessionInfo) => boolean = (session) =>
+      this.suppliers.has(session.provider),
     private readonly graceMs = 5_000,
     private readonly turnLimitMs = 120_000,
   ) {}
 
   private readonly waits = new Map<string, NodeJS.Timeout>()
+  private readonly suppliers = new Set<string>()
 
   private clearWait(taskId: string): void {
     clearTimeout(this.waits.get(taskId))
@@ -124,6 +130,7 @@ export class ThreadTitles {
       const session = this.agents.get(sessionId)
       const top = this.agents.list(session.taskId)
       if (top.at(-1)?.id !== sessionId) return null
+      if (raw.trim()) this.suppliers.add(session.provider)
       if ([...raw].some((c) => (c.codePointAt(0)! < 32 && !'\t\n\r'.includes(c)) || c.codePointAt(0) === 127))
         return null
       const title = cleanTitle(raw)

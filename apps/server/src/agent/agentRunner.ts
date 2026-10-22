@@ -39,6 +39,8 @@ export type AgentRunnerFactory = (
   /** `usageLimit`: true when the failure is confidently a usage limit, 'low' when only a generic phrase matched. */
   emit: (event: AgentEvent, usageLimit?: boolean | 'low') => void,
   readOnly?: boolean,
+  /** A title the provider chose for this conversation. Only runners that verifiably receive one call it; it is never recorded. */
+  onTitle?: (title: string) => void,
 ) => AgentRunner
 
 /**
