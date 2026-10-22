@@ -1,7 +1,18 @@
 {
+  "cli": { "appVersionSource": "remote" },
   "build": {
     "development": { "developmentClient": true, "distribution": "internal" },
     "preview": { "distribution": "internal" },
-    "production": {}
+    "production": {
+      "autoIncrement": true,
+      "ios": { "distribution": "store" },
+      "android": { "buildType": "app-bundle" }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {},
+      "android": { "track": "internal", "releaseStatus": "draft" }
+    }
   }
 }

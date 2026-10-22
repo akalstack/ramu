@@ -47,6 +47,13 @@ jobs:
             arch: x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
+    env:
+      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      RAMU_SIGN_IDENTITY: ${{ secrets.RAMU_SIGN_IDENTITY }}
+      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,12 +68,21 @@ jobs:
       - run: pnpm check
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg
+      - name: Prepare macOS signing (skipped without secrets)
+        if: runner.os == 'macOS'
+        run: scripts/release/macos-signing.sh setup
       - run: pnpm make --arch=${{ matrix.arch }}
+      - name: Verify macOS signature and notarization
+        if: runner.os == 'macOS'
+        run: scripts/release/macos-signing.sh verify "${{ github.workspace }}/dist/Ramu-darwin-${{ matrix.arch }}/Ramu.app"
       - name: Smoke test packaged macOS app
         if: runner.os == 'macOS'
         env:
           RAMU_PACKAGED_EXECUTABLE: ${{ github.workspace }}/dist/Ramu-darwin-${{ matrix.arch }}/Ramu.app/Contents/MacOS/Ramu
         run: pnpm test:desktop-smoke
+      - name: Remove signing material
+        if: always() && runner.os == 'macOS'
+        run: scripts/release/macos-signing.sh cleanup
       - run: pnpm release:assets ${{ matrix.platform }} ${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
