@@ -576,7 +576,12 @@ export interface RamuMethods {
   'folders.roots'(): string[]
   'folders.list'(path: string): { path: string; parent: string | null; folders: { name: string; path: string }[] }
   'folders.create'(parent: string, name: string): string
-  'folders.clone'(parent: string, name: string, url: string): string
+  /** Clones into a new folder. A client-chosen `cloneId` lets progress be read and the clone cancelled. */
+  'folders.clone'(parent: string, name: string, url: string, cloneId?: string): string
+  /** How far a running clone has got; null when it is not running (finished, cancelled or unknown). */
+  'folders.cloneProgress'(cloneId: string): { phase: string; percent: number | null; running: boolean } | null
+  /** Stops a running clone and removes the folder it was filling. */
+  'folders.cancelClone'(cloneId: string): boolean
   'folders.addProject'(path: string): { project: Project; repositories: Repository[] }
   'projects.list'(): Project[]
   /** Picks the destination project for a first prompt before any thread exists; ambiguous or unknown asks the person. */

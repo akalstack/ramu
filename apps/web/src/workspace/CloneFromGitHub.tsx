@@ -5,6 +5,7 @@ import { Input } from '@/components/desktop-input'
 import { t } from '../i18n'
 import { invokerFor } from '../ipc'
 import { errorText } from '../lib/errors'
+import { cloneProgressText, useClone } from './useClone'
 
 /** The folder name a clone gets: the repository name, restricted to what a single folder name allows. */
 export const cloneFolderName = (fullName: string) =>
@@ -29,6 +30,7 @@ export function CloneFromGitHub({
   const [busy, setBusy] = useState<'search' | 'clone' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const request = useRef(0)
+  const cloning = useClone(host)
 
   // Another host or folder starts a fresh search; a late answer for the old one is dropped.
   useEffect(() => {
@@ -56,9 +58,7 @@ export function CloneFromGitHub({
     setBusy('clone')
     setError(null)
     try {
-      onCloned(
-        await invokerFor(host)('folders.clone', parent, cloneFolderName(repository.fullName), repository.cloneUrl),
-      )
+      onCloned(await cloning.run(parent, cloneFolderName(repository.fullName), repository.cloneUrl))
     } catch (reason) {
       setError(errorText(reason))
     } finally {
@@ -93,6 +93,11 @@ export function CloneFromGitHub({
           {error}
         </p>
       )}
+      {busy === 'clone' && cloning.canCancel && (
+        <Button variant="secondary" size="sm" className="self-start" onClick={cloning.cancel}>
+          {t('Cancel clone')}
+        </Button>
+      )}
       {results && !results.length && (
         <p className="m-0 text-caption text-muted-foreground">{t('No repositories found')}</p>
       )}
@@ -108,7 +113,7 @@ export function CloneFromGitHub({
                 {repository.private && <span className="text-caption text-muted-foreground">{t('Private')}</span>}
               </span>
               <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => void clone(repository)}>
-                {busy === 'clone' ? t('Cloning…') : t('Clone')}
+                {busy === 'clone' ? cloneProgressText(cloning.progress, t) : t('Clone')}
               </Button>
             </li>
           ))}

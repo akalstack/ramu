@@ -136,8 +136,17 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       run: async (path: string) => workspace.addProjectFromFolder(await hostFolders.inspect(path)),
     },
     'folders.clone': {
-      args: z.tuple([z.string().max(4096), z.string().max(200), z.string().max(4096)]),
-      run: (parent: string, name: string, url: string) => hostFolders.clone(parent, name, url),
+      args: z.tuple([z.string().max(4096), z.string().max(200), z.string().max(4096), z.string().max(64).optional()]),
+      run: (parent: string, name: string, url: string, cloneId?: string) =>
+        hostFolders.clone(parent, name, url, cloneId),
+    },
+    'folders.cloneProgress': {
+      args: z.tuple([z.string().max(64)]),
+      run: (cloneId: string) => hostFolders.cloneProgress(cloneId),
+    },
+    'folders.cancelClone': {
+      args: z.tuple([z.string().max(64)]),
+      run: (cloneId: string) => hostFolders.cancelClone(cloneId),
     },
     'projects.inspect': { args: z.tuple([z.string().max(4096)]), run: (dir: string) => workspace.inspectFolder(dir) },
     'projects.addFolder': {
@@ -173,7 +182,13 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
           const goal = main ? agents.goalOf(main.id) : null
           const executionState = main?.state
-          const base = { ...task, inputSummary, executionState, helperSummary: helpers.get(task.id) ?? null, snapshotAt }
+          const base = {
+            ...task,
+            inputSummary,
+            executionState,
+            helperSummary: helpers.get(task.id) ?? null,
+            snapshotAt,
+          }
           if (!goal || goal.status === 'completed') return { ...base, goalState: null }
           return {
             ...base,

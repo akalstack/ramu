@@ -1,5 +1,5 @@
 import { goBackOrHome } from '../runtime/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { TextInput } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Folder, ChevronLeft } from 'lucide-react-native'
@@ -26,7 +26,10 @@ export default function HostFolders() {
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [search, setSearch] = useState(''),
-    [found, setFound] = useState<ForgeRepositorySummary[] | null>(null)
+    [found, setFound] = useState<ForgeRepositorySummary[] | null>(null),
+    [cloneProgress, setCloneProgress] = useState<string | null>(null),
+    [cancellable, setCancellable] = useState(false)
+  const activeClone = useRef<string | null>(null)
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
     try {
@@ -143,17 +146,57 @@ export default function HostFolders() {
               style={{ padding: space.m, backgroundColor: c.fill, color: c.text, fontSize: font.body }}
             />
             <GlassButton
-              title={busy ? 'Working on host…' : 'Clone repository'}
+              title={busy ? (cloneProgress ?? 'Working on host…') : 'Clone repository'}
               disabled={busy || !url.trim() || !name.trim()}
               onPress={() =>
                 void run(async () => {
-                  const path = await store.invoke(computerId, 'folders.clone', listing.path, name, url)
-                  setListing(await store.invoke(computerId, 'folders.list', path))
-                  setName('')
-                  setUrl('')
+                  // Only a host that answers the progress call also understands the clone id.
+                  const supported = await store.invoke(computerId, 'folders.cloneProgress', 'probe-unused-id').then(
+                    () => true,
+                    () => false,
+                  )
+                  const id = `clone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+                  activeClone.current = supported ? id : null
+                  setCancellable(supported)
+                  const timer = supported
+                    ? setInterval(
+                        () =>
+                          void store.invoke(computerId, 'folders.cloneProgress', id).then(
+                            (next) =>
+                              activeClone.current === id &&
+                              setCloneProgress(
+                                next ? `${next.phase}${next.percent === null ? '' : ` ${next.percent}%`}` : null,
+                              ),
+                            () => {},
+                          ),
+                        800,
+                      )
+                    : undefined
+                  try {
+                    const path = supported
+                      ? await store.invoke(computerId, 'folders.clone', listing.path, name, url, id)
+                      : await store.invoke(computerId, 'folders.clone', listing.path, name, url)
+                    setListing(await store.invoke(computerId, 'folders.list', path))
+                    setName('')
+                    setUrl('')
+                  } finally {
+                    clearInterval(timer)
+                    activeClone.current = null
+                    setCloneProgress(null)
+                    setCancellable(false)
+                  }
                 })
               }
             />
+            {busy && cancellable ? (
+              <GlassButton
+                title="Cancel clone"
+                onPress={() => {
+                  const id = activeClone.current
+                  if (id) void store.invoke(computerId, 'folders.cancelClone', id).catch(() => {})
+                }}
+              />
+            ) : null}
           </>
         ) : null}
       </ScrollView>

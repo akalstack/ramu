@@ -9,6 +9,7 @@ import { Input } from '@/components/desktop-input'
 import { invokerFor } from '../ipc'
 import { ownHostId } from '../hosts'
 import { errorText } from './TaskPane'
+import { cloneProgressText, useClone } from './useClone'
 import { onFolderPick, onRepoChoice, type FolderPick, type RepoChoice } from './addProject'
 
 const name = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
@@ -112,6 +113,7 @@ function CloneFromGitHub({
   const [results, setResults] = useState<ForgeRepositorySummary[] | null>(null)
   const [searching, setSearching] = useState(false)
   const [cloning, setCloning] = useState<string | null>(null)
+  const cloneRun = useClone(host)
   const [error, setError] = useState('')
   const request = useRef(0)
   useEffect(() => {
@@ -143,7 +145,7 @@ function CloneFromGitHub({
     setCloning(cloneUrl)
     setError('')
     try {
-      onCloned(await invokerFor(host)('folders.clone', parent, folder, cloneUrl))
+      onCloned(await cloneRun.run(parent, folder, cloneUrl))
     } catch (reason) {
       setError(errorText(reason))
     } finally {
@@ -217,8 +219,13 @@ function CloneFromGitHub({
           onChange={(event) => setUrl(event.target.value)}
         />
         <Button type="submit" variant="secondary" size="sm" disabled={!!cloning || !folderOf(url.trim())}>
-          {cloning ? t('Cloning…') : t('Clone')}
+          {cloning ? cloneProgressText(cloneRun.progress, t) : t('Clone')}
         </Button>
+        {cloning && cloneRun.canCancel && (
+          <Button type="button" variant="ghost" size="sm" onClick={cloneRun.cancel}>
+            {t('Cancel clone')}
+          </Button>
+        )}
       </form>
     </div>
   )
