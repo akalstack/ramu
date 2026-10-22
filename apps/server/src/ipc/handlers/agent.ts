@@ -2,13 +2,21 @@ import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
 import type { AgentSettings, FileContext, PermissionScope } from '@ramu/shared/types'
 import { MAX_ATTACHMENT_BYTES } from '../../attachments'
+import { buildSetupSnapshot } from '../../agent/effectiveSetup'
+import {
+  accountEnvironment,
+  sharedSessionServers,
+  sharedSessionSkills,
+  SKILL_SHARING_KEY,
+  type SkillSharing,
+} from '../../agent/projectSetup'
 import { lockCheckouts, lockSession } from '../helpers'
 import { agentSettings, attachmentIds, fileContext, id, text } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
 /** Chat sessions: sending prompts, interrupting, answering questions and permissions, and attachments. */
 export const registerAgentHandlers: RegisterHandlers = (ctx) => {
-  const { host, workspace, agents, attachmentStore, withContext } = ctx
+  const { host, workspace, agents, attachmentStore, withContext, rules, getSharedMcp } = ctx
   return {
     'agent.all': { args: z.tuple([]), run: () => agents.all() },
     'agent.list': { args: z.tuple([id]), run: (taskId: string) => agents.list(taskId) },
@@ -35,6 +43,47 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       run: (query: string) => agents.searchMessages(query),
     },
     'agent.mcpStatus': { args: z.tuple([id]), run: (s: string) => agents.mcpStatus(s) },
+    /** What this thread has from Ramu's agent setup, from the resolvers a launch uses. Names and states only. */
+    'agent.setup': {
+      args: z.tuple([id]),
+      run: async (sessionId: string) => {
+        const session = agents.get(sessionId)
+        let projectId: string | null = null
+        try {
+          projectId = workspace.getTask(session.taskId).projectId
+        } catch {
+          // A thread outside a project resolves host-wide setup only.
+        }
+        const accountId = session.settings.accountId ?? 'default'
+        const dirs = [...new Set([session.cwd, ...session.additionalDirs, ...session.covers])]
+        const env = accountEnvironment(session.provider, accountId)
+        let runtimeServers: { name: string; status: string }[] | undefined
+        try {
+          const status = await agents.mcpStatus(sessionId)
+          if (status.live) runtimeServers = status.servers
+        } catch {
+          // The runtime could not be asked; its servers stay unconfirmed.
+        }
+        return buildSetupSnapshot({
+          sessionId,
+          provider: session.provider,
+          accountId,
+          projectId,
+          startedAt: session.createdAt,
+          rules: rules?.list() ?? [],
+          addedServers: sharedSessionServers(dirs, session.provider, env).map((server) => server.name),
+          ...(runtimeServers ? { runtimeServers } : {}),
+          sharedSkills: sharedSessionSkills(
+            dirs,
+            session.provider,
+            env,
+            workspace.getAppState<SkillSharing>(SKILL_SHARING_KEY, {}),
+          ).map((skill) => skill.name),
+          connections: getSharedMcp?.().sessionConnections(session.provider, accountId, projectId) ?? [],
+          now: Date.now(),
+        })
+      },
+    },
     'agent.reloadMcp': { args: z.tuple([id]), run: (s: string) => agents.reloadMcp(s) },
     'agent.reconnectMcp': {
       args: z.tuple([id, z.string().min(1).max(500)]),

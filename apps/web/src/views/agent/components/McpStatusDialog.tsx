@@ -5,6 +5,7 @@ import { Button } from '@/components/desktop-button'
 import { useHost } from '../../../workspace/HostProvider'
 import { t, useLanguage } from '../../../i18n'
 import { errorText } from '../../../lib/errors'
+import { AgentSetupSection } from './AgentSetupSection'
 
 export function McpStatusDialog({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
   useLanguage()
@@ -129,6 +130,7 @@ export function McpStatusDialog({ sessionId, onClose }: { sessionId: string; onC
             </ul>
           </>
         )}
+        <AgentSetupSection sessionId={sessionId} />
       </div>
     </Dialog>
   )

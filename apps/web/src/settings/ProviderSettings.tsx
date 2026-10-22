@@ -57,6 +57,21 @@ export function ProviderSettings({
       setError(errorText(reason))
     }
   }
+  const readiness = (provider: AgentProvider, id: string) =>
+    mcp.data?.readiness?.find((entry) => entry.provider === provider && entry.accountId === id)
+  const [rechecking, setRechecking] = useState<string | null>(null)
+  const recheck = async (provider: AgentProvider, id: string) => {
+    setError(null)
+    setRechecking(`${provider}:${id}`)
+    try {
+      await invoke('mcp.recheckAccount', provider, id, null)
+      await refetchMcp()
+    } catch (reason) {
+      setError(errorText(reason))
+    } finally {
+      setRechecking(null)
+    }
+  }
   const loginPending = useRef(false)
   const accountUsage = useAccountUsage()
   // Cache entries are host/configuration scoped, so reopening never shows another host’s logins.
@@ -231,6 +246,9 @@ export function ProviderSettings({
             onAddAccount={() => add(provider)}
             mcpSharing={canShare ? (id) => sharing(provider, id) : undefined}
             onMcpSharing={(id, on) => void setSharing(provider, id, on)}
+            mcpReadiness={canShare ? (id) => readiness(provider, id) : undefined}
+            mcpRechecking={(id) => rechecking === `${provider}:${id}`}
+            onMcpRecheck={canShare ? (id) => void recheck(provider, id) : undefined}
             onUpdate={() => void update(provider)}
             stale={statusQuery.isError && !!statusQuery.data}
             onCheckAgain={() => void refresh()}

@@ -43,6 +43,11 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, sharedMcpSelection]),
       run: (connectionId: string, selection: SharedMcpSelection) => admin().check(connectionId, selection),
     },
+    'mcp.recheckAccount': {
+      args: z.tuple([sharedMcpAccount.shape.provider, id, id.nullable()]),
+      run: (provider: SharedMcpProviderAccount['provider'], accountId: string, projectId: string | null) =>
+        admin().recheckAccount(provider, accountId, projectId),
+    },
     'mcp.approve': {
       args: z.tuple([sharedMcpApproval]),
       run: (input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }) =>

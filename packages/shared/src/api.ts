@@ -7,6 +7,7 @@ import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
 import type { RamuTheme, ThemeIssue, ThemeRole } from './theme'
 import type { AppUpdateStatus } from './updates'
+import type { AgentSetupSnapshot } from './agentSetup'
 import type { ProviderConfiguration, ProviderStatus } from './providers/providers'
 import type { LimitRetryResult } from './chat/providerWait'
 import type {
@@ -14,6 +15,7 @@ import type {
   SharedMcpGrant,
   SharedMcpInspection,
   SharedMcpManagement,
+  SharedMcpAccountReadiness,
   SharedMcpProviderAccount,
   SharedMcpSelection,
   ProjectSetup,
@@ -80,6 +82,7 @@ import type {
   Rule,
   RuleInput,
   RuleRevision,
+  NativeInstructions,
   ForgeConnectionSummary,
   PullRequestWatchStatus,
   IssueLink,
@@ -616,6 +619,12 @@ export interface RamuMethods {
   /** Drops a provider account from shared approvals; its provider login is untouched. */
   'mcp.removeAccount'(provider: SharedMcpProviderAccount['provider'], accountId: string): void
   'mcp.check'(connectionId: string, selection: SharedMcpSelection): Promise<SharedMcpInspection>
+  /** Checks every shared connection a login could use again and returns its readiness. */
+  'mcp.recheckAccount'(
+    provider: SharedMcpProviderAccount['provider'],
+    accountId: string,
+    projectId: string | null,
+  ): Promise<SharedMcpAccountReadiness[]>
   'mcp.approve'(input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }): SharedMcpGrant
   'mcp.disconnect'(connectionId: string): Promise<void>
   'mcp.remove'(connectionId: string): Promise<void>
@@ -739,6 +748,8 @@ export interface RamuMethods {
   /** Publishes the branch when needed, then opens the pull request. */
   /** GitHub sign-ins this host already holds (read-only). Pass nothing; the host runs `gh auth status`. */
   'forge.connections'(): ForgeConnectionSummary
+  /** Instruction files providers read on their own (AGENTS.md, CLAUDE.md, rules folders) for a project and the user; read-only. */
+  'rules.native'(projectId: string | null): NativeInstructions
   'rules.list'(): Rule[]
   'rules.save'(input: RuleInput): Rule
   'rules.remove'(ruleId: string): void
@@ -902,6 +913,8 @@ export interface RamuMethods {
   /** Keep the chat's current provider despite the usage threshold: for the next message, for this chat until its limit resets, or clear. */
   'agent.holdProvider'(sessionId: string, scope: 'message' | 'chat' | null): void
   'agent.mcpStatus'(sessionId: string): Promise<AgentMcpStatus>
+  /** Rules, servers, skills and Shared MCP connections this thread has, with how far each got. Names and states only. */
+  'agent.setup'(sessionId: string): Promise<AgentSetupSnapshot>
   'agent.reloadMcp'(sessionId: string): Promise<void>
   'agent.reconnectMcp'(sessionId: string, name: string): Promise<void>
   'agent.providerHold'(sessionId: string): 'message' | 'chat' | 'picked' | null

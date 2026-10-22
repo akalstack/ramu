@@ -24,6 +24,7 @@ import {
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { AgentProvider } from '@ramu/shared/types'
 import { useState } from 'react'
+import type { SharedMcpAccountReadiness } from '@ramu/shared/mcp'
 import { t } from '../i18n'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { SettingsField } from './SettingsScope'
@@ -54,6 +55,9 @@ export function ProviderCard({
   onAddAccount,
   mcpSharing,
   onMcpSharing,
+  mcpReadiness,
+  mcpRechecking,
+  onMcpRecheck,
   onUpdate,
   onBrowse,
   stale = false,
@@ -81,6 +85,10 @@ export function ProviderCard({
   /** Whether an account shares approved Shared MCP connections; undefined hides the control (not the host's administrator). */
   mcpSharing?: (id: string) => boolean | undefined
   onMcpSharing?: (id: string, on: boolean) => void
+  /** Readiness of each login for the shared connections, and the check-again action. */
+  mcpReadiness?: (id: string) => SharedMcpAccountReadiness | undefined
+  mcpRechecking?: (id: string) => boolean
+  onMcpRecheck?: (id: string) => void
   onUpdate: () => void
   onBrowse: (key: 'binary' | 'harness') => void
   /** The host could not be reached; the status is its last known result. */
@@ -194,7 +202,13 @@ export function ProviderCard({
                           onRemove={() => onRemove(id)}
                           mcpSharing={
                             mcpSharing && accounts
-                              ? { value: mcpSharing(id), onChange: (on) => onMcpSharing?.(id, on) }
+                              ? {
+                                  value: mcpSharing(id),
+                                  onChange: (on) => onMcpSharing?.(id, on),
+                                  readiness: mcpReadiness?.(id),
+                                  rechecking: mcpRechecking?.(id),
+                                  onRecheck: onMcpRecheck ? () => onMcpRecheck(id) : undefined,
+                                }
                               : undefined
                           }
                         />

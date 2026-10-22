@@ -17,10 +17,13 @@ import { GripVertical, LogIn, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
+import type { SharedMcpAccountReadiness } from '@ramu/shared/mcp'
 import { t } from '../i18n'
 import { SettingsField } from './SettingsScope'
 import { peakUsage, usageTone, type useAccountUsage } from './Usage'
 import { SECONDARY_BUTTON_CLASS } from './constants'
+import { timeAgo } from '../Menu'
+import { readinessLine, readinessTone } from './mcpReadinessView'
 
 /** `name` is what is shown (a label, the sign-in email, or a generic name); `label` is only a label the person gave. */
 export type LoginRow = { id: string; name: string; label?: string; enabled?: boolean }
@@ -54,7 +57,14 @@ export function ProviderLoginRow({
   onRename: (name: string) => void
   onRemove: () => void
   /** Reuse of approved Shared MCP connections for this login; absent hides the control. */
-  mcpSharing?: { value: boolean | undefined; onChange: (on: boolean) => void }
+  mcpSharing?: {
+    value: boolean | undefined
+    onChange: (on: boolean) => void
+    /** Whether the login can use the shared connections now; absent on hosts that predate readiness. */
+    readiness?: SharedMcpAccountReadiness
+    rechecking?: boolean
+    onRecheck?: () => void
+  }
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: row.id,
@@ -138,6 +148,26 @@ export function ProviderLoginRow({
               ? `${t('Signed in')}${state.detail && state.detail !== row.name && provider !== 'opencode' ? ` · ${state.detail}` : ''}`
               : t('Not signed in')}
         </span>
+        {mcpSharing?.readiness && (
+          <span
+            className={`block small text-caption ${readinessTone(mcpSharing.readiness.status) === 'warn' ? 'text-warn' : readinessTone(mcpSharing.readiness.status) === 'ok' ? 'text-brand' : 'muted text-muted-foreground'}`}
+            title={mcpSharing.readiness.reason}
+          >
+            {readinessLine(mcpSharing.readiness, timeAgo)}
+            {mcpSharing.onRecheck && (
+              <Button
+                variant="link"
+                size="xs"
+                className="ml-1.5 h-auto p-0 align-baseline"
+                disabled={mcpSharing.rechecking}
+                aria-label={t('Check MCP access again for {0}', { '0': row.name })}
+                onClick={mcpSharing.onRecheck}
+              >
+                {mcpSharing.rechecking ? t('Checking…') : t('Check again')}
+              </Button>
+            )}
+          </span>
+        )}
       </span>
       {mcpSharing && (
         <label
