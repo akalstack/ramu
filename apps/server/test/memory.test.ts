@@ -183,7 +183,7 @@ it('gives every provider the same protocol and index; sub-agents get the protoco
   expect(top).toBe(memory.instructions(session({ provider: 'claude-code' }), null))
   expect(top).toContain('memory_search')
   // Changed decisions are saved as replacements, conflicts stay visible, and changeable facts are re-checked.
-  expect(top).toContain('`supersedes`')
+  expect(top).toContain('with supersedes set to')
   expect(top).toContain('never pick one by date alone')
   expect(top).toContain('re-check anything that can change')
   expect(top).toMatch(/user, global: Prefers Indonesian: Reply in Indonesian/)
