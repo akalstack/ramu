@@ -404,6 +404,8 @@ export interface RamuMethods {
   'skills.cancel'(stageId: string): void
   'skills.updateSource'(id: string): import('./types').SkillInstallPreview
   'skills.move'(id: string, projectId: string | null): void
+  /** Which providers' exports carry a managed skill. Applies to new threads. */
+  'skills.setProviders'(id: string, providers: import('./types').AgentProvider[]): void
   'skills.remove'(id: string): void
   'agent.all'(): AgentSessionInfo[]
   'learning.get'(): import('./types').LearningSnapshot

@@ -1,10 +1,10 @@
 import { z } from 'zod'
 import { skillInstallInput } from '../../memory/externalSkills'
-import type { MemoryInput } from '@ramu/shared/types'
+import type { AgentProvider, MemoryInput } from '@ramu/shared/types'
 import { discoverSkills } from '../../context'
 import { memoryInputSchema } from '../../memory/memory'
 import { need } from '../helpers'
-import { id } from '../schemas'
+import { id, providerId } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
 /** Memories, learned skills and the skill catalog. */
@@ -41,6 +41,10 @@ export const registerMemoryHandlers: RegisterHandlers = ({
   'skills.move': {
     args: z.tuple([id, id.nullable()]),
     run: (skillId: string, projectId: string | null) => need(externalSkills).move(skillId, projectId),
+  },
+  'skills.setProviders': {
+    args: z.tuple([id, z.array(providerId).min(1).max(5)]),
+    run: (skillId: string, providers: AgentProvider[]) => need(learning).setProviders(skillId, providers),
   },
   'skills.list': {
     args: z.tuple([id]),

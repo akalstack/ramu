@@ -47,7 +47,7 @@ Provider-specific variants are optional overrides of one managed item, with a vi
 
 ## Skills improvements
 
-1. Extend the current manager with provider selection, source/ownership, native-skill discovery, duplicate handling and compatibility details. Preserve approved supporting files, learned/installed distinctions, revision history and existing source-update protections.
+1. Installed skills already carry a provider selection (Settings → Installed skills, `skills.setProviders`; a new revision per change, applied to new threads). Extend the manager with source/ownership, native-skill discovery, duplicate handling and compatibility details. Preserve approved supporting files, learned/installed distinctions, revision history and existing source-update protections.
 2. Provide **Create skill** and **Edit a copy** through the existing managed-skill storage/editor flow. Editing an installed skill creates an explicit local override/copy or a reviewed revision with defined source-update conflicts; never let automatic learning rewrite installed or user-protected content.
 3. Resolve required tools against stable Shared MCP tool identities and actual session capabilities, while preserving existing exact-name metadata. Use verified aliases only when they map unambiguously to the same connection/tool. Distinguish available tool, missing login and denied access. Incomplete deferred discovery cannot prove a fallback tool is absent; agent-reported compatibility remains guidance, not authorization.
 4. Skills remain discoverable through native provider loading and the existing picker. Avoid inserting full skill bodies into every prompt or creating per-provider rewrites of shared workspace links.

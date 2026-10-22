@@ -34,6 +34,8 @@ export interface ManagedSkill {
   description: string
   content: string
   status: 'active' | 'disabled' | 'archived'
+  /** Providers whose exports carry it. Absent means every provider. */
+  providers?: AgentProvider[]
   pinned: boolean
   revision: number
   createdAt: number

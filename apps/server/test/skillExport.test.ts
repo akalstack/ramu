@@ -280,3 +280,19 @@ it('keeps the links of a concurrent session that re-linked the same folder to an
   expect(readlinkSync(join(shared, '.cursor', 'skills', 'ramu-beta'))).toBe(join(qExport, 'skills', 'ramu-beta'))
   expect(readdirSync(join(shared, '.agents', 'skills'))).toEqual(['ramu-beta'])
 })
+
+it('carries a skill only to the providers chosen for it, in a new revision, and back to all when every one is chosen', () => {
+  insert(skill('a', 'alpha', 'p'))
+  insert(skill('b', 'beta', 'p'))
+  service.setProviders('a', ['codex'])
+  const names = (target: AgentSessionInfo['provider']) =>
+    readdirSync(join(service.exportDir('p', target, root)!, 'skills')).sort()
+  expect(names('codex')).toEqual(['ramu-alpha', 'ramu-beta'])
+  expect(names('claude-code')).toEqual(['ramu-beta'])
+  const changed = service.history('a')[0]!
+  expect(changed).toMatchObject({ revision: 2, providers: ['codex'], changedBy: 'user' })
+  expect(() => service.setProviders('a', [])).toThrow('at least one')
+  service.setProviders('a', ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'])
+  expect(names('claude-code')).toEqual(['ramu-alpha', 'ramu-beta'])
+  expect(service.skills().find((entry) => entry.id === 'a')?.providers).toBeUndefined()
+})

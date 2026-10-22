@@ -24,6 +24,7 @@ import {
   type UsageReading,
 } from '@ramu/shared/types'
 import { isOver, peakFor } from '@ramu/shared/providers/routing'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import type { Db } from '../db'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
@@ -321,7 +322,7 @@ export class LearningService {
     }
     const wanted = new Map<string, ManagedSkill>()
     for (const skill of this.scoped(projectId)
-      .filter((skill) => this.usable(skill))
+      .filter((skill) => this.usable(skill) && (!skill.providers?.length || skill.providers.includes(provider)))
       .sort((a, b) => Number(a.projectId !== null) - Number(b.projectId !== null)))
       wanted.set(`ramu-${skill.name}`.slice(0, 64).replace(/-+$/, ''), skill)
     const copies = new Map<string, string>()
@@ -802,6 +803,24 @@ ${JSON.stringify({ previousCheckpoint: this.checkpoint(job.sessionId), trace: bo
       ...(action === 'pin' || action === 'unpin'
         ? { pinned: action === 'pin' }
         : { status: action === 'restore' ? 'active' : action === 'disable' ? 'disabled' : 'archived' }),
+      updatedAt: Date.now(),
+      revision: skill.revision + 1,
+      changedBy: 'user',
+    })
+  }
+  /**
+   * The providers whose exports carry this skill; every provider when the choice covers all of them. A new revision, so
+   * the change is in the skill's history and can be restored like any other edit.
+   */
+  setProviders(id: string, providers: AgentProvider[]) {
+    const skill = this.skills().find((skill) => skill.id === id)
+    if (!skill) throw new Error('Unknown skill')
+    const chosen = AGENT_PROVIDERS.filter((provider) => providers.includes(provider))
+    if (!chosen.length) throw new Error('Choose at least one provider, or disable the skill')
+    const { providers: _previous, ...rest } = skill
+    this.persist({
+      ...rest,
+      ...(chosen.length === AGENT_PROVIDERS.length ? {} : { providers: chosen }),
       updatedAt: Date.now(),
       revision: skill.revision + 1,
       changedBy: 'user',

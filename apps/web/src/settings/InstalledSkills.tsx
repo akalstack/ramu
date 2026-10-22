@@ -9,6 +9,7 @@ import { Dialog, Dropdown } from '../Menu'
 import { useSettingsInvoke } from './SettingsScope'
 import { SettingsCard, SettingsCardList, usePaged } from './cards'
 import { useWorkspace } from '../workspace/workspace'
+import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
 
@@ -153,6 +154,32 @@ export function InstalledSkills() {
             <p className="m-0 truncate text-caption text-muted-foreground">
               {skill.installation!.source} · {t(skill.status)}
             </p>
+            <fieldset className="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 border-0 p-0">
+              <legend className="sr-only">{t('Providers for {name}', { name: skill.name })}</legend>
+              <span className="text-caption text-muted-foreground">{t('Providers')}</span>
+              {AGENT_PROVIDERS.map((provider) => {
+                const on = !skill.providers?.length || skill.providers.includes(provider)
+                const chosen = skill.providers?.length ? skill.providers : [...AGENT_PROVIDERS]
+                return (
+                  <label key={provider} className="flex items-center gap-1.5 text-caption">
+                    <Checkbox
+                      checked={on}
+                      disabled={busy || (on && chosen.length === 1)}
+                      onCheckedChange={(checked) =>
+                        void act(() =>
+                          invoke(
+                            'skills.setProviders',
+                            skill.id,
+                            checked ? [...chosen, provider] : chosen.filter((entry) => entry !== provider),
+                          ),
+                        )
+                      }
+                    />
+                    {providerName(provider)}
+                  </label>
+                )
+              })}
+            </fieldset>
             <Dropdown
               label={`${t('Move skill')}: ${skill.name}`}
               value={skill.projectId ?? ''}
