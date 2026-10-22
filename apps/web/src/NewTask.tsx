@@ -46,7 +46,15 @@ import { useHost } from './workspace/HostProvider'
 import { useAddProject } from './workspace/addProject'
 import { useHostSelection } from './workspace/HostSelection'
 import { StatusDot, useComputers } from './workspace/computers'
-import { defaultStartProject, lastStartProject, rememberStartProject } from './startProject'
+import {
+  clearDraftDestination,
+  defaultStartProject,
+  draftDestination,
+  homeDestination,
+  lastStartProject,
+  rememberDraftDestination,
+  rememberStartProject,
+} from './startProject'
 import { useAppSettings } from './settings/AppSettings'
 import { routingLabels } from '@ramu/shared/workspace/projectRouting'
 import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
@@ -208,12 +216,26 @@ export function HomePage() {
   // With no explicit choice, the box starts in the project you last started a thread in.
   const { preferences } = useAppSettings()
   // Auto is the default while the preference is on; an explicit project choice always wins for the draft.
+  const storage = hostStorageFor(host.id)
   const projectId =
     ws.composing ??
-    (preferences.autoProjectSelection && ws.projects.length > 0
-      ? AUTO_PROJECT
-      : defaultStartProject(lastStartProject(hostStorageFor(host.id)), ws.projects))
-  return <NewTask projectId={projectId} onProjectChange={(id) => ws.newTask(id)} allowAuto />
+    homeDestination({
+      saved: draftDestination(storage),
+      autoOn: preferences.autoProjectSelection,
+      projects: ws.projects,
+      lastProject: lastStartProject(storage),
+    })
+  return (
+    <NewTask
+      projectId={projectId}
+      onProjectChange={(id) => {
+        // The pick survives a restart with the draft, until that draft is sent.
+        rememberDraftDestination(id, storage)
+        ws.newTask(id)
+      }}
+      allowAuto
+    />
+  )
 }
 
 /**
@@ -510,6 +532,7 @@ export function NewTask({
       created = null
       creationRequest.current = null
       if (!auto) rememberStartProject(projectId, hostStorageFor(host.id))
+      clearDraftDestination(hostStorageFor(host.id))
       // The link lets this chat's pull request close the issue; losing it only loses that line.
       if (issue) void host.invoke('forge.linkIssue', task.id, issue).catch(() => {})
       setIssue(null)
