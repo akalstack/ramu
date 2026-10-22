@@ -4,7 +4,11 @@ Proposal, 2026-10-18. All implementation and acceptance below remain unfinished.
 
 ## Already in place
 
-The platform-independent dictation state (`packages/shared/src/voice/dictation.ts`) models one take at a time, the five-minute cap with explicit Transcribe or Discard, cancellation on scope change or system interruption, and transcript insertion only into the draft and revision that started the take. Everything else below, including capture, recognition, the microphone control, device settings and acceptance, is unfinished.
+All of the code below is written and unit-tested against fakes; none of it has run on a physical iPhone, an Android device or a packaged desktop, so every adapter below still needs the device acceptance in the roadmap.
+
+- **Shared model** (`packages/shared/src/voice/`): the one-take dictation state (five-minute cap with explicit Transcribe or Discard, cancellation on scope change or interruption, insertion only into the draft and revision that started the take), the engine contracts, the session with its lease, and the device-local settings.
+- **Desktop:** Electron main runs the macOS helper `apps/desktop/native/ramu-speech.swift` (on-device only) behind a narrow preload bridge; the renderer records and sends a temporary file that main deletes (`apps/desktop/src/main/voice.ts`, `apps/web/src/voice/`). The composer has the microphone, recording, review and settings states, and a **Dictate message** command reaches the composer in use. Settings → Voice holds the language and input device.
+- **Phone:** the Ramu-owned `RamuSpeech` native module (`apps/mobile/modules/ramu-speech`: Swift with `SFSpeechRecognizer` and on-device recognition required; Kotlin with the device's own on-device `SpeechRecognizer`, which a device without one reports as unsupported). The JS engine is `apps/mobile/src/runtime/voiceEngine.ts`; Android asks for the microphone once from JS and the iOS prompts come with the first take. Expo Go has no such module, so the microphone stays hidden there.
 
 ## Delivery
 
