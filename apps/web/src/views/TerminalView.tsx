@@ -288,6 +288,26 @@ export function TerminalView({
             if (gate.output()) runtime.activity.markTerminalOutput(ws.workspaceOf(taskId))
           }),
         )
+        // Output produced while the event stream was down never arrives as a chunk: when it comes back, fetch just the gap.
+        offs.push(
+          runtime.on('background:connection', ({ connected }) => {
+            if (!connected || disposed || readOnly) return
+            void invoke('term.snapshot', info.id, replayed).then(
+              (snap) => {
+                if (disposed) return
+                const unseen = unseenOutput({ id: info.id, data: snap.output, cursor: snap.cursor }, replayed)
+                if (!unseen) return
+                if (unseen.reset)
+                  term.write(
+                    `\x1bc\x1b[2m[${t('Showing the most recent terminal output. Older output was truncated.')}]\x1b[0m\r\n`,
+                  )
+                term.write(unseen.data)
+                replayed = snap.cursor
+              },
+              () => {},
+            )
+          }),
+        )
         const typed = term.onKey(() => gate.arm())
         offs.push(() => typed.dispose())
         offs.push(

@@ -791,7 +791,8 @@ export interface RamuMethods {
   'term.background.inspect'(taskId: string, termId: string): BackgroundTerminalInfo & { output: string }
   /** Requests termination of that command's process group (`force` kills it). Safe to repeat and after it ended. */
   'term.background.stop'(taskId: string, termId: string, force?: boolean): BackgroundTerminalInfo
-  'term.snapshot'(termId: string): { output: string; cursor: number; exited: boolean }
+  /** With `since` (the cursor already shown), only the output after it when the host still holds that much; the output always ends at `cursor`. */
+  'term.snapshot'(termId: string, since?: number): { output: string; cursor: number; exited: boolean }
   /** Your messages and the agent's replies that contain `query`, newest first, across every chat. */
   'agent.searchMessages'(query: string): ChatSearchHit[]
   'agent.scope'(taskId: string): AgentScope

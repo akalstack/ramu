@@ -33,3 +33,23 @@ it('terminals reattach with bounded output and a cursor that includes missed chu
   service.close(terminal.id)
   expect(service.list('task')).toEqual([])
 })
+
+it('returns only the output after a cursor the viewer already shows, or everything when it cannot', () => {
+  const service = new TerminalService(
+    () => {},
+    () => {},
+  )
+  const terminal = service.open('task', null, '/tmp')
+  callbacks.data('one')
+  callbacks.data('two')
+  callbacks.data('three')
+  // cursor is 11: "onetwothree"
+  expect(service.snapshot(terminal.id, 3)).toEqual({ output: 'twothree', cursor: 11, exited: false })
+  expect(service.snapshot(terminal.id, 11)).toEqual({ output: '', cursor: 11, exited: false })
+  // A cursor from before the held output, from the future, or none at all gets the whole held output.
+  callbacks.data('x'.repeat(300_000))
+  expect(service.snapshot(terminal.id, 5).output).toHaveLength(256_000)
+  expect(service.snapshot(terminal.id, 999_999).output).toHaveLength(256_000)
+  expect(service.snapshot(terminal.id).output).toHaveLength(256_000)
+  service.close(terminal.id)
+})

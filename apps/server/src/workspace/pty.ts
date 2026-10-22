@@ -216,11 +216,22 @@ export class TerminalService {
     return [...records.values()]
   }
 
-  snapshot(id: string): { output: string; cursor: number; exited: boolean } {
+  /**
+   * The held output, and the cursor it ends at. With `since` (the cursor a client already shows), only what came after
+   * it when the held tail still covers that, so a reconnecting viewer fetches the gap instead of the whole buffer.
+   * Output ends at `cursor`, so a client can place it from `cursor - output.length` either way.
+   */
+  snapshot(id: string, since?: number): { output: string; cursor: number; exited: boolean } {
     const saved = this.history.get(id)
-    if (!this.terms.has(id) && saved) return { output: saved.output, cursor: saved.cursor, exited: true }
-    const entry = this.require(id)
-    return { output: entry.output, cursor: entry.cursor, exited: entry.exited }
+    const entry = !this.terms.has(id) && saved ? { ...saved, exited: true } : { ...this.require(id) }
+    const missed = since === undefined ? undefined : entry.cursor - since
+    const output =
+      missed !== undefined && missed >= 0 && missed <= entry.output.length
+        ? missed === 0
+          ? ''
+          : entry.output.slice(-missed)
+        : entry.output
+    return { output, cursor: entry.cursor, exited: entry.exited }
   }
 
   get(id: string): TerminalInfo | undefined {
