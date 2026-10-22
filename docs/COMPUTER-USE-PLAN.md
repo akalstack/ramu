@@ -15,7 +15,7 @@ Implementation proposal, 2026-10-19. This planning change does not install a com
 
 Checked on a development macOS 27 build through the real desktop app (2026-10-22): a 1600×900 JPEG frame of about 200 KB in about 0.5 s, and input at frame coordinates landed on the matching screen points. Still to check: a packaged build's own Screen Recording and Accessibility identity, Retina/external-display variations, IME text entry and the phone.
 
-Not yet in place: an enrolled broker for a runtime owner that is not the execution host, a push frame subscription (viewers poll and share one capture at most four times a second), and per-provider image delivery checks.
+A paired computer can own the screen for a thread running on another host: it registers with that host's broker (`computer/broker.ts`), the host's owner allows it in **Settings → Computer use**, and commands flow over a long poll with nothing replayed after a disconnect (covered in `computer.test.ts`; the real two-computer run is not done). Settings also shows the pinned Open Computer Use release and whether Keep awake is holding the Mac. Not yet in place: a push frame subscription (viewers poll and share one capture at most four times a second) and per-provider image delivery checks.
 
 ## Human need and delivery
 
