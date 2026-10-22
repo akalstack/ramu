@@ -192,6 +192,7 @@ export class AgentService {
       policyOf: (...a) => parts.router.policyOf(...a),
       launchSettings: (...a) => parts.process.launchSettings(...a),
       idleStateChanged: (...a) => parts.idle.stateChanged(...a),
+      noteCredits: (...a) => parts.idle.noteCredits(...a),
       preferences: () => this.preferences?.(),
       preferencesSource: () => this.preferences,
       providerQuery: (args) => this.providerQuery(args),

@@ -30,6 +30,7 @@ export interface ClaudeStreamPumpHost
     Pick<SessionStore, 'events' | 'get'>,
     Pick<AgentTasks, 'settleTasks' | 'updateTask'> {
   usage(): AgentService['usage']
+  noteCredits(id: string, usingCredits: boolean): void
 }
 
 /** Reads a Claude SDK query to its end and turns its messages into recorded events. */
@@ -64,7 +65,10 @@ export class ClaudeStreamPump {
       for await (const msg of query) {
         if (this.host.live.get(id)?.query !== query) return
         if (msg.type !== 'stream_event') flush()
-        const wire = msg as SDKMessage & { rate_limit_info?: { status?: string }; api_error?: string }
+        const wire = msg as SDKMessage & {
+          rate_limit_info?: { status?: string; isUsingOverage?: boolean }
+          api_error?: string
+        }
         if (wire.type === 'rate_limit_event' && wire.rate_limit_info) {
           const account = this.host.get(id).settings.accountId ?? 'default'
           const readings = claudeReadings(
@@ -73,6 +77,8 @@ export class ClaudeStreamPump {
           ).map((reading) => (account === 'default' ? reading : { ...reading, accountId: account }))
           if (readings.length) this.host.usage()?.update(readings)
         }
+        if (wire.type === 'rate_limit_event' && typeof wire.rate_limit_info?.isUsingOverage === 'boolean')
+          this.host.noteCredits(id, wire.rate_limit_info.isUsingOverage)
         if (wire.type === 'rate_limit_event' && wire.rate_limit_info?.status === 'rejected') continue
         const limit =
           wire.api_error === 'usage_limit_reached'

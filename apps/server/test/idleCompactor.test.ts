@@ -2,16 +2,15 @@ import { describe, expect, it, vi, afterEach } from 'vitest'
 import {
   IdleCompactor,
   IDLE_COMPACT_MIN_TOKENS,
-  IDLE_COMPACT_AFTER_API_MS,
-  IDLE_COMPACT_AFTER_SUBSCRIPTION_MS,
   idleCompactDelay,
+  promptCacheTtlMs,
   type IdleCompactorHost,
 } from '../src/agent/idleCompactor'
 
 function setup(over: { used?: number; enabled?: boolean; provider?: string; queued?: number; tasks?: boolean } = {}) {
   const pushed: string[] = []
   const states: string[] = []
-  const session = { provider: over.provider ?? 'claude-code', parentId: undefined, state: 'idle' }
+  const session = { settings: {}, provider: over.provider ?? 'claude-code', parentId: undefined, state: 'idle' }
   const host = {
     preferences: () => ({ idleCompaction: over.enabled ?? true }),
     shutdown: () => false,
@@ -28,12 +27,28 @@ function setup(over: { used?: number; enabled?: boolean; provider?: string; queu
 
 afterEach(() => vi.useRealTimers())
 
-describe('idleCompactDelay', () => {
-  it('waits out the longer subscription cache and moves early only for key-based sign-in', () => {
-    expect(idleCompactDelay(undefined, {})).toBe(IDLE_COMPACT_AFTER_SUBSCRIPTION_MS)
-    expect(idleCompactDelay('default', { ANTHROPIC_API_KEY: 'k' })).toBe(IDLE_COMPACT_AFTER_API_MS)
-    expect(idleCompactDelay(undefined, { CLAUDE_CODE_USE_BEDROCK: '1' })).toBe(IDLE_COMPACT_AFTER_API_MS)
-    expect(idleCompactDelay('work', { ANTHROPIC_API_KEY: 'k' })).toBe(IDLE_COMPACT_AFTER_SUBSCRIPTION_MS)
+describe('prompt cache lifetime', () => {
+  const HOUR = 60 * 60_000
+  const FIVE = 5 * 60_000
+  it('gives a subscription within plan usage the one-hour cache', () => {
+    expect(promptCacheTtlMs({}, {})).toBe(HOUR)
+    expect(promptCacheTtlMs({ accountId: 'work' }, { ANTHROPIC_API_KEY: 'k' })).toBe(HOUR)
+  })
+  it('drops to five minutes on usage credits, an API key or a cloud provider', () => {
+    expect(promptCacheTtlMs({ usingCredits: true }, {})).toBe(FIVE)
+    expect(promptCacheTtlMs({ accountId: 'default' }, { ANTHROPIC_API_KEY: 'k' })).toBe(FIVE)
+    expect(promptCacheTtlMs({}, { CLAUDE_CODE_USE_BEDROCK: '1' })).toBe(FIVE)
+  })
+  it("honors Claude Code's TTL overrides in its order", () => {
+    expect(promptCacheTtlMs({}, { FORCE_PROMPT_CACHING_5M: '1', CLAUDE_CODE_PROMPT_CACHE_TTL: '1h' })).toBe(FIVE)
+    expect(promptCacheTtlMs({ usingCredits: true }, { CLAUDE_CODE_PROMPT_CACHE_TTL: '1h' })).toBe(HOUR)
+    expect(promptCacheTtlMs({}, { CLAUDE_CODE_PROMPT_CACHE_TTL: '5m', ENABLE_PROMPT_CACHING_1H: '1' })).toBe(FIVE)
+    expect(promptCacheTtlMs({ usingCredits: true }, { ENABLE_PROMPT_CACHING_1H: '1' })).toBe(HOUR)
+    expect(promptCacheTtlMs({}, { CLAUDE_CODE_PROMPT_CACHE_TTL: 'soon' })).toBe(HOUR)
+  })
+  it('compacts a minute before the cache lapses', () => {
+    expect(idleCompactDelay({}, {})).toBe(HOUR - 60_000)
+    expect(idleCompactDelay({ usingCredits: true }, {})).toBe(FIVE - 60_000)
   })
 })
 
