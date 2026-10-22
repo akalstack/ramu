@@ -13,6 +13,7 @@ import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
 import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
 import { ComputerScope } from '../../components/SettingsChrome'
 import { RulesSettings } from '../../components/RulesSettings'
+import { ProviderCompatibility } from '../../components/ProviderCompatibility'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import {
   emptyLayers,
@@ -260,7 +261,7 @@ function Usage({ computer }: { computer: string }) {
 
 /** What the desktop edits that the phone leaves to it, so a missing row is explained rather than puzzling. */
 const desktopOnly: Partial<Record<SettingsSection, string>> = {
-  providers: 'Model sets, provider binaries and sign-in are managed in Ramu on the host.',
+  providers: 'Model sets, provider executable paths and sign-in are managed in Ramu on the host.',
   access: 'Permission rules and the provider fallback order are edited in Ramu on the host.',
   workflows: 'Sub-agent routing and the advisor are set up in Ramu on the host.',
   memory: 'The memory and skills library, and its model choices, are managed in Ramu on the host.',
@@ -285,6 +286,7 @@ export default function SettingsSectionPage() {
         {id === 'notifications' ? <Notifications host={host} name={name} /> : null}
         {id === 'computers' ? <Computers /> : null}
         {id === 'about' ? <About /> : null}
+        {id === 'providers' ? <ProviderCompatibility key={selected} hostId={selected} /> : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
         {id === 'rules' ? <RulesSettings key={selected} hostId={selected} /> : null}
         {section.scope === 'host' ? <HostGroups section={id} host={host} name={name} /> : null}

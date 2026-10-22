@@ -2970,5 +2970,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Decline": "Tolak",
   "Request control": "Minta kendali",
   "Waiting for the device in control to allow it.": "Menunggu perangkat yang memegang kendali mengizinkan.",
+  "Runtime compatibility": "Kompatibilitas runtime",
+  "Update this host to see provider compatibility.": "Perbarui host ini untuk melihat kompatibilitas penyedia.",
+  "Reconnect to check provider compatibility.": "Sambungkan kembali untuk memeriksa kompatibilitas penyedia.",
+  "Compatibility is not reported by this host.": "Host ini tidak melaporkan kompatibilitas.",
+  "Update Ramu on the host to change this bundled runtime.": "Perbarui Ramu di host untuk mengubah runtime bawaan ini.",
+  "Change the executable path in Ramu on the host.": "Ubah path executable di Ramu pada host.",
+  "No providers are installed on this computer.": "Tidak ada penyedia yang terpasang di komputer ini.",
+  "Checks run on the host and never start a conversation or use model credit.": "Pemeriksaan berjalan di host dan tidak pernah memulai percakapan atau memakai kuota model.",
   "Ramu cannot tell when you use this computer’s mouse or keyboard. Take control before using it yourself.": "Ramu tidak dapat mendeteksi saat Anda memakai mouse atau keyboard komputer ini. Ambil kendali sebelum memakainya sendiri.",
 }
