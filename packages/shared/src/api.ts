@@ -676,6 +676,8 @@ export interface RamuMethods {
   'files.dropInfo'(paths: string[]): { path: string; kind: 'file' | 'dir' }[]
   /** Permanently deletes a file or folder inside the checkout. */
   'files.delete'(taskId: string, repoId: string, path: string): void
+  /** Whether an agent is writing in this checkout, so a rename, move or delete can collide with its work. */
+  'files.writer'(taskId: string, repoId: string): { active: boolean }
   'files.reveal'(taskId: string, repoId: string, path: string): void
   'files.explorerBindings'(context: string): RepositoryBinding[]
   'files.browse'(

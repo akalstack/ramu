@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, Share, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronDown, ChevronRight, File, Folder, RefreshCw, GitBranch, ListCollapse } from 'lucide-react-native'
@@ -16,7 +16,8 @@ import {
 import { useStore } from '../runtime/store'
 import { useWorkspaces } from '../runtime/useWorkspaces'
 import { fill, useT } from '../i18n'
-import { explorerActions, parentFolder, planRename } from '../runtime/explorerActions'
+import { duplicateName, explorerActions, parentFolder, planMove, planRename } from '../runtime/explorerActions'
+import { HostError } from '../runtime/transport'
 import { readExplorerNavigation } from '../runtime/explorerNavigation'
 import { font, space, useTheme } from '../theme'
 import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen'
@@ -86,10 +87,41 @@ export default function Explorer() {
   const [renameDraft, setRenameDraft] = useState<string | null>(null)
   const [actionError, setActionError] = useState('')
   const [acted, setActed] = useState(false)
+  const [moving, setMoving] = useState(false)
+  // Whether an agent is writing in the checkout of the row whose actions are open; asked while the sheet is open.
+  const [writerActive, setWriterActive] = useState(false)
   const closeActions = () => {
     setActing(null)
     setRenameDraft(null)
+    setMoving(false)
+    setWriterActive(false)
     setActionError('')
+  }
+  useEffect(() => {
+    if (!acting || !scope || !online) return
+    let current = true
+    store
+      .invoke(scope.host, 'files.writer', scope.context, acting.repoId)
+      .then((result) => current && setWriterActive(result.active))
+      .catch(() => current && setWriterActive(false))
+    return () => {
+      current = false
+    }
+  }, [acting?.repoId, acting?.entry.path])
+  /** Reads a file's text from the host (bounded there) and hands it to the device's clipboard or share sheet. */
+  const withContents = async (use: (text: string) => Promise<unknown> | void) => {
+    if (!scope || !acting || acted) return
+    setActed(true)
+    setActionError('')
+    try {
+      const file = await store.invoke(scope.host, 'files.read', scope.context, acting.repoId, acting.entry.path)
+      await use(file.content)
+      closeActions()
+    } catch (cause) {
+      setActionError(`${t.explorerUnreadable} ${String(cause instanceof Error ? cause.message : cause)}`)
+    } finally {
+      setActed(false)
+    }
   }
   /** Runs a change on the host, then reloads only the folder it touched. A failure keeps the sheet open to retry. */
   const change = async (work: () => Promise<unknown>, folder: string, repoId: string) => {
@@ -102,7 +134,12 @@ export default function Explorer() {
       const binding = bindingsRef.current.find((entry) => entry.repoId === repoId)
       if (binding) void loadDirectory(binding, folder)
     } catch (cause) {
-      setActionError(`${t.explorerActionFailed} ${String(cause instanceof Error ? cause.message : cause)}`)
+      if (cause instanceof HostError && cause.ambiguous) {
+        // The host may have applied it: reload instead of offering a blind retry, and let the person check.
+        const binding = bindingsRef.current.find((entry) => entry.repoId === repoId)
+        if (binding) void loadDirectory(binding, folder)
+        setActionError(t.explorerAmbiguous)
+      } else setActionError(`${t.explorerActionFailed} ${String(cause instanceof Error ? cause.message : cause)}`)
     } finally {
       setActed(false)
     }
@@ -621,9 +658,51 @@ export default function Explorer() {
         {acting && scope && (
           <>
             {actionError ? <T tone="muted">{actionError}</T> : null}
-            {renameDraft === null ? (
+            {writerActive && renameDraft === null && !moving ? (
+              <T tone="muted" size={font.caption}>
+                {t.explorerWriterWarning}
+              </T>
+            ) : null}
+            {moving ? (
               <>
-                {explorerActions({ online, viewOnly }).includes('copy-path') && (
+                <T tone="muted" size={font.caption}>
+                  {t.explorerMoveTitle}
+                </T>
+                {Object.keys(directories[acting.repoId] ?? {})
+                  .sort()
+                  .map((folder) => ({ folder, plan: planMove(acting.entry.path, folder) }))
+                  .filter(({ plan }) => plan.ok)
+                  .map(({ folder, plan }) => (
+                    <Row
+                      key={folder}
+                      disabled={acted}
+                      onPress={() =>
+                        plan.ok &&
+                        void change(
+                          () =>
+                            store.invoke(
+                              scope.host,
+                              'files.rename',
+                              scope.context,
+                              acting.repoId,
+                              acting.entry.path,
+                              plan.destination,
+                            ),
+                          parentFolder(acting.entry.path),
+                          acting.repoId,
+                        ).then(() => {
+                          const binding = bindingsRef.current.find((entry) => entry.repoId === acting.repoId)
+                          if (binding) void loadDirectory(binding, folder)
+                        })
+                      }
+                    >
+                      <T numberOfLines={1}>{folder || t.explorerRootFolder}</T>
+                    </Row>
+                  ))}
+              </>
+            ) : renameDraft === null ? (
+              <>
+                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('copy-path') && (
                   <Row
                     onPress={() => {
                       void Clipboard.setStringAsync(acting.entry.path)
@@ -631,37 +710,92 @@ export default function Explorer() {
                     }}
                   >
                     <T>{t.explorerCopyPath}</T>
+                    <T tone="muted" size={font.caption}>
+                      {fill(t.explorerCopyPathNote, store.computers.find((pc) => pc.id === scope.host)?.name ?? '')}
+                    </T>
                   </Row>
                 )}
-                {explorerActions({ online, viewOnly }).includes('rename') && (
+                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('copy-contents') && (
+                  <Row disabled={acted} onPress={() => void withContents((text) => Clipboard.setStringAsync(text))}>
+                    <T>{t.explorerCopyContents}</T>
+                  </Row>
+                )}
+                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('share') && (
+                  <Row
+                    disabled={acted}
+                    onPress={() =>
+                      void withContents((text) => Share.share({ message: text, title: acting.entry.name }))
+                    }
+                  >
+                    <T>{t.explorerShare}</T>
+                  </Row>
+                )}
+                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('duplicate') && (
+                  <Row
+                    disabled={acted}
+                    onPress={() =>
+                      void change(
+                        () =>
+                          store.invoke(
+                            scope.host,
+                            'files.copy',
+                            scope.context,
+                            acting.repoId,
+                            acting.entry.path,
+                            duplicateName(
+                              acting.entry.path,
+                              (directories[acting.repoId]?.[parentFolder(acting.entry.path)] ?? []).map(
+                                (entry) => entry.name,
+                              ),
+                            ),
+                          ),
+                        parentFolder(acting.entry.path),
+                        acting.repoId,
+                      )
+                    }
+                  >
+                    <T>{t.explorerDuplicate}</T>
+                  </Row>
+                )}
+                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('move') && (
+                  <Row onPress={() => setMoving(true)}>
+                    <T>{t.explorerMove}</T>
+                  </Row>
+                )}
+                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('rename') && (
                   <Row onPress={() => setRenameDraft(acting.entry.name)}>
                     <T>{t.explorerRename}</T>
                   </Row>
                 )}
-                {explorerActions({ online, viewOnly }).includes('delete') && (
+                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('delete') && (
                   <Row
                     disabled={acted}
                     onPress={() =>
-                      Alert.alert(t.explorerDelete, fill(t.explorerDeleteConfirm, acting.entry.path), [
-                        { text: t.cancel, style: 'cancel' },
-                        {
-                          text: t.explorerDelete,
-                          style: 'destructive',
-                          onPress: () =>
-                            void change(
-                              () =>
-                                store.invoke(
-                                  scope.host,
-                                  'files.delete',
-                                  scope.context,
-                                  acting.repoId,
-                                  acting.entry.path,
-                                ),
-                              parentFolder(acting.entry.path),
-                              acting.repoId,
-                            ),
-                        },
-                      ])
+                      Alert.alert(
+                        t.explorerDelete,
+                        fill(t.explorerDeleteConfirm, acting.entry.path) +
+                          (writerActive ? `\n\n${t.explorerWriterWarning}` : ''),
+                        [
+                          { text: t.cancel, style: 'cancel' },
+                          {
+                            text: t.explorerDelete,
+                            style: 'destructive',
+                            onPress: () =>
+                              void change(
+                                () =>
+                                  store.invoke(
+                                    scope.host,
+                                    'files.delete',
+                                    scope.context,
+                                    acting.repoId,
+                                    acting.entry.path,
+                                  ),
+                                parentFolder(acting.entry.path),
+                                acting.repoId,
+                              ),
+                          },
+                        ],
+                      )
                     }
                   >
                     <T>{t.explorerDelete}</T>

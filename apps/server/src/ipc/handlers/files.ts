@@ -61,6 +61,10 @@ export const registerFileHandlers: RegisterHandlers = (ctx) => {
           await rm(absolute, { recursive: true, force: true })
         }),
     },
+    'files.writer': {
+      args: z.tuple([id, id]),
+      run: (t: string, r: string) => ({ active: !!ctx.agents.activeWriter([cwdOf(t, r)]) }),
+    },
     'files.reveal': {
       args: z.tuple([id, id, relPath]),
       run: async (t: string, r: string, path: string) => {
