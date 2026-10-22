@@ -2971,4 +2971,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Request control": "Minta kendali",
   "Waiting for the device in control to allow it.": "Menunggu perangkat yang memegang kendali mengizinkan.",
   "Ramu cannot tell when you use this computer’s mouse or keyboard. Take control before using it yourself.": "Ramu tidak dapat mendeteksi saat Anda memakai mouse atau keyboard komputer ini. Ambil kendali sebelum memakainya sendiri.",
+  "Tap": "Ketuk",
+  "Scroll": "Gulir",
+  "Drag": "Seret",
+  "Pan view": "Geser tampilan",
+  "Selected": "Dipilih",
+  "Computer screen": "Layar komputer",
+  "Type on the computer": "Ketik di komputer",
+  "Send text": "Kirim teks",
+  "Activate to click the middle of the screen": "Aktifkan untuk mengeklik bagian tengah layar",
 }

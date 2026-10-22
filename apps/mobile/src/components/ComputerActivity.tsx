@@ -21,6 +21,9 @@ import { useComputerVideo, webrtc } from './useComputerVideo'
 type Frame = { uri: string; width: number; height: number; capturedAt: number; generation: number }
 
 const label = computerControllerLabel
+const MODE_LABEL = { tap: 'Tap', scroll: 'Scroll', drag: 'Drag', pan: 'Pan view' } as const
+/** A touch that moves less than this many points is a tap, not a gesture. */
+const TAP_SLOP = 10
 
 /** The phone watches and steers the owning computer's screen. Nothing runs here; the host keeps every grant. */
 function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: ComputerSessionSummary; onClose(): void }) {
@@ -36,6 +39,10 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
   const [error, setError] = useState('')
   const [layout, setLayout] = useState({ width: 1, height: 1 })
   const [asked, setAsked] = useState(false)
+  // Touch gestures act on the computer only in the chosen mode; Pan moves the zoomed view without sending anything.
+  const [mode, setMode] = useState<'tap' | 'scroll' | 'drag' | 'pan'>('tap')
+  const [zoom, setZoom] = useState(1)
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
   // Landscape gets the whole height; the frame is fitted inside the box so touches map through the letterbox bars.
   const window = useWindowDimensions()
   const maxHeight = Math.max(200, window.height - 160)
@@ -53,6 +60,17 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
     const subscription = AppState.addEventListener('change', (state) => setActive(state === 'active'))
     return () => subscription.remove()
   }, [])
+  // Losing the viewer pauses human control whichever transport it used: backgrounding or closing releases input.
+  useEffect(() => {
+    if (active) return
+    void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
+  }, [active, chat.computerId, taskId])
+  useEffect(
+    () => () => {
+      void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
+    },
+    [chat.computerId, taskId],
+  )
   // Frames stop and the last one is dropped when the app is backgrounded, so no screen lingers in the app switcher.
   useEffect(() => {
     if (!active || live) {
@@ -115,6 +133,7 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
     }
   }, [live, active, chat.computerId, taskId])
   const stale = !live && !!frame && now - frame.capturedAt > COMPUTER_FRAME_STALE_MS
+  const surface = live && video.streamURL && webrtc() ? video : frame
   const act = async (work: () => Promise<unknown>) => {
     try {
       await work()
@@ -163,53 +182,102 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
           <T tone="muted" accessibilityLiveRegion="polite">
             {status}
           </T>
-          {live && video.streamURL && webrtc() ? (
-            <Pressable
-              disabled={!human}
-              accessibilityRole="button"
-              accessibilityLabel={t('Computer screen')}
-              onLayout={(event) => setLayout(event.nativeEvent.layout)}
-              onPress={(event) => {
-                const point = frameOffset(
-                  { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY },
-                  layout,
-                  video,
-                )
-                if (point) send({ kind: 'click', ...point })
-              }}
-            >
-              {(() => {
-                const { RTCView } = webrtc()!
-                return (
-                  <RTCView
-                    streamURL={video.streamURL}
-                    objectFit="contain"
-                    style={{ width: '100%', aspectRatio: video.width / video.height, maxHeight }}
-                  />
-                )
-              })()}
-            </Pressable>
-          ) : frame ? (
-            <Pressable
-              disabled={!human || stale}
-              accessibilityRole="button"
-              accessibilityLabel={t('Computer screen')}
-              onLayout={(event) => setLayout(event.nativeEvent.layout)}
-              onPress={(event) => {
-                const point = frameOffset(
-                  { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY },
-                  layout,
-                  frame,
-                )
-                if (point) send({ kind: 'click', ...point })
-              }}
-            >
-              <Image
-                source={{ uri: frame.uri }}
-                resizeMode="contain"
-                style={{ width: '100%', aspectRatio: frame.width / frame.height, maxHeight, opacity: stale ? 0.5 : 1 }}
+          {human ? (
+            <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }} accessibilityRole="radiogroup">
+              {(['tap', 'scroll', 'drag', 'pan'] as const).map((choice) => (
+                <Button
+                  key={choice}
+                  kind={mode === choice ? 'primary' : 'secondary'}
+                  title={t(MODE_LABEL[choice])}
+                  accessibilityLabel={`${t(MODE_LABEL[choice])}${mode === choice ? `, ${t('Selected')}` : ''}`}
+                  onPress={() => setMode(choice)}
+                />
+              ))}
+              <Button
+                kind="secondary"
+                title={`${zoom}×`}
+                accessibilityLabel={t('Zoom')}
+                onPress={() => setZoom((value) => (value >= 3 ? 1 : value + 1))}
               />
-            </Pressable>
+            </View>
+          ) : null}
+          {surface ? (
+            <ScrollView
+              horizontal
+              nestedScrollEnabled
+              scrollEnabled={mode === 'pan' || !human}
+              showsHorizontalScrollIndicator={zoom > 1}
+            >
+              <ScrollView
+                nestedScrollEnabled
+                scrollEnabled={mode === 'pan' || !human}
+                showsVerticalScrollIndicator={zoom > 1}
+              >
+                <View
+                  accessible
+                  accessibilityRole="button"
+                  accessibilityLabel={t('Computer screen')}
+                  accessibilityHint={human ? t('Activate to click the middle of the screen') : undefined}
+                  accessibilityActions={human && !stale ? [{ name: 'activate' }] : []}
+                  onAccessibilityAction={() =>
+                    send({ kind: 'click', x: Math.floor(surface.width / 2), y: Math.floor(surface.height / 2) })
+                  }
+                  onLayout={(event) => setLayout(event.nativeEvent.layout)}
+                  onTouchStart={(event) => {
+                    touchStart.current = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }
+                  }}
+                  onTouchEnd={(event) => {
+                    const from = touchStart.current
+                    touchStart.current = null
+                    if (!from || !human || mode === 'pan') return
+                    const to = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }
+                    const start = frameOffset(from, layout, surface)
+                    const end = frameOffset(to, layout, surface)
+                    if (!start || !end) return
+                    const moved = Math.hypot(to.x - from.x, to.y - from.y) > TAP_SLOP
+                    if (mode === 'tap') {
+                      if (!moved) send({ kind: 'click', ...end })
+                    } else if (!moved) {
+                      return
+                    } else if (mode === 'scroll') {
+                      // Dragging the finger up moves the content up, as on the phone itself.
+                      send({ kind: 'scroll', x: start.x, y: start.y, dx: start.x - end.x, dy: start.y - end.y })
+                    } else {
+                      send({ kind: 'drag', fromX: start.x, fromY: start.y, toX: end.x, toY: end.y })
+                    }
+                  }}
+                  style={{ width: (window.width - space.m * 2) * zoom }}
+                >
+                  {live && video.streamURL && webrtc() ? (
+                    (() => {
+                      const { RTCView } = webrtc()!
+                      return (
+                        <RTCView
+                          streamURL={video.streamURL}
+                          objectFit="contain"
+                          style={{
+                            width: '100%',
+                            aspectRatio: video.width / video.height,
+                            maxHeight: maxHeight * zoom,
+                          }}
+                        />
+                      )
+                    })()
+                  ) : frame ? (
+                    <Image
+                      source={{ uri: frame.uri }}
+                      resizeMode="contain"
+                      style={{
+                        width: '100%',
+                        aspectRatio: frame.width / frame.height,
+                        maxHeight: maxHeight * zoom,
+                        opacity: stale ? 0.5 : 1,
+                      }}
+                    />
+                  ) : null}
+                </View>
+              </ScrollView>
+            </ScrollView>
           ) : null}
           <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
             {human ? (
@@ -273,6 +341,7 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
                   send({ kind: 'type', text })
                   setText('')
                 }}
+                blurOnSubmit={false}
                 style={{
                   color: theme.text,
                   borderWidth: 1,
@@ -283,6 +352,15 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
                 }}
               />
               <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
+                <Button
+                  title={t('Send text')}
+                  disabled={!text || stale}
+                  onPress={() => {
+                    if (!text) return
+                    send({ kind: 'type', text })
+                    setText('')
+                  }}
+                />
                 {(['Enter', 'Tab', 'Escape', 'Backspace', 'ArrowUp', 'ArrowDown'] as const).map((key) => (
                   <Button
                     key={key}
