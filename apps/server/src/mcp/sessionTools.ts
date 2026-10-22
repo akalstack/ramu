@@ -33,6 +33,17 @@ export function externalToolName(connection: Pick<SharedMcpConnection, 'id' | 'n
   return `${prefix}__${tool}`.slice(0, NAME_BUDGET)
 }
 
+/**
+ * The connections a thread has already called, read from the names of the tools it used. A tool name carries the short
+ * hash of its connection's id (see `externalToolName`), whatever prefix a provider adds in front of it.
+ */
+export function connectionsUsed(toolNames: Iterable<string>, connectionIds: Iterable<string>): Set<string> {
+  const marks = [...connectionIds].map((id) => [id, `-${short(id)}__`] as const)
+  const used = new Set<string>()
+  for (const name of toolNames) for (const [id, mark] of marks) if (name.includes(mark)) used.add(id)
+  return used
+}
+
 export interface ExternalToolEntry {
   name: string
   connectionId: string

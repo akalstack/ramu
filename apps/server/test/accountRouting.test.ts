@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -363,4 +364,59 @@ it('prefers a login that already has the thread’s Shared MCP access, and falls
   const none = await pick()
   expect(none?.account).toBe('b')
   expect(none?.attention).toEqual([{ name: 'Tracker', status: 'approval-needed' }])
+})
+
+it('pauses a limit fallback instead of moving a thread onto a login that would lose a connection it already used', async () => {
+  const provider: AgentProvider = 'claude-code'
+  const usage = new UsageService(
+    () => [reading(provider), reading(provider, 'b', 3)],
+    () => {},
+    () => {},
+  )
+  const events: unknown[] = []
+  const states: string[] = []
+  const toolName = (id: string) =>
+    `mcp__shared_mcp__Tracker-${createHash('sha256').update(id).digest('hex').slice(0, 6)}__create`
+  const history = [{ kind: 'tool-use', name: toolName('conn-1') }]
+  let launched = 0
+  const attention = [{ name: 'Tracker', status: 'approval-needed', connectionId: 'conn-1' }]
+  const host = {
+    preferencesSource: () => () => prefs,
+    preferences: () => prefs,
+    usage: () => usage,
+    catalog: async () => catalogs,
+    refreshAccountUsage: () => async () => {},
+    mcpDestination: () => async () => attention,
+    get: () => ({ id: 's', provider, settings: settings(provider), state: 'running' }),
+    events: () => history,
+    transitioning: new Set<string>(),
+    revisions: new Map<string, number>(),
+    draining: new Map<string, Promise<void>>(),
+    shutdown: () => false,
+    catalogReady: true,
+    planSwitch: () => ({ resume: null, info: { cause: 'limit', mode: 'full', fromSeq: 1 }, fits: true }),
+    halt: () => {},
+    record: (_id: string, event: unknown) => events.push(event),
+    setState: (_id: string, state: string) => states.push(state),
+    launch: () => void launched++,
+    rememberSession: () => {},
+    setupOmissions: () => () => [],
+    settleChild: () => {},
+    waitForGoalProvider: () => false,
+    fail: () => {},
+  } as unknown as FallbackRouterHost
+  const router = new FallbackRouter(host, db)
+  await router.fallback('s', 'high')
+  expect(launched).toBe(0)
+  expect(states.at(-1)).toBe('failed')
+  expect(events).toEqual([expect.objectContaining({ kind: 'error', message: expect.stringContaining('Tracker') })])
+  expect(JSON.stringify(events)).not.toMatch(/usage limit|quota/i)
+
+  // A connection this thread never called does not stop the fallback; the switch carries the notice as before.
+  history.length = 0
+  events.length = 0
+  states.length = 0
+  await router.fallback('s', 'high')
+  expect(launched).toBe(1)
+  expect(events[0]).toMatchObject({ kind: 'settings', mcpAttention: attention })
 })

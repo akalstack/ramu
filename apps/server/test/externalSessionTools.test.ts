@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
 import { openDb } from '../src/db'
@@ -8,6 +8,7 @@ import { SharedMcpService } from '../src/mcp/service'
 import { connectSharedMcpStdio } from '../src/mcp/stdio'
 import {
   ExternalSessionTools,
+  connectionsUsed,
   externalToolName,
   hasExternalConnections,
   type ExternalSessionSource,
@@ -117,4 +118,14 @@ it('queues parallel calls on one connection instead of rejecting the second', as
     [1, 2, 3].map(() => gateway.invoke(connection.id, inspection.catalogRevision, 'inspect_environment', {})),
   )
   expect(results.map((result) => result.isError)).toEqual([undefined, undefined, undefined])
+})
+
+describe('connectionsUsed', () => {
+  it('recognizes a thread’s calls to a connection whatever provider prefix the tool name carries', () => {
+    const tracker = { id: 'conn-tracker-1', name: 'Tracker' }
+    const wiki = { id: 'conn-wiki-2', name: 'Wiki' }
+    const used = [`mcp__shared_mcp__${externalToolName(tracker, 'create_issue')}`, 'shared_mcp.search', 'Read']
+    expect([...connectionsUsed(used, [tracker.id, wiki.id])]).toEqual([tracker.id])
+    expect(connectionsUsed([], [tracker.id]).size).toBe(0)
+  })
 })

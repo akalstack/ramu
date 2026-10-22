@@ -37,6 +37,7 @@ import {
   type RouteDecision,
   type RouteContext,
 } from '@ramu/shared/providers/routing'
+import { connectionsUsed } from '../mcp/sessionTools'
 import { WRITING_STATES } from './constants'
 import { LIMIT_CONTINUATION } from './providerWait'
 import { sameSettings } from './settings'
@@ -58,7 +59,7 @@ export interface FallbackRouterHost
     Pick<ProviderWaits, 'waitForGoalProvider'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
     Pick<SessionRegistry, 'draining' | 'revisions' | 'transitioning'>,
-    Pick<SessionStore, 'get'>,
+    Pick<SessionStore, 'get' | 'events'>,
     Pick<SubagentRunner, 'settleChild'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   mcpDestination(): AgentService['mcpDestination']
@@ -185,6 +186,20 @@ export class FallbackRouter {
       this.host.transitioning.delete(id)
       this.host.settleChild(id)
     }
+  }
+
+  /**
+   * Names of the attention items this thread has already called, so losing them would break work in progress. A
+   * connection the thread never used is only noted on the settings event; it does not stop a fallback.
+   */
+  private requiredLost(id: string, attention: { name: string; connectionId?: string }[]): string[] {
+    const ids = attention.flatMap((item) => (item.connectionId ? [item.connectionId] : []))
+    if (!ids.length) return []
+    const tools = this.host
+      .events(id)
+      .flatMap((event) => (event.kind === 'tool-use' && !event.agentId ? [event.name] : []))
+    const used = connectionsUsed(tools, ids)
+    return attention.filter((item) => item.connectionId && used.has(item.connectionId)).map((item) => item.name)
   }
 
   /**
@@ -526,6 +541,19 @@ export class FallbackRouter {
       if (account && accountPlan?.fits) {
         const accountAttention = choice!.attention
         if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
+        // Never move a thread onto a login that would silently lose a connection it was already using.
+        const lost = this.requiredLost(id, accountAttention)
+        if (lost.length) {
+          this.host.halt(id)
+          await this.host.draining.get(id)
+          this.host.record(id, {
+            kind: 'error',
+            message: `Continuing on ${this.accountName(s.provider, account)} would leave ${lost.join(', ')} without access that this thread was using. Choose another account from the model menu, or approve ${lost.length === 1 ? 'it' : 'them'} for that login in Settings → Providers, then send again.`,
+          })
+          this.host.transitioning.delete(id)
+          this.host.setState(id, 'failed')
+          return
+        }
         this.host.halt(id)
         await this.host.draining.get(id)
         if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return

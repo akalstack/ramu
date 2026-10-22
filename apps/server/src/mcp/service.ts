@@ -157,8 +157,8 @@ export class SharedMcpService {
       ])
       clearTimeout(timer)
     }
-    return this.sessionConnections(provider, accountId, projectId).flatMap(({ name, status }) =>
-      status === 'ready' ? [] : [{ name, status }],
+    return this.sessionConnections(provider, accountId, projectId).flatMap(({ name, status, connectionId }) =>
+      status === 'ready' ? [] : [{ name, status, connectionId }],
     )
   }
 

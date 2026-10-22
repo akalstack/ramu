@@ -432,6 +432,8 @@ type AgentEventBody =
       /** Shared MCP connections the new login cannot use yet, so the person can review access or choose another login. */
       mcpAttention?: {
         name: string
+        /** The connection, so a fallback can tell one this thread has already used from one it never touched. */
+        connectionId?: string
         status: 'approval-needed' | 'sign-in-required' | 'unsupported' | 'not-checked'
       }[]
       /** What the destination login lacks from the thread's agent setup, checked on the execution server before launch. */
