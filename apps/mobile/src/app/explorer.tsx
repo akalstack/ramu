@@ -16,7 +16,8 @@ import {
 import { useStore } from '../runtime/store'
 import { useWorkspaces } from '../runtime/useWorkspaces'
 import { fill, useT } from '../i18n'
-import { explorerActions, parentFolder, planRename } from '../runtime/explorerActions'
+import { duplicateName, explorerActions, parentFolder, planMove, planRename } from '../runtime/explorerActions'
+import { shareDownloadedFile } from '../runtime/explorerShare'
 import { readExplorerNavigation } from '../runtime/explorerNavigation'
 import { font, space, useTheme } from '../theme'
 import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen'
@@ -84,15 +85,18 @@ export default function Explorer() {
   // The row whose actions are open, and its rename draft; closing the sheet changes nothing.
   const [acting, setActing] = useState<{ repoId: string; entry: DirEntry } | null>(null)
   const [renameDraft, setRenameDraft] = useState<string | null>(null)
+  const [moveDraft, setMoveDraft] = useState<string | null>(null)
   const [actionError, setActionError] = useState('')
   const [acted, setActed] = useState(false)
+  const actions = acting ? explorerActions({ online, viewOnly, kind: acting.entry.kind }) : []
   const closeActions = () => {
     setActing(null)
     setRenameDraft(null)
+    setMoveDraft(null)
     setActionError('')
   }
   /** Runs a change on the host, then reloads only the folder it touched. A failure keeps the sheet open to retry. */
-  const change = async (work: () => Promise<unknown>, folder: string, repoId: string) => {
+  const change = async (work: () => Promise<unknown>, folder: string, repoId: string, alsoReload?: string) => {
     if (!scope || acted) return
     setActed(true)
     setActionError('')
@@ -100,7 +104,11 @@ export default function Explorer() {
       await work()
       closeActions()
       const binding = bindingsRef.current.find((entry) => entry.repoId === repoId)
-      if (binding) void loadDirectory(binding, folder)
+      if (binding) {
+        void loadDirectory(binding, folder)
+        if (alsoReload !== undefined && alsoReload !== folder && directories[repoId]?.[alsoReload])
+          void loadDirectory(binding, alsoReload)
+      }
     } catch (cause) {
       setActionError(`${t.explorerActionFailed} ${String(cause instanceof Error ? cause.message : cause)}`)
     } finally {
@@ -621,9 +629,111 @@ export default function Explorer() {
         {acting && scope && (
           <>
             {actionError ? <T tone="muted">{actionError}</T> : null}
-            {renameDraft === null ? (
+            {moveDraft !== null ? (
               <>
-                {explorerActions({ online, viewOnly }).includes('copy-path') && (
+                <T tone="muted">{t.explorerMoveHint}</T>
+                <TextInput
+                  autoFocus
+                  accessibilityLabel={t.explorerMoveTitle}
+                  value={moveDraft}
+                  onChangeText={setMoveDraft}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="src/lib"
+                  placeholderTextColor={c.soft}
+                  style={{ color: c.text, fontSize: font.body, paddingVertical: space.s, minHeight: 44 }}
+                />
+                <Row
+                  disabled={acted}
+                  onPress={() => {
+                    const plan = planMove(acting.entry.path, moveDraft)
+                    if (!plan.ok) {
+                      if (plan.reason === 'unchanged') closeActions()
+                      else setActionError(plan.reason === 'inside-self' ? t.explorerMoveInside : t.explorerMoveInvalid)
+                      return
+                    }
+                    void change(
+                      () =>
+                        store.invoke(
+                          scope.host,
+                          'files.rename',
+                          scope.context,
+                          acting.repoId,
+                          acting.entry.path,
+                          plan.destination,
+                        ),
+                      parentFolder(acting.entry.path),
+                      acting.repoId,
+                      parentFolder(plan.destination),
+                    )
+                  }}
+                >
+                  <T>{t.explorerMove}</T>
+                </Row>
+              </>
+            ) : renameDraft === null ? (
+              <>
+                {actions.includes('share') && (
+                  <Row
+                    disabled={acted}
+                    onPress={async () => {
+                      setActed(true)
+                      setActionError('')
+                      try {
+                        const { content } = await store.invoke(
+                          scope.host,
+                          'files.read',
+                          scope.context,
+                          acting.repoId,
+                          acting.entry.path,
+                        )
+                        if (await shareDownloadedFile(acting.entry.name, content)) closeActions()
+                        else setActionError(t.explorerShareUnavailable)
+                      } catch (cause) {
+                        setActionError(
+                          `${t.explorerActionFailed} ${String(cause instanceof Error ? cause.message : cause)}`,
+                        )
+                      } finally {
+                        setActed(false)
+                      }
+                    }}
+                  >
+                    <T>{t.explorerShare}</T>
+                    <T size={font.caption} tone="muted">
+                      {t.explorerShareNote}
+                    </T>
+                  </Row>
+                )}
+                {actions.includes('duplicate') && (
+                  <Row
+                    disabled={acted}
+                    onPress={() => {
+                      const folder = parentFolder(acting.entry.path)
+                      const siblings = (directories[acting.repoId]?.[folder] ?? []).map((entry) => entry.name)
+                      void change(
+                        () =>
+                          store.invoke(
+                            scope.host,
+                            'files.copy',
+                            scope.context,
+                            acting.repoId,
+                            acting.entry.path,
+                            duplicateName(acting.entry.path, siblings),
+                          ),
+                        folder,
+                        acting.repoId,
+                      )
+                    }}
+                  >
+                    <T>{t.explorerDuplicate}</T>
+                  </Row>
+                )}
+                {actions.includes('move') && (
+                  <Row onPress={() => setMoveDraft(parentFolder(acting.entry.path))}>
+                    <T>{t.explorerMove}</T>
+                  </Row>
+                )}
+                {actions.includes('copy-path') && (
                   <Row
                     onPress={() => {
                       void Clipboard.setStringAsync(acting.entry.path)
@@ -633,12 +743,12 @@ export default function Explorer() {
                     <T>{t.explorerCopyPath}</T>
                   </Row>
                 )}
-                {explorerActions({ online, viewOnly }).includes('rename') && (
+                {actions.includes('rename') && (
                   <Row onPress={() => setRenameDraft(acting.entry.name)}>
                     <T>{t.explorerRename}</T>
                   </Row>
                 )}
-                {explorerActions({ online, viewOnly }).includes('delete') && (
+                {actions.includes('delete') && (
                   <Row
                     disabled={acted}
                     onPress={() =>
