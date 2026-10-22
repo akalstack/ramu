@@ -124,6 +124,15 @@ it('reports the caller role for client action hiding, defaulting local and legac
   expect(accessOf(undefined)).toBe('owner')
 })
 
+it('lets a viewer device reach only the computer screen watching methods, never input or grants', async () => {
+  const f = await fixture()
+  const viewer = f.devices.redeem(f.devices.createCode(f.now(), 'viewer').code, 'Phone', f.now())!.device
+  for (const method of ['computer.frame', 'computer.session', 'computer.rtcOffer'])
+    expect(deviceMayInvoke(viewer, method)).toBe(true)
+  for (const method of ['computer.input', 'computer.takeControl', 'computer.grantViewer', 'computer.setEnabled', 'computer.revoke'])
+    expect(deviceMayInvoke(viewer, method)).toBe(false)
+})
+
 it('renews a device token over HTTP without a gap, and refuses renewal without a live device token', async () => {
   const f = await fixture()
   const paired = (await (await f.pair(f.devices.createCode(f.now()).code)).json()) as { token: string }

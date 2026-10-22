@@ -62,8 +62,18 @@ const viewerMethods = new Set([
   'liveActivity.register',
   'liveActivity.unregister',
 ])
+// A viewer-role device is read-only: it may watch a computer only when the host's owner granted it that thread's
+// screen (checked again by the handler on every call, including every frame). Input, control and every setup or
+// grant method stay owner-only whatever grant exists.
+const viewerComputerMethods = new Set([
+  'computer.session',
+  'computer.frame',
+  'computer.rtcOffer',
+  'computer.rtcKeyFrame',
+  'computer.rtcClose',
+])
 export const deviceMayInvoke = (device: DeviceInfo | undefined, method: string): boolean =>
-  device?.role !== 'viewer' || viewerMethods.has(method)
+  device?.role !== 'viewer' || viewerMethods.has(method) || viewerComputerMethods.has(method)
 /** What this device is told about its own access so clients can hide actions the server would refuse. Advisory only. */
 export const accessOf = (device: DeviceInfo | undefined): 'owner' | 'viewer' =>
   device?.role === 'viewer' ? 'viewer' : 'owner'
