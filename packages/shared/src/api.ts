@@ -83,7 +83,10 @@ import type {
   RuleInput,
   RuleRevision,
   NativeInstructions,
+  ForgeAccessReport,
   ForgeConnectionSummary,
+  ForgeSaveConnectionInput,
+  ForgeSavedConnection,
   PullRequestWatchStatus,
   IssueLink,
   IssueSummary,
@@ -752,6 +755,19 @@ export interface RamuMethods {
   'forge.connections'(): ForgeConnectionSummary
   /** Instruction files providers read on their own (AGENTS.md, CLAUDE.md, rules folders) for a project and the user; read-only. */
   'rules.native'(projectId: string | null): NativeInstructions
+  /** Saves or replaces a GitHub token on this host after the server vouches for it. Host administrators only. */
+  'forge.saveConnection'(input: ForgeSaveConnectionInput): ForgeSavedConnection
+  /** Verifies a saved token again; a failure records why and keeps the credential. */
+  'forge.checkConnection'(connectionId: string): ForgeSavedConnection
+  'forge.setConnectionEnabled'(connectionId: string, enabled: boolean): void
+  /** Removes only Ramu's saved token; a detected CLI sign-in is untouched and watches that used it end. */
+  'forge.removeConnection'(connectionId: string): void
+  /** The account an origin uses: a saved connection id, `cli` or `cli:<login>`. */
+  'forge.selectAccount'(origin: string, account: string): void
+  /** Pins this repository to an account, or clears the pin with null. */
+  'forge.setRepositoryAccount'(taskId: string, repoId: string, account: string | null): void
+  /** API reads, writes and Git transport for this repository, separately; nothing is pushed. */
+  'forge.checkAccess'(taskId: string, repoId: string): ForgeAccessReport
   'rules.list'(): Rule[]
   'rules.save'(input: RuleInput): Rule
   'rules.remove'(ruleId: string): void

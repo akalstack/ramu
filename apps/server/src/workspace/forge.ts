@@ -3,7 +3,9 @@
 import { existsSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import type {
+  ForgeAccessReport,
   ForgeAvailability,
+  ForgeCheckResult,
   ForgeCheck,
   ForgeCheckState,
   ForgeConnectionSummary,
@@ -18,6 +20,8 @@ import type {
   PullRequestReviewDecision,
 } from '@ramu/shared/types'
 import { parseGhAuthStatus } from '@ramu/shared/forgeAccounts'
+import { githubApiBase, parseForgeRemote, redactSecrets, type ForgeRemote } from '@ramu/shared/forgeRemote'
+import type { ForgeAccountStore } from './forgeAccounts'
 import { findExecutable } from '../providers/providerBinaries'
 import { branchExists, commitBranchInfo, currentBranch, git, headOid, publishRemote } from './git'
 
@@ -48,10 +52,68 @@ export function availabilityFromError(stderr: string): ForgeAvailability | null 
 
 const MAX_BUFFER = 32 * 1024 * 1024
 
-export function gh(cwd: string, args: string[]): Promise<string> {
+let accountStore: ForgeAccountStore | null = null
+
+/** Wires saved connections into every `gh` call. Without it `gh` runs as before, with its own sign-in. */
+export function configureForgeAccounts(store: ForgeAccountStore | null): void {
+  accountStore = store
+  remoteCache.clear()
+}
+
+const remoteCache = new Map<string, { at: number; remote: ForgeRemote | null }>()
+
+/** The forge repository behind a checkout's publish remote, from its URL alone. No network request. */
+export async function forgeRemoteOf(cwd: string): Promise<ForgeRemote | null> {
+  const cached = remoteCache.get(cwd)
+  if (cached && Date.now() - cached.at < 10_000) return cached.remote
+  let remote: ForgeRemote | null = null
+  try {
+    const { remote: name } = await publishRemote(cwd, await currentBranch(cwd))
+    if (name) remote = parseForgeRemote((await git(cwd, ['remote', 'get-url', name])).trim())
+  } catch {
+    remote = null
+  }
+  if (remoteCache.size > 200) remoteCache.clear()
+  remoteCache.set(cwd, { at: Date.now(), remote })
+  return remote
+}
+
+/** The token of one `gh` sign-in, for a call that must use a specific CLI account. Never stored or returned. */
+function cliToken(executable: string, origin: string, login: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      executable,
+      ['auth', 'token', '--hostname', origin, '--user', login],
+      { encoding: 'utf8', timeout: 15_000, env: { ...process.env, GH_PROMPT_DISABLED: '1', NO_COLOR: '1' } },
+      (error, stdout) =>
+        error || !stdout.trim()
+          ? reject(new ForgeError(`The GitHub CLI has no sign-in for ${login} on ${origin}.`, 'signed-out'))
+          : resolve(stdout.trim()),
+    )
+  })
+}
+
+/** Environment that makes `gh` act as the chosen account. An ambiguous choice is an error, never a silent pick. */
+export async function accountEnvironment(cwd: string, executable: string): Promise<Record<string, string>> {
+  if (!accountStore) return {}
+  const remote = await forgeRemoteOf(cwd)
+  const origin = remote?.origin ?? 'github.com'
+  const account = await accountStore.resolve(origin, remote?.owner, remote?.repo)
+  if (account.kind === 'ambiguous')
+    throw new ForgeError(
+      `Several GitHub accounts are saved for ${origin}. Choose which one this repository uses in Settings → Git.`,
+      'choose-account',
+    )
+  const token =
+    account.kind === 'saved' ? account.token : account.login ? await cliToken(executable, origin, account.login) : null
+  if (!token) return {}
+  return origin === 'github.com' ? { GH_TOKEN: token } : { GH_HOST: origin, GH_ENTERPRISE_TOKEN: token }
+}
+
+export async function gh(cwd: string, args: string[]): Promise<string> {
   const executable = ghExecutable()
-  if (!executable)
-    return Promise.reject(new ForgeError('Install the GitHub CLI (gh) to use pull requests and issues.', 'no-cli'))
+  if (!executable) throw new ForgeError('Install the GitHub CLI (gh) to use pull requests and issues.', 'no-cli')
+  const account = await accountEnvironment(cwd, executable)
   return new Promise((resolve, reject) => {
     execFile(
       executable,
@@ -64,6 +126,7 @@ export function gh(cwd: string, args: string[]): Promise<string> {
         // Never prompt, page, colour output or check for updates.
         env: {
           ...process.env,
+          ...account,
           GH_PROMPT_DISABLED: '1',
           GH_NO_UPDATE_NOTIFIER: '1',
           GH_PAGER: 'cat',
@@ -73,7 +136,7 @@ export function gh(cwd: string, args: string[]): Promise<string> {
       },
       (err, stdout, stderr) => {
         if (!err) return resolve(stdout)
-        const detail = stderr.trim() || err.message
+        const detail = redactSecrets(stderr.trim() || err.message)
         reject(new ForgeError(`gh ${args[0]} failed: ${detail}`, availabilityFromError(detail)))
       },
     )
@@ -106,6 +169,141 @@ export async function forgeConnections(
   if (!executable) return { cli: 'no-cli', accounts: [], checkedAt }
   const accounts = parseGhAuthStatus(await (options.status ?? authStatusText)(executable))
   return { cli: accounts.length ? 'signed-in' : 'signed-out', accounts, checkedAt }
+}
+
+/** Detected CLI sign-ins plus the credentials saved on this host. */
+export async function connectionSummary(canAdminister: boolean): Promise<ForgeConnectionSummary> {
+  const detected = await forgeConnections()
+  return accountStore ? { ...detected, ...accountStore.summary(canAdminister) } : detected
+}
+
+/** The saved connection a checkout's GitHub calls use, or null for the detected CLI or when none is configured. */
+export async function resolvedConnectionId(cwd: string): Promise<string | null> {
+  if (!accountStore) return null
+  try {
+    const remote = await forgeRemoteOf(cwd)
+    const account = await accountStore.resolve(remote?.origin ?? 'github.com', remote?.owner, remote?.repo)
+    return account.kind === 'saved' ? account.connectionId : null
+  } catch {
+    return null
+  }
+}
+
+const unknownCheck =(detail: string | null = null): ForgeCheckResult => ({ state: 'unknown', detail })
+
+/** Runs `git ls-remote`: reads refs through the remote's own transport and credentials, and changes nothing. */
+function remoteReachable(cwd: string, remote: string): Promise<ForgeCheckResult> {
+  return new Promise((resolve) => {
+    execFile(
+      'git',
+      ['ls-remote', '--heads', remote],
+      {
+        cwd,
+        timeout: 20_000,
+        maxBuffer: 4 * 1024 * 1024,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GIT_TERMINAL_PROMPT: '0',
+          // A key passphrase or unknown host must fail here instead of waiting for input.
+          GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? 'ssh -o BatchMode=yes -o ConnectTimeout=10',
+          LC_ALL: 'C',
+        },
+      },
+      (error, _stdout, stderr) => {
+        if (!error) return resolve({ state: 'ok', detail: null })
+        const text = redactSecrets(stderr.trim() || error.message).split('\n')[0] ?? ''
+        const denied = /permission denied|authentication failed|could not read username|access denied|403|publickey/i
+        resolve({ state: denied.test(text) ? 'denied' : 'failed', detail: text.slice(0, 300) || null })
+      },
+    )
+  })
+}
+
+interface RepositoryRead {
+  permissions?: { push?: boolean; admin?: boolean; maintain?: boolean }
+}
+
+function readOutcome(status: number): ForgeCheckResult {
+  if (status === 401) return { state: 'denied', detail: 'The credential was rejected. It may be expired or revoked.' }
+  if (status === 403 || status === 429)
+    return { state: 'denied', detail: 'The server refused the request: a permission is missing or the rate limit was reached.' }
+  if (status === 404)
+    return { state: 'denied', detail: 'The repository was not found with this account. It may be private or need organization approval.' }
+  return { state: 'failed', detail: `The server answered with status ${status}.` }
+}
+
+/**
+ * What the account that would be used can do in this repository: API reads, writes and Git transport are reported
+ * separately, and nothing is committed or pushed. A successful identity check elsewhere proves none of this.
+ */
+export async function checkAccess(
+  cwd: string,
+  options: { fetch?: typeof fetch; now?: number } = {},
+): Promise<ForgeAccessReport> {
+  const checkedAt = options.now ?? Date.now()
+  const remote = await forgeRemoteOf(cwd)
+  const none = { source: 'none' as const, login: null, connectionId: null, ambiguous: false }
+  if (!remote)
+    return {
+      origin: null,
+      account: none,
+      api: { read: unknownCheck('This repository has no GitHub remote.'), write: unknownCheck() },
+      transport: unknownCheck(),
+      checkedAt,
+    }
+  const resolution = accountStore ? await accountStore.resolve(remote.origin, remote.owner, remote.repo) : null
+  if (resolution?.kind === 'ambiguous')
+    return {
+      origin: remote.origin,
+      account: { ...none, ambiguous: true },
+      api: { read: unknownCheck('Choose an account for this repository first.'), write: unknownCheck() },
+      transport: unknownCheck(),
+      checkedAt,
+    }
+  const account =
+    resolution?.kind === 'saved'
+      ? { source: 'saved' as const, login: resolution.login, connectionId: resolution.connectionId, ambiguous: false }
+      : { source: 'cli' as const, login: resolution?.kind === 'cli' ? resolution.login : null, connectionId: null, ambiguous: false }
+  let read: ForgeCheckResult
+  let write: ForgeCheckResult = unknownCheck()
+  try {
+    let body: RepositoryRead | null = null
+    if (resolution?.kind === 'saved') {
+      const response = await (options.fetch ?? fetch)(`${githubApiBase(remote.origin)}/repos/${remote.owner}/${remote.repo}`, {
+        headers: {
+          Authorization: `Bearer ${resolution.token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'Ramu',
+        },
+        redirect: 'error',
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (response.ok) body = (await response.json()) as RepositoryRead
+      else read = readOutcome(response.status)
+    } else {
+      body = JSON.parse(await gh(cwd, ['api', `repos/${remote.owner}/${remote.repo}`])) as RepositoryRead
+    }
+    read = body ? { state: 'ok', detail: null } : read!
+    if (body) {
+      const permissions = body.permissions
+      write = !permissions
+        ? unknownCheck('The server did not report write permissions.')
+        : permissions.push || permissions.admin || permissions.maintain
+          ? { state: 'ok', detail: null }
+          : { state: 'denied', detail: 'This account can read the repository but not push or open pull requests.' }
+    }
+  } catch (error) {
+    const message = redactSecrets(error instanceof Error ? error.message : String(error))
+    read =
+      error instanceof ForgeError && error.availability
+        ? { state: 'denied', detail: message }
+        : { state: 'failed', detail: /redirect/i.test(message) ? 'The server redirected the request, so the credential was not sent on.' : message.slice(0, 300) }
+  }
+  const { remote: name } = await publishRemote(cwd, await currentBranch(cwd)).catch(() => ({ remote: null }))
+  const transport = name ? await remoteReachable(cwd, name) : unknownCheck('No remote is configured.')
+  return { origin: remote.origin, account, api: { read, write }, transport, checkedAt }
 }
 
 // ---- Pull requests ----

@@ -8,7 +8,11 @@ import { currentBranch } from '../src/workspace/git'
 import { pullRequestFeedback, pullRequestStatus } from '../src/workspace/forge'
 
 vi.mock('../src/workspace/git', () => ({ currentBranch: vi.fn() }))
-vi.mock('../src/workspace/forge', () => ({ pullRequestFeedback: vi.fn(), pullRequestStatus: vi.fn() }))
+vi.mock('../src/workspace/forge', () => ({
+  pullRequestFeedback: vi.fn(),
+  pullRequestStatus: vi.fn(),
+  resolvedConnectionId: vi.fn(async () => null),
+}))
 
 let db: Db, ws: Workspace, service: PullRequestWatchService
 let session: AgentSessionInfo

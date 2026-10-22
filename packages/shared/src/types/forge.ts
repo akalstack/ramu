@@ -1,7 +1,7 @@
 // Pull requests and issues on the repository's hosting service (GitHub through the `gh` CLI).
 
 /** Why forge features are unavailable for a checkout, or `ready` when they work. */
-export type ForgeAvailability = 'ready' | 'no-cli' | 'signed-out' | 'not-github' | 'no-remote'
+export type ForgeAvailability = 'ready' | 'no-cli' | 'signed-out' | 'not-github' | 'no-remote' | 'choose-account'
 
 export type ForgeCheckState = 'pending' | 'success' | 'failure' | 'skipped'
 
@@ -95,10 +95,73 @@ export interface ForgeCliAccount {
   scopes: string[]
 }
 
-/** GitHub on one host, from its detected CLI sign-ins. Saved credentials and other providers are not here yet. */
+/**
+ * Where a connection stands after its last check. A successful identity check does not prove repository or push access;
+ * `forge.checkAccess` reports that per repository.
+ */
+export type ForgeConnectionState =
+  | 'connected'
+  | 'unverified'
+  | 'expired'
+  | 'missing-permission'
+  | 'rate-limited'
+  | 'offline'
+  | 'unsupported-server'
+
+/** A credential Ramu saved on the execution host for one GitHub server. Never carries the token or its reference. */
+export interface ForgeSavedConnection {
+  id: string
+  /** `github.com` or the configured Enterprise `host[:port]`. The token is only ever sent here. */
+  origin: string
+  login: string | null
+  enabled: boolean
+  /** The account used for this origin unless a repository overrides it. */
+  selected: boolean
+  state: ForgeConnectionState
+  verifiedAt: number | null
+  scopes: string[]
+  /** Redacted explanation for a state other than `connected`. */
+  detail: string | null
+}
+
+/** Where a repository's account comes from. */
+export type ForgeAccountSource = 'saved' | 'cli' | 'none'
+
+export interface ForgeSaveConnectionInput {
+  origin: string
+  /** Write-only. Never returned, logged or stored outside the host credential store. */
+  token: string
+  /** Replace this connection's credential; the old one stays until the new one verifies. */
+  replaceId?: string
+}
+
+export interface ForgeCheckResult {
+  state: 'ok' | 'denied' | 'failed' | 'unknown'
+  detail: string | null
+}
+
+/** Per-repository diagnostics: API reads, writes and Git transport are reported separately and nothing is pushed. */
+export interface ForgeAccessReport {
+  origin: string | null
+  /** The account that would be used, and why. `ambiguous` asks the person to choose in Settings. */
+  account: { source: ForgeAccountSource; login: string | null; connectionId: string | null; ambiguous: boolean }
+  api: { read: ForgeCheckResult; write: ForgeCheckResult }
+  transport: ForgeCheckResult
+  checkedAt: number
+}
+
+/** GitHub on one host, from its detected CLI sign-ins and the credentials saved on that host. */
 export interface ForgeConnectionSummary {
   /** `no-cli`: `gh` is not installed. `signed-out`: installed with no account. */
   cli: 'no-cli' | 'signed-out' | 'signed-in'
   accounts: ForgeCliAccount[]
   checkedAt: number
+  /** Saved credentials; absent from hosts that predate them. */
+  saved?: ForgeSavedConnection[]
+  /** `unavailable` means a locked or missing OS credential store: saving is blocked, existing CLI use is unaffected. */
+  credentialStore?: 'not-checked' | 'available' | 'unavailable'
+  /** Only the machine running the host may add, replace or remove credentials. */
+  canAdminister?: boolean
+  /** The choice per origin: a saved connection id, or `cli` to keep using the detected sign-in. */
+  selection?: Record<string, string>
 }

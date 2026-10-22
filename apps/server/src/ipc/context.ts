@@ -13,6 +13,8 @@ import { runtimeVersion } from '../build'
 import { configureProviderAccounts, providerEnvironment } from '../providers/providerBinaries'
 import { UsageService } from '../providers/usage'
 import { ProviderEnvironmentStore } from '../providers/environmentStore'
+import { ForgeAccountStore } from '../workspace/forgeAccounts'
+import { configureForgeAccounts } from '../workspace/forge'
 import { ExtraUsageReader, readAntigravityUsage, readCursorUsage } from '../providers/providerUsage'
 import { ACCOUNT_USAGE_INTERVAL_MS, AccountUsage } from '../providers/accountUsage'
 import { codexUsage } from '../providers/codex'
@@ -34,6 +36,18 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
   )
   // Loaded before threads resume; a locked credential store is reported in Settings and retried there.
   void environment.load().catch(() => {})
+  const forgeAccounts = new ForgeAccountStore(
+    (key, fallback) => workspace.getAppState(key, fallback),
+    (key, value) => workspace.setAppState(key, value),
+    undefined,
+    undefined,
+    undefined,
+    ({ removedId, disabledId }) => {
+      const id = removedId ?? disabledId
+      if (id) services.pullRequestWatches?.stopForConnection(id)
+    },
+  )
+  configureForgeAccounts(forgeAccounts)
   const storedPreferences = () => workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
   const managedSkills = (taskId: string) => learning?.catalog(workspace.projectIdOf(taskId)) ?? []
   const withContext = (ws: Workspace, taskId: string, prompt: string, context?: FileContext[]) =>
@@ -175,6 +189,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     extraUsage,
     accountUsage,
     environment,
+    forgeAccounts,
     loadPreferences,
     savePreferences,
     storedPreferences,
