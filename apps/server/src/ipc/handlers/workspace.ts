@@ -165,8 +165,9 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       args: z.tuple([]),
       run: () => {
         const snapshotAt = nextSnapshotAt()
-        const helpers = agents.helperSummaries()
-        return workspace.listTasks().map((task) => {
+        const tasks = workspace.listTasks()
+        const helpers = tasks.length ? agents.helperSummaries() : new Map<string, never>()
+        return tasks.map((task) => {
           const sessions = agents.list(task.id).filter((session) => !session.parentId)
           const main = sessions.at(-1)
           const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
