@@ -85,3 +85,45 @@ it('locks profile administration across runtime contexts and releases the lock a
   ).rejects.toThrow('clear failed')
   expect(profiles.isBusy(work.id)).toBe(false)
 })
+
+it('stages an import out of sight, then keeps or discards it', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ramu-browser-profiles-'))
+  directories.push(directory)
+  const path = join(directory, 'profiles.json')
+  const profiles = new BrowserProfiles(path)
+  const staged = profiles.stage('From Chrome')
+  // Hidden from the catalog and from the ids a tab may use, and its name is reserved.
+  expect(profiles.catalog().profiles.map((profile) => profile.id)).not.toContain(staged.id)
+  expect(profiles.ids()).not.toContain(staged.id)
+  expect(profiles.stagedIds()).toEqual([staged.id])
+  expect(() => profiles.create('from chrome')).toThrow(/already uses that name/)
+  expect(() => profiles.rename(staged.id, 'x')).toThrow(/cannot be changed/)
+  expect(() => profiles.remove(staged.id)).toThrow(/cannot be changed/)
+  // A restart keeps the staged record so the caller can clean up its website data.
+  expect(new BrowserProfiles(path).stagedIds()).toEqual([staged.id])
+  const kept = profiles.keep(staged.id)
+  expect(kept.importedAt).toBeGreaterThan(0)
+  expect(profiles.catalog().profiles.find((profile) => profile.id === staged.id)).toMatchObject({
+    name: 'From Chrome',
+    importedAt: kept.importedAt,
+  })
+  expect(profiles.stagedIds()).toEqual([])
+  expect(() => profiles.keep(staged.id)).toThrow(/no longer waiting/)
+  const second = profiles.stage('Second')
+  profiles.discard(second.id)
+  expect(profiles.stagedIds()).toEqual([])
+  expect(JSON.parse(readFileSync(path, 'utf8')).profiles.some((profile: { staged?: boolean }) => profile.staged)).toBe(
+    false,
+  )
+  expect(() => profiles.discard(kept.id)).toThrow(/no longer waiting/)
+})
+
+it('counts a staged import toward the profile limit', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ramu-browser-profiles-'))
+  directories.push(directory)
+  const profiles = new BrowserProfiles(join(directory, 'profiles.json'))
+  for (let index = 0; index < 19; index++) profiles.create(`P${index}`)
+  profiles.stage('Last')
+  expect(() => profiles.create('One more')).toThrow(/Remove a browser profile/)
+  expect(() => profiles.stage('Another')).toThrow(/Remove a browser profile/)
+})

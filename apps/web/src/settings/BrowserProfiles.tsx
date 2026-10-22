@@ -8,6 +8,7 @@ import { ramu } from '../ipc'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { addressFrom } from '../views/browserAddress'
+import { BrowserImportWizard } from './BrowserImportWizard'
 
 /** Profile metadata and user-only sign-in. Site data and administration stay on this desktop. */
 export function BrowserProfilesSettings({
@@ -28,6 +29,7 @@ export function BrowserProfilesSettings({
   const [signIn, setSignIn] = useState<BrowserProfileInfo | null>(null)
   const [address, setAddress] = useState('')
   const [sources, setSources] = useState<BrowserImportSource[] | null>(null)
+  const [importing, setImporting] = useState<BrowserImportSource | null>(null)
   const scope = useRef({ hostId, epoch: 0 })
   const acting = useRef(false)
   if (scope.current.hostId !== hostId) {
@@ -40,6 +42,7 @@ export function BrowserProfilesSettings({
     setSignIn(null)
     setBusy(false)
     setSources(null)
+    setImporting(null)
   }, [hostId])
   const run = async (operation: (valid: () => boolean) => Promise<void>) => {
     if (acting.current) return
@@ -140,14 +143,39 @@ export function BrowserProfilesSettings({
         const sources = await ramu.invoke('browser.profiles.importSources', hostId)
         if (valid()) setSources(sources)
       })}>{t('Import signed-in sessions')}</Button>
-      {sources && <div className="space-y-2 text-caption">
-        <p className="text-muted-foreground">{t('Session import is optional and unavailable for these sources. No cookies or passwords have been read or copied.')}</p>
-        {sources.map(source => <p key={source.id}>{source.name} · {t(source.installed ? 'Installed' : 'Not installed')} · {t(source.reason ?? 'Unavailable')}</p>)}
-        <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => {
-          const profile = catalog?.profiles.find(profile => profile.id === 'default')
-          if (profile) { setSignIn(profile); setAddress('') }
-        }}>{t('Sign in instead')}</Button>
-      </div>}
+      {sources && (
+        <div className="space-y-2 text-caption">
+          <p className="text-muted-foreground">
+            {t('Import copies sign-in cookies once into a new profile. Nothing is read until you choose a browser, and the source browser is never changed.')}
+          </p>
+          {sources.map((source) => (
+            <div key={source.id} className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 flex-1">
+                {source.name} · {t(source.installed ? 'Installed' : 'Not installed')}
+                {!source.supported && ` · ${t(source.reason ?? 'Unavailable')}`}
+              </span>
+              {source.supported && source.installed && (
+                <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => setImporting(source)}>
+                  {t('Import…')}
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => {
+            const profile = catalog?.profiles.find(profile => profile.id === 'default')
+            if (profile) { setSignIn(profile); setAddress('') }
+          }}>{t('Sign in instead')}</Button>
+        </div>
+      )}
+      {importing && (
+        <BrowserImportWizard
+          hostId={hostId}
+          source={importing}
+          existing={catalog?.profiles ?? []}
+          onClose={() => setImporting(null)}
+          onChanged={() => void refresh()}
+        />
+      )}
       <Dialog
         open={!!signIn}
         onOpenChange={(open) => {

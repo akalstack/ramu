@@ -263,6 +263,22 @@ export interface RamuMethods {
   /** Integrated browser tabs of this computer's desktop app; every call names the host and thread it is for. */
   'browser.profiles.list'(hostId: string): BrowserProfileCatalog
   'browser.profiles.importSources'(hostId: string): import('./types/browser').BrowserImportSource[]
+  /** Copy website sign-ins once from another browser into a new hidden profile. Local desktop only; values never reach the renderer. */
+  'browser.import.profiles'(hostId: string, source: string): import('./types/browser').BrowserImportProfile[]
+  'browser.import.inspect'(
+    hostId: string,
+    source: string,
+    profileId: string,
+  ): { token: string; domains: import('./types/browser').BrowserImportDomain[] }
+  'browser.import.run'(
+    hostId: string,
+    token: string,
+    domains: string[],
+    name: string,
+  ): import('./types/browser').BrowserImportStaged
+  'browser.import.cancel'(hostId: string, token: string): void
+  'browser.import.keep'(hostId: string, profileId: string): import('./types/browser').BrowserProfileInfo
+  'browser.import.discard'(hostId: string, profileId: string): void
   'browser.profiles.create'(hostId: string, name: string): BrowserProfileInfo
   'browser.profiles.signIn'(hostId: string, profileId: string, url: string): void
   'browser.profiles.rename'(hostId: string, profileId: string, name: string): void

@@ -26,7 +26,7 @@ import type { AppUpdateStatus } from '@ramu/shared/updates'
 import { configureDesktopLanguage, desktopLanguage, t } from './localization'
 import { editorMenu, type EditorMenuOptions } from './editorMenu'
 import { existsSync, writeFileSync } from 'node:fs'
-import { hostname } from 'node:os'
+import { homedir, hostname } from 'node:os'
 import { type AppPreferences } from '@ramu/shared/types'
 import { join } from 'node:path'
 import {
@@ -66,6 +66,7 @@ import { RemoteServers } from './remoteServers'
 import { ComputerBroadcaster } from './computerBroadcast'
 import { ComputerRegistry, LOCAL } from './computers'
 import { ScreenSharing } from './screenSharing'
+import { BrowserImporter, type ImportSourceId } from './browserImport'
 import { ensureRuntime, loginService, loginEnabled, loginPreferred } from './runtimeLauncher'
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'ramu-content', privileges: { standard: true, secure: true } }])
@@ -522,6 +523,16 @@ async function main() {
     }),
   )
   const browserRuntimes = new Set([browser])
+  const guestPartition = (id: string) => session.fromPartition(`persist:ramu-browser:${id}`)
+  // Copies website sign-ins once, from another browser into a new hidden profile the person then keeps or discards.
+  const browserImporter = new BrowserImporter({
+    profiles: browserProfiles,
+    home: homedir(),
+    setCookie: (id, cookie) => guestPartition(id).cookies.set(cookie),
+    flush: (id) => guestPartition(id).cookies.flushStore(),
+    clearData: (id) => browserGuests.clearProfile(id),
+  })
+  void browserImporter.cleanup()
   const browserSignIn = new BrowserSignInWindows(browserProfiles, browserRuntimes, () => {
     if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
   })
@@ -709,6 +720,38 @@ async function main() {
         return { cancelled: result.canceled }
       }
       if (method === 'browser.profiles.importSources') return browserImportSources()
+      if (method.startsWith('browser.import.')) {
+        const source = (value: unknown): ImportSourceId => {
+          if (value !== 'chrome' && value !== 'edge' && value !== 'firefox') throw new Error('Choose a supported browser.')
+          return value
+        }
+        const text = (value: unknown, max = 200) => {
+          if (typeof value !== 'string' || !value || value.length > max) throw new Error('Invalid import request')
+          return value
+        }
+        if (method === 'browser.import.profiles') return browserImporter.profiles(source(args[1]))
+        if (method === 'browser.import.inspect') return browserImporter.inspect(source(args[1]), text(args[2]))
+        if (method === 'browser.import.run') {
+          const domains = args[2]
+          if (!Array.isArray(domains) || domains.length > 500 || domains.some((entry) => typeof entry !== 'string' || entry.length > 253))
+            throw new Error('Invalid import request')
+          const staged = await browserImporter.run(text(args[1]), domains as string[], text(args[3], 80))
+          if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+          return staged
+        }
+        if (method === 'browser.import.cancel') return browserImporter.cancel(text(args[1]))
+        if (method === 'browser.import.keep') {
+          const kept = browserImporter.keep(text(args[1]))
+          if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+          return kept
+        }
+        if (method === 'browser.import.discard') {
+          await browserImporter.discard(text(args[1]))
+          if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+          return
+        }
+        throw new Error('Unknown browser import action')
+      }
       if (method === 'browser.profiles.signIn') {
         if (typeof args[1] !== 'string' || typeof args[2] !== 'string' || args[2].length > 4000)
           throw new Error('Invalid browser sign-in request')
