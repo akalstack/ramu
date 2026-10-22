@@ -99,6 +99,30 @@ export function ModelSetsEditor({
           )}{' '}
           {t('Applies to desktop and to phones without their own setting.')}
         </p>
+        <label>
+          {t('Phones and tablets')}
+          <Dropdown
+            label={t('Model selection on phones and tablets')}
+            value={draft.mobileBarMode ?? 'inherit'}
+            options={[
+              { value: 'inherit', label: t('Same as all devices') },
+              { value: 'model', label: t('Steps') },
+              { value: 'effort', label: t('Model then effort') },
+            ]}
+            onChange={(mode) =>
+              setDraft({
+                ...draft,
+                mobileBarMode: mode === 'inherit' ? undefined : mode === 'effort' ? 'effort' : 'model',
+              })
+            }
+            disabled={busy}
+          />
+        </label>
+        <p className="muted text-muted-foreground text-caption">
+          {t(
+            'Applies to phones and tablets that use this computer. A phone with its own choice keeps it; clear it on the phone to follow this one.',
+          )}
+        </p>
         <div className="settings-defaults grid [grid-template-columns:minmax(0,_1fr)_minmax(0,_1fr)] gap-3">
           <label>
             {t('Default set')}

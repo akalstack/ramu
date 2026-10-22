@@ -105,6 +105,8 @@ export class AgentService {
 
   /** A bare factory serves every provider except Claude Code, which keeps the SDK loop. */
   private readonly runners: ProviderRunners
+  /** Receives a title a provider session supplied on its own; set by the thread-title scheduler. */
+  onProviderTitle?: (sessionId: string, title: string) => void
 
   private providerQuery: QueryFn = (args) =>
     this.queryFn({ ...args, options: { ...args.options, pathToClaudeCodeExecutable: providerBinary('claude-code') } })
@@ -236,6 +238,7 @@ export class AgentService {
       routing: (...a) => parts.router.routing(...a),
       runnerFactory: (provider) => this.runnerFactory(provider),
       usesRunner: (provider) => this.usesRunner(provider),
+      providerTitle: (id, title) => this.onProviderTitle?.(id, title),
       get runners() {
         return parts.registry.runners
       },

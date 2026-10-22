@@ -348,8 +348,8 @@ export async function acpSignIn(
     await rpc.close()
   }
 }
-export const createAcpRunner: AgentRunnerFactory = (scope, settings, emit, readOnly) =>
-  new AcpSession(scope, settings, emit, readOnly)
+export const createAcpRunner: AgentRunnerFactory = (scope, settings, emit, readOnly, onTitle) =>
+  new AcpSession(scope, settings, emit, readOnly, onTitle)
 class AcpSession implements AgentRunner {
   private rpc?: AcpRpc
   private sessionId = ''
@@ -379,6 +379,7 @@ class AcpSession implements AgentRunner {
     private settings: AgentSettings,
     private emit: (event: AgentEvent, limit?: boolean | 'low') => void,
     private readOnly = false,
+    private onTitle?: (title: string) => void,
   ) {
     this.events = new AcpEvents(settings.provider === 'antigravity' ? ['invoke_subagent'] : ['task', 'subagent'])
   }
@@ -733,6 +734,11 @@ class AcpSession implements AgentRunner {
     if (m.method === 'session/update') {
       if (p.sessionId !== this.sessionId) return
       const u = p.update ?? {}
+      // Session metadata: a title the runtime chose. History replay while loading is ignored above, so only live updates count.
+      if (u.sessionUpdate === 'session_info_update') {
+        if (!this.loading && typeof u.title === 'string' && u.title.trim()) this.onTitle?.(u.title)
+        return
+      }
       if (this.loading && !['compaction_update', 'compaction_summary_chunk', 'usage_update'].includes(u.sessionUpdate))
         return
       for (const event of this.events.consume(u)) {

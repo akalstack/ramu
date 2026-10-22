@@ -89,7 +89,6 @@ import type {
   ForgeRepositoryAccount,
   ForgeRepositorySummary,
   ForgeConnectionSummary,
-  ForgeRepositorySummary,
   ForgeSaveConnectionInput,
   ForgeSavedConnection,
   PullRequestWatchStatus,
@@ -724,6 +723,8 @@ export interface RamuMethods {
   'files.dropInfo'(paths: string[]): { path: string; kind: 'file' | 'dir' }[]
   /** Permanently deletes a file or folder inside the checkout. */
   'files.delete'(taskId: string, repoId: string, path: string): void
+  /** Whether an agent is writing in this checkout, so a rename, move or delete can collide with its work. */
+  'files.writer'(taskId: string, repoId: string): { active: boolean }
   'files.reveal'(taskId: string, repoId: string, path: string): void
   'files.explorerBindings'(context: string): RepositoryBinding[]
   'files.browse'(
@@ -816,8 +817,6 @@ export interface RamuMethods {
   'forge.setRepositoryAccount'(taskId: string, repoId: string, account: string | null): void
   /** API reads, writes and Git transport for this repository, separately; nothing is pushed. */
   'forge.checkAccess'(taskId: string, repoId: string): ForgeAccessReport
-  /** GitHub repositories to clone: the account's own when the search is empty. */
-  'forge.searchRepositories'(search: string): ForgeRepositorySummary[]
   'rules.list'(): Rule[]
   'rules.save'(input: RuleInput): Rule
   'rules.remove'(ruleId: string): void

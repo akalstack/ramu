@@ -28,6 +28,9 @@ export const registerSettingsHandlers: RegisterHandlers = ({
   const modelSettingsSchema = z.toJSONSchema(modelPreferences.nullable(), { unrepresentable: 'any' }) as SettingSchema
   const selectionMode = z.enum(['model', 'effort'])
   const selectionModeSchema = z.toJSONSchema(selectionMode) as SettingSchema
+  // The all-mobile layer: `inherit` removes it so phones follow the all-device value again.
+  const mobileMode = z.enum(['inherit', 'model', 'effort'])
+  const mobileModeSchema = z.toJSONSchema(mobileMode) as SettingSchema
   const modelSettings = () => workspace.getAppState<ModelPreferences | null>('model-preferences', null)
   const settingsSnapshot = async (): Promise<SettingsSnapshot> => {
     const preferences = loadPreferences(),
@@ -41,6 +44,7 @@ export const registerSettingsHandlers: RegisterHandlers = ({
         ...portableSettings(sharedSettingsSchema, preferences as unknown as Record<string, unknown>),
         { path: '$models', schema: modelSettingsSchema, value: models },
         { path: '$models.defaultBarMode', schema: selectionModeSchema, value: models?.defaultBarMode ?? 'model' },
+        { path: '$models.mobileBarMode', schema: mobileModeSchema, value: models?.mobileBarMode ?? 'inherit' },
       ],
     }
   }
@@ -122,10 +126,14 @@ export const registerSettingsHandlers: RegisterHandlers = ({
       run: async (edits: SettingEdit[]) => {
         // Resolve dynamic choices before reading current values; comparison and persistence then stay synchronous.
         const catalogs = agents ? await agents.catalog() : null
-        const modelEdits = edits.filter((edit) => edit.path === '$models' || edit.path === '$models.defaultBarMode')
-        if (modelEdits.length > 1) throw new Error('Duplicate model settings')
-        const modeEdit = modelEdits.find((edit) => edit.path === '$models.defaultBarMode')
+        const MODEL_PATHS = ['$models', '$models.defaultBarMode', '$models.mobileBarMode']
+        const modelEdits = edits.filter((edit) => MODEL_PATHS.includes(edit.path))
+        if (new Set(modelEdits.map((edit) => edit.path)).size !== modelEdits.length)
+          throw new Error('Duplicate model settings')
         const modelEdit = modelEdits.find((edit) => edit.path === '$models')
+        if (modelEdit && modelEdits.length > 1) throw new Error('Duplicate model settings')
+        const modeEdit = modelEdits.find((edit) => edit.path === '$models.defaultBarMode')
+        const mobileEdit = modelEdits.find((edit) => edit.path === '$models.mobileBarMode')
         if (modelEdit && schemaKey(modelEdit.schema) !== schemaKey(modelSettingsSchema))
           throw new Error('Model options changed. Reload before saving.')
         if (modelEdit && !sameValue(modelSettings(), modelEdit.before) && !sameValue(modelSettings(), modelEdit.value))
@@ -135,12 +143,24 @@ export const registerSettingsHandlers: RegisterHandlers = ({
         const currentMode = modelSettings()?.defaultBarMode ?? 'model'
         if (modeEdit && !sameValue(currentMode, modeEdit.before) && !sameValue(currentMode, modeEdit.value))
           throw new Error('Model selection changed elsewhere. Reload before saving.')
+        if (mobileEdit && schemaKey(mobileEdit.schema) !== schemaKey(mobileModeSchema))
+          throw new Error('Model selection options changed. Reload before saving.')
+        const currentMobile = modelSettings()?.mobileBarMode ?? 'inherit'
+        if (mobileEdit && !sameValue(currentMobile, mobileEdit.before) && !sameValue(currentMobile, mobileEdit.value))
+          throw new Error('Model selection changed elsewhere. Reload before saving.')
         const models = modelEdit
           ? modelPreferences.parse(modelEdit.value)
-          : modeEdit
+          : modeEdit || mobileEdit
             ? modelPreferences.parse({
                 ...(modelSettings() ?? recommendedSets(catalogs ?? [])),
-                defaultBarMode: selectionMode.parse(modeEdit.value),
+                ...(modeEdit ? { defaultBarMode: selectionMode.parse(modeEdit.value) } : {}),
+                ...(mobileEdit
+                  ? {
+                      mobileBarMode: ((value) => (value === 'inherit' ? undefined : value))(
+                        mobileMode.parse(mobileEdit.value),
+                      ),
+                    }
+                  : {}),
               })
             : undefined
         const stored = loadPreferences()
@@ -148,7 +168,7 @@ export const registerSettingsHandlers: RegisterHandlers = ({
           sharedSettingsSchema,
           appPreferences,
           { ...stored, agentBrowser: stored.agentBrowser ?? appPreferences.shape.agentBrowser.parse(undefined) },
-          edits.filter((edit) => edit.path !== '$models' && edit.path !== '$models.defaultBarMode'),
+          edits.filter((edit) => !MODEL_PATHS.includes(edit.path)),
         )
         for (const edit of edits) {
           const match = /^providerBinaries\.([^.]+)\.(accountId|accounts|accountOrder|defaultAccountEnabled)$/.exec(

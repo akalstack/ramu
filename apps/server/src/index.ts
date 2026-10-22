@@ -299,6 +299,7 @@ const threadTitles = new ThreadTitles(
   (session) => providerAdapter(session.provider).native?.titles === true,
 )
 agents.providerTitle = (sessionId, title) => void threadTitles.acceptProviderTitle(sessionId, title)
+agents.onProviderTitle = agents.providerTitle
 const mobileLiveActivities = new MobileLiveActivities(
   join(userData, 'mobile-live-activities.json'),
   () => devices.list(),

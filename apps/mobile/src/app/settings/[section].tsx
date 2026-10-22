@@ -6,7 +6,13 @@ import { font, space, useTheme, type Appearance, type TextSize } from '../../the
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
-import { PUSH_CATEGORIES, PUSH_MUTED_KEY, isCategoryOn, parseSwitched, type PushCategory } from '../../runtime/pushCategories'
+import {
+  PUSH_CATEGORIES,
+  PUSH_MUTED_KEY,
+  isCategoryOn,
+  parseSwitched,
+  type PushCategory,
+} from '../../runtime/pushCategories'
 import { useT } from '../../i18n'
 import { Header, Screen, PageScrollView as ScrollView } from '../../components/Screen'
 import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
@@ -14,6 +20,8 @@ import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '.
 import { ComputerScope } from '../../components/SettingsChrome'
 import { RulesSettings } from '../../components/RulesSettings'
 import { VoiceSettings } from '../../components/VoiceSettings'
+import { ProviderCompatibility } from '../../components/ProviderCompatibility'
+import { ThemeLibrary } from '../../components/ThemeLibrary'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import { ScopeControl } from '../../components/ScopeControl'
 
@@ -42,6 +50,7 @@ function AppearancePage() {
         inheritedLabel="System"
         onUseInherited={() => setAppearance('system')}
       />
+      <ThemeLibrary />
       <SectionLabel>{t.textSizeLabel}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <Segmented<TextSize>
@@ -255,7 +264,7 @@ function Usage({ computer }: { computer: string }) {
 
 /** What the desktop edits that the phone leaves to it, so a missing row is explained rather than puzzling. */
 const desktopOnly: Partial<Record<SettingsSection, string>> = {
-  providers: 'Model sets, provider binaries and sign-in are managed in Ramu on the host.',
+  providers: 'Model sets, provider executable paths and sign-in are managed in Ramu on the host.',
   access: 'Permission rules and the provider fallback order are edited in Ramu on the host.',
   workflows: 'Sub-agent routing and the advisor are set up in Ramu on the host.',
   memory: 'The memory and skills library, and its model choices, are managed in Ramu on the host.',
@@ -280,6 +289,7 @@ export default function SettingsSectionPage() {
         {id === 'notifications' ? <Notifications host={host} name={name} /> : null}
         {id === 'computers' ? <Computers /> : null}
         {id === 'about' ? <About /> : null}
+        {id === 'providers' ? <ProviderCompatibility key={selected} hostId={selected} /> : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
         {id === 'rules' ? <RulesSettings key={selected} hostId={selected} /> : null}
         {section.scope === 'host' ? <HostGroups section={id} host={host} name={name} /> : null}

@@ -257,6 +257,28 @@ describe('provider-supplied titles', () => {
     expect(workspace.getTask('task').title).toBe('My name')
   })
 
+  it('waits for a provider only after one of its sessions has delivered a title', async () => {
+    const acp = { ...session, provider: 'antigravity' } as AgentSessionInfo
+    agents = { ...agents, get: () => acp, list: () => [acp] }
+    await titles.stop()
+    titles = new ThreadTitles(db, workspace, agents, changed, 1000, undefined, 50, 500)
+    vi.useFakeTimers()
+    // First thread: nothing is known about this provider yet, so the fallback runs at once.
+    titles.observe('session', user)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(draft).toHaveBeenCalledTimes(1)
+    // A placeholder title still proves the provider reports titles, but is not accepted.
+    expect(titles.acceptProviderTitle('session', 'New session - 2026-10-22T10:00:00.000Z')).toBeNull()
+    db.prepare("UPDATE tasks SET title_source = 'prompt', title_auto_attempted = 0 WHERE id = 'task'").run()
+    titles.observe('session', user)
+    await vi.advanceTimersByTimeAsync(10)
+    expect(draft).toHaveBeenCalledTimes(1)
+    titles.acceptProviderTitle('session', 'Fix duplicate payment retries')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(draft).toHaveBeenCalledTimes(1)
+    expect(workspace.titleSource('task')).toBe('provider')
+  })
+
   it('uses an unsolicited useful provider title with zero Ramu generation calls', async () => {
     await titles.stop()
     titles = supplier()

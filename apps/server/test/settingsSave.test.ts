@@ -76,6 +76,14 @@ it('reuses discovered models across ordinary saves and refreshes them for UI and
     saved = await snapshot()
     saved = await patch(saved, '$models.defaultBarMode', 'model')
     expect(saved.models?.sets).toEqual(external.sets)
+    // The all-mobile layer is separate from the all-device value, and `inherit` removes it again.
+    saved = await patch(saved, '$models.mobileBarMode', 'effort')
+    expect(saved.models?.mobileBarMode).toBe('effort')
+    expect(saved.models?.defaultBarMode).toBe('model')
+    expect(saved.settings.find((field) => field.path === '$models.mobileBarMode')?.value).toBe('effort')
+    saved = await patch(saved, '$models.mobileBarMode', 'inherit')
+    expect(saved.models?.mobileBarMode).toBeUndefined()
+    expect(saved.models?.sets).toEqual(external.sets)
     expect(discovery).toHaveBeenCalledTimes(1)
     for (const value of [true, false, true]) {
       saved = await patch(saved, 'autoWatchPullRequests', value)

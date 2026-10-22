@@ -1,6 +1,6 @@
 // File management from the mobile Explorer. Pure rules; the host validates and performs every change.
 
-export type ExplorerAction = 'copy-path' | 'share' | 'duplicate' | 'move' | 'rename' | 'delete'
+export type ExplorerAction = 'copy-path' | 'copy-contents' | 'share' | 'duplicate' | 'move' | 'rename' | 'delete'
 
 /**
  * What a row offers. Copying a path is always possible. Changing files needs a host that can be reached and a device
@@ -13,7 +13,7 @@ export function explorerActions(options: {
 }): ExplorerAction[] {
   if (!options.online) return ['copy-path']
   // Sharing downloads the file's contents to this device, so it only needs a reachable host, and only applies to files.
-  const read: ExplorerAction[] = options.kind === 'dir' ? ['copy-path'] : ['copy-path', 'share']
+  const read: ExplorerAction[] = options.kind === 'dir' ? ['copy-path'] : ['copy-path', 'copy-contents', 'share']
   return options.viewOnly ? read : [...read, 'duplicate', 'move', 'rename', 'delete']
 }
 

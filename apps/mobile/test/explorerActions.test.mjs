@@ -5,6 +5,7 @@ import { duplicateName, explorerActions, parentFolder, planMove, planRename } fr
 test('copying a path is always offered; changes need a reachable host and a device that is not view-only', () => {
   assert.deepEqual(explorerActions({ online: true, viewOnly: false }), [
     'copy-path',
+    'copy-contents',
     'share',
     'duplicate',
     'move',
@@ -19,7 +20,7 @@ test('copying a path is always offered; changes need a reachable host and a devi
     'rename',
     'delete',
   ])
-  assert.deepEqual(explorerActions({ online: true, viewOnly: true }), ['copy-path', 'share'])
+  assert.deepEqual(explorerActions({ online: true, viewOnly: true }), ['copy-path', 'copy-contents', 'share'])
 })
 
 test('a rename stays in its folder and rejects empty, unchanged and path-like names', () => {

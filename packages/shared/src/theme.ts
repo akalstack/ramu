@@ -3,6 +3,8 @@
  * a theme can be validated, compared and shared as data; layout, geometry and behavior are not themeable.
  */
 
+import { sha256Hex } from './sha256'
+
 export const THEME_SCHEMA_VERSION = 1
 
 export const THEME_ROLES = [
@@ -226,6 +228,8 @@ export function canonicalTheme(theme: RamuTheme): string {
 /** Content digest that detects changes; it does not authenticate who made the theme. */
 export async function themeDigest(theme: RamuTheme): Promise<string> {
   const bytes = new TextEncoder().encode(canonicalTheme(theme))
+  // React Native's engine has no SubtleCrypto; the portable fallback gives the same digest.
+  if (typeof crypto === 'undefined' || !crypto.subtle) return sha256Hex(bytes)
   const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
   return Array.from(hash, (b) => b.toString(16).padStart(2, '0')).join('')
 }

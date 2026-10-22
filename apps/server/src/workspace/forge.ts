@@ -661,6 +661,7 @@ export async function createPullRequest(cwd: string, input: PullRequestInput): P
 }
 
 interface RawRepository {
+  fullName?: string
   nameWithOwner?: string
   description?: string | null
   isPrivate?: boolean
@@ -672,7 +673,7 @@ interface RawRepository {
 export function parseRepositories(raw: RawRepository[]): ForgeRepositorySummary[] {
   const found: ForgeRepositorySummary[] = []
   for (const repository of raw) {
-    const fullName = repository.nameWithOwner
+    const fullName = repository.fullName ?? repository.nameWithOwner
     if (!fullName || !/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(fullName)) continue
     let cloneUrl: string
     try {

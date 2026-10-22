@@ -217,6 +217,7 @@ export const appPreferences = z.object({
 export const modelPreferences = z
   .object({
     defaultBarMode: z.enum(['effort', 'model']).optional(),
+    mobileBarMode: z.enum(['effort', 'model']).optional(),
     sets: z
       .array(
         z.object({

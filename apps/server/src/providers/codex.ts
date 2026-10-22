@@ -181,8 +181,8 @@ export async function codexUsage(accountId?: string): Promise<UsageReading[]> {
 export type { AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
 import type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
 
-export const createCodexRunner: CodexFactory = (scope, settings, emit, readOnly) =>
-  new CodexSession(scope, settings, emit, readOnly)
+export const createCodexRunner: CodexFactory = (scope, settings, emit, readOnly, onTitle) =>
+  new CodexSession(scope, settings, emit, readOnly, onTitle)
 class CodexSession implements CodexRunner {
   private readonly requestScope = randomUUID()
   private rpc!: CodexRpc
@@ -211,6 +211,7 @@ class CodexSession implements CodexRunner {
     private readonly settings: AgentSettings,
     private readonly emit: (event: AgentEvent, usageLimit?: boolean | 'low') => void,
     private readonly readOnly = false,
+    private readonly onTitle?: (title: string) => void,
   ) {}
   setTools(connection: McpConnection): void {
     this.connection = connection
@@ -705,6 +706,9 @@ class CodexSession implements CodexRunner {
     }
     if (this.liveTool(this.threadId, m.method, p)) return
     if (m.method === 'account/rateLimits/updated') this.reportUsage(p.rateLimits)
+    // The app-server's thread name, only for this conversation's own thread and never a sub-agent's.
+    if (m.method === 'thread/name/updated' && p.threadId === this.threadId && typeof p.threadName === 'string')
+      this.onTitle?.(p.threadName)
     if (m.method === 'thread/tokenUsage/updated') {
       const context = codexContext(p.tokenUsage)
       if (context) this.emit({ kind: 'context', ...context })
