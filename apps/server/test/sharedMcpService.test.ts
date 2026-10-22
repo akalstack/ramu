@@ -27,6 +27,7 @@ function fixture() {
   let local = true
   const handlers = registerSharedMcpHandlers({
     getSharedMcp: () => manager,
+    workspace,
     host: { canAdministerIntegrations: () => local },
   } as unknown as HandlerContext)
   const invoke = (method: string, ...args: unknown[]) => {
