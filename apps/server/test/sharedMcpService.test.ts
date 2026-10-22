@@ -290,7 +290,6 @@ it('stores a credential write-only, replaces it without losing the old one on fa
   expect(refs()).toEqual({})
 })
 
-
 it('names what a destination login still lacks without checking unreviewed connections, and rechecks reviewed ones', async () => {
   const { invoke, input, connect, manager } = fixture()
   const connection = invoke('mcp.save', input) as SharedMcpConnection
