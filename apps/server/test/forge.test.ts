@@ -151,6 +151,8 @@ describe('feedback prompts', () => {
     expect(prompt).toContain('- ana (changes requested): Close, a few things.')
     expect(prompt).not.toContain('Already fixed.')
     expect(prompt).not.toContain('ben')
+    expect(prompt).toContain('which checks you ran locally')
+    expect(prompt).toContain('Do not push')
   })
 
   it('has nothing to hand off when every thread is resolved', () => {

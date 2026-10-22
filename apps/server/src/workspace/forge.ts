@@ -251,7 +251,13 @@ export async function pullRequestDraft(cwd: string, issue: IssueLink | null): Pr
   if (!branch) throw new Error('Switch to a branch before opening a pull request.')
   const base = defaultBranch ?? 'main'
   const onBase = branch === base
-  const raw = await git(cwd, ['log', '--reverse', '--format=%s%x1f%b%x1e', `${await baseRef(cwd, branch, base)}..HEAD`, '--'])
+  const raw = await git(cwd, [
+    'log',
+    '--reverse',
+    '--format=%s%x1f%b%x1e',
+    `${await baseRef(cwd, branch, base)}..HEAD`,
+    '--',
+  ])
   const commits = raw
     .split('\x1e')
     .map((entry) => entry.trim())
@@ -399,6 +405,7 @@ async function failedChecksFeedback(cwd: string, pr: PullRequestInfo): Promise<s
     'Work out the cause from the logs and the code, fix it, and run the same check locally when you can.',
     'Commit the fix on this branch. Do not push; I will review and push from Source Control.',
     'Reply briefly: what failed, why, and what you changed. If a failure is flaky or unrelated to this branch, say so instead of changing code.',
+    'Say which checks you ran locally and their result. Remote CI cannot pass until the fix is pushed, so report it as pending rather than fixed.',
     '</ramu-context>',
   ].join('\n')
 }
@@ -459,7 +466,7 @@ export function reviewFeedbackPrompt(pr: PullRequestInfo, raw: RawReviewData): s
     '',
     'Make the requested changes where you agree. Where you disagree or a comment is unclear, leave the code and explain why.',
     'Commit the changes on this branch. Do not push or reply on GitHub; I will review and push from Source Control.',
-    'Reply briefly: one line per thread on what you did.',
+    'Reply briefly: one line per thread on what you did, and which checks you ran locally. The reviewer has not seen the changes until they are pushed.',
     '</ramu-context>',
   ].join('\n')
 }
