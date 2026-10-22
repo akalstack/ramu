@@ -27,6 +27,7 @@ import { ChatsSettings } from './ChatsSettings'
 import { GHOST_BUTTON_CLASS, RESET_KEYS, SETTINGS_FORM_CLASS } from './constants'
 import { EditorSettings } from './EditorSettings'
 import { BrowserSettings } from './BrowserSettings'
+import { ComputerUseSettings } from './ComputerSettings'
 import { GitSettings } from './GitSettings'
 import { ModelSetsEditor } from './ModelSetsEditor'
 import { ResetDialog, type ResetTarget } from './ResetDialog'
@@ -185,6 +186,7 @@ export function SettingsPanel({
             )}
             {page === 'editor' && <EditorSettings {...draftProps} />}
             {page === 'browser' && <BrowserSettings {...draftProps} />}
+            {page === 'computer' && <ComputerUseSettings />}
             {page === 'access' && <AccessSettings {...draftProps} />}
             {page === 'memory' && (
               <>

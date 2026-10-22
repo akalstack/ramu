@@ -14,7 +14,6 @@ import { ramu, invokeOn, bridge } from '../ipc'
 import type { ProviderStatus } from '@ramu/shared/providers/providers'
 import type { BrowserProfileCatalog } from '@ramu/shared/types/browser'
 import { BrowserProfilesSettings } from './BrowserProfiles'
-import { ComputerSettings } from './ComputerSettings'
 import { HostBrowserSettings } from './HostBrowserSettings'
 
 /** Settings → Browser. Where clicked links open is a choice of this device; it follows the person across hosts. */
@@ -133,9 +132,9 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
     ['antigravity', 'Antigravity'],
   ]
   return (
-    <div className="settings-form flex flex-col gap-3">
+    <div className="settings-form flex flex-col gap-0">
       <SettingsGroupTitle>{t('Agent browser')}</SettingsGroupTitle>
-      <p role="status" className="m-0 text-caption text-muted-foreground">
+      <p role="status" className="m-[0_0_12px] text-caption text-muted-foreground">
         {readiness
           ? readiness.available
             ? t('Integrated browser ready on this computer')
@@ -143,7 +142,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
           : t('Checking browser availability…')}
       </p>
       {readiness?.warning && (
-        <p role="alert" className="m-0 text-caption text-bad">
+        <p role="alert" className="m-[0_0_12px] text-caption text-bad">
           {t(readiness.warning)}
         </p>
       )}
@@ -223,13 +222,13 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
           />
         </SettingsRow>
       ))}
-      <p className="m-0 text-caption text-muted-foreground">
+      <p className="m-[0_0_20px] text-caption text-muted-foreground">
         {t(
           'Use this provider’s existing browser tools and sessions. Ramu cannot show or import them here. Provider tools may remain available when the integrated browser is selected.',
         )}
       </p>
       {bulkHosts ? (
-        <p className="m-0 text-caption text-muted-foreground">
+        <p className="m-[0_0_20px] text-caption text-muted-foreground">
           {t('Choose one host to manage browser profiles. Named profiles belong to their owning computer.')}
         </p>
       ) : !hosted ? (
@@ -244,7 +243,6 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
           }}
         />
       ) : null}
-      {!bulkHosts && <ComputerSettings key={`computer:${selectedHost}`} hostId={selectedHost} />}
       {!bulkHosts && <HostBrowserSettings key={selectedHost} hostId={selectedHost} refreshed={refreshProfiles} onRemoved={id => {
         const current = draftRef.current
         if (current.agentBrowser?.defaultProfileId === id) onChange({ ...current, agentBrowser: { ...current.agentBrowser, defaultProfileId: 'default' } })
@@ -277,7 +275,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
         />
         <SearchEnginePicker label={t('Search engine')} />
       </SettingsRow>
-      <p className="m-0 text-caption text-muted-foreground">
+      <p className="m-[0_0_8px] text-caption text-muted-foreground">
         {t('The Ramu browser keeps its own sign-ins, separate from your system browser and from your threads.')}
       </p>
     </div>

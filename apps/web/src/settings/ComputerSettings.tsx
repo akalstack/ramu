@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useContext, useEffect, useState } from 'react'
+import { SettingsScopeContext } from './SettingsScope'
+import { SETTINGS_FORM_CLASS } from './constants'
+import { ownHostId } from '../hosts'
 import type { RamuMethods } from '@ramu/shared/api'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
@@ -54,7 +57,7 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
   }
   return (
     <>
-      <SettingsGroupTitle>{t('Computer use')}</SettingsGroupTitle>
+      <SettingsGroupTitle>{t('Agent access')}</SettingsGroupTitle>
       <SettingsRow>
         <SettingsLabel title={t('Let agents use this computer')} help={t(runtimeHelp(status))} />
         <Button
@@ -114,13 +117,13 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
       )}
       <LockedUseRow hostId={hostId} visible={!!status?.enabled && !!status.apps?.available} />
       <ScreenSharing hostId={hostId} enabled={!!status?.enabled} />
-      <p className="m-0 text-caption text-muted-foreground">
+      <p className="m-[0_0_12px] text-caption text-muted-foreground">
         {t(
           'macOS asks for Screen Recording and Accessibility the first time. Ramu cannot tell when you use your own mouse or keyboard while an agent works, so choose Take control first. Turning this off ends every thread’s access.',
         )}
       </p>
       {error && (
-        <p role="alert" className="m-0 text-caption text-destructive">
+        <p role="alert" className="m-[0_0_12px] text-caption text-destructive">
           {error}
         </p>
       )}
@@ -310,5 +313,23 @@ function LockedUseRow({ hostId, visible }: { hostId: string; visible: boolean })
         </p>
       )}
     </>
+  )
+}
+
+/** Settings → Computer use: the selected host's computer access, kept apart from the browser settings. */
+export function ComputerUseSettings() {
+  useLanguage()
+  const scope = useContext(SettingsScopeContext)
+  const hostId = scope?.primaryId ?? ownHostId()
+  if (scope?.target === 'all' && scope.targets.length > 1)
+    return (
+      <p className="m-0 text-caption text-muted-foreground">
+        {t('Choose one host to manage computer use. Access belongs to the computer that runs it.')}
+      </p>
+    )
+  return (
+    <div className={SETTINGS_FORM_CLASS}>
+      <ComputerSettings key={`computer:${hostId}`} hostId={hostId} />
+    </div>
   )
 }

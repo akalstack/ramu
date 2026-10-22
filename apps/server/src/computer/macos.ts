@@ -26,7 +26,7 @@ export function parseScreenLocked(registry: string): boolean {
 }
 
 export const LOCKED_MESSAGE =
-  'The computer is locked. Unlock it, or turn on “Keep working while the screen is locked” in Settings → Browser → Computer use.'
+  'The computer is locked. Unlock it, or turn on “Keep working while the screen is locked” in Settings → Computer use.'
 
 /** The main display. App- and window-scoped confinement needs a driver that can enforce it, so it is not claimed. */
 export const MAIN_DISPLAY: ComputerTarget = { id: 'display:main', kind: 'display', name: 'Main display' }

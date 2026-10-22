@@ -13,6 +13,7 @@ import {
   Cpu,
   GitBranch,
   Globe,
+  MonitorCog,
   Keyboard,
   Layers,
   Palette,
@@ -37,6 +38,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'editor', label: 'Editor & Terminal', Icon: Code, group: 'Workspace' },
   { id: 'git', label: 'Git', Icon: GitBranch, group: 'Workspace' },
   { id: 'browser', label: 'Browser', Icon: Globe, group: 'Workspace' },
+  { id: 'computer', label: 'Computer use', Icon: MonitorCog, group: 'Workspace' },
   { id: 'shortcuts', label: 'Keyboard shortcuts', Icon: Keyboard, group: 'Workspace' },
   { id: 'archived', label: 'Archived threads', Icon: Archive, group: 'Workspace' },
   { id: 'chats', label: 'Threads', Icon: MessageSquare, group: 'Agents' },
@@ -55,23 +57,23 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
   {
-    section: 'browser',
+    section: 'computer',
     title: 'Computer use',
     words:
       'computer screen display desktop control agent native app accessibility screen recording permission lock awake share phone',
   },
   {
-    section: 'browser',
+    section: 'computer',
     title: 'Limit access to one app',
     words: 'computer use open computer use app scoped install calculator accessibility',
   },
   {
-    section: 'browser',
+    section: 'computer',
     title: 'Let app drags use your real pointer',
     words: 'computer use drag pointer mouse window move select text',
   },
   {
-    section: 'browser',
+    section: 'computer',
     title: 'Keep this computer awake',
     words: 'computer use sleep awake caffeinate screen lock',
   },
