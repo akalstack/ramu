@@ -1,4 +1,5 @@
-import type { AgentEvent } from '@ramu/shared/types'
+import type { AgentEvent, ChatGoal } from '@ramu/shared/types'
+import { createFinishedGate } from '@ramu/shared/chat/finishedGate'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
 
 /**
@@ -8,6 +9,7 @@ import type { InboxNotice } from '@ramu/shared/chat/notices'
 export class NoticeInbox {
   private items: InboxNotice[] = []
   private readonly last = new Map<string, string>()
+  private readonly finished = createFinishedGate()
 
   constructor(
     private readonly changed: (items: InboxNotice[]) => void,
@@ -18,7 +20,11 @@ export class NoticeInbox {
     return this.items
   }
 
-  observe(session: { id: string; taskId: string; parentId?: string | null }, event: AgentEvent): void {
+  observe(
+    session: { id: string; taskId: string; parentId?: string | null },
+    event: AgentEvent,
+    context: { goal?: ChatGoal | null; helpers?: number } = {},
+  ): void {
     if (session.parentId || event.kind !== 'state') return
     const before = this.last.get(session.id)
     this.last.set(session.id, event.state)
@@ -33,7 +39,11 @@ export class NoticeInbox {
         ? 'input'
         : event.state === 'failed'
           ? 'failed'
-          : event.state === 'idle' && (before === 'running' || before === 'starting' || before === 'needs-input')
+          : this.finished.settle(session.id, event.state, {
+                turnEnded: before === 'running' || before === 'starting' || before === 'needs-input',
+                goal: context.goal,
+                helpers: context.helpers ?? 0,
+              })
             ? 'done'
             : null
     if (!kind) return

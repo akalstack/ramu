@@ -245,9 +245,7 @@ const ocuBackend = new OcuBackend(
   undefined,
   () => workspace.getAppState<boolean>('computer:globalPointer', false) === true,
 )
-const computer = new ComputerService(
-  new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), ocuBackend),
-)
+const computer = new ComputerService(new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), ocuBackend))
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {
@@ -264,8 +262,13 @@ const agents = new AgentService(
     threadTitles?.observe(sessionId, event)
     queueMicrotask(() => {
       try {
-        inbox.observe(agents.get(sessionId), event)
-        mobilePush.observe(agents.get(sessionId), event, agents.getGoal(sessionId))
+        const session = agents.get(sessionId)
+        const goal = agents.getGoal(sessionId)
+        // Only a state change can finish a thread, so the helper lookup is skipped for every other event.
+        const helpers =
+          event.kind === 'state' ? (agents.helperSummaries(session.taskId).get(session.taskId)?.active ?? 0) : 0
+        inbox.observe(session, event, { goal, helpers })
+        mobilePush.observe(session, event, goal, helpers)
         if (['state', 'permission', 'question', 'goal'].includes(event.kind)) mobileLiveActivities.observe()
       } catch {}
     })
