@@ -1,8 +1,8 @@
 import { memo, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Archive, ArchiveRestore, Clock, GitBranch, Pin, PinOff } from 'lucide-react-native'
-import { font, useTheme } from '../theme'
+import { TEXT_SCALE, font, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
 import { ago, useT, type Strings } from '../i18n'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
@@ -36,7 +36,9 @@ export const ChatRow = memo(function ChatRow({
   project?: string
   divider?: boolean
 }) {
-  const { c } = useTheme()
+  const { c, textSize } = useTheme()
+  // At large text, a title squeezed beside the status and age is unreadable: metadata drops to its own wrapping line.
+  const stacked = useWindowDimensions().fontScale * TEXT_SCALE[textSize] >= 1.3
   const router = useRouter()
   const [menu, setMenu] = useState(false)
   const commands = useChatCommands(chat)
@@ -73,6 +75,33 @@ export const ChatRow = memo(function ChatRow({
           onPress: () => void commands.toggleArchive(),
         },
       ]
+  const meta = (
+    <>
+      {!online ? (
+        <T size={font.caption} tone="muted">
+          {strings.offline}
+        </T>
+      ) : null}
+      {shortKey ? (
+        <T
+          size={font.caption}
+          weight="500"
+          tone={
+            status?.kind === 'input' || status?.kind === 'approval'
+              ? 'warn'
+              : status?.kind === 'failed'
+                ? 'bad'
+                : 'soft'
+          }
+        >
+          {strings[shortKey]}
+        </T>
+      ) : null}
+      <T size={font.caption} tone="muted">
+        {ago(chat.lastActiveAt)}
+      </T>
+    </>
+  )
   return (
     <>
       <SwipeRow actions={actions} background={c.raised2}>
@@ -125,34 +154,17 @@ export const ChatRow = memo(function ChatRow({
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <T size={font.body} weight="500" numberOfLines={1} style={{ flex: 1 }}>
+              <T size={font.body} weight="500" numberOfLines={stacked ? 2 : 1} style={{ flex: 1 }}>
                 {chat.title}
               </T>
               {chat.pinnedAt !== null ? <Pin size={11} color={c.muted} /> : null}
-              {!online ? (
-                <T size={font.caption} tone="muted">
-                  {strings.offline}
-                </T>
-              ) : null}
-              {shortKey ? (
-                <T
-                  size={font.caption}
-                  weight="500"
-                  tone={
-                    status?.kind === 'input' || status?.kind === 'approval'
-                      ? 'warn'
-                      : status?.kind === 'failed'
-                        ? 'bad'
-                        : 'soft'
-                  }
-                >
-                  {strings[shortKey]}
-                </T>
-              ) : null}
-              <T size={font.caption} tone="muted">
-                {ago(chat.lastActiveAt)}
-              </T>
+              {stacked ? null : meta}
             </View>
+            {stacked ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 2 }}>
+                {meta}
+              </View>
+            ) : null}
             {hasDetail ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 {project ? (
