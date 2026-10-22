@@ -126,6 +126,8 @@ On desktop and mobile, typing `/` lists commands and skills, `@` lists files and
 
 A mounted composer reloads file references on return without replacing its text, quotes, attachments or mentions. A late Send acknowledgement clears only an unchanged composer snapshot. Messages with more than 30 combined mentions and context references are blocked for correction instead of silently dropping files.
 
+Long-pressing a row opens file actions. **Copy path** is always offered. When the host is reachable, **Share a copy** downloads a file's contents to this device and opens the system share sheet (it shares the device copy, never the host path). Unless the device is view-only, **Duplicate** (a free `name copy` sibling), **Move to folder** (a destination folder inside the same checkout), **Rename** and a confirmed **Delete** run through the host's `files.*` handlers; a name clash is refused by the host rather than overwritten, and only the affected folders reload.
+
 **Show in Explorer** reveals the selected file in its exact host, checkout and repository, expands its ancestors and scrolls to the row. A missing path or one outside loaded entries is reported explicitly. Collapse remains in effect through refresh; an explicit reveal can expand the path again. Previews resolve read-only bindings before reading files, so opening an unstarted standalone thread never creates a working folder. Older hosts lacking this boundary explain that an update is needed. Plain folders offer file viewing without Git controls, and Markdown links with a line number open source for line navigation.
 
 ## Current chat state

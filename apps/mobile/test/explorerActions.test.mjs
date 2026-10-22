@@ -3,9 +3,22 @@ import assert from 'node:assert/strict'
 import { duplicateName, explorerActions, parentFolder, planMove, planRename } from '../src/runtime/explorerActions.ts'
 
 test('copying a path is always offered; changes need a reachable host and a device that is not view-only', () => {
-  assert.deepEqual(explorerActions({ online: true, viewOnly: false }), ['copy-path', 'share', 'duplicate', 'move', 'rename', 'delete'])
+  assert.deepEqual(explorerActions({ online: true, viewOnly: false }), [
+    'copy-path',
+    'share',
+    'duplicate',
+    'move',
+    'rename',
+    'delete',
+  ])
   assert.deepEqual(explorerActions({ online: false, viewOnly: false }), ['copy-path'])
-  assert.deepEqual(explorerActions({ online: true, viewOnly: false, kind: 'dir' }), ['copy-path', 'duplicate', 'move', 'rename', 'delete'])
+  assert.deepEqual(explorerActions({ online: true, viewOnly: false, kind: 'dir' }), [
+    'copy-path',
+    'duplicate',
+    'move',
+    'rename',
+    'delete',
+  ])
   assert.deepEqual(explorerActions({ online: true, viewOnly: true }), ['copy-path', 'share'])
 })
 
@@ -28,7 +41,8 @@ test('moving keeps the name, targets a folder of the checkout and never into its
   assert.deepEqual(planMove('src/a.ts', ''), { ok: true, destination: 'a.ts' })
   assert.deepEqual(planMove('src/a.ts', 'src'), { ok: false, reason: 'unchanged' })
   assert.deepEqual(planMove('src', 'src/inner'), { ok: false, reason: 'inside-self' })
-  for (const bad of ['../x', 'a/../b', 'a//b', 'a\\b']) assert.deepEqual(planMove('a.ts', bad), { ok: false, reason: 'invalid' })
+  for (const bad of ['../x', 'a/../b', 'a//b', 'a\\b'])
+    assert.deepEqual(planMove('a.ts', bad), { ok: false, reason: 'invalid' })
 })
 
 test('a duplicate takes the first free sibling name', () => {

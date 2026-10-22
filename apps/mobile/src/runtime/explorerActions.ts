@@ -37,7 +37,8 @@ export const parentFolder = (path: string): string => {
   return slash === -1 ? '' : path.slice(0, slash)
 }
 
-export type MovePlan = { ok: true; destination: string } | { ok: false; reason: 'unchanged' | 'invalid' | 'inside-self' }
+export type MovePlan =
+  { ok: true; destination: string } | { ok: false; reason: 'unchanged' | 'invalid' | 'inside-self' }
 
 const trimSlashes = (value: string) => value.trim().replace(/^\/+|\/+$/g, '')
 
@@ -47,7 +48,7 @@ const trimSlashes = (value: string) => value.trim().replace(/^\/+|\/+$/g, '')
  */
 export function planMove(path: string, rawFolder: string): MovePlan {
   const folder = trimSlashes(rawFolder)
-  if (folder.split('/').some((part) => part === '.' || part === '..' || part === '' ) && folder !== '')
+  if (folder.split('/').some((part) => part === '.' || part === '..' || part === '') && folder !== '')
     return { ok: false, reason: 'invalid' }
   if (/[\\\0]/.test(folder)) return { ok: false, reason: 'invalid' }
   if (folder === path || folder.startsWith(`${path}/`)) return { ok: false, reason: 'inside-self' }
