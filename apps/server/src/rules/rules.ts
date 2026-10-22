@@ -8,7 +8,7 @@ import {
   type RuleInput,
   type RuleRevision,
 } from '@ramu/shared/types'
-import { ruleScopeCosts } from '@ramu/shared/rules'
+import { ruleCharacters, ruleDeliveryBlock, ruleScopeCosts } from '@ramu/shared/rules'
 import type { Db } from '../db'
 
 type Row = {
@@ -175,10 +175,15 @@ export class RuleStore {
     )
   }
 
-  /** The labelled section for a session, or undefined when no rule applies. */
+  /** The labelled section for a session, or undefined when no rule applies. Throws when the rules exceed what the runtime can receive. */
   instructions(projectId: string | null, provider: AgentProvider): string | undefined {
     const rules = this.applicable(projectId, provider)
     if (!rules.length) return undefined
+    const blocked = ruleDeliveryBlock(
+      provider,
+      rules.reduce((sum, rule) => sum + ruleCharacters(rule), 0),
+    )
+    if (blocked) throw new Error(blocked)
     return `${RULES_PREAMBLE}\n\n${rules.map((rule) => `### ${rule.name}\n${rule.body}`).join('\n\n')}`
   }
 

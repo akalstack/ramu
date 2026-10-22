@@ -1,4 +1,4 @@
-import { ruleCharacters } from '@ramu/shared/rules'
+import { ruleCharacters, ruleDelivery, ruleDeliveryBlock } from '@ramu/shared/rules'
 import type { AgentSetupSnapshot, SetupItem } from '@ramu/shared/agentSetup'
 import { RULE_TOTAL_LIMIT, type AgentProvider, type Rule } from '@ramu/shared/types'
 import type { SharedMcpAccountReadiness } from '@ramu/shared/mcp'
@@ -41,7 +41,13 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
     (rule.projectId === null || rule.projectId === input.projectId) &&
     (rule.providers.length === 0 || rule.providers.includes(input.provider))
   let rulesCharacters = 0
-  for (const rule of input.rules.filter(reaches)) {
+  const reached = input.rules.filter(reaches)
+  const overSize =
+    ruleDeliveryBlock(
+      input.provider,
+      reached.filter((rule) => rule.activation === 'always').reduce((sum, rule) => sum + ruleCharacters(rule), 0),
+    ) !== null
+  for (const rule of reached) {
     if (rule.activation === 'manual') {
       items.push({
         kind: 'rule',
@@ -52,6 +58,16 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
       continue
     }
     rulesCharacters += ruleCharacters(rule)
+    if (overSize) {
+      items.push({
+        kind: 'rule',
+        name: rule.name,
+        state: 'omitted',
+        reason:
+          'Not sent: these rules are over the size this runtime can receive. Shorten or turn off a rule in Settings → Agent setup → Rules.',
+      })
+      continue
+    }
     const changed = rule.updatedAt > input.startedAt
     items.push({
       kind: 'rule',
@@ -59,7 +75,7 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
       state: changed ? 'needs-refresh' : 'delivered',
       reason: changed
         ? 'Changed after this thread started. It applies to a new thread; a running thread keeps what it was given.'
-        : "Sent in the thread's starting guidance as the user's own instructions. Whether the model followed it is not observable.",
+        : `${ruleDelivery(input.provider).detail} Whether the model followed it is not observable.`,
     })
   }
   for (const name of input.addedServers) {

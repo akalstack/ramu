@@ -82,3 +82,13 @@ it('never calls Shared MCP loaded and gives the next step for an unready connect
   expect(items[1]!.reason).toMatch(/Review access/)
   expect(JSON.stringify(items)).not.toMatch(/Write the test first/)
 })
+
+it('says how each runtime receives rules and omits them all when they are over its size', () => {
+  const reason = (provider: 'claude-code' | 'codex' | 'cursor') =>
+    buildSetupSnapshot(base({ provider, rules: [rule({})] })).items[0]!.reason
+  expect(reason('claude-code')).toContain('system prompt')
+  expect(reason('codex')).toContain('developer instructions')
+  expect(reason('cursor')).toContain('ahead of the first message')
+  const big = buildSetupSnapshot(base({ rules: [rule({ id: 'a', body: 'x'.repeat(25_000) })] }))
+  expect(big.items.map((item) => item.state)).toEqual(['omitted'])
+})

@@ -1,4 +1,47 @@
+import type { AgentProvider } from './types/agent'
 import { RULE_TOTAL_LIMIT, type Rule } from './types/rules'
+
+export interface RuleDelivery {
+  /**
+   * `system`: the runtime takes the rules as separate instructions it keeps for the whole session.
+   * `first-message`: the runtime has no such slot, so the rules travel ahead of the first prompt in a labelled block.
+   */
+  path: 'system' | 'first-message'
+  /** The most rule characters Ramu will hand this runtime in one session. */
+  limit: number
+  /** One sentence for the thread's setup list: how the rules arrive and what that does not guarantee. */
+  detail: string
+}
+
+/** How each adapter receives Always rules, from what its launch code does today. */
+export function ruleDelivery(provider: AgentProvider): RuleDelivery {
+  if (provider === 'claude-code')
+    return {
+      path: 'system',
+      limit: RULE_TOTAL_LIMIT,
+      detail: "Appended to Claude's system prompt as the user's own instructions, labelled apart from Ramu's guidance.",
+    }
+  if (provider === 'codex')
+    return {
+      path: 'system',
+      limit: RULE_TOTAL_LIMIT,
+      detail: "Sent as Codex developer instructions, labelled as the user's own instructions.",
+    }
+  return {
+    path: 'first-message',
+    limit: RULE_TOTAL_LIMIT,
+    detail:
+      'This runtime has no separate instruction slot, so the rules went ahead of the first message in a labelled block. That is weaker than system instructions, and a resumed session does not receive them again.',
+  }
+}
+
+/** Why Always rules of this size cannot be handed to the runtime, or null when they fit. Rules are never trimmed. */
+export function ruleDeliveryBlock(provider: AgentProvider, characters: number): string | null {
+  const { limit } = ruleDelivery(provider)
+  return characters > limit
+    ? `Your enabled rules use ${characters} of the ${limit} characters this runtime can receive. Turn one off or shorten it in Settings → Agent setup → Rules; Ramu never trims rules silently.`
+    : null
+}
 
 type Scoped = Pick<Rule, 'id' | 'name' | 'body' | 'projectId' | 'providers' | 'activation' | 'enabled'>
 
