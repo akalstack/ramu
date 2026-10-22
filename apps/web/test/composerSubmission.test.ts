@@ -58,6 +58,15 @@ vi.mock('../src/i18n', () => ({ useLanguage() {}, t: (value: string) => value })
 vi.mock('../src/lib/errors', () => ({ errorText: (error: Error) => error.message }))
 vi.mock('../src/ipc', () => ({ ramu: {}, invoke() {} }))
 vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ id: state.host, isLocal: false, invoke() {} }) }))
+vi.mock('../src/voice/useDictation', () => ({
+  useVoiceSettings: () => [{}, () => {}],
+  useVoiceCapability: () => undefined,
+  useMicControl: () => ({ kind: 'hidden' }),
+  useDictation: () => ({
+    snapshot: { state: { phase: 'idle' }, level: 0 },
+    session: { start() {}, stop() {}, cancel() {}, insertReview: () => true },
+  }),
+}))
 vi.mock('../src/composer/ComposerInput', () => ({ ComposerInput: 'textarea' }))
 vi.mock('../src/composer/Attachments', () => ({ Attachments: () => null }))
 vi.mock('../src/components/ui/button', () => ({ Button: 'button' }))
