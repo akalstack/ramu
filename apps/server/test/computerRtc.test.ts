@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RTCPeerConnection } from 'werift'
+import { RTCPeerConnection, RTCRtpCodecParameters } from 'werift'
 import type {
   ComputerAction,
   ComputerBackend,
@@ -85,8 +85,17 @@ const fakeFeed = () => {
   return { feed: feed as unknown as VideoFeed, raw: feed, unsubscribed }
 }
 
+// A phone or desktop viewer offers H.264, the one codec the shared hardware stream can answer.
+const h264 = () =>
+  new RTCRtpCodecParameters({
+    mimeType: 'video/H264',
+    clockRate: 90000,
+    rtcpFeedback: [{ type: 'nack' }, { type: 'nack', parameter: 'pli' }],
+    parameters: 'level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f',
+  })
+
 const viewerOffer = async () => {
-  const pc = new RTCPeerConnection()
+  const pc = new RTCPeerConnection({ codecs: { audio: [], video: [h264()] } })
   pc.addTransceiver('video', { direction: 'recvonly' })
   await pc.setLocalDescription(await pc.createOffer())
   return { pc, sdp: pc.localDescription!.sdp }
@@ -106,6 +115,7 @@ describe('rtc viewers', () => {
     closers.push(() => pc.close())
     const answer = await viewers.answer('thread', 'phone', sdp)
     expect(answer.sdp.toLowerCase()).toContain('h264')
+    expect(answer.sdp).not.toContain('a=inactive')
     expect(viewers.count('thread')).toBe(1)
 
     viewers.keyFrame(answer.id, 'someone-else')
