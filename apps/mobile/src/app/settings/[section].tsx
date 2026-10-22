@@ -13,6 +13,7 @@ import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
 import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
 import { ComputerScope } from '../../components/SettingsChrome'
 import { RulesSettings } from '../../components/RulesSettings'
+import { VoiceSettings } from '../../components/VoiceSettings'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import { ScopeControl } from '../../components/ScopeControl'
 
@@ -83,6 +84,7 @@ function AppearancePage() {
           onChange={(on) => setDraft('haptics', on ? '' : 'off')}
         />
       </Card>
+      <VoiceSettings />
     </>
   )
 }

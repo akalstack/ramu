@@ -334,6 +334,9 @@ export const registerComputerHandlers: RegisterHandlers = ({
         const service = admin()
         const session = service.session(thread(threadId))
         if (!session) throw new Error('Grant a computer to this thread first.')
+        // Input needs a full-access device; a read-only (viewer) device can only ever be given the screen to watch.
+        if (input && !host.browserGrantEligible?.(deviceId))
+          throw new Error('Choose a paired owner device. A viewer device can only watch.')
         service.grantViewer(threadId, deviceId, input)
       },
     },

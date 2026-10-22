@@ -78,4 +78,14 @@ const bridge: RamuBridge = {
   },
 }
 
-contextBridge.exposeInMainWorld('ramu', bridge)
+// Dictation: the shell captures audio only after a person's action and holds a token main issued. Errors keep their
+// `voice:<reason>` message so the page can tell a denied microphone from an unavailable recognizer.
+const voice: NonNullable<RamuBridge['voice']> = {
+  capability: (language) => ipcRenderer.invoke('ramu:voice:capability', language),
+  begin: (language) => ipcRenderer.invoke('ramu:voice:begin', language),
+  transcribe: (token, pcm, language) => ipcRenderer.invoke('ramu:voice:transcribe', token, pcm, language),
+  cancel: (token) => ipcRenderer.invoke('ramu:voice:cancel', token),
+  openSettings: () => ipcRenderer.invoke('ramu:voice:settings'),
+}
+
+contextBridge.exposeInMainWorld('ramu', { ...bridge, voice })

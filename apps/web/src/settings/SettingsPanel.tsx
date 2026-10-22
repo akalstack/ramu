@@ -27,6 +27,7 @@ import { ChatsSettings } from './ChatsSettings'
 import { GHOST_BUTTON_CLASS, RESET_KEYS, SETTINGS_FORM_CLASS } from './constants'
 import { EditorSettings } from './EditorSettings'
 import { BrowserSettings } from './BrowserSettings'
+import { VoiceSettings } from './VoiceSettings'
 import { ComputerUseSettings } from './ComputerSettings'
 import { GitSettings } from './GitSettings'
 import { ModelSetsEditor } from './ModelSetsEditor'
@@ -220,7 +221,14 @@ export function SettingsPanel({
               </>
             )}
             {page === 'archived' && <ArchivedThreads />}
-            {page === 'chats' && <ChatsSettings {...draftProps} />}
+            {page === 'chats' && (
+              <>
+                <ChatsSettings {...draftProps} />
+                <div className={SETTINGS_FORM_CLASS}>
+                  <VoiceSettings />
+                </div>
+              </>
+            )}
             {page === 'git' && <GitSettings {...draftProps} />}
             {page === 'shortcuts' && <ShortcutsSettings shortcuts={shortcuts} />}
             {page === 'models' && (

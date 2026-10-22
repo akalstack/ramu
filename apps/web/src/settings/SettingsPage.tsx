@@ -77,6 +77,11 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
     title: 'Keep this computer awake',
     words: 'computer use sleep awake caffeinate screen lock',
   },
+  {
+    section: 'chats',
+    title: 'Voice input',
+    words: 'microphone dictation speech voice dictate language transcribe record',
+  },
   { section: 'browser', title: 'Open clicked links in', words: 'browser links system integrated web external' },
   {
     section: 'browser',

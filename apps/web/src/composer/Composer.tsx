@@ -14,6 +14,9 @@ import { registerWorkspaceCheckpoint } from '../workspace/workspaceCheckpoint'
 import { useHost } from '../workspace/HostProvider'
 import { VIEW_ONLY_NOTICE } from './viewerAccess'
 import { useViewOnly } from './useViewOnly'
+import { DictationStatus, MicButton } from '../voice/DictationControls'
+import { useDictation, useMicControl, useVoiceCapability, useVoiceSettings } from '../voice/useDictation'
+import { dictationBusy } from '@ramu/shared/voice/dictation'
 
 const CHIPS_SHOWN = 4
 // Keep long documents out of the prompt box while leaving ordinary pastes inline.
@@ -102,6 +105,86 @@ export function Composer({
   const { id: checkpointHost, isLocal, invoke } = useHost()
   const viewOnly = useViewOnly()
   const scopeKey = JSON.stringify([checkpointHost, suggestions.scope])
+  // Dictation: a take belongs to this host's draft and the revision it started from. An edit, restored draft or
+  // another thread never receives its text; the draft is frozen while a take runs. Choices are device-local.
+  const [voiceSettings] = useVoiceSettings()
+  const voiceCapability = useVoiceCapability(voiceSettings)
+  const mic = useMicControl(voiceSettings, voiceCapability)
+  const revision = useRef(0)
+  const latestValue = useRef(value)
+  latestValue.current = value
+  useEffect(() => {
+    revision.current += 1
+  }, [value])
+  const dictationKey = JSON.stringify([checkpointHost, suggestions.scope ?? scopeId ?? ''])
+  const takeSelection = useRef({ start: 0, end: 0 })
+  const dictation = useDictation({
+    draftKey: dictationKey,
+    settings: voiceSettings,
+    getDraft: () => ({ draftKey: dictationKey, revision: revision.current, text: latestValue.current }),
+    onInsert: ({ text: next, caret: at }) => {
+      const input = ref.current
+      const current = latestValue.current
+      const start = Math.min(takeSelection.current.start, current.length)
+      const end = Math.max(start, Math.min(takeSelection.current.end, current.length))
+      const inserted = next.slice(start, next.length - (current.length - end))
+      // One edit through the editor, so undo removes the whole transcript.
+      if (input) input.setRangeText(inserted, start, end)
+      else onChange(next)
+      setCaret(at)
+      requestAnimationFrame(() => {
+        ref.current?.focus()
+        ref.current?.setSelectionRange(at, at)
+      })
+    },
+  })
+  const dictating = dictationBusy(dictation.snapshot.state)
+  const startDictation = () => {
+    if (mic.kind === 'blocked') {
+      if (mic.reason === 'permission-denied') void window.ramu.voice?.openSettings()
+      return
+    }
+    if (mic.kind === 'hidden') return
+    const input = ref.current
+    const start = input?.selectionStart ?? latestValue.current.length
+    takeSelection.current = { start, end: input?.selectionEnd ?? start }
+    dictation.session.start({
+      draftKey: dictationKey,
+      revision: revision.current,
+      selection: { ...takeSelection.current },
+    })
+  }
+  const toggleDictation = () => {
+    const phase = dictation.snapshot.state.phase
+    if (phase === 'recording' || phase === 'limit') dictation.session.stop()
+    else if (phase === 'idle' || phase === 'failed' || phase === 'review') startDictation()
+  }
+  const toggleRef = useRef(toggleDictation)
+  toggleRef.current = toggleDictation
+  const micVisible = mic.kind !== 'hidden' && !viewOnly
+  // The "Dictate message" command (and its shortcut) reaches the composer the person is working in.
+  useEffect(() => {
+    const onCommand = () => {
+      const root = rootRef.current
+      if (!micVisible || !root || !root.checkVisibility()) return
+      const focused = root.contains(document.activeElement)
+      if (!focused && [...document.querySelectorAll('.composer')].filter((el) => el.checkVisibility()).length > 1) return
+      toggleRef.current()
+    }
+    window.addEventListener('ramu:dictate', onCommand)
+    return () => window.removeEventListener('ramu:dictate', onCommand)
+  }, [micVisible])
+  // Escape discards a take that is running, wherever focus is.
+  useEffect(() => {
+    if (!dictating) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      dictation.session.cancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dictating, dictation.session])
   const [submissionFailure, setSubmissionFailure] = useState<{ scope: string; message: string } | null>(null)
   const currentScope = useRef({ host: checkpointHost, scope: suggestions.scope })
   currentScope.current = { host: checkpointHost, scope: suggestions.scope }
@@ -249,7 +332,7 @@ export function Composer({
   }, [hasAlternate])
   const hasPinned = suggestions.pinned.length > 0
   const hasContent = allowEmpty || hasPinned || value.trim().length > 0 || attachments.length > 0
-  const canAlternate = !submitting && !alternateDisabled && !uploading && hasContent
+  const canAlternate = !submitting && !alternateDisabled && !uploading && !dictating && hasContent
   const showStop =
     !submitting && !allowEmpty && !hasPinned && !!stop?.active && !value.trim() && attachments.length === 0
   const showAlternate = modHeld && hasAlternate
@@ -326,7 +409,7 @@ export function Composer({
     window.addEventListener('ramu:chat-drop', onChatDrop)
     return () => window.removeEventListener('ramu:chat-drop', onChatDrop)
   }, [])
-  const canSend = !submitting && !disabled && !viewOnly && !uploading && hasContent
+  const canSend = !submitting && !disabled && !viewOnly && !uploading && !dictating && hasContent
   return (
     <>
       <div
@@ -433,8 +516,31 @@ export function Composer({
             {submissionFailure.message}
           </div>
         )}
+        {(micVisible || dictation.snapshot.state.phase !== 'idle') && (
+          <DictationStatus
+            state={dictation.snapshot.state}
+            level={dictation.snapshot.level}
+            onStop={() => dictation.session.stop()}
+            onCancel={() => dictation.session.cancel()}
+            onDismiss={() => dictation.session.cancel()}
+            onInsert={() => {
+              const input = ref.current
+              const position = input?.selectionStart ?? latestValue.current.length
+              takeSelection.current = { start: position, end: input?.selectionEnd ?? position }
+              if (
+                !dictation.session.insertReview(
+                  { draftKey: dictationKey, revision: revision.current, text: latestValue.current },
+                  { ...takeSelection.current },
+                )
+              )
+                dictation.session.cancel()
+            }}
+            onOpenSettings={() => void window.ramu.voice?.openSettings()}
+          />
+        )}
         <ComposerInput
           ref={ref}
+          readOnly={dictating}
           autoFocus={autoFocus}
           value={value}
           placeholder={t(placeholder)}
@@ -539,6 +645,26 @@ export function Composer({
             <div className="composer-controls flex min-w-0 flex-1 flex-wrap items-center gap-1">{controls}</div>
           ) : (
             <span className="grow flex-1 min-w-0 text-left" />
+          )}
+          {micVisible && (
+            <MicButton
+              active={dictating}
+              disabled={
+                mic.kind === 'blocked' && mic.reason === 'language-unsupported'
+                  ? true
+                  : dictating && dictation.snapshot.state.phase !== 'recording' && dictation.snapshot.state.phase !== 'limit'
+              }
+              title={
+                mic.kind === 'blocked'
+                  ? mic.reason === 'permission-denied'
+                    ? t('Microphone or speech access is off. Turn it on in system settings to dictate.')
+                    : t('This computer cannot recognize the chosen language offline.')
+                  : dictating
+                    ? t('Stop and transcribe')
+                    : t('Dictate message')
+              }
+              onClick={toggleDictation}
+            />
           )}
           {actions}
           <Button

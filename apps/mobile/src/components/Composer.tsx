@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFocusEffect } from 'expo-router'
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, FlatList, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
@@ -33,7 +33,7 @@ import { font, radius, space, useTheme } from '../theme'
 import { providerNames } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { useModelFlow } from '../runtime/useModelFlow'
-import { useT } from '../i18n'
+import { fill, useT } from '../i18n'
 import { Chip, IconButton, Row, Segmented, Sheet, T, tap } from './ui'
 import { ProviderIcon } from './Logos'
 import { Glass } from './Glass'
@@ -42,6 +42,15 @@ import { hostHasAutoResume } from '../runtime/limitTray'
 import { offersVerify } from '../runtime/goalVerify'
 import { isUserPaused } from '@ramu/shared/chat/goalHold'
 import { GoalVerifySheet } from './GoalVerifySheet'
+import { DictationStatus, MicButton } from './DictationControls'
+import { dictationBusy } from '@ramu/shared/voice/dictation'
+import {
+  prepareVoiceModel,
+  useDictation,
+  useMicControl,
+  useVoiceCapability,
+  useVoiceSettings,
+} from '../runtime/useDictation'
 
 export interface ModelChoice {
   provider: AgentProvider
@@ -587,6 +596,68 @@ export function Composer({
         split.body,
       ),
     )
+  // Dictation: a take belongs to this host's draft and the revision it started from, so an edit, restored draft or
+  // another thread never receives its text. Voice choices are device-local (never host preferences).
+  const [voiceSettings] = useVoiceSettings()
+  const [voiceRefresh, setVoiceRefresh] = useState(0)
+  const voiceCapability = useVoiceCapability(voiceSettings, voiceRefresh)
+  const mic = useMicControl(voiceSettings, voiceCapability)
+  const revision = useRef(0)
+  const selectionEnd = useRef(0)
+  const bodyText = useRef(split.body)
+  bodyText.current = split.body
+  const dictationKey = `${pc}:${draftKey ?? 'composer'}`
+  const dictation = useDictation({
+    draftKey: dictationKey,
+    settings: voiceSettings,
+    getDraft: () => ({ draftKey: dictationKey, revision: revision.current, text: bodyText.current }),
+    onInsert: ({ text: next, caret: at }) => {
+      edit(next)
+      setCaret(at)
+      setForced({ start: at, end: at })
+    },
+  })
+  const dictating = dictationBusy(dictation.snapshot.state)
+  const startDictation = () => {
+    if (mic.kind === 'blocked') {
+      Alert.alert(
+        t.dictate,
+        mic.reason === 'permission-denied' ? t.dictatePermissionDenied : t.dictateLanguageUnsupported,
+        mic.reason === 'permission-denied'
+          ? [
+              { text: t.dictateDiscard, style: 'cancel' },
+              { text: t.dictateOpenSettings, onPress: () => void Linking.openSettings() },
+            ]
+          : undefined,
+      )
+      return
+    }
+    if (mic.kind === 'setup' && mic.reason === 'model-needed') {
+      const size = mic.modelBytes
+        ? fill(t.dictateModelSize, `${Math.max(1, Math.round(mic.modelBytes / 1_000_000))} MB`)
+        : t.dictateModelNeeded
+      Alert.alert(t.dictateSetup, size, [
+        { text: t.dictateDiscard, style: 'cancel' },
+        {
+          text: t.voiceDownloadModel,
+          onPress: () =>
+            void prepareVoiceModel(
+              voiceCapability?.resolvedLanguage ?? voiceSettings.language,
+              new AbortController().signal,
+            )
+              .then(() => setVoiceRefresh((n) => n + 1))
+              .catch(() => Alert.alert(t.dictate, t.dictateFailedModel)),
+        },
+      ])
+      return
+    }
+    if (mic.kind === 'hidden') return
+    dictation.session.start({
+      draftKey: dictationKey,
+      revision: revision.current,
+      selection: { start: Math.min(caret, selectionEnd.current), end: Math.max(caret, selectionEnd.current) },
+    })
+  }
   const pick = (choice: Parameters<typeof suggest.choose>[0]) => {
     const next = suggest.choose(choice)
     // Inline like the desktop: the mention stays in the sentence, as a short @name (coloured like a badge). A text field can't
@@ -709,10 +780,13 @@ export function Composer({
   useEffect(() => {
     if (restore) setText(restore.text)
   }, [restore])
+  useEffect(() => {
+    revision.current += 1
+  }, [text, draftKey])
   const has = text.trim().length > 0 || attachments.length > 0 || context.length > 0
   const viewOnly = store.computers?.find((computer) => computer.id === pc)?.access === 'viewer'
   const submit = async () => {
-    if (!has || viewOnly || sending.current || uploading) return
+    if (!has || viewOnly || sending.current || uploading || dictating) return
     sending.current = true
     setBusy(true)
     const submittedOwner = origin.current
@@ -881,13 +955,32 @@ export function Composer({
         </T>
       ) : null}
       <View style={{ paddingTop: space.s }}>
+        <View style={{ paddingHorizontal: space.s }}>
+          <DictationStatus
+            state={dictation.snapshot.state}
+            level={dictation.snapshot.level}
+            onStop={() => dictation.session.stop()}
+            onCancel={() => dictation.session.cancel()}
+            onDismiss={() => dictation.session.cancel()}
+            onInsert={() => {
+              const inserted = dictation.session.insertReview(
+                { draftKey: dictationKey, revision: revision.current, text: bodyText.current },
+                { start: caret, end: caret },
+              )
+              if (!inserted) dictation.session.cancel()
+            }}
+            showSettings
+          />
+        </View>
         <TextInput
           onChangeText={(value) => {
             edit(value)
             if (forced) setForced(undefined)
           }}
+          editable={!dictating}
           onSelectionChange={(event) => {
             setCaret(event.nativeEvent.selection.start)
+            selectionEnd.current = event.nativeEvent.selection.end
             if (forced && event.nativeEvent.selection.start === forced.start) setForced(undefined)
           }}
           selection={forced}
@@ -936,6 +1029,15 @@ export function Composer({
             style={{ borderRadius: radius.full }}
             onPress={() => setMenu('actions')}
           />
+          {mic.kind !== 'hidden' ? (
+            <MicButton
+              active={dictating}
+              disabled={viewOnly || (dictating && dictation.snapshot.state.phase !== 'recording')}
+              onPress={() =>
+                dictation.snapshot.state.phase === 'recording' ? dictation.session.stop() : startDictation()
+              }
+            />
+          ) : null}
           <ModelChip value={model} onChange={onModel} computerId={computerId} limited={limited} />
           {computerId ? (
             <ThreadUsageChip
@@ -1013,7 +1115,7 @@ export function Composer({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={offline ? 'Add to outbox' : limited ? t.queue : 'Send'}
-              disabled={!has || viewOnly || busy || uploading}
+              disabled={!has || viewOnly || busy || uploading || dictating}
               onPress={() => {
                 tap()
                 submit()

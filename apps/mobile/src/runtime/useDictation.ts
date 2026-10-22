@@ -11,6 +11,10 @@ let sharedEngine: VoiceEngine | undefined
 const engine = () => (sharedEngine ??= createPhoneVoiceEngine())
 const lease = createVoiceLease()
 
+/** Downloads a missing speech model on the phone (an explicit action); resolves when it is installed. */
+export const prepareVoiceModel = (language: string, signal: AbortSignal, onProgress?: (progress: number) => void) =>
+  engine().transcriber.prepare(language, { signal, onProgress })
+
 const SETTINGS_KEY = 'voice-settings'
 
 /** Device-local voice choices, kept with the phone's other local preferences and never sent to a host. */
@@ -93,7 +97,10 @@ export function useDictation(options: {
     [draftKey, session],
   )
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => state !== 'active' && session.interrupt('system'))
+    const subscription = AppState.addEventListener(
+      'change',
+      (state) => state !== 'active' && session.interrupt('system'),
+    )
     return () => subscription.remove()
   }, [session])
   return { snapshot, session }
