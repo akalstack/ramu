@@ -31,6 +31,7 @@ const viewerMethods = new Set([
   'agent.dismissQuestion',
   'settings.app.get',
   'settings.app.snapshot',
+  'preferences.layers.get',
   'settings.models.get',
   'recaps.get',
   'summaries.get',

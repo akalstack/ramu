@@ -8,6 +8,8 @@ import {
   type SettingSchema,
 } from '@ramu/shared/settingsCompatibility'
 import type { AppPreferences, ModelPreferences } from '@ramu/shared/types'
+import { MODEL_FLOW_FIELD, applyLayerEdit } from '@ramu/shared/modelFlow'
+import { parseLayer, type PreferenceLayer } from '@ramu/shared/preferenceScopes'
 import { migrateModelDefaults, recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { applySettingEdits, validateSettingModels } from '../../sharedSettings'
 import { appPreferences, modelPreferences } from '../preferences'
@@ -43,7 +45,35 @@ export const registerSettingsHandlers: RegisterHandlers = ({
     }
   }
 
+  // The mobile layer of shared display preferences lives on the host the phones are paired with; the host's own
+  // setting is the all-device baseline and each phone keeps its device layer locally.
+  const mobileLayer = () => parseLayer(workspace.getAppState<PreferenceLayer | null>('preference-layer-mobile', null))
+  const layerSnapshot = () => ({ protocol: 1 as const, mobile: mobileLayer() })
+
   return {
+    'preferences.layers.get': { args: z.tuple([]), run: layerSnapshot },
+    'preferences.layers.set': {
+      args: z.tuple([
+        z.object({
+          id: z.literal(MODEL_FLOW_FIELD),
+          value: selectionMode.optional(),
+          at: z.number().finite(),
+          by: z.string().min(1).max(80),
+        }),
+      ]),
+      run: (edit: { id: typeof MODEL_FLOW_FIELD; value?: 'model' | 'effort'; at: number; by: string }) => {
+        const { layer, applied } = applyLayerEdit(mobileLayer(), edit.id, {
+          ...(edit.value ? { value: edit.value } : {}),
+          at: Math.min(edit.at, Date.now() + 5 * 60_000),
+          by: edit.by,
+        })
+        if (applied) {
+          workspace.setAppState('preference-layer-mobile', layer)
+          host.send('settings:changed', loadPreferences())
+        }
+        return { ...layerSnapshot(), applied }
+      },
+    },
     'settings.permissions.clear': {
       args: z.tuple([
         z

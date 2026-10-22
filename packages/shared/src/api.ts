@@ -663,6 +663,14 @@ export interface RamuMethods {
   'settings.permissions.list'(): import('./types').SavedPermissionRule[]
   'settings.permissions.remove'(id: string): void
   'settings.app.get'(): AppPreferences
+  /** Shared mobile display preferences kept on the host the phones are paired with. */
+  'preferences.layers.get'(): import('./modelFlow').PreferenceLayersSnapshot
+  'preferences.layers.set'(edit: {
+    id: 'modelFlow'
+    value?: import('./modelFlow').ModelFlow
+    at: number
+    by: string
+  }): import('./modelFlow').PreferenceLayersSnapshot & { applied: boolean }
   'settings.app.set'(preferences: AppPreferences): void
   'settings.models.set'(preferences: ModelPreferences): void
   'ui.get'(): { workspace: WorkspaceUiState; tasks: Record<string, TaskUiState> }
