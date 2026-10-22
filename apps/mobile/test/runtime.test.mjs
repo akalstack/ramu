@@ -37,8 +37,8 @@ test('invoke preserves optional argument positions, bearer token stays in header
 })
 test('authentication errors and ambiguous submissions are distinct; neither retries a mutation', async () => {
   let calls = 0
-  const client = new HostClient('https://host', 'token', async () => {
-    calls++
+  const client = new HostClient('https://host', 'token', async (_url, options) => {
+    if (String(options.body).includes('agent.send')) calls++
     throw new Error('offline')
   })
   await assert.rejects(
@@ -175,4 +175,36 @@ test('a human background stop remains visible without becoming a message or comp
   assert.equal(items[0].kind, 'note')
   assert.equal(items[0].title, 'Background command stop requested')
   assert.equal(items[0].detail, 'pnpm dev')
+})
+
+test('a host with operation keys gets the same key on a retried send after a lost connection', async () => {
+  const keys = []
+  let drops = 1
+  const client = new HostClient('https://host', 'token', async (_url, options) => {
+    const body = JSON.parse(options.body)
+    if (body.method === 'background.status') return new Response('{"value":{"capabilities":["operation-keys"]}}')
+    keys.push(body.operationKey)
+    if (drops-- > 0) throw new Error('connection lost')
+    return new Response('{"value":"sent"}')
+  })
+  assert.equal(await client.invoke('agent.send', 'session', 'hello'), 'sent')
+  assert.equal(keys.length, 2)
+  assert.match(keys[0], /^[A-Za-z0-9_-]{8,128}$/)
+  assert.equal(keys[0], keys[1])
+})
+test('answers from the host are final and unlisted methods carry no key', async () => {
+  let sends = 0
+  const client = new HostClient('https://host', 'token', async (_url, options) => {
+    const body = JSON.parse(options.body)
+    if (body.method === 'background.status') return new Response('{"value":{"capabilities":["operation-keys"]}}')
+    if (body.method === 'agent.send') {
+      sends++
+      return new Response('{"error":"Session not found"}')
+    }
+    assert.equal(body.operationKey, undefined)
+    return new Response('{"value":[]}')
+  })
+  await assert.rejects(client.invoke('agent.send', 'session', 'hello'), /Session not found/)
+  assert.equal(sends, 1)
+  assert.deepEqual(await client.invoke('tasks.list'), [])
 })

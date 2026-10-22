@@ -61,6 +61,14 @@ export interface InvokeRequest {
 
 export const OPERATION_KEY_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 
+/** Mutations whose reply can be lost after the host already ran them: a retry must carry an operation key. */
+export const RECOVERABLE_MUTATIONS: ReadonlySet<string> = new Set([
+  'tasks.create',
+  'agent.start',
+  'agent.send',
+  'agent.sendQueuedNow',
+])
+
 const UNDEFINED_MARKER = '$ramuUndefined'
 
 /** JSON drops `undefined`; the marker keeps optional arguments in their positions. */

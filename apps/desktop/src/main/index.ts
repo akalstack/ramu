@@ -63,6 +63,7 @@ import { terminalMenu } from './terminalMenu'
 import { createAgentNotifier } from './agentNotifier'
 import {
   runtimeInvoke,
+  runtimeInvokeRecoverable,
   runtimePair,
   runtimeRenew,
   subscribeRuntime,
@@ -698,7 +699,7 @@ async function main() {
   })
   /** Runs a call on another host's server and nudges overviews when it changed threads or projects. */
   const runOnHost = async (id: string, method: string, args: unknown[]) => {
-    const result = await runtimeInvoke(computers.endpoint(id), method, args)
+    const result = await runtimeInvokeRecoverable(computers.endpoint(id), method, args)
     const channel = activityChannel(method)
     if (channel) observeHostActivity(id, channel, {})
     return result
@@ -1128,7 +1129,7 @@ async function main() {
       await desktopUpdater.prepare(updateStatus!)
       return updateView(updateStatus!)
     }
-    return runtimeInvoke(target, method, args)
+    return runtimeInvokeRecoverable(target, method, args)
   })
 
   // Dictation bridge. Only the shell window's own main frame; audio and the lease never reach a guest page or a host.

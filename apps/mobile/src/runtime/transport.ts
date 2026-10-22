@@ -1,4 +1,4 @@
-import { encodeInvoke, PROTOCOL_HEADER, PROTOCOL_VERSION, isLoopbackHost } from '@ramu/contracts'
+import { encodeInvoke, PROTOCOL_HEADER, PROTOCOL_VERSION, RECOVERABLE_MUTATIONS, isLoopbackHost } from '@ramu/contracts'
 import type { PushEvents, RamuMethods } from '@ramu/shared/api'
 
 export class HostError extends Error {
@@ -9,6 +9,14 @@ export class HostError extends Error {
     this.status = status
     this.ambiguous = ambiguous
   }
+}
+/** A fresh key for one logical mutation: the host stores its result under it for ten minutes. */
+export function operationKey(): string {
+  const part = () =>
+    Math.floor(Math.random() * 36 ** 6)
+      .toString(36)
+      .padStart(6, '0')
+  return `${Date.now().toString(36)}-${part()}${part()}${part()}`
 }
 export function normalizeAddress(input: string, allowHttp = false): string {
   const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`)
@@ -87,10 +95,31 @@ export class HostClient {
   private headers() {
     return { Authorization: `Bearer ${this.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) }
   }
+  private operationKeys: Promise<boolean> | undefined
+  /** Whether the host advertises `operation-keys`, read once from its status. A host that does not say never gets retries. */
+  private supportsOperationKeys(): Promise<boolean> {
+    this.operationKeys ??= this.call('background.status', [])
+      .then((status: { capabilities?: string[] }) => !!status?.capabilities?.includes('operation-keys'))
+      .catch(() => false)
+    return this.operationKeys
+  }
   async invoke<M extends keyof RamuMethods>(
     method: M,
     ...args: Parameters<RamuMethods[M]>
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>> {
+    if (!RECOVERABLE_MUTATIONS.has(method) || !(await this.supportsOperationKeys())) return this.call(method, args)
+    // One key across the attempts: a host that already ran the action returns its first result instead of running it again.
+    const key = operationKey()
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.call(method, args, key)
+      } catch (error) {
+        if (!(error instanceof HostError) || !error.ambiguous || attempt >= 2) throw error
+        await new Promise((resolve) => setTimeout(resolve, 500 * 3 ** attempt))
+      }
+    }
+  }
+  private async call(method: string, args: unknown[], operationKey?: string): Promise<any> {
     const controller = new AbortController()
     this.controllers.add(controller)
     const timer = setTimeout(() => controller.abort(), 45_000)
@@ -98,7 +127,7 @@ export class HostClient {
       const response = await this.fetcher(`${this.address}/invoke`, {
         method: 'POST',
         headers: { ...this.headers(), 'Content-Type': 'application/json' },
-        body: encodeInvoke(method, args),
+        body: encodeInvoke(method, args, operationKey),
         signal: controller.signal,
       })
       const text = await response.text()

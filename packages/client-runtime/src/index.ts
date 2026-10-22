@@ -9,13 +9,14 @@ export { refreshRuntimeNetwork } from './network'
 export { runtimeNetwork } from './network'
 export { PresenceListener, presenceKey, presenceMessage } from './presence'
 import { join } from 'node:path'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   AUTH_SCHEME,
   PAIR_PATH,
   RENEW_PATH,
   PROTOCOL_HEADER,
   PROTOCOL_VERSION,
+  RECOVERABLE_MUTATIONS,
   encodeInvoke,
   parseRemoteUrl,
   type PairResponse,
@@ -106,6 +107,76 @@ export async function runtimeInvoke(
     })
   } finally {
     release()
+  }
+}
+
+const TRANSPORT_CODES = new Set(['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', 'ECONNABORTED', 'ENETUNREACH'])
+
+/** A failure of the connection itself, as opposed to an answer from the host, which is final. */
+export function isTransportFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const code = (error as NodeJS.ErrnoException).code
+  if (code && TRANSPORT_CODES.has(code)) return true
+  // A reply cut off mid-body does not parse; a request that outlived its deadline is destroyed by the client.
+  return error instanceof SyntaxError || /timed out|socket hang up|aborted/i.test(error.message)
+}
+
+const operationSupport = new Map<string, { supported: boolean; at: number }>()
+const SUPPORT_TTL_MS = 10 * 60_000
+
+async function supportsOperationKeys(target: string | RuntimeEndpoint, signal?: AbortSignal): Promise<boolean> {
+  const endpoint = toEndpoint(target)
+  const key = endpoint.kind === 'socket' ? endpoint.path : endpoint.url
+  const known = operationSupport.get(key)
+  if (known && Date.now() - known.at < SUPPORT_TTL_MS) return known.supported
+  try {
+    const status = (await runtimeInvoke(target, 'background.status', [], { signal, timeoutMs: 10_000 })) as {
+      capabilities?: string[]
+    }
+    const supported = !!status?.capabilities?.includes('operation-keys')
+    operationSupport.set(key, { supported, at: Date.now() })
+    return supported
+  } catch {
+    return false
+  }
+}
+
+export interface RecoverableInvokeOptions extends InvokeOptions {
+  /** Retries after a lost connection; each waits `backoffMs * 3 ** attempt`. */
+  retries?: number
+  backoffMs?: number
+  /** Supplies the operation key; defaults to a random UUID. */
+  newKey?: () => string
+}
+
+/**
+ * Like `runtimeInvoke`, and for a listed mutation, retries a lost connection under one operation key so a host that
+ * advertises `operation-keys` returns the first result instead of running it again. A host that does not advertise it,
+ * a method outside the list and an answer from the host (an error reply) are never retried: the outcome stays the
+ * caller's to reconcile.
+ */
+export async function runtimeInvokeRecoverable(
+  target: string | RuntimeEndpoint,
+  method: string,
+  args: unknown[] = [],
+  policy: RecoverableInvokeOptions = {},
+): Promise<any> {
+  if (
+    policy.operationKey ||
+    !RECOVERABLE_MUTATIONS.has(method) ||
+    !(await supportsOperationKeys(target, policy.signal))
+  )
+    return runtimeInvoke(target, method, args, policy)
+  const operationKey = (policy.newKey ?? (() => randomUUID()))()
+  const retries = policy.retries ?? 2
+  const backoffMs = policy.backoffMs ?? 500
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await runtimeInvoke(target, method, args, { ...policy, operationKey })
+    } catch (error) {
+      if (attempt >= retries || policy.signal?.aborted || !isTransportFailure(error)) throw error
+      await new Promise((resolve) => setTimeout(resolve, backoffMs * 3 ** attempt))
+    }
   }
 }
 
