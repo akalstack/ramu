@@ -357,6 +357,9 @@ export class AcpEvents {
             })),
         },
       ]
+    // ACP session metadata: a nonempty string is the provider's own title; null or absent fields change nothing.
+    if (u.sessionUpdate === 'session_info_update')
+      return typeof u.title === 'string' && u.title.trim() ? [{ kind: 'title', title: u.title }] : []
     if (
       u.sessionUpdate === 'usage_update' &&
       Number.isFinite(u.used) &&

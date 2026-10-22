@@ -35,9 +35,11 @@ Candidate references to investigate:
 
 ## Remaining implementation
 
-### Wire a verified provider
+### Enable a verified provider
 
-- Verify one provider live, then make `suppliesTitles` true for it and call `acceptProviderTitle` from its runner/event boundary (normalize metadata before it reaches workspace code). Until then nothing calls it.
+The boundary is wired: ACP `session_info_update` titles and Codex `thread/name/updated` for the main thread become a `title` runner event, which `SessionProcess` hands to `acceptProviderTitle` for top-level sessions only and never records. `NativeFeatures.titles` (adapter) drives `suppliesTitles`; it is unset everywhere, so no fallback is deferred.
+
+- Verify one provider live (a title arrives during a normal session, and when), then set `native.titles` on its adapter. Until then offered titles are still accepted when they beat the existing automatic title's rules.
 - Native explicit regeneration remains unimplemented.
 
 ### Prefer an existing provider title (remaining parts)

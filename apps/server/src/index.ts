@@ -1,4 +1,5 @@
 import { DEFAULT_AGENT_BROWSER_PREFERENCES } from '@ramu/shared/browser'
+import { providerAdapter } from './providers/adapters'
 import { LocalDiagnostics } from './background/diagnostics'
 import {
   accountEnvironment,
@@ -271,7 +272,15 @@ const agents = new AgentService(
   fake?.fakeQuery ?? query,
   fake?.fakeCodex,
 )
-const threadTitles = new ThreadTitles(db, workspace, agents, () => send('workspace:changed', {}))
+const threadTitles = new ThreadTitles(
+  db,
+  workspace,
+  agents,
+  () => send('workspace:changed', {}),
+  undefined,
+  (session) => providerAdapter(session.provider).native?.titles === true,
+)
+agents.providerTitle = (sessionId, title) => void threadTitles.acceptProviderTitle(sessionId, title)
 const mobileLiveActivities = new MobileLiveActivities(
   join(userData, 'mobile-live-activities.json'),
   () => devices.list(),

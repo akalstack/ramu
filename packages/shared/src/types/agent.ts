@@ -361,6 +361,8 @@ type AgentEventBody =
     }
   /** Plan usage a provider reported. Handed to the usage store and never recorded in the chat. */
   | { kind: 'usage'; readings: UsageReading[] }
+  /** A title the provider generated for the session. Handed to thread titles and never recorded in the chat. */
+  | { kind: 'title'; title: string }
   /** How full the model's context window is. Pushed to the chat's view and never recorded. */
   | { kind: 'context'; used: number; max: number }
   /** Reasoning the provider chose to show: Claude thinking blocks, Codex reasoning summaries. */

@@ -86,6 +86,7 @@ export interface SessionProcessHost
   shutdown(): AgentService['shutdown']
   toolConnection(): AgentService['toolConnection']
   usage(): AgentService['usage']
+  providerTitle(): AgentService['providerTitle']
 }
 
 /** The provider process behind a session: launching it, halting it, interrupting it and failing it. */
@@ -375,6 +376,10 @@ export class SessionProcess {
           if (this.host.runners.get(id) !== runner) return
           if (event.kind === 'usage') {
             this.host.usage()?.update(event.readings)
+            return
+          }
+          if (event.kind === 'title') {
+            if (!s.parentId) this.host.providerTitle()?.(id, event.title)
             return
           }
           if (event.kind === 'context') {

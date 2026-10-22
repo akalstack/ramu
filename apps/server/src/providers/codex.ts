@@ -703,6 +703,9 @@ class CodexSession implements CodexRunner {
       const context = codexContext(p.tokenUsage)
       if (context) this.emit({ kind: 'context', ...context })
     }
+    // The thread's own name, when app-server reports one for this thread. Sub-agent threads are ignored.
+    if (m.method === 'thread/name/updated' && p.threadId === this.threadId && typeof p.threadName === 'string')
+      this.emit({ kind: 'title', title: p.threadName })
     if (m.method === 'turn/started') {
       this.turnId = p.turn.id
       this.emit({ kind: 'state', state: 'running' })

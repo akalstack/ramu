@@ -63,6 +63,11 @@ export interface NativeFeatures {
   advisor?: boolean
   /** A built-in blocking question tool whose requests reach Ramu (Claude `AskUserQuestion`, Codex `requestUserInput`). */
   blockingQuestions?: boolean
+  /**
+   * Verified live to deliver a generated title during a normal session. Ramu then waits through the first turn and a
+   * short grace period before its own generation. Leave unset until verified: titles are still accepted when offered.
+   */
+  titles?: boolean
 }
 
 /** Everything that varies per provider. Shared mechanics (spawning, caching, timeouts) stay in providers.ts / providerBinaries.ts. */

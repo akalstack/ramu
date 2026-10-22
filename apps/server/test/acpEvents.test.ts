@@ -523,3 +523,13 @@ it('applies ACP summary chunks and replacement/clearing patches to the same enti
   expect(decoder.consume({ sessionUpdate: 'compaction_update', compactionId: '', status: 'completed' })).toEqual([])
   expect(decoder.consume({ sessionUpdate: 'compaction_update', compactionId: 'invalid' })).toEqual([])
 })
+
+it("turns ACP session metadata titles into title events and ignores empty or null titles", () => {
+  const decoder = new AcpEvents()
+  expect(decoder.consume({ sessionUpdate: "session_info_update", title: "Fix payment retries" })).toEqual([
+    { kind: "title", title: "Fix payment retries" },
+  ])
+  expect(decoder.consume({ sessionUpdate: "session_info_update", title: null })).toEqual([])
+  expect(decoder.consume({ sessionUpdate: "session_info_update", title: "  " })).toEqual([])
+  expect(decoder.consume({ sessionUpdate: "session_info_update", updatedAt: "x" })).toEqual([])
+})

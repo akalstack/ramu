@@ -56,6 +56,8 @@ export class AgentService {
   private readonly parts: Collaborators
   private shutdown = false
   helperHistory: HelperHistoryLoader = loadHelperHistory
+  /** Receives a title a provider supplied for a top-level session; set by the server once thread titles exist. */
+  providerTitle: ((sessionId: string, title: string) => void) | undefined
   /** How goals read git and run a verification command; replaceable so tests need no processes. */
   goalProbes: GoalProbes = realGoalProbes
   reviewHooks:
@@ -261,6 +263,7 @@ export class AgentService {
       updateQueue: (...a) => parts.dispatcher.updateQueue(...a),
       updateTask: (...a) => parts.tasks.updateTask(...a),
       usage: () => this.usage,
+      providerTitle: () => this.providerTitle,
       get usageReader() {
         return parts.contexts.usageReader
       },
