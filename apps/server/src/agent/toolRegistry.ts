@@ -29,6 +29,7 @@ const ALIASES: Record<string, string> = {
   session: 'history transcript checkpoint',
   preview: 'interactive visual chart simulation calculator diagram prototype playground explorer walkthrough visualize',
   publish: 'interactive visual chart simulation calculator diagram prototype playground explorer walkthrough visualize',
+  theme: 'palette colors colours appearance dark light look style',
   interactive: 'visual chart simulation calculator diagram prototype playground explorer walkthrough visualize',
 }
 const reply = (value: unknown): CallToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value) }] })

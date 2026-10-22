@@ -9,6 +9,7 @@ function renderLine(e: AgentEvent): string | null {
     return `USER: ${e.text}${e.attachments?.length ? '\nAttached files: ' + e.attachments.map((file) => `${JSON.stringify(file.name)} saved at ${JSON.stringify(file.path)}`).join(', ') : ''}`
   if (e.kind === 'interactive')
     return `INTERACTIVE CONTENT ${e.reference.id} v${e.reference.version}: ${e.reference.title} — ${e.reference.summary}`
+  if (e.kind === 'theme') return `THEME DRAFT SHOWN TO THE USER: ${e.theme.name}`
   if (e.kind === 'text') return `ASSISTANT: ${e.text}`
   if (e.kind === 'file-restore')
     return `FILES RESTORED: ${e.fileCount} selected files from user message ${e.userSeq} and later captured runs. The earlier tool results describe historical file states.`

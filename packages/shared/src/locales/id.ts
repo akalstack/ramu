@@ -740,6 +740,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Updated the helper;": "Helper diperbarui;",
   "Needs a look": "Perlu dicek",
   "Another direction": "Arah lain",
+  "Preview theme": "Pratinjau tema",
+  "Drafted by the agent. Nothing changes until you keep it.": "Dirancang oleh agen. Tidak ada yang berubah sampai Anda menyimpannya.",
   "Add reference image": "Tambah gambar acuan",
   "Adding…": "Menambahkan…",
   "Reference image": "Gambar acuan",

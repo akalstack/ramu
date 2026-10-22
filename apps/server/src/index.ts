@@ -15,6 +15,7 @@ import { MobilePush } from './remote/mobilePush'
 import { DEFAULT_FALLBACK_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 import { InteractiveStore } from './interactive/store'
 import { registerInteractiveTools } from './interactive/tools'
+import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { SqliteBackgroundTerminalHistory } from './workspace/backgroundTerminalHistory'
 import { ToolRegistry } from './agent/toolRegistry'
@@ -741,6 +742,7 @@ const mcpHttp = createServer(async (req, res) => {
       () => agents.get(source.id),
       (detail, signal) => agents.requestPermission(source.id, 'Background command', detail, signal),
     )
+  if (!review) registerThemeTools(server, (theme) => agents.themeProposed(source.id, theme))
   if (!review)
     registerBrowserTools(
       server,

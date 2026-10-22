@@ -309,6 +309,8 @@ export interface AgentToolDetails {
 }
 type AgentEventBody =
   | { kind: 'interactive'; reference: import('../interactive').InteractiveReference }
+  /** A theme the agent drafted. It is only shown: the person previews, keeps or discards it on their own device. */
+  | { kind: 'theme'; theme: import('../theme').RamuTheme }
   | { kind: 'goal'; goal: ChatGoal | null }
   | { kind: 'schedule'; schedule: Schedule }
   | ({ kind: 'provider-wait' } & ProviderWaitFields)

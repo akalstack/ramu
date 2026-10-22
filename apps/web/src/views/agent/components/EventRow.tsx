@@ -1,3 +1,4 @@
+import { ThemeCard } from '../../../theme/ThemeCard'
 import { InteractiveContent } from '../../../interactive/InteractiveContent'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
@@ -190,6 +191,8 @@ export function EventRow({
       return <ThinkingRow text={e.text} active={generating} />
     case 'interactive':
       return <InteractiveContent key={`${e.reference.id}:${e.reference.version}`} reference={e.reference} />
+    case 'theme':
+      return <ThemeCard theme={e.theme} />
     case 'content':
       return <AgentContentView content={e.content} taskId={taskId} />
     case 'plan':

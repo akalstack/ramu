@@ -345,6 +345,11 @@ export class AgentService {
     this.record(sessionId, { kind: 'interactive', reference })
   }
 
+  /** A drafted theme appears in the thread as a card; the person alone previews and keeps it. */
+  themeProposed(sessionId: string, theme: import('@ramu/shared/theme').RamuTheme): void {
+    this.record(sessionId, { kind: 'theme', theme })
+  }
+
   scheduleSaved(sessionId: string, schedule: Schedule): void {
     this.record(sessionId, { kind: 'schedule', schedule })
   }

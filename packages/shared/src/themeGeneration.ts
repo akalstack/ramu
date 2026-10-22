@@ -14,7 +14,7 @@ export type LockedRoles = { light: ThemeRole[]; dark: ThemeRole[] }
 
 export const NO_LOCKED_ROLES: LockedRoles = { light: [], dark: [] }
 
-const ROLE_MEANING: Record<ThemeRole, string> = {
+export const ROLE_MEANING: Record<ThemeRole, string> = {
   window: 'window frame and sidebar background',
   canvas: 'main reading surface behind threads and files',
   raised: 'cards, menus, dialogs and the composer',
