@@ -69,6 +69,15 @@ import { ThreadTitles } from './agent/threadTitles'
 import { DesktopBrowserBroker } from './browser/desktopBroker'
 import { INTEGRATED_BROWSER_GUIDE, registerBrowserTools } from './browser/tools'
 import { HostBrowser } from './browser/hostBrowser'
+import { MacosComputerBackend } from './computer/macos'
+import { OcuBackend } from './computer/ocu'
+import { SckDisplayBackend } from './computer/sck'
+import { BrokerHub } from './computer/broker'
+import { RtcViewers } from './computer/rtc'
+import { VideoFeed } from './computer/video'
+import { ComputerRouter } from './computer/router'
+import { ComputerService } from './computer/service'
+import { COMPUTER_GUIDE, registerComputerTools } from './computer/tools'
 import { TerminalService } from './workspace/pty'
 import { createDispatcher } from './ipc'
 import { OperationLog, runOnce } from './ipc/operationLog'
@@ -226,6 +235,19 @@ const mobilePush = new MobilePush(
   fetch,
   (sessionId) => schedules.hasSession(sessionId),
 )
+const computerBroker = new BrokerHub()
+const computerVideo = new RtcViewers(new VideoFeed(), (threadId, deviceId) => {
+  const access = computer.viewerAccess(threadId, deviceId)
+  return access.observe && !!computer.session(threadId)
+})
+const ocuBackend = new OcuBackend(
+  undefined,
+  undefined,
+  () => workspace.getAppState<boolean>('computer:globalPointer', false) === true,
+)
+const computer = new ComputerService(
+  new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), ocuBackend),
+)
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {
@@ -234,6 +256,9 @@ const agents = new AgentService(
       browserAccessEpochs.set(sessionId, (browserAccessEpochs.get(sessionId) ?? 0) + 1)
       try {
         browserBroker.endRun(agents.get(sessionId).taskId, sessionId)
+      } catch {}
+      try {
+        computer.endRun(agents.get(sessionId).taskId, sessionId)
       } catch {}
     }
     threadTitles?.observe(sessionId, event)
@@ -397,6 +422,9 @@ const dispatcher = createDispatcher(
     getSharedMcp,
     browser: browserBroker,
     hostBrowser,
+    computer,
+    computerBroker,
+    computerVideo,
     terminals,
     agents,
     threadTitles,
@@ -427,6 +455,9 @@ async function stop(intentional = false) {
   if (!intentional) agents.prepareForRestart()
   reviews.stop()
   await threadTitles?.stop()
+  computerVideo.closeAll()
+  // The app-control helper is a child process; end it with the server.
+  void ocuBackend.close()
   agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
@@ -671,6 +702,14 @@ const mcpHttp = createServer(async (req, res) => {
       () => browserTokens.get(source.id) === token,
       (detail, signal) => agents.requestPermission(source.id, 'Ramu integrated browser', detail, signal),
       () => browserAccessEpochs.get(source.id) ?? 0,
+    )
+  if (!review && workspace.getAppState<boolean>('computer:enabled', false) === true)
+    registerComputerTools(
+      server,
+      computer,
+      source,
+      () => agents.get(source.id),
+      () => browserTokens.get(source.id) === token,
     )
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
@@ -948,10 +987,14 @@ agents.toolConnection = (session) => {
     url: `http://127.0.0.1:${address.port}/mcp`,
     token,
     ...(review ? { restricted: true } : {}),
-    ...(!review &&
-    (browserPreferences?.providerOverrides[session.provider] ?? browserPreferences?.agentBrowser) === 'integrated'
-      ? { browserInstructions: INTEGRATED_BROWSER_GUIDE }
-      : {}),
+    ...(() => {
+      if (review) return {}
+      const integrated =
+        (browserPreferences?.providerOverrides[session.provider] ?? browserPreferences?.agentBrowser) === 'integrated'
+      const computerOn = workspace.getAppState<boolean>('computer:enabled', false) === true
+      const parts = [...(integrated ? [INTEGRATED_BROWSER_GUIDE] : []), ...(computerOn ? [COMPUTER_GUIDE] : [])]
+      return parts.length ? { browserInstructions: parts.join('\n\n') } : {}
+    })(),
     ...(mcpConfigDirs.length ? { mcpConfigDirs } : {}),
     ...(skillsDir ? { skillsDir } : {}),
   }

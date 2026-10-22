@@ -39,3 +39,30 @@ export interface BrowserImportSource {
   supported: boolean
   reason?: string
 }
+
+/** One browser profile on this computer that sessions could be copied from. Names only: no cookie or path is exposed. */
+export interface BrowserImportProfile {
+  id: string
+  name: string
+}
+/** A website with sign-in cookies in a source profile. Counts only; values never leave the privileged process. */
+export interface BrowserImportDomain {
+  domain: string
+  cookies: number
+}
+export interface BrowserImportSkip {
+  reason: string
+  count: number
+}
+/** What an import did. Counts and reasons only. */
+export interface BrowserImportResult {
+  imported: number
+  skipped: BrowserImportSkip[]
+  failed: number
+}
+/** A new profile holding imported sessions, hidden from agents until the person keeps it. */
+export interface BrowserImportStaged {
+  profileId: string
+  name: string
+  result: BrowserImportResult
+}

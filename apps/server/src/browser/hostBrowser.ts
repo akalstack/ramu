@@ -13,6 +13,8 @@ import { randomUUID } from 'node:crypto'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 
 const HOST = 'execution-host'
+/** A viewer frame larger than this (base64 characters, about 3 MB of image) is refused rather than streamed to a phone. */
+export const MAX_VIEWER_FRAME_CHARS = 4 * 1024 * 1024
 export interface HostedBrowserBackend {
   selected(): boolean
   status(): { available: boolean; location: 'execution-host-chromium'; reason?: string }
@@ -216,8 +218,11 @@ export class HostBrowser implements HostedBrowserBackend {
     if (this.captures >= 2 || now - (this.frameTimes.get(device) ?? 0) < 450) throw new Error('Wait before requesting another browser frame.')
     this.frameTimes.set(device, now)
     this.captures++
-    try { return await runtime.captureForViewer(tabId, { hostId: HOST, threadId: thread }) }
-    finally { this.captures-- }
+    try {
+      const image = await runtime.captureForViewer(tabId, { hostId: HOST, threadId: thread })
+      if (image.data.length > MAX_VIEWER_FRAME_CHARS) throw new Error('This page is too large to stream. Make the page smaller and try again.')
+      return image
+    } finally { this.captures-- }
   }
   take(device: string, thread: string, tabId: string) {
     const runtime = this.authorized(device, thread)

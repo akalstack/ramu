@@ -19,6 +19,7 @@ it('upgrades saved native sessions without assuming their old context belongs to
     db.exec(`ALTER TABLE session_provider_sessions DROP COLUMN model;
       ALTER TABLE session_provider_sessions DROP COLUMN context_used;
       DROP TABLE model_context_windows;
+      ALTER TABLE interactive_versions DROP COLUMN files;
       PRAGMA user_version = 24;`)
     db.close()
     db = openDb(path)

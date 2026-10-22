@@ -50,6 +50,13 @@
       "expo-notifications",
       "./plugins/withTrustedHttp.cjs",
       [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Ramu does not use the camera for screen video.",
+          "microphonePermission": "Ramu does not use the microphone for screen video."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "ios": {

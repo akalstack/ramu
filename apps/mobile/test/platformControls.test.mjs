@@ -81,7 +81,6 @@ function load(file, os, overrides = {}, globals = {}) {
     clearTimeout,
     requestAnimationFrame: (callback) => setTimeout(callback, 0),
     cancelAnimationFrame: clearTimeout,
-    Error,
     ...globals,
     exports: module.exports,
     require: (id) => {
@@ -313,7 +312,7 @@ for (const os of ['ios', 'android']) {
     await settle()
     assert.equal(closed, 0)
     assert.equal(input('Rule text').props.value, 'Preserve user edits.')
-    assert.ok(nodes(render()).some((node) => node.props.children === 'Concurrent edit'))
+    assert.ok(nodes(render()).some((node) => node.props.children === 'Error: Concurrent edit'))
     fail = false
     button('Save').props.onPress()
     finish()
@@ -377,7 +376,7 @@ for (const os of ['ios', 'android']) {
     await settle()
     assert.equal(closed, 0)
     assert.equal(input().props.value, 'Storefront, Payments')
-    assert.ok(nodes(render()).some((node) => node.props.children === 'Host unavailable'))
+    assert.ok(nodes(render()).some((node) => node.props.children === 'Error: Host unavailable'))
     fail = false
     save().props.onPress()
     finish()

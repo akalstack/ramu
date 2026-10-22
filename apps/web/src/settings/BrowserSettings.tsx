@@ -14,6 +14,7 @@ import { ramu, invokeOn, bridge } from '../ipc'
 import type { ProviderStatus } from '@ramu/shared/providers/providers'
 import type { BrowserProfileCatalog } from '@ramu/shared/types/browser'
 import { BrowserProfilesSettings } from './BrowserProfiles'
+import { ComputerSettings } from './ComputerSettings'
 import { HostBrowserSettings } from './HostBrowserSettings'
 
 /** Settings → Browser. Where clicked links open is a choice of this device; it follows the person across hosts. */
@@ -243,6 +244,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
           }}
         />
       ) : null}
+      {!bulkHosts && <ComputerSettings key={`computer:${selectedHost}`} hostId={selectedHost} />}
       {!bulkHosts && <HostBrowserSettings key={selectedHost} hostId={selectedHost} refreshed={refreshProfiles} onRemoved={id => {
         const current = draftRef.current
         if (current.agentBrowser?.defaultProfileId === id) onChange({ ...current, agentBrowser: { ...current.agentBrowser, defaultProfileId: 'default' } })

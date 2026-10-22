@@ -146,7 +146,88 @@ export interface MobileLiveActivityRegistration {
   environment: 'sandbox' | 'production'
 }
 
+export interface ComputerSessionSummary {
+  target: import('./computerBridge').ComputerTarget
+  controller: import('./control/lease').Controller
+  generation: number
+  paused: boolean
+  /** The computer whose screen this is; `local` is the host itself. */
+  runtime: { id: string; name: string }
+}
+
+export interface ComputerLockedUse {
+  installed: boolean
+  enabled: boolean
+  available: boolean
+  stage: string
+  session: string
+  clientApproved: boolean
+  blockers: string[]
+}
+
+export interface ComputerRuntimeInfo {
+  id: string
+  name: string
+  online: boolean
+}
+
+type ComputerFrameMeta = import('./computerBridge').ComputerFrameMeta
+type ComputerAction = import('./computerBridge').ComputerAction
+
 export interface RamuMethods {
+  'computer.status'(): {
+    enabled: boolean
+    runtime: import('./computerBridge').ComputerRuntimeStatus
+    /** Whether a single app can be granted instead of the whole display; null on a host that cannot. */
+    apps: import('./computerBridge').ComputerRuntimeStatus | null
+    /** Whether the host's Keep awake setting is holding it awake right now. */
+    keepAwake: boolean
+    /** Whether app drags may use the real pointer (window moves, text selection). */
+    globalPointer: boolean
+  }
+  /** Installs the pinned Open Computer Use release for app-scoped access. Owning host only. */
+  /** Whether the agent can keep working while the Mac is locked (Open Computer Use's Locked Use). */
+  'computer.lockedUse'(): ComputerLockedUse
+  /** Starts the macOS installer and permission prompts on the host. Owning host only. */
+  'computer.lockedUseEnable'(): ComputerLockedUse
+  'computer.lockedUseDisable'(): ComputerLockedUse
+  'computer.installApps'(): { version: string }
+  /** Computers whose screen a thread can use: this host and paired computers the owner allowed. */
+  'computer.runtimes'(): ComputerRuntimeInfo[]
+  /** Paired devices that registered as screen owners, with whether this host's owner allowed them. */
+  'computer.runtimeDevices'(): (ComputerRuntimeInfo & { deviceId: string; allowed: boolean })[]
+  'computer.allowRuntime'(deviceId: string, allow: boolean): void
+  'computerBroker.register'(name: string): void
+  'computerBroker.next'(waitMs: number): import('./computerBridge').BrokerCommand | null
+  'computerBroker.result'(id: string, outcome: { ok: true; value?: unknown } | { ok: false; error: string }): void
+  'computerBroker.unregister'(): void
+  'computer.brokerExec'(command: unknown): unknown
+  'computer.apps'(runtime?: string): string[]
+  'computer.setEnabled'(enabled: boolean): void
+  'computer.setGlobalPointer'(enabled: boolean): void
+  'computer.grant'(threadId: string, scope: { observe: boolean; input: boolean; app?: string; runtime?: string }): ComputerSessionSummary | null
+  'computer.revoke'(threadId: string): void
+  'computer.grantViewer'(threadId: string, deviceId: string, input: boolean): void
+  'computer.revokeViewer'(threadId: string, deviceId: string): void
+  'computer.viewers'(threadId: string): { deviceId: string; input: boolean }[]
+  'computer.session'(threadId: string): ComputerSessionSummary | null
+  'computer.takeControl'(threadId: string): ComputerSessionSummary | null
+  'computer.giveToAgent'(threadId: string): ComputerSessionSummary | null
+  'computer.stop'(threadId: string): ComputerSessionSummary | null
+  /** With the hash of the frame already shown, an unchanged screen returns `unchanged` and no image. */
+  'computer.frame'(
+    threadId: string,
+    since?: string,
+  ): ComputerFrameMeta & { id: string; hash: string } & ({ unchanged: true } | { unchanged?: undefined; mimeType: string; data: string })
+  /** Smooth video of the main display over WebRTC: send the viewer's offer, get the host's answer and the picture size. */
+  'computer.rtcOffer'(
+    threadId: string,
+    offer: string,
+  ): { id: string; sdp: string; width: number; height: number; scale: number }
+  'computer.rtcKeyFrame'(threadId: string, peerId: string): void
+  'computer.rtcClose'(threadId: string, peerId: string): void
+  'computer.input'(threadId: string, generation: number, capturedAt: number, action: ComputerAction): void
+  'computer.disconnect'(threadId: string): void
   'hostBrowser.status'(): { available: boolean; enabled?: boolean; location?: 'execution-host-chromium'; reason?: string }
   'hostBrowser.setup'(): void
   'hostBrowser.profiles'(): BrowserProfileCatalog
@@ -185,6 +266,22 @@ export interface RamuMethods {
   /** Integrated browser tabs of this computer's desktop app; every call names the host and thread it is for. */
   'browser.profiles.list'(hostId: string): BrowserProfileCatalog
   'browser.profiles.importSources'(hostId: string): import('./types/browser').BrowserImportSource[]
+  /** Copy website sign-ins once from another browser into a new hidden profile. Local desktop only; values never reach the renderer. */
+  'browser.import.profiles'(hostId: string, source: string): import('./types/browser').BrowserImportProfile[]
+  'browser.import.inspect'(
+    hostId: string,
+    source: string,
+    profileId: string,
+  ): { token: string; domains: import('./types/browser').BrowserImportDomain[] }
+  'browser.import.run'(
+    hostId: string,
+    token: string,
+    domains: string[],
+    name: string,
+  ): import('./types/browser').BrowserImportStaged
+  'browser.import.cancel'(hostId: string, token: string): void
+  'browser.import.keep'(hostId: string, profileId: string): import('./types/browser').BrowserProfileInfo
+  'browser.import.discard'(hostId: string, profileId: string): void
   'browser.profiles.create'(hostId: string, name: string): BrowserProfileInfo
   'browser.profiles.signIn'(hostId: string, profileId: string, url: string): void
   'browser.profiles.rename'(hostId: string, profileId: string, name: string): void
@@ -360,6 +457,9 @@ export interface RamuMethods {
   'computers.sshHosts'(): string[]
   /** Adds a computer over SSH: `target` is user@host or an alias from ~/.ssh/config. */
   'computers.pairSsh'(target: string, name?: string): Computers
+  /** Paired computers this computer lets use its screen (opt-in per host). */
+  'computers.screenSharing'(): string[]
+  'computers.setScreenSharing'(id: string, enabled: boolean): string[]
   'computers.forget'(id: string): Computers
   'computers.retry'(id: string): Computers
   'computers.update'(

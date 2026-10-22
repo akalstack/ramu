@@ -3,6 +3,7 @@ import type { AgentEvent, AgentSessionInfo, AgentSettings } from '@ramu/shared/t
 import { useHost } from '../../../workspace/HostProvider'
 import { notifyError } from '../../../chat/Notifications'
 import { errorText } from '../../../workspace/TaskPane'
+import { useJsonDraft } from '../../../composer/useJsonDraft'
 
 /**
  * Settings changes made in the controls under the message box. They stay pending until the next message, except
@@ -23,8 +24,19 @@ export function useModelChange({
   busyAgent: boolean
   warnModelChange: boolean
 }) {
-  const { invoke } = useHost()
-  const [pendingSettings, setPendingSettings] = useState<AgentSettings | null>(null)
+  const { invoke, id: host } = useHost()
+  // A choice waiting for the next message is a draft like the text: it survives switching chats and restarting.
+  const [pendingSettings, setPendingSettings] = useJsonDraft<AgentSettings | null>(
+    `model:${sessionId}`,
+    host,
+    null,
+    (value): value is AgentSettings | null =>
+      value === null ||
+      (typeof value === 'object' &&
+        typeof (value as AgentSettings).provider === 'string' &&
+        typeof (value as AgentSettings).access === 'string'),
+    (value) => value === null,
+  )
   // While the agent is working, a model change takes effect right away and the run continues with the new settings.
   // The model bar hands over one change when the slider is released. While the agent is working it is applied straight away.
   const [modelWarning, setModelWarning] = useState<AgentSettings | null>(null)

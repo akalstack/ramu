@@ -70,7 +70,6 @@ type ModelRow = {
  */
 export function ModelChip({
   value,
-  current: running,
   onChange,
   computerId,
   limited,
@@ -78,7 +77,6 @@ export function ModelChip({
   value: ModelChoice
   /** The thread is held at this provider's usage limit: the chip carries a small "Limit reached" marker. */
   limited?: boolean
-  /** What the chat runs now, when `value` is a choice waiting for the next send. */ current?: ModelChoice
   onChange: (m: ModelChoice) => void
   computerId?: string
 }) {
@@ -117,21 +115,6 @@ export function ModelChip({
     (value.model ? undefined : models.find((m) => m.provider === value.provider && m.isDefault))
   const label = current?.label ?? modelLabel(value)
   const effort = value.effort || current?.defaultEffort || ''
-  const nameOf = (m: ModelChoice) => {
-    const row =
-      models.find((x) => x.provider === m.provider && x.model === m.model) ??
-      (m.model ? undefined : models.find((x) => x.provider === m.provider && x.isDefault))
-    const e = m.effort || row?.defaultEffort || ''
-    return { name: row?.label ?? modelLabel(m), effort: e }
-  }
-  // Desktop-style preview: "Opus medium → Sonnet high" until the next message applies it.
-  const staged =
-    running &&
-    (running.provider !== value.provider ||
-      running.model !== value.model ||
-      (running.effort || '') !== (value.effort || ''))
-      ? nameOf(running)
-      : null
   const close = () => {
     setOpen(false)
     setPicking(null)
@@ -182,29 +165,14 @@ export function ModelChip({
         })}
       >
         <ProviderIcon provider={value.provider} size={14} />
-        {staged ? (
-          // Desktop style: what runs now, muted, then only what changes: "Sonnet Medium → Low" or "Sonnet Medium → Opus High".
-          <T size={font.control} numberOfLines={1} style={{ marginLeft: 2, maxWidth: 230 }}>
-            <T
-              size={font.control}
-              tone="muted"
-            >{`${staged.name}${staged.effort ? ` ${capitalize(staged.effort)}` : ''} → `}</T>
-            <T size={font.control} weight="500" tone="text">
-              {staged.name === label ? capitalize(effort) : `${label}${effort ? ` ${capitalize(effort)}` : ''}`}
-            </T>
+        <T size={font.control} weight="500" tone="soft" numberOfLines={1} style={{ marginLeft: 2, maxWidth: 140 }}>
+          {label}
+        </T>
+        {effort ? (
+          <T size={font.control} tone="muted">
+            {effort}
           </T>
-        ) : (
-          <>
-            <T size={font.control} weight="500" tone="soft" numberOfLines={1} style={{ marginLeft: 2, maxWidth: 140 }}>
-              {label}
-            </T>
-            {effort ? (
-              <T size={font.control} tone="muted">
-                {effort}
-              </T>
-            ) : null}
-          </>
-        )}
+        ) : null}
         {limited ? (
           <T size={font.caption} weight="600" tone="warn" numberOfLines={1}>
             {t.limitReached}
@@ -485,7 +453,6 @@ export function GoalQueueTray({
 export function Composer({
   running,
   model,
-  currentModel,
   onModel,
   onSend,
   onStop,
@@ -524,8 +491,6 @@ export function Composer({
   chatId?: string
   running: boolean
   model: ModelChoice
-  /** The model the chat runs now, when `model` is staged for the next send. */
-  currentModel?: ModelChoice
   onModel: (m: ModelChoice) => void
   onSend: (
     text: string,
@@ -971,7 +936,6 @@ export function Composer({
           />
           <ModelChip
             value={model}
-            current={currentModel}
             onChange={onModel}
             computerId={computerId}
             limited={limited}

@@ -48,8 +48,12 @@
   align-items: center;
   min-height: 28px;
   gap: 4px;
+  /* The tray already has its own surface; a second one under the header made a visible inner edge. */
+  background: transparent;
+  border-radius: var(--radius-s);
+}
+.composer-tray-section:has([data-panel-open]) > .composer-tray-header {
   border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--canvas) 35%, transparent);
   border-radius: var(--radius-s) var(--radius-s) 0 0;
 }
 .composer-tray-trigger {

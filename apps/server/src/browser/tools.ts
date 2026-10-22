@@ -379,15 +379,9 @@ export function registerBrowserTools(
         ...target,
         key: z
           .string()
-          .min(1)
-          .max(12)
-          .refine(
-            (key) =>
-              [...key].length === 1 ||
-              /^(Enter|Escape|Tab|Arrow(Up|Down|Left|Right)|Backspace|Delete|Home|End|PageUp|PageDown|F([1-9]|1[0-2]))$/.test(
-                key,
-              ),
-            'Use a key name such as Enter or ArrowDown, or a single character; add modifiers separately.',
+          .regex(
+            /^(Enter|Escape|Tab|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Backspace|Delete|Space|Home|End|PageUp|PageDown|F([1-9]|1[0-2])|[\x20-\x7e])$/,
+            'Use a key name, F1–F12 or one character; hold others with modifiers.',
           ),
         modifiers: z
           .array(z.enum(['Alt', 'Control', 'Meta', 'Shift']))

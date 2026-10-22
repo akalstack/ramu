@@ -105,7 +105,7 @@ describe('computer session', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     session.takeControl('phone')
     // The agent's last action has not settled, so human input is held back.
-    const view = await session.view()
+    const view = { capturedAt: 1000 }
     await expect(
       session.humanInput('phone', session.state.generation, view, { kind: 'key', key: 'x' }),
     ).rejects.toThrow(/finishing/)
@@ -120,13 +120,13 @@ describe('computer session', () => {
     const { session, tick } = setup()
     session.takeControl('phone')
     const generation = session.state.generation
-    const frame = await session.view()
+    const frame = { capturedAt: 1000 }
     const action: ComputerAction = { kind: 'click', x: 5, y: 5 }
     await expect(session.humanInput('tablet', generation, frame, action)).rejects.toThrow(/does not control/)
     await expect(session.humanInput('phone', generation - 1, frame, action)).rejects.toThrow(/Control changed/)
     tick(6000)
     await expect(session.humanInput('phone', generation, frame, action)).rejects.toThrow(/stale/)
-    await session.humanInput('phone', generation, await session.view(), action)
+    await session.humanInput('phone', generation, { capturedAt: 7000 }, action)
   })
 
   it('requires an explicit handoff between devices, but a local takeover wins', () => {

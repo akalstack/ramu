@@ -19,9 +19,14 @@ export function browserImportSources(platform = process.platform, env = process.
     firefox: { name: 'Firefox', paths: ['/usr/bin/firefox', '/snap/bin/firefox'] },
   }
   return Object.entries(paths).map(([id, browser]) => ({
-    id, name: browser.name, installed: browser.paths.some(path => exists(path)), supported: false,
-    reason: platform === 'win32' && (id === 'chrome' || id === 'edge')
-      ? 'Import from Windows Chromium browsers is unavailable because their protected credentials are not supported. Sign in to a Ramu profile instead.'
-      : 'Session import from this browser is not available yet. Sign in to a Ramu profile instead.',
+    id, name: browser.name, installed: browser.paths.some(path => exists(path)),
+    // macOS Chrome, Edge and Firefox are the verified sources. Everything else says why not and offers manual sign-in.
+    supported: platform === 'darwin' && (id === 'chrome' || id === 'edge' || id === 'firefox'),
+    ...(platform === 'darwin' && (id === 'chrome' || id === 'edge' || id === 'firefox') ? {} : { reason:
+      platform === 'win32' && (id === 'chrome' || id === 'edge')
+        ? 'Import from Windows Chromium browsers is unavailable because their protected credentials are not supported. Sign in to a Ramu profile instead.'
+        : id === 'safari'
+          ? 'Safari keeps its cookies where only apps with Full Disk Access can read them. Sign in to a Ramu profile instead.'
+          : 'Session import from this browser is not available yet. Sign in to a Ramu profile instead.' }),
   }))
 }

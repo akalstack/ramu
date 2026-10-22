@@ -70,7 +70,7 @@ export interface SessionProcessHost
     Pick<UserRequests, 'cancelWaiters' | 'hasBlockingQuestions' | 'questionStatus'>,
     Pick<FallbackRouter, 'fallback' | 'retryQuietly' | 'subagentSettings'>,
     Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'isRecoveryPending' | 'queued' | 'task'>,
-    Pick<SubagentRunner, 'children' | 'nativeSubagentsOff' | 'subagentHooks'>,
+    Pick<SubagentRunner, 'children' | 'nativeSubagentsOff' | 'subagentHooks' | 'cancelPendingStarts'>,
     Pick<AgentTasks, 'settleTasks' | 'updateTask'> {
   learningInstructions(): AgentService['learningInstructions']
   memoryInstructions(): AgentService['memoryInstructions']
@@ -540,6 +540,7 @@ export class SessionProcess {
       this.db.prepare('DELETE FROM agent_recovery WHERE session_id = ?').run(id)
       this.host.setState(id, 'stopped')
     }
+    this.host.cancelPendingStarts(id)
     for (const [childId, run] of this.host.children) if (run.parentId === id) this.stop(childId)
     this.host.pauseQueue(id)
     this.host.revisions.set(id, (this.host.revisions.get(id) ?? 0) + 1)

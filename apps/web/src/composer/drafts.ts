@@ -184,3 +184,28 @@ export function useDraftPersistence(key: string, value: string, host: string = o
     }
   }
 }
+
+/** Structured composer state (attachments, a chosen model) saved beside the text; an empty value removes the entry. */
+export function loadJsonDraft<T>(
+  key: string,
+  host: string,
+  valid: (value: unknown) => value is T,
+  empty: T,
+  now = Date.now(),
+): T {
+  const text = loadDraft(key, draftStore(host), now)
+  if (!text) return empty
+  try {
+    const value: unknown = JSON.parse(text)
+    return valid(value) ? value : empty
+  } catch {
+    return empty
+  }
+}
+
+/** Too large to store whole counts as not saved: a cut-off JSON document is useless. */
+export function saveJsonDraft<T>(key: string, host: string, value: T, isEmpty: (value: T) => boolean): void {
+  const text = isEmpty(value) ? '' : JSON.stringify(value)
+  if (text.length > MAX_LENGTH) return
+  saveDraft(key, text, draftStore(host))
+}

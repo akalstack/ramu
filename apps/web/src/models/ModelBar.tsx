@@ -13,7 +13,7 @@ import { effortDisplayName, modelDisplayName, settingsNames, useModelSets } from
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 
-/** `current` is what the chat runs now; while a different choice waits for the next send, the chip shows current → new. */
+/** `current` is what the chat runs now; a different choice waiting for the next send shows in the transcript. */
 export function ModelBar({
   settings: value,
   current,
@@ -161,15 +161,6 @@ export function ModelBar({
     settings.provider === 'codex' && !!model?.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority')
   const fast = settings.provider === 'codex' && settings.serviceTier === 'fast'
   const selectedText = `${modelName} ${effortName}`
-  const before =
-    !drag &&
-    current &&
-    (current.provider !== settings.provider || current.model !== settings.model || current.effort !== settings.effort)
-      ? settingsNames(current, catalogs)
-      : null
-  const sameModel = before?.model === modelName
-  // A different provider gets its own icon on each side of the arrow; within one provider a single icon is enough.
-  const otherProvider = !!before && current!.provider !== settings.provider
   const fraction = count > 1 && index >= 0 ? index / (count - 1) : 0
   const chooseSet = (id: string) => {
     setSetId(id)
@@ -201,34 +192,9 @@ export function ModelBar({
         menuClassName={`model-controls-menu ${picker === 'model' ? 'model-menu w-[256px] max-h-[min(420px,_calc(100vh_-_24px))] overflow-y-auto embedded-model-menu [&:has(.model-picker)]:w-[380px] [&:has(.model-picker)]:p-0 [&:has(.model-picker)]:max-h-[none] [&:has(.model-picker)]:overflow-hidden [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.07)] w-[300px] max-w-[calc(100vw_-_16px)] max-h-[min(480px,_calc(100vh_-_16px))] overflow-y-auto' : picker === 'effort' ? 'reasoning-menu w-[240px]' : 'model-bar-menu [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.07)] max-w-[calc(100vw_-_16px)] w-[340px] p-0'}`}
         icon={
           <>
-            {otherProvider && (
-              <>
-                <ProviderIcon provider={current!.provider} size={14} className="opacity-50" />
-                <span className="muted text-muted-foreground">{before!.model} →</span>
-              </>
-            )}
             {fast ? <Zap size={13} /> : <ProviderIcon provider={settings.provider} size={14} />}
-            <span
-              title={
-                pending
-                  ? t('Applying model in {0}s', { 0: seconds })
-                  : before
-                    ? t('Applies when you send your next message')
-                    : undefined
-              }
-            >
-              {before && !otherProvider && (
-                <span className="muted text-muted-foreground">
-                  {sameModel ? `${before.model} ${before.effort}` : before.model} →{' '}
-                </span>
-              )}
-              {sameModel ? (
-                effortName
-              ) : (
-                <>
-                  {modelName} <span className="muted text-muted-foreground">{effortName}</span>
-                </>
-              )}
+            <span title={pending ? t('Applying model in {0}s', { 0: seconds }) : undefined}>
+              {modelName} <span className="muted text-muted-foreground">{effortName}</span>
             </span>
             <ChevronDown size={12} />
           </>

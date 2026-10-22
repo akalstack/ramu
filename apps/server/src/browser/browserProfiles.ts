@@ -19,6 +19,8 @@ interface SavedProfile {
   name: string
   createdAt: number
   importedAt?: number
+  /** An import in progress or awaiting Keep/Discard: hidden from agents and the catalog, never usable for a tab. */
+  staged?: boolean
 }
 export interface BrowserProfileFiles {
   read(path: string): string
@@ -96,6 +98,7 @@ export class BrowserProfiles {
           ...(Number.isSafeInteger(profile.importedAt) && profile.importedAt! >= 0
             ? { importedAt: profile.importedAt }
             : {}),
+          ...(profile.staged === true ? { staged: true } : {}),
         })
       }
     } catch (error) {
@@ -111,7 +114,9 @@ export class BrowserProfiles {
       profiles: [
         { id: 'default', name: 'Default', builtin: true, temporary: false, createdAt: null },
         { id: 'temporary', name: 'Temporary', builtin: true, temporary: true, createdAt: null },
-        ...this.records.map((profile) => ({ ...profile, builtin: false, temporary: false })),
+        ...this.records
+          .filter((profile) => !profile.staged)
+          .map(({ staged: _staged, ...profile }) => ({ ...profile, builtin: false, temporary: false })),
       ],
       ...(this.error ? { error: this.error } : {}),
     }
@@ -128,8 +133,13 @@ export class BrowserProfiles {
       this.busy.delete(id)
     }
   }
+  /** Profiles a tab may use. A staged import is not one of them. */
   ids(): string[] {
-    return this.records.map((profile) => profile.id)
+    return this.records.filter((profile) => !profile.staged).map((profile) => profile.id)
+  }
+  /** Imports that were never kept. Their website data is removed by the caller, then each is discarded. */
+  stagedIds(): string[] {
+    return this.records.filter((profile) => profile.staged).map((profile) => profile.id)
   }
   private save(next: SavedProfile[]) {
     if (this.error) throw new Error(this.error)
@@ -144,6 +154,9 @@ export class BrowserProfiles {
       )
     )
       throw new Error('A browser profile already uses that name.')
+    // A name held by a staged import is taken too, so Keep cannot collide later.
+    if (this.records.some((profile) => profile.id !== except && profile.name.toLowerCase() === name.toLowerCase()))
+      throw new Error('A browser profile already uses that name.')
     return name
   }
   create(value: unknown): BrowserProfileInfo {
@@ -151,6 +164,37 @@ export class BrowserProfiles {
     const profile = { id: randomUUID(), name: this.name(value), createdAt: Date.now() }
     this.save([...this.records, profile])
     return { ...profile, builtin: false, temporary: false }
+  }
+  /** A new hidden profile to receive imported sessions. It counts toward the profile limit while it exists. */
+  stage(value: unknown): BrowserProfileInfo {
+    if (this.records.length >= 20) throw new Error('Remove a browser profile before adding another.')
+    const name = this.name(value)
+    const profile = { id: randomUUID(), name, createdAt: Date.now(), staged: true as const }
+    this.save([...this.records, profile])
+    return { id: profile.id, name, createdAt: profile.createdAt, builtin: false, temporary: false }
+  }
+  /** Makes a staged import a normal profile. Fails if its name was taken in the meantime. */
+  keep(id: string): BrowserProfileInfo {
+    const staged = this.requireStaged(id)
+    const name = this.name(staged.name, id)
+    const importedAt = Date.now()
+    this.save(
+      this.records.map((profile) =>
+        profile.id === id ? { id, name, createdAt: profile.createdAt, importedAt } : profile,
+      ),
+    )
+    return { id, name, createdAt: staged.createdAt, importedAt, builtin: false, temporary: false }
+  }
+  /** Removes a staged import's record. Clearing its website data is the caller's job and comes first. */
+  discard(id: string): void {
+    this.requireStaged(id)
+    this.save(this.records.filter((profile) => profile.id !== id))
+  }
+  private requireStaged(id: string): SavedProfile {
+    if (this.error) throw new Error(this.error)
+    const staged = this.records.find((profile) => profile.id === id && profile.staged)
+    if (!validProfileId(id) || !staged) throw new Error('That import is no longer waiting to be kept.')
+    return staged
   }
   rename(id: string, value: unknown): void {
     this.requireCustom(id)
@@ -160,7 +204,11 @@ export class BrowserProfiles {
   }
   requireCustom(id: string): void {
     if (this.error) throw new Error(this.error)
-    if (!validProfileId(id) || isBuiltInProfile(id) || !this.records.some((profile) => profile.id === id))
+    if (
+      !validProfileId(id) ||
+      isBuiltInProfile(id) ||
+      !this.records.some((profile) => profile.id === id && !profile.staged)
+    )
       throw new Error('That browser profile cannot be changed or is no longer available.')
   }
   remove(id: string): void {

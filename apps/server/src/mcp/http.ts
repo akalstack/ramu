@@ -89,7 +89,7 @@ export function sharedMcpHttpFetch(endpoint: string, allowPrivate = false, dispa
     // No proxy or global dispatcher is used. Redirects, cookies and credential-bearing origin changes are never automatic.
     const response = await request(url, {
       method: init.method,
-      headers: headerRecord(new Headers(init.headers)),
+      headers: Object.fromEntries(new Headers(init.headers) as unknown as Iterable<[string, string]>),
       body: init.body as string | undefined,
       signal: init.signal,
       dispatcher: agent,
@@ -113,9 +113,9 @@ export function sharedMcpHttpFetch(endpoint: string, allowPrivate = false, dispa
             if (bytes > limit) throw new Error('MCP response exceeds the supported size')
             controller.enqueue(chunk)
           },
-        }),
+        }) as never,
       ) ?? null
-    return new Response(body, {
+    return new Response(body as BodyInit | null, {
       status: response.status,
       statusText: response.statusText,
       headers: headerRecord(response.headers as unknown as Headers),

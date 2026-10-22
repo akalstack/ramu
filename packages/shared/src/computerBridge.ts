@@ -29,7 +29,7 @@ export type ComputerAction =
   | { kind: 'drag'; fromX: number; fromY: number; toX: number; toY: number }
 
 export interface ComputerCapture {
-  mimeType: 'image/jpeg' | 'image/webp'
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp'
   /** Base64 image data. Never stored in transcript events. */
   data: string
   width: number
@@ -62,4 +62,20 @@ export interface ComputerBackend {
   perform(target: ComputerTarget, action: ComputerAction): Promise<void>
   /** Release held keys and buttons after cancellation, an ownership change or connection loss. */
   releaseInput(target: ComputerTarget): void
+  /** How often a watched target is worth capturing, in milliseconds. Cheap streaming backends return less than the default. */
+  frameInterval?(target: ComputerTarget): number
+  /** Prepares slow one-time setup (for example building a native helper) before the first capture needs it. */
+  warm?(): void
 }
+
+/** What the execution host asks a runtime owner's broker to do. The owner runs it on its own backend. */
+export type BrokerCommand =
+  | { id: string; kind: 'capture'; target: ComputerTarget }
+  | { id: string; kind: 'perform'; target: ComputerTarget; action: ComputerAction }
+  | { id: string; kind: 'release'; target: ComputerTarget }
+  | { id: string; kind: 'apps' }
+
+export type BrokerOutcome = { ok: true; value?: unknown } | { ok: false; error: string }
+
+/** A backend refused before doing anything (for example the screen is locked), so the action certainly did not run. */
+export class ComputerNotRun extends Error {}

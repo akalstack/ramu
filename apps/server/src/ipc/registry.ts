@@ -5,6 +5,7 @@ import { registerAsideHandlers } from './handlers/aside'
 import { registerThemeHandlers } from './handlers/theme'
 import { registerBackgroundHandlers } from './handlers/background'
 import { registerBrowserActivityHandlers } from './handlers/browserActivity'
+import { registerComputerHandlers } from './handlers/computer'
 import { registerHostBrowserHandlers } from './handlers/hostBrowser'
 import { registerFileHandlers } from './handlers/files'
 import { registerForgeHandlers } from './handlers/forge'
@@ -61,5 +62,6 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable =>
     registerBackgroundHandlers(ctx),
     registerBrowserActivityHandlers(ctx),
     registerHostBrowserHandlers(ctx),
+    registerComputerHandlers(ctx),
     registerScheduleHandlers(ctx),
   )

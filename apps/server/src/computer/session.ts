@@ -1,6 +1,7 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   COMPUTER_FRAME_STALE_MS,
+  ComputerNotRun,
   MAX_COMPUTER_TEXT,
   type ComputerAction,
   type ComputerBackend,
@@ -22,6 +23,12 @@ import {
   type LeaseRefusal,
   type LeaseState,
 } from '@ramu/shared/control/lease'
+
+/** Viewers refresh at most about four times a second however many are watching. */
+const VIEW_MIN_INTERVAL_MS = 250
+/** The background capture stops this long after the last viewer request. */
+const VIEW_IDLE_STOP_MS = 5000
+const VIEW_FIRST_FRAME_MS = 90_000
 
 const REFUSALS: Record<LeaseRefusal, string> = {
   'human-controlled': 'The person is controlling this computer. Wait for them to give control back.',
@@ -59,6 +66,8 @@ export class ComputerSession {
     private grant: ComputerGrant,
     private readonly backend: ComputerBackend,
     private readonly now: () => number = Date.now,
+    /** The computer whose screen this is: `local` is the execution host itself. */
+    readonly runtime: { id: string; name: string } = { id: 'local', name: 'This computer' },
   ) {}
 
   get target() {
@@ -89,11 +98,82 @@ export class ComputerSession {
     return this.frame(runId)
   }
 
-  /** A viewer's frame. Requires the observe grant; never touches the agent's observation or the lease. */
-  async view(): Promise<ComputerObservation> {
+  /**
+   * A viewer's frame. Requires the observe grant; never touches the agent's observation or the lease. While anyone is
+   * watching the host keeps capturing in the background, so a request returns as soon as a newer frame exists instead
+   * of waiting for a capture of its own. `since` is the hash of the frame the viewer already shows.
+   */
+  async view(since?: string, waitMs = 0): Promise<ComputerObservation & { hash: string }> {
     this.alive()
     if (!this.grant.observe) refuse('Screen observation is not granted for this computer.')
-    return this.frame()
+    this.watchedAt = this.now()
+    this.startPump()
+    const deadline = this.now() + waitMs
+    for (;;) {
+      this.alive()
+      const current = this.shared
+      if (current && current.generation === this.lease.generation && (since === undefined || current.hash !== since))
+        return { ...current.frame, hash: current.hash }
+      if (this.pumpError) {
+        const error = this.pumpError
+        this.pumpError = null
+        throw error
+      }
+      const remaining = deadline - this.now()
+      if (current && waitMs > 0 && remaining <= 0 && current.generation === this.lease.generation)
+        return { ...current.frame, hash: current.hash }
+      if (waitMs <= 0 && !current) await this.waitForFrame(VIEW_FIRST_FRAME_MS)
+      else await this.waitForFrame(Math.max(20, Math.min(remaining, 100)))
+      if (!this.shared && this.now() > deadline + VIEW_FIRST_FRAME_MS) refuse('The screen could not be captured.')
+    }
+  }
+
+  private shared: { frame: ComputerObservation; generation: number; hash: string } | null = null
+  private watchedAt = 0
+  private pumping = false
+  private pumpError: Error | null = null
+  private frameWaiters = new Set<() => void>()
+
+  private waitForFrame(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer)
+        this.frameWaiters.delete(done)
+        resolve()
+      }
+      const timer = setTimeout(done, ms)
+      this.frameWaiters.add(done)
+    })
+  }
+
+  private startPump() {
+    if (this.pumping) return
+    this.pumping = true
+    void (async () => {
+      try {
+        // Stops a few seconds after the last viewer request, and when the grant is revoked.
+        while (!this.closed && this.now() - this.watchedAt < VIEW_IDLE_STOP_MS) {
+          const started = this.now()
+          try {
+            const generation = this.lease.generation
+            const frame = await this.frame()
+            const hash = createHash('sha256').update(frame.capture.data).digest('hex').slice(0, 32)
+            if (generation === this.lease.generation) this.shared = { frame, generation, hash }
+            this.pumpError = null
+          } catch (error) {
+            this.pumpError = error instanceof Error ? error : new Error(String(error))
+            for (const wake of [...this.frameWaiters]) wake()
+            break
+          }
+          for (const wake of [...this.frameWaiters]) wake()
+          const spent = this.now() - started
+          const every = this.backend.frameInterval?.(this.grant.target) ?? VIEW_MIN_INTERVAL_MS
+          if (spent < every) await new Promise((r) => setTimeout(r, every - spent))
+        }
+      } finally {
+        this.pumping = false
+      }
+    })()
   }
 
   private async frame(runId?: string): Promise<ComputerObservation> {
@@ -134,6 +214,7 @@ export class ComputerSession {
       try {
         await this.backend.perform(this.grant.target, action)
       } catch (error) {
+        if (error instanceof ComputerNotRun) throw new ComputerRefusal(error.message)
         throw new ComputerRefusal(
           `The action may or may not have run (${error instanceof Error ? error.message : 'failed'}). Observe the screen before deciding what to do.`,
         )
@@ -181,7 +262,10 @@ export class ComputerSession {
     try {
       await this.backend.perform(this.grant.target, action)
     } catch (error) {
-      throw new ComputerRefusal(`The input may or may not have run (${error instanceof Error ? error.message : 'failed'}).`)
+      if (error instanceof ComputerNotRun) throw new ComputerRefusal(error.message)
+      throw new ComputerRefusal(
+        `The input may or may not have run (${error instanceof Error ? error.message : 'failed'}).`,
+      )
     }
   }
 

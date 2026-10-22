@@ -8,6 +8,7 @@ import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
 import { Button, T } from './ui'
+import { CONTROL_TEXT, controlState, profileLabel, viewerMessage } from '../runtime/browserViewerState'
 
 /** The phone views the owning host's browser; it never substitutes a phone WebView or copies credentials. */
 export function BrowserViewer({ chat, onClose }: { chat: Chat; onClose(): void }) {
@@ -41,6 +42,7 @@ export function BrowserViewer({ chat, onClose }: { chat: Chat; onClose(): void }
   current.current = tab
   const controlled = !!tab && tab.controller === 'human' && tab.generation === owned && !tab.paused && active && store.isOnline(chat.computerId)
   const own = controlled && !!tab?.inputReady
+  const state = tab ? controlState(tab, { online: store.isOnline(chat.computerId), active, ownedGeneration: owned }) : null
   const invoke = store.invoke.bind(store)
   useEffect(() => { const subscription = AppState.addEventListener('change', state => setActive(state === 'active')); return () => subscription.remove() }, [])
   useEffect(() => {
@@ -98,7 +100,11 @@ export function BrowserViewer({ chat, onClose }: { chat: Chat; onClose(): void }
       </ScrollView>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.m, gap: space.s }}>
         <T tone="muted">{t('Browser runs on the selected execution host. Sign-ins stay there.')}</T>
-        {error ? <T tone="muted">{t(error)}</T> : null}
+        {error ? <T tone="muted">{t(viewerMessage(error))}</T> : null}
+        {tab && state && <View accessibilityRole="summary" style={{ gap: 2 }}>
+          <T tone="muted" size={font.caption}>{t(profileLabel(tab.profileId))} · {store.computers.find(computer => computer.id === chat.computerId)?.name}</T>
+          <T accessibilityLiveRegion="polite" tone={state === 'disconnected' ? undefined : 'muted'} weight={state === 'disconnected' ? '600' : undefined}>{t(CONTROL_TEXT[state])}</T>
+        </View>}
         <TextInput accessibilityLabel={t('Address')} value={address} onChangeText={setAddress} autoCapitalize="none" autoCorrect={false}
           onFocus={() => { editing.current = true }} onBlur={() => { editing.current = false }} editable={own || !tab} style={inputStyle}
           onSubmitEditing={() => void act(async () => {

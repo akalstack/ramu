@@ -285,6 +285,7 @@ describe('page observations and native input', () => {
     expect(page.setHumanInput).toHaveBeenLastCalledWith(false)
     const observation = await runtime.inspectForAgent(tab.id, run.runId, user)
     let finish!: (value: { ok: boolean }) => void
+    // @ts-ignore The mock resolves with a loose type; the test supplies the shape it needs.
     page.act = vi.fn(
       () =>
         new Promise<{ ok: boolean }>((resolve) => {
@@ -326,6 +327,7 @@ describe('page observations and native input', () => {
     const { tab } = await runtime.open(run, 'https://a.test')
     let finish!: (value: Awaited<ReturnType<GuestPage['inspect']>>) => void
     const result = { url: 'https://a.test/', title: 'A', text: 'read', elements: [], truncated: false }
+    // @ts-ignore The mock resolves with a loose type; the test supplies the shape it needs.
     created[0]!.page.inspect = vi.fn(
       () =>
         new Promise<Awaited<ReturnType<GuestPage['inspect']>>>((resolve) => {
@@ -354,6 +356,7 @@ describe('page observations and native input', () => {
     })
     expect(created[0]!.page.inspect).not.toHaveBeenCalled()
     let finish!: (value: Awaited<ReturnType<GuestPage['inspect']>>) => void
+    // @ts-ignore The mock resolves with a loose type; the test supplies the shape it needs.
     created[0]!.page.inspect = vi.fn(
       () =>
         new Promise<Awaited<ReturnType<GuestPage['inspect']>>>((resolve) => {
@@ -586,6 +589,7 @@ describe('extended browser operations', () => {
       dialog = null
       finish({ ok: true })
     })
+    // @ts-ignore The mock resolves with a loose type; the test supplies the shape it needs.
     page.act = vi.fn(
       () =>
         new Promise<{ ok: boolean }>((resolve) => {
@@ -618,6 +622,7 @@ describe('extended browser operations', () => {
       dialog = null
       finish({ ok: true })
     })
+    // @ts-ignore The mock resolves with a loose type; the test supplies the shape it needs.
     page.act = vi.fn(
       () =>
         new Promise<{ ok: boolean }>((resolve) => {
