@@ -175,6 +175,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
               status: goal.status,
               ...(goal.pausedBy ? { pausedBy: goal.pausedBy } : {}),
               objective: goal.objective.slice(0, 300),
+              sessionId: main!.id,
               ...(goal.claim ? { verifying: true } : {}),
               ...(goal.check && !goal.check.ok ? { verificationFailed: true } : {}),
               ...(goal.reason ? { reason: goal.reason.slice(0, 300) } : {}),

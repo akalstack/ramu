@@ -113,6 +113,7 @@ it('exposes bounded verification context without leaking command output into tas
     const [task] = (await dispatcher.invoke('tasks.list', [])) as Task[]
     expect(task?.goalState).toMatchObject({ status: 'active', verifying: true, verificationFailed: true })
     expect(task?.goalState?.objective).toHaveLength(300)
+    expect(task?.goalState?.sessionId).toBe(store.list('t').at(-1)?.id)
     expect(JSON.stringify(task)).not.toContain('private')
     goal = { ...goal, status: 'completed' }
     expect(((await dispatcher.invoke('tasks.list', [])) as Task[])[0]?.goalState).toBeNull()

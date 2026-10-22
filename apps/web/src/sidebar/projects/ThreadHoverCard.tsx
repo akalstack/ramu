@@ -133,9 +133,24 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
       )}
       {task.goalState && (
         <div className="flex flex-col gap-0.5 text-caption">
-          <span className="text-soft [overflow-wrap:anywhere]">
-            {t('Goal')}: {task.goalState.objective}
-          </span>
+          {task.goalState.sessionId ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto min-h-8 w-full justify-start whitespace-normal px-1 text-left text-caption text-soft [overflow-wrap:anywhere]"
+              onClick={(event) => {
+                event.stopPropagation()
+                ws.openTask(task.id)
+                ws.openView(task.id, { kind: 'agent', sessionId: task.goalState!.sessionId! })
+              }}
+            >
+              {t('Goal')}: {task.goalState.objective}
+            </Button>
+          ) : (
+            <span className="text-soft [overflow-wrap:anywhere]">
+              {t('Goal')}: {task.goalState.objective}
+            </span>
+          )}
           {task.goalState.verifying && <span className="text-muted-foreground">{t('Verifying goal')}</span>}
           {!task.goalState.verifying && task.goalState.verificationFailed && (
             <span className="text-warn">{t('Verification failed')}</span>

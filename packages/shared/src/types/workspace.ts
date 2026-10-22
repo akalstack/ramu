@@ -80,6 +80,8 @@ export interface TaskGoalSummary {
   status: Exclude<ChatGoal['status'], 'completed'>
   pausedBy?: ChatGoal['pausedBy']
   objective: string
+  /** The main session that owns the goal, so a list can open it exactly. Older hosts omit it. */
+  sessionId?: string
   /** A completion claim is waiting for, or running, the verification command. */
   verifying?: boolean
   verificationFailed?: boolean

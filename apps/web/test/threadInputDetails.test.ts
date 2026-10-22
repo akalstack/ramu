@@ -115,6 +115,17 @@ it('distinguishes a pending verification from a failed latest check', () => {
   expect(failed).toContain('Verification failed')
   expect(failed).not.toContain('Verifying goal')
 })
+it('opens the goal-owning session from the card, and stays plain text for hosts that omit it', () => {
+  const goalState = { status: 'active' as const, objective: 'Fix build', sessionId: 'main', verifying: true }
+  render({ ...task, inputSummary: undefined, goalState })
+  const button = state.buttons.find((button) => String(button.children).includes('Fix build'))!
+  button.onClick!({ stopPropagation() {} } as React.MouseEvent<HTMLButtonElement>)
+  expect(state.openTask).toHaveBeenCalledWith('thread')
+  expect(state.openView).toHaveBeenCalledWith('thread', { kind: 'agent', sessionId: 'main' })
+  state.buttons = []
+  render({ ...task, inputSummary: undefined, goalState: { ...goalState, sessionId: undefined } })
+  expect(state.buttons.some((button) => String(button.children).includes('Fix build'))).toBe(false)
+})
 it('keeps offline details qualified and cannot fetch another host branch or invent old-host request context', () => {
   state.host = 'host-b'
   const markup = render(task, true)
