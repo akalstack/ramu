@@ -697,10 +697,12 @@ function FileTab({
     ws.activateView(taskId, terminalGroup?.terminalIds.includes(focused ?? '') ? focused! : view.id)
   }
   const index = files.findIndex((tab) => tab.id === view.id)
-  const others = files.filter((tab) => tab.id !== view.id)
-  const toLeft = files.slice(0, index)
-  const toRight = files.slice(index + 1)
-  const saved = files.filter((tab) => tab.kind !== 'terminal' && !ws.dirty[tab.id])
+  // Terminal groups have their own close actions in the terminal tab menu, so bulk closing only touches files.
+  const closable = files.filter((tab) => tab.kind !== 'terminal')
+  const others = closable.filter((tab) => tab.id !== view.id)
+  const toLeft = files.slice(0, index).filter((tab) => tab.kind !== 'terminal')
+  const toRight = files.slice(index + 1).filter((tab) => tab.kind !== 'terminal')
+  const saved = closable.filter((tab) => !ws.dirty[tab.id])
   const close = (views: ViewDescriptor[]) =>
     ws.closeViews(
       taskId,
@@ -729,7 +731,8 @@ function FileTab({
     { key: 'right', label: t('Close to the Right'), disabled: !toRight.length, onSelect: () => close(toRight) },
     { key: 'separator', separator: true },
     { key: 'saved', label: t('Close Saved Tabs'), disabled: !saved.length, onSelect: () => close(saved) },
-    { key: 'all', label: t('Close All'), onSelect: () => close(files) },
+    { key: 'files', label: t('Close All Editors'), disabled: !closable.length, onSelect: () => close(closable) },
+    { key: 'all', label: t('Close All Editors and Terminals'), onSelect: () => close(files) },
     {
       key: 'reopen',
       label: (
