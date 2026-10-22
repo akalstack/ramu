@@ -372,38 +372,44 @@ export class SessionProcess {
     if (this.host.usesRunner(s.provider)) {
       let runner: AgentRunner
       try {
-        runner = this.host.runnerFactory(s.provider)(s, s.settings, (event, limit) => {
-          if (this.host.runners.get(id) !== runner) return
-          if (event.kind === 'usage') {
-            this.host.usage()?.update(event.readings)
-            return
-          }
-          if (event.kind === 'context') {
-            this.host.setContext(id, event.used, event.max)
-            return
-          }
-          if (event.kind === 'init')
-            this.db
-              .prepare('UPDATE agent_sessions SET provider_session_id = ? WHERE id = ?')
-              .run(event.providerSessionId, id)
-          if (event.kind === 'state')
-            this.host.setState(
-              id,
-              event.state === 'running' && this.host.hasBlockingQuestions(id) ? 'needs-input' : event.state,
-            )
-          else if (event.kind === 'agent') {
-            const { kind: _, at: __, ...task } = event
-            if (this.host.task(id, task.agentId)?.status !== 'stopped') this.host.updateTask(id, task.agentId, task)
-          } else {
-            this.host.record(id, event.kind === 'init' ? { ...event, provider: s.provider } : event)
-            if (event.kind === 'result') {
-              if (limit && event.isError) void this.host.fallback(id, limit === 'low' ? 'low' : 'high')
-              else this.host.setState(id, event.isError ? 'failed' : 'idle')
+        runner = this.host.runnerFactory(s.provider)(
+          s,
+          s.settings,
+          (event, limit) => {
+            if (this.host.runners.get(id) !== runner) return
+            if (event.kind === 'usage') {
+              this.host.usage()?.update(event.readings)
+              return
             }
-          }
-        }, false, (title) => {
-          if (this.host.runners.get(id) === runner) this.host.providerTitle(id, title)
-        })
+            if (event.kind === 'context') {
+              this.host.setContext(id, event.used, event.max)
+              return
+            }
+            if (event.kind === 'init')
+              this.db
+                .prepare('UPDATE agent_sessions SET provider_session_id = ? WHERE id = ?')
+                .run(event.providerSessionId, id)
+            if (event.kind === 'state')
+              this.host.setState(
+                id,
+                event.state === 'running' && this.host.hasBlockingQuestions(id) ? 'needs-input' : event.state,
+              )
+            else if (event.kind === 'agent') {
+              const { kind: _, at: __, ...task } = event
+              if (this.host.task(id, task.agentId)?.status !== 'stopped') this.host.updateTask(id, task.agentId, task)
+            } else {
+              this.host.record(id, event.kind === 'init' ? { ...event, provider: s.provider } : event)
+              if (event.kind === 'result') {
+                if (limit && event.isError) void this.host.fallback(id, limit === 'low' ? 'low' : 'high')
+                else this.host.setState(id, event.isError ? 'failed' : 'idle')
+              }
+            }
+          },
+          false,
+          (title) => {
+            if (this.host.runners.get(id) === runner) this.host.providerTitle(id, title)
+          },
+        )
         if (connection) runner.setTools?.(connection)
         this.host.runners.set(id, runner)
         if (recordUser)

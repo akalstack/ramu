@@ -1,7 +1,13 @@
 import { useState, type ReactNode } from 'react'
+import {
+  inheritedModelFlow,
+  resolveModelFlow,
+  type ModelFlow,
+  type ModelFlowScope,
+} from '@ramu/shared/providers/modelFlow'
 import { translate } from '@ramu/shared/i18n'
 import { useStore } from '../runtime/store'
-import { ActivityIndicator, TextInput, View } from 'react-native'
+import { ActivityIndicator, Platform, TextInput, View } from 'react-native'
 import { Check, ChevronsUpDown } from 'lucide-react-native'
 import type { LimitChoice } from '@ramu/shared/chat/limitPolicy'
 import { font, radius, space, useTheme } from '../theme'
@@ -15,7 +21,8 @@ import {
   type Option,
 } from '../runtime/settingsModel'
 import type { useHostSettings } from '../runtime/useHostSettings'
-import { Button, Card, Divider, Row, SectionLabel, Sheet, T, Toggle, tap } from './ui'
+import { Button, Card, Divider, Row, SectionLabel, Segmented, Sheet, T, Toggle, tap } from './ui'
+import { MODEL_FLOW_DEVICE_KEY } from '../runtime/modelFlow'
 
 type Host = ReturnType<typeof useHostSettings>
 
@@ -171,16 +178,115 @@ export function TextRow({
   )
 }
 
+const tablet = Platform.OS === 'ios' && Platform.isPad
+
+/**
+ * Steps versus Model then effort, with where the choice applies. All devices and all mobile devices are saved on the host
+ * these devices use (the host owns that shared baseline); this phone's own choice never leaves the phone. The narrower
+ * choice wins, and clearing it shows what the phone will follow instead.
+ */
+export function ModelFlowRow({ host, disabled }: { host: Host; disabled?: boolean }) {
+  const { language, drafts, setDraft, modelPrefs, selected } = useStore()
+  const t = (key: string, values?: Record<string, string>) => translate(language, key, values)
+  const [scope, setScope] = useState<ModelFlowScope>('device')
+  const prefs = modelPrefs[selected]
+  // Read the host's live values so a change made elsewhere shows at once; modelPrefs is the fallback while loading.
+  const hostAll = host.read('$models.defaultBarMode')
+  const hostMobile = host.read('$models.mobileBarMode')
+  const sharedAvailable = hostMobile !== undefined
+  const layers = {
+    defaultBarMode: hostAll === 'effort' || hostAll === 'model' ? hostAll : prefs?.defaultBarMode,
+    mobileBarMode:
+      hostMobile === 'effort' || hostMobile === 'model'
+        ? hostMobile
+        : hostMobile === 'inherit'
+          ? undefined
+          : prefs?.mobileBarMode,
+  }
+  const device = drafts[MODEL_FLOW_DEVICE_KEY]
+  const { flow, source } = resolveModelFlow(layers, { mobile: true, device })
+  const here = tablet ? t('This tablet') : t('This phone')
+  const scopes: { key: ModelFlowScope; label: string }[] = [
+    { key: 'device', label: here },
+    { key: 'mobile', label: t('All mobile devices') },
+    { key: 'all', label: t('All devices') },
+  ]
+  const label = (value: ModelFlow) => t(value === 'effort' ? 'Model then effort' : 'Steps')
+  const sourceText = {
+    device: t('Set on {0}', { '0': here.toLowerCase() }),
+    mobile: t('Using mobile setting'),
+    all: t('Using all-device setting'),
+    default: t('Using built-in default'),
+  }[source]
+  const save = (value: ModelFlow) => {
+    if (scope === 'device') setDraft(MODEL_FLOW_DEVICE_KEY, value)
+    else if (scope === 'mobile') host.set('$models.mobileBarMode', value)
+    else host.set('$models.defaultBarMode', value)
+  }
+  // The broader value being edited is "unset" for the phone and the mobile layer; the all-device value always exists.
+  const clearable =
+    scope === 'device'
+      ? source === 'device'
+      : scope === 'mobile'
+        ? sharedAvailable && layers.mobileBarMode !== undefined
+        : false
+  const preview = clearable ? inheritedModelFlow(layers, scope === 'device' ? 'device' : 'mobile', device) : null
+  const clear = () => {
+    if (scope === 'device') setDraft(MODEL_FLOW_DEVICE_KEY, '')
+    else host.set('$models.mobileBarMode', 'inherit')
+  }
+  const blocked = scope !== 'device' && (scope === 'mobile' ? !sharedAvailable : false)
+  return (
+    <View>
+      <ChoiceRow
+        title={t('Model selection')}
+        help={t(
+          'Choose configured steps, or choose a model and adjust its supported effort. Switching keeps your current selection and draft.',
+        )}
+        value={flow}
+        options={[
+          { value: 'model', label: t('Steps') },
+          { value: 'effort', label: t('Model then effort') },
+        ]}
+        disabled={disabled || blocked}
+        onChange={(next) => save(next as ModelFlow)}
+      />
+      <View style={{ paddingHorizontal: space.l, paddingBottom: space.m, gap: space.s }}>
+        <T size={font.caption} tone="muted">
+          {t('Apply to')}
+        </T>
+        <Segmented<ModelFlowScope> value={scope} onChange={setScope} options={scopes} />
+        <T size={font.caption} tone="muted" accessibilityLiveRegion="polite">
+          {`${sourceText}: ${label(flow)}.`}
+        </T>
+        {blocked ? (
+          <T size={font.caption} tone="muted">
+            {t('Update Ramu on the host to share this setting with all mobile devices.')}
+          </T>
+        ) : null}
+        {clearable && preview ? (
+          <Button
+            kind="ghost"
+            title={t('Use inherited setting ({0})', { '0': label(preview.flow) })}
+            onPress={clear}
+            disabled={disabled}
+          />
+        ) : null}
+      </View>
+      <Hint>
+        {t(
+          'All devices and all mobile devices are saved on this computer and apply to the devices that use it. Devices with their own setting keep it.',
+        )}
+      </Hint>
+    </View>
+  )
+}
+
 /** One computer-side row, drawn from its definition and the live value. */
 function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disabled?: boolean }) {
   const { language } = useStore()
   if (row.path === '$models.defaultBarMode' && row.kind === 'choice')
-    row = {
-      ...row,
-      title: translate(language, row.title),
-      help: row.help ? translate(language, row.help) : undefined,
-      options: row.options.map((option) => ({ ...option, label: translate(language, option.label) })),
-    }
+    return <ModelFlowRow host={host} disabled={disabled} />
   const value = host.read(row.path)
   if (row.kind === 'toggle')
     return (

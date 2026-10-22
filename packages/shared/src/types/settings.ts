@@ -27,6 +27,8 @@ export interface ModelSet {
 }
 export interface ModelPreferences {
   defaultBarMode?: 'effort' | 'model'
+  /** Overrides defaultBarMode for phones and tablets using this host; absent follows defaultBarMode. */
+  mobileBarMode?: 'effort' | 'model'
   sets: ModelSet[]
   defaultSetId: string
   defaultStepId: string
