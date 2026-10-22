@@ -54,13 +54,7 @@ export const ChatRow = memo(function ChatRow({
         chat.goal && { ...chat.goal, verifying: !!chat.goal.claim },
       )
   const online = store.isOnline(chat.computerId)
-  // A completion claim waiting for its check is still the goal working; the row says so instead of just "Goal".
-  const verifying = status?.kind === 'goal' && Boolean(chat.goal?.claim)
-  const [shortKey, fullKey] = verifying
-    ? (['threadVerifying', 'threadVerifyingFull'] as const)
-    : status
-      ? SHORT[status.kind]
-      : []
+  const [shortKey, fullKey] = status ? SHORT[status.kind] : []
   // A thread with no project and nothing to preview is one line; its row is centered instead of leaving a blank line.
   const hasDetail = Boolean(project || chat.mode === 'worktree' || chat.preview)
   const actions = chat.pending
