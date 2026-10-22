@@ -1,11 +1,13 @@
 import { z } from 'zod'
 import {
   discoverProjectSetup,
+  MCP_IMPORTS_KEY,
   MCP_SHARING_KEY,
   SKILL_SHARING_KEY,
   type McpSharing,
   type SkillSharing,
 } from '../../agent/projectSetup'
+import { isAbsolute } from 'node:path'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -18,20 +20,66 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
     if (ctx.host.canAdministerIntegrations?.() !== true)
       throw new Error('Manage MCP connections and credentials on the host running Ramu')
   }
+  const setupOf = (projectId: string) => {
+    const project = workspace.listProjects().find((entry) => entry.id === projectId)
+    if (!project) throw new Error('Unknown project.')
+    const roots = workspace.listRepositories(projectId).map((repo) => ({ label: repo.name, path: repo.root }))
+    // A multi-repository workspace folder may hold its own configuration beside the repositories.
+    if (project.root && !roots.some((root) => root.path === project.root))
+      roots.unshift({ label: project.name, path: project.root })
+    const managed = (getSharedMcp?.().list().connections ?? [])
+      .filter(({ connection }) => connection.scope.hostWide || connection.scope.projectIds.includes(projectId))
+      .map(({ connection }) => ({ id: connection.id, transport: connection.transport }))
+    return {
+      project,
+      setup: discoverProjectSetup(projectId, roots, managed, sharing(), undefined, undefined, skillSharing()),
+    }
+  }
   return {
     'projects.setup': {
       args: z.tuple([id]),
-      run: (projectId: string) => {
-        const project = workspace.listProjects().find((entry) => entry.id === projectId)
-        if (!project) throw new Error('Unknown project.')
-        const roots = workspace.listRepositories(projectId).map((repo) => ({ label: repo.name, path: repo.root }))
-        // A multi-repository workspace folder may hold its own configuration beside the repositories.
-        if (project.root && !roots.some((root) => root.path === project.root))
-          roots.unshift({ label: project.name, path: project.root })
-        const managed = (getSharedMcp?.().list().connections ?? [])
-          .filter(({ connection }) => connection.scope.hostWide || connection.scope.projectIds.includes(projectId))
-          .map(({ connection }) => ({ id: connection.id, transport: connection.transport }))
-        return discoverProjectSetup(projectId, roots, managed, sharing(), undefined, undefined, skillSharing())
+      run: (projectId: string) => setupOf(projectId).setup,
+    },
+    /**
+     * Copies a declared server's non-secret definition into Shared MCP for this project. Values of its environment and
+     * headers are never read: the person provides credentials or signs in afterwards, and nothing connects until they
+     * choose Connect. A declared copy that Ramu was sharing stops being added to other providers, so one server is
+     * not offered twice; the provider that declares it keeps its own copy, and removing the connection restores sharing.
+     */
+    'mcp.import': {
+      args: z.tuple([id, z.string().regex(/^[0-9a-f]{16}$/)]),
+      run: (projectId: string, key: string) => {
+        admin()
+        if (!getSharedMcp) throw new Error('Update this host for Shared MCP management')
+        const { project, setup } = setupOf(projectId)
+        const server = setup.mcp.find((entry) => entry.key === key)
+        if (!server) throw new Error('This server is no longer declared in the project’s setup.')
+        if (server.managedConnectionId) throw new Error('This server is already connected through Ramu.')
+        const transport = server.transport
+        if (transport.type === 'stdio' && !isAbsolute(transport.command))
+          throw new Error(
+            'This command is relative to a provider’s folder. Add it as a local command with its full path.',
+          )
+        const cwd = project.root ?? setup.roots[0]?.path
+        if (transport.type === 'stdio' && !cwd) throw new Error('This project has no folder to run the command in.')
+        const connection = getSharedMcp().save({
+          name: server.name,
+          serviceAccountId: 'default',
+          enabled: true,
+          scope: { projectIds: [projectId], hostWide: false },
+          providers: [...server.providers],
+          transport:
+            transport.type === 'http'
+              ? { type: 'http', url: transport.url, headerSecretRefs: {} }
+              : { type: 'stdio', command: transport.command, args: transport.args, cwd: cwd!, envSecretRefs: {} },
+        })
+        if (sharing()[key] ?? transport.type === 'http') {
+          const imports = workspace.getAppState<Record<string, string>>(MCP_IMPORTS_KEY, {})
+          workspace.setAppState(MCP_IMPORTS_KEY, { ...imports, [connection.id]: key })
+          workspace.setAppState(MCP_SHARING_KEY, { ...sharing(), [key]: false })
+        }
+        ctx.host.send('mcp:changed', {})
+        return connection
       },
     },
     /** Sharing passes a server's own credentials to other providers' sessions, so only the host decides it. */

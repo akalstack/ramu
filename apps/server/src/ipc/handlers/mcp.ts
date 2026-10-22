@@ -6,6 +6,7 @@ import type {
   SharedMcpSelection,
 } from '@ramu/shared/mcp'
 import { sharedMcpAccount, sharedMcpApproval, sharedMcpDefinition, sharedMcpSelection } from '../../mcp/policy'
+import { MCP_IMPORTS_KEY, MCP_SHARING_KEY } from '../../agent/projectSetup'
 import type { RegisterHandlers } from '../types'
 
 const id = z.string().min(1).max(200)
@@ -64,7 +65,23 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       run: (connectionId: string, name: string) => admin().removeCredential(connectionId, name),
     },
     'mcp.disconnect': { args: z.tuple([id]), run: (id: string) => admin().disconnect(id) },
-    'mcp.remove': { args: z.tuple([id]), run: (id: string) => admin().remove(id) },
+    'mcp.remove': {
+      args: z.tuple([id]),
+      run: async (id: string) => {
+        await admin().remove(id)
+        // An imported server stops replacing the declared copy: give back the sharing it displaced.
+        const imports = ctx.workspace?.getAppState<Record<string, string>>(MCP_IMPORTS_KEY, {}) ?? {}
+        const key = imports[id]
+        if (key && ctx.workspace) {
+          const { [id]: _removed, ...rest } = imports
+          ctx.workspace.setAppState(MCP_IMPORTS_KEY, rest)
+          ctx.workspace.setAppState(MCP_SHARING_KEY, {
+            ...ctx.workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {}),
+            [key]: true,
+          })
+        }
+      },
+    },
     'mcp.checkCredentialStore': {
       args: z.tuple([]),
       run: () => admin().verifyCredentialStore(),

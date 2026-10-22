@@ -7,7 +7,8 @@ import { Input } from '@/components/desktop-input'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
-import { Dropdown } from '../Menu'
+import { Dialog, Dropdown } from '../Menu'
+import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { ProviderIcon } from '../models/ProviderIcon'
@@ -72,6 +73,7 @@ function ShareRow({
   label,
   disabled,
   onShare,
+  extra,
 }: {
   name: string
   detail: string
@@ -81,6 +83,7 @@ function ShareRow({
   label: string
   disabled: boolean
   onShare(shared: boolean): void
+  extra?: ReactNode
 }) {
   return (
     <SettingsRow>
@@ -95,6 +98,7 @@ function ShareRow({
         <span className="block small text-caption text-muted-foreground">
           {reach(item)} · {t('From {places}', { places: fromText(sources) })}
         </span>
+        {extra}
       </span>
       <Switch
         aria-label={label}
@@ -170,10 +174,12 @@ export function AgentSetup() {
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [importing, setImporting] = useState<ProjectMcpServer | null>(null)
   const epoch = useRef(0)
   useEffect(() => {
     epoch.current++
     setPicked(undefined)
+    setImporting(null)
     setPending(null)
     setError('')
   }, [hostKey])
@@ -230,6 +236,15 @@ export function AgentSetup() {
         label={t('Share {name} with every provider and account', { name: server.name })}
         disabled={locked}
         onShare={(shared) => void share(server.key, () => invoke('mcp.share', server.key, shared))}
+        extra={
+          server.managedConnectionId ? (
+            <span className="block small text-caption text-muted-foreground">{t('Also connected through Ramu')}</span>
+          ) : (
+            <Button size="sm" variant="ghost" className="mt-1" disabled={locked} onClick={() => setImporting(server)}>
+              {t('Connect through Ramu…')}
+            </Button>
+          )
+        }
       />
     ))
   const skillList = (scopeName: 'user' | 'project') => (
@@ -299,6 +314,57 @@ export function AgentSetup() {
             ))}
           </ul>
         </details>
+      )}
+
+      {importing && projectId && (
+        <Dialog
+          title={t('Connect through Ramu')}
+          confirmLabel={t('Add to Shared MCP')}
+          busy={pending !== null}
+          error={error}
+          onCancel={() => {
+            if (pending === null) setImporting(null)
+          }}
+          onConfirm={() =>
+            void share(importing.key, async () => {
+              await invoke('mcp.import', projectId, importing.key)
+              setImporting(null)
+            })
+          }
+        >
+          <p>
+            <strong>{importing.name}</strong> ·{' '}
+            {t('Connection host: {host}', {
+              host: scope?.available.find((host) => host.id === scope.primaryId)?.name ?? t('This host'),
+            })}
+          </p>
+          <p className="break-all">
+            {importing.transport.type === 'http'
+              ? importing.transport.url
+              : [importing.transport.command, ...importing.transport.args].join(' ')}
+          </p>
+          <p>
+            {t('Available to: {providers} in {project}', {
+              providers: importing.providers.map(providerName).join(', '),
+              project: projectName ?? t('This project'),
+            })}
+          </p>
+          {importing.transport.type === 'stdio' && (
+            <p>{t('This command runs on this host with your user’s files and processes. Saving never starts it.')}</p>
+          )}
+          {[...importing.headerKeys, ...importing.envKeys].length > 0 && (
+            <p>
+              {t('Values are not copied. Enter these again as write-only credentials: {names}', {
+                names: [...importing.headerKeys, ...importing.envKeys].join(', '),
+              })}
+            </p>
+          )}
+          <p>
+            {t(
+              'Ramu stops adding the declared copy to other providers and offers its approved tools instead. The provider that declares it keeps its own copy. Removing the connection restores sharing.',
+            )}
+          </p>
+        </Dialog>
       )}
 
       <McpSettings />

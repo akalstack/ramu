@@ -650,6 +650,8 @@ export interface RamuMethods {
   'mcp.disconnect'(connectionId: string): Promise<void>
   'mcp.remove'(connectionId: string): Promise<void>
   'mcp.checkCredentialStore'(): Promise<'available' | 'unavailable' | 'not-checked'>
+  /** Copy a declared server's non-secret definition into Shared MCP for one project. Connects nothing. */
+  'mcp.import'(projectId: string, key: string): SharedMcpConnection
   /** Give a declared server to every provider and account, or stop. Takes effect for new sessions. */
   'mcp.share'(key: string, shared: boolean): void
   /** Copy a skill from the person's own provider folder to every provider and account. Applies to new threads. */

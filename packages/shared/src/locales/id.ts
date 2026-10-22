@@ -3022,4 +3022,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   "The service declined the sign-in.": "Layanan menolak login.",
   "Sign-in could not be finished.": "Login tidak dapat diselesaikan.",
   "The service did not offer a supported sign-in.": "Layanan tidak menawarkan login yang didukung.",
+  "Also connected through Ramu": "Juga terhubung lewat Ramu",
+  "Connect through Ramu…": "Hubungkan lewat Ramu…",
+  "Connect through Ramu": "Hubungkan lewat Ramu",
+  "Add to Shared MCP": "Tambahkan ke MCP bersama",
+  "Available to: {providers} in {project}": "Tersedia untuk: {providers} di {project}",
+  "This command runs on this host with your user’s files and processes. Saving never starts it.": "Perintah ini berjalan di host ini dengan akses ke berkas dan proses pengguna Anda. Menyimpan tidak pernah menjalankannya.",
+  "Values are not copied. Enter these again as write-only credentials: {names}": "Nilai tidak disalin. Masukkan lagi sebagai kredensial hanya-tulis: {names}",
+  "Ramu stops adding the declared copy to other providers and offers its approved tools instead. The provider that declares it keeps its own copy. Removing the connection restores sharing.": "Ramu berhenti menambahkan salinan yang dideklarasikan ke provider lain dan menawarkan alat yang disetujui sebagai gantinya. Provider yang mendeklarasikannya tetap memakai salinannya sendiri. Menghapus koneksi memulihkan pembagian.",
 }

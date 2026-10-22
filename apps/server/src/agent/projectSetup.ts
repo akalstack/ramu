@@ -341,6 +341,8 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
 /** Host choices about which declared servers Ramu gives to every provider and account. Keyed by `mcpServerKey`. */
 export type McpSharing = Record<string, boolean>
 export const MCP_SHARING_KEY = 'agent-setup:mcp-sharing:v1'
+/** Shared MCP connection ID to the declared server whose sharing it replaced, so removing it can restore that choice. */
+export const MCP_IMPORTS_KEY = 'agent-setup:mcp-imports:v1'
 const isShared = (key: string, transport: Transport, sharing: McpSharing) => sharing[key] ?? sharedByDefault(transport)
 
 const order = (providers: Iterable<AgentProvider>) => AGENT_PROVIDERS.filter((p) => [...providers].includes(p))
