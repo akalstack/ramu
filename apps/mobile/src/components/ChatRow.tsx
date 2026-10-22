@@ -14,6 +14,7 @@ import { useStore } from '../runtime/store'
 const SHORT = {
   working: ['threadWorking', 'threadWorkingFull'],
   goal: ['threadGoal', 'threadGoalFull'],
+  verifying: ['threadVerifying', 'threadVerifyingFull'],
   paused: ['threadPaused', 'threadPausedFull'],
   blocked: ['threadInput', 'threadBlockedFull'],
   'turn-limit': ['threadTurnLimit', 'threadTurnLimitFull'],
@@ -47,7 +48,11 @@ export const ChatRow = memo(function ChatRow({
     (store.inbox[chat.computerId] ?? []).some((n) => n.sessionId === chat.sessionId && n.kind === 'done')
   const status = chat.pending
     ? null
-    : threadStatus(chat, unread && (chat.status === 'idle' || chat.status === 'ready-for-review'), chat.goal)
+    : threadStatus(
+        chat,
+        unread && (chat.status === 'idle' || chat.status === 'ready-for-review'),
+        chat.goal && { ...chat.goal, verifying: !!chat.goal.claim },
+      )
   const online = store.isOnline(chat.computerId)
   const [shortKey, fullKey] = status ? SHORT[status.kind] : []
   // A thread with no project and nothing to preview is one line; its row is centered instead of leaving a blank line.
@@ -109,7 +114,7 @@ export const ChatRow = memo(function ChatRow({
                   status?.kind === 'blocked' ||
                   status?.kind === 'turn-limit'
                     ? 'needs-input'
-                    : status?.kind === 'goal' || status?.kind === 'working'
+                    : status?.kind === 'goal' || status?.kind === 'verifying' || status?.kind === 'working'
                       ? 'running'
                       : status?.kind === 'paused' || status?.kind === 'stopped' || status?.kind === 'limit'
                         ? 'idle'

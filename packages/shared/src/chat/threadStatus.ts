@@ -7,6 +7,7 @@ export interface ThreadStatus {
   kind:
     | 'working'
     | 'goal'
+    | 'verifying'
     | 'approval'
     | 'input'
     | 'limit'
@@ -21,7 +22,7 @@ export interface ThreadStatus {
 }
 
 /** The part of a goal that decides a status; a `ChatGoal` and a list summary both fit. */
-type GoalLike = Pick<ChatGoal, 'status' | 'pausedBy'>
+type GoalLike = Pick<ChatGoal, 'status' | 'pausedBy'> & { verifying?: boolean }
 
 /**
  * The one status a thread row, its popover and its accessible name agree on. The priority is the sidebar's: live
@@ -44,6 +45,8 @@ export function threadStatus(
       : { kind: 'input', short: 'Needs input', full: 'Waiting for your input' }
   if (task.status === 'running') {
     if (goalHold(unfinished) === 'provider-limit') return limit
+    if (unfinished?.status === 'active' && unfinished.verifying)
+      return { kind: 'verifying', short: 'Verifying', full: 'Verifying goal' }
     return unfinished?.status === 'active'
       ? { kind: 'goal', short: 'Goal', full: 'Working toward goal' }
       : { kind: 'working', short: 'Working', full: 'Agent working' }
@@ -51,6 +54,8 @@ export function threadStatus(
   if (task.status === 'needs-input') return { kind: 'input', short: 'Needs input', full: 'Waiting for your input' }
   if (task.waitingUntil || goalHold(unfinished) === 'provider-limit') return limit
   if (task.status === 'failed') return { kind: 'failed', short: 'Failed', full: 'Agent failed' }
+  if (unfinished?.status === 'active' && unfinished.verifying)
+    return { kind: 'verifying', short: 'Verifying', full: 'Verifying goal' }
   if (unfinished?.status === 'active') return { kind: 'goal', short: 'Goal', full: 'Working toward goal' }
   if (unfinished?.status === 'paused') return { kind: 'paused', short: 'Paused', full: 'Goal paused' }
   if (unfinished?.status === 'blocked') return { kind: 'blocked', short: 'Needs input', full: 'Goal needs input' }

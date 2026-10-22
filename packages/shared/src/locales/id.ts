@@ -2332,6 +2332,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Verified": "Terverifikasi",
   "Verification failed": "Verifikasi gagal",
   "Verifying goal": "Memverifikasi tujuan",
+  "Verifying": "Memverifikasi",
   "Verification command": "Perintah verifikasi",
   "Edit verification command": "Ubah perintah verifikasi",
   "Set verification command": "Atur perintah verifikasi",

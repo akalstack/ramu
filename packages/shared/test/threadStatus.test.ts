@@ -36,6 +36,13 @@ describe('threadStatus', () => {
 })
 
 describe('threadStatus with a goal', () => {
+  it('names verification between turns and while running, and keeps a failed run first', () => {
+    const verifying = { status: 'active', verifying: true } as never
+    expect(threadStatus(task(), false, verifying)).toMatchObject({ kind: 'verifying', full: 'Verifying goal' })
+    expect(threadStatus(task({ status: 'running' }), false, verifying)?.kind).toBe('verifying')
+    expect(threadStatus(task({ status: 'failed' }), false, verifying)?.kind).toBe('failed')
+    expect(threadStatus(task(), false, { status: 'active' } as never)?.kind).toBe('goal')
+  })
   const goal = (status: string, pausedBy?: string) => ({ status, pausedBy }) as never
 
   it('keeps an active goal unfinished between turns and while running', () => {
