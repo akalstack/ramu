@@ -794,7 +794,7 @@ export type PushEvents = {
   'summaries:changed': { created: string | null }
   'rules:changed': Record<string, never>
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
-  'background:connection': { connected: boolean; rejected?: boolean }
+  'background:connection': { connected: boolean; rejected?: boolean; restarted?: boolean }
   'computers:changed': Computers
   'computers:navigate': { hostId: string; destination: HostDestination }
   'computers:activity': { ids: string[] }

@@ -487,6 +487,8 @@ const dropRevoked = () => {
 const json = { 'Content-Type': 'application/json' }
 // Results of keyed mutations, kept briefly so a retry after a lost reply returns the first outcome instead of running twice.
 const operations = new OperationLog<unknown>(10 * 60_000, 500)
+// Identifies this server run; a client that sees it change knows the host restarted and every cursor it held is void.
+const runEpoch = randomUUID()
 // One handler serves both transports. Requests over TCP (`remote`) must present the bearer token.
 const handle = (remote: boolean) => async (req: import('node:http').IncomingMessage, res: ServerResponse) => {
   try {
@@ -503,6 +505,7 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
         presence.register(deviceId, req.socket.remoteAddress, Number(req.headers['x-ramu-presence-port']))
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
       res.write(': connected\n\n')
+      res.write(`data: ${JSON.stringify({ channel: 'background:epoch', payload: { epoch: runEpoch } })}\n\n`)
       clients.add(res)
       const clientId =
         !remote &&

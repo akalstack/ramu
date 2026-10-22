@@ -96,6 +96,24 @@ it('streams events and reports connection state', async () => {
   stop()
 })
 
+it('flags a restart only when the host announces a different run after reconnecting', async () => {
+  let connections = 0
+  const server = await listen((_req, res) => {
+    const epoch = connections++ < 2 ? 'run-a' : 'run-b'
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+    res.write(`data: ${JSON.stringify({ channel: 'background:epoch', payload: { epoch } })}\n\n`)
+    if (connections <= 2) setTimeout(() => res.end(), 50)
+  }, 0)
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const seen: { channel: string; payload: { connected?: boolean; restarted?: boolean } }[] = []
+  const stop = subscribeRuntime({ kind: 'http', url, token: '' }, (channel, payload) => seen.push({ channel, payload }))
+  await expect.poll(() => seen.some((item) => item.payload.restarted), { timeout: 8000 }).toBe(true)
+  // The epoch announcement itself is internal, and a reconnect to the same run is not a restart.
+  expect(seen.every((item) => item.channel === 'background:connection')).toBe(true)
+  expect(seen.filter((item) => item.payload.restarted)).toHaveLength(1)
+  stop()
+}, 12000)
+
 it('stops retrying when the server rejects the token, so a revoked device is not locked out of pairing', async () => {
   let requests = 0
   const server = await listen((_req, res) => {

@@ -199,6 +199,8 @@ export function subscribeRuntime(
     retry: NodeJS.Timeout | undefined,
     active: ReturnType<typeof httpRequest> | undefined,
     failures = 0
+  // The host's run identity from its last connection; a different one means it restarted and held cursors are void.
+  let epoch: string | null = null
   let generation = 0,
     connected = false,
     connecting = false,
@@ -311,6 +313,13 @@ export function subscribeRuntime(
           if (!line.startsWith('data: ')) continue
           try {
             const event = JSON.parse(line.slice(6))
+            if (event.channel === 'background:epoch') {
+              const next = typeof event.payload?.epoch === 'string' ? event.payload.epoch : null
+              const restarted = epoch !== null && next !== null && next !== epoch
+              if (next) epoch = next
+              if (restarted) receive('background:connection', { connected: true, restarted: true })
+              continue
+            }
             receive(event.channel, event.payload)
           } catch {}
         }
