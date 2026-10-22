@@ -15,7 +15,13 @@ import { executeBrowserBridge } from './browserBridge'
 import { randomUUID } from 'node:crypto'
 import { ElectronGuestFactory } from './electronGuest'
 import { browserMethod, isBrowserMethod } from './browserMethods'
-import { isHostInvokeAllowed, isSettingsActionAllowed, routeInvoke, routeTaskCommand, activityChannel } from './hostInvoke'
+import {
+  isHostInvokeAllowed,
+  isSettingsActionAllowed,
+  routeInvoke,
+  routeTaskCommand,
+  activityChannel,
+} from './hostInvoke'
 import { DeviceState } from './deviceState'
 import { partitionHostEntries } from './partitionStorage'
 import { newerVersion } from '@ramu/shared/version'
@@ -62,6 +68,7 @@ import {
   PresenceListener,
 } from '@ramu/client-runtime'
 import { SshComputers } from './sshComputers'
+import { NearbyBrowser } from './discovery'
 import { RemoteServers } from './remoteServers'
 import { ComputerBroadcaster } from './computerBroadcast'
 import { ComputerRegistry, LOCAL } from './computers'
@@ -459,6 +466,8 @@ async function main() {
   const presence = new PresenceListener()
   await presence.start()
   const ssh = new SshComputers(servers)
+  // Browsing is started and stopped by the Connect-to-a-host panel; nothing listens otherwise.
+  const nearby = new NearbyBrowser()
   const computers = new ComputerRegistry({
     servers,
     ssh,
@@ -722,7 +731,8 @@ async function main() {
       if (method === 'browser.profiles.importSources') return browserImportSources()
       if (method.startsWith('browser.import.')) {
         const source = (value: unknown): ImportSourceId => {
-          if (value !== 'chrome' && value !== 'edge' && value !== 'firefox') throw new Error('Choose a supported browser.')
+          if (value !== 'chrome' && value !== 'edge' && value !== 'firefox')
+            throw new Error('Choose a supported browser.')
           return value
         }
         const text = (value: unknown, max = 200) => {
@@ -733,7 +743,11 @@ async function main() {
         if (method === 'browser.import.inspect') return browserImporter.inspect(source(args[1]), text(args[2]))
         if (method === 'browser.import.run') {
           const domains = args[2]
-          if (!Array.isArray(domains) || domains.length > 500 || domains.some((entry) => typeof entry !== 'string' || entry.length > 253))
+          if (
+            !Array.isArray(domains) ||
+            domains.length > 500 ||
+            domains.some((entry) => typeof entry !== 'string' || entry.length > 253)
+          )
             throw new Error('Invalid import request')
           const staged = await browserImporter.run(text(args[1]), domains as string[], text(args[3], 80))
           if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
@@ -972,6 +986,10 @@ async function main() {
       for (const server of previous) if (!computers.exists(server.id)) await closeComputer(server.id)
       return computers.list(self)
     }
+    // Device-local: this computer listens for nearby hosts and only lists them. Pairing still takes a code.
+    if (method === 'computers.discovery.start') return nearby.start()
+    if (method === 'computers.discovery.state') return nearby.state()
+    if (method === 'computers.discovery.stop') return nearby.stop()
     if (method === 'computers.sshHosts') return ssh.hosts()
     if (method === 'computers.pairSsh') {
       const [target, label] = args
@@ -991,7 +1009,12 @@ async function main() {
     }
     if (method === 'computers.screenSharing') return screenSharingRef?.list() ?? []
     if (method === 'computers.setScreenSharing') {
-      if (typeof args[0] !== 'string' || args[0] === LOCAL || !computers.exists(args[0]) || typeof args[1] !== 'boolean')
+      if (
+        typeof args[0] !== 'string' ||
+        args[0] === LOCAL ||
+        !computers.exists(args[0]) ||
+        typeof args[1] !== 'boolean'
+      )
         throw new Error('Invalid host')
       return screenSharingRef?.set(args[0], args[1]) ?? []
     }
@@ -1167,6 +1190,7 @@ async function main() {
   powerMonitor.on('resume', networkWake)
   app.on('before-quit', () => {
     powerMonitor.removeListener('resume', networkWake)
+    nearby.stop()
     desktopUpdater.close()
     deviceState.flush()
     computers.stop()

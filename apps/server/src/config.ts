@@ -20,6 +20,8 @@ export interface ServerConfig {
   tokenPath: string
   /** Paired devices (per-device tokens and pending pairing codes). */
   devicesPath: string
+  /** `--discoverable` / RAMU_DISCOVERABLE=1: advertise a command-line `--listen` to nearby devices. */
+  discoverable: boolean
   /** Network access chosen in Settings; ignored when `listen` comes from the command line. */
   networkPath: string
   /** Certificate and key for serving the network listener over HTTPS. */
@@ -77,5 +79,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     tokenPath: env.RAMU_TOKEN_FILE || join(userData, 'remote-token'),
     devicesPath: env.RAMU_DEVICES_FILE || join(userData, 'remote-devices.json'),
     networkPath: join(userData, 'network.json'),
+    discoverable: env.RAMU_DISCOVERABLE === '1',
   }
 }

@@ -259,6 +259,11 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
     title: 'Allow other devices',
     words: 'remote access network listen phone tablet vpn tailscale netbird zerotier wireguard lan server',
   },
+  {
+    section: 'remote',
+    title: 'Discoverable on this network',
+    words: 'nearby discovery bonjour mdns advertise visible host name find automatic lan',
+  },
   { section: 'remote', title: 'Pair a device', words: 'pairing code link phone another host connect add' },
   { section: 'remote', title: 'Paired devices', words: 'revoke remove devices access token' },
   {

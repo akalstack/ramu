@@ -36,6 +36,8 @@ Options:
   --private-network              Permit a non-loopback --listen address without TLS when every device that can reach it is
                                  on a network you trust, such as a VPN (Tailscale, NetBird, ZeroTier, WireGuard) or a LAN.
                                  (--allow-plaintext-remote is the same flag.)
+  --discoverable                 With --listen: let devices on the same network see this host's name and find it when pairing
+                                 (off by default; Settings controls it otherwise). Nothing is advertised on loopback.
   --tls-cert <file> --tls-key <file>
                                  Serve the network listener over HTTPS (for example a certificate from your VPN or a proxy)
   --url <address>                With "pair": the address the other device should use, such as a VPN hostname
@@ -43,7 +45,7 @@ Options:
   -h, --help   -v, --version
 
 Environment: RAMU_USER_DATA, RAMU_SOCKET, RAMU_LISTEN, RAMU_TOKEN_FILE, RAMU_DEVICES_FILE, RAMU_WORKTREES,
-             RAMU_ALLOW_PLAINTEXT_REMOTE, RAMU_TLS_CERT, RAMU_TLS_KEY, RAMU_DEVICE_TOKEN_DAYS (90 or never),
+             RAMU_ALLOW_PLAINTEXT_REMOTE, RAMU_DISCOVERABLE, RAMU_TLS_CERT, RAMU_TLS_KEY, RAMU_DEVICE_TOKEN_DAYS (90 or never),
              RAMU_ALLOW_LEGACY_TOKEN (1 to opt in), RAMU_BROWSER_ORIGINS (comma-separated exact origins),
              RAMU_BROWSER_EXECUTABLE (optional host Chromium executable; Setup checks its sandbox).
 A paired device has the same control as the desktop app, including shell access. Pair only devices you own.`
@@ -53,7 +55,15 @@ function fail(message: string): never {
   process.exit(1)
 }
 
-const booleans = new Set(['json', 'rotate', 'help', 'version', 'allow-plaintext-remote', 'private-network'])
+const booleans = new Set([
+  'json',
+  'rotate',
+  'help',
+  'version',
+  'allow-plaintext-remote',
+  'private-network',
+  'discoverable',
+])
 const flags = new Map<string, string | true>()
 const positional: string[] = []
 const argv = process.argv.slice(2)
@@ -96,6 +106,7 @@ if (listen) {
   process.env.RAMU_LISTEN = listen
 }
 if (flags.has('allow-plaintext-remote') || flags.has('private-network')) process.env.RAMU_ALLOW_PLAINTEXT_REMOTE = '1'
+if (flags.has('discoverable')) process.env.RAMU_DISCOVERABLE = '1'
 if (text('tls-cert')) process.env.RAMU_TLS_CERT = text('tls-cert')
 if (text('tls-key')) process.env.RAMU_TLS_KEY = text('tls-key')
 
@@ -187,21 +198,36 @@ if (command === 'start') {
 } else if (command === 'browser') {
   const action = positional[1] ?? 'status'
   try {
-    if (action === 'status') console.log(JSON.stringify(await runtimeInvoke(config.socketPath, 'hostBrowser.status'), null, 2))
+    if (action === 'status')
+      console.log(JSON.stringify(await runtimeInvoke(config.socketPath, 'hostBrowser.status'), null, 2))
     else if (action === 'setup') {
       console.log('Setting up sandboxed Chromium on this host. A compatible runtime is downloaded if needed.')
       await runtimeInvoke(config.socketPath, 'hostBrowser.setup')
       console.log('Host browser ready. No website was opened. Use browser grant <device> <thread> for remote viewing.')
-    } else if (action === 'stop') { await runtimeInvoke(config.socketPath, 'hostBrowser.disable'); console.log('Host browser stopped; device grants revoked.') }
-    else if (action === 'threads') for (const task of await runtimeInvoke(config.socketPath, 'tasks.list')) console.log(`${task.id}  ${task.title}`)
-    else if (action === 'grants') console.log(JSON.stringify(await runtimeInvoke(config.socketPath, 'hostBrowser.grants'), null, 2))
+    } else if (action === 'stop') {
+      await runtimeInvoke(config.socketPath, 'hostBrowser.disable')
+      console.log('Host browser stopped; device grants revoked.')
+    } else if (action === 'threads')
+      for (const task of await runtimeInvoke(config.socketPath, 'tasks.list')) console.log(`${task.id}  ${task.title}`)
+    else if (action === 'grants')
+      console.log(JSON.stringify(await runtimeInvoke(config.socketPath, 'hostBrowser.grants'), null, 2))
     else if (action === 'grant' || action === 'revoke') {
-      const device = positional[2], task = positional[3]
+      const device = positional[2],
+        task = positional[3]
       if (!device || !task) fail(`Usage: ramu browser ${action} <device> <thread>`)
-      await runtimeInvoke(config.socketPath, action === 'grant' ? 'hostBrowser.grant' : 'hostBrowser.revoke', [device, task])
-      console.log(action === 'grant' ? 'Browser access granted for one hour to this device/thread only.' : 'Browser access revoked.')
+      await runtimeInvoke(config.socketPath, action === 'grant' ? 'hostBrowser.grant' : 'hostBrowser.revoke', [
+        device,
+        task,
+      ])
+      console.log(
+        action === 'grant'
+          ? 'Browser access granted for one hour to this device/thread only.'
+          : 'Browser access revoked.',
+      )
     } else fail(`Unknown browser command ${action}. Run ramu --help.`)
-  } catch (error) { fail(error instanceof Error ? error.message : String(error)) }
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error))
+  }
 } else if (command === 'devices') {
   const store = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
   if (positional[1] === 'revoke') {

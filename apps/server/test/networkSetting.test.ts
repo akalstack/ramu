@@ -24,7 +24,7 @@ const addresses = [
   { name: 'en0', address: '192.168.1.5' },
   { name: 'wt0', address: '100.64.0.7' },
 ]
-const on = { enabled: true, host: '100.64.0.7', port: 7788, acceptUnencrypted: true }
+const on = { enabled: true, host: '100.64.0.7', port: 7788, acceptUnencrypted: true, discoverable: false }
 
 it('accepts every network or one of this host’s addresses', () => {
   expect(validateNetworkSetting(on, false, addresses)).toEqual(on)
@@ -64,6 +64,14 @@ it('saves privately and survives a missing or broken file', () => {
   expect(readNetworkSetting(path, false)).toEqual(DEFAULT_NETWORK_SETTING)
   writeNetworkSetting(path, { ...on, acceptUnencrypted: false })
   expect(readNetworkSetting(path, false)).toEqual(DEFAULT_NETWORK_SETTING)
+})
+
+it('keeps discovery off unless it is saved on, including for settings written before it existed', () => {
+  const path = file()
+  writeFileSync(path, JSON.stringify({ enabled: true, host: '100.64.0.7', port: 7788, acceptUnencrypted: true }))
+  expect(readNetworkSetting(path, false).discoverable).toBe(false)
+  expect(validateNetworkSetting({ ...on, discoverable: true }, false, addresses).discoverable).toBe(true)
+  expect(() => validateNetworkSetting({ ...on, discoverable: 'yes' }, false, addresses)).toThrow(/Invalid/)
 })
 
 it('lists this host’s addresses without loopback or link-local', () => {

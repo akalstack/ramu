@@ -46,6 +46,18 @@ export interface NetworkStatus {
   deviceLifetime?: { days: number | 'never'; saved: boolean }
   /** Pairing offers not yet used, without their codes. Absent on older hosts. */
   offers?: { id: string; role: 'owner' | 'viewer'; expiresAt: number }[]
+  /** Nearby-device discovery. Absent on hosts that predate it. */
+  discovery?: {
+    /** The saved choice; it advertises only while network access is also on and listening. */
+    discoverable: boolean
+    state: 'off' | 'advertising' | 'unavailable'
+    /** Interfaces being advertised on. */
+    interfaces: string[]
+    /** Short reason code when `unavailable`. */
+    error: string | null
+    /** Name nearby devices see. */
+    name: string
+  }
 }
 /** What became of one pairing offer. */
 export type PairingOfferStatus =
@@ -59,6 +71,8 @@ export interface NetworkSettingsInput {
   port: number
   /** Required to listen beyond this computer without TLS: the user accepts that Ramu does not encrypt the traffic. */
   acceptUnencrypted: boolean
+  /** Let nearby devices see this host's name. Leave out to keep the saved choice. */
+  discoverable?: boolean
 }
 export interface PairingOffer {
   /** Non-secret handle for cancelling this offer or asking what became of it. Absent on older hosts. */

@@ -57,6 +57,7 @@ import { loadConfig } from './config'
 import { TokenStore } from './remote/auth'
 import { DeviceStore, validLifetime, type DeviceInfo } from './remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
+import { HostAdvertiser, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
   candidateUrls,
   localAddresses,
@@ -109,10 +110,20 @@ const remoteAccess = new RemoteAccess({
 const presence = new HostPresence(join(userData, 'presence.json'), (id) => devices.presenceKey(id))
 const stopPresenceNetwork = runtimeNetwork.subscribe(() => {
   if (network.enabled) presence.announce()
+  // A changed network or a wake may add or remove an interface to advertise on.
+  void advertiser.refresh().catch(() => {})
 })
+// Nearby discovery: advertises the bound listener only while access and Discoverable are both on.
+const advertiser = new HostAdvertiser({ hostId: readDiscoveryHostId(join(userData, 'discovery.json')) })
 // `--listen` / RAMU_LISTEN wins and cannot be changed from Settings. Otherwise Settings decides, and applies without a restart.
 let network: NetworkSetting = config.listen
-  ? { enabled: true, host: config.listen.host, port: config.listen.port, acceptUnencrypted: true }
+  ? {
+      enabled: true,
+      host: config.listen.host,
+      port: config.listen.port,
+      acceptUnencrypted: true,
+      discoverable: config.discoverable,
+    }
   : readNetworkSetting(config.networkPath, Boolean(config.tls))
 // A launchd instance can supervise a daemon that was started by the UI without interrupting it.
 // Intentional stops exit successfully; crashes let launchd restart or take over execution.
@@ -509,6 +520,7 @@ async function stop(intentional = false) {
   clearInterval(pushReceipts)
   mobileLiveActivities.dispose()
   stopPresenceNetwork()
+  void advertiser.stop()
   presence.close()
   clearTimeout(remoteRetry)
   mcpHttp.close()
@@ -1086,6 +1098,7 @@ function listenRemote(server: NonNullable<typeof remote>, attempt = 0) {
     remoteError = null
     presence.announce()
     server.on('error', (error) => console.error(`Ramu network listener error: ${error.message}`))
+    syncDiscovery()
     console.log(
       `Ramu server listening on ${config.tls ? 'https' : 'http'}://${host}:${port}; pair a device with \`ramu pair\``,
     )
@@ -1099,8 +1112,15 @@ function startRemote() {
     : createServer(handle(true)))
   listenRemote(server)
 }
+/** Advertises the address the listener bound, and only while both settings allow it. Never affects the listener. */
+function syncDiscovery() {
+  if (network.enabled && network.discoverable && remote?.listening)
+    void advertiser.start({ host: network.host, port: network.port, tls: Boolean(config.tls) }).catch(() => {})
+  else void advertiser.stop()
+}
 function stopRemote() {
   clearTimeout(remoteRetry)
+  void advertiser.stop()
   const old = remote
   remote = null
   remoteError = null
@@ -1116,6 +1136,11 @@ function networkStatus() {
   return {
     enabled: network.enabled,
     listening: Boolean(remote?.listening),
+    discovery: {
+      discoverable: network.discoverable,
+      ...advertiser.status(),
+      name: discoveryName(),
+    },
     host: network.host,
     port: network.port,
     source: config.listen ? ('command-line' as const) : ('settings' as const),
@@ -1131,14 +1156,21 @@ async function networkMethod(method: string, args: unknown[]) {
   if (method === 'network.status') return networkStatus()
   if (method === 'network.configure') {
     if (config.listen) throw new Error('Network access was set with --listen; change it there')
-    const next = validateNetworkSetting(args[0], Boolean(config.tls))
+    const input = args[0] as { discoverable?: unknown } | null
+    // A client that predates discovery leaves the choice out; that keeps the saved one rather than switching it off.
+    const next = validateNetworkSetting(
+      input && typeof input === 'object' && input.discoverable === undefined
+        ? { ...input, discoverable: network.discoverable }
+        : args[0],
+      Boolean(config.tls),
+    )
     writeNetworkSetting(config.networkPath, next)
     const moved = next.enabled !== network.enabled || next.host !== network.host || next.port !== network.port
     network = next
     if (moved || (next.enabled && !remote)) {
       stopRemote()
       startRemote()
-    }
+    } else syncDiscovery()
     // Turning access off also drops every connected device: their tokens stay valid but nothing is listening for them.
     return networkStatus()
   }

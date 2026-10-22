@@ -7,6 +7,7 @@ import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
 import type { RamuTheme, ThemeIssue, ThemeRole } from './theme'
 import type { AppUpdateStatus } from './updates'
+import type { NearbyHostsState } from './discovery/tracker'
 import type { AgentSetupSnapshot } from './agentSetup'
 import type { ProviderConfiguration, ProviderStatus } from './providers/providers'
 import type { LimitRetryResult } from './chat/providerWait'
@@ -515,6 +516,10 @@ export interface RamuMethods {
   'computers.open'(id: string): void
   'computers.pair'(url: string, code: string, name?: string): Computers
   'computers.sshHosts'(): string[]
+  /** Nearby hosts heard on this computer's networks. Browsing runs here, never on a selected host, and lists only. */
+  'computers.discovery.start'(): NearbyHostsState
+  'computers.discovery.state'(): NearbyHostsState
+  'computers.discovery.stop'(): NearbyHostsState
   /** Adds a computer over SSH: `target` is user@host or an alias from ~/.ssh/config. */
   'computers.pairSsh'(target: string, name?: string): Computers
   /** Paired computers this computer lets use its screen (opt-in per host). */

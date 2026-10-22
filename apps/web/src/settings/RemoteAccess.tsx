@@ -13,7 +13,7 @@ import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/set
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Check, Copy, Link2, Monitor, Network, Plus, Settings2, Terminal } from 'lucide-react'
+import { Check, Copy, Link2, Monitor, Network, Plus, Radar, Settings2, Terminal } from 'lucide-react'
 import { useContext, useCallback, useEffect, useRef, useState } from 'react'
 import type { Computer, Computers as ComputerList, NetworkStatus, PairingOffer } from '@ramu/shared/types'
 import { Dialog as ConfirmDialog, Dropdown, timeAgo } from '../Menu'
@@ -24,6 +24,7 @@ import { t, useLanguage } from '../i18n'
 import { StatusDot, activityText, statusText, useComputers } from '../workspace/computers'
 import { workspaceVisible } from '../workspace/workspaceLifetime'
 import { onPairLink, takePairLink } from '../pairLink'
+import { NearbyHosts } from './NearbyHosts'
 
 const ALL_NETWORKS = '0.0.0.0'
 /** Virtual networks that Docker, VMs and macOS create. Another device almost never reaches this computer through them. */
@@ -130,10 +131,19 @@ function ThisComputer() {
     ...status.addresses.map((entry) => ({ value: entry.address, label: `${entry.name} · ${entry.address}` })),
   ]
   if (!options.some((option) => option.value === host)) options.push({ value: host, label: host })
-  const apply = async (enabled: boolean) => {
+  const apply = async (enabled: boolean, discoverable = status.discovery?.discoverable) => {
     setBusy(true)
     try {
-      setStatus(await invoke('network.configure', { enabled, host, port: portNumber, acceptUnencrypted: true }))
+      setStatus(
+        await invoke('network.configure', {
+          enabled,
+          host,
+          port: portNumber,
+          acceptUnencrypted: true,
+          // Older hosts have no such setting; leaving it out keeps whatever they saved.
+          ...(discoverable === undefined ? {} : { discoverable }),
+        }),
+      )
     } catch (error) {
       notifyError(errorText(error), t('Remote access'))
     } finally {
@@ -182,6 +192,43 @@ function ThisComputer() {
           }}
         />
       </SettingsRow>
+      {status.discovery && (
+        <>
+          <SettingsRow className="settings-toggle">
+            <SettingsLabel
+              title={t('Discoverable on this network')}
+              help={
+                managed
+                  ? t('Set with --discoverable when Ramu was started with --listen.')
+                  : t(
+                      'Devices on the same network can see this host’s name ({0}) while pairing. Finding a host never gives access; they still need a pairing code. Off by default.',
+                      { 0: status.discovery.name },
+                    )
+              }
+            />
+            <Switch
+              aria-label={t('Discoverable on this network')}
+              checked={status.discovery.discoverable}
+              disabled={busy || managed || !status.enabled}
+              onCheckedChange={(checked) => void apply(status.enabled, checked)}
+            />
+          </SettingsRow>
+          {status.enabled && status.discovery.discoverable && (
+            <p className="muted text-muted-foreground small text-caption m-[0_0_12px]" role="status">
+              {status.discovery.state === 'advertising'
+                ? t('Visible as {0} on {1}', {
+                    0: status.discovery.name,
+                    1: status.discovery.interfaces.join(', '),
+                  })
+                : status.listening
+                  ? t('Not visible right now ({0}). Pairing by address or QR code still works.', {
+                      0: status.discovery.error ?? t('no network to advertise on'),
+                    })
+                  : t('Starting…')}
+            </p>
+          )}
+        </>
+      )}
       {!managed && (
         <>
           <SettingsRow>
@@ -570,7 +617,9 @@ function Computers({ state }: { state: ComputerList }) {
     [name, setName] = useState('')
   const [adding, setAdding] = useState(false),
     [editing, setEditing] = useState<string | null>(null)
-  const [mode, setMode] = useState<'link' | 'ssh'>('link'),
+  // Nearby hosts come first; entering an address or using SSH stays one click away in every state.
+  const [mode, setMode] = useState<'nearby' | 'link' | 'ssh'>('nearby'),
+    [focusCode, setFocusCode] = useState(false),
     [link, setLink] = useState(''),
     [linkError, setLinkError] = useState<string | null>(null)
   const [target, setTarget] = useState(''),
@@ -604,6 +653,8 @@ function Computers({ state }: { state: ComputerList }) {
     setAdding(true)
   }
   const reset = () => {
+    setMode('nearby')
+    setFocusCode(false)
     setAddress('')
     setCode('')
     setName('')
@@ -611,7 +662,8 @@ function Computers({ state }: { state: ComputerList }) {
     setLinkError(null)
     setTarget('')
   }
-  const choose = (next: 'link' | 'ssh') => {
+  const choose = (next: 'nearby' | 'link' | 'ssh') => {
+    setFocusCode(false)
     setMode(next)
     if (next === 'ssh' && !hosts.length) void invoke('computers.sshHosts').then(setHosts, () => {})
   }
@@ -794,6 +846,17 @@ function Computers({ state }: { state: ComputerList }) {
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={mode === 'nearby'}
+              className={mode === 'nearby' ? 'bg-hover' : ''}
+              disabled={busy}
+              onClick={() => choose('nearby')}
+            >
+              <Radar size={14} />
+              {t('Nearby hosts')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               aria-pressed={mode === 'link'}
               className={mode === 'link' ? 'bg-hover' : ''}
               disabled={busy}
@@ -814,7 +877,21 @@ function Computers({ state }: { state: ComputerList }) {
               {t('SSH')}
             </Button>
           </div>
-          {mode === 'link' ? (
+          {mode === 'nearby' ? (
+            <NearbyHosts
+              onFallback={choose}
+              onChoose={(host, url) => {
+                // Only the address and a name are filled in; the pairing code still comes from that host.
+                setAddress(url)
+                setName((current) => current || host.name)
+                setLink('')
+                setLinkError(null)
+                setCode('')
+                setMode('link')
+                setFocusCode(true)
+              }}
+            />
+          ) : mode === 'link' ? (
             <>
               <p className="m-[0_0_12px] text-caption text-muted-foreground">
                 {t(
@@ -855,6 +932,7 @@ function Computers({ state }: { state: ComputerList }) {
                     className="bg-background"
                     aria-label={t('Pairing code')}
                     placeholder={t('Pairing code')}
+                    autoFocus={focusCode}
                     autoCapitalize="characters"
                     spellCheck={false}
                     value={code}
