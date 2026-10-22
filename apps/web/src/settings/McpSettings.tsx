@@ -20,6 +20,7 @@ import { useModelSets } from '../models/ModelSets'
 import { useAppSettings } from './AppSettings'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { SettingsCard, SettingsCardList } from './cards'
+import { availabilityLabels, connectionAvailability } from './mcpAvailability'
 
 type Definition = Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>
 const statusLabels = {
@@ -514,6 +515,16 @@ export function McpSettings() {
               meta={`${connection.providers.map(providerName).join(', ')} · ${connection.scope.hostWide ? t('All projects') : connection.scope.projectIds.map((id) => projects.data?.find((project) => project.id === id)?.name ?? id).join(', ')}`}
             >
               {reason && <p className="m-0 text-caption text-muted-foreground">{t(reason)}</p>}
+              <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-0.5 p-0 text-caption text-muted-foreground">
+                {AGENT_PROVIDERS.map((provider) => {
+                  const availability = connectionAvailability(connection, status, data.readiness, provider)
+                  return (
+                    <li key={provider} title={t(availability.reason)}>
+                      {providerName(provider)}: {t(availabilityLabels[availability.state])}
+                    </li>
+                  )
+                })}
+              </ul>
               {checkedAt && (
                 <p className="m-0 text-caption text-muted-foreground">
                   {t('Last checked')}: {new Date(checkedAt).toLocaleString()}{' '}
