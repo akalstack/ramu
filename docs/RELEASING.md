@@ -41,7 +41,7 @@ The helper requires a clean tree, matching version and notes, a local tag at HEA
 
 ## Signing and packaged checks
 
-CI macOS builds are unsigned and not notarized. Signed builds use `RAMU_SIGN_IDENTITY`; notarization also needs `APPLE_API_KEY` (a `.p8` file path), `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`. Keep credentials in CI secrets and remove temporary signing material after the build.
+CI macOS builds stay unsigned until the repository has these secrets: `MACOS_CERTIFICATE_P12` (base64 Developer ID Application `.p12`), `MACOS_CERTIFICATE_PASSWORD`, `RAMU_SIGN_IDENTITY`, and for notarization `APPLE_API_KEY_P8` (base64 `.p8`), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`. With them, `scripts/release/macos-signing.sh` imports the certificate into a temporary keychain and stages the key (Forge reads `APPLE_API_KEY` as a file path), then verifies `codesign`, Gatekeeper (`spctl`) and the stapled ticket after `pnpm make`, and finally deletes the keychain and key. Without the certificate it skips every step. Locally, export `RAMU_SIGN_IDENTITY` and the `APPLE_API_*` variables yourself.
 
 Test signed installers on another machine. Simulated checks do not verify live provider authentication, login startup, or real model calls. Linux packaged GUI validation remains separate.
 
@@ -51,7 +51,7 @@ For packaged macOS checks, run `RAMU_PACKAGED_EXECUTABLE=/path/to/Ramu pnpm test
 
 ## Updates and the background service
 
-The app checks stable releases from `ahxar/ramu`; drafts and prereleases are excluded. Downloads require a matching ZIP and checksum file. Automatic installation requires a signed macOS app and compatible signed ZIP. Unsigned macOS and other platforms use manual installation.
+The app checks stable releases from `ahxar/ramu`; drafts and prereleases are excluded. Tags with a hyphen (`v0.2.0-alpha.1`) publish as prereleases and are installed manually; a plain `vX.Y.Z` tag is the stable channel that updates reach. Downloads require a matching ZIP and checksum file. Automatic installation requires a signed macOS app and compatible signed ZIP. Unsigned macOS and other platforms use manual installation.
 
 Auto-update is currently disabled (`APP_AUTO_UPDATE` in `packages/shared/src/updates.ts`) because builds are not signed with an Apple Developer ID. The service still checks for releases, and Settings links to the GitHub release for a manual install. Once signed builds ship, set the flag to `true` to restore the **Auto-update Ramu** setting and in-app downloads.
 

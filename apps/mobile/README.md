@@ -121,7 +121,12 @@ EXPO_PUBLIC_EAS_PROJECT_ID=<project-uuid> pnpm --filter @ramu/mobile build:ios
 # Or build:android; RAMU_GOOGLE_SERVICES_FILE can point to google-services.json.
 ```
 
-EAS development/preview profiles are in `eas.json`. If enhanced Expo push security is
+EAS development/preview profiles are in `eas.json`. The `production` profile builds store
+artifacts (iOS App Store/TestFlight, Android app bundle) with auto-incremented build numbers, and
+`pnpm --filter @ramu/mobile eas:release:ios` / `eas:release:android` build and submit them to
+TestFlight and the Android internal track (as a draft). Signing keys, the App Store Connect app and the Google Play
+service account stay in the owner's EAS account (`eas credentials`, `eas submit`); nothing is committed. Run
+these only after the [remote-security prerequisites](../../docs/REMOTE-SECURITY-PLAN.md#plan). If enhanced Expo push security is
 configured, set `RAMU_EXPO_PUSH_ACCESS_TOKEN` on the host, never in the phone bundle.
 A physical phone and signed development build are required to validate delivery.
 Expo Go/web/simulators show a clear setup message. Delivery is best effort; forgotten

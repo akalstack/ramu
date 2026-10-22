@@ -20,6 +20,8 @@
     "dev:go": "node scripts/start.mjs --go",
     "eas:ios": "eas build --profile development --platform ios",
     "eas:android": "eas build --profile development --platform android",
+    "eas:release:ios": "eas build --profile production --platform ios --auto-submit",
+    "eas:release:android": "eas build --profile production --platform android --auto-submit",
     "gen:icons": "swift scripts/gen-icons.swift"
   },
   "dependencies": {
