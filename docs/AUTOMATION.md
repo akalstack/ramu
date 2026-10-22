@@ -16,7 +16,7 @@ Async questions and drafts survive reopening and service restarts. A dead proces
 
 **Continue threads after restart** is on by default. Unfinished threads resume their native provider session where available, otherwise use the stored transcript. Finished, failed, and manually stopped threads stay stopped.
 
-**Trim long Claude threads before they go cold** is off by default. When a Claude thread with at least 50,000 tokens of context has been idle for four minutes (its prompt cache lasts five), Ramu runs one `/compact` turn so the next message re-reads a short summary instead of the whole thread. It skips threads with queued messages or running background tasks, and any thread you resume first.
+**Trim long Claude threads before they go cold** is off by default. When a Claude thread with at least 200,000 tokens of context sits idle until its prompt cache is about to lapse (about 55 minutes on a Claude subscription, 4 minutes on an API key, Bedrock or Vertex), Ramu runs one `/compact` turn so the next message re-reads a short summary instead of the whole thread. It skips threads with queued messages or running background tasks, and any thread you resume first.
 
 Threads sharing a checkout wait for the active writer. Queued messages and pause state persist. Explicitly stopping the service cancels pending recovery. Saved sub-agent transcripts help the main agent reconcile work; sub-agent processes are not all reattached.
 

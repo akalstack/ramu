@@ -1,5 +1,12 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { IdleCompactor, IDLE_COMPACT_MIN_TOKENS, type IdleCompactorHost } from '../src/agent/idleCompactor'
+import {
+  IdleCompactor,
+  IDLE_COMPACT_MIN_TOKENS,
+  IDLE_COMPACT_AFTER_API_MS,
+  IDLE_COMPACT_AFTER_SUBSCRIPTION_MS,
+  idleCompactDelay,
+  type IdleCompactorHost,
+} from '../src/agent/idleCompactor'
 
 function setup(over: { used?: number; enabled?: boolean; provider?: string; queued?: number; tasks?: boolean } = {}) {
   const pushed: string[] = []
@@ -20,6 +27,15 @@ function setup(over: { used?: number; enabled?: boolean; provider?: string; queu
 }
 
 afterEach(() => vi.useRealTimers())
+
+describe('idleCompactDelay', () => {
+  it('waits out the longer subscription cache and moves early only for key-based sign-in', () => {
+    expect(idleCompactDelay(undefined, {})).toBe(IDLE_COMPACT_AFTER_SUBSCRIPTION_MS)
+    expect(idleCompactDelay('default', { ANTHROPIC_API_KEY: 'k' })).toBe(IDLE_COMPACT_AFTER_API_MS)
+    expect(idleCompactDelay(undefined, { CLAUDE_CODE_USE_BEDROCK: '1' })).toBe(IDLE_COMPACT_AFTER_API_MS)
+    expect(idleCompactDelay('work', { ANTHROPIC_API_KEY: 'k' })).toBe(IDLE_COMPACT_AFTER_SUBSCRIPTION_MS)
+  })
+})
 
 describe('IdleCompactor', () => {
   it('summarizes a long idle Claude thread before its cache lapses', () => {

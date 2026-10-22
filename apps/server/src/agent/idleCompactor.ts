@@ -4,13 +4,24 @@ import type { SessionRegistry } from './sessionRegistry'
 import type { SessionRecorder } from './sessionRecorder'
 import type { SessionStore } from './sessionStore'
 
-/** Claude keeps a prompt cache for five minutes; the summary turn must still read it, so it starts a little before. */
-export const IDLE_COMPACT_AFTER_MS = 4 * 60_000
+/** The summary turn must still read the cache, so it starts a little before the cache lapses. */
+export const IDLE_COMPACT_AFTER_API_MS = 4 * 60_000
+/** A Claude subscription keeps its prompt cache for about an hour; an API key, Bedrock or Vertex for five minutes. */
+export const IDLE_COMPACT_AFTER_SUBSCRIPTION_MS = 55 * 60_000
 /** Below this a cold re-read is cheap enough that a summary turn would cost more than it saves. */
-export const IDLE_COMPACT_MIN_TOKENS = 50_000
+export const IDLE_COMPACT_MIN_TOKENS = 200_000
+
+/** The cache lifetime follows how the thread signs in: a named account is a subscription login; the default profile uses an API key when the environment has one. */
+export function idleCompactDelay(accountId: string | undefined, env: NodeJS.ProcessEnv = process.env): number {
+  const usesKey =
+    (!accountId || accountId === 'default') &&
+    !!(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.CLAUDE_CODE_USE_BEDROCK || env.CLAUDE_CODE_USE_VERTEX)
+  return usesKey ? IDLE_COMPACT_AFTER_API_MS : IDLE_COMPACT_AFTER_SUBSCRIPTION_MS
+}
 
 export interface IdleCompactorHost
-  extends Pick<SessionRegistry, 'live' | 'runners'>,
+  extends
+    Pick<SessionRegistry, 'live' | 'runners'>,
     Pick<SessionRecorder, 'setState'>,
     Pick<SessionStore, 'get' | 'hasRunningTasks' | 'queued'>,
     Pick<ContextUsageTracker, 'context'> {
@@ -24,14 +35,17 @@ export class IdleCompactor {
 
   constructor(
     private readonly host: IdleCompactorHost,
-    private readonly delayMs = IDLE_COMPACT_AFTER_MS,
+    private readonly delayMs?: number,
   ) {}
 
   /** Called on every state change: a thread that turns idle is scheduled, anything else cancels. */
   stateChanged(id: string, state: AgentSessionState): void {
     this.cancel(id)
     if (state !== 'idle' || this.host.shutdown() || !this.host.preferences()?.idleCompaction) return
-    const timer = setTimeout(() => this.compact(id), this.delayMs)
+    const timer = setTimeout(
+      () => this.compact(id),
+      this.delayMs ?? idleCompactDelay(this.host.get(id).settings.accountId),
+    )
     timer.unref?.()
     this.timers.set(id, timer)
   }
