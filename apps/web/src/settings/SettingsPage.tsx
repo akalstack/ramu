@@ -149,7 +149,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   },
   {
     section: 'chats',
-    title: 'Trim long Claude threads before they go cold (beta)',
+    title: 'Trim long Claude threads before they go cold',
     words: 'compact compaction idle prompt cache expire summarize context tokens cost',
   },
   { section: 'system', title: 'Daily recaps', words: 'recap summary home tokens' },

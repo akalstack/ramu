@@ -68,7 +68,7 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
       <ToggleRow
         {...toggleProps}
         setting="idleCompaction"
-        title="Trim long Claude threads before they go cold (beta)"
+        title="Trim long Claude threads before they go cold"
         description="When a long Claude thread sits idle and its prompt cache is about to lapse, summarize it so the next message is cheaper to resume. Costs one summary turn."
       />
       <SettingsGroupTitle>{t('Thread history')}</SettingsGroupTitle>

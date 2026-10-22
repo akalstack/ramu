@@ -277,7 +277,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         {
           kind: 'toggle',
           path: 'idleCompaction',
-          title: 'Trim long Claude threads before they go cold (beta)',
+          title: 'Trim long Claude threads before they go cold',
           help: 'When a long Claude thread sits idle and its prompt cache is about to lapse, summarize it so the next message is cheaper to resume. Costs one summary turn.',
           words: 'compact compaction idle prompt cache expire summarize context tokens cost',
         },
