@@ -153,6 +153,12 @@ export interface ComputerSessionSummary {
   paused: boolean
   /** The computer whose screen this is; `local` is the host itself. */
   runtime: { id: string; name: string }
+  /** Control passed to the person at the computer because they used its mouse or keyboard. Cleared at the next change of owner. */
+  interruption: 'local-input' | null
+  /** The device asking the human controller for control, if any. */
+  handoffRequest: string | null
+  /** False when mouse and keyboard use on the computer cannot be noticed, so the person must take control explicitly. */
+  detectsLocalInput: boolean
 }
 
 export interface ComputerLockedUse {
@@ -217,6 +223,9 @@ export interface RamuMethods {
   'computer.viewers'(threadId: string): { deviceId: string; input: boolean }[]
   'computer.session'(threadId: string): ComputerSessionSummary | null
   'computer.takeControl'(threadId: string): ComputerSessionSummary | null
+  'computer.requestHandoff'(threadId: string): ComputerSessionSummary | null
+  'computer.approveHandoff'(threadId: string): ComputerSessionSummary | null
+  'computer.declineHandoff'(threadId: string): ComputerSessionSummary | null
   'computer.giveToAgent'(threadId: string): ComputerSessionSummary | null
   'computer.stop'(threadId: string): ComputerSessionSummary | null
   /** With the hash of the frame already shown, an unchanged screen returns `unchanged` and no image. */
