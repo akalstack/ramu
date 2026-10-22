@@ -16,6 +16,7 @@ import { excerpt } from './text'
 import { LEGACY_ACCOUNT_PROVIDERS } from './settings'
 import type { Db } from '../db'
 import { readInputSummaries } from './inputSummaries'
+import { readSessionHelperSummary } from './helperSummaries'
 
 /** What SessionStore needs from the rest of the service. */
 export interface SessionStoreHost {
@@ -233,6 +234,11 @@ export class SessionStore {
         "SELECT 1 FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'agent' AND json_extract(event, '$.status') = 'running' LIMIT 1",
       )
       .get(id)
+  }
+
+  /** Running helpers of one session, excluding advisor consultations, shell commands and restored activity. */
+  helperSummary(id: string) {
+    return readSessionHelperSummary(this.db, id)
   }
 
   isRecoveryPending(id: string): boolean {

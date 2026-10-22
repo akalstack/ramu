@@ -20,7 +20,7 @@ export interface SessionRecorderHost
     Pick<GoalManager, 'getGoal' | 'saveGoal' | 'scheduleGoal'>,
     Pick<SessionRegistry, 'draining' | 'finalizing' | 'live' | 'pendingBackground' | 'runners'>,
     Pick<UserRequests, 'notifyWaiters' | 'applySavedPermission'>,
-    Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'list'>,
+    Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'helperSummary' | 'list'>,
     Pick<SubagentRunner, 'children' | 'mirrorChild' | 'settleChild'>,
     Pick<AgentTasks, 'updateTask'> {
   preferences(): AppPreferences | undefined
@@ -320,7 +320,7 @@ export class SessionRecorder {
               entry.state === 'running' ||
               entry.state === 'starting' ||
               ((this.host.live.has(entry.id) || this.host.runners.has(entry.id)) &&
-                this.host.hasRunningTasks(entry.id)),
+                this.host.helperSummary(entry.id).active > 0),
           )
         ? 'running'
         : latest?.state === 'failed'

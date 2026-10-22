@@ -4,6 +4,7 @@ import { HoverCardContent } from '@/components/ui/hover-card'
 import { Button } from '@/components/desktop-button'
 import type { RepositoryBinding, Task } from '@ramu/shared/types'
 import type { ThreadStatus } from '@ramu/shared/chat/threadStatus'
+import { describeInputCounts } from '@ramu/shared/chat/inputSummary'
 import { t, useLanguage } from '../../i18n'
 import { useHost } from '../../workspace/HostProvider'
 import { ipcQueryKeyOn, cachedDataOn } from '../../dataQueries'
@@ -84,6 +85,19 @@ export function ThreadHoverCard(props: CardProps) {
 }
 
 /** Mounted only while the card is open, so nothing is fetched for rows nobody is looking at. */
+/** Approvals, questions and connector requests, or the older-host split that only knows approvals versus the rest. */
+function inputCountText(summary: NonNullable<Task['inputSummary']>): string {
+  const counts = describeInputCounts(summary)
+  return [
+    counts.approvals && t('Approvals {0}', { 0: counts.approvals }),
+    counts.questions && t('Questions {0}', { 0: counts.questions }),
+    counts.connectors && t('Connector requests {0}', { 0: counts.connectors }),
+    counts.other && t('Other requests {0}', { 0: counts.other }),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace, offline }: CardProps) {
   useLanguage()
   const ws = useWorkspaceActions()
@@ -106,6 +120,7 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
       {!!task.inputSummary?.count && (
         <div className="flex flex-col gap-1 text-caption" aria-label={t('Pending requests')}>
           <span className="text-muted-foreground">{t('{0} input requests', { 0: task.inputSummary.count })}</span>
+          <span className="text-muted-foreground">{inputCountText(task.inputSummary)}</span>
           {task.inputSummary.requests.map((request) => (
             <div key={`${request.sessionId}:${request.requestId}`} className="text-soft [overflow-wrap:anywhere]">
               <Button

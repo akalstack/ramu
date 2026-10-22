@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { threadStatus } from '../src/chat/threadStatus'
+import { newerTaskSnapshot, threadStatus } from '../src/chat/threadStatus'
 
 const task = (patch: Partial<Parameters<typeof threadStatus>[0]> = {}) => ({
   status: 'idle' as never,
@@ -86,5 +86,23 @@ describe('threadStatus request and older-host context', () => {
     expect(threadStatus(task({ status: 'running' }), false, undefined)?.kind).toBe('working')
     expect(threadStatus(task({ status: 'running' }), false, null)?.kind).toBe('working')
     expect(threadStatus(task(), false, undefined)).toBeNull()
+  })
+})
+
+describe('helper work and stale snapshots', () => {
+  it('keeps a thread working while a helper runs after its parent is idle, but not for no helpers', () => {
+    expect(threadStatus(task({ helperSummary: { active: 1, waiting: 0 } }), false)?.kind).toBe('working')
+    expect(threadStatus(task({ helperSummary: { active: 0, waiting: 0 } }), false)).toBeNull()
+    expect(threadStatus(task({ helperSummary: null }), false)).toBeNull()
+    expect(threadStatus(task({ helperSummary: { active: 1, waiting: 1 }, status: 'needs-input' }), false)?.kind).toBe(
+      'input',
+    )
+  })
+  it('rejects an older read of the same task and accepts reads that cannot be ordered', () => {
+    const at = (snapshotAt?: number, status = 'idle') => ({ snapshotAt, status })
+    expect(newerTaskSnapshot(at(5, 'idle'), at(3, 'running'))).toEqual(at(5, 'idle'))
+    expect(newerTaskSnapshot(at(5, 'idle'), at(6, 'running'))).toEqual(at(6, 'running'))
+    expect(newerTaskSnapshot(at(5, 'idle'), at(undefined, 'running'))).toEqual(at(undefined, 'running'))
+    expect(newerTaskSnapshot(undefined, at(1))).toEqual(at(1))
   })
 })

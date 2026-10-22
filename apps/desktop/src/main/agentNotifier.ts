@@ -35,6 +35,8 @@ export function createAgentNotifier(options: {
   const last = new Map<string, AgentSessionState>()
   const live = new Set<Notification>()
   const questionsSeen = new Set<string>()
+  // A turn that ended while independent helpers still ran is not finished yet; its notice waits for the next idle state.
+  const waitingForHelpers = new Set<string>()
   // A reset is announced once per wait: the server stamps `resetNotifiedAt` on the wait, and a restart replays it.
   const resetsSeen = new Set<string>()
   const open = (notice: AgentNotice) => {
@@ -61,6 +63,12 @@ export function createAgentNotifier(options: {
       const task = ((await options.invoke('tasks.list')) as Task[]).find((entry) => entry.id === session.taskId)
       // A sub-agent only ever needs you when it asks for approval; finishing or failing is reported in its chat.
       if (session.parentId && kind !== 'input') return
+      if (kind === 'done' && task?.helperSummary?.active) {
+        waitingForHelpers.add(sessionId)
+        if (waitingForHelpers.size > 500) waitingForHelpers.delete(waitingForHelpers.values().next().value!)
+        return
+      }
+      waitingForHelpers.delete(sessionId)
       const notice: AgentNotice = {
         sessionId: session.parentId ?? sessionId,
         taskId: session.taskId,
@@ -130,6 +138,13 @@ export function createAgentNotifier(options: {
       if (event.kind !== 'state' || !event.state) return
       const previous = last.get(sessionId)
       last.set(sessionId, event.state)
+      // The last helper settled after the parent was already idle: now the thread has finished.
+      if (event.state === 'idle' && waitingForHelpers.has(sessionId)) {
+        waitingForHelpers.delete(sessionId)
+        void deliver(sessionId, 'done')
+        return
+      }
+      if (event.state !== 'idle') waitingForHelpers.delete(sessionId)
       if (!previous || !ACTIVE.includes(previous)) return
       if (event.state === 'idle' && previous !== 'needs-input') void deliver(sessionId, 'done')
       else if (event.state === 'needs-input' && previous !== 'needs-input') void deliver(sessionId, 'input')

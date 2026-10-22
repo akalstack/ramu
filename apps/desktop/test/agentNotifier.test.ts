@@ -10,12 +10,12 @@ const { createAgentNotifier } = await import('../src/main/agentNotifier')
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-function setup(goal: unknown = null) {
+function setup(goal: unknown = null, helpers: { active: number }[] = []) {
   const send = vi.fn()
   const invoke = vi.fn(async (method: string) => {
     if (method === 'agent.goal') return goal
     if (method === 'agent.get') return { id: 's1', taskId: 't1', title: 'A thread' }
-    if (method === 'tasks.list') return [{ id: 't1', title: 'A thread' }]
+    if (method === 'tasks.list') return [{ id: 't1', title: 'A thread', helperSummary: helpers[0] ?? null }]
     return null
   })
   const window = {
@@ -91,4 +91,23 @@ it('still says a turn is done when its goal was paused by the user', async () =>
   expect(await turnEnds(heldGoal({ status: 'paused', pausedBy: 'user' }))).toHaveBeenCalledTimes(1)
   expect(await turnEnds(heldGoal({ status: 'paused' }))).toHaveBeenCalledTimes(1)
   expect(await turnEnds(null)).toHaveBeenCalledTimes(1)
+})
+
+it('holds the finished notice while a helper still runs and sends it when the thread goes idle again', async () => {
+  const helpers = [{ active: 1 }]
+  const { notifier, send } = setup(null, helpers)
+  const state = (value: string) =>
+    notifier.observe('agent:event', { sessionId: 's1', event: { kind: 'state', state: value } })
+  state('running')
+  state('idle')
+  await flush()
+  expect(send).not.toHaveBeenCalled()
+  helpers[0] = { active: 0 }
+  state('idle')
+  await flush()
+  expect(send).toHaveBeenCalledTimes(1)
+  expect(send).toHaveBeenCalledWith('notify:inapp', expect.objectContaining({ kind: 'done' }))
+  state('idle')
+  await flush()
+  expect(send).toHaveBeenCalledTimes(1)
 })

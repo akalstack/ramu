@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
 import type { AgentEvent, AgentSessionInfo, ChatGoal } from '@ramu/shared/types'
-import { goalContinues } from '@ramu/shared/chat/goalHold'
+import { createFinishedGate } from '@ramu/shared/chat/finishedGate'
 /**
  * What a phone can switch on or off. `done` and `failed` cover ordinary threads; a thread started by a schedule that finishes
  * or fails counts as `scheduled` instead, so scheduled work can be muted on its own, and so does a scheduled run that could
@@ -29,6 +29,7 @@ export class MobilePush {
   private registrations: Registration[] = []
   private states = new Map<string, string>()
   private questions = new Set<string>()
+  private finished = createFinishedGate()
   private receipts = new Map<string, Registration>()
   constructor(
     private path: string,
@@ -73,20 +74,23 @@ export class MobilePush {
       this.save()
     }
   }
-  observe(session: AgentSessionInfo, event: AgentEvent, goal?: ChatGoal | null) {
+  observe(session: AgentSessionInfo, event: AgentEvent, goal?: ChatGoal | null, helpers = 0) {
     if (session.parentId) return
     let kind: 'done' | 'input' | 'failed' | undefined
     if (event.kind === 'state') {
       const previous = this.states.get(session.id)
       this.states.set(session.id, event.state)
       if (this.states.size > 5000) this.states.delete(this.states.keys().next().value!)
+      // A continuing or blocked goal, or helpers still running, is not a finished thread.
+      if (
+        this.finished.settle(session.id, event.state, {
+          turnEnded: !!previous && ['running', 'starting'].includes(previous),
+          goal,
+          helpers,
+        })
+      )
+        kind = 'done'
       if (previous && previous !== event.state) {
-        if (
-          event.state === 'idle' &&
-          ['running', 'starting'].includes(previous) &&
-          (!goal || !(goalContinues(goal) || goal.status === 'blocked'))
-        )
-          kind = 'done'
         if (event.state === 'needs-input') kind = 'input'
         if (event.state === 'failed') kind = 'failed'
       }

@@ -1,6 +1,6 @@
 import type { BranchChoice, BranchNamingIntent } from '../workspaceDefaults'
 import type { ChatGoal } from './goal'
-import type { AgentSessionState, ThreadInputSummary } from './agent'
+import type { AgentSessionState, ThreadHelperSummary, ThreadInputSummary } from './agent'
 export type CheckoutMode = 'current' | 'worktree'
 
 export interface Project {
@@ -115,6 +115,13 @@ export interface Task {
   goalState?: TaskGoalSummary | null
   /** Unresolved requests from main sessions, including forwarded helper input. Older hosts omit this. */
   inputSummary?: ThreadInputSummary | null
+  /** Independent helper work after the parent goes idle. Absent from older hosts (unknown); null means none. */
+  helperSummary?: ThreadHelperSummary | null
+  /**
+   * When the host read this task, never moving backwards. A client keeps the newer of two reads of the same task, so a
+   * late response cannot bring back stopped or completed work. Absent from older hosts.
+   */
+  snapshotAt?: number
   /** Latest root execution outcome; absent when an older host cannot supply it. */
   executionState?: AgentSessionState
   /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */

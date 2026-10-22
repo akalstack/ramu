@@ -26,6 +26,7 @@ import { loadHelperHistory, type HelperHistoryLoader } from './agent/helperHisto
 import { realGoalProbes, type GoalProbes } from './agent/goalProbes'
 import type { QueryFn } from './agent/types'
 import { SessionStore } from './agent/sessionStore'
+import { readHelperSummaries } from './agent/helperSummaries'
 import { SessionRegistry } from './agent/sessionRegistry'
 import { SessionRecorder } from './agent/sessionRecorder'
 import { MessageDispatcher } from './agent/messageDispatcher'
@@ -177,6 +178,7 @@ export class AgentService {
       halt: (...a) => parts.process.halt(...a),
       hasBlockingQuestions: (...a) => parts.requests.hasBlockingQuestions(...a),
       hasRunningTasks: (...a) => parts.store.hasRunningTasks(...a),
+      helperSummary: (...a) => parts.store.helperSummary(...a),
       helperHistory: () => this.helperHistory,
       goalProbes: () => this.goalProbes,
       isRecoveryPending: (...a) => parts.store.isRecoveryPending(...a),
@@ -389,6 +391,11 @@ export class AgentService {
       process.stop(id)
       if (preserveRecovery) dispatcher.updateQueue(id, store.queued(id), paused)
     }
+  }
+
+  /** Independently running helpers per thread for list views, from one query. */
+  helperSummaries(taskId?: string) {
+    return readHelperSummaries(this.db, taskId)
   }
 
   /** The latest goal of a session for list views; cheap to call for every thread. */
