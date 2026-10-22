@@ -754,23 +754,37 @@ export default function NewChat() {
             ['current', 'Current checkout', 'Work directly in the folders on disk.'],
             ['worktree', 'Isolated worktrees', 'A new branch and worktree per repository.'],
           ] as const
-        ).map(([value, label, hint]) => (
-          <Row
-            key={value}
-            onPress={() => {
-              chooseWorkspace({ mode: value, branch: choice.branch })
-              setPicker(null)
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <T weight="500">{label}</T>
-              <T size={font.caption} tone="muted">
-                {hint}
-              </T>
-            </View>
-            {!workspaceId && manualMode === value ? <Check size={16} color={c.accent} /> : null}
-          </Row>
-        ))}
+        ).map(([value, label, hint]) => {
+          // A mode that cannot be used says why in place instead of silently doing nothing.
+          const why =
+            value !== 'worktree'
+              ? null
+              : projectId === STANDALONE
+                ? t.worktreeNeedsProject
+                : offline && !workspaceOptions
+                  ? t.worktreeCheckOffline
+                  : (workspaceOptions?.worktreeUnavailable ?? null)
+          return (
+            <Row
+              key={value}
+              disabled={Boolean(why) && manualMode !== value}
+              accessibilityState={{ disabled: Boolean(why) && manualMode !== value }}
+              style={{ opacity: why && manualMode !== value ? 0.6 : 1 }}
+              onPress={() => {
+                chooseWorkspace({ mode: value, branch: choice.branch })
+                setPicker(null)
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <T weight="500">{label}</T>
+                <T size={font.caption} tone={why ? 'bad' : 'muted'}>
+                  {why ?? hint}
+                </T>
+              </View>
+              {!workspaceId && manualMode === value ? <Check size={16} color={c.accent} /> : null}
+            </Row>
+          )
+        })}
         {optionsError ? (
           <T tone="muted">{optionsState.unsupported ? t.workspaceSettingsUnsupported : t.workspaceSettingsFailed}</T>
         ) : null}
