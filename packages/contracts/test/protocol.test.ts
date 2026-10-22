@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeInvoke, encodeInvoke, isLoopbackHost, parseRemoteUrl } from '../src'
+import { OPERATION_KEY_PATTERN, decodeInvoke, encodeInvoke, isLoopbackHost, parseRemoteUrl } from '../src'
 
 it('keeps undefined arguments in position across the wire', () => {
   const request = decodeInvoke(encodeInvoke('x.y', [undefined, 'a', { nested: undefined }]))
@@ -7,6 +7,14 @@ it('keeps undefined arguments in position across the wire', () => {
   expect(request.args).toHaveLength(3)
   expect(request.args[0]).toBeUndefined()
   expect(request.args[1]).toBe('a')
+})
+
+it('carries an operation key only when one is given, and accepts only bounded plain keys', () => {
+  expect(decodeInvoke(encodeInvoke('x.y', ['a'])).operationKey).toBeUndefined()
+  expect(decodeInvoke(encodeInvoke('x.y', ['a'], 'op-12345678')).operationKey).toBe('op-12345678')
+  expect(OPERATION_KEY_PATTERN.test('0b0e7f3a-1c2d-4e5f-8a9b-123456789abc')).toBe(true)
+  for (const bad of ['short', 'has space123', 'a'.repeat(129), '../etc/passwd1'])
+    expect(OPERATION_KEY_PATTERN.test(bad)).toBe(false)
 })
 
 it('normalizes remote server addresses', () => {

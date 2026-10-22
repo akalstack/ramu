@@ -23,6 +23,8 @@ export const CAPABILITIES = {
   pairing: 'pairing',
   /** POST /renew rotates this device's token with a bounded overlap. */
   renewal: 'renewal',
+  /** POST /invoke accepts an `operationKey` so a mutation retried after a lost reply runs once. */
+  operationKeys: 'operation-keys',
 } as const
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES]
 
@@ -53,13 +55,19 @@ export const MAX_REQUEST_BYTES = 16_000_000
 export interface InvokeRequest {
   method: string
   args: unknown[]
+  /** Identifies one logical mutation across retries; the server binds it to the method, arguments and device. */
+  operationKey?: string
 }
+
+export const OPERATION_KEY_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 
 const UNDEFINED_MARKER = '$ramuUndefined'
 
 /** JSON drops `undefined`; the marker keeps optional arguments in their positions. */
-export function encodeInvoke(method: string, args: unknown[] = []): string {
-  return JSON.stringify({ method, args }, (_key, value) => (value === undefined ? { [UNDEFINED_MARKER]: true } : value))
+export function encodeInvoke(method: string, args: unknown[] = [], operationKey?: string): string {
+  return JSON.stringify({ method, args, ...(operationKey ? { operationKey } : {}) }, (_key, value) =>
+    value === undefined ? { [UNDEFINED_MARKER]: true } : value,
+  )
 }
 
 export function decodeInvoke(text: string): InvokeRequest {

@@ -54,3 +54,36 @@ export class OperationLog<T = unknown> {
       if (record.state === 'done' && now - record.at > this.retainMs) this.records.delete(key)
   }
 }
+
+export class OperationInProgressError extends Error {
+  constructor() {
+    super('This request is already running. Check its result before trying again.')
+  }
+}
+
+/**
+ * Runs `run` once per key within `scope` (a device): a finished key returns the recorded result, a running key is
+ * reported, a key reused with other arguments is refused. A failure frees the key so a corrected request can retry.
+ */
+export async function runOnce<T>(
+  log: OperationLog<T>,
+  scope: string,
+  key: string,
+  method: string,
+  args: unknown,
+  run: () => T | Promise<T>,
+): Promise<T> {
+  const id = `${scope}\u0000${key}`
+  const start = log.begin(id, method, args)
+  if (start.kind === 'done') return start.result
+  if (start.kind === 'running') throw new OperationInProgressError()
+  if (start.kind === 'conflict') throw new Error('That operation key was already used for a different request.')
+  try {
+    const result = await run()
+    log.finish(id, result)
+    return result
+  } catch (error) {
+    log.abandon(id)
+    throw error
+  }
+}

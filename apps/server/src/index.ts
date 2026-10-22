@@ -42,7 +42,14 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod'
 import { runtimeInvoke, runtimeNetwork } from '@ramu/client-runtime'
 import { HostPresence } from './remote/presence'
-import { CAPABILITIES, MAX_REQUEST_BYTES, PROTOCOL_VERSION, decodeInvoke, type Capability } from '@ramu/contracts'
+import {
+  CAPABILITIES,
+  MAX_REQUEST_BYTES,
+  OPERATION_KEY_PATTERN,
+  PROTOCOL_VERSION,
+  decodeInvoke,
+  type Capability,
+} from '@ramu/contracts'
 import { loadConfig } from './config'
 import { TokenStore } from './remote/auth'
 import { DeviceStore, validLifetime, type DeviceInfo } from './remote/devices'
@@ -64,6 +71,7 @@ import { INTEGRATED_BROWSER_GUIDE, registerBrowserTools } from './browser/tools'
 import { HostBrowser } from './browser/hostBrowser'
 import { TerminalService } from './workspace/pty'
 import { createDispatcher } from './ipc'
+import { OperationLog, runOnce } from './ipc/operationLog'
 import { ScheduleService, scheduleSchema } from './background/schedules'
 import { PullRequestWatchService } from './background/pullRequestWatches'
 import { runtimeBuild, runtimeVersion } from './build'
@@ -158,20 +166,31 @@ const clients = new Set<ServerResponse>()
 // Only clients on the local socket can answer native dialogs; a remote client's folder picker would open on the wrong machine.
 const hostClients = new Set<ServerResponse>()
 const desktopClients = new Map<string, ServerResponse>()
-const hostBrowser = new HostBrowser(join(userData, 'host-browser'), () => {
-  for (const client of clients) if (!client.destroyed && client.writableLength < 1024 * 1024)
-    client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:changed', payload: {} })}\n\n`)
-}, tab => {
-  for (const client of clients) if (!client.destroyed && client.writableLength < 1024 * 1024)
-    client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:present', payload: tab })}\n\n`)
-})
-const browserBroker = new DesktopBrowserBroker((clientId, request) => {
-  const client = desktopClients.get(clientId)
-  if (!client || client.destroyed || client.writableLength > 1024 * 1024) return false
-  return (
-    client.write(`data: ${JSON.stringify({ channel: 'browser:operation', payload: request })}\n\n`) || !client.destroyed
-  )
-}, 30000, hostBrowser)
+const hostBrowser = new HostBrowser(
+  join(userData, 'host-browser'),
+  () => {
+    for (const client of clients)
+      if (!client.destroyed && client.writableLength < 1024 * 1024)
+        client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:changed', payload: {} })}\n\n`)
+  },
+  (tab) => {
+    for (const client of clients)
+      if (!client.destroyed && client.writableLength < 1024 * 1024)
+        client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:present', payload: tab })}\n\n`)
+  },
+)
+const browserBroker = new DesktopBrowserBroker(
+  (clientId, request) => {
+    const client = desktopClients.get(clientId)
+    if (!client || client.destroyed || client.writableLength > 1024 * 1024) return false
+    return (
+      client.write(`data: ${JSON.stringify({ channel: 'browser:operation', payload: request })}\n\n`) ||
+      !client.destroyed
+    )
+  },
+  30000,
+  hostBrowser,
+)
 const nativeRequests = new Map<
   string,
   { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
@@ -345,8 +364,8 @@ const dispatcher = createDispatcher(
   {
     userData,
     canAdministerIntegrations: () => origin.getStore()?.network !== true,
-    browserDevice: () => origin.getStore()?.network ? origin.getStore()?.deviceId : 'local',
-    browserGrantEligible: id => devices.list().some(device => device.id === id && device.role !== 'viewer'),
+    browserDevice: () => (origin.getStore()?.network ? origin.getStore()?.deviceId : 'local'),
+    browserGrantEligible: (id) => devices.list().some((device) => device.id === id && device.role !== 'viewer'),
     send,
     native: (method, path) => {
       if (origin.getStore()?.network)
@@ -456,6 +475,7 @@ const capabilities = (): Capability[] => [
   CAPABILITIES.liveActivities,
   CAPABILITIES.hostBrowser,
   CAPABILITIES.hostRequests,
+  CAPABILITIES.operationKeys,
   ...(network.enabled ? [CAPABILITIES.remote, CAPABILITIES.pairing, CAPABILITIES.renewal] : []),
 ]
 // Event streams of network clients stay open, so a revoked device must be cut off here, not only refused on its next request.
@@ -465,6 +485,8 @@ const dropRevoked = () => {
   for (const [stream, header] of remoteStreams) if (!stillAuthorized(header)) stream.end()
 }
 const json = { 'Content-Type': 'application/json' }
+// Results of keyed mutations, kept briefly so a retry after a lost reply returns the first outcome instead of running twice.
+const operations = new OperationLog<unknown>(10 * 60_000, 500)
 // One handler serves both transports. Requests over TCP (`remote`) must present the bearer token.
 const handle = (remote: boolean) => async (req: import('node:http').IncomingMessage, res: ServerResponse) => {
   try {
@@ -510,7 +532,9 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
       res.writeHead(404).end()
       return
     }
-    const { method, args } = await body(req)
+    const { method, args, operationKey } = await body(req)
+    if (operationKey !== undefined && !(typeof operationKey === 'string' && OPERATION_KEY_PATTERN.test(operationKey)))
+      throw new Error('Invalid operation key.')
     if (remote && !deviceMayInvoke(device, method)) {
       res
         .writeHead(403, json)
@@ -586,7 +610,13 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
       res.writeHead(200, json).end('{}')
       void stop()
       return
-    } else value = await origin.run({ network: remote, deviceId }, () => dispatcher.invoke(method, args))
+    } else {
+      const dispatch = async () =>
+        await origin.run({ network: remote, deviceId }, () => dispatcher.invoke(method, args))
+      value = operationKey
+        ? await runOnce(operations, deviceId ?? 'local', operationKey, method, args, dispatch)
+        : await dispatch()
+    }
     res.writeHead(200, json).end(JSON.stringify({ value }))
   } catch (error) {
     if (!res.headersSent) res.writeHead(400, json)

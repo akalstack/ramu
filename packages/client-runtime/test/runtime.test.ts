@@ -27,7 +27,7 @@ const echoFor =
   async (req, res) => {
     const chunks: Buffer[] = []
     for await (const chunk of req) chunks.push(chunk)
-    const { method, args } = decodeInvoke(Buffer.concat(chunks).toString())
+    const { method, args, operationKey } = decodeInvoke(Buffer.concat(chunks).toString())
     if (token && req.headers.authorization !== `Bearer ${token}`) {
       res.writeHead(401).end()
       return
@@ -41,6 +41,7 @@ const echoFor =
                 method,
                 args: args.length,
                 first: args[0] === undefined,
+                operationKey,
                 protocol: req.headers[PROTOCOL_HEADER],
               },
             },
@@ -60,7 +61,14 @@ it('invokes over a unix socket with the protocol header', async () => {
   const path = join(dir, 's.sock')
   await listen(echoFor(null), path)
   const value = await runtimeInvoke(path, 'x.y', [undefined, 1])
-  expect(value).toEqual({ method: 'x.y', args: 2, first: true, protocol: String(PROTOCOL_VERSION) })
+  expect(value).toMatchObject({ method: 'x.y', args: 2, first: true, protocol: String(PROTOCOL_VERSION) })
+})
+
+it('sends the operation key only when the caller gives one', async () => {
+  const server = await listen(echoFor(null), 0)
+  const target = { kind: 'http' as const, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, token: '' }
+  expect((await runtimeInvoke(target, 'x.y')).operationKey).toBeUndefined()
+  expect((await runtimeInvoke(target, 'x.y', [], { operationKey: 'op-12345678' })).operationKey).toBe('op-12345678')
 })
 
 it('authenticates over HTTP and surfaces server errors', async () => {

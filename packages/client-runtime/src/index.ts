@@ -65,6 +65,8 @@ function prepare(
 export interface InvokeOptions {
   signal?: AbortSignal
   timeoutMs?: number
+  /** Marks one logical mutation across retries; a host that advertises `operation-keys` runs it once. */
+  operationKey?: string
 }
 export async function runtimeInvoke(
   target: string | RuntimeEndpoint,
@@ -100,7 +102,7 @@ export async function runtimeInvoke(
       )
       req.once('close', () => clearTimeout(deadline))
       req.on('error', reject)
-      req.end(encodeInvoke(method, args))
+      req.end(encodeInvoke(method, args, policy.operationKey))
     })
   } finally {
     release()
