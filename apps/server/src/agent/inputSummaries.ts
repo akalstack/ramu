@@ -26,6 +26,7 @@ export function readInputSummaries(db: Db, taskId?: string): Map<string, ThreadI
   ), ranked AS (
     SELECT *, COUNT(*) OVER (PARTITION BY sessionId) AS count,
       SUM(kind = 'approval') OVER (PARTITION BY sessionId) AS approvals,
+      SUM(kind = 'connector') OVER (PARTITION BY sessionId) AS connectors,
       ROW_NUMBER() OVER (PARTITION BY sessionId ORDER BY kind != 'approval', seq) AS rank
     FROM pending
   ) SELECT * FROM ranked WHERE rank <= 3`,
@@ -33,6 +34,7 @@ export function readInputSummaries(db: Db, taskId?: string): Map<string, ThreadI
     .all(...(taskId === undefined ? [] : [taskId])) as unknown as (ThreadInputRequest & {
     count: number
     approvals: number
+    connectors: number
     sourceSession: string | null
     sourceAgent: string | null
     sourceName: string | null
@@ -40,7 +42,12 @@ export function readInputSummaries(db: Db, taskId?: string): Map<string, ThreadI
   })[]
   const summaries = new Map<string, ThreadInputSummary>()
   for (const row of rows) {
-    const summary = summaries.get(row.sessionId) ?? { count: row.count, approvals: row.approvals, requests: [] }
+    const summary = summaries.get(row.sessionId) ?? {
+      count: row.count,
+      approvals: row.approvals,
+      connectors: row.connectors,
+      requests: [],
+    }
     summary.requests.push({
       sessionId: row.sessionId,
       requestId: row.requestId,

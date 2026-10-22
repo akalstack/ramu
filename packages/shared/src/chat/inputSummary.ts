@@ -8,8 +8,26 @@ export function summarizeInputs(requests: ThreadInputRequest[]): ThreadInputSumm
   return {
     count: requests.length,
     approvals: requests.filter((request) => request.kind === 'approval').length,
+    connectors: requests.filter((request) => request.kind === 'connector').length,
     requests: [...requests].sort((a, b) => priority(a) - priority(b)).slice(0, 3),
   }
+}
+
+/**
+ * Per-kind pending counts. An older host reports only approvals and a total, so its remaining requests are `other`
+ * rather than guessed to be questions.
+ */
+export function describeInputCounts(summary: ThreadInputSummary): {
+  approvals: number
+  questions: number
+  connectors: number
+  other: number
+} {
+  const rest = Math.max(0, summary.count - summary.approvals)
+  if (summary.connectors === undefined)
+    return { approvals: summary.approvals, questions: 0, connectors: 0, other: rest }
+  const connectors = Math.min(summary.connectors, rest)
+  return { approvals: summary.approvals, questions: rest - connectors, connectors, other: 0 }
 }
 
 /** Merge session summaries without losing counts when their visible excerpts have already been bounded. */
@@ -19,6 +37,10 @@ export function mergeInputSummaries(summaries: (ThreadInputSummary | null | unde
   return {
     count: known.reduce((total, summary) => total + summary.count, 0),
     approvals: known.reduce((total, summary) => total + summary.approvals, 0),
+    // One older summary makes the split unknown for the whole thread.
+    ...(known.every((summary) => summary.connectors !== undefined)
+      ? { connectors: known.reduce((total, summary) => total + (summary.connectors ?? 0), 0) }
+      : {}),
     requests: known
       .flatMap((summary) => summary.requests)
       .sort((a, b) => priority(a) - priority(b))

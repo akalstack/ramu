@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { AgentEvent } from '../src/types'
-import { inputSummary, mergeInputSummaries, changesThreadSummary } from '../src/chat/inputSummary'
+import { describeInputCounts, inputSummary, mergeInputSummaries, changesThreadSummary } from '../src/chat/inputSummary'
 import { threadStatus } from '../src/chat/threadStatus'
 const approval = (requestId: string): AgentEvent => ({
   kind: 'permission-request',
@@ -75,4 +75,23 @@ it('refreshes summaries for async input and resolution without refetching on str
   expect(changesThreadSummary(approval('a'))).toBe(true)
   expect(changesThreadSummary({ kind: 'request-resolved', requestId: 'a', outcome: 'allowed' })).toBe(true)
   expect(changesThreadSummary({ kind: 'text', text: 'token' })).toBe(false)
+})
+
+it('splits pending counts by kind, and leaves non-approvals unclassified for an older host', () => {
+  expect(describeInputCounts({ count: 4, approvals: 1, connectors: 1, requests: [] })).toEqual({
+    approvals: 1,
+    questions: 2,
+    connectors: 1,
+    other: 0,
+  })
+  expect(describeInputCounts({ count: 3, approvals: 1, requests: [] })).toEqual({
+    approvals: 1,
+    questions: 0,
+    connectors: 0,
+    other: 2,
+  })
+  const old = { count: 1, approvals: 0, requests: [] }
+  expect(
+    mergeInputSummaries([old, { count: 1, approvals: 0, connectors: 1, requests: [] }])?.connectors,
+  ).toBeUndefined()
 })
