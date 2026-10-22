@@ -182,6 +182,8 @@ export interface RamuMethods {
     apps: import('./computerBridge').ComputerRuntimeStatus | null
     /** Whether the host's Keep awake setting is holding it awake right now. */
     keepAwake: boolean
+    /** Whether app drags may use the real pointer (window moves, text selection). */
+    globalPointer: boolean
   }
   /** Installs the pinned Open Computer Use release for app-scoped access. Owning host only. */
   /** Whether the agent can keep working while the Mac is locked (Open Computer Use's Locked Use). */
@@ -202,6 +204,7 @@ export interface RamuMethods {
   'computer.brokerExec'(command: unknown): unknown
   'computer.apps'(runtime?: string): string[]
   'computer.setEnabled'(enabled: boolean): void
+  'computer.setGlobalPointer'(enabled: boolean): void
   'computer.grant'(threadId: string, scope: { observe: boolean; input: boolean; app?: string; runtime?: string }): ComputerSessionSummary | null
   'computer.revoke'(threadId: string): void
   'computer.grantViewer'(threadId: string, deviceId: string, input: boolean): void

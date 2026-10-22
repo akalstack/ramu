@@ -232,8 +232,13 @@ const computerVideo = new RtcViewers(new VideoFeed(), (threadId, deviceId) => {
   const access = computer.viewerAccess(threadId, deviceId)
   return access.observe && !!computer.session(threadId)
 })
+const ocuBackend = new OcuBackend(
+  undefined,
+  undefined,
+  () => workspace.getAppState<boolean>('computer:globalPointer', false) === true,
+)
 const computer = new ComputerService(
-  new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), new OcuBackend()),
+  new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), ocuBackend),
 )
 const agents = new AgentService(
   db,
@@ -443,6 +448,8 @@ async function stop(intentional = false) {
   reviews.stop()
   await threadTitles?.stop()
   computerVideo.closeAll()
+  // The app-control helper is a child process; end it with the server.
+  void ocuBackend.close()
   agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))

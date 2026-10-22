@@ -169,12 +169,31 @@ export class OcuBackend implements ComputerBackend {
   private client: Promise<OcuClient> | null = null
   constructor(
     private readonly executable: () => string | null = ocuExecutable,
-    private readonly connect: (executable: string) => Promise<OcuClient> = async (command) => {
+    private readonly connect: (executable: string, globalPointer: boolean) => Promise<OcuClient> = async (
+      command,
+      globalPointer,
+    ) => {
       const client = new Client({ name: 'ramu-computer', version: '0.1.0' }, { capabilities: {} })
-      await client.connect(new StdioClientTransport({ command, args: ['mcp'], stderr: 'ignore' }), { timeout: 30_000 })
+      await client.connect(
+        new StdioClientTransport({
+          command,
+          args: ['mcp'],
+          stderr: 'ignore',
+          // Window moves and text selection need the real pointer. Open Computer Use only does that when told to.
+          env: {
+            ...(process.env as Record<string, string>),
+            ...(globalPointer ? { OPEN_COMPUTER_USE_ALLOW_GLOBAL_POINTER_FALLBACKS: '1' } : {}),
+          },
+        }),
+        { timeout: 30_000 },
+      )
       return client as unknown as OcuClient
     },
+    /** Whether drags may use the person's real pointer (off by default). Read each time, so a change applies at once. */
+    private readonly globalPointer: () => boolean = () => false,
   ) {}
+
+  private connectedWithPointer = false
 
   status(): ComputerRuntimeStatus {
     if (process.platform !== 'darwin')
@@ -191,7 +210,15 @@ export class OcuBackend implements ComputerBackend {
   private async session(): Promise<OcuClient> {
     const path = this.executable()
     if (!path) throw new Error('Open Computer Use is not installed.')
-    this.client ??= this.connect(path).catch((error) => {
+    const pointer = this.globalPointer()
+    if (this.client && pointer !== this.connectedWithPointer) {
+      // The setting changed: the helper reads it only at start, so start a new one.
+      const previous = await this.client.catch(() => null)
+      this.client = null
+      await previous?.close().catch(() => {})
+    }
+    this.connectedWithPointer = pointer
+    this.client ??= this.connect(path, pointer).catch((error) => {
       this.client = null
       throw error
     })

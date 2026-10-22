@@ -83,6 +83,37 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
           )}
         </SettingsRow>
       )}
+      {status?.enabled && status.apps?.available && (
+        <SettingsRow>
+          <SettingsLabel
+            title={t('Let app drags use your real pointer')}
+            help={t(
+              status.globalPointer
+                ? 'On. Dragging in an app can move windows and select text, and it may move your pointer while the agent works.'
+                : 'Off. Drags stay inside the app and never move your pointer, but cannot move windows or select text.',
+            )}
+          />
+          <Button
+            size="sm"
+            variant={status.globalPointer ? 'secondary' : 'default'}
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              setError('')
+              try {
+                await invokeOn(hostId, 'computer.setGlobalPointer', !status.globalPointer)
+                await refresh()
+              } catch (reason) {
+                setError(t(errorText(reason)))
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            {status.globalPointer ? t('Turn off') : t('Turn on')}
+          </Button>
+        </SettingsRow>
+      )}
       <LockedUseRow hostId={hostId} visible={!!status?.enabled && !!status.apps?.available} />
       <ScreenSharing hostId={hostId} enabled={!!status?.enabled} />
       <p className="m-0 text-caption text-muted-foreground">

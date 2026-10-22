@@ -106,7 +106,16 @@ export const registerComputerHandlers: RegisterHandlers = ({
         apps: computer?.backend instanceof ComputerRouter ? computer.backend.appStatus() : null,
         // The host's own Keep awake setting decides whether it can sleep while an agent works on it.
         keepAwake: awake.status().active,
+        globalPointer: workspace.getAppState<boolean>('computer:globalPointer', false) === true,
       }),
+    },
+    // Lets drags in an app move windows and select text by using the real pointer. Off unless the owner turns it on.
+    'computer.setGlobalPointer': {
+      args: z.tuple([z.boolean()]),
+      run: (value: boolean) => {
+        admin()
+        workspace.setAppState('computer:globalPointer', value)
+      },
     },
     'computer.setEnabled': {
       args: z.tuple([z.boolean()]),

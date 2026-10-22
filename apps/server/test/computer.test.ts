@@ -576,3 +576,28 @@ describe('app scrolling', () => {
     ])
   })
 })
+
+describe('real pointer for drags', () => {
+  it('starts the helper with the pointer flag only when allowed, and restarts it when the setting changes', async () => {
+    const { OcuBackend } = await import('../src/computer/ocu')
+    const starts: boolean[] = []
+    let closed = 0
+    let allowed = false
+    const backend = new OcuBackend(
+      () => '/bin/ocu',
+      async (_file, pointer) => {
+        starts.push(pointer)
+        return { callTool: async () => ({ content: [{ type: 'text', text: 'ok' }] }), close: async () => void closed++ }
+      },
+      () => allowed,
+    )
+    const app = { id: 'app:Notes', kind: 'app' as const, name: 'Notes' }
+    await backend.perform(app, { kind: 'drag', fromX: 1, fromY: 1, toX: 9, toY: 9 })
+    await backend.perform(app, { kind: 'drag', fromX: 1, fromY: 1, toX: 9, toY: 9 })
+    expect(starts).toEqual([false])
+    allowed = true
+    await backend.perform(app, { kind: 'drag', fromX: 1, fromY: 1, toX: 9, toY: 9 })
+    expect(starts).toEqual([false, true])
+    expect(closed).toBe(1)
+  })
+})
