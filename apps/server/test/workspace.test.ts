@@ -658,6 +658,38 @@ describe('authoritative worktree creation', () => {
     expect(ws.listTasks(project.id)).toEqual([])
     expect(fingerprint(web)).toEqual(before)
   })
+  it('starts a worktree from a detached checkout at its commit without touching the checkout', async () => {
+    const project = ws.createProject('Detached')
+    await ws.addRepository(project.id, web)
+    sh(web, 'checkout', '-q', '--detach')
+    const state = () => [
+      sh(web, 'status', '--porcelain=v2', '-z', '--untracked-files=all'),
+      sh(web, 'diff', '--cached'),
+      sh(web, 'diff'),
+      sh(web, 'stash', 'list'),
+    ]
+    const before = state()
+    const oid = await git.headOid(web)
+    const task = await ws.createTask({ projectId: project.id, title: 'From detached', mode: 'worktree' })
+    const [binding] = await ws.setupTask(task.id)
+    expect(binding).toMatchObject({ setupState: 'ready', taskBranch: 'ramu/from-detached' })
+    expect(await git.headOid(binding!.cwd)).toBe(oid)
+    expect(state()).toEqual(before)
+    expect(sh(web, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('HEAD')
+  })
+  it('reports a repository without commits instead of creating a worktree from nothing', async () => {
+    const project = ws.createProject('Unborn')
+    const empty = join(tmp, 'code', 'empty')
+    mkdirSync(empty, { recursive: true })
+    sh(empty, 'init', '-q', '-b', 'main')
+    await ws.addRepository(project.id, empty)
+    await expect(ws.createTask({ projectId: project.id, title: 'No commits', mode: 'worktree' })).rejects.toThrow(
+      /no commits/,
+    )
+    expect(ws.listTasks(project.id)).toEqual([])
+    expect(sh(empty, 'worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1)
+    expect(sh(empty, 'branch', '--list')).toBe('')
+  })
   it('retains pending allocation and creation receipts across a database reopen', async () => {
     const database = join(tmp, 'allocation.sqlite')
     let db = openDb(database)
