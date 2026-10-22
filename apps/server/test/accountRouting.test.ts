@@ -310,3 +310,57 @@ it('previews the next message route without switching, fetching or clearing a ho
   expect(service.get(s.id).settings.accountId).toBe('default')
   expect(refresh).not.toHaveBeenCalled()
 })
+
+it('prefers a login that already has the thread’s Shared MCP access, and falls back to the first when none does', async () => {
+  const provider: AgentProvider = 'claude-code'
+  const withAccounts = {
+    ...prefs,
+    providerBinaries: {
+      ...prefs.providerBinaries,
+      [provider]: {
+        binary: '',
+        accountId: 'default',
+        accounts: [
+          { id: 'b', name: 'Second' },
+          { id: 'c', name: 'Third' },
+        ],
+      },
+    },
+  }
+  const usage = new UsageService(
+    () => [reading(provider), reading(provider, 'b', 3), reading(provider, 'c', 3)],
+    () => {},
+    () => {},
+  )
+  const lacking = new Set(['b'])
+  const checked: (string | undefined)[] = []
+  const host = {
+    preferencesSource: () => () => withAccounts,
+    preferences: () => withAccounts,
+    usage: () => usage,
+    catalog: async () => catalogs,
+    refreshAccountUsage: () => async () => {},
+    mcpDestination: () => async (_session: unknown, next: AgentSettings) => {
+      checked.push(next.accountId)
+      return lacking.has(next.accountId ?? '') ? [{ name: 'Tracker', status: 'approval-needed' }] : []
+    },
+  } as unknown as FallbackRouterHost
+  const router = new FallbackRouter(host, db)
+  const session = { provider, settings: settings(provider) } as never
+  const pick = () =>
+    (
+      router as unknown as {
+        readyAccount: (...args: unknown[]) => Promise<{ account: string; attention: unknown[] } | null>
+      }
+    ).readyAccount(session, router.routing(settings(provider)), catalogs, 80, new Set(['claude-code:default']))
+  // B lacks the connection, C has it: C is chosen even though B comes first.
+  const ready = await pick()
+  expect(ready?.account).toBe('c')
+  expect(ready?.attention).toEqual([])
+  expect(checked).toEqual(['b', 'c'])
+  // When every candidate lacks it, the first is used and still carries the notice.
+  lacking.add('c')
+  const none = await pick()
+  expect(none?.account).toBe('b')
+  expect(none?.attention).toEqual([{ name: 'Tracker', status: 'approval-needed' }])
+})

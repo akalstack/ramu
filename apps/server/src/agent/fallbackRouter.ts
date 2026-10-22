@@ -187,6 +187,30 @@ export class FallbackRouter {
     }
   }
 
+  /**
+   * The next login of the provider that has room, preferring one that lacks none of the thread's Shared MCP connections.
+   * Bounded: at most five candidates are checked, each at most as slowly as one destination check.
+   */
+  private async readyAccount(
+    s: AgentSessionInfo,
+    routing: NonNullable<ReturnType<FallbackRouter['routing']>>,
+    catalogs: ProviderCatalog[],
+    switchAt: Parameters<FallbackRouter['otherAccount']>[3],
+    tried: Set<string>,
+  ): Promise<{ account: string; attention: Awaited<ReturnType<FallbackRouter['mcpAttention']>> } | null> {
+    const skipped = new Set(tried)
+    let first: { account: string; attention: Awaited<ReturnType<FallbackRouter['mcpAttention']>> } | null = null
+    for (let candidate = 0; candidate < 5; candidate++) {
+      const account = this.otherAccount(s.settings, routing, catalogs, switchAt, skipped)
+      if (!account) break
+      const attention = await this.mcpAttention(s, { ...s.settings, accountId: account })
+      if (!attention.length) return { account, attention }
+      first ??= { account, attention }
+      skipped.add(accountKey(s.provider, account))
+    }
+    return first
+  }
+
   /** Shared MCP connections the destination login still lacks; empty when the login did not change. */
   private async mcpAttention(s: AgentSessionInfo, next: AgentSettings) {
     if (next.provider === s.provider && (next.accountId ?? 'default') === (s.settings.accountId ?? 'default')) return []
@@ -492,12 +516,15 @@ export class FallbackRouter {
         await this.freshAccountUsage(s.provider)
         routing = this.routing(s.settings) ?? routing
       }
-      const account = routing ? this.otherAccount(s.settings, routing, catalogs, policy.switchAt, tried) : null
+      // Prefer a login that already has the thread's Shared MCP access: usage decides which logins have room, and
+      // connection readiness only orders them. When every candidate lacks something the first still gets the notice.
+      const choice = routing ? await this.readyAccount(s, routing, catalogs, policy.switchAt, tried) : null
+      const account = choice?.account ?? null
       const accountPlan = account
         ? this.host.planSwitch(id, { provider: s.provider, accountId: account }, 'limit')
         : null
       if (account && accountPlan?.fits) {
-        const accountAttention = await this.mcpAttention(s, { ...s.settings, accountId: account })
+        const accountAttention = choice!.attention
         if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
         this.host.halt(id)
         await this.host.draining.get(id)
