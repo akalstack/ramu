@@ -182,6 +182,10 @@ it('gives every provider the same protocol and index; sub-agents get the protoco
   const top = memory.instructions(session({ provider: 'codex' }), null)
   expect(top).toBe(memory.instructions(session({ provider: 'claude-code' }), null))
   expect(top).toContain('memory_search')
+  // Changed decisions are saved as replacements, conflicts stay visible, and changeable facts are re-checked.
+  expect(top).toContain('`supersedes`')
+  expect(top).toContain('never pick one by date alone')
+  expect(top).toContain('re-check anything that can change')
   expect(top).toMatch(/user, global: Prefers Indonesian: Reply in Indonesian/)
   expect(top).toMatch(/reference, global: Board\n/)
   // Agent-written text is never quoted into instructions, only pointed at.
