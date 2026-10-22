@@ -638,6 +638,9 @@ export interface RamuMethods {
     projectId: string | null,
   ): Promise<SharedMcpAccountReadiness[]>
   'mcp.approve'(input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }): SharedMcpGrant
+  /** Write-only: the value is stored on the host and never returned by any method. */
+  'mcp.setCredential'(connectionId: string, name: string, value: string): Promise<void>
+  'mcp.removeCredential'(connectionId: string, name: string): Promise<void>
   'mcp.disconnect'(connectionId: string): Promise<void>
   'mcp.remove'(connectionId: string): Promise<void>
   'mcp.checkCredentialStore'(): Promise<'available' | 'unavailable' | 'not-checked'>

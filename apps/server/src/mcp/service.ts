@@ -175,12 +175,107 @@ export class SharedMcpService {
     return this.readiness(this.policy.snapshot())
   }
 
+  private references(connection: SharedMcpConnection) {
+    return connection.transport.type === 'http'
+      ? connection.transport.headerSecretRefs
+      : connection.transport.envSecretRefs
+  }
+
+  private scopeOf(connection: SharedMcpConnection) {
+    return {
+      hostId: connection.hostId,
+      integration: 'mcp' as const,
+      connectionId: connection.id,
+      accountId: connection.serviceAccountId,
+    }
+  }
+
   save(input: Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>, connectionId?: string) {
-    const connection = this.policy.saveConnection(input, connectionId)
+    const previous = connectionId ? this.connection(connectionId) : undefined
+    // Credentials belong to one service account. Changing the account never carries them to another identity, so the
+    // person provides the new account's own, and the old entries are deleted from the host store.
+    const accountChanged = previous && previous.serviceAccountId !== input.serviceAccountId
+    const connection = this.policy.saveConnection(
+      accountChanged
+        ? {
+            ...input,
+            transport:
+              input.transport.type === 'http'
+                ? { ...input.transport, headerSecretRefs: {} }
+                : { ...input.transport, envSecretRefs: {} },
+          }
+        : input,
+      connectionId,
+    )
+    if (previous && accountChanged)
+      for (const reference of new Set(Object.values(this.references(previous))))
+        void this.credentials.remove(this.scopeOf(previous), reference).catch(() => {})
     this.inspections.delete(connection.id)
     void this.release(connection.id)
     this.changed()
     return connection
+  }
+
+  /**
+   * Write-only. The value goes straight to the host credential store under a fresh reference; the definition then
+   * points at it. A failed store write leaves the working credential untouched, and the old entry is removed only
+   * after the new definition is saved. Replacing a credential changes the configuration, so earlier approvals are
+   * reviewed again.
+   */
+  async setCredential(connectionId: string, name: string, value: string) {
+    const connection = this.connection(connectionId)
+    if (!/^[A-Za-z_][A-Za-z0-9_-]{0,127}$/.test(name)) throw new Error('Use a plain name for this credential')
+    const reference = await this.credentials.put(this.scopeOf(connection), value)
+    const { id: _id, hostId: _hostId, revision: _revision, ...definition } = this.connection(connectionId)
+    const old = this.references(connection)[name]
+    try {
+      this.policy.saveConnection(
+        {
+          ...definition,
+          transport:
+            definition.transport.type === 'http'
+              ? {
+                  ...definition.transport,
+                  headerSecretRefs: { ...definition.transport.headerSecretRefs, [name]: reference },
+                }
+              : {
+                  ...definition.transport,
+                  envSecretRefs: { ...definition.transport.envSecretRefs, [name]: reference },
+                },
+        },
+        connectionId,
+      )
+    } catch (error) {
+      await this.credentials.remove(this.scopeOf(connection), reference).catch(() => {})
+      throw error
+    }
+    if (old) await this.credentials.remove(this.scopeOf(connection), old).catch(() => {})
+    this.inspections.delete(connectionId)
+    void this.release(connectionId)
+    this.changed()
+  }
+
+  async removeCredential(connectionId: string, name: string) {
+    const connection = this.connection(connectionId)
+    const old = this.references(connection)[name]
+    if (!old) return
+    const { id: _id, hostId: _hostId, revision: _revision, ...definition } = connection
+    const without = (refs: Record<string, string>) =>
+      Object.fromEntries(Object.entries(refs).filter(([key]) => key !== name))
+    this.policy.saveConnection(
+      {
+        ...definition,
+        transport:
+          definition.transport.type === 'http'
+            ? { ...definition.transport, headerSecretRefs: without(definition.transport.headerSecretRefs) }
+            : { ...definition.transport, envSecretRefs: without(definition.transport.envSecretRefs) },
+      },
+      connectionId,
+    )
+    await this.credentials.remove(this.scopeOf(connection), old).catch(() => {})
+    this.inspections.delete(connectionId)
+    void this.release(connectionId)
+    this.changed()
   }
 
   saveAccount(account: SharedMcpProviderAccount) {

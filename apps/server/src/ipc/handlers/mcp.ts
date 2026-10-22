@@ -53,6 +53,14 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       run: (input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }) =>
         admin().approve(input),
     },
+    'mcp.setCredential': {
+      args: z.tuple([id, z.string().regex(/^[A-Za-z_][A-Za-z0-9_-]{0,127}$/), z.string().min(1).max(65536)]),
+      run: (connectionId: string, name: string, value: string) => admin().setCredential(connectionId, name, value),
+    },
+    'mcp.removeCredential': {
+      args: z.tuple([id, z.string().regex(/^[A-Za-z_][A-Za-z0-9_-]{0,127}$/)]),
+      run: (connectionId: string, name: string) => admin().removeCredential(connectionId, name),
+    },
     'mcp.disconnect': { args: z.tuple([id]), run: (id: string) => admin().disconnect(id) },
     'mcp.remove': { args: z.tuple([id]), run: (id: string) => admin().remove(id) },
     'mcp.checkCredentialStore': {

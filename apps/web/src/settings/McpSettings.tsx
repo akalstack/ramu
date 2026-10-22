@@ -7,6 +7,7 @@ import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { SettingsGroupTitle } from '@/components/settings-row'
@@ -31,6 +32,75 @@ const statusLabels = {
   'insufficient-permission': 'Insufficient permission',
 }
 
+function CredentialFields({
+  names,
+  kind,
+  busy,
+  onSet,
+  onRemove,
+}: {
+  names: string[]
+  kind: 'header' | 'env'
+  busy: boolean
+  onSet(name: string, value: string): void
+  onRemove(name: string): void
+}) {
+  const id = useId()
+  const [name, setName] = useState('')
+  const [value, setValue] = useState('')
+  const valid = /^[A-Za-z_][A-Za-z0-9_-]{0,127}$/.test(name) && value.length > 0
+  return (
+    <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+      <legend>{t(kind === 'header' ? 'Request headers (write-only)' : 'Environment secrets (write-only)')}</legend>
+      <p className="m-0 text-caption text-muted-foreground">
+        {t('Values are stored on this host and are never shown again. Replacing one asks for approval again.')}
+      </p>
+      {names.map((entry) => (
+        <div key={entry} className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate font-mono text-caption">{entry}</span>
+          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => onRemove(entry)}>
+            {t('Remove')}
+          </Button>
+        </div>
+      ))}
+      <Field>
+        <FieldLabel htmlFor={`${id}-name`}>{t(kind === 'header' ? 'Header name' : 'Variable name')}</FieldLabel>
+        <Input
+          id={`${id}-name`}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder={kind === 'header' ? 'Authorization' : 'SERVICE_API_KEY'}
+          autoComplete="off"
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={`${id}-value`}>{t('Value')}</FieldLabel>
+        <Input
+          id={`${id}-value`}
+          type="password"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          autoComplete="new-password"
+        />
+      </Field>
+      <div>
+        <Button
+          type="button"
+          size="sm"
+          disabled={busy || !valid}
+          onClick={() => {
+            onSet(name, value)
+            setName('')
+            setValue('')
+          }}
+        >
+          {t(names.includes(name) ? 'Replace credential' : 'Save credential')}
+        </Button>
+      </div>
+    </fieldset>
+  )
+}
+
 function ConnectionEditor({
   initial,
   projects,
@@ -41,6 +111,8 @@ function ConnectionEditor({
   error,
   onSave,
   onCancel,
+  onSetCredential,
+  onRemoveCredential,
 }: {
   initial?: SharedMcpConnection
   projects: Project[]
@@ -51,35 +123,52 @@ function ConnectionEditor({
   error?: string
   onSave(value: Definition): void
   onCancel(): void
+  onSetCredential(name: string, value: string): void
+  onRemoveCredential(name: string): void
 }) {
   const id = useId()
   const form = useRef<HTMLFormElement>(null)
+  const first = initial?.transport
   const [name, setName] = useState(initial?.name ?? '')
-  const [url, setUrl] = useState(initial?.transport.type === 'http' ? initial.transport.url : '')
+  const [kind, setKind] = useState<'http' | 'stdio'>(first?.type ?? 'http')
+  const [url, setUrl] = useState(first?.type === 'http' ? first.url : '')
+  const [privateNetwork, setPrivateNetwork] = useState(first?.type === 'http' && first.allowPrivateNetwork === true)
+  const [command, setCommand] = useState(first?.type === 'stdio' ? first.command : '')
+  const [args, setArgs] = useState(first?.type === 'stdio' ? first.args.join('\n') : '')
+  const [cwd, setCwd] = useState(first?.type === 'stdio' ? first.cwd : '')
+  const [account, setAccount] = useState(initial?.serviceAccountId ?? 'public')
   const [providers, setProviders] = useState<AgentProvider[]>(initial?.providers ?? [defaultProvider])
   const [scope, setScope] = useState(
     initial?.scope ?? { projectIds: defaultProject ? [defaultProject] : [], hostWide: false },
   )
-  // Existing stdio definitions are kept intact; adding local commands belongs in the advanced editor.
-  const editable = !initial || initial.transport.type === 'http'
+  const live = initial?.transport
+  const credentialNames = live
+    ? Object.keys(live.type === 'http' ? live.headerSecretRefs : live.envSecretRefs).sort()
+    : []
   const save = () =>
     onSave({
       name,
-      serviceAccountId: initial?.serviceAccountId ?? 'public',
+      serviceAccountId: account.trim() || 'public',
       enabled: initial?.enabled ?? true,
       scope,
       providers,
-      transport: editable
-        ? {
-            type: 'http',
-            url,
-            headerSecretRefs: initial?.transport.type === 'http' ? initial.transport.headerSecretRefs : {},
-            ...(initial?.transport.type === 'http' && initial.transport.allowPrivateNetwork
-              ? { allowPrivateNetwork: true }
-              : {}),
-          }
-        : initial!.transport,
+      transport:
+        kind === 'http'
+          ? {
+              type: 'http',
+              url,
+              headerSecretRefs: live?.type === 'http' ? live.headerSecretRefs : {},
+              ...(privateNetwork ? { allowPrivateNetwork: true } : {}),
+            }
+          : {
+              type: 'stdio',
+              command: command.trim(),
+              args: args.split('\n').filter((line) => line.length > 0),
+              cwd: cwd.trim(),
+              envSecretRefs: live?.type === 'stdio' ? live.envSecretRefs : {},
+            },
     })
+  const ready = kind === 'http' ? Boolean(url.trim()) : Boolean(command.trim() && cwd.trim())
   return (
     <Dialog
       title={t(initial ? 'Edit MCP server' : 'Add MCP server')}
@@ -88,7 +177,7 @@ function ConnectionEditor({
       onConfirm={() => form.current?.requestSubmit()}
       busy={busy}
       error={error}
-      confirmDisabled={!name.trim() || !providers.length || (!scope.hostWide && !scope.projectIds.length)}
+      confirmDisabled={!name.trim() || !ready || !providers.length || (!scope.hostWide && !scope.projectIds.length)}
     >
       <form
         ref={form}
@@ -109,19 +198,100 @@ function ConnectionEditor({
               required
             />
           </Field>
-          {editable && (
-            <Field>
-              <FieldLabel htmlFor={`${id}-url`}>{t('Server URL')}</FieldLabel>
-              <Input
-                id={`${id}-url`}
-                type="url"
-                placeholder="https://mcp.deepwiki.com/mcp"
-                value={url}
-                onChange={(event) => setUrl(event.target.value)}
-                required
-              />
-            </Field>
+          <fieldset className="m-0 flex gap-4 border-0 p-0">
+            <legend>{t('Type')}</legend>
+            {(['http', 'stdio'] as const).map((value) => (
+              <label key={value} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`${id}-kind`}
+                  checked={kind === value}
+                  disabled={Boolean(initial)}
+                  onChange={() => setKind(value)}
+                />
+                {t(value === 'http' ? 'Remote server' : 'Local command')}
+              </label>
+            ))}
+          </fieldset>
+          {kind === 'http' ? (
+            <>
+              <Field>
+                <FieldLabel htmlFor={`${id}-url`}>{t('Server URL')}</FieldLabel>
+                <Input
+                  id={`${id}-url`}
+                  type="url"
+                  placeholder="https://mcp.deepwiki.com/mcp"
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  required
+                />
+              </Field>
+              <Field orientation="horizontal">
+                <Checkbox
+                  id={`${id}-private`}
+                  checked={privateNetwork}
+                  onCheckedChange={(checked) => setPrivateNetwork(checked === true)}
+                />
+                <FieldLabel htmlFor={`${id}-private`}>
+                  {t('This server is on a private network. Allow the host to reach private addresses.')}
+                </FieldLabel>
+              </Field>
+            </>
+          ) : (
+            <>
+              <Alert>
+                <AlertDescription>
+                  {t(
+                    'A local command runs on this host with your user’s files and processes. Ramu does not sandbox it, and saving never starts it.',
+                  )}
+                </AlertDescription>
+              </Alert>
+              <Field>
+                <FieldLabel htmlFor={`${id}-command`}>{t('Executable path')}</FieldLabel>
+                <Input
+                  id={`${id}-command`}
+                  placeholder="/usr/local/bin/my-mcp-server"
+                  value={command}
+                  onChange={(event) => setCommand(event.target.value)}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${id}-args`}>{t('Arguments, one per line')}</FieldLabel>
+                <Textarea
+                  id={`${id}-args`}
+                  rows={3}
+                  value={args}
+                  onChange={(event) => setArgs(event.target.value)}
+                  spellCheck={false}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${id}-cwd`}>{t('Working folder')}</FieldLabel>
+                <Input
+                  id={`${id}-cwd`}
+                  placeholder="/path/to/project"
+                  value={cwd}
+                  onChange={(event) => setCwd(event.target.value)}
+                  required
+                />
+              </Field>
+            </>
           )}
+          <Field>
+            <FieldLabel htmlFor={`${id}-account`}>{t('Service account')}</FieldLabel>
+            <Input
+              id={`${id}-account`}
+              value={account}
+              onChange={(event) => setAccount(event.target.value)}
+              maxLength={200}
+            />
+            <p className="m-0 text-caption text-muted-foreground">
+              {t(
+                'A label for the external service account this connection uses. Changing it removes stored credentials so the new account signs in with its own.',
+              )}
+            </p>
+          </Field>
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
             <legend>{t('Providers')}</legend>
             {AGENT_PROVIDERS.map((provider) => (
@@ -173,6 +343,19 @@ function ConnectionEditor({
           </p>
         </fieldset>
       </form>
+      {initial ? (
+        <CredentialFields
+          names={credentialNames}
+          kind={kind === 'http' ? 'header' : 'env'}
+          busy={busy}
+          onSet={onSetCredential}
+          onRemove={onRemoveCredential}
+        />
+      ) : (
+        <p className="m-0 text-caption text-muted-foreground">
+          {t('Save the server first, then add its credentials here.')}
+        </p>
+      )}
     </Dialog>
   )
 }
@@ -337,7 +520,13 @@ export function McpSettings() {
                   disabled={!canAdminister || busy || !connection.enabled}
                   onClick={() => check(connection)}
                 >
-                  {t(status === 'connected' ? 'Check connection' : 'Connect')}
+                  {t(
+                    status === 'connected'
+                      ? 'Check connection'
+                      : status === 'failed' || status === 'sign-in-required' || status === 'insufficient-permission'
+                        ? 'Reconnect'
+                        : 'Connect',
+                  )}
                 </Button>
                 <Button
                   size="sm"
@@ -383,7 +572,17 @@ export function McpSettings() {
       {editing && (
         <ConnectionEditor
           key={`${hostKey}:${editing === 'new' ? 'new' : editing.id}`}
-          initial={editing === 'new' ? undefined : editing}
+          initial={
+            editing === 'new'
+              ? undefined
+              : (data?.connections.find((entry) => entry.connection.id === editing.id)?.connection ?? editing)
+          }
+          onSetCredential={(name, value) =>
+            editing !== 'new' && void act(() => invoke('mcp.setCredential', editing.id, name, value))
+          }
+          onRemoveCredential={(name) =>
+            editing !== 'new' && void act(() => invoke('mcp.removeCredential', editing.id, name))
+          }
           projects={projects.data ?? []}
           defaultProject={
             projects.data?.some((project) => project.id === ws.composing) ? (ws.composing ?? undefined) : undefined

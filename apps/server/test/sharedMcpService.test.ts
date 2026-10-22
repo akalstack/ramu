@@ -245,3 +245,46 @@ it('reports each login as not checked, approval needed or ready, and unsupported
   expect(again.find((entry) => entry.accountId === 'a')?.status).toBe('ready')
   await expect(invoke('mcp.recheckAccount', 'codex', 'missing', null)).rejects.toThrow('Unknown provider account')
 })
+
+it('stores a credential write-only, replaces it without losing the old one on failure, and drops it on an account change', async () => {
+  const db = openDb(':memory:')
+  cleanup.push(() => db.close())
+  const storage = new SharedMcpStorage(new Workspace(db, '/unused'))
+  const values = new Map<string, string>()
+  let locked = false
+  const credentials = new HostCredentialStore(async (_service, key) => ({
+    setPassword: async (value) => {
+      if (locked) throw new Error('locked')
+      values.set(key, value)
+    },
+    getPassword: async () => values.get(key) ?? null,
+    deletePassword: async () => values.delete(key),
+  }))
+  const manager = new SharedMcpService(storage, credentials)
+  cleanup.push(() => manager.close())
+  const connection = manager.save({
+    name: 'Keyed',
+    serviceAccountId: 'alice',
+    enabled: true,
+    providers: ['codex'],
+    scope: { hostWide: true, projectIds: [] },
+    transport: { type: 'http', url: 'https://example.test/mcp', headerSecretRefs: {} },
+  })
+  await manager.setCredential(connection.id, 'Authorization', 'first-secret')
+  const saved = () => manager.list().connections[0]!.connection
+  const refs = () => (saved().transport as { headerSecretRefs: Record<string, string> }).headerSecretRefs
+  const firstRef = refs().Authorization
+  expect([...values.values()]).toEqual(['first-secret'])
+  expect(JSON.stringify(manager.list())).not.toContain('first-secret')
+  locked = true
+  await expect(manager.setCredential(connection.id, 'Authorization', 'second-secret')).rejects.toThrow('unavailable')
+  locked = false
+  expect(refs().Authorization).toBe(firstRef)
+  expect([...values.values()]).toEqual(['first-secret'])
+  await manager.setCredential(connection.id, 'Authorization', 'second-secret')
+  expect([...values.values()]).toEqual(['second-secret'])
+  const { id, hostId: _host, revision: _revision, ...definition } = saved()
+  manager.save({ ...definition, serviceAccountId: 'bob' }, id)
+  await vi.waitFor(() => expect(values.size).toBe(0))
+  expect(refs()).toEqual({})
+})
