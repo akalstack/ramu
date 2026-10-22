@@ -103,6 +103,17 @@ export interface HandoffInfo {
   contextWindow?: number
 }
 
+/**
+ * Setup a thread had before a switch, fallback or account change that the destination cannot take over as it was.
+ * Names only: it points at what to fix, never at a rule's text or a server's address.
+ */
+export interface SetupOmission {
+  kind: 'shared-mcp' | 'rule'
+  name: string
+  /** Why it is missing at the destination: the destination login's readiness, or `too-large` for rules over its size. */
+  status: 'approval-needed' | 'sign-in-required' | 'unsupported' | 'not-checked' | 'too-large'
+}
+
 /** Fields of the `provider-wait` event: a thread held at a usage limit, to be continued at `retryAt`. `retryAt` null ends the wait. */
 export interface ProviderWaitFields {
   retryAt: number | null
@@ -406,6 +417,8 @@ type AgentEventBody =
       previous?: AgentSettings
       /** Why the conversation is handed over and, once the next launch has built it, what was carried. Present only with `handoff`. */
       handoffInfo?: HandoffInfo
+      /** What the destination login lacks from the thread's agent setup, checked on the execution server before launch. */
+      setupOmissions?: SetupOmission[]
     }
   | ({ kind: 'agent' } & AgentTask)
 

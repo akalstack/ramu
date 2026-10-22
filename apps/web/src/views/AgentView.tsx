@@ -552,6 +552,7 @@ export const AgentView = memo(function AgentView({
     onOpenAgent: setOpenAgent,
     onStopTask: stopTask,
     onOpenQuestion: openQuestion,
+    onReviewAccess: () => setMcpOpen(true),
     onEditMessage: editMessage,
   }
 

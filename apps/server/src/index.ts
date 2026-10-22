@@ -90,7 +90,7 @@ import { MemoryService, registerMemoryTools } from './memory/memory'
 import { RuleStore } from './rules/rules'
 import { SummaryService, registerLibraryTools, withoutTools } from './memory/summaries'
 import { discoverSkills } from './context'
-import { NO_PROJECT, type AgentSessionInfo, type ScheduleInput } from '@ramu/shared/types'
+import { NO_PROJECT, type AgentSessionInfo, type ScheduleInput, type SetupOmission } from '@ramu/shared/types'
 
 const config = loadConfig()
 const { userData, socketPath } = config
@@ -245,9 +245,7 @@ const ocuBackend = new OcuBackend(
   undefined,
   () => workspace.getAppState<boolean>('computer:globalPointer', false) === true,
 )
-const computer = new ComputerService(
-  new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), ocuBackend),
-)
+const computer = new ComputerService(new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), ocuBackend))
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {
@@ -384,6 +382,28 @@ const getSharedMcp = () => {
   } catch {
     throw new Error('Shared MCP configuration could not be loaded. Restore valid configuration on this host.')
   }
+}
+// Before a switch or fallback launches, say what the destination login lacks from the thread's setup.
+agents.setupOmissions = (session, settings) => {
+  const projectId = projectOf(session)
+  const omitted: SetupOmission[] = []
+  try {
+    for (const connection of getSharedMcp().sessionConnections(
+      settings.provider,
+      settings.accountId ?? 'default',
+      projectId,
+    ))
+      if (connection.status !== 'ready')
+        omitted.push({ kind: 'shared-mcp', name: connection.name, status: connection.status })
+  } catch {
+    // Unreadable Shared MCP configuration is reported in Settings; it must not stop a switch.
+  }
+  try {
+    rules.instructions(projectId, settings.provider)
+  } catch {
+    omitted.push({ kind: 'rule', name: 'Rules', status: 'too-large' })
+  }
+  return omitted
 }
 const dispatcher = createDispatcher(
   {

@@ -22,6 +22,7 @@ import { PermissionRequestCard } from './PermissionRequestCard'
 import { CONVERSATION_SEPARATOR_CLASS, GHOST_TEXT_BUTTON_CLASS, TURN_END_CLASS } from '../styles'
 import { ErrorNote } from './ErrorNote'
 import { handoffLine } from '../handoffLine'
+import { canReviewAccess, omissionsLine } from '../setupOmissions'
 
 /** Renders one transcript event by kind: messages, separators, plans, permission and question cards, results and errors. */
 export function EventRow({
@@ -38,6 +39,7 @@ export function EventRow({
   onEdit,
   onOpenAgent,
   onOpenQuestion,
+  onReviewAccess,
 }: {
   event: AgentEvent
   sessionId: string
@@ -52,6 +54,8 @@ export function EventRow({
   onEdit?: (text: string, attachments: Attachment[]) => void
   onOpenAgent?: (agentId: string) => void
   onOpenQuestion?: (requestId: string) => void
+  /** Opens the thread's MCP access dialog from a switch notice. */
+  onReviewAccess?: () => void
 }) {
   useLanguage()
   const { invoke } = useHost()
@@ -134,6 +138,19 @@ export function EventRow({
             {e.reason && e.reason !== 'Changed conversation settings' && <small>{e.reason}</small>}
             {e.handoff && handoffLine(e.handoffInfo, translate) && (
               <small>{handoffLine(e.handoffInfo, translate)}</small>
+            )}
+            {omissionsLine(e.setupOmissions) && (
+              <small role="status">
+                {omissionsLine(e.setupOmissions)}
+                {onReviewAccess && canReviewAccess(e.setupOmissions) && (
+                  <>
+                    {' '}
+                    <Button variant="link" size="xs" className="h-auto p-0 align-baseline" onClick={onReviewAccess}>
+                      {translate('Review access')}
+                    </Button>
+                  </>
+                )}
+              </small>
             )}
           </span>
         </div>

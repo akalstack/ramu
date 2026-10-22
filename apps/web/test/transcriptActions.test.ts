@@ -69,6 +69,7 @@ const render = ({ ended = false, working = true, needsInput = false, isLast = tr
     onOpenAgent: () => {},
     onStopTask: () => {},
     onOpenQuestion: () => {},
+    onReviewAccess: () => {},
     onEditMessage: () => {},
   }
   return renderToStaticMarkup(

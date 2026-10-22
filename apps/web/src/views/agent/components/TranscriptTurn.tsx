@@ -106,6 +106,7 @@ function TranscriptBlock({
           }
           onOpenAgent={ctx.onOpenAgent}
           onOpenQuestion={ctx.onOpenQuestion}
+          onReviewAccess={ctx.onReviewAccess}
         />
       )}
     </div>

@@ -17,6 +17,7 @@ import {
   type AgentProvider,
   type ProviderCatalog,
   type NextMessageRoute,
+  type SetupOmission,
 } from '@ramu/shared/types'
 import {
   capSubagentEffort,
@@ -65,6 +66,7 @@ export interface FallbackRouterHost
   refreshAccountUsage(): AgentService['refreshAccountUsage']
   shutdown(): AgentService['shutdown']
   usage(): AgentService['usage']
+  setupOmissions(): AgentService['setupOmissions']
 }
 
 /** Usage-limit fallback and account/model routing: where a chat or sub-agent should run, and moving it there. */
@@ -155,6 +157,7 @@ export class FallbackRouter {
         handoff: !!handoffInfo,
         previous: s.settings,
         ...(handoffInfo ? { handoffInfo } : {}),
+        ...this.omissions(s, settings),
       })
       if (WRITING_STATES.includes(s.state)) {
         this.host.transitioning.delete(id)
@@ -169,6 +172,20 @@ export class FallbackRouter {
     } finally {
       this.host.transitioning.delete(id)
       this.host.settleChild(id)
+    }
+  }
+
+  /**
+   * What the destination login lacks from the thread's agent setup, resolved on this host before launch. A missing
+   * approval or sign-in is reported next to the switch and never read as a usage limit; the request continues without
+   * those tools rather than as though they were present.
+   */
+  private omissions(session: AgentSessionInfo, settings: AgentSettings): { setupOmissions?: SetupOmission[] } {
+    try {
+      const found = this.host.setupOmissions()?.(session, settings) ?? []
+      return found.length ? { setupOmissions: found } : {}
+    } catch {
+      return {}
     }
   }
 
@@ -474,6 +491,7 @@ export class FallbackRouter {
           handoff: true,
           previous: s.settings,
           handoffInfo: accountPlan.info,
+          ...this.omissions(s, accountSettings),
         })
         this.host.transitioning.delete(id)
         this.host.launch(
@@ -562,6 +580,7 @@ export class FallbackRouter {
         handoff: !!plan?.info,
         previous: s.settings,
         ...(plan?.info ? { handoffInfo: plan.info } : {}),
+        ...this.omissions(s, settings),
       })
       this.host.transitioning.delete(id)
       this.host.launch(
