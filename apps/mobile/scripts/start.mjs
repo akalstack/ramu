@@ -1,11 +1,12 @@
 // Starts Metro for a phone on the same network. Expo otherwise advertises the Mac's `<name>.local` hostname,
 // which an iPhone often cannot resolve ("hostname not found"), so hand it the LAN address instead.
-// Usage: node scripts/start.mjs [--go | --dev-client] [expo start options]
+// Usage: node scripts/start.mjs [--dev-client | --go] [expo start options]
+// Defaults to the development build (EAS `development` profile or `expo run:*`); pass --go for Expo Go, which cannot load Ramu's native modules or WebRTC.
 import { spawn } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
 
 const args = process.argv.slice(2)
-if (!args.includes('--go') && !args.includes('--dev-client')) args.unshift('--go')
+if (!args.includes('--go') && !args.includes('--dev-client')) args.unshift('--dev-client')
 
 // Private LAN ranges only: VPN (100.x, NetBird/Tailscale) and container bridges are not reachable from the phone.
 const isLan = (ip) => /^192\.168\./.test(ip) || /^10\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip)

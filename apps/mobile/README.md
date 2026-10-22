@@ -10,7 +10,7 @@ LAN/VPN. The production app has no seeded hosts or simulated conversations.
 2. Open desktop **Settings → Remote access**, enable network access, then **Pair a
    device**. Review [remote access and device privileges](../../SECURITY.md#remote-access). Choose the reachable address in the QR selector. For a headless host,
    use `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`.
-3. Build once with `pnpm --filter @ramu/mobile build:ios` (or `build:android`), then run `pnpm dev:mobile` (Expo Go; use `pnpm --filter @ramu/mobile dev:build` for a development build) and open **Hosts → Pair**.
+3. Install a development build once: from EAS with `pnpm --filter @ramu/mobile eas:ios` (or `eas:android`), or locally with `pnpm --filter @ramu/mobile build:ios` (or `build:android`). Then run `pnpm dev:mobile` and open **Hosts → Pair**.
    Scan the desktop's QR offer, or enter its address and ten-character pairing code.
    Review the address and explicitly allow HTTP only on a trusted network.
 4. Select a project or Standalone, then send an instruction. Provider installation
@@ -23,7 +23,7 @@ capability show an update error; rebuild/restart the host rather than reusing mo
 
 The React Native/React pins are isolated from desktop React through Metro. Install
 SDK-compatible native modules with `pnpm --filter @ramu/mobile exec expo install …`.
-`pnpm dev:mobile` starts Metro for Expo Go on the Mac's LAN address (`scripts/start.mjs`; an iPhone often cannot resolve the `.local` name). Use a development build (`dev:build`) for the native adaptive header and background push; Expo Go's bundled navigation library does not include our native scroll-view bridge.
+`pnpm dev:mobile` starts Metro for the development build on the Mac's LAN address (`scripts/start.mjs`; an iPhone often cannot resolve the `.local` name). The development build is the default because pairing now uses WebRTC, and the native adaptive header, background push and scroll-view bridge need native code that Expo Go does not include. `pnpm --filter @ramu/mobile dev:go` still starts Metro for Expo Go as an opt-in layout preview, without pairing or native features.
 
 ## Project actions
 
