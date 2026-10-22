@@ -82,28 +82,48 @@ export class SharedMcpService {
     return state.connections.filter((connection) => connection.enabled && connection.providers.includes(provider))
   }
 
+  /** One connection's readiness for one login, from its last check at the current revision and the approvals. */
+  private connectionReadiness(
+    connection: SharedMcpConnection,
+    provider: SharedMcpProviderAccount['provider'],
+    accountId: string,
+  ): { status: SharedMcpAccountReadiness['status']; checkedAt: number | null } {
+    const check = this.checks.get(connection.id)
+    const current = check?.revision === connection.revision ? check : undefined
+    const inspection = this.inspections.get(connection.id)
+    let status: SharedMcpAccountReadiness['status'] = 'not-checked'
+    if (current?.status === 'sign-in-required' || current?.status === 'insufficient-permission')
+      status = 'sign-in-required'
+    else if (current?.status === 'unsupported') status = 'unsupported'
+    else if (current?.status === 'connected' && inspection?.revision === connection.revision)
+      status = this.policy.hasApproval(provider, accountId, connection.id, inspection.catalogRevision)
+        ? 'ready'
+        : 'approval-needed'
+    return { status, checkedAt: current?.checkedAt ?? null }
+  }
+
+  /** The connections one session could reach (its provider, project and login) with their readiness. */
+  sessionConnections(provider: SharedMcpProviderAccount['provider'], accountId: string, projectId: string | null) {
+    return this.applicable(this.policy.snapshot(), provider)
+      .filter(
+        (connection) =>
+          connection.scope.hostWide || (projectId !== null && connection.scope.projectIds.includes(projectId)),
+      )
+      .map((connection) => ({
+        connectionId: connection.id,
+        name: connection.name,
+        ...this.connectionReadiness(connection, provider, accountId),
+      }))
+  }
+
   /** Readiness per set-up login, from the last verified catalog and the approvals; nothing is contacted here. */
   private readiness(state: SharedMcpPolicyState): SharedMcpAccountReadiness[] {
     return state.accounts.map((account) => {
-      const connections = this.applicable(state, account.provider).map((connection) => {
-        const check = this.checks.get(connection.id)
-        const current = check?.revision === connection.revision ? check : undefined
-        const inspection = this.inspections.get(connection.id)
-        let status: SharedMcpAccountReadiness['status'] = 'not-checked'
-        if (current?.status === 'sign-in-required' || current?.status === 'insufficient-permission')
-          status = 'sign-in-required'
-        else if (current?.status === 'unsupported') status = 'unsupported'
-        else if (current?.status === 'connected' && inspection?.revision === connection.revision)
-          status = this.policy.hasApproval(
-            account.provider,
-            account.accountId,
-            connection.id,
-            inspection.catalogRevision,
-          )
-            ? 'ready'
-            : 'approval-needed'
-        return { connectionId: connection.id, name: connection.name, status, checkedAt: current?.checkedAt ?? null }
-      })
+      const connections = this.applicable(state, account.provider).map((connection) => ({
+        connectionId: connection.id,
+        name: connection.name,
+        ...this.connectionReadiness(connection, account.provider, account.accountId),
+      }))
       const order: SharedMcpAccountReadiness['status'][] = [
         'sign-in-required',
         'approval-needed',

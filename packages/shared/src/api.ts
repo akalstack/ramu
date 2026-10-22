@@ -7,6 +7,7 @@ import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
 import type { RamuTheme, ThemeIssue, ThemeRole } from './theme'
 import type { AppUpdateStatus } from './updates'
+import type { AgentSetupSnapshot } from './agentSetup'
 import type { ProviderConfiguration, ProviderStatus } from './providers/providers'
 import type { LimitRetryResult } from './chat/providerWait'
 import type {
@@ -903,6 +904,8 @@ export interface RamuMethods {
   /** Keep the chat's current provider despite the usage threshold: for the next message, for this chat until its limit resets, or clear. */
   'agent.holdProvider'(sessionId: string, scope: 'message' | 'chat' | null): void
   'agent.mcpStatus'(sessionId: string): Promise<AgentMcpStatus>
+  /** Rules, servers, skills and Shared MCP connections this thread has, with how far each got. Names and states only. */
+  'agent.setup'(sessionId: string): Promise<AgentSetupSnapshot>
   'agent.reloadMcp'(sessionId: string): Promise<void>
   'agent.reconnectMcp'(sessionId: string, name: string): Promise<void>
   'agent.providerHold'(sessionId: string): 'message' | 'chat' | 'picked' | null
