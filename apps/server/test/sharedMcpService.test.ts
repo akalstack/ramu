@@ -296,7 +296,7 @@ it('names what a destination login still lacks without checking unreviewed conne
   invoke('mcp.account', { provider: 'codex', accountId: 'a', shareApprovals: true })
   invoke('mcp.account', { provider: 'codex', accountId: 'b', shareApprovals: true })
   expect(await manager.destinationAttention('codex', 'b', 'project')).toEqual([
-    { name: 'Shared local service', status: 'not-checked' },
+    { name: 'Shared local service', status: 'not-checked', connectionId: connection.id },
   ])
   expect(connect).not.toHaveBeenCalled()
   const inspection = (await invoke('mcp.check', connection.id, {
