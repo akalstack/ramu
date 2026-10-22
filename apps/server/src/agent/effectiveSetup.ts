@@ -13,6 +13,8 @@ export interface SetupInputs {
   rules: readonly Rule[]
   /** Servers Ramu adds to this thread's launch from the person's own configuration (names only). */
   addedServers: readonly string[]
+  /** Names among `addedServers` and `sharedSkills` whose source file changed after the thread started. */
+  changedSources?: readonly string[]
   /** What the live runtime reports, when it reports anything; undefined when it cannot be asked. */
   runtimeServers?: readonly { name: string; status: string }[]
   /** Skills Ramu copies into this login's skill export for the person (names only). */
@@ -78,8 +80,15 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
         : `${ruleDelivery(input.provider).detail} Whether the model followed it is not observable.`,
     })
   }
+  const stale = new Set(input.changedSources ?? [])
+  const staleReason =
+    'The file it comes from changed after this thread started. A new thread uses the current version; this one keeps what it was given.'
   for (const name of input.addedServers) {
     const reported = input.runtimeServers?.find((server) => server.name === name)
+    if (stale.has(`server:${name}`)) {
+      items.push({ kind: 'native-mcp', name, state: 'needs-refresh', reason: staleReason })
+      continue
+    }
     items.push(
       reported?.status === 'connected'
         ? {
@@ -106,13 +115,17 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
     )
   }
   for (const name of input.sharedSkills)
-    items.push({
-      kind: 'skill',
-      name,
-      state: 'configured',
-      reason:
-        "Copied into this login's skill export for new threads. Whether the model reads a skill is not observable.",
-    })
+    items.push(
+      stale.has(`skill:${name}`)
+        ? { kind: 'skill', name, state: 'needs-refresh', reason: staleReason }
+        : {
+            kind: 'skill',
+            name,
+            state: 'configured',
+            reason:
+              "Copied into this login's skill export for new threads. Whether the model reads a skill is not observable.",
+          },
+    )
   for (const connection of input.connections)
     items.push({
       kind: 'shared-mcp',

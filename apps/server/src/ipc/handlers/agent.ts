@@ -64,6 +64,14 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         } catch {
           // The runtime could not be asked; its servers stay unconfirmed.
         }
+        const servers = sharedSessionServers(dirs, session.provider, env, { projectId })
+        const skills = sharedSessionSkills(
+          dirs,
+          session.provider,
+          env,
+          workspace.getAppState<SkillSharing>(SKILL_SHARING_KEY, {}),
+          { projectId },
+        )
         return buildSetupSnapshot({
           sessionId,
           provider: session.provider,
@@ -71,15 +79,13 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
           projectId,
           startedAt: session.createdAt,
           rules: rules?.list() ?? [],
-          addedServers: sharedSessionServers(dirs, session.provider, env, { projectId }).map((server) => server.name),
+          addedServers: servers.map((server) => server.name),
+          changedSources: [
+            ...servers.filter((server) => (server.changedAt ?? 0) > session.createdAt).map((s) => `server:${s.name}`),
+            ...skills.filter((skill) => skill.changedAt > session.createdAt).map((s) => `skill:${s.name}`),
+          ],
           ...(runtimeServers ? { runtimeServers } : {}),
-          sharedSkills: sharedSessionSkills(
-            dirs,
-            session.provider,
-            env,
-            workspace.getAppState<SkillSharing>(SKILL_SHARING_KEY, {}),
-            { projectId },
-          ).map((skill) => skill.name),
+          sharedSkills: skills.map((skill) => skill.name),
           connections: getSharedMcp?.().sessionConnections(session.provider, accountId, projectId) ?? [],
           now: Date.now(),
         })

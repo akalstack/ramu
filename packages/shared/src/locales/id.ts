@@ -2889,6 +2889,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Its values for {names} stay in the original file. Ramu copies none of them; enter them as write-only secrets after importing.": "Nilai untuk {names} tetap di berkas aslinya. Ramu tidak menyalinnya; masukkan sebagai rahasia tulis-saja setelah impor.",
   "Importing does not connect or run anything. Review its tools when you connect.": "Impor tidak menghubungkan atau menjalankan apa pun. Tinjau alatnya saat Anda menghubungkan.",
   "Connect through Ramu": "Hubungkan lewat Ramu",
+  "The file it comes from changed after this thread started. A new thread uses the current version; this one keeps what it was given.": "Berkas asalnya berubah setelah thread ini dimulai. Thread baru memakai versi terbaru; thread ini tetap memakai yang sudah diberikan.",
   "Connected through Ramu": "Terhubung lewat Ramu",
   "Add a remote server no provider has yet. Ramu connects it and lets you review its tools first.": "Tambahkan server jarak jauh yang belum dimiliki provider mana pun. Ramu menghubungkannya dan memungkinkan Anda meninjau alatnya terlebih dahulu.",
   "No servers connected through Ramu yet.": "Belum ada server yang terhubung lewat Ramu.",

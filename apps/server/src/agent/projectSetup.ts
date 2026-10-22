@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
+import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import type { AgentProvider } from '@ramu/shared/types'
@@ -27,6 +27,8 @@ export interface Declared {
   enabled: boolean
   /** Codex runs relative commands from its own folder; they cannot move to another provider. */
   cwd?: string
+  /** When the declaring file last changed (ms), so a running thread can be told its copy is out of date. */
+  changedAt?: number
 }
 
 const object = (value: unknown): Json | null =>
@@ -243,7 +245,13 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
   const result: Collected = { servers: new Map(), diagnostics: [] }
   const display = (path: string) =>
     path === home || path.startsWith(home + '/') ? '~' + path.slice(home.length) : path
+  // The declaring file's modification time travels with each server it declares.
+  let changedAt = 0
+  const touch = (file: string) => {
+    changedAt = statSync(file, { throwIfNoEntry: false })?.mtimeMs ?? 0
+  }
   const attempt = (file: string, work: () => void) => {
+    touch(file)
     try {
       work()
     } catch (error) {
@@ -255,7 +263,7 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
       const key = mcpServerKey(server.transport)
       const entry = result.servers.get(key) ?? { name: server.name, declared: [], sources: [], providers: new Set() }
       result.servers.set(key, entry)
-      entry.declared.push(server)
+      entry.declared.push({ ...server, changedAt })
       entry.sources.push({ ...origin, enabled: server.enabled })
       if (!server.enabled) continue
       // Ramu forwards repository and Claude local-scope servers to every provider session in this project.
@@ -317,6 +325,7 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
     })
     const local = object(claudeProjects[path])
     if (local) {
+      touch(files.claude)
       const disabled = strings(local.disabledMcpServers)
       add(
         standardServers(local.mcpServers).map((s) => ({ ...s, enabled: s.enabled && !disabled.includes(s.name) })),
@@ -658,7 +667,7 @@ export function sharedSessionSkills(
   accountEnv: NodeJS.ProcessEnv,
   sharing: SkillSharing,
   options: { env?: NodeJS.ProcessEnv; home?: string; projectId?: string | null } = {},
-): { name: string; dir: string }[] {
+): { name: string; dir: string; changedAt: number }[] {
   if (!Object.values(sharing).some(Boolean)) return []
   const env = options.env ?? process.env,
     home = options.home ?? homedir()
@@ -668,7 +677,13 @@ export function sharedSessionSkills(
   const own = collectSkills(roots, accountEnv, home).skills
   return [...all.values()].flatMap((skill) =>
     isSkillShared(skill.name, sharing, options.projectId) && !own.get(skill.name)?.providers.has(provider)
-      ? [{ name: skill.name, dir: skill.folders[0]! }]
+      ? [
+          {
+            name: skill.name,
+            dir: skill.folders[0]!,
+            changedAt: statSync(join(skill.folders[0]!, 'SKILL.md'), { throwIfNoEntry: false })?.mtimeMs ?? 0,
+          },
+        ]
       : [],
   )
 }
