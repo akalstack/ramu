@@ -88,7 +88,9 @@ function ConnectionForm({
         )}
       </p>
       <p className="m-0 text-caption text-muted-foreground">
-        {t('A saved token covers pull requests, issues and checks. Git push and fetch keep using your own Git credentials.')}
+        {t(
+          'A saved token covers pull requests, issues and checks. Git push and fetch keep using your own Git credentials.',
+        )}
       </p>
       {error && (
         <p role="alert" className="m-0 text-caption text-destructive">
@@ -280,7 +282,9 @@ export function HostingAccounts() {
                           variant="ghost"
                           size="sm"
                           disabled={pending}
-                          onClick={() => void act(() => invoke('forge.selectAccount', connection.origin, connection.id))}
+                          onClick={() =>
+                            void act(() => invoke('forge.selectAccount', connection.origin, connection.id))
+                          }
                         >
                           {t('Use by default')}
                         </Button>
@@ -300,7 +304,9 @@ export function HostingAccounts() {
                         variant="ghost"
                         size="sm"
                         disabled={pending}
-                        onClick={() => void act(() => invoke('forge.setConnectionEnabled', connection.id, !connection.enabled))}
+                        onClick={() =>
+                          void act(() => invoke('forge.setConnectionEnabled', connection.id, !connection.enabled))
+                        }
                       >
                         {connection.enabled ? t('Disable') : t('Enable')}
                       </Button>
@@ -319,6 +325,21 @@ export function HostingAccounts() {
                 <li key={`${account.host}:${account.login}`}>
                   <strong>{account.login}</strong> <span className="text-muted-foreground">{account.host}</span>
                   <div className="text-muted-foreground">{accountDetail(account)}</div>
+                  {canAdminister &&
+                    account.state === 'ok' &&
+                    summary.accounts.filter((other) => other.host === account.host).length > 1 &&
+                    summary.selection?.[account.host] !== `cli:${account.login}` && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() =>
+                          void act(() => invoke('forge.selectAccount', account.host, `cli:${account.login}`))
+                        }
+                      >
+                        {t('Use {0} for {1}', { '0': account.login, '1': account.host })}
+                      </Button>
+                    )}
                 </li>
               ))}
             </ul>

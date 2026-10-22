@@ -5,13 +5,14 @@ import { Workspace } from '../src/workspace/workspace'
 import type { AgentService } from '../src/agent'
 import { PullRequestWatchService } from '../src/background/pullRequestWatches'
 import { currentBranch } from '../src/workspace/git'
-import { pullRequestFeedback, pullRequestStatus } from '../src/workspace/forge'
+import { pullRequestFeedback, pullRequestStatus, resolvedAccountChoice } from '../src/workspace/forge'
 
 vi.mock('../src/workspace/git', () => ({ currentBranch: vi.fn() }))
 vi.mock('../src/workspace/forge', () => ({
   pullRequestFeedback: vi.fn(),
   pullRequestStatus: vi.fn(),
   resolvedConnectionId: vi.fn(async () => null),
+  resolvedAccountChoice: vi.fn(async () => null),
 }))
 
 let db: Db, ws: Workspace, service: PullRequestWatchService
@@ -242,6 +243,19 @@ describe('automatic watches on PR creation', () => {
     await service.tick(60_000)
     expect(enqueue).toHaveBeenCalledOnce()
     service.stopForSession('session')
+    expect(service.status('/repo', pr.url).sessionId).toBeNull()
+  })
+
+  it('ends a watch when the account it was made under is no longer the one in use, and keeps it when that is unknown', async () => {
+    vi.mocked(resolvedAccountChoice).mockResolvedValue('cli:me')
+    await watch()
+    // A locked store or an ambiguous choice says nothing about the account.
+    vi.mocked(resolvedAccountChoice).mockResolvedValue(null)
+    await service.tick(0)
+    expect(service.status('/repo', pr.url).sessionId).toBe('session')
+    // Saving and selecting a token switches the identity: the watch ends instead of reading as someone else.
+    vi.mocked(resolvedAccountChoice).mockResolvedValue('saved-token')
+    await service.tick(60_000)
     expect(service.status('/repo', pr.url).sessionId).toBeNull()
   })
 })

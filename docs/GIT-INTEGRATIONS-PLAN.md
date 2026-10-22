@@ -16,7 +16,13 @@ Ramu already has GitHub PR discovery/creation, checks, review feedback, issues a
 
 ## Already in place
 
-Settings → Git starts with a **Hosting accounts** group: GitHub shows the host's detected `gh` sign-ins (`forge.connections`, read-only, never the token) with **Check connection** and per-account details, and GitLab, Bitbucket Cloud and Azure DevOps are informational **Coming soon** rows with no setup or backend activity. Remaining: saved credentials, per-repository access checks, multiple-account selection and overrides, deep links from Source Control, replace/disconnect, and the adapter boundary.
+Written, not yet exercised on a device, a packaged build or a live provider (see Remaining acceptance below):
+
+- **Settings → Git → Hosting accounts.** GitHub shows detected `gh` sign-ins (read-only, never the token), saved tokens (**Connect**, **Check connection**, **Replace credential**, **Disable/Enable**, **Disconnect**, **Use by default**, per-CLI-account choice when several are signed in), the locked-credential-store state and host-only administration. GitLab, Bitbucket Cloud and Azure DevOps are informational **Coming soon** rows.
+- **Host-owned credentials** in `workspace/forgeAccounts.ts` through `credentials/store.ts`, with origin binding, atomic replacement, redirect refusal and redaction. A saved token is used by `gh` calls, and by the direct API client in `workspace/githubApi.ts` when the host has no `gh` (pull request status with checks and reviews, create, issues, review threads, job logs, repository search, publish).
+- **Per-repository access** (`forge.checkAccess`, `forge.repositoryAccount`, `forge.setRepositoryAccount`), shown in Source Control under **GitHub access** with the account choice, **Open GitHub settings** deep links for unavailable actions, and the resolved account in the Publish dialog.
+- **Watches** record the account choice they were made under and end when it changes, poll each pull request once per round, and pause on rate limits. A lost reply to **Create pull request** is reconciled against the branch before an error is reported.
+- **Clone** from the signed-in account's repositories or an exact `owner/name` in the host folder dialog (`forge.searchRepositories` then `folders.clone`).
 
 ## Settings and interaction
 
@@ -58,16 +64,13 @@ Route existing GitHub watches through the adapter boundary with host/account/rep
 
 Cancellation and timeouts must distinguish failed from unknown outcomes. After a create request loses its response, reconcile against the intended repository and branch before offering retry; do not duplicate a PR or retry through another account. Preserve partial push/create/watch outcomes and existing Git locks. Enforce capabilities and authorization on the server as well as in UI.
 
-**Publish to GitHub (implemented).** A repository with no remote publishes through `forge.publishRepository` (private by default, `gh repo create --source --push`); a repository with a remote or no commits explains the next step, and a created-but-unpushed repository is finished by the ordinary Publish branch rather than recreated. Remaining: show the signed-in account in the dialog once the connection summary exists, and an optional remote picker when several remotes have none named `origin`.
+**Publish to GitHub.** A repository with no remote publishes through `forge.publishRepository` (private by default, `gh repo create --source --push`, or the API plus Git push without `gh`); a repository with a remote or no commits explains the next step, and a created-but-unpushed repository is finished by the ordinary Publish branch rather than recreated. The dialog names the account. Remaining: an optional remote picker when several remotes have none named `origin`.
 
-Then after the GitHub connection and existing flows work, add GitHub-backed repository search/clone and publish through the existing project/host-folder flow. Keep a pasted Git URL available. Clone destinations belong to the workspace host; cancelled/failed clones preserve inspectable state. Publishing previews account, destination, visibility (private by default), remote name and push scope before executing; a partial publish must be reconcilable without recreating the repository. Full review/merge dashboards, automatic merging, stacks, webhooks and cross-host credential brokering are deferred.
+Clone from GitHub and publish use the existing project/host-folder flow; the pasted Git URL stays available. Clone destinations belong to the workspace host; cancelled/failed clones preserve inspectable state. Publishing previews account, destination, visibility (private by default), remote name and push scope before executing; a partial publish must be reconcilable without recreating the repository. Full review/merge dashboards, automatic merging, stacks, webhooks and cross-host credential brokering are deferred.
 
-## Implementation and acceptance
+## Remaining and acceptance
 
-1. Define shared identities/capabilities, connection lifecycle, authorization and credential-store contracts; add fixtures and migrate the current GitHub facade without behavior loss.
-2. Deliver GitHub settings, secure storage, detected CLI selection, direct API support and repository diagnostics. Gate rollout on existing PR/issue/watch regressions and headless acceptance.
-3. Add the three **Coming soon** rows for GitLab, Bitbucket Cloud and Azure DevOps Services. Verify they remain informational and cannot start setup or backend work. Their implementation is not an acceptance requirement for this plan.
-4. Add GitHub repository search/clone/publish, mobile status/setup guidance, localization and native acceptance. Update lasting architecture/UI/feature guides as behavior lands. Remove completed work from this plan and delete it when finished; keep any remaining checks in the roadmap.
+Unwritten: the `workspace/forge/` adapter directory (the facade in `workspace/forge.ts` and `githubApi.ts` is the boundary today; split it only when a second provider is built), mobile status and setup guidance, a clone-progress/cancel surface beyond the kept destination folder, and GitHub Enterprise repository search (search uses github.com or the checkout's own origin). Everything else here is written and awaits acceptance below. Coming soon rows stay informational and their implementation is not an acceptance requirement.
 
 Focused shared/server tests cover remote parsing and identity collisions; capability normalization; selected-account precedence and ambiguity; disabled connections; scope failures; pagination; rate-limit/offline errors; secret redaction and storage failure; atomic replacement; redirects; paired-client authorization; stale responses; watch migration/deduplication; and lost acknowledgements after remote writes. Use the existing forge/watch suites and temporary Git repositories where a real boundary matters, with fake HTTP/CLI adapters for external services.
 

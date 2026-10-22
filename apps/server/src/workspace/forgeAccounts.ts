@@ -107,7 +107,8 @@ export async function checkGithubToken(origin: string, token: string, fetchImpl:
       state: 'missing-permission',
       login: body.login,
       scopes,
-      detail: 'The token cannot access repositories. Add the repo scope, or use a fine-grained token with repository access.',
+      detail:
+        'The token cannot access repositories. Add the repo scope, or use a fine-grained token with repository access.',
     }
   return { state: 'connected', login: body.login, scopes, detail: null }
 }
@@ -154,7 +155,9 @@ export class ForgeAccountStore {
     return { hostId: index.hostId, integration: 'forge', connectionId: connection.id, accountId: connection.accountId }
   }
 
-  summary(canAdminister: boolean): Pick<ForgeConnectionSummary, 'saved' | 'credentialStore' | 'canAdminister' | 'selection'> {
+  summary(
+    canAdminister: boolean,
+  ): Pick<ForgeConnectionSummary, 'saved' | 'credentialStore' | 'canAdminister' | 'selection'> {
     const index = this.index()
     const saved: ForgeSavedConnection[] = index.connections.map((connection) => ({
       id: connection.id,
@@ -182,7 +185,9 @@ export class ForgeAccountStore {
     const token = input.token.trim()
     if (!token || /\s/.test(token)) throw new ForgeAccountError('Paste the token on its own, without spaces.')
     const index = this.index()
-    const previous = input.replaceId ? index.connections.find((connection) => connection.id === input.replaceId) : undefined
+    const previous = input.replaceId
+      ? index.connections.find((connection) => connection.id === input.replaceId)
+      : undefined
     if (input.replaceId && !previous) throw new ForgeAccountError('That connection no longer exists.')
     if (previous && previous.origin !== origin)
       throw new ForgeAccountError('A credential is bound to its server. Connect the other server separately.')
@@ -213,7 +218,9 @@ export class ForgeAccountStore {
       scopes: check.scopes,
       detail: null,
     }
-    const connections = existing ? next.connections.map((c) => (c.id === id ? stored : c)) : [...next.connections, stored]
+    const connections = existing
+      ? next.connections.map((c) => (c.id === id ? stored : c))
+      : [...next.connections, stored]
     const selected = { ...next.selected }
     if (!selected[origin]) selected[origin] = id
     this.publish({ ...next, connections, selected })
@@ -312,6 +319,33 @@ export class ForgeAccountStore {
    */
   async resolve(origin: string, owner?: string, repo?: string): Promise<ForgeAccountResolution> {
     const index = this.index()
+    const chosen = this.choose(index, origin, owner, repo)
+    if (chosen.kind === 'cli') return { kind: 'cli', login: chosen.login }
+    if (chosen.kind === 'ambiguous') return chosen
+    const token = await this.credentials.read(this.scope(index, chosen.connection), chosen.connection.reference)
+    return { kind: 'saved', connectionId: chosen.connection.id, login: chosen.connection.login, token }
+  }
+
+  /**
+   * The identity a call would use, without reading any token: a saved connection id, `cli`, `cli:<login>`, or null
+   * when several accounts need a choice. Watches record it so they can end when it changes.
+   */
+  choiceId(origin: string, owner?: string, repo?: string): string | null {
+    const chosen = this.choose(this.index(), origin, owner, repo)
+    if (chosen.kind === 'ambiguous') return null
+    if (chosen.kind === 'saved') return chosen.connection.id
+    return chosen.login ? `cli:${chosen.login}` : 'cli'
+  }
+
+  private choose(
+    index: ForgeIndex,
+    origin: string,
+    owner?: string,
+    repo?: string,
+  ):
+    | { kind: 'saved'; connection: StoredConnection }
+    | { kind: 'cli'; login: string | null }
+    | { kind: 'ambiguous'; candidates: { id: string; login: string | null }[] } {
     const usable = index.connections.filter((c) => c.origin === origin && c.enabled)
     const pin = owner && repo ? index.overrides[`${origin}/${owner}/${repo}`.toLowerCase()] : undefined
     const wanted = [pin, index.selected[origin]].find((choice) => {
@@ -321,12 +355,8 @@ export class ForgeAccountStore {
     })
     if (wanted?.startsWith('cli')) return { kind: 'cli', login: wanted === 'cli' ? null : wanted.slice(4) }
     const pick = wanted ? usable.find((c) => c.id === wanted) : usable.length === 1 ? usable[0] : undefined
-    if (pick) {
-      const token = await this.credentials.read(this.scope(index, pick), pick.reference)
-      return { kind: 'saved', connectionId: pick.id, login: pick.login, token }
-    }
-    if (usable.length > 1)
-      return { kind: 'ambiguous', candidates: usable.map((c) => ({ id: c.id, login: c.login })) }
+    if (pick) return { kind: 'saved', connection: pick }
+    if (usable.length > 1) return { kind: 'ambiguous', candidates: usable.map((c) => ({ id: c.id, login: c.login })) }
     return { kind: 'cli', login: null }
   }
 

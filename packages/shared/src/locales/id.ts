@@ -2990,4 +2990,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Cloning…": "Meng-clone…",
   "Clone": "Clone",
   "The host clones into this folder with its own Git credentials. A failed clone keeps its folder to inspect.": "Host meng-clone ke folder ini dengan kredensial Git miliknya. Clone yang gagal mempertahankan foldernya untuk diperiksa.",
+  "Use {0} for {1}": "Pakai {0} untuk {1}",
 }

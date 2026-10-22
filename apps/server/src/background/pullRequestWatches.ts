@@ -9,7 +9,7 @@ import type { Db } from '../db'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
 import { currentBranch } from '../workspace/git'
-import { pullRequestFeedback, pullRequestStatus, resolvedConnectionId } from '../workspace/forge'
+import { pullRequestFeedback, pullRequestStatus, resolvedAccountChoice, resolvedConnectionId } from '../workspace/forge'
 import { fingerprint } from './inputGate'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
@@ -26,6 +26,8 @@ interface Watch {
   sessionId: string
   /** The saved connection this watch reads with, so disconnecting it ends the watch. Absent for the detected CLI. */
   connectionId?: string | null
+  /** The account choice (connection id, `cli` or `cli:<login>`) this watch was made under; it ends when that changes. */
+  account?: string | null
   delivered: Partial<Record<PullRequestFeedbackKind, string>>
 }
 
@@ -130,7 +132,8 @@ export class PullRequestWatchService {
     const existing = this.list().find((watch) => watch.cwd === cwd && watch.url === url)
     if (existing?.sessionId === sessionId) return
     const connectionId = await resolvedConnectionId(cwd)
-    const watch: Watch = { id: randomUUID(), cwd, repoId, branch, url, sessionId, connectionId, delivered: {} }
+    const account = await resolvedAccountChoice(cwd)
+    const watch: Watch = { id: randomUUID(), cwd, repoId, branch, url, sessionId, connectionId, account, delivered: {} }
     this.workspace.setAppState(KEY, [...this.list().filter((w) => w.cwd !== cwd || w.url !== url), watch])
     this.changed()
     this.nextPoll = 0
@@ -170,6 +173,7 @@ export class PullRequestWatchService {
       url: pr.url,
       sessionId: session.id,
       connectionId,
+      account: await resolvedAccountChoice(cwd),
       delivered: {},
     }
     if (!this.valid(watch)) return
@@ -284,9 +288,14 @@ export class PullRequestWatchService {
       try {
         // A watch never moves to another identity on its own: when the account it read with is no longer the one
         // this checkout resolves to, it ends and the person chooses to watch again.
-        if (watch.connectionId && (await resolvedConnectionId(watch.cwd)) !== watch.connectionId) {
-          this.remove((entry) => entry.id === watch.id)
-          continue
+        const expected = watch.account ?? watch.connectionId
+        if (expected) {
+          const choice = await resolvedAccountChoice(watch.cwd)
+          // An unreadable or ambiguous choice says nothing about the account: keep the watch and look again next poll.
+          if (choice !== null && choice !== expected) {
+            this.remove((entry) => entry.id === watch.id)
+            continue
+          }
         }
         const statusKey = `${watch.url}|${watch.connectionId ?? ''}`
         let pending = statuses.get(statusKey)

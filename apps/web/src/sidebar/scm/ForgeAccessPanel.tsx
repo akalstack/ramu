@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ForgeAccessReport, ForgeAvailability, ForgeConnectionSummary } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
+import { Dropdown } from '../../Menu'
 import { t } from '../../i18n'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
@@ -40,7 +41,6 @@ export function ForgeAccessPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const request = useRef(0)
-  const selectId = useId()
 
   // A different repository or host has its own report; never show the previous one.
   useEffect(() => {
@@ -137,24 +137,17 @@ export function ForgeAccessPanel({
           ))}
         </dl>
       )}
-      {report && choices.length > 1 && (
-        <label htmlFor={selectId} className="flex flex-col gap-1 text-caption text-muted-foreground">
-          {t('Account for this repository')}
-          <select
-            id={selectId}
-            className="h-7 rounded-(--radius-s) border border-line bg-transparent px-1.5 text-foreground"
+      {report && choices.length > 1 && summary?.canAdminister !== false && (
+        <div className="flex flex-col gap-1 text-caption text-muted-foreground">
+          <Dropdown
+            label={t('Account for this repository')}
+            placeholder={t('Choose an account')}
             value={chosen}
+            options={choices}
+            onChange={(value) => void choose(value)}
             disabled={busy}
-            onChange={(event) => void choose(event.target.value)}
-          >
-            {!chosen && <option value="">{t('Choose an account')}</option>}
-            {choices.map((choice) => (
-              <option key={choice.value} value={choice.value}>
-                {choice.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        </div>
       )}
     </div>
   )
