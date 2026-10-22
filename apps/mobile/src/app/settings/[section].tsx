@@ -21,6 +21,7 @@ import { ComputerScope } from '../../components/SettingsChrome'
 import { RulesSettings } from '../../components/RulesSettings'
 import { VoiceSettings } from '../../components/VoiceSettings'
 import { ProviderCompatibility } from '../../components/ProviderCompatibility'
+import { HostingStatus } from '../../components/HostingStatus'
 import { ThemeLibrary } from '../../components/ThemeLibrary'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import { ScopeControl } from '../../components/ScopeControl'
@@ -291,6 +292,7 @@ export default function SettingsSectionPage() {
         {id === 'about' ? <About /> : null}
         {id === 'providers' ? <ProviderCompatibility key={selected} hostId={selected} /> : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
+        {id === 'git' ? <HostingStatus key={selected} hostId={selected} /> : null}
         {id === 'rules' ? <RulesSettings key={selected} hostId={selected} /> : null}
         {section.scope === 'host' ? <HostGroups section={id} host={host} name={name} /> : null}
         {note ? <Hint>{note}</Hint> : null}
