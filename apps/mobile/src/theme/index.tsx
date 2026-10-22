@@ -1,5 +1,17 @@
-import { readAppearance, readTextSize, saveAppearance, saveTextSize, type TextSize } from '../storage'
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import {
+  readAppearance,
+  readSelectedThemeId,
+  readTextSize,
+  readThemeLibraryText,
+  saveAppearance,
+  saveSelectedThemeId,
+  saveTextSize,
+  saveThemeLibraryText,
+  type TextSize,
+} from '../storage'
+import { DEFAULT_THEME, checkTheme, parseTheme, type RamuTheme, type ThemeIssue } from '@ramu/shared/theme'
+import { mobilePalette } from '@ramu/shared/themeMobile'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Appearance, Platform, useColorScheme } from 'react-native'
 
 // Ported from apps/web/src/styles.css: neutral gray surfaces separated by shade,
@@ -91,7 +103,34 @@ export type { TextSize }
 /** Multiplies the app's own sizes on top of the OS text size, which RN already applies. */
 export const TEXT_SCALE: Record<TextSize, number> = { default: 1, large: 1.12, larger: 1.25 }
 
+/** Themes kept on this phone. Each document is validated again on load, so damaged text never reaches the palette. */
+const MAX_THEMES = 20
+function readLibrary(): RamuTheme[] {
+  try {
+    const raw = JSON.parse(readThemeLibraryText() ?? '[]') as unknown
+    if (!Array.isArray(raw)) return []
+    return raw.flatMap((item) => {
+      const parsed = parseTheme(item)
+      return parsed.ok ? [parsed.theme] : []
+    })
+  } catch {
+    return []
+  }
+}
+/** A trial is only ever a preview: it reverts on its own after this long unless it is kept. */
+const TRIAL_MS = 2 * 60_000
+
 interface ThemeValue {
+  /** The theme in effect (the trial while one runs), and the kept themes. Ramu Default is not in the list. */
+  theme: RamuTheme
+  themes: RamuTheme[]
+  trial: RamuTheme | null
+  /** Shows a theme without keeping it; null reverts. Never persisted. */
+  tryTheme: (theme: RamuTheme | null) => void
+  /** Keeps and selects a theme; one that fails the readability checks is refused with its issues. */
+  keepTheme: (theme: RamuTheme) => ThemeIssue[]
+  selectTheme: (id: string | null) => void
+  removeTheme: (id: string) => void
   c: Palette
   scheme: 'light' | 'dark'
   appearance: Appearance
@@ -119,9 +158,60 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     updateAppearance(value)
   }
   const scheme = appearance === 'system' ? (system === 'light' ? 'light' : 'dark') : appearance
+  const [themes, setThemes] = useState<RamuTheme[]>(readLibrary)
+  const [selectedId, setSelectedId] = useState(readSelectedThemeId)
+  const [trial, setTrial] = useState<RamuTheme | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  const tryTheme = (theme: RamuTheme | null) => {
+    clearTimeout(timer.current)
+    setTrial(theme)
+    if (theme) timer.current = setTimeout(() => setTrial(null), TRIAL_MS)
+  }
+  const keepTheme = (theme: RamuTheme) => {
+    const issues = checkTheme(theme)
+    if (issues.length) return issues
+    const next = [theme, ...themes.filter((saved) => saved.id !== theme.id)].slice(0, MAX_THEMES)
+    // The library is written before the pointer, so a failed write never selects a theme that is not stored.
+    saveThemeLibraryText(JSON.stringify(next))
+    saveSelectedThemeId(theme.id)
+    setThemes(next)
+    setSelectedId(theme.id)
+    tryTheme(null)
+    return []
+  }
+  const selectTheme = (id: string | null) => {
+    const next = id && themes.some((theme) => theme.id === id) ? id : ''
+    saveSelectedThemeId(next)
+    setSelectedId(next)
+  }
+  const removeTheme = (id: string) => {
+    const next = themes.filter((theme) => theme.id !== id)
+    saveThemeLibraryText(JSON.stringify(next))
+    setThemes(next)
+    if (selectedId === id) {
+      saveSelectedThemeId('')
+      setSelectedId('')
+    }
+  }
+  const theme = trial ?? themes.find((item) => item.id === selectedId) ?? DEFAULT_THEME
   const value = useMemo(
-    () => ({ c: scheme === 'light' ? light : dark, scheme, appearance, setAppearance, textSize, setTextSize }),
-    [scheme, appearance, textSize],
+    () => ({
+      theme,
+      themes,
+      trial,
+      tryTheme,
+      keepTheme,
+      selectTheme,
+      removeTheme,
+      c: theme.id === DEFAULT_THEME.id ? (scheme === 'light' ? light : dark) : mobilePalette(theme[scheme]),
+      scheme,
+      appearance,
+      setAppearance,
+      textSize,
+      setTextSize,
+    }),
+    [scheme, appearance, textSize, theme, themes, trial],
   )
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }

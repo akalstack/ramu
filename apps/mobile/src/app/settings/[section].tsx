@@ -14,6 +14,7 @@ import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '.
 import { ComputerScope } from '../../components/SettingsChrome'
 import { RulesSettings } from '../../components/RulesSettings'
 import { ProviderCompatibility } from '../../components/ProviderCompatibility'
+import { ThemeLibrary } from '../../components/ThemeLibrary'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import {
   emptyLayers,
@@ -65,6 +66,7 @@ function AppearancePage() {
         />
       </Card>
       <ScopeNote field="appearance" explicit={appearance !== 'system'} />
+      <ThemeLibrary />
       <SectionLabel>{t.textSizeLabel}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <Segmented<TextSize>

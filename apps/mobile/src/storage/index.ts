@@ -41,6 +41,25 @@ export function saveTextSize(value: TextSize) {
   if (Platform.OS === 'web') localStorage.setItem(textSizeKey, value)
   else new File(Paths.document, textSizeKey).write(value)
 }
+const themeLibraryKey = 'ramu-theme-library'
+const themeSelectedKey = 'ramu-theme-selected'
+const readSmall = (name: string): string | null => {
+  try {
+    return Platform.OS === 'web' ? localStorage.getItem(name) : new File(Paths.document, name).textSync()
+  } catch {
+    return null
+  }
+}
+const writeSmall = (name: string, value: string) => {
+  if (Platform.OS === 'web') localStorage.setItem(name, value)
+  else new File(Paths.document, name).write(value)
+}
+/** Themes kept on this phone, as stored text; callers validate each document before use. */
+export const readThemeLibraryText = () => readSmall(themeLibraryKey)
+export const saveThemeLibraryText = (text: string) => writeSmall(themeLibraryKey, text)
+/** The kept theme this phone shows; empty means Ramu Default. */
+export const readSelectedThemeId = () => readSmall(themeSelectedKey) ?? ''
+export const saveSelectedThemeId = (id: string) => writeSmall(themeSelectedKey, id)
 /** Serialize writes so a slower save cannot overwrite a newer draft or computer list. */
 export function readLocal<T>(fallback: T): T {
   try {
