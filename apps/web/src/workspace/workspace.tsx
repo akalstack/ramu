@@ -1,3 +1,4 @@
+import { latestOnly } from '@ramu/shared/latestOnly'
 import { changesThreadSummary } from '@ramu/shared/chat/inputSummary'
 import { requestBrowserNavigation } from '../views/browserNavigation'
 import { closingPanel } from '@ramu/shared/workspace/panelClose'
@@ -374,14 +375,19 @@ const HostWorkspace = memo(function HostWorkspace({
     [hostId, storage],
   )
 
+  // Bursts of workspace changes start overlapping refreshes; only the newest may replace what is shown.
+  const startRefresh = useRef(latestOnly()).current
   const refresh = useCallback(async () => {
+    const newest = startRefresh()
     const ps = await invoke('projects.list')
     const rs: Record<string, Repository[]> = {}
     for (const p of ps) rs[p.id] = await invoke('repos.list', p.id)
+    if (!newest()) return
     setProjects(ps)
     setRepos(rs)
     const chats = await invoke('tasks.list')
     const isolated = await invoke('workspaces.list')
+    if (!newest()) return
     setTasks(chats)
     setWorkspaces(isolated)
     const known = new Set([
