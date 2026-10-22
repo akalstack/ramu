@@ -611,6 +611,52 @@ describe('app scrolling', () => {
   })
 })
 
+describe('accessibility text for the agent', () => {
+  const target = { id: 'app:Calculator', kind: 'app' as const, name: 'Calculator' }
+  const png = (width: number, height: number) => {
+    const bytes = Buffer.alloc(24)
+    bytes[0] = 0x89
+    bytes.write('PNG', 1, 'latin1')
+    bytes.writeUInt32BE(width, 16)
+    bytes.writeUInt32BE(height, 20)
+    return bytes.toString('base64')
+  }
+  const tree = '1 window Calculator\n2 button 7\n3 button 8'
+  const backendWith = async (text: string) => {
+    const { OcuBackend } = await import('../src/computer/ocu')
+    const client = {
+      callTool: async () => ({
+        content: [
+          { type: 'text', text },
+          { type: 'image', data: png(5, 5), mimeType: 'image/png' },
+        ],
+      }),
+      close: async () => {},
+    }
+    return new OcuBackend(
+      () => '/bin/ocu',
+      async () => client,
+    )
+  }
+
+  it('carries the app tree on a capture, bounded, and omits it when the app returns none', async () => {
+    const { MAX_COMPUTER_TREE_TEXT } = await import('@ramu/shared/computerBridge')
+    expect((await (await backendWith(tree)).capture(target)).text).toBe(tree)
+    expect((await (await backendWith('x'.repeat(MAX_COMPUTER_TREE_TEXT + 500))).capture(target)).text).toHaveLength(
+      MAX_COMPUTER_TREE_TEXT,
+    )
+    expect(await (await backendWith('   ')).capture(target)).not.toHaveProperty('text')
+  })
+
+  it('reaches the agent through observe', async () => {
+    const service = new ComputerService(await backendWith(tree))
+    const session = service.grant('t', { target, observe: true, input: true })
+    session.open('run')
+    expect((await session.observe('run')).capture.text).toBe(tree)
+    service.revoke('t')
+  })
+})
+
 describe('real pointer for drags', () => {
   it('starts the helper with the pointer flag only when allowed, and restarts it when the setting changes', async () => {
     const { OcuBackend } = await import('../src/computer/ocu')

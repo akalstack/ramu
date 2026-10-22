@@ -11,6 +11,7 @@ import type {
   ComputerRuntimeStatus,
   ComputerTarget,
 } from '@ramu/shared/computerBridge'
+import { MAX_COMPUTER_TREE_TEXT } from '@ramu/shared/computerBridge'
 import { findExecutable } from '../providers/providerBinaries'
 
 /** The part of an MCP client this backend uses, so a fake can stand in for the native process in tests. */
@@ -248,11 +249,19 @@ export class OcuBackend implements ComputerBackend {
 
   async capture(target: ComputerTarget): Promise<ComputerCapture> {
     const result = await this.call('get_app_state', { app: target.name })
-    this.trees.set(target.name, scrollAreas(result.content?.find((part) => part.type === 'text')?.text ?? ''))
+    const tree = result.content?.find((part) => part.type === 'text')?.text ?? ''
+    this.trees.set(target.name, scrollAreas(tree))
     const image = result.content?.find((part) => part.type === 'image' && part.data)
     if (!image?.data) throw new Error(`${target.name} has no window to show.`)
     const { width, height } = pngSize(Buffer.from(image.data, 'base64'))
-    return { mimeType: 'image/png', data: image.data, width, height, scale: 1 }
+    return {
+      mimeType: 'image/png',
+      data: image.data,
+      width,
+      height,
+      scale: 1,
+      ...(tree.trim() ? { text: tree.slice(0, MAX_COMPUTER_TREE_TEXT) } : {}),
+    }
   }
 
   async perform(target: ComputerTarget, action: ComputerAction): Promise<void> {

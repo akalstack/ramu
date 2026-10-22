@@ -2,6 +2,8 @@
 // grants and leases; the broker owns OS capture/input. Coordinates are pixels in the most recent observation.
 
 export const MAX_COMPUTER_TEXT = 2000
+/** The most accessibility-tree text one observation carries to the agent. */
+export const MAX_COMPUTER_TREE_TEXT = 12_000
 /** A frame older than this while subscribed is shown as stale and no longer accepts remote input. */
 export const COMPUTER_FRAME_STALE_MS = 5000
 
@@ -35,6 +37,8 @@ export interface ComputerCapture {
   width: number
   height: number
   scale: number
+  /** The app's accessibility tree as text, when the backend has one. For an agent only; viewers never receive it. */
+  text?: string
 }
 
 export interface ComputerFrameMeta {
