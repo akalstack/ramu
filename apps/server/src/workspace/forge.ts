@@ -23,7 +23,13 @@ import type {
   PullRequestReviewDecision,
 } from '@ramu/shared/types'
 import { parseGhAuthStatus } from '@ramu/shared/forgeAccounts'
-import { githubApiBase, parseForgeRemote, redactSecrets, type ForgeRemote } from '@ramu/shared/forgeRemote'
+import {
+  githubApiBase,
+  normalizeOrigin,
+  parseForgeRemote,
+  redactSecrets,
+  type ForgeRemote,
+} from '@ramu/shared/forgeRemote'
 import type { ForgeAccountStore } from './forgeAccounts'
 import { findExecutable } from '../providers/providerBinaries'
 import { branchExists, commitBranchInfo, currentBranch, git, headOid, publishRemote } from './git'
@@ -670,7 +676,7 @@ interface RawRepository {
 }
 
 /** Repository list entries as clone choices. Entries without a name or an https address are dropped. */
-export function parseRepositories(raw: RawRepository[]): ForgeRepositorySummary[] {
+export function parseRepositories(raw: RawRepository[], host = 'github.com'): ForgeRepositorySummary[] {
   const found: ForgeRepositorySummary[] = []
   for (const repository of raw) {
     const fullName = repository.fullName ?? repository.nameWithOwner
@@ -678,8 +684,8 @@ export function parseRepositories(raw: RawRepository[]): ForgeRepositorySummary[
     let cloneUrl: string
     try {
       const url = new URL(repository.url ?? '')
-      if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.port || url.username || url.password)
-        continue
+      // Only the server the list came from: a clone address on another host is dropped, not trusted.
+      if (url.protocol !== 'https:' || url.host !== host || url.username || url.password) continue
       cloneUrl = `${url.origin}/${fullName}.git`
     } catch {
       continue
@@ -701,9 +707,32 @@ const REPOSITORY_FIELDS = 'nameWithOwner,description,isPrivate,url,updatedAt'
  * Repositories to clone: an exact `owner/name` is looked up directly (works for any organization), otherwise the
  * signed-in account's own repositories, most recently updated first, narrowed by the search text.
  */
-export async function searchRepositories(search: string, cwd: string = homedir()): Promise<ForgeRepositorySummary[]> {
+export async function searchRepositories(
+  search: string,
+  cwd: string = homedir(),
+  /** A GitHub Enterprise server with a saved connection on this host; absent means github.com or the checkout's origin. */
+  origin?: string,
+): Promise<ForgeRepositorySummary[]> {
   const text = search.trim()
   const exact = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(text)
+  if (origin && origin !== 'github.com') {
+    const normalized = normalizeOrigin(origin)
+    if (!normalized || !accountStore)
+      throw new ForgeError('Save a token for that GitHub server in Settings → Git first.', 'no-cli')
+    const access = await savedAccessFor(normalized)
+    const found = parseRepositories(
+      await repositoriesDirect(access, exact ? text : null).catch(directFailure),
+      normalized,
+    )
+    const needle = text.toLowerCase()
+    return (
+      exact || !needle
+        ? found
+        : found.filter((r) => `${r.fullName} ${r.description ?? ''}`.toLowerCase().includes(needle))
+    )
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 50)
+  }
   const direct = await directAccess(cwd).catch(() => null)
   if (direct || (!ghExecutable() && accountStore)) {
     const access = direct ?? (await savedAccessFor('github.com'))

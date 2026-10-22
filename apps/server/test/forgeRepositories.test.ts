@@ -30,4 +30,16 @@ describe('parseRepositories', () => {
       ]),
     ).toEqual([])
   })
+
+  it("keeps an Enterprise server's own addresses, and only those, when the list came from it", () => {
+    const raw = [
+      { fullName: 'a/one', url: 'https://ghe.example.com:8443/a/one' },
+      { fullName: 'a/two', url: 'https://github.com/a/two' },
+      { fullName: 'a/three', url: 'https://ghe.example.com/a/three' },
+    ]
+    expect(parseRepositories(raw, 'ghe.example.com:8443').map((r) => r.cloneUrl)).toEqual([
+      'https://ghe.example.com:8443/a/one.git',
+    ])
+    expect(parseRepositories(raw).map((r) => r.cloneUrl)).toEqual(['https://github.com/a/two.git'])
+  })
 })

@@ -1465,6 +1465,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Receiving objects": "Menerima objek",
   "Resolving deltas": "Menyelesaikan delta",
   "Updating files": "Memperbarui berkas",
+  "GitHub server": "Server GitHub",
   "Keep working while asking questions": "Tetap bekerja sambil bertanya",
   "Trim long Claude threads before they go cold": "Ringkas thread Claude yang panjang sebelum dingin",
   "When a long Claude thread sits idle and its prompt cache is about to lapse, summarize it so the next message is cheaper to resume. Costs one summary turn.": "Saat thread Claude yang panjang diam dan cache prompt-nya hampir habis, ringkas agar pesan berikutnya lebih murah dilanjutkan. Memakai satu giliran ringkasan.",

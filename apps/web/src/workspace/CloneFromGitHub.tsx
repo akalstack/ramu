@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ForgeRepositorySummary } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
+import { Dropdown } from '../Menu'
 import { t } from '../i18n'
 import { invokerFor } from '../ipc'
 import { errorText } from '../lib/errors'
@@ -31,6 +32,8 @@ export function CloneFromGitHub({
   const [error, setError] = useState<string | null>(null)
   const request = useRef(0)
   const cloning = useClone(host)
+  const [origin, setOrigin] = useState('github.com')
+  const [origins, setOrigins] = useState<string[]>(['github.com'])
 
   // Another host or folder starts a fresh search; a late answer for the old one is dropped.
   useEffect(() => {
@@ -38,6 +41,16 @@ export function CloneFromGitHub({
     setResults(null)
     setError(null)
     setBusy(null)
+    setOrigin('github.com')
+    // Enterprise servers appear once this host has a saved token for them.
+    void invokerFor(host)('forge.connections').then(
+      (summary) =>
+        setOrigins([
+          'github.com',
+          ...new Set((summary.saved ?? []).filter((c) => c.enabled && c.origin !== 'github.com').map((c) => c.origin)),
+        ]),
+      () => setOrigins(['github.com']),
+    )
   }, [host])
 
   const find = async () => {
@@ -45,7 +58,10 @@ export function CloneFromGitHub({
     setBusy('search')
     setError(null)
     try {
-      const found = await invokerFor(host)('forge.searchRepositories', search.trim())
+      const found =
+        origin === 'github.com'
+          ? await invokerFor(host)('forge.searchRepositories', search.trim())
+          : await invokerFor(host)('forge.searchRepositories', search.trim(), origin)
       if (mine === request.current) setResults(found)
     } catch (reason) {
       if (mine === request.current) setError(errorText(reason))
@@ -69,6 +85,17 @@ export function CloneFromGitHub({
   return (
     <section aria-label={t('Clone from GitHub')} className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
       <strong className="text-caption">{t('Clone from GitHub')}</strong>
+      {origins.length > 1 && (
+        <Dropdown
+          label={t('GitHub server')}
+          value={origin}
+          options={origins.map((value) => ({ value, label: value }))}
+          onChange={(value) => {
+            setOrigin(value)
+            setResults(null)
+          }}
+        />
+      )}
       <form
         className="flex gap-2"
         onSubmit={(event) => {

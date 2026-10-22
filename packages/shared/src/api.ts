@@ -846,7 +846,8 @@ export interface RamuMethods {
   'forge.pullRequestFeedback'(taskId: string, repoId: string, kind: PullRequestFeedbackKind): string
   'forge.issues'(repoId: string, search: string): IssueSummary[]
   /** Repositories the host's GitHub account can see (yours when the search is empty), or one `owner/name`; to clone. */
-  'forge.searchRepositories'(search: string): ForgeRepositorySummary[]
+  /** Repositories to clone. `origin` names a GitHub Enterprise server that has a saved connection on this host. */
+  'forge.searchRepositories'(search: string, origin?: string): ForgeRepositorySummary[]
   /** The GitHub account this repository would use, with its source, before anything runs. */
   'forge.repositoryAccount'(taskId: string, repoId: string): ForgeRepositoryAccount
   'forge.issue'(repoId: string, number: number): { link: IssueLink; prompt: string }
