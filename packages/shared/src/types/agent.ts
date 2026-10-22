@@ -146,6 +146,12 @@ export interface ThreadInputRequest {
   title: string
   source?: { sessionId: string; agentId: string; name: string; requestId?: string }
 }
+/** Independently running helpers of a thread's main sessions; advisors, shell commands and restored activity are excluded. */
+export interface ThreadHelperSummary {
+  active: number
+  /** Active helpers held on input or a provider limit. */
+  waiting: number
+}
 export interface ThreadInputSummary {
   count: number
   approvals: number

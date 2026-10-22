@@ -1,4 +1,5 @@
 import { latestOnly } from '@ramu/shared/latestOnly'
+import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
 import { changesThreadSummary } from '@ramu/shared/chat/inputSummary'
 import { requestBrowserNavigation } from '../views/browserNavigation'
 import { closingPanel } from '@ramu/shared/workspace/panelClose'
@@ -73,6 +74,12 @@ import {
   worktreeCtx,
   type ViewInput,
 } from './workspaceModel'
+
+/** A late read from the host never replaces a task with an older snapshot of itself. */
+function keepNewerTasks(current: Task[], incoming: Task[]): Task[] {
+  const known = new Map(current.map((task) => [task.id, task]))
+  return incoming.map((task) => newerTaskSnapshot(known.get(task.id), task))
+}
 
 export { isPreviewable, isWorkspaceCtx, isWorktreeCtx, projectCtx, tabOrder, worktreeCtx } from './workspaceModel'
 
@@ -388,7 +395,7 @@ const HostWorkspace = memo(function HostWorkspace({
     const chats = await invoke('tasks.list')
     const isolated = await invoke('workspaces.list')
     if (!newest()) return
-    setTasks(chats)
+    setTasks((current) => keepNewerTasks(current, chats))
     setWorkspaces(isolated)
     const known = new Set([
       ...chats.map((t) => t.id),
@@ -571,7 +578,7 @@ const HostWorkspace = memo(function HostWorkspace({
           const current = ++request
           void invoke('tasks.list').then(
             (chats) => {
-              if (!disposed && current === request) setTasks(chats)
+              if (!disposed && current === request) setTasks((now) => keepNewerTasks(now, chats))
             },
             () => undefined,
           )

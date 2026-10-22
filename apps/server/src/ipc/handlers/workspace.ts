@@ -22,6 +22,10 @@ import { agentSettings, id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 import type { TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
 
+let lastSnapshotAt = 0
+/** Never moves backwards, even if the clock does, so clients can order two reads of one task. */
+const nextSnapshotAt = () => (lastSnapshotAt = Math.max(lastSnapshotAt + 1, Date.now()))
+
 const namingIntent = z.object({
   strategy: z.enum(['fixed', 'semantic', 'custom']),
   instructions: z.string().max(2000),
@@ -159,18 +163,19 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     },
     'tasks.list': {
       args: z.tuple([]),
-      run: () =>
-        workspace.listTasks().map((task) => {
+      run: () => {
+        const snapshotAt = nextSnapshotAt()
+        const helpers = agents.helperSummaries()
+        return workspace.listTasks().map((task) => {
           const sessions = agents.list(task.id).filter((session) => !session.parentId)
           const main = sessions.at(-1)
           const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
           const goal = main ? agents.goalOf(main.id) : null
           const executionState = main?.state
-          if (!goal || goal.status === 'completed') return { ...task, goalState: null, inputSummary, executionState }
+          const base = { ...task, inputSummary, executionState, helperSummary: helpers.get(task.id) ?? null, snapshotAt }
+          if (!goal || goal.status === 'completed') return { ...base, goalState: null }
           return {
-            ...task,
-            inputSummary,
-            executionState,
+            ...base,
             goalState: {
               status: goal.status,
               ...(goal.pausedBy ? { pausedBy: goal.pausedBy } : {}),
@@ -181,7 +186,8 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
               ...(goal.reason ? { reason: goal.reason.slice(0, 300) } : {}),
             },
           }
-        }),
+        })
+      },
     },
     'tasks.workspaceOptions': {
       args: z.tuple([id]),

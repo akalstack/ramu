@@ -33,7 +33,7 @@ type GoalLike = Pick<ChatGoal, 'status' | 'pausedBy'> & { verifying?: boolean }
  * callers qualify it rather than hiding it.
  */
 export function threadStatus(
-  task: Pick<Task, 'status' | 'waitingUntil' | 'inputSummary' | 'executionState'>,
+  task: Pick<Task, 'status' | 'waitingUntil' | 'inputSummary' | 'executionState' | 'helperSummary'>,
   unread: boolean,
   goal?: GoalLike | null,
 ): ThreadStatus | null {
@@ -43,7 +43,8 @@ export function threadStatus(
     return task.inputSummary.approvals
       ? { kind: 'approval', short: 'Approval', full: 'Approval needed' }
       : { kind: 'input', short: 'Needs input', full: 'Waiting for your input' }
-  if (task.status === 'running') {
+  // Independent helper work keeps the thread working after its parent goes idle, even before the stored status catches up.
+  if (task.status === 'running' || (task.helperSummary?.active && task.status !== 'needs-input')) {
     if (goalHold(unfinished) === 'provider-limit') return limit
     if (unfinished?.status === 'active' && unfinished.verifying)
       return { kind: 'verifying', short: 'Verifying', full: 'Verifying goal' }
@@ -64,4 +65,13 @@ export function threadStatus(
   if (task.executionState === 'stopped') return { kind: 'stopped', short: 'Stopped', full: 'Agent stopped' }
   if (unread) return { kind: 'finished', short: 'Finished', full: 'Finished, not viewed yet' }
   return null
+}
+
+/**
+ * The newer of two reads of the same task from one host. A read without a `snapshotAt` (an older host) always replaces,
+ * since nothing can order it; a late, older read never brings back work that has since stopped or finished.
+ */
+export function newerTaskSnapshot<T extends Pick<Task, 'snapshotAt'>>(current: T | undefined, incoming: T): T {
+  if (!current || current.snapshotAt === undefined || incoming.snapshotAt === undefined) return incoming
+  return incoming.snapshotAt >= current.snapshotAt ? incoming : current
 }
