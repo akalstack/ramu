@@ -206,3 +206,19 @@ it('puts async questions and approvals in Waiting even when execution continues,
   expect(cleared.waiting).toEqual([])
   expect(cleared.running.map((chat) => chat.id)).toEqual(['live'])
 })
+
+it('treats a host that sends no goal summary as unknown rather than inventing a goal or hiding the thread', () => {
+  const data = {
+    projects: [],
+    recaps: [],
+    summaries: [],
+    errors: [],
+    tasks: [{ id: 't', projectId: 'p', title: 'Old host task', status: 'ready-for-review', lastActiveAt: now }],
+    agents: [{ id: 's', taskId: 't', createdAt: 1, state: 'idle' }],
+  } as unknown as HostOverview
+  const input = hostInboxInput([{ id: 'old', data }])
+  expect(input.chats[0]?.goalState).toBeUndefined()
+  const result = buildInbox({ ...input, now })
+  expect(result.running).toEqual([])
+  expect(result.completed.map((item) => item.taskId)).toEqual(['t'])
+})

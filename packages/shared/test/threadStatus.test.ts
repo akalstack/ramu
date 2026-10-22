@@ -62,3 +62,22 @@ describe('threadStatus with a goal', () => {
     expect(threadStatus(task({ status: 'needs-input' }), false, goal('active'))?.kind).toBe('input')
   })
 })
+
+describe('threadStatus request and older-host context', () => {
+  const inputSummary = (approvals: number, count: number) => ({ count, approvals }) as never
+
+  it('puts an approval ahead of a question and ahead of live work', () => {
+    expect(threadStatus(task({ status: 'running', inputSummary: inputSummary(1, 2) }), false)?.kind).toBe('approval')
+    expect(threadStatus(task({ status: 'running', inputSummary: inputSummary(0, 1) }), false)?.kind).toBe('input')
+  })
+
+  it('ignores an empty request summary', () => {
+    expect(threadStatus(task({ inputSummary: inputSummary(0, 0) }), false)).toBeNull()
+  })
+
+  it('treats a missing or null goal from an older host as unknown, not as a finished thread', () => {
+    expect(threadStatus(task({ status: 'running' }), false, undefined)?.kind).toBe('working')
+    expect(threadStatus(task({ status: 'running' }), false, null)?.kind).toBe('working')
+    expect(threadStatus(task(), false, undefined)).toBeNull()
+  })
+})
