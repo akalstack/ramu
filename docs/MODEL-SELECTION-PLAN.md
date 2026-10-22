@@ -4,13 +4,13 @@ Current generated sets and selection controls are documented in [UI](UI.md#new-t
 
 ## Remaining delivery
 
-A person with a desktop and two phones can choose a selection flow for all devices, all mobile devices or one phone, see where the effective choice comes from, and clear an override. Deliver the shared preference transport and scope controls through the [mobile settings preferences plan](MOBILE-SETTINGS-PLAN.md). The current setting belongs to one execution host and affects clients using that host; it is not an account-wide or mobile-only preference.
+The selection flow resolves through the shared scopes: the host setting (all devices), a mobile layer stored on the paired host (`preferences.layers.*`, host-paired phones share it) and a phone-local override, with visible source, **Use inherited setting** and pending/error state (see [UI](UI.md#new-thread-model-defaults)). What remains is:
+
+- Cross-host sharing: the mobile layer lives on each paired host, so a phone paired to two hosts can hold different shared values. A profile or account transport that follows the person across hosts is not designed; extend the same layers only after a concrete mechanism exists, and keep showing the host prerequisite until then.
+- Clearing a shared override deletes it without a tombstone, so a much older offline write from another phone could reapply it. Add tombstones if this appears in acceptance.
+- Extending the same transport to the other fields in the [mobile settings plan](MOBILE-SETTINGS-PLAN.md).
 
 **Easier for the person:** One choice can cover every device, with a one-click clear for the exceptions, so the person does not reconfigure each phone.
-
-Keep provider availability and execution configuration on the selected host. Reuse device storage for phone identity and local overrides. Define a suitable profile/account or pairing mechanism for a shared baseline before promising cross-device propagation. If unavailable, show that prerequisite explicitly. Do not copy provider credentials or workspace state into device preferences.
-
-Version the shared preference contract, preserve older-host compatibility and discard stale host/device responses. Offline phone overrides remain usable; shared saves need visible pending/error states and safe retry. Reuse the existing Settings patch concurrency checks rather than replacing whole model sets to change a presentation preference.
 
 ## Remaining acceptance and recovery
 

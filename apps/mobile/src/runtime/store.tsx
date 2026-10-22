@@ -35,7 +35,7 @@ import { deleteToken, readLocal, readRenewedAt, readToken, saveRenewedAt, saveTo
 import { renewalDue, renewCredential } from './tokenRenewal'
 import { HostClient, HostError, normalizeAddress } from './transport'
 import { transcript, visibleText } from './transcript'
-import type { Language } from './settingsModel'
+import { isOutdated, type Language } from './settingsModel'
 import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } from './pushCategories'
 import { GOAL_VERIFY_METHOD, isMethodMissing } from './goalVerify'
 import { mergeTranscript, transcriptRows } from './transcriptChanges'
@@ -167,6 +167,9 @@ interface Store extends State {
   appPreferences: Record<string, AppPreferences>
   /** The computer's model sets and steps (Settings › Models), which the step slider walks through. */
   modelPrefs: Record<string, import('@ramu/shared/types').ModelPreferences | null>
+  /** The mobile layer of shared display preferences each computer keeps; null when the computer is too old to offer it. */
+  mobileLayers: Record<string, import('@ramu/shared/preferenceScopes').PreferenceLayer | null>
+  setMobileLayer(computerId: string, layer: import('@ramu/shared/preferenceScopes').PreferenceLayer): void
   /** What the computer keeps for every device: finished, failed or waiting chats nobody has dealt with yet. */
   inbox: Record<string, InboxNotice[]>
   /** The chat has been looked at (here or anywhere); its notice is cleared on every device. */
@@ -236,9 +239,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [inbox, setInbox] = useState<Record<string, InboxNotice[]>>({})
   const [modelPrefs, setModelPrefs] = useState<Record<string, import('@ramu/shared/types').ModelPreferences | null>>({})
   const [appPreferences, setAppPreferences] = useState<Record<string, AppPreferences>>({})
+  const [mobileLayers, setMobileLayers] = useState<
+    Record<string, import('@ramu/shared/preferenceScopes').PreferenceLayer | null>
+  >({})
   const [missingMethods, setMissingMethods] = useState<Record<string, string[]>>({})
   const [startSettings, setStartSettings] = useState<Record<string, AgentSettings>>({})
-  const loadDefaults = (id: string) =>
+  const loadDefaults = (id: string) => {
+    // Older computers have no shared mobile layer; they keep working with the computer's own setting and this phone's.
+    void invoke(id, 'preferences.layers.get').then(
+      (snapshot) => setMobileLayers((p) => ({ ...p, [id]: snapshot.mobile })),
+      (error) => {
+        if (isOutdated(error)) setMobileLayers((p) => ({ ...p, [id]: null }))
+      },
+    )
+    loadModels(id)
+  }
+  const loadModels = (id: string) =>
     void Promise.all([invoke(id, 'settings.models.get'), invoke(id, 'settings.app.get')]).then(
       ([models, app]) => {
         setAppPreferences((p) => ({ ...p, [id]: app }))
@@ -933,6 +949,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     inbox,
     defaults: startSettings,
     modelPrefs,
+    mobileLayers,
+    setMobileLayer: (id, layer) => setMobileLayers((p) => ({ ...p, [id]: layer })),
     appPreferences,
     missingMethods,
     invoke,

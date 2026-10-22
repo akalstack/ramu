@@ -96,7 +96,8 @@ export function ModelSetsEditor({
         <p className="muted text-muted-foreground text-caption">
           {t(
             'Choose configured steps, or choose a model and adjust its supported effort. Switching keeps your current selection and draft.',
-          )}
+          )}{' '}
+          {t('Applies to desktop and to phones without their own setting.')}
         </p>
         <div className="settings-defaults grid [grid-template-columns:minmax(0,_1fr)_minmax(0,_1fr)] gap-3">
           <label>

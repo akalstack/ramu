@@ -53,7 +53,8 @@ export function resolveModelFlow(
   host: ModelFlow,
   layers: { mobile: PreferenceLayer; device: PreferenceLayer },
 ): ResolvedModelFlow {
-  const readable = (layer: PreferenceLayer) => (isModelFlow(layer.fields[MODEL_FLOW_FIELD]?.value) ? layer : emptyLayer())
+  const readable = (layer: PreferenceLayer) =>
+    isModelFlow(layer.fields[MODEL_FLOW_FIELD]?.value) ? layer : emptyLayer()
   const base = setOverride(emptyLayers(), 'all', MODEL_FLOW_FIELD, host, 'host', 0)
   const { value, source } = resolvePreference(
     { all: base.all, mobile: readable(layers.mobile), device: readable(layers.device) },

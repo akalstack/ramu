@@ -8,7 +8,7 @@ People may want larger text, a different appearance, quieter notifications or si
 
 ## Already in place
 
-The shared resolver (`@ramu/shared/preferenceScopes`) is used by Settings → Appearance on mobile, which shows the effective source and explains that All devices and All mobile devices need a sync transport. Interface text size (Default, Large, Larger) is stored on this phone and scales the app's own text on top of the OS size; the other fields still wait for the transport below.
+The shared resolver (`@ramu/shared/preferenceScopes`) is used by Settings → Appearance on mobile, which shows the effective source and explains that All devices and All mobile devices need a sync transport. Interface text size (Default, Large, Larger) is stored on this phone and scales the app's own text on top of the OS size; the other fields still wait for the transport below. Model selection flow is the first field on it: the host's own setting is the all-device baseline, a mobile layer is stored on the paired host (`preferences.layers.get/set`, owner devices write, viewers read) and a phone override stays on the device; `@ramu/shared/modelFlow` adds stale-write discard and the inherited preview. Cross-host propagation still needs a profile or account mechanism.
 
 ## Copy and interaction
 

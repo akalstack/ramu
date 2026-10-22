@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { translate } from '@ramu/shared/i18n'
+import { ModelFlowRow } from './ModelFlowRow'
 import { useStore } from '../runtime/store'
 import { ActivityIndicator, TextInput, View } from 'react-native'
 import { Check, ChevronsUpDown } from 'lucide-react-native'
@@ -175,12 +176,15 @@ export function TextRow({
 function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disabled?: boolean }) {
   const { language } = useStore()
   if (row.path === '$models.defaultBarMode' && row.kind === 'choice')
-    row = {
-      ...row,
-      title: translate(language, row.title),
-      help: row.help ? translate(language, row.help) : undefined,
-      options: row.options.map((option) => ({ ...option, label: translate(language, option.label) })),
-    }
+    return (
+      <ModelFlowRow
+        title={row.title}
+        help={row.help}
+        options={row.options}
+        disabled={disabled}
+        save={(next) => host.set(row.path, next)}
+      />
+    )
   const value = host.read(row.path)
   if (row.kind === 'toggle')
     return (

@@ -32,6 +32,7 @@ import type { AgentProvider, AgentSettings, ChatGoal, FileContext, QueuedMessage
 import { font, radius, space, useTheme } from '../theme'
 import { providerNames } from '../runtime/types'
 import { useStore } from '../runtime/store'
+import { useModelFlow } from '../runtime/useModelFlow'
 import { useT } from '../i18n'
 import { Chip, IconButton, Row, Segmented, Sheet, T, tap } from './ui'
 import { ProviderIcon } from './Logos'
@@ -291,6 +292,7 @@ export function ModelChip({
               value={value}
               models={models}
               prefs={store.modelPrefs[computerId ?? store.selected]}
+              computerId={computerId ?? store.selected}
               onChange={(choice) => {
                 onChange(choice)
                 close()
@@ -934,12 +936,7 @@ export function Composer({
             style={{ borderRadius: radius.full }}
             onPress={() => setMenu('actions')}
           />
-          <ModelChip
-            value={model}
-            onChange={onModel}
-            computerId={computerId}
-            limited={limited}
-          />
+          <ModelChip value={model} onChange={onModel} computerId={computerId} limited={limited} />
           {computerId ? (
             <ThreadUsageChip
               hostId={computerId}
@@ -1301,18 +1298,22 @@ function QuickSteps({
   value,
   models,
   prefs,
+  computerId,
   onChange,
 }: {
   value: ModelChoice
   models: ModelRow[]
   prefs?: import('@ramu/shared/types').ModelPreferences | null
+  computerId: string
   onChange: (m: ModelChoice) => void
 }) {
-  const [mode, setMode] = useState<'model' | 'effort'>(prefs?.defaultBarMode ?? 'model')
+  // This phone's own choice, then the shared mobile setting, then the computer's. Changing it only redraws the control.
+  const flow = useModelFlow(computerId).effective.value
+  const [mode, setMode] = useState<'model' | 'effort'>(flow)
   useEffect(() => {
-    setMode(prefs?.defaultBarMode ?? 'model')
+    setMode(flow)
     setPreview(null)
-  }, [prefs?.defaultBarMode])
+  }, [flow])
   const [setId, setSetId] = useState(prefs?.defaultSetId ?? '')
   const [preview, setPreview] = useState<number | null>(null)
   if (!prefs?.sets.length && mode === 'model') return null
