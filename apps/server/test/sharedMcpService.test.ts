@@ -288,3 +288,31 @@ it('stores a credential write-only, replaces it without losing the old one on fa
   await vi.waitFor(() => expect(values.size).toBe(0))
   expect(refs()).toEqual({})
 })
+
+
+it('names what a destination login still lacks without checking unreviewed connections, and rechecks reviewed ones', async () => {
+  const { invoke, input, connect, manager } = fixture()
+  const connection = invoke('mcp.save', input) as SharedMcpConnection
+  invoke('mcp.account', { provider: 'codex', accountId: 'a', shareApprovals: true })
+  invoke('mcp.account', { provider: 'codex', accountId: 'b', shareApprovals: true })
+  expect(await manager.destinationAttention('codex', 'b', 'project')).toEqual([
+    { name: 'Shared local service', status: 'not-checked' },
+  ])
+  expect(connect).not.toHaveBeenCalled()
+  const inspection = (await invoke('mcp.check', connection.id, {
+    provider: 'codex',
+    accountId: 'a',
+    projectId: 'project',
+  })) as SharedMcpInspection
+  invoke('mcp.approve', {
+    connectionId: connection.id,
+    revision: inspection.revision,
+    catalogRevision: inspection.catalogRevision,
+    provider: 'codex',
+    accountId: 'a',
+    scope: input.scope,
+    tools: [{ name: 'inspect_environment', action: 'read', approval: 'connection' }],
+  })
+  expect(await manager.destinationAttention('codex', 'b', 'project')).toEqual([])
+  expect(await manager.destinationAttention('codex', 'b', 'other-project')).toEqual([])
+})

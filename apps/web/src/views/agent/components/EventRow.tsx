@@ -23,6 +23,13 @@ import { CONVERSATION_SEPARATOR_CLASS, GHOST_TEXT_BUTTON_CLASS, TURN_END_CLASS }
 import { ErrorNote } from './ErrorNote'
 import { handoffLine } from '../handoffLine'
 
+const MCP_ATTENTION_LABELS = {
+  'approval-needed': 'Approval needed',
+  'sign-in-required': 'Sign-in required',
+  unsupported: 'Unsupported',
+  'not-checked': 'Not checked',
+} as const
+
 /** Renders one transcript event by kind: messages, separators, plans, permission and question cards, results and errors. */
 export function EventRow({
   event: e,
@@ -134,6 +141,23 @@ export function EventRow({
             {e.reason && e.reason !== 'Changed conversation settings' && <small>{e.reason}</small>}
             {e.handoff && handoffLine(e.handoffInfo, translate) && (
               <small>{handoffLine(e.handoffInfo, translate)}</small>
+            )}
+            {e.mcpAttention && e.mcpAttention.length > 0 && (
+              <small role="status">
+                {translate('Shared MCP is not ready on this login: {servers}.', {
+                  servers: e.mcpAttention
+                    .map((entry) => `${entry.name} (${translate(MCP_ATTENTION_LABELS[entry.status])})`)
+                    .join(', '),
+                })}{' '}
+                <Button
+                  variant="link"
+                  size="xs"
+                  className="h-auto p-0 align-baseline"
+                  onClick={() => window.dispatchEvent(new Event('ramu:mcp-status'))}
+                >
+                  {translate('Review access')}
+                </Button>
+              </small>
             )}
           </span>
         </div>

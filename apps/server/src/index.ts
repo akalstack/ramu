@@ -380,6 +380,14 @@ const projectOf = (session: AgentSessionInfo) => {
 agents.memoryInstructions = (session) => memory.instructions(session, projectOf(session))
 const rules = new RuleStore(db)
 agents.rulesInstructions = (session) => rules.instructions(projectOf(session), session.provider)
+agents.mcpDestination = (session, settings) => {
+  const project = projectOf(session)
+  return getSharedMcp().destinationAttention(
+    settings.provider,
+    settings.accountId ?? 'default',
+    project && project !== NO_PROJECT ? project : null,
+  )
+}
 // Calls that arrive over the network are marked, so a desktop dialog is never opened on this computer for someone else.
 const origin = new AsyncLocalStorage<{ network: boolean; deviceId?: string }>()
 const interactive = new InteractiveStore(db, (session, ref) => agents.interactivePublished(session, ref))

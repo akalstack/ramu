@@ -22,7 +22,7 @@ export interface SetupInputs {
 }
 
 const connectionReasons: Record<SharedMcpAccountReadiness['status'], string> = {
-  ready: 'Checked and approved for this login. Thread launches do not add Shared MCP tools yet.',
+  ready: 'Checked and approved for this login. Its approved tools reach the thread on the ramu_external server; each call asks first.',
   'approval-needed': 'Review access for this login in Settings → Agent setup → MCP servers.',
   'sign-in-required': 'Sign in to the service in Settings → Agent setup → MCP servers.',
   unsupported: 'This connection cannot be used from this provider.',

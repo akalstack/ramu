@@ -110,7 +110,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Added to the launch; the runtime has not reported this server.': 'Ditambahkan saat peluncuran; runtime belum melaporkan server ini.',
   'Added to the launch; this runtime does not report its servers.': 'Ditambahkan saat peluncuran; runtime ini tidak melaporkan servernya.',
   "Copied into this login's skill export for new threads. Whether the model reads a skill is not observable.": 'Disalin ke ekspor skill login ini untuk thread baru. Apakah model membaca skill tidak dapat diamati.',
-  'Checked and approved for this login. Thread launches do not add Shared MCP tools yet.': 'Sudah diperiksa dan disetujui untuk login ini. Peluncuran thread belum menambahkan alat MCP bersama.',
+  'Checked and approved for this login. Its approved tools reach the thread on the ramu_external server; each call asks first.': 'Sudah diperiksa dan disetujui untuk login ini. Alat yang disetujui masuk ke thread lewat server ramu_external; setiap panggilan meminta izin dulu.',
   'Review access for this login in Settings → Agent setup → MCP servers.': 'Tinjau akses untuk login ini di Pengaturan → Pengaturan agen → Server MCP.',
   'Sign in to the service in Settings → Agent setup → MCP servers.': 'Masuk ke layanan di Pengaturan → Pengaturan agen → Server MCP.',
   'This connection cannot be used from this provider.': 'Koneksi ini tidak dapat dipakai dari provider ini.',
@@ -3007,4 +3007,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "A label for the external service account this connection uses. Changing it removes stored credentials so the new account signs in with its own.": "Label untuk akun layanan eksternal yang dipakai koneksi ini. Mengubahnya menghapus kredensial tersimpan agar akun baru masuk dengan kredensialnya sendiri.",
   "Save the server first, then add its credentials here.": "Simpan server dulu, lalu tambahkan kredensialnya di sini.",
 
+  "Shared MCP is not ready on this login: {servers}.": "MCP bersama belum siap di login ini: {servers}.",
+  "Review access": "Tinjau akses",
+  "Approval needed": "Perlu persetujuan",
+  "Unsupported": "Tidak didukung",
 }

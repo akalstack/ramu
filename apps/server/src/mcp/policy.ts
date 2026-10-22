@@ -307,6 +307,18 @@ export class SharedMcpPolicy {
     )
   }
 
+  /** Whether this login was ever approved for the connection's current revision, whatever its catalog was then. */
+  hasReviewedAccess(provider: SharedMcpProviderAccount['provider'], accountId: string, connectionId: string) {
+    const connection = this.connection(connectionId)
+    return this.state.grants.some(
+      (entry) =>
+        entry.connectionId === connection.id &&
+        entry.revision === connection.revision &&
+        entry.provider === provider &&
+        entry.accountIds.includes(accountId),
+    )
+  }
+
   private matchingGrants(session: ExternalMcpSession, connection: SharedMcpConnection, catalogRevision: string) {
     return this.state.grants.filter(
       (entry) =>

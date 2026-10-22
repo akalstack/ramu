@@ -116,6 +116,35 @@ export class SharedMcpService {
       }))
   }
 
+  /**
+   * What a login would lack if a chat moved onto it now, for the notice that follows a switch. A connection this login
+   * was already approved for but has not been checked since Ramu started is checked again here, bounded in time, so the
+   * switch is not blamed on setup that is actually fine. Everything else is reported as it stands; nothing is approved.
+   */
+  async destinationAttention(
+    provider: SharedMcpProviderAccount['provider'],
+    accountId: string,
+    projectId: string | null,
+    waitMs = 10_000,
+  ) {
+    for (const entry of this.sessionConnections(provider, accountId, projectId)) {
+      if (entry.status !== 'not-checked' || !this.policy.hasReviewedAccess(provider, accountId, entry.connectionId))
+        continue
+      let timer: ReturnType<typeof setTimeout> | undefined
+      await Promise.race([
+        this.check(entry.connectionId, { provider, accountId, projectId }).catch(() => {}),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, waitMs)
+          timer.unref()
+        }),
+      ])
+      clearTimeout(timer)
+    }
+    return this.sessionConnections(provider, accountId, projectId).flatMap(({ name, status }) =>
+      status === 'ready' ? [] : [{ name, status }],
+    )
+  }
+
   /** Readiness per set-up login, from the last verified catalog and the approvals; nothing is contacted here. */
   private readiness(state: SharedMcpPolicyState): SharedMcpAccountReadiness[] {
     return state.accounts.map((account) => {

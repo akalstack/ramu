@@ -75,6 +75,13 @@ export class AgentService {
   memoryInstructions: ((session: AgentSessionInfo) => string) | undefined
   /** The user's always-on rules for a session's project and provider, labelled as the user's own. */
   rulesInstructions: ((session: AgentSessionInfo) => string | undefined) | undefined
+  /** Shared MCP connections a login cannot use yet for a chat's project, checked when a chat moves onto it. */
+  mcpDestination:
+    | ((
+        session: AgentSessionInfo,
+        settings: AgentSessionInfo['settings'],
+      ) => Promise<NonNullable<Extract<AgentEvent, { kind: 'settings' }>['mcpAttention']>>)
+    | undefined
   /** Guidance from the learning job. `checkpoint: false` leaves the progress summary out, when a handoff already carries it. */
   learningInstructions: ((session: AgentSessionInfo, options?: { checkpoint?: boolean }) => string) | undefined
   sessionCheckpoint: ((id: string) => { seq: number; summary: string } | null) | undefined
@@ -178,6 +185,7 @@ export class AgentService {
       },
       memoryInstructions: () => this.memoryInstructions,
       rulesInstructions: () => this.rulesInstructions,
+      mcpDestination: () => this.mcpDestination,
       mirrorChild: (...a) => parts.subagents.mirrorChild(...a),
       nativeSubagentsOff: (...a) => parts.subagents.nativeSubagentsOff(...a),
       noteRoute: (...a) => parts.router.noteRoute(...a),

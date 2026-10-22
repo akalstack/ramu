@@ -60,6 +60,7 @@ export interface FallbackRouterHost
     Pick<SessionStore, 'get'>,
     Pick<SubagentRunner, 'settleChild'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
+  mcpDestination(): AgentService['mcpDestination']
   preferences(): AppPreferences | undefined
   preferencesSource(): (() => AppPreferences) | undefined
   refreshAccountUsage(): AgentService['refreshAccountUsage']
@@ -141,6 +142,12 @@ export class FallbackRouter {
       if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0))
         throw new Error('Provider switch cancelled')
       if (!sameIdentity) this.host.rememberSession(id)
+      // Shared MCP access belongs to the login a chat runs on: say what the new one still lacks, never why it was chosen.
+      const mcpAttention = await this.host
+        .mcpDestination()?.(s, settings)
+        .catch(() => [])
+      if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0))
+        throw new Error('Provider switch cancelled')
       this.db
         .prepare('UPDATE agent_sessions SET provider = ?, settings = ?, provider_session_id = ? WHERE id = ?')
         .run(settings.provider, JSON.stringify(settings), resume, id)
@@ -155,6 +162,7 @@ export class FallbackRouter {
         handoff: !!handoffInfo,
         previous: s.settings,
         ...(handoffInfo ? { handoffInfo } : {}),
+        ...(mcpAttention?.length ? { mcpAttention } : {}),
       })
       if (WRITING_STATES.includes(s.state)) {
         this.host.transitioning.delete(id)

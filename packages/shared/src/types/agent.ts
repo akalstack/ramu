@@ -408,6 +408,11 @@ type AgentEventBody =
       previous?: AgentSettings
       /** Why the conversation is handed over and, once the next launch has built it, what was carried. Present only with `handoff`. */
       handoffInfo?: HandoffInfo
+      /** Shared MCP connections the new login cannot use yet, so the person can review access or choose another login. */
+      mcpAttention?: {
+        name: string
+        status: 'approval-needed' | 'sign-in-required' | 'unsupported' | 'not-checked'
+      }[]
     }
   | ({ kind: 'agent' } & AgentTask)
 
