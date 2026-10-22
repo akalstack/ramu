@@ -14,9 +14,11 @@ import type {
   AgentEvent,
   AgentScope,
   AgentSessionInfo,
+  AgentSettings,
   AgentProvider,
   ProviderCatalog,
   McpConnection,
+  SetupOmission,
   Schedule,
 } from '@ramu/shared/types'
 import type { UsageService } from './providers/usage'
@@ -82,6 +84,8 @@ export class AgentService {
         settings: AgentSessionInfo['settings'],
       ) => Promise<NonNullable<Extract<AgentEvent, { kind: 'settings' }>['mcpAttention']>>)
     | undefined
+  /** What a destination provider login lacks from the thread's setup, for the settings event of a switch or fallback. */
+  setupOmissions: ((session: AgentSessionInfo, settings: AgentSettings) => SetupOmission[]) | undefined
   /** Guidance from the learning job. `checkpoint: false` leaves the progress summary out, when a handoff already carries it. */
   learningInstructions: ((session: AgentSessionInfo, options?: { checkpoint?: boolean }) => string) | undefined
   sessionCheckpoint: ((id: string) => { seq: number; summary: string } | null) | undefined
@@ -186,6 +190,7 @@ export class AgentService {
       memoryInstructions: () => this.memoryInstructions,
       rulesInstructions: () => this.rulesInstructions,
       mcpDestination: () => this.mcpDestination,
+      setupOmissions: () => this.setupOmissions,
       mirrorChild: (...a) => parts.subagents.mirrorChild(...a),
       nativeSubagentsOff: (...a) => parts.subagents.nativeSubagentsOff(...a),
       noteRoute: (...a) => parts.router.noteRoute(...a),

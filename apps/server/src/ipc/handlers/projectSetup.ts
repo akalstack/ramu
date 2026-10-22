@@ -1,8 +1,11 @@
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
+import type { AgentProvider } from '@ramu/shared/types'
 import { z } from 'zod'
 import {
   discoverProjectSetup,
   MCP_IMPORTS_KEY,
   MCP_SHARING_KEY,
+  projectSharingKey,
   SKILL_SHARING_KEY,
   type McpImports,
   type McpSharing,
@@ -11,6 +14,11 @@ import {
 import { isAbsolute } from 'node:path'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
+
+const choose = (all: Record<string, boolean>, key: string, shared: boolean | null) => {
+  const { [key]: _old, ...rest } = all
+  return shared === null ? rest : { ...rest, [key]: shared }
+}
 
 /** What agents get in a project, merged across providers and repositories, and which servers Ramu shares. */
 export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
@@ -49,8 +57,13 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
      * copy works; the provider that declares it keeps its own copy, and removing the connection restores sharing.
      */
     'mcp.import': {
-      args: z.tuple([id, z.string().regex(/^[0-9a-f]{16}$/)]),
-      run: (projectId: string, key: string) => {
+      args: z.union([
+        z.tuple([id, z.string().regex(/^[0-9a-f]{16}$/)]),
+        z.tuple([z.string().regex(/^[0-9a-f]{16}$/), id, z.array(z.enum(AGENT_PROVIDERS)).min(1).max(5)]),
+      ]),
+      run: (first: string, second: string, providers?: AgentProvider[]) => {
+        const projectId = providers ? second : first
+        const key = providers ? first : second
         admin()
         if (!getSharedMcp) throw new Error('Update this host for Shared MCP management')
         const { project, setup } = setupOf(projectId)
@@ -69,7 +82,7 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
           serviceAccountId: 'default',
           enabled: true,
           scope: { projectIds: [projectId], hostWide: false },
-          providers: [...server.providers],
+          providers: providers ?? [...server.providers],
           transport:
             transport.type === 'http'
               ? { type: 'http', url: transport.url, headerSecretRefs: {} }
@@ -86,10 +99,13 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
     },
     /** Sharing passes a server's own credentials to other providers' sessions, so only the host decides it. */
     'mcp.share': {
-      args: z.tuple([z.string().regex(/^[0-9a-f]{16}$/), z.boolean()]),
-      run: (key: string, shared: boolean) => {
+      args: z.tuple([z.string().regex(/^[0-9a-f]{16}$/), z.boolean().nullable(), id.optional()]),
+      run: (key: string, shared: boolean | null, projectId?: string) => {
         admin()
-        workspace.setAppState(MCP_SHARING_KEY, { ...sharing(), [key]: shared })
+        workspace.setAppState(
+          MCP_SHARING_KEY,
+          choose(sharing(), projectId ? projectSharingKey(projectId, key) : key, shared),
+        )
         ctx.host.send('mcp:changed', {})
       },
     },
@@ -100,11 +116,15 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
           .string()
           .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
           .max(64),
-        z.boolean(),
+        z.boolean().nullable(),
+        id.optional(),
       ]),
-      run: (name: string, shared: boolean) => {
+      run: (name: string, shared: boolean | null, projectId?: string) => {
         admin()
-        workspace.setAppState(SKILL_SHARING_KEY, { ...skillSharing(), [name]: shared })
+        workspace.setAppState(
+          SKILL_SHARING_KEY,
+          choose(skillSharing(), projectId ? projectSharingKey(projectId, name) : name, shared),
+        )
         ctx.host.send('memory:changed', {})
         ctx.host.send('mcp:changed', {})
       },

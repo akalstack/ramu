@@ -78,6 +78,17 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.string().regex(/^[A-Za-z_][A-Za-z0-9_-]{0,127}$/)]),
       run: (connectionId: string, name: string) => admin().removeCredential(connectionId, name),
     },
+    /** Write-only: the value is stored in the host's credential store and never returned or listed. */
+    'mcp.setSecret': {
+      args: z.tuple([id, z.enum(['header', 'env']), z.string().min(1).max(128), z.string().min(1).max(65536)]),
+      run: (connectionId: string, kind: 'header' | 'env', name: string, value: string) =>
+        admin().setSecret(connectionId, kind, name, value),
+    },
+    'mcp.removeSecret': {
+      args: z.tuple([id, z.enum(['header', 'env']), z.string().min(1).max(128)]),
+      run: (connectionId: string, kind: 'header' | 'env', name: string) =>
+        admin().removeSecret(connectionId, kind, name),
+    },
     'mcp.disconnect': { args: z.tuple([id]), run: (id: string) => admin().disconnect(id) },
     'mcp.remove': {
       args: z.tuple([id]),

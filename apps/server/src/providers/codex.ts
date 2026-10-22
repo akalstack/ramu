@@ -282,7 +282,13 @@ class CodexSession implements CodexRunner {
         ...(this.connection?.interceptSubagents ? [CODEX_HOOK_CONFIG] : []),
         ...(this.connection
           ? codexMcpConfig(
-              sessionMcpServers(this.scope, this.connection, 'codex', this.settings.accountId),
+              sessionMcpServers(
+                this.scope,
+                this.connection,
+                'codex',
+                this.settings.accountId,
+                this.connection?.sharingProjectId,
+              ),
             )
           : []),
       ],

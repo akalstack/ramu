@@ -60,6 +60,7 @@ export function sessionMcpServers(
   connection: McpConnection | undefined,
   provider: AgentProvider,
   accountId?: string,
+  projectId?: string | null,
 ): NormalizedMcp[] {
   const configDirs = connection?.mcpConfigDirs ?? []
   const repo = repoMcpServers(scope, configDirs).filter((s) => s.name !== EXTERNAL_MCP_SERVER)
@@ -67,7 +68,9 @@ export function sessionMcpServers(
   const dirs = [...new Set([scope.cwd, ...scope.additionalDirs, ...scope.covers, ...configDirs])]
   return [
     ...repo,
-    ...sharedSessionServers(dirs, provider, accountEnvironment(provider, accountId))
+    ...sharedSessionServers(dirs, provider, accountEnvironment(provider, accountId), {
+      projectId: projectId ?? connection?.sharingProjectId,
+    })
       .filter((s) => !names.has(s.name) && s.name !== EXTERNAL_MCP_SERVER)
       .map((s): NormalizedMcp => ({
         name: s.name,
@@ -172,7 +175,7 @@ export function configuredMcpStatus(
 ): AgentMcpStatus {
   const servers = (
     session
-      ? sessionMcpServers(scope, connection, session.provider, session.accountId)
+      ? sessionMcpServers(scope, connection, session.provider, session.accountId, connection?.sharingProjectId)
       : repoMcpServers(scope, connection?.mcpConfigDirs)
   ).map((server) => ({
     name: server.name,

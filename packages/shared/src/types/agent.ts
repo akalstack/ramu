@@ -103,6 +103,17 @@ export interface HandoffInfo {
   contextWindow?: number
 }
 
+/**
+ * Setup a thread had before a switch, fallback or account change that the destination cannot take over as it was.
+ * Names only: it points at what to fix, never at a rule's text or a server's address.
+ */
+export interface SetupOmission {
+  kind: 'shared-mcp' | 'rule'
+  name: string
+  /** Why it is missing at the destination: the destination login's readiness, or `too-large` for rules over its size. */
+  status: 'approval-needed' | 'sign-in-required' | 'unsupported' | 'not-checked' | 'too-large'
+}
+
 /** Fields of the `provider-wait` event: a thread held at a usage limit, to be continued at `retryAt`. `retryAt` null ends the wait. */
 export interface ProviderWaitFields {
   retryAt: number | null
@@ -415,6 +426,8 @@ type AgentEventBody =
         name: string
         status: 'approval-needed' | 'sign-in-required' | 'unsupported' | 'not-checked'
       }[]
+      /** What the destination login lacks from the thread's agent setup, checked on the execution server before launch. */
+      setupOmissions?: SetupOmission[]
     }
   | ({ kind: 'agent' } & AgentTask)
 
@@ -464,6 +477,8 @@ export interface McpConnection {
   externalUrl?: string
   /** Original project/repository directories whose MCP definitions belong to this workspace. */
   mcpConfigDirs?: string[]
+  /** The project whose per-project sharing choices apply to this chat's shared servers and skills. */
+  sharingProjectId?: string
   /** Codex only: a hook asks Ramu before each of Codex's own sub-agents starts, so Ramu can send it elsewhere. */ interceptSubagents?: boolean
   /** Claude only: Ramu's advisor replaces Claude Code's own, which is turned off. */
   replaceAdvisor?: boolean

@@ -659,11 +659,22 @@ export interface RamuMethods {
   'mcp.remove'(connectionId: string): Promise<void>
   'mcp.checkCredentialStore'(): Promise<'available' | 'unavailable' | 'not-checked'>
   /** Copy a declared server's non-secret definition into Shared MCP for one project. Connects nothing. */
-  'mcp.import'(projectId: string, key: string): SharedMcpConnection
-  /** Give a declared server to every provider and account, or stop. Takes effect for new sessions. */
-  'mcp.share'(key: string, shared: boolean): void
+  'mcp.import'(
+    ...args:
+      | [projectId: string, key: string]
+      | [key: string, projectId: string, providers: SharedMcpProviderAccount['provider'][]]
+  ): SharedMcpConnection
+  /** Write-only: store one header or environment secret on the host. Nothing reads the value back. */
+  'mcp.setSecret'(connectionId: string, kind: 'header' | 'env', name: string, value: string): Promise<void>
+  /** Remove one secret from a connection and delete its stored value. */
+  'mcp.removeSecret'(connectionId: string, kind: 'header' | 'env', name: string): Promise<void>
+  /**
+   * Give a declared server to every provider and account, or stop. With a project the choice covers that project
+   * only; `null` removes that choice (or the host-wide one). Takes effect for new sessions.
+   */
+  'mcp.share'(key: string, shared: boolean | null, projectId?: string): void
   /** Copy a skill from the person's own provider folder to every provider and account. Applies to new threads. */
-  'skills.share'(name: string, shared: boolean): void
+  'skills.share'(name: string, shared: boolean | null, projectId?: string): void
   'providers.loginCommand'(
     provider: ProviderStatus['provider'],
     configuration?: ProviderConfiguration,

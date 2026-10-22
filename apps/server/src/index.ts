@@ -94,7 +94,7 @@ import { MemoryService, registerMemoryTools } from './memory/memory'
 import { RuleStore } from './rules/rules'
 import { SummaryService, registerLibraryTools, withoutTools } from './memory/summaries'
 import { discoverSkills } from './context'
-import { NO_PROJECT, type AgentSessionInfo, type ScheduleInput } from '@ramu/shared/types'
+import { NO_PROJECT, type AgentSessionInfo, type ScheduleInput, type SetupOmission } from '@ramu/shared/types'
 
 const config = loadConfig()
 const { userData, socketPath } = config
@@ -368,7 +368,9 @@ learning.sharedSkills = ({ projectId, provider, accountId, cwd }) => {
     ...(project?.root ? [project.root] : []),
     ...(projectId ? workspace.listRepositories(projectId).map((repo) => repo.root) : []),
   ]
-  return sharedSessionSkills([...new Set(dirs)], provider, accountEnvironment(provider, accountId), sharing)
+  return sharedSessionSkills([...new Set(dirs)], provider, accountEnvironment(provider, accountId), sharing, {
+    projectId,
+  })
 }
 const summaries = new SummaryService(db, workspace, agents, memory, learning, (created) =>
   send('summaries:changed', { created }),
@@ -428,6 +430,28 @@ const externalSource = (session: AgentSessionInfo): ExternalSessionSource => {
     role: summaries.isReviewChat(session.taskId) ? 'restricted' : 'interactive',
     externalToolsAllowed: !session.parentId,
   }
+}
+// Before a switch or fallback launches, say what the destination login lacks from the thread's setup.
+agents.setupOmissions = (session, settings) => {
+  const projectId = projectOf(session)
+  const omitted: SetupOmission[] = []
+  try {
+    for (const connection of getSharedMcp().sessionConnections(
+      settings.provider,
+      settings.accountId ?? 'default',
+      projectId,
+    ))
+      if (connection.status !== 'ready')
+        omitted.push({ kind: 'shared-mcp', name: connection.name, status: connection.status })
+  } catch {
+    // Unreadable Shared MCP configuration is reported in Settings; it must not stop a switch.
+  }
+  try {
+    rules.instructions(projectId, settings.provider)
+  } catch {
+    omitted.push({ kind: 'rule', name: 'Rules', status: 'too-large' })
+  }
+  return omitted
 }
 const dispatcher = createDispatcher(
   {
@@ -1059,6 +1083,7 @@ agents.toolConnection = (session) => {
       return parts.length ? { browserInstructions: parts.join('\n\n') } : {}
     })(),
     ...(mcpConfigDirs.length ? { mcpConfigDirs } : {}),
+    ...(projectId && projectId !== NO_PROJECT ? { sharingProjectId: projectId } : {}),
     ...(skillsDir ? { skillsDir } : {}),
     ...(() => {
       try {

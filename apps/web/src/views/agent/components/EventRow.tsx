@@ -23,6 +23,7 @@ import { PermissionRequestCard } from './PermissionRequestCard'
 import { CONVERSATION_SEPARATOR_CLASS, GHOST_TEXT_BUTTON_CLASS, TURN_END_CLASS } from '../styles'
 import { ErrorNote } from './ErrorNote'
 import { handoffLine } from '../handoffLine'
+import { canReviewAccess, omissionsLine } from '../setupOmissions'
 
 const MCP_ATTENTION_LABELS = {
   'approval-needed': 'Approval needed',
@@ -46,6 +47,7 @@ export function EventRow({
   onEdit,
   onOpenAgent,
   onOpenQuestion,
+  onReviewAccess,
 }: {
   event: AgentEvent
   sessionId: string
@@ -60,6 +62,8 @@ export function EventRow({
   onEdit?: (text: string, attachments: Attachment[]) => void
   onOpenAgent?: (agentId: string) => void
   onOpenQuestion?: (requestId: string) => void
+  /** Opens the thread's MCP access dialog from a switch notice. */
+  onReviewAccess?: () => void
 }) {
   useLanguage()
   const { invoke } = useHost()
@@ -158,6 +162,19 @@ export function EventRow({
                 >
                   {translate('Review access')}
                 </Button>
+              </small>
+            )}
+            {omissionsLine(e.setupOmissions) && (
+              <small role="status">
+                {omissionsLine(e.setupOmissions)}
+                {onReviewAccess && canReviewAccess(e.setupOmissions) && (
+                  <>
+                    {' '}
+                    <Button variant="link" size="xs" className="h-auto p-0 align-baseline" onClick={onReviewAccess}>
+                      {translate('Review access')}
+                    </Button>
+                  </>
+                )}
               </small>
             )}
           </span>

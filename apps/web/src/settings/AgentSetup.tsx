@@ -3,7 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import type { AgentProvider } from '@ramu/shared/types'
 import type { ProjectMcpServer, ProjectSetupSource, ProjectSkill } from '@ramu/shared/mcp'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
+import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
@@ -53,11 +56,14 @@ function fromText(sources: ProjectSetupSource[]) {
   return places.length > 2 ? t('{places} and {count} more', { places: shown, count: places.length - 2 }) : shown
 }
 
-type Shareable = Pick<ProjectMcpServer, 'shared' | 'shareBlocked' | 'nativeProviders'>
+type Shareable = Pick<ProjectMcpServer, 'shared' | 'shareBlocked' | 'nativeProviders' | 'shareScope'>
 
 /** One line on who has it now: shared, only some providers, or off everywhere. */
 function reach(item: Shareable) {
-  if (item.shared) return t('Shared with every provider and account')
+  if (item.shared)
+    return item.shareScope === 'project'
+      ? t('Shared with every provider and account in this project')
+      : t('Shared with every provider and account')
   if (item.shareBlocked) return t(item.shareBlocked)
   if (!item.nativeProviders.length) return t('Turned off in every provider')
   return t('Only in {providers}', { providers: item.nativeProviders.map(providerName).join(', ') })
@@ -73,6 +79,7 @@ function ShareRow({
   label,
   disabled,
   onShare,
+  onWiden,
   extra,
 }: {
   name: string
@@ -83,6 +90,9 @@ function ShareRow({
   label: string
   disabled: boolean
   onShare(shared: boolean): void
+  /** Offered when the choice covers this project only: extends it to every project. */
+  onWiden?(): void
+  /** An item-specific action beside the switch. */
   extra?: ReactNode
 }) {
   return (
@@ -97,16 +107,106 @@ function ShareRow({
         </span>
         <span className="block small text-caption text-muted-foreground">
           {reach(item)} · {t('From {places}', { places: fromText(sources) })}
+          {onWiden && item.shared && item.shareScope === 'project' && (
+            <>
+              {' · '}
+              <button
+                type="button"
+                className="cursor-pointer border-0 bg-transparent p-0 text-caption text-brand underline-offset-2 hover:underline disabled:cursor-default disabled:no-underline"
+                disabled={disabled}
+                onClick={onWiden}
+              >
+                {t('Share with every project')}
+              </button>
+            </>
+          )}
         </span>
         {extra}
       </span>
-      <Switch
-        aria-label={label}
-        checked={item.shared}
-        disabled={disabled || !!item.shareBlocked || !item.nativeProviders.length}
-        onCheckedChange={onShare}
-      />
+      <span className="flex flex-none items-center gap-2">
+        {extra}
+        <Switch
+          aria-label={label}
+          checked={item.shared}
+          disabled={disabled || !!item.shareBlocked || !item.nativeProviders.length}
+          onCheckedChange={onShare}
+        />
+      </span>
     </SettingsRow>
+  )
+}
+
+/**
+ * Previews what importing a declared server into Shared MCP copies (its address or command, never its values) and
+ * where it will apply, then asks before saving. Nothing runs and no provider file changes.
+ */
+function ImportDialog({
+  server,
+  projectName,
+  hostName,
+  busy,
+  error,
+  onCancel,
+  onImport,
+}: {
+  server: ProjectMcpServer
+  projectName: string
+  hostName: string
+  busy: boolean
+  error: string
+  onCancel(): void
+  onImport(providers: AgentProvider[]): void
+}) {
+  const [providers, setProviders] = useState<AgentProvider[]>(
+    server.nativeProviders.length ? server.nativeProviders : [...AGENT_PROVIDERS],
+  )
+  const secretNames = [...server.envKeys, ...server.headerKeys]
+  return (
+    <Dialog
+      title={t('Connect {name} through Ramu', { name: server.name })}
+      confirmLabel={t('Import')}
+      busy={busy}
+      error={error}
+      confirmDisabled={!providers.length}
+      onCancel={onCancel}
+      onConfirm={() => onImport(providers)}
+    >
+      <p>{t('Connection host: {host}', { host: hostName })}</p>
+      <p>
+        {server.transport.type === 'http'
+          ? t('Remote server: {target}', { target: server.transport.url })
+          : t('Runs on the host: {target}', {
+              target: [server.transport.command, ...server.transport.args].join(' '),
+            })}
+      </p>
+      <p>{t('Applies to {project} only. Widen it later in the server’s settings.', { project: projectName })}</p>
+      {secretNames.length > 0 && (
+        <p>
+          {t(
+            'Its values for {names} stay in the original file. Ramu copies none of them; enter them as write-only secrets after importing.',
+            { names: secretNames.join(', ') },
+          )}
+        </p>
+      )}
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend>{t('Providers')}</legend>
+        {AGENT_PROVIDERS.map((provider) => (
+          <Field key={provider} orientation="horizontal">
+            <Checkbox
+              id={`import-${provider}`}
+              checked={providers.includes(provider)}
+              onCheckedChange={(checked) =>
+                setProviders((current) =>
+                  checked ? [...current, provider] : current.filter((entry) => entry !== provider),
+                )
+              }
+            />
+            <FieldLabel htmlFor={`import-${provider}`}>{providerName(provider)}</FieldLabel>
+          </Field>
+        ))}
+      </fieldset>
+      <p>{t('Importing does not connect or run anything. Review its tools when you connect.')}</p>
+    </Dialog>
   )
 }
 
@@ -125,10 +225,12 @@ function Skills({
   skills,
   disabled,
   onShare,
+  onWiden,
 }: {
   skills: ProjectSkill[]
   disabled: boolean
   onShare(name: string, shared: boolean): void
+  onWiden(name: string): void
 }) {
   const paged = usePaged(skills, 10)
   return (
@@ -144,6 +246,7 @@ function Skills({
           label={t('Share {name} with every provider and account', { name: skill.name })}
           disabled={disabled}
           onShare={(shared) => onShare(skill.name, shared)}
+          onWiden={() => onWiden(skill.name)}
         />
       ))}
       {paged.more}
@@ -181,6 +284,7 @@ export function AgentSetup() {
     setPicked(undefined)
     setImporting(null)
     setPending(null)
+    setImporting(null)
     setError('')
   }, [hostKey])
   const projectId =
@@ -235,15 +339,21 @@ export function AgentSetup() {
         sources={server.sources}
         label={t('Share {name} with every provider and account', { name: server.name })}
         disabled={locked}
-        onShare={(shared) => void share(server.key, () => invoke('mcp.share', server.key, shared))}
+        onShare={(shared) => void share(server.key, () => invoke('mcp.share', server.key, shared, projectId))}
         extra={
           server.managedConnectionId ? (
-            <span className="block small text-caption text-muted-foreground">{t('Also connected through Ramu')}</span>
+            <span className="text-caption text-muted-foreground">{t('Connected through Ramu')}</span>
           ) : (
-            <Button size="sm" variant="ghost" className="mt-1" disabled={locked} onClick={() => setImporting(server)}>
-              {t('Connect through Ramu…')}
+            <Button size="sm" variant="ghost" disabled={locked} onClick={() => setImporting(server)}>
+              {t('Connect through Ramu')}
             </Button>
           )
+        }
+        onWiden={() =>
+          void share(server.key, async () => {
+            await invoke('mcp.share', server.key, true)
+            await invoke('mcp.share', server.key, null, projectId)
+          })
         }
       />
     ))
@@ -251,7 +361,13 @@ export function AgentSetup() {
     <Skills
       skills={skillsIn(scopeName)}
       disabled={locked}
-      onShare={(name, shared) => void share(name, () => invoke('skills.share', name, shared))}
+      onShare={(name, shared) => void share(name, () => invoke('skills.share', name, shared, projectId))}
+      onWiden={(name) =>
+        void share(name, async () => {
+          await invoke('skills.share', name, true)
+          await invoke('skills.share', name, null, projectId)
+        })
+      }
     />
   )
   const projectName = projects.data?.find((project) => project.id === projectId)?.name
@@ -282,7 +398,7 @@ export function AgentSetup() {
       <SettingsGroupTitle>{t('MCP servers')}</SettingsGroupTitle>
       <p className={`${CAPTION} mb-4`}>
         {t(
-          'Tools agents can call. Share a server to give it to every provider and account, using the sign-in it already has. New threads pick up changes.',
+          'Tools agents can call. Share a server to give it to every provider and account in this project, using the sign-in it already has. New threads pick up changes.',
         )}
       </p>
       {data && mcp('user').length + mcp('project').length === 0 && (
@@ -317,54 +433,22 @@ export function AgentSetup() {
       )}
 
       {importing && projectId && (
-        <Dialog
-          title={t('Connect through Ramu')}
-          confirmLabel={t('Add to Shared MCP')}
+        <ImportDialog
+          server={importing}
+          projectName={projectName ?? ''}
+          hostName={scope?.available.find((host) => host.id === scope.primaryId)?.name ?? t('This host')}
           busy={pending !== null}
           error={error}
           onCancel={() => {
             if (pending === null) setImporting(null)
           }}
-          onConfirm={() =>
+          onImport={(providers) =>
             void share(importing.key, async () => {
-              await invoke('mcp.import', projectId, importing.key)
+              await invoke('mcp.import', importing.key, projectId, providers)
               setImporting(null)
             })
           }
-        >
-          <p>
-            <strong>{importing.name}</strong> ·{' '}
-            {t('Connection host: {host}', {
-              host: scope?.available.find((host) => host.id === scope.primaryId)?.name ?? t('This host'),
-            })}
-          </p>
-          <p className="break-all">
-            {importing.transport.type === 'http'
-              ? importing.transport.url
-              : [importing.transport.command, ...importing.transport.args].join(' ')}
-          </p>
-          <p>
-            {t('Available to: {providers} in {project}', {
-              providers: importing.providers.map(providerName).join(', '),
-              project: projectName ?? t('This project'),
-            })}
-          </p>
-          {importing.transport.type === 'stdio' && (
-            <p>{t('This command runs on this host with your user’s files and processes. Saving never starts it.')}</p>
-          )}
-          {[...importing.headerKeys, ...importing.envKeys].length > 0 && (
-            <p>
-              {t('Values are not copied. Enter these again as write-only credentials: {names}', {
-                names: [...importing.headerKeys, ...importing.envKeys].join(', '),
-              })}
-            </p>
-          )}
-          <p>
-            {t(
-              'Once you approve the Shared MCP copy, Ramu stops adding the declared copy to other providers and offers the approved tools instead. The provider that declares it keeps its own copy. Removing the connection restores sharing.',
-            )}
-          </p>
-        </Dialog>
+        />
       )}
 
       <McpSettings />
@@ -374,7 +458,7 @@ export function AgentSetup() {
       <SettingsGroupTitle className="mt-8">{t('Skills')}</SettingsGroupTitle>
       <p className={`${CAPTION} mb-4`}>
         {t(
-          'Instructions agents can load. Share a skill to copy it to every provider and account that does not have it. Your original files are not changed.',
+          'Instructions agents can load. Share a skill to copy it to every provider and account in this project that does not have it. Your original files are not changed.',
         )}
       </p>
       {(data?.skills.length ?? 0) > 10 && (

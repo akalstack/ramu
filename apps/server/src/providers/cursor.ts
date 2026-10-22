@@ -123,7 +123,13 @@ export class CursorSession implements AgentRunner {
     return this.connection
       ? {
           ...(cursorMcpServers(
-            sessionMcpServers(this.scope, this.connection, 'cursor', this.settings.accountId),
+            sessionMcpServers(
+              this.scope,
+              this.connection,
+              'cursor',
+              this.settings.accountId,
+              this.connection?.sharingProjectId,
+            ),
           ) as NonNullable<AgentOptions['mcpServers']>),
           ramu: {
             type: 'http',

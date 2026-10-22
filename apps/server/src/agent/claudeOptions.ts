@@ -12,10 +12,11 @@ function claudeSharedServers(
   s: { cwd: string; additionalDirs: string[]; covers: string[] },
   configDirs: string[] = [],
   env: NodeJS.ProcessEnv,
+  projectId?: string,
 ): NonNullable<Options['mcpServers']> {
   const dirs = [...new Set([s.cwd, ...s.additionalDirs, ...s.covers, ...configDirs])]
   return Object.fromEntries(
-    sharedSessionServers(dirs, 'claude-code', env).map((server) => [
+    sharedSessionServers(dirs, 'claude-code', env, { projectId }).map((server) => [
       server.name,
       server.transport.type === 'http'
         ? { type: 'http' as const, url: server.transport.url, headers: server.headers }
@@ -68,7 +69,7 @@ export function claudeLaunchOptions({
       ? {
           mcpServers: {
             ...(claudeMcpServers(s, connection.mcpConfigDirs, env) as NonNullable<Options['mcpServers']>),
-            ...claudeSharedServers(s, connection.mcpConfigDirs, env),
+            ...claudeSharedServers(s, connection.mcpConfigDirs, env, connection.sharingProjectId),
             ...(connection.externalUrl
               ? {
                   [EXTERNAL_MCP_SERVER]: {

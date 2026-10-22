@@ -464,6 +464,7 @@ class AcpSession implements AgentRunner {
               this.connection,
               this.settings.provider,
               this.settings.accountId,
+              this.connection?.sharingProjectId,
             ),
             this.mcpHttp,
           ),

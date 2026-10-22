@@ -1,4 +1,4 @@
-import { ruleCharacters } from '@ramu/shared/rules'
+import { ruleCharacters, ruleDelivery, ruleDeliveryBlock } from '@ramu/shared/rules'
 import type { AgentSetupSnapshot, SetupItem } from '@ramu/shared/agentSetup'
 import { RULE_TOTAL_LIMIT, type AgentProvider, type Rule } from '@ramu/shared/types'
 import type { SharedMcpAccountReadiness } from '@ramu/shared/mcp'
@@ -13,6 +13,8 @@ export interface SetupInputs {
   rules: readonly Rule[]
   /** Servers Ramu adds to this thread's launch from the person's own configuration (names only). */
   addedServers: readonly string[]
+  /** Names among `addedServers` and `sharedSkills` whose source file changed after the thread started. */
+  changedSources?: readonly string[]
   /** What the live runtime reports, when it reports anything; undefined when it cannot be asked. */
   runtimeServers?: readonly { name: string; status: string }[]
   /** Skills Ramu copies into this login's skill export for the person (names only). */
@@ -41,7 +43,13 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
     (rule.projectId === null || rule.projectId === input.projectId) &&
     (rule.providers.length === 0 || rule.providers.includes(input.provider))
   let rulesCharacters = 0
-  for (const rule of input.rules.filter(reaches)) {
+  const reached = input.rules.filter(reaches)
+  const overSize =
+    ruleDeliveryBlock(
+      input.provider,
+      reached.filter((rule) => rule.activation === 'always').reduce((sum, rule) => sum + ruleCharacters(rule), 0),
+    ) !== null
+  for (const rule of reached) {
     if (rule.activation === 'manual') {
       items.push({
         kind: 'rule',
@@ -52,6 +60,16 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
       continue
     }
     rulesCharacters += ruleCharacters(rule)
+    if (overSize) {
+      items.push({
+        kind: 'rule',
+        name: rule.name,
+        state: 'omitted',
+        reason:
+          'Not sent: these rules are over the size this runtime can receive. Shorten or turn off a rule in Settings → Agent setup → Rules.',
+      })
+      continue
+    }
     const changed = rule.updatedAt > input.startedAt
     items.push({
       kind: 'rule',
@@ -59,11 +77,18 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
       state: changed ? 'needs-refresh' : 'delivered',
       reason: changed
         ? 'Changed after this thread started. It applies to a new thread; a running thread keeps what it was given.'
-        : "Sent in the thread's starting guidance as the user's own instructions. Whether the model followed it is not observable.",
+        : `${ruleDelivery(input.provider).detail} Whether the model followed it is not observable.`,
     })
   }
+  const stale = new Set(input.changedSources ?? [])
+  const staleReason =
+    'The file it comes from changed after this thread started. A new thread uses the current version; this one keeps what it was given.'
   for (const name of input.addedServers) {
     const reported = input.runtimeServers?.find((server) => server.name === name)
+    if (stale.has(`server:${name}`)) {
+      items.push({ kind: 'native-mcp', name, state: 'needs-refresh', reason: staleReason })
+      continue
+    }
     items.push(
       reported?.status === 'connected'
         ? {
@@ -90,13 +115,17 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
     )
   }
   for (const name of input.sharedSkills)
-    items.push({
-      kind: 'skill',
-      name,
-      state: 'configured',
-      reason:
-        "Copied into this login's skill export for new threads. Whether the model reads a skill is not observable.",
-    })
+    items.push(
+      stale.has(`skill:${name}`)
+        ? { kind: 'skill', name, state: 'needs-refresh', reason: staleReason }
+        : {
+            kind: 'skill',
+            name,
+            state: 'configured',
+            reason:
+              "Copied into this login's skill export for new threads. Whether the model reads a skill is not observable.",
+          },
+    )
   for (const connection of input.connections)
     items.push({
       kind: 'shared-mcp',

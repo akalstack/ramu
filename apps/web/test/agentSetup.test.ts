@@ -36,6 +36,7 @@ const server = (overrides: Partial<ProjectMcpServer>): ProjectMcpServer => ({
   sources: [{ scope: 'user', label: 'Codex', file: '~/.codex/config.toml', provider: 'codex', enabled: true }],
   nameConflict: false,
   shared: false,
+  shareScope: 'default',
   ...overrides,
 })
 
@@ -96,6 +97,7 @@ it('lists skills with where they come from', () => {
         providers: ['claude-code', 'opencode'],
         nativeProviders: ['claude-code', 'opencode'],
         shared: false,
+        shareScope: 'default',
         scope: 'project',
         sources: [
           {

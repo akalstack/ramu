@@ -313,6 +313,20 @@ export class SessionProcess {
     const explicitGoal = !s.parentId && /^\/goal\s+(\S[\s\S]*)$/.exec(prompt.split('\n\n<ramu-context>')[0]!.trim())
     if (explicitGoal) this.host.setGoal(id, explicitGoal[1]!, true)
     const connection = this.host.toolConnection()?.(s)
+    // Enabled Always rules are required: a launch that cannot hand them over stops with the reason, never drops them.
+    let rulesText: string | undefined
+    try {
+      rulesText = this.host.rulesInstructions()?.(s)
+      if (rulesText && !connection)
+        throw new Error(
+          'Your enabled rules cannot be delivered to this runtime. Turn them off in Settings → Agent setup → Rules to continue without them.',
+        )
+    } catch (e) {
+      if (recordUser)
+        this.host.record(id, { kind: 'user', text: prompt, ...(attachments.length ? { attachments } : {}) })
+      this.fail(id, e)
+      return
+    }
     // The conversation reaches a provider session that has not seen it: a switch, a lost session, a rewind. Built first so
     // the checkpoint goes out once, in the handoff, and not again in the session guidance.
     const carried = this.carry(id, resume, !!connection, prompt, attachments)
@@ -355,7 +369,7 @@ export class SessionProcess {
         memory: this.host.memoryInstructions()?.(s),
         toolSearch: this.host.preferences()?.intelligence?.toolSearch !== false,
         learning: this.host.learningInstructions()?.(s, { checkpoint: !carried?.built.includesCheckpoint }),
-        rules: this.host.rulesInstructions()?.(s),
+        rules: rulesText,
         browser: connection.browserInstructions,
       })
     }

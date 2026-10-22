@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
+import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import type { AgentProvider } from '@ramu/shared/types'
@@ -27,6 +27,8 @@ export interface Declared {
   enabled: boolean
   /** Codex runs relative commands from its own folder; they cannot move to another provider. */
   cwd?: string
+  /** When the declaring file last changed (ms), so a running thread can be told its copy is out of date. */
+  changedAt?: number
 }
 
 const object = (value: unknown): Json | null =>
@@ -243,7 +245,13 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
   const result: Collected = { servers: new Map(), diagnostics: [] }
   const display = (path: string) =>
     path === home || path.startsWith(home + '/') ? '~' + path.slice(home.length) : path
+  // The declaring file's modification time travels with each server it declares.
+  let changedAt = 0
+  const touch = (file: string) => {
+    changedAt = statSync(file, { throwIfNoEntry: false })?.mtimeMs ?? 0
+  }
   const attempt = (file: string, work: () => void) => {
+    touch(file)
     try {
       work()
     } catch (error) {
@@ -255,7 +263,7 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
       const key = mcpServerKey(server.transport)
       const entry = result.servers.get(key) ?? { name: server.name, declared: [], sources: [], providers: new Set() }
       result.servers.set(key, entry)
-      entry.declared.push(server)
+      entry.declared.push({ ...server, changedAt })
       entry.sources.push({ ...origin, enabled: server.enabled })
       if (!server.enabled) continue
       // Ramu forwards repository and Claude local-scope servers to every provider session in this project.
@@ -317,6 +325,7 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
     })
     const local = object(claudeProjects[path])
     if (local) {
+      touch(files.claude)
       const disabled = strings(local.disabledMcpServers)
       add(
         standardServers(local.mcpServers).map((s) => ({ ...s, enabled: s.enabled && !disabled.includes(s.name) })),
@@ -348,7 +357,17 @@ export const MCP_SHARING_KEY = 'agent-setup:mcp-sharing:v1'
  */
 export const MCP_IMPORTS_KEY = 'agent-setup:mcp-imports:v1'
 export type McpImports = Record<string, { key: string; wasShared: boolean; applied: boolean }>
-const isShared = (key: string, transport: Transport, sharing: McpSharing) => sharing[key] ?? sharedByDefault(transport)
+/** A project's own choice sits beside the host-wide one under `<projectId>/<key>` and wins inside that project. */
+export const projectSharingKey = (projectId: string, key: string) => `${projectId}/${key}`
+const isShared = (key: string, transport: Transport, sharing: McpSharing, projectId?: string | null) =>
+  (projectId ? sharing[projectSharingKey(projectId, key)] : undefined) ?? sharing[key] ?? sharedByDefault(transport)
+/** Where the choice that applies in a project was made. */
+const shareScope = (key: string, sharing: Record<string, boolean>, projectId: string | null | undefined) =>
+  projectId && sharing[projectSharingKey(projectId, key)] !== undefined
+    ? ('project' as const)
+    : sharing[key] !== undefined
+      ? ('host' as const)
+      : ('default' as const)
 
 const order = (providers: Iterable<AgentProvider>) => AGENT_PROVIDERS.filter((p) => [...providers].includes(p))
 
@@ -373,7 +392,7 @@ export function discoverProjectSetup(
     const declared = entry.declared.find((d) => d.enabled) ?? entry.declared[0]!
     const blocked = shareBlocker(declared)
     const enabled = entry.declared.some((d) => d.enabled)
-    const shared = enabled && !blocked && isShared(key, declared.transport, sharing)
+    const shared = enabled && !blocked && isShared(key, declared.transport, sharing, projectId)
     return {
       key,
       name: entry.name,
@@ -387,6 +406,7 @@ export function discoverProjectSetup(
       sources: entry.sources,
       nameConflict: false,
       shared,
+      shareScope: shareScope(key, sharing, projectId),
       ...(blocked ? { shareBlocked: blocked } : {}),
       managedConnectionId: managed.find(({ transport: m }) =>
         declared.transport.type === 'http'
@@ -411,7 +431,7 @@ export function discoverProjectSetup(
           /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skill.name) && skill.name.length <= 64
             ? undefined
             : 'Its name must be lowercase words joined by hyphens.'
-        const shared = !blocked && skillSharing[skill.name] === true
+        const shared = !blocked && isSkillShared(skill.name, skillSharing, projectId)
         return {
           ...(blocked ? { shareBlocked: blocked } : {}),
           ...skill,
@@ -419,6 +439,7 @@ export function discoverProjectSetup(
           providers: shared ? [...AGENT_PROVIDERS] : order(providers),
           nameConflict: digests.size > 1,
           shared,
+          shareScope: shareScope(skill.name, skillSharing, projectId),
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name)),
@@ -445,6 +466,17 @@ function nativeNames(provider: AgentProvider, dirs: string[], accountEnv: NodeJS
   return names
 }
 
+/** One declared server by key, as its file declares it, for an explicit import. Reads known files only. */
+export function findDeclaredServer(
+  roots: { label: string; path: string }[],
+  key: string,
+  env: NodeJS.ProcessEnv = process.env,
+  home = homedir(),
+): Declared | undefined {
+  const entry = collect(roots, env, home).servers.get(key)
+  return entry?.declared.find((d) => d.enabled) ?? entry?.declared[0]
+}
+
 let sharingSource: (() => McpSharing) | undefined
 /**
  * Set once at host startup so provider runners can read the sharing choices without a service reference. Until then
@@ -464,7 +496,7 @@ export function sharedSessionServers(
   dirs: string[],
   provider: AgentProvider,
   accountEnv: NodeJS.ProcessEnv,
-  options: { env?: NodeJS.ProcessEnv; home?: string; sharing?: McpSharing } = {},
+  options: { env?: NodeJS.ProcessEnv; home?: string; sharing?: McpSharing; projectId?: string | null } = {},
 ): Declared[] {
   const env = options.env ?? process.env,
     home = options.home ?? homedir(),
@@ -476,7 +508,7 @@ export function sharedSessionServers(
   const result: Declared[] = []
   for (const [key, entry] of found.servers) {
     const declared = entry.declared.find((d) => d.enabled)
-    if (!declared || shareBlocker(declared) || !isShared(key, declared.transport, sharing)) continue
+    if (!declared || shareBlocker(declared) || !isShared(key, declared.transport, sharing, options.projectId)) continue
     if (skip.has(declared.name) || result.some((s) => s.name === declared.name)) continue
     result.push(declared)
   }
@@ -531,7 +563,10 @@ export function codexDisabledSkills(toml: string): Set<string> {
   return disabled
 }
 
-interface FoundSkill extends Omit<ProjectSkill, 'providers' | 'nativeProviders' | 'shared' | 'nameConflict'> {
+interface FoundSkill extends Omit<
+  ProjectSkill,
+  'providers' | 'nativeProviders' | 'shared' | 'shareScope' | 'nameConflict'
+> {
   providers: Set<AgentProvider>
   digests: Set<string>
   /** Real skill folders, project copies first; the first is the one shared with other providers. */
@@ -625,6 +660,9 @@ function collectSkills(roots: { label: string; path: string }[], env: NodeJS.Pro
 /** Host choices about which skills Ramu gives to every provider and account, by skill name. Off unless turned on. */
 export type SkillSharing = Record<string, boolean>
 export const SKILL_SHARING_KEY = 'agent-setup:skill-sharing:v1'
+/** Skills are off unless turned on; a project's own choice wins inside that project. */
+const isSkillShared = (name: string, sharing: SkillSharing, projectId?: string | null) =>
+  (projectId ? sharing[projectSharingKey(projectId, name)] : undefined) ?? sharing[name] === true
 
 /**
  * Skill folders Ramu adds to one provider account's skill export: each shared skill this account does not already
@@ -635,8 +673,8 @@ export function sharedSessionSkills(
   provider: AgentProvider,
   accountEnv: NodeJS.ProcessEnv,
   sharing: SkillSharing,
-  options: { env?: NodeJS.ProcessEnv; home?: string } = {},
-): { name: string; dir: string }[] {
+  options: { env?: NodeJS.ProcessEnv; home?: string; projectId?: string | null } = {},
+): { name: string; dir: string; changedAt: number }[] {
   if (!Object.values(sharing).some(Boolean)) return []
   const env = options.env ?? process.env,
     home = options.home ?? homedir()
@@ -645,8 +683,14 @@ export function sharedSessionSkills(
   // What this account loads itself, read through its own folders.
   const own = collectSkills(roots, accountEnv, home).skills
   return [...all.values()].flatMap((skill) =>
-    sharing[skill.name] === true && !own.get(skill.name)?.providers.has(provider)
-      ? [{ name: skill.name, dir: skill.folders[0]! }]
+    isSkillShared(skill.name, sharing, options.projectId) && !own.get(skill.name)?.providers.has(provider)
+      ? [
+          {
+            name: skill.name,
+            dir: skill.folders[0]!,
+            changedAt: statSync(join(skill.folders[0]!, 'SKILL.md'), { throwIfNoEntry: false })?.mtimeMs ?? 0,
+          },
+        ]
       : [],
   )
 }

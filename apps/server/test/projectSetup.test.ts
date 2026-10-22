@@ -16,6 +16,7 @@ import {
   codexServers,
   discoverProjectSetup,
   parseJsonc,
+  projectSharingKey,
   sharedSessionServers,
   sharedSessionSkills,
 } from '../src/agent/projectSetup'
@@ -247,6 +248,28 @@ describe('sharing with every provider and account', () => {
     expect(after.mcp.find((s) => s.name === 'repl')!.providers).toHaveLength(5)
     expect(after.mcp.find((s) => s.name === 'atlassian')!.providers).toEqual(['codex'])
     expect(JSON.stringify(after)).not.toContain('secret-key')
+  })
+})
+
+describe('sharing for one project', () => {
+  const dirs = () => {
+    mkdirSync(join(root, 'repo'), { recursive: true })
+    return [join(root, 'repo')]
+  }
+
+  it('shares a skill in the chosen project only, and a project choice beats the host-wide one', () => {
+    put(join(home, '.claude/skills/bitbucket/SKILL.md'), skill('bitbucket'))
+    const sharing = { [projectSharingKey('p1', 'bitbucket')]: true }
+    const names = (projectId: string, choices: Record<string, boolean>) =>
+      sharedSessionSkills(dirs(), 'codex', {}, choices, { env: {}, home, projectId }).map((s) => s.name)
+    expect(names('p1', sharing)).toEqual(['bitbucket'])
+    expect(names('p2', sharing)).toEqual([])
+    const widened = { bitbucket: true, [projectSharingKey('p2', 'bitbucket')]: false }
+    expect(names('p1', widened)).toEqual(['bitbucket'])
+    expect(names('p2', widened)).toEqual([])
+    const [shown] = discoverProjectSetup('p1', [], [], {}, {}, home, sharing).skills
+    expect([shown!.shared, shown!.shareScope]).toEqual([true, 'project'])
+    expect(discoverProjectSetup('p2', [], [], {}, {}, home, sharing).skills[0]!.shareScope).toBe('default')
   })
 })
 
