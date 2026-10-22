@@ -461,7 +461,7 @@ class AcpSession implements AgentRunner {
           ...acpMcpServers(
             sessionMcpServers(
               this.scope,
-              this.connection?.mcpConfigDirs,
+              this.connection,
               this.settings.provider,
               this.settings.accountId,
             ),

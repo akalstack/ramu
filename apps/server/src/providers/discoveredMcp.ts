@@ -3,6 +3,7 @@ import { claudeMcpServers } from './claudeMcp'
 import type { DiscoveredMcpServer } from '../context'
 import type { AgentProvider } from '@ramu/shared/types'
 import { accountEnvironment, sharedSessionServers } from '../agent/projectSetup'
+import { EXTERNAL_MCP_SERVER } from '../mcp/sessionTools'
 
 type Wire = Record<string, any>
 const text = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback)
@@ -56,17 +57,18 @@ export function repoMcpServers(scope: AgentScope, configDirs: string[] = []): No
  */
 export function sessionMcpServers(
   scope: AgentScope,
-  configDirs: string[] = [],
+  connection: McpConnection | undefined,
   provider: AgentProvider,
   accountId?: string,
 ): NormalizedMcp[] {
-  const repo = repoMcpServers(scope, configDirs)
+  const configDirs = connection?.mcpConfigDirs ?? []
+  const repo = repoMcpServers(scope, configDirs).filter((s) => s.name !== EXTERNAL_MCP_SERVER)
   const names = new Set(repo.map((s) => s.name))
   const dirs = [...new Set([scope.cwd, ...scope.additionalDirs, ...scope.covers, ...configDirs])]
   return [
     ...repo,
     ...sharedSessionServers(dirs, provider, accountEnvironment(provider, accountId))
-      .filter((s) => !names.has(s.name))
+      .filter((s) => !names.has(s.name) && s.name !== EXTERNAL_MCP_SERVER)
       .map((s): NormalizedMcp => ({
         name: s.name,
         startupTimeoutMs: 60_000,
@@ -75,6 +77,19 @@ export function sessionMcpServers(
         args: s.transport.type === 'stdio' ? s.transport.args : [],
         env: s.env,
       })),
+    // Shared MCP tools: a separate server name from `ramu`, authorized again on the host for every list and call.
+    ...(connection?.externalUrl
+      ? [
+          {
+            name: EXTERNAL_MCP_SERVER,
+            startupTimeoutMs: 60_000,
+            url: connection.externalUrl,
+            headers: { Authorization: `Bearer ${connection.token}` },
+            args: [],
+            env: {},
+          },
+        ]
+      : []),
   ]
 }
 
@@ -157,7 +172,7 @@ export function configuredMcpStatus(
 ): AgentMcpStatus {
   const servers = (
     session
-      ? sessionMcpServers(scope, connection?.mcpConfigDirs, session.provider, session.accountId)
+      ? sessionMcpServers(scope, connection, session.provider, session.accountId)
       : repoMcpServers(scope, connection?.mcpConfigDirs)
   ).map((server) => ({
     name: server.name,

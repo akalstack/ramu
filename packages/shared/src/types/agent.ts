@@ -453,6 +453,8 @@ export interface McpConnection {
   restricted?: boolean
   /** Ramu's exported managed skills for this chat's scope, set only for providers that load them through their own skill system. */
   skillsDir?: string
+  /** Shared MCP tools this chat may use, served on their own endpoint and server name (never as `ramu`). */
+  externalUrl?: string
   /** Original project/repository directories whose MCP definitions belong to this workspace. */
   mcpConfigDirs?: string[]
   /** Codex only: a hook asks Ramu before each of Codex's own sub-agents starts, so Ramu can send it elsewhere. */ interceptSubagents?: boolean

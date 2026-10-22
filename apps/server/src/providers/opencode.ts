@@ -330,7 +330,7 @@ export class OpenCodeSession implements AgentRunner {
         undefined,
         this.connection
           ? openCodeMcpServers(
-              sessionMcpServers(this.scope, this.connection?.mcpConfigDirs, 'opencode', this.settings.accountId),
+              sessionMcpServers(this.scope, this.connection, 'opencode', this.settings.accountId),
             )
           : {},
       ),

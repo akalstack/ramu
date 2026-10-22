@@ -24,6 +24,7 @@ import { migrateLearningDefault } from './memory/learningDefault'
 import { SettingsStore } from './settings/settingsStore'
 import { SharedMcpStorage } from './mcp/storage'
 import { SharedMcpService } from './mcp/service'
+import { ExternalSessionTools, hasExternalConnections, type ExternalSessionSource } from './mcp/sessionTools'
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
 import { createServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
@@ -392,6 +393,22 @@ const getSharedMcp = () => {
     throw new Error('Shared MCP configuration could not be loaded. Restore valid configuration on this host.')
   }
 }
+const externalTools = new ExternalSessionTools(getSharedMcp, (sessionId, title, detail, signal) =>
+  agents.requestPermission(sessionId, title, detail, signal),
+)
+const externalSource = (session: AgentSessionInfo): ExternalSessionSource => {
+  const project = projectOf(session)
+  return {
+    sessionId: session.id,
+    hostId: getSharedMcp().storage.hostId,
+    provider: session.provider,
+    accountId: session.settings.accountId ?? 'default',
+    projectId: project && project !== NO_PROJECT ? project : null,
+    // Review chats are restricted; sub-agents are helpers and never inherit external access by default.
+    role: summaries.isReviewChat(session.taskId) ? 'restricted' : 'interactive',
+    externalToolsAllowed: !session.parentId,
+  }
+}
 const dispatcher = createDispatcher(
   {
     userData,
@@ -470,6 +487,7 @@ async function stop(intentional = false) {
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
   await Promise.all([recaps.settle(), reviews.settle(), memory.settle(), learning.settle(), summaries.settle()])
   terminals.closeAll()
+  await externalTools.close()
   await sharedMcp?.close()
   await hostBrowser.close()
   dispatcher.close()
@@ -678,12 +696,21 @@ const mcpHttp = createServer(async (req, res) => {
   const token = req.headers.authorization?.replace(/^Bearer /, '')
   const connection = token ? sessions.get(token) : undefined
   const source = connection?.session
-  if (!source || req.url !== '/mcp' || stopping) {
+  if (!source || (req.url !== '/mcp' && req.url !== '/mcp/external') || stopping) {
     res.writeHead(401).end()
     return
   }
   if (req.method !== 'POST') {
     res.writeHead(405).end()
+    return
+  }
+  if (req.url === '/mcp/external') {
+    // External tools stay off the trusted Ramu registry: a separate endpoint and server name, gated by Shared MCP policy.
+    try {
+      await externalTools.serve(externalSource(source), req, res, await body(req))
+    } catch {
+      if (!res.headersSent) res.writeHead(500).end()
+    }
     return
   }
   const target = new McpServer({ name: 'ramu', version: '0.1.0' })
@@ -1011,6 +1038,15 @@ agents.toolConnection = (session) => {
     })(),
     ...(mcpConfigDirs.length ? { mcpConfigDirs } : {}),
     ...(skillsDir ? { skillsDir } : {}),
+    ...(() => {
+      try {
+        return hasExternalConnections(getSharedMcp(), externalSource(session))
+          ? { externalUrl: `http://127.0.0.1:${address.port}/mcp/external` }
+          : {}
+      } catch {
+        return {}
+      }
+    })(),
   }
 }
 // Never unlink a socket owned by another live service. The launcher removes stale sockets first.

@@ -1,0 +1,96 @@
+import { afterEach, expect, it } from 'vitest'
+import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
+import { openDb } from '../src/db'
+import { Workspace } from '../src/workspace/workspace'
+import { SharedMcpStorage } from '../src/mcp/storage'
+import { SharedMcpService } from '../src/mcp/service'
+import { connectSharedMcpStdio } from '../src/mcp/stdio'
+import {
+  ExternalSessionTools,
+  externalToolName,
+  hasExternalConnections,
+  type ExternalSessionSource,
+} from '../src/mcp/sessionTools'
+
+const cleanup: (() => void | Promise<void>)[] = []
+afterEach(async () => {
+  for (const close of cleanup.splice(0).reverse()) await close()
+})
+
+it('names tools deterministically, within the provider limit, and never merges same-named servers', () => {
+  const a = externalToolName({ id: 'one', name: 'Atlassian' }, 'search issues')
+  expect(a).toBe(externalToolName({ id: 'one', name: 'Atlassian' }, 'search issues'))
+  expect(a).not.toBe(externalToolName({ id: 'two', name: 'Atlassian' }, 'search issues'))
+  expect(externalToolName({ id: 'one', name: 'x' }, 'a b')).not.toBe(externalToolName({ id: 'one', name: 'x' }, 'a_b'))
+  const long = externalToolName({ id: 'one', name: 'A very long connection name' }, 't'.repeat(200))
+  expect(`mcp__ramu_external__${long}`.length).toBeLessThanOrEqual(64)
+  expect(long).toMatch(/^[A-Za-z0-9_-]+$/)
+})
+
+function fixture() {
+  const db = openDb(':memory:')
+  cleanup.push(() => db.close())
+  const workspace = new Workspace(db, '/test/trees')
+  const service = new SharedMcpService(
+    new SharedMcpStorage(workspace),
+    undefined,
+    () => {},
+    (connection, _session, signal) => connectSharedMcpStdio(connection, signal),
+  )
+  cleanup.push(() => service.close())
+  const path = fileURLToPath(new URL('./fixtures/shared-mcp.mjs', import.meta.url))
+  const connection = service.save({
+    name: 'Fixture',
+    serviceAccountId: 'alice',
+    enabled: true,
+    providers: ['codex'],
+    scope: { hostWide: false, projectIds: ['project'] },
+    transport: { type: 'stdio', command: process.execPath, args: [path], cwd: dirname(path), envSecretRefs: {} },
+  })
+  service.saveAccount({ provider: 'codex', accountId: 'a', shareApprovals: true })
+  const source: ExternalSessionSource = {
+    sessionId: 'thread',
+    hostId: service.storage.hostId,
+    provider: 'codex',
+    accountId: 'a',
+    projectId: 'project',
+    role: 'interactive',
+    externalToolsAllowed: true,
+  }
+  const tools = new ExternalSessionTools(
+    () => service,
+    async () => true,
+  )
+  cleanup.push(() => tools.close())
+  return { service, connection, source, tools }
+}
+
+it('lists nothing until a reviewed approval exists, then lists only approved tools', async () => {
+  const { service, connection, source, tools } = fixture()
+  expect(hasExternalConnections(service, source)).toBe(true)
+  expect(await tools.list(source)).toEqual([])
+  const inspection = await service.check(connection.id, { provider: 'codex', accountId: 'a', projectId: 'project' })
+  service.approve({
+    connectionId: connection.id,
+    revision: inspection.revision,
+    catalogRevision: inspection.catalogRevision,
+    provider: 'codex',
+    accountId: 'a',
+    scope: connection.scope,
+    tools: [{ name: 'inspect_environment', action: 'read', approval: 'connection' }],
+  })
+  const listed = await tools.list(source)
+  expect(listed.map((entry) => entry.tool.name)).toEqual(['inspect_environment'])
+  expect(listed[0]!.name).toContain('inspect_environment')
+  expect(await tools.list({ ...source, sessionId: 'other-thread', projectId: 'other' })).toEqual([])
+})
+
+it('offers external tools to no restricted, helper or out-of-scope session', () => {
+  const { service, source } = fixture()
+  expect(hasExternalConnections(service, { ...source, role: 'restricted' })).toBe(false)
+  expect(hasExternalConnections(service, { ...source, externalToolsAllowed: false })).toBe(false)
+  expect(hasExternalConnections(service, { ...source, projectId: null })).toBe(false)
+  expect(hasExternalConnections(service, { ...source, provider: 'claude-code' })).toBe(false)
+  expect(hasExternalConnections(service, { ...source, connectionIds: [] })).toBe(false)
+})

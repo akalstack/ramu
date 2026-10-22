@@ -5,6 +5,7 @@ import { providerAdapter } from '../providers/adapters'
 import { providerEnvironment } from '../providers/providerBinaries'
 import { baseMode } from './settings'
 import { sharedSessionServers } from './projectSetup'
+import { EXTERNAL_MCP_SERVER } from '../mcp/sessionTools'
 
 /** Servers shared through Agent setup that this Claude account does not already load from its own configuration. */
 function claudeSharedServers(
@@ -68,6 +69,15 @@ export function claudeLaunchOptions({
           mcpServers: {
             ...(claudeMcpServers(s, connection.mcpConfigDirs, env) as NonNullable<Options['mcpServers']>),
             ...claudeSharedServers(s, connection.mcpConfigDirs, env),
+            ...(connection.externalUrl
+              ? {
+                  [EXTERNAL_MCP_SERVER]: {
+                    type: 'http' as const,
+                    url: connection.externalUrl,
+                    headers: { Authorization: `Bearer ${connection.token}` },
+                  },
+                }
+              : {}),
             ramu: {
               type: 'http' as const,
               url: connection.url,
