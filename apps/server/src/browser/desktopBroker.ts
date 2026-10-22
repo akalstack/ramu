@@ -45,6 +45,10 @@ export class DesktopBrowserBroker {
     this.attachment.ready = true
   }
 
+  async prepare(): Promise<void> {
+    if (this.hosted?.selected()) await this.hosted.prepare?.()
+  }
+
   status() {
     if (this.hosted?.selected()) return this.hosted.status()
     return { available: this.attachment?.ready === true, location: 'execution-host-desktop' as const }

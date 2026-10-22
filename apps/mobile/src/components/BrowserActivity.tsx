@@ -28,7 +28,14 @@ export function BrowserActivity({ chat }: { chat: Chat }) {
     if (!open || !online || !chat.taskId) return
     let active = true
     setStatus('Loading…')
-    void io.current.invoke(chat.computerId, 'hostBrowser.status').then(status => { if (active) setHosted(status.available) }).catch(() => { if (active) setHosted(false) })
+    void io.current
+      .invoke(chat.computerId, 'hostBrowser.status')
+      .then((status) => {
+        if (active) setHosted(status.enabled ?? status.available)
+      })
+      .catch(() => {
+        if (active) setHosted(false)
+      })
     void io.current.invoke(chat.computerId, 'browser.activity', chat.taskId).then(
       (result) => {
         if (!active) return
@@ -52,7 +59,7 @@ export function BrowserActivity({ chat }: { chat: Chat }) {
   return (
     <>
       <Button kind="ghost" icon={Globe} title={t('Browser')} onPress={() => setOpen(true)} />
-      {viewing && <BrowserViewer chat={chat} onClose={() => setViewing(false)}/>}
+      {viewing && <BrowserViewer chat={chat} onClose={() => setViewing(false)} />}
       <Sheet open={open} onClose={() => setOpen(false)} title={`${t('Browser')} · ${host}`}>
         <View style={{ padding: space.m, gap: space.m }}>
           <T tone="muted">
@@ -60,7 +67,19 @@ export function BrowserActivity({ chat }: { chat: Chat }) {
               'Website sign-ins and local addresses belong to this host. Remote viewing requires a host browser and a separate device/thread grant.',
             )}
           </T>
-          {hosted && <Button kind="secondary" title={t('View host browser')} disabled={!online || store.computers.find(computer => computer.id === chat.computerId)?.access === 'viewer'} onPress={() => { setOpen(false); setViewing(true) }}/>} 
+          {hosted && (
+            <Button
+              kind="secondary"
+              title={t('View host browser')}
+              disabled={
+                !online || store.computers.find((computer) => computer.id === chat.computerId)?.access === 'viewer'
+              }
+              onPress={() => {
+                setOpen(false)
+                setViewing(true)
+              }}
+            />
+          )}
           {!online ? (
             <T tone="muted">{t('Offline · last-known activity')}</T>
           ) : status ? (

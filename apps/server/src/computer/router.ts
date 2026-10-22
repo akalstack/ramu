@@ -12,7 +12,7 @@ export class ComputerRouter implements ComputerBackend {
   constructor(
     private readonly display: ComputerBackend,
     private readonly apps: Pick<OcuBackend, 'status' | 'capture' | 'perform' | 'releaseInput' | 'apps'> &
-      ComputerBackend,
+      ComputerBackend & { close?(): Promise<void> },
   ) {}
 
   private pick(target: ComputerTarget): ComputerBackend {
@@ -29,6 +29,10 @@ export class ComputerRouter implements ComputerBackend {
   /** What an app grant can use: the display runtime's status is separate from whether app control is installed. */
   appStatus(): ComputerRuntimeStatus {
     return this.apps.status()
+  }
+
+  async closeApps(): Promise<void> {
+    await this.apps.close?.()
   }
 
   listApps(): Promise<string[]> {

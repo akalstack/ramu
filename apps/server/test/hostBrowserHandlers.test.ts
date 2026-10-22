@@ -11,6 +11,7 @@ function setup(
   const hostBrowser = {
     status: vi.fn(() => ({ available: true })),
     setup: vi.fn(),
+    prepare: vi.fn(async () => {}),
     disable: vi.fn(),
     grant: vi.fn(),
     revoke: vi.fn(),
@@ -59,9 +60,20 @@ describe('host browser handlers', () => {
     expect(owner.hostBrowser.grant).toHaveBeenCalledWith('tablet', THREAD)
   })
 
-  it('refuses viewing from a caller with no paired identity', () => {
+  it('refuses viewing from a caller with no paired identity', async () => {
     const anonymous = setup({ deviceId: undefined })
-    expect(() => anonymous.call('hostBrowser.list', THREAD)).toThrow(/Pair this device/)
+    await expect(anonymous.call('hostBrowser.list', THREAD)).rejects.toThrow(/Pair this device/)
+  })
+
+  it('opens the browser for a paired owner without a separate grant', async () => {
+    const owner = setup()
+    await owner.call('hostBrowser.list', THREAD)
+    expect(owner.hostBrowser.prepare).toHaveBeenCalled()
+    expect(owner.hostBrowser.list).toHaveBeenCalledWith('phone', THREAD)
+    expect(owner.hostBrowser.grant).not.toHaveBeenCalled()
+    const viewer = setup({ eligible: false })
+    await expect(viewer.call('hostBrowser.list', THREAD)).rejects.toThrow(/owner device/)
+    expect(viewer.hostBrowser.prepare).not.toHaveBeenCalled()
   })
 
   it('on release hands the tab to the live run, or keeps it for the next run when nothing is running', () => {

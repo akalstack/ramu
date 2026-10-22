@@ -137,16 +137,8 @@ Saving patches only changed settings, checks for concurrent edits and changed op
 
 ## Host browser
 
-Run `ramu browser setup` on the owning host (or use Settings → Browser there). Setup downloads compatible Chromium when needed and checks it with the sandbox enabled. An administrator can set `RAMU_BROWSER_EXECUTABLE` to an installed Chromium executable instead. Missing system dependencies or sandbox support are reported; Ramu never adds `--no-sandbox` to bypass them. Website profiles stay on this host, separate from desktop Electron profiles. Enabling the host runtime affects new browser turns; an existing turn keeps its selected runtime.
+Open Browser in a thread from any paired owner device. The browser runs on the execution host, like terminals, without separate setup or expiring browser grants. First use downloads compatible Chromium and checks its sandbox. `ramu browser setup` remains an optional preflight/retry command. An administrator can set `RAMU_BROWSER_EXECUTABLE` to an installed Chromium executable. Missing system dependencies or sandbox support are reported; Ramu never adds `--no-sandbox`. Website profiles stay on this host, separate from desktop Electron profiles. An existing agent turn keeps its selected runtime.
 
-`ramu browser status` reports readiness, `ramu browser threads` lists thread IDs, and `ramu devices` lists paired devices. Explicitly grant an owner device one hour of browser viewing, control and scoped file transfers for a single thread:
-
-```sh
-ramu browser grant <device-id> <thread-id>
-ramu browser grants
-ramu browser revoke <device-id> <thread-id>
-```
-
-Pairing alone grants no browser viewer access. Viewer-role devices cannot receive browser grants. Setup/profile administration and grants remain local to the owning host. Grants are memory-only and must be renewed after expiry or restart. Desktop and mobile view bounded JPEG frames through authenticated RPC; they never receive cookies or a public debug endpoint. Hidden/background viewers stop capturing. A missing heartbeat pauses human control after five seconds without returning it to the agent. The owning host can explicitly take control to recover a disconnected device.
+`ramu browser status` reports readiness; `ramu browser threads` lists thread IDs. Viewer-role devices cannot use the host browser. Profile administration and turning the runtime on/off remain local to the owning host. Desktop and mobile view bounded JPEG frames through authenticated RPC; they never receive cookies or a public debug endpoint. Hidden/background viewers stop capturing. A missing heartbeat pauses human control after five seconds without returning it to the agent. The owning host can explicitly take control to recover a disconnected device.
 
 `ramu browser stop` cancels work, closes host tabs and revokes grants. Persistent website profiles remain; Temporary profiles are isolated and removed when their run/tabs end. Completed downloads expire after an hour and are never opened automatically. Human and agent file transfers use relative paths within the thread's authorized workspace, with bounds and no download overwrites. See [browser behavior](UI.md#integrated-browser) for ownership and transfer details.

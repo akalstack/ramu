@@ -1,4 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -125,11 +126,12 @@ const execute: Exec = (file, args) =>
 export async function installOcu(exec: Exec = execute, npm: string | null = findExecutable('npm')): Promise<string> {
   if (process.platform !== 'darwin') throw new Error('App-scoped computer use currently supports macOS.')
   if (!npm) throw new Error('Install Node.js (npm) first, then try again.')
-  const dir = ocuToolsDir()
+  const dir = join(ocuToolsDir(), `ocu-${OCU_VERSION}`)
   await exec(npm, ['install', '--prefix', dir, '--no-audit', '--no-fund', `open-computer-use@${OCU_VERSION}`])
   const installed = join(dir, 'node_modules/.bin/ocu')
   const version = (await exec(installed, ['--version'])).trim()
   if (version !== OCU_VERSION) throw new Error(`Installed Open Computer Use ${version}, expected ${OCU_VERSION}.`)
+  versions.clear()
   return version
 }
 
@@ -150,9 +152,14 @@ function versionOf(path: string): string | null {
 /** Ramu's own pinned install first; any other copy only when it is exactly the release Ramu was checked against. */
 export function ocuExecutable(): string | null {
   const configured = process.env.RAMU_OCU_PATH
-  const pinned = findExecutable(join(ocuToolsDir(), 'node_modules/.bin/ocu'))
-  if (configured) return findExecutable(configured)
-  if (pinned) return pinned
+  const pinned = findExecutable(join(ocuToolsDir(), `ocu-${OCU_VERSION}`, 'node_modules/.bin/ocu'))
+  const legacy = findExecutable(join(ocuToolsDir(), 'node_modules/.bin/ocu'))
+  if (configured) {
+    const path = findExecutable(configured)
+    return path && versionOf(path) === OCU_VERSION ? path : null
+  }
+  if (pinned && versionOf(pinned) === OCU_VERSION) return pinned
+  if (legacy && versionOf(legacy) === OCU_VERSION) return legacy
   const others = [
     findExecutable('ocu'),
     findExecutable('open-computer-use'),
@@ -160,6 +167,31 @@ export function ocuExecutable(): string | null {
     findExecutable('/usr/local/bin/ocu'),
   ]
   return others.find((path): path is string => !!path && versionOf(path) === OCU_VERSION) ?? null
+}
+
+/** Reports the actual managed installation, including an old release that cannot run with this Ramu. */
+export function ocuUpdateStatus(): {
+  installedVersion: string | null
+  supportedVersion: string
+  updateAvailable: boolean
+  managed: boolean
+} {
+  let installedVersion: string | null = null
+  for (const root of [join(ocuToolsDir(), `ocu-${OCU_VERSION}`), ocuToolsDir()]) {
+    try {
+      const value = JSON.parse(readFileSync(join(root, 'node_modules/open-computer-use/package.json'), 'utf8')).version
+      if (typeof value === 'string') {
+        installedVersion = value
+        break
+      }
+    } catch {}
+  }
+  return {
+    installedVersion,
+    supportedVersion: OCU_VERSION,
+    updateAvailable: !!installedVersion && installedVersion !== OCU_VERSION && !process.env.RAMU_OCU_PATH,
+    managed: !process.env.RAMU_OCU_PATH,
+  }
 }
 
 /**

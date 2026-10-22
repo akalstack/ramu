@@ -136,8 +136,9 @@ export function registerBrowserTools(
         'Show the selected integrated browser runtime on the execution host. Its localhost and website logins belong to that runtime. Provider-native browser tools may also remain available; use this selected browser for the task. Readiness does not grant control of human tabs.',
       inputSchema: {},
     },
-    () => {
+    async () => {
       scope(false)
+      await broker.prepare()
       return result(broker.status())
     },
   )

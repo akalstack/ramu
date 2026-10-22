@@ -187,6 +187,7 @@ const hostBrowser = new HostBrowser(
       if (!client.destroyed && client.writableLength < 1024 * 1024)
         client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:present', payload: tab })}\n\n`)
   },
+  (id) => devices.list().some((device) => device.id === id && device.role !== 'viewer'),
 )
 const browserBroker = new DesktopBrowserBroker(
   (clientId, request) => {
@@ -226,7 +227,6 @@ workspace.settingsStore = new SettingsStore(userData, {
   models: workspace.getAppState('model-preferences', null),
 })
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./providers/fakeAgent') : null
-void hostBrowser.restore()
 const browserAccessEpochs = new Map<string, number>()
 let reviews!: ReviewService
 const mobilePush = new MobilePush(
@@ -245,9 +245,7 @@ const ocuBackend = new OcuBackend(
   undefined,
   () => workspace.getAppState<boolean>('computer:globalPointer', false) === true,
 )
-const computer = new ComputerService(
-  new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), ocuBackend),
-)
+const computer = new ComputerService(new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), ocuBackend))
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {

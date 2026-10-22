@@ -18,6 +18,7 @@ beforeEach(() => {
     captureForViewer: vi.fn(async () => ({ mimeType: 'image/jpeg', data: 'AAAA', width: 10, height: 10 })),
     takeControl: vi.fn(() => ({ id: 'tab1', controller: 'human' })),
     closeAll: vi.fn(),
+    endRun: vi.fn(),
   }
   ;(browser as unknown as { runtime: unknown }).runtime = runtime
 })
@@ -26,6 +27,44 @@ afterEach(async () => {
   vi.useRealTimers()
   await browser.close()
   rmSync(dir, { recursive: true, force: true })
+})
+
+it('enables fresh hosts without downloading a browser at startup', () => {
+  const fresh = new HostBrowser(join(dir, 'fresh'), () => {})
+  expect(fresh.selected()).toBe(true)
+  expect(fresh.status()).toMatchObject({ enabled: true, available: false })
+})
+
+it('uses the paired owner connection without a per-thread viewing grant and rechecks revoked pairing', () => {
+  let paired = true
+  const owner = new HostBrowser(
+    join(dir, 'owner'),
+    () => {},
+    () => {},
+    (device) => paired && device === 'phone',
+  )
+  ;(owner as unknown as { runtime: unknown }).runtime = runtime
+  expect(owner.list('phone', 't1')).toEqual([{ id: 'tab1' }])
+  expect(owner.grantsList()).toEqual([])
+  paired = false
+  expect(() => owner.list('phone', 't1')).toThrow(/not granted/)
+  owner.disconnect('phone')
+})
+
+it('does not run a queued browser action when the run stops during first-use preparation', async () => {
+  let finish!: () => void
+  vi.spyOn(browser, 'prepare').mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+  )
+  const action = browser.request('t1', 'r1', { kind: 'list' })
+  const refused = expect(action).rejects.toThrow(/run ended/)
+  browser.endRun('t1', 'r1')
+  finish()
+  await refused
+  expect(runtime.list).not.toHaveBeenCalled()
 })
 
 describe('host browser device grants', () => {
@@ -108,7 +147,10 @@ describe('host browser frames', () => {
   })
 
   it('refuses a frame that is too large to stream', async () => {
-    runtime.captureForViewer!.mockResolvedValue({ mimeType: 'image/jpeg', data: 'A'.repeat(MAX_VIEWER_FRAME_CHARS + 1) })
+    runtime.captureForViewer!.mockResolvedValue({
+      mimeType: 'image/jpeg',
+      data: 'A'.repeat(MAX_VIEWER_FRAME_CHARS + 1),
+    })
     await expect(browser.frame('local', 't1', 'tab1')).rejects.toThrow(/too large/)
   })
 })

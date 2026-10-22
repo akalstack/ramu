@@ -21,6 +21,8 @@ export function keepAwakeHelp(status: Status | null): string {
 export function appControlHelp(status: Status | null): string {
   const apps = status?.apps
   if (!apps) return 'App control is not available on this host.'
+  if (status.appUpdate?.updateAvailable)
+    return `Open Computer Use ${status.appUpdate.installedVersion} is installed. Update to the tested version ${status.appUpdate.supportedVersion}.`
   if (!apps.available) return apps.detail ?? 'App control is not available on this host.'
   const version = status.appVersion ? ` Open Computer Use ${status.appVersion}.` : ''
   return `Ready.${version} Choose an app in a thread; it works in the background without moving your cursor.`

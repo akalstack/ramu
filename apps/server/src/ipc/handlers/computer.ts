@@ -9,7 +9,7 @@ import {
 } from '@ramu/shared/computerBridge'
 import { MAIN_DISPLAY } from '../../computer/macos'
 import { ComputerRouter } from '../../computer/router'
-import { OCU_VERSION, installOcu } from '../../computer/ocu'
+import { installOcu, ocuUpdateStatus } from '../../computer/ocu'
 import { LockedUse } from '../../computer/lockedUse'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
@@ -57,6 +57,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
   workspace,
   agents,
 }) => {
+  let installingApps = false
   const ready = () => {
     if (!computer) throw new Error('Update this host for computer use.')
     return computer
@@ -116,7 +117,8 @@ export const registerComputerHandlers: RegisterHandlers = ({
         // The host's own Keep awake setting decides whether it can sleep while an agent works on it.
         keepAwake: awake.status().active,
         globalPointer: workspace.getAppState<boolean>('computer:globalPointer', false) === true,
-        appVersion: OCU_VERSION,
+        appVersion: ocuUpdateStatus().installedVersion ?? undefined,
+        appUpdate: ocuUpdateStatus(),
       }),
     },
     // Lets drags in an app move windows and select text by using the real pointer. Off unless the owner turns it on.
@@ -144,7 +146,30 @@ export const registerComputerHandlers: RegisterHandlers = ({
       args: z.tuple([]),
       run: async () => {
         admin()
-        return { version: await installOcu() }
+        if (installingApps) throw new Error('Open Computer Use installation is already running.')
+        if (workspace.listTasks().some((task) => computer?.session(task.id)))
+          throw new Error('Stop computer use in every thread before updating.')
+        if (process.env.RAMU_OCU_PATH)
+          throw new Error('This host uses a custom Open Computer Use path. Update it on the owning host.')
+        installingApps = true
+        try {
+          if (computer?.backend instanceof ComputerRouter) await computer.backend.closeApps()
+          return { version: await installOcu() }
+        } finally {
+          installingApps = false
+        }
+      },
+    },
+    'computer.resetDefaults': {
+      args: z.tuple([]),
+      run: async () => {
+        const service = admin()
+        workspace.setAppState('computer:enabled', false)
+        workspace.setAppState('computer:globalPointer', false)
+        workspace.setAppState('computer:runtimes', [])
+        for (const task of workspace.listTasks()) service.revoke(task.id)
+        const locked = await lockedUse.status()
+        if (locked.enabled) await lockedUse.disable()
       },
     },
     'computer.apps': {
@@ -171,6 +196,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
       ]),
       run: async (threadId: string, scope: { observe: boolean; input: boolean; app?: string; runtime?: string }) => {
         const service = admin()
+        if (installingApps) throw new Error('Wait for the Open Computer Use update to finish.')
         if (!enabled()) throw new Error('Turn on computer use in Settings first.')
         const remoteId = scope.runtime && scope.runtime !== 'local' ? scope.runtime : null
         let backend: ComputerBackend = service.backend
@@ -284,6 +310,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
       args: z.tuple([z.custom<BrokerCommand>((value) => typeof value === 'object' && value !== null)]),
       run: async (command: BrokerCommand) => {
         const service = admin()
+        if (installingApps) throw new Error('Wait for the Open Computer Use update to finish.')
         if (!enabled()) throw new Error('Computer use is off on this computer.')
         const local = service.backend
         switch (command.kind) {

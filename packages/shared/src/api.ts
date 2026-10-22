@@ -200,6 +200,12 @@ export interface RamuMethods {
     globalPointer: boolean
     /** The pinned Open Computer Use release this host runs; absent on hosts from before it was reported. */
     appVersion?: string
+    appUpdate?: {
+      installedVersion: string | null
+      supportedVersion: string
+      updateAvailable: boolean
+      managed: boolean
+    }
   }
   /** Installs the pinned Open Computer Use release for app-scoped access. Owning host only. */
   /** Whether the agent can keep working while the Mac is locked (Open Computer Use's Locked Use). */
@@ -208,6 +214,7 @@ export interface RamuMethods {
   'computer.lockedUseEnable'(): ComputerLockedUse
   'computer.lockedUseDisable'(): ComputerLockedUse
   'computer.installApps'(): { version: string }
+  'computer.resetDefaults'(): void
   /** Computers whose screen a thread can use: this host and paired computers the owner allowed. */
   'computer.runtimes'(): ComputerRuntimeInfo[]
   /** Paired devices that registered as screen owners, with whether this host's owner allowed them. */

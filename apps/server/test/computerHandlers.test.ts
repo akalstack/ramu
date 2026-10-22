@@ -1,8 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ComputerBackend } from '@ramu/shared/computerBridge'
 import { ComputerService } from '../src/computer/service'
 import { registerComputerHandlers } from '../src/ipc/handlers/computer'
 import type { HandlerContext } from '../src/ipc/types'
+
+vi.mock('../src/computer/lockedUse', () => ({
+  LockedUse: class {
+    async status() {
+      return { enabled: false }
+    }
+    async disable() {
+      return { enabled: false }
+    }
+  },
+}))
 
 function setup(deviceId: string | undefined, admin: boolean, text?: string) {
   const backend: ComputerBackend = {
@@ -47,6 +58,27 @@ describe('computer handlers', () => {
     })
     const remote = setup('phone', false)
     expect(() => remote.call('computer.setEnabled', true)).toThrow(/owning host/)
+  })
+
+  it('resets access and pointer defaults and revokes active sessions and viewer grants', async () => {
+    const owner = setup('local', true)
+    owner.call('computer.setEnabled', true)
+    owner.call('computer.setGlobalPointer', true)
+    await owner.call('computer.grant', 't1', { observe: true, input: true })
+    owner.computer.grantViewer('t1', 'phone', true)
+    await owner.call('computer.resetDefaults')
+    expect(owner.call('computer.status')).toMatchObject({ enabled: false, globalPointer: false })
+    expect(owner.computer.session('t1')).toBeUndefined()
+    expect(owner.computer.viewerAccess('t1', 'phone')).toEqual({ observe: false, input: false })
+    const remote = setup('phone', false)
+    await expect(remote.call('computer.resetDefaults')).rejects.toThrow(/owning host/)
+  })
+
+  it('refuses to install over an active computer session', async () => {
+    const owner = setup('local', true)
+    owner.call('computer.setEnabled', true)
+    await owner.call('computer.grant', 't1', { observe: true, input: true })
+    await expect(owner.call('computer.installApps')).rejects.toThrow(/Stop computer use/)
   })
 
   it('lets a paired device watch only after an explicit viewer grant, and drive only with input', async () => {

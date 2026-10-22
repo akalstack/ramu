@@ -4,6 +4,7 @@ import { SETTINGS_FORM_CLASS } from './constants'
 import { ownHostId } from '../hosts'
 import type { RamuMethods } from '@ramu/shared/api'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/desktop-button'
 import { invokeOn, ramu } from '../ipc'
 import { useComputers } from '../workspace/computers'
@@ -19,6 +20,7 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
   const [status, setStatus] = useState<Status | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [revision, setRevision] = useState(0)
   const refresh = useCallback(async () => {
     setStatus(await invokeOn(hostId, 'computer.status'))
   }, [hostId])
@@ -60,21 +62,20 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
       <SettingsGroupTitle>{t('Agent access')}</SettingsGroupTitle>
       <SettingsRow>
         <SettingsLabel title={t('Let agents use this computer')} help={t(runtimeHelp(status))} />
-        <Button
-          variant={status?.enabled ? 'secondary' : 'default'}
-          size="sm"
+        <Switch
+          aria-label={t('Let agents use this computer')}
+          checked={!!status?.enabled}
           disabled={busy || !status || (!status.enabled && !status.runtime.available)}
-          onClick={() => void toggle()}
-        >
-          {status?.enabled ? t('Turn off') : t('Turn on')}
-        </Button>
+          onCheckedChange={() => void toggle()}
+        />
       </SettingsRow>
       {status?.enabled && status.apps && (
         <SettingsRow>
           <SettingsLabel title={t('Limit access to one app')} help={t(appControlHelp(status))} />
-          {!status.apps.available && status.apps.reason === 'not-installed' && (
+          {((!status.apps.available && status.apps.reason === 'not-installed') ||
+            status.appUpdate?.updateAvailable) && (
             <Button size="sm" disabled={busy} onClick={() => void install()}>
-              {busy ? t('Installing…') : t('Install')}
+              {busy ? t('Installing…') : status.appUpdate?.updateAvailable ? t('Update') : t('Install')}
             </Button>
           )}
         </SettingsRow>
@@ -89,15 +90,15 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
                 : 'Off. Drags stay inside the app and never move your pointer, but cannot move windows or select text.',
             )}
           />
-          <Button
-            size="sm"
-            variant={status.globalPointer ? 'secondary' : 'default'}
+          <Switch
+            aria-label={t('Let app drags use your real pointer')}
+            checked={status.globalPointer}
             disabled={busy}
-            onClick={async () => {
+            onCheckedChange={async (checked) => {
               setBusy(true)
               setError('')
               try {
-                await invokeOn(hostId, 'computer.setGlobalPointer', !status.globalPointer)
+                await invokeOn(hostId, 'computer.setGlobalPointer', checked)
                 await refresh()
               } catch (reason) {
                 setError(t(errorText(reason)))
@@ -105,9 +106,7 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
                 setBusy(false)
               }
             }}
-          >
-            {status.globalPointer ? t('Turn off') : t('Turn on')}
-          </Button>
+          />
         </SettingsRow>
       )}
       {status?.enabled && (
@@ -115,13 +114,49 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
           <SettingsLabel title={t('Keep this computer awake')} help={t(keepAwakeHelp(status))} />
         </SettingsRow>
       )}
-      <LockedUseRow hostId={hostId} visible={!!status?.enabled && !!status.apps?.available} />
-      <ScreenSharing hostId={hostId} enabled={!!status?.enabled} />
+      <LockedUseRow
+        key={`locked:${revision}`}
+        hostId={hostId}
+        visible={!!status?.enabled && !!status.apps?.available}
+      />
+      <ScreenSharing key={`sharing:${revision}`} hostId={hostId} enabled={!!status?.enabled} />
       <p className="m-[0_0_12px] text-caption text-muted-foreground">
         {t(
-          'macOS asks for Screen Recording and Accessibility the first time. Ramu cannot tell when you use your own mouse or keyboard while an agent works, so choose Take control first. Turning this off ends every thread’s access.',
+          'macOS asks for Screen Recording and Accessibility the first time. Display control pauses when you use the mouse or keyboard where supported. Choose Take control to step in. Turning this off ends every thread’s access.',
         )}
       </p>
+      <SettingsRow>
+        <SettingsLabel
+          title={t('Reset defaults')}
+          help={t(
+            'Turn off computer access, real-pointer drags, locked-screen use and screen sharing. Active computer sessions end. Installed tools and macOS permissions are kept.',
+          )}
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={busy || !status}
+          onClick={async () => {
+            setBusy(true)
+            setError('')
+            try {
+              await invokeOn(hostId, 'computer.resetDefaults')
+              if (hostId === ownHostId()) {
+                const shared = await ramu.invoke('computers.screenSharing')
+                for (const id of shared) await ramu.invoke('computers.setScreenSharing', id, false)
+              }
+              await refresh()
+              setRevision((value) => value + 1)
+            } catch (reason) {
+              setError(t(errorText(reason)))
+            } finally {
+              setBusy(false)
+            }
+          }}
+        >
+          {t('Reset defaults')}
+        </Button>
+      </SettingsRow>
       {error && (
         <p role="alert" className="m-[0_0_12px] text-caption text-destructive">
           {error}
@@ -169,15 +204,13 @@ function ScreenSharing({ hostId, enabled }: { hostId: string; enabled: boolean }
             title={t('Let {0} use this computer’s screen', { 0: computer.name })}
             help={t('Off by default. That host’s owner must also allow this computer, and can revoke it at any time.')}
           />
-          <Button
-            size="sm"
-            variant={shared.includes(computer.id) ? 'secondary' : 'default'}
-            onClick={() =>
-              void act(() => ramu.invoke('computers.setScreenSharing', computer.id, !shared.includes(computer.id)))
+          <Switch
+            aria-label={t('Let {0} use this computer’s screen', { 0: computer.name })}
+            checked={shared.includes(computer.id)}
+            onCheckedChange={(checked) =>
+              void act(() => ramu.invoke('computers.setScreenSharing', computer.id, checked))
             }
-          >
-            {shared.includes(computer.id) ? t('Turn off') : t('Turn on')}
-          </Button>
+          />
         </SettingsRow>
       ))}
       {devices.map((device) => (
@@ -186,13 +219,13 @@ function ScreenSharing({ hostId, enabled }: { hostId: string; enabled: boolean }
             title={t('{0} shares its screen with this host', { 0: device.name })}
             help={device.online ? t('Online') : t('Offline')}
           />
-          <Button
-            size="sm"
-            variant={device.allowed ? 'secondary' : 'default'}
-            onClick={() => void act(() => invokeOn(hostId, 'computer.allowRuntime', device.deviceId, !device.allowed))}
-          >
-            {device.allowed ? t('Block') : t('Allow')}
-          </Button>
+          <Switch
+            aria-label={t('{0} shares its screen with this host', { 0: device.name })}
+            checked={device.allowed}
+            onCheckedChange={(checked) =>
+              void act(() => invokeOn(hostId, 'computer.allowRuntime', device.deviceId, checked))
+            }
+          />
         </SettingsRow>
       ))}
       {error && (
@@ -259,21 +292,14 @@ function LockedUseRow({ hostId, visible }: { hostId: string; visible: boolean })
     <>
       <SettingsRow>
         <SettingsLabel title={t('Keep working while the screen is locked')} help={help} />
-        {state.enabled ? (
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => void act(() => invokeOn(hostId, 'computer.lockedUseDisable'))}
-          >
-            {t('Turn off')}
-          </Button>
-        ) : (
-          !waiting && (
-            <Button size="sm" onClick={() => setConfirming(true)}>
-              {t('Set up…')}
-            </Button>
-          )
-        )}
+        <Switch
+          aria-label={t('Keep working while the screen is locked')}
+          checked={state.enabled}
+          disabled={waiting}
+          onCheckedChange={(checked) =>
+            checked ? setConfirming(true) : void act(() => invokeOn(hostId, 'computer.lockedUseDisable'))
+          }
+        />
       </SettingsRow>
       {confirming && !state.enabled && (
         <div

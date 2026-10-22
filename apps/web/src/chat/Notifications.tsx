@@ -63,7 +63,12 @@ export function Notifications() {
         const icon = <ProviderIcon provider={status.provider} size={18} />
         const name = providerName(status.provider)
         const install = () => {
-          notify.update(id, { type: 'loading', title: t('Updating {0}…', { '0': name }), timeout: 0, actionProps: undefined })
+          notify.update(id, {
+            type: 'loading',
+            title: t('Updating {0}…', { '0': name }),
+            timeout: 0,
+            actionProps: undefined,
+          })
           void ramu
             .invoke('providers.update', status.provider)
             .then(() => {
@@ -118,6 +123,77 @@ export function Notifications() {
     dismissedUpdates.current.add(`${status.provider}:${status.binary}:${status.latestVersion}`)
     void ramu.invoke('providers.dismissUpdate', status.provider, status.binary, status.latestVersion!).catch(() => {})
   }
+  useEffect(() => {
+    let active = true
+    const id = 'computer-use-update'
+    let shown = ''
+    const hide = () => {
+      notify.close(id)
+      notices.remove(id)
+    }
+    const check = async () => {
+      try {
+        const status = await ramu.invoke('computer.status')
+        if (!active) return
+        const update = status.appUpdate
+        if (!update?.updateAvailable) {
+          hide()
+          shown = ''
+          return
+        }
+        if (shown === update.supportedVersion) return
+        shown = update.supportedVersion
+        const title = t('Open Computer Use update available')
+        const description = t('Version {0} is tested with this Ramu. Stop computer use before updating.', {
+          0: update.supportedVersion,
+        })
+        const install = () => {
+          notify.update(id, {
+            type: 'loading',
+            title: t('Updating {0}…', { 0: 'Open Computer Use' }),
+            timeout: 0,
+            actionProps: undefined,
+          })
+          void ramu
+            .invoke('computer.installApps')
+            .then(() => {
+              hide()
+              notify.add({
+                type: 'success',
+                title: t('{0} updated', { 0: 'Open Computer Use' }),
+                timeout: TOAST_MS.success,
+              })
+            })
+            .catch((reason) => {
+              notify.update(id, {
+                type: 'error',
+                title: t('Could not update {0}', { 0: 'Open Computer Use' }),
+                description: errorText(reason),
+                timeout: TOAST_MS.error,
+                actionProps: { children: t('Update'), onClick: install },
+              })
+            })
+        }
+        notify.add({
+          id,
+          title,
+          description,
+          timeout: TOAST_MS.update,
+          actionProps: { children: t('Update'), onClick: install },
+        })
+        notices.add({ id, title, description, type: 'info', actionLabel: t('Update'), onAction: install })
+      } catch {
+        /* Older or disconnected hosts do not support update status. */
+      }
+    }
+    void check()
+    const timer = setInterval(() => void check(), 60 * 60_000)
+    return () => {
+      active = false
+      clearInterval(timer)
+      hide()
+    }
+  }, [])
   const watching = useRef<(taskId: string, sessionId: string) => boolean>(() => false)
   watching.current = (taskId, sessionId) => {
     if (ws.ui.activeTaskId !== taskId || ws.composing || ws.ui.sidebar === 'schedules' || ws.ui.sidebar === 'inbox')
