@@ -3,7 +3,7 @@ import { elicitationRequest, elicitationContent } from '../src/agent/elicitation
 import { AcpResumeUnavailable } from '../src/providers/acp'
 import { configureProviderBinaries } from '../src/providers/providerBinaries'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { query, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -153,7 +153,9 @@ describe('AgentService', () => {
   it('repairs an older shutdown stop after a successful result but retains genuinely interrupted work', async () => {
     const svc = new AgentService(db, () => {}, demoQuery)
     const finished = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
-    const interrupted = svc.start('t2', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
+    const other = join(tmp, 'other')
+    mkdirSync(other)
+    const interrupted = svc.start('t2', scopeOf(other), 'hello', DEFAULT_AGENT_SETTINGS)
     await until(() => svc.get(finished.id).state === 'idle' && svc.get(interrupted.id).state === 'idle')
     svc.stopAll()
     const record = (id: string, event: AgentEvent) =>
@@ -797,7 +799,8 @@ describe('AgentService', () => {
     expect(svc.list('t')[0]!.title).toBe('hello')
 
     await svc.send(s.id, 'again')
-    await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:again'))
+    // Stopping a turn that already finished is only cleanup and leaves the chat idle; interrupt one in progress.
+    expect(['starting', 'running']).toContain(svc.get(s.id).state)
     svc.stop(s.id)
     expect(svc.get(s.id).state).toBe('stopped')
     expect(svc.events(s.id).findLast((event) => event.kind === 'state')).toMatchObject({

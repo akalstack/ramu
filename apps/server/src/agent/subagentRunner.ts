@@ -44,7 +44,7 @@ export interface SubagentRunnerHost
     Pick<MessageDispatcher, 'submit'>,
     Pick<SessionProcess, 'launch' | 'stop'>,
     Pick<SessionRecorder, 'record'>,
-    Pick<SessionRegistry, 'transitioning'>,
+    Pick<SessionRegistry, 'revisions' | 'transitioning'>,
     Pick<UserRequests, 'childRequests'>,
     Pick<
       FallbackRouter,
@@ -162,6 +162,8 @@ export class SubagentRunner {
     reservation: symbol,
   ): Promise<SubagentResult> {
     const parent = this.host.get(parentId)
+    // Stopping the parent bumps this, even when it was idle and so stays idle: a start that began earlier is then stale.
+    const parentRevision = this.host.revisions.get(parentId) ?? 0
     if (parent.parentId) throw new Error('A sub-agent cannot start sub-agents through Ramu. Use your own tools.')
     if (this.host.shutdown() || !['running', 'starting', 'idle', 'needs-input'].includes(parent.state))
       throw new Error('This thread is not running.')
@@ -195,7 +197,12 @@ export class SubagentRunner {
         target.reason = [target.reason, selection.note].filter(Boolean).join('; ')
       } else target.settings = capSubagentEffort(target.settings, selectionPrefs, catalogs)
     }
-    if (signal?.aborted || this.host.shutdown() || this.host.get(parentId).state === 'stopped')
+    if (
+      signal?.aborted ||
+      this.host.shutdown() ||
+      this.host.get(parentId).state === 'stopped' ||
+      parentRevision !== (this.host.revisions.get(parentId) ?? 0)
+    )
       throw new Error('Sub-agent start was cancelled.')
     await this.host.validateSettings(target.settings)
     const name = clipText(input.name?.trim() || input.description.trim() || 'Sub-agent', 80)

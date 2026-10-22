@@ -293,7 +293,12 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     due_at INTEGER NOT NULL
   );`,
   // Multi-file Interactive Content keeps its exact sources beside the bundled runnable document.
-  `ALTER TABLE interactive_versions ADD COLUMN files TEXT;`,
+  (db) => {
+    const columns = new Set(
+      (db.prepare('PRAGMA table_info(interactive_versions)').all() as { name: string }[]).map((c) => c.name),
+    )
+    if (!columns.has('files')) db.exec('ALTER TABLE interactive_versions ADD COLUMN files TEXT;')
+  },
 ]
 
 export type Db = DatabaseSync

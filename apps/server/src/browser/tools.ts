@@ -377,7 +377,18 @@ export function registerBrowserTools(
         'Press one key in a snapshot-bound element using Chromium input: a name such as Enter, Escape, Tab, an arrow, Backspace, Delete, Home, End, PageUp, PageDown, F1–F12, or a single character. Hold Alt, Control, Meta or Shift with modifiers, for example key a with Meta to select all. Password/file fields require human control. A key can submit or navigate; never replay an uncertain result.',
       inputSchema: {
         ...target,
-        key: z.string().min(1).max(12),
+        key: z
+          .string()
+          .min(1)
+          .max(12)
+          .refine(
+            (key) =>
+              [...key].length === 1 ||
+              /^(Enter|Escape|Tab|Arrow(Up|Down|Left|Right)|Backspace|Delete|Home|End|PageUp|PageDown|F([1-9]|1[0-2]))$/.test(
+                key,
+              ),
+            'Use a key name such as Enter or ArrowDown, or a single character; add modifiers separately.',
+          ),
         modifiers: z
           .array(z.enum(['Alt', 'Control', 'Meta', 'Shift']))
           .max(4)

@@ -1,6 +1,6 @@
 import { isAcpProvider } from '@ramu/shared/providers/providers'
 import type { AgentTask } from '@ramu/shared/types'
-import { taskMessagePrompt, taskStopPrompt } from '@ramu/shared/chat/agentTasks'
+import { isStaleProgress, taskMessagePrompt, taskStopPrompt } from '@ramu/shared/chat/agentTasks'
 import { WRITING_STATES } from './constants'
 import { isUsageLimit } from './usageLimit'
 import type { AdvisorService } from './advisorService'
@@ -42,13 +42,7 @@ export class AgentTasks {
     ) as Partial<AgentTask>
     if (defined.resumedAt && current?.status !== 'running' && defined.resumedAt >= (current?.endedAt ?? 0))
       defined.resumedAt = Math.max(defined.resumedAt, (current?.endedAt ?? 0) + 1)
-    if (
-      current &&
-      current.status !== 'running' &&
-      defined.status === 'running' &&
-      !(defined.resumedAt && defined.resumedAt > (current.endedAt ?? current.resumedAt ?? 0))
-    )
-      return
+    if (isStaleProgress(current, defined)) return
     const next: AgentTask = { name: 'Agent', status: 'running', ...current, ...defined, agentId }
     if (defined.status === 'running' && defined.resumedAt) {
       delete next.endedAt

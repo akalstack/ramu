@@ -1,6 +1,7 @@
 import { permissionKey, PermissionApprovals, commandPatterns } from './permissionApprovals'
 import { goalContinues } from '@ramu/shared/chat/goalHold'
-import type { AppPreferences, AgentEvent, AgentSessionState } from '@ramu/shared/types'
+import { isStaleProgress } from '@ramu/shared/chat/agentTasks'
+import type { AppPreferences, AgentEvent, AgentSessionState, AgentTask } from '@ramu/shared/types'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
 import type { SessionRegistry } from './sessionRegistry'
@@ -180,7 +181,7 @@ export class SessionRecorder {
               : event.kind === 'agent'
                 ? this.db
                     .prepare(
-                      "SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'agent' AND json_extract(event, '$.agentId') = ? LIMIT 1",
+                      "SELECT seq, event FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'agent' AND json_extract(event, '$.agentId') = ? LIMIT 1",
                     )
                     .get(id, event.agentId)
                 : this.db
@@ -190,6 +191,8 @@ export class SessionRecorder {
                     .get(id, (event as { messageId: string }).messageId, replacesMessageId ?? null)
       ) as { seq: number; event?: string } | undefined
       if (previous) {
+        if (event.kind === 'agent' && previous.event && isStaleProgress(JSON.parse(previous.event) as AgentTask, event))
+          return
         if (event.kind === 'tool-use' && previous.event) event.at = (JSON.parse(previous.event) as AgentEvent).at
         this.db
           .prepare('UPDATE agent_events SET event = ? WHERE session_id = ? AND seq = ?')

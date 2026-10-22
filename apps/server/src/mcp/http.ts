@@ -75,6 +75,13 @@ export function sharedMcpHttpFetch(endpoint: string, allowPrivate = false, dispa
       bodyTimeout: 60_000,
       connect: { lookup: sharedMcpLookup(allowPrivate), timeout: 15_000 },
     })
+  const headerRecord = (headers: Headers) => {
+    const record: Record<string, string> = {}
+    headers.forEach((value, key) => {
+      record[key] = value
+    })
+    return record
+  }
   const fetch: FetchLike = async (input, init = {}) => {
     const url = new URL(input)
     if (url.origin !== origin.origin || url.username || url.password || url.hash)
@@ -82,7 +89,7 @@ export function sharedMcpHttpFetch(endpoint: string, allowPrivate = false, dispa
     // No proxy or global dispatcher is used. Redirects, cookies and credential-bearing origin changes are never automatic.
     const response = await request(url, {
       method: init.method,
-      headers: Object.fromEntries(new Headers(init.headers).entries()),
+      headers: headerRecord(new Headers(init.headers)),
       body: init.body as string | undefined,
       signal: init.signal,
       dispatcher: agent,
@@ -99,7 +106,7 @@ export function sharedMcpHttpFetch(endpoint: string, allowPrivate = false, dispa
     }
     let bytes = 0
     const body =
-      response.body?.pipeThrough(
+      (response.body as ReadableStream<Uint8Array> | null)?.pipeThrough(
         new TransformStream<Uint8Array, Uint8Array>({
           transform(chunk, controller) {
             bytes += chunk.byteLength
@@ -111,7 +118,7 @@ export function sharedMcpHttpFetch(endpoint: string, allowPrivate = false, dispa
     return new Response(body, {
       status: response.status,
       statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
+      headers: headerRecord(response.headers as unknown as Headers),
     })
   }
   return { fetch, close: () => agent.destroy() }

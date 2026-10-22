@@ -50,7 +50,7 @@ async function setup(
     state: 'running',
     settings: { provider: 'codex', model: 'model', access: options.access ?? 'full' },
     ...(options.helper ? { parentId: 'parent' } : {}),
-  } as AgentSessionInfo
+  } as unknown as AgentSessionInfo
   let current = source,
     active = true
   let epoch = 0

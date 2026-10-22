@@ -27,6 +27,22 @@ export function parseTaskMessage(text: string): { name: string; address: string;
   return match ? { name: match[1]!, address: match[2]!, body: match[3]! } : null
 }
 
+/**
+ * Progress that arrives after a sub-agent has stopped, failed or finished is stale and must not bring it back to life.
+ * Only a resume that is newer than the end counts.
+ */
+export function isStaleProgress(
+  previous: Pick<AgentTask, 'status' | 'endedAt' | 'resumedAt'> | null | undefined,
+  next: Partial<Pick<AgentTask, 'status' | 'resumedAt'>>,
+): boolean {
+  return (
+    !!previous &&
+    previous.status !== 'running' &&
+    next.status === 'running' &&
+    !(next.resumedAt && next.resumedAt > (previous.endedAt ?? previous.resumedAt ?? 0))
+  )
+}
+
 /** The latest state of every sub-agent in a transcript, in the order they started. */
 export function latestTasks(events: AgentEvent[]): AgentTask[] {
   const tasks = new Map<string, AgentTask>()
@@ -36,13 +52,7 @@ export function latestTasks(events: AgentEvent[]): AgentTask[] {
       delete task.kind
       delete task.at
       const previous = tasks.get(task.agentId)
-      if (
-        previous &&
-        previous.status !== 'running' &&
-        task.status === 'running' &&
-        !(task.resumedAt && task.resumedAt > (previous.endedAt ?? previous.resumedAt ?? 0))
-      )
-        continue
+      if (isStaleProgress(previous, task)) continue
       tasks.set(task.agentId, task)
     }
   // Older background services saved the delivered advice without a task or its own transcript.
