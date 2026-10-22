@@ -1,6 +1,7 @@
 import { afterEach, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { openDb } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
@@ -10,7 +11,7 @@ import { registerProjectSetupHandlers } from '../src/ipc/handlers/projectSetup'
 import { registerSharedMcpHandlers } from '../src/ipc/handlers/mcp'
 import { MCP_SHARING_KEY, mcpServerKey } from '../src/agent/projectSetup'
 import type { HandlerContext } from '../src/ipc/types'
-import type { SharedMcpConnection } from '@ramu/shared/mcp'
+import type { SharedMcpConnection, SharedMcpInspection } from '@ramu/shared/mcp'
 
 const cleanup: (() => void | Promise<void>)[] = []
 afterEach(async () => {
@@ -69,15 +70,42 @@ it('imports a declared remote server as a definition without secrets, connecting
     transport: { type: 'http', url: 'https://tracker.example/mcp', headerSecretRefs: {} },
   })
   expect(JSON.stringify(service.list())).not.toContain('secret-token')
-  // The declared copy is no longer also added to other providers.
-  expect(workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {})[declared.key]).toBe(false)
+  // Nothing is switched off yet: no provider may lose the server before the Shared MCP copy works.
+  expect(workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {})[declared.key]).toBeUndefined()
   const again = (
     setup('projects.setup', project.id) as { mcp: { name: string; managedConnectionId?: string }[] }
   ).mcp.find((entry) => entry.name === 'tracker')!
   expect(again.managedConnectionId).toBe(connection.id)
   expect(() => setup('mcp.import', project.id, declared.key)).toThrow('already connected')
   await mcp('mcp.remove', connection.id)
-  expect(workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {})[declared.key]).toBe(true)
+  expect(workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {})[declared.key]).toBeUndefined()
+})
+
+it('stops sharing the declared copy at the first approval and gives it back when the connection is removed', async () => {
+  const path = fileURLToPath(new URL('./fixtures/shared-mcp.mjs', import.meta.url))
+  const { setup, mcp, project, workspace } = fixture({ local: { command: process.execPath, args: [path] } })
+  const declared = (setup('projects.setup', project.id) as { mcp: { key: string; name: string }[] }).mcp.find(
+    (entry) => entry.name === 'local',
+  )!
+  const sharing = () => workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {})[declared.key]
+  workspace.setAppState(MCP_SHARING_KEY, { [declared.key]: true })
+  const connection = setup('mcp.import', project.id, declared.key) as SharedMcpConnection
+  expect(sharing()).toBe(true)
+  mcp('mcp.account', { provider: 'codex', accountId: 'a', shareApprovals: true })
+  const selection = { provider: 'codex', accountId: 'a', projectId: project.id }
+  const inspection = (await mcp('mcp.check', connection.id, selection)) as SharedMcpInspection
+  mcp('mcp.approve', {
+    connectionId: connection.id,
+    revision: inspection.revision,
+    catalogRevision: inspection.catalogRevision,
+    provider: 'codex',
+    accountId: 'a',
+    scope: connection.scope,
+    tools: [{ name: 'inspect_environment', action: 'read', approval: 'connection' }],
+  })
+  expect(sharing()).toBe(false)
+  await mcp('mcp.remove', connection.id)
+  expect(sharing()).toBe(true)
 })
 
 it('imports a local command with its folder, refuses a relative one, and needs the host administrator', () => {

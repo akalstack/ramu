@@ -400,6 +400,33 @@ describe('what a switch carries', () => {
     expect(settingsEvents(svc, s.id).at(-1)?.handoffInfo).toMatchObject({ cause: 'limit', from: 'codex' })
   })
 
+  it('names the Shared MCP connections the fallback destination lacks on the settings event, and only then', async () => {
+    const svc = make()
+    svc.preferences = () => ({
+      ...DEFAULT_APP_PREFERENCES,
+      fallback: {
+        ...DEFAULT_APP_PREFERENCES.fallback,
+        order: [
+          { id: 'a', provider: 'codex', model: 'codex-m', effort: null },
+          { id: 'b', provider: 'cursor', model: 'cursor-m', effort: null },
+        ],
+      },
+    })
+    svc.usage = { list: () => [], update: () => {} }
+    const checked: string[] = []
+    svc.mcpDestination = async (_session, settings) => {
+      checked.push(settings.provider)
+      return [{ name: 'Tracker', status: 'approval-needed' }]
+    }
+    const s = svc.start('t', scopeOf(cwd), 'seed', { ...codex, autoFallback: true })
+    await until(() => idle(svc, s.id))
+    limited.add('codex')
+    await svc.send(s.id, 'keep going')
+    await until(() => svc.get(s.id).provider === 'cursor' && starts.at(-1)?.provider === 'cursor')
+    expect(checked).toEqual(['cursor'])
+    expect(settingsEvents(svc, s.id).at(-1)?.mcpAttention).toEqual([{ name: 'Tracker', status: 'approval-needed' }])
+  })
+
   it('carries the goal through guidance, not twice, when the provider receives guidance', async () => {
     const svc = make()
     svc.toolConnection = () => ({ url: 'http://127.0.0.1:1', token: 't' })

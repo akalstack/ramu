@@ -136,18 +136,22 @@ export class FallbackRouter {
         )
       const resume = plan.resume
       const handoffInfo = plan.info
+      // Shared MCP access belongs to the login a chat runs on: say what the new one still lacks, never why it was chosen.
+      // Checked while the old process still runs, so a slow service never leaves the chat stopped; a model or effort
+      // change on the same login says nothing.
+      const mcpAttention = sameIdentity
+        ? undefined
+        : await this.host
+            .mcpDestination()?.(s, settings)
+            .catch(() => [])
+      if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0))
+        throw new Error('Provider switch cancelled')
       // Terminate the old process before releasing its checkout or starting another provider.
       this.host.halt(id)
       await this.host.draining.get(id)
       if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0))
         throw new Error('Provider switch cancelled')
       if (!sameIdentity) this.host.rememberSession(id)
-      // Shared MCP access belongs to the login a chat runs on: say what the new one still lacks, never why it was chosen.
-      const mcpAttention = await this.host
-        .mcpDestination()?.(s, settings)
-        .catch(() => [])
-      if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0))
-        throw new Error('Provider switch cancelled')
       this.db
         .prepare('UPDATE agent_sessions SET provider = ?, settings = ?, provider_session_id = ? WHERE id = ?')
         .run(settings.provider, JSON.stringify(settings), resume, id)
@@ -178,6 +182,16 @@ export class FallbackRouter {
       this.host.transitioning.delete(id)
       this.host.settleChild(id)
     }
+  }
+
+  /** Shared MCP connections the destination login still lacks; empty when the login did not change. */
+  private async mcpAttention(s: AgentSessionInfo, next: AgentSettings) {
+    if (next.provider === s.provider && (next.accountId ?? 'default') === (s.settings.accountId ?? 'default')) return []
+    return (
+      (await this.host
+        .mcpDestination()?.(s, next)
+        .catch(() => [])) ?? []
+    )
   }
 
   /** Clear the hold to allow usage-limit fallback again. */
@@ -466,6 +480,8 @@ export class FallbackRouter {
         ? this.host.planSwitch(id, { provider: s.provider, accountId: account }, 'limit')
         : null
       if (account && accountPlan?.fits) {
+        const accountAttention = await this.mcpAttention(s, { ...s.settings, accountId: account })
+        if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
         this.host.halt(id)
         await this.host.draining.get(id)
         if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
@@ -482,6 +498,7 @@ export class FallbackRouter {
           handoff: true,
           previous: s.settings,
           handoffInfo: accountPlan.info,
+          ...(accountAttention.length ? { mcpAttention: accountAttention } : {}),
         })
         this.host.transitioning.delete(id)
         this.host.launch(
@@ -555,6 +572,8 @@ export class FallbackRouter {
       const same = step.provider === s.provider
       const peak = peakFor(routing?.usage ?? [], s.provider, s.settings.model)
       const resume = plan?.resume ?? null
+      const fallbackAttention = await this.mcpAttention(s, settings)
+      if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
       this.host.halt(id)
       await this.host.draining.get(id)
       if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
@@ -570,6 +589,7 @@ export class FallbackRouter {
         handoff: !!plan?.info,
         previous: s.settings,
         ...(plan?.info ? { handoffInfo: plan.info } : {}),
+        ...(fallbackAttention.length ? { mcpAttention: fallbackAttention } : {}),
       })
       this.host.transitioning.delete(id)
       this.host.launch(

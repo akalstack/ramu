@@ -8,7 +8,7 @@ import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js'
 import type { SharedMcpConnection } from '@ramu/shared/mcp'
 import type { HostSecretReader } from './stdio'
 import { SharedMcpConnectionError } from './errors'
-import { HostOAuthProvider, OAUTH_REFERENCE_NAME, type OAuthRecordStore, type StoredOAuth } from './oauth'
+import { HostOAuthProvider, lockedOAuthRecord, OAUTH_REFERENCE_NAME, type StoredOAuth } from './oauth'
 
 const privateV4 = new BlockList()
 for (const [address, prefix] of [
@@ -167,10 +167,11 @@ export async function connectSharedMcpHttp(
   if (record) {
     if (!secrets?.write) throw new Error('Set up a secure host credential store before using signed-in servers')
     const store = secrets
-    const recordStore: OAuthRecordStore = {
-      load: async () => JSON.parse(await store.read(record)) as StoredOAuth,
-      save: (value) => store.write!(record, JSON.stringify(value)),
-    }
+    const recordStore = lockedOAuthRecord(
+      `${connection.hostId}:${connection.id}:${oauthReference}`,
+      async () => JSON.parse(await store.read(record!)) as StoredOAuth,
+      (value) => store.write!(record!, JSON.stringify(value)),
+    )
     // Refresh needs stored tokens; with none, the person has to sign in again rather than a background retry.
     if (!(await recordStore.load()).tokens) throw new SharedMcpConnectionError('sign-in-required')
     authProvider = new HostOAuthProvider(recordStore)

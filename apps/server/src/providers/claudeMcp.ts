@@ -26,6 +26,7 @@ export function claudeMcpServers(
     for (const [name, server] of Object.entries(entries)) {
       if (
         name === 'ramu' ||
+        name === 'shared_mcp' ||
         (Array.isArray(disabled) && disabled.includes(name)) ||
         Object.hasOwn(local, name) ||
         !server ||
@@ -39,7 +40,7 @@ export function claudeMcpServers(
   return {
     ...discoverMcpServers(
       { cwd: scope.cwd, additionalDirs: [...scope.additionalDirs, ...scope.covers, ...configDirs], covers: [] },
-      ['ramu'],
+      ['ramu', 'shared_mcp'],
     ),
     ...local,
   }

@@ -6,7 +6,7 @@ import type {
   SharedMcpSelection,
 } from '@ramu/shared/mcp'
 import { sharedMcpAccount, sharedMcpApproval, sharedMcpDefinition, sharedMcpSelection } from '../../mcp/policy'
-import { MCP_IMPORTS_KEY, MCP_SHARING_KEY } from '../../agent/projectSetup'
+import { MCP_IMPORTS_KEY, MCP_SHARING_KEY, type McpImports } from '../../agent/projectSetup'
 import type { RegisterHandlers } from '../types'
 
 const id = z.string().min(1).max(200)
@@ -51,8 +51,22 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
     },
     'mcp.approve': {
       args: z.tuple([sharedMcpApproval]),
-      run: (input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }) =>
-        admin().approve(input),
+      run: (input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }) => {
+        const grant = admin().approve(input)
+        // The first approval of an imported connection is when it replaces the declared copy's sharing: before that
+        // no other provider could use it, so turning the old one off would only remove access.
+        const workspace = ctx.workspace
+        const imports = workspace.getAppState<McpImports>(MCP_IMPORTS_KEY, {})
+        const entry = imports[input.connectionId]
+        if (entry && !entry.applied) {
+          workspace.setAppState(MCP_IMPORTS_KEY, { ...imports, [input.connectionId]: { ...entry, applied: true } })
+          workspace.setAppState(MCP_SHARING_KEY, {
+            ...workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {}),
+            [entry.key]: false,
+          })
+        }
+        return grant
+      },
     },
     'mcp.signIn': { args: z.tuple([id]), run: (connectionId: string) => admin().signIn(connectionId) },
     'mcp.cancelSignIn': { args: z.tuple([id]), run: (connectionId: string) => admin().cancelSignIn(connectionId) },
@@ -70,16 +84,17 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       run: async (id: string) => {
         await admin().remove(id)
         // An imported server stops replacing the declared copy: give back the sharing it displaced.
-        const imports = ctx.workspace?.getAppState<Record<string, string>>(MCP_IMPORTS_KEY, {}) ?? {}
-        const key = imports[id]
-        if (key && ctx.workspace) {
-          const { [id]: _removed, ...rest } = imports
-          ctx.workspace.setAppState(MCP_IMPORTS_KEY, rest)
-          ctx.workspace.setAppState(MCP_SHARING_KEY, {
-            ...ctx.workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {}),
-            [key]: true,
+        const workspace = ctx.workspace
+        const imports = workspace.getAppState<McpImports>(MCP_IMPORTS_KEY, {})
+        const entry = imports[id]
+        if (!entry) return
+        const { [id]: _removed, ...rest } = imports
+        workspace.setAppState(MCP_IMPORTS_KEY, rest)
+        if (entry.applied && entry.wasShared)
+          workspace.setAppState(MCP_SHARING_KEY, {
+            ...workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {}),
+            [entry.key]: true,
           })
-        }
       },
     },
     'mcp.checkCredentialStore': {

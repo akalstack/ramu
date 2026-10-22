@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { HostOAuthProvider, OAuthSignIn, type StoredOAuth } from '../src/mcp/oauth'
+import { HostOAuthProvider, lockedOAuthRecord, OAuthSignIn, type StoredOAuth } from '../src/mcp/oauth'
 
 const open: OAuthSignIn[] = []
 afterEach(() => {
@@ -113,18 +113,49 @@ it('refuses a callback once the connection changed or the sign-in was cancelled'
   expect(cancelled.failures).toEqual(['Sign-in was cancelled.'])
 })
 
+const sharedRecord = (initial: StoredOAuth, key = 'connection') => {
+  const state = { record: initial }
+  const store = () =>
+    lockedOAuthRecord(
+      key,
+      async () => structuredClone(state.record),
+      async (value) => {
+        // A slow keychain write, so interleaving would show up if the lock did not hold.
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        state.record = value
+      },
+    )
+  return { state, store }
+}
+
 it('uses and refreshes stored tokens in the background but never starts a sign-in on its own', async () => {
-  let record: StoredOAuth = { tokens: { access_token: 'a', token_type: 'Bearer', refresh_token: 'r' } }
-  const provider = new HostOAuthProvider({
-    load: async () => structuredClone(record),
-    save: async (next) => {
-      record = next
-    },
-  })
+  const { state, store } = sharedRecord({ tokens: { access_token: 'a', token_type: 'Bearer', refresh_token: 'r' } })
+  const provider = new HostOAuthProvider(store())
   expect((await provider.tokens())?.access_token).toBe('a')
   await provider.saveTokens({ access_token: 'b', token_type: 'Bearer', refresh_token: 'r2' })
-  expect(record.tokens?.access_token).toBe('b')
+  expect(state.record.tokens?.access_token).toBe('b')
   expect(() => provider.redirectToAuthorization(new URL('https://auth.example/authorize'))).toThrow('Settings')
   await provider.invalidateCredentials('tokens')
-  expect(record.tokens).toBeUndefined()
+  expect(state.record.tokens).toBeUndefined()
+})
+
+it('does not let a stale provider clear tokens another one just refreshed, nor lose a concurrent save', async () => {
+  const { state, store } = sharedRecord(
+    { tokens: { access_token: 'a', token_type: 'Bearer', refresh_token: 'r1' }, clientInformation: { client_id: 'c' } },
+    'race',
+  )
+  const first = new HostOAuthProvider(store())
+  const second = new HostOAuthProvider(store())
+  await first.tokens()
+  await second.tokens()
+  // The first refreshes and rotates; the second, still holding the old refresh token, is told it is invalid.
+  await first.saveTokens({ access_token: 'b', token_type: 'Bearer', refresh_token: 'r2' })
+  await second.invalidateCredentials('tokens')
+  expect(state.record.tokens?.refresh_token).toBe('r2')
+  await Promise.all([
+    first.saveClientInformation({ client_id: 'c2' }),
+    second.saveTokens({ access_token: 'c', token_type: 'Bearer', refresh_token: 'r3' }),
+  ])
+  expect(state.record.clientInformation?.client_id).toBe('c2')
+  expect(state.record.tokens?.refresh_token).toBe('r3')
 })

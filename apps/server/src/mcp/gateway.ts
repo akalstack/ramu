@@ -47,7 +47,8 @@ export class ExternalMcpGateway {
   private connections = new Map<string, Connection>()
   private closed = false
   private abort = new AbortController()
-  private pending = new Set<string>()
+  private tails = new Map<string, Promise<void>>()
+  private waiting = 0
 
   constructor(
     private readonly sessionId: string,
@@ -160,14 +161,25 @@ export class ExternalMcpGateway {
     return { ...catalog, tools }
   }
 
+  /**
+   * Operations on one connection run one after another, so a provider's parallel calls queue instead of failing and
+   * two never connect or read the catalog at once. At most eight wait across the session.
+   */
   private async exclusive<T>(connectionId: string, work: () => Promise<T>): Promise<T> {
     this.signal()
-    if (this.pending.has(connectionId) || this.pending.size >= 8) throw new Error('Shared MCP session is busy')
-    this.pending.add(connectionId)
+    if (this.waiting >= 8) throw new Error('Shared MCP session is busy')
+    this.waiting++
+    const run = (this.tails.get(connectionId) ?? Promise.resolve()).then(work)
+    const tail = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    this.tails.set(connectionId, tail)
     try {
-      return await work()
+      return await run
     } finally {
-      this.pending.delete(connectionId)
+      this.waiting--
+      if (this.tails.get(connectionId) === tail) this.tails.delete(connectionId)
     }
   }
 

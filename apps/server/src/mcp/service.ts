@@ -140,14 +140,18 @@ export class SharedMcpService {
     projectId: string | null,
     waitMs = 10_000,
   ) {
+    // One deadline for the whole check, however many connections need it.
+    const deadline = Date.now() + waitMs
     for (const entry of this.sessionConnections(provider, accountId, projectId)) {
       if (entry.status !== 'not-checked' || !this.policy.hasReviewedAccess(provider, accountId, entry.connectionId))
         continue
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) break
       let timer: ReturnType<typeof setTimeout> | undefined
       await Promise.race([
         this.check(entry.connectionId, { provider, accountId, projectId }).catch(() => {}),
         new Promise<void>((resolve) => {
-          timer = setTimeout(resolve, waitMs)
+          timer = setTimeout(resolve, remaining)
           timer.unref()
         }),
       ])

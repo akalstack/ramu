@@ -24,7 +24,7 @@ it('names tools deterministically, within the provider limit, and never merges s
   expect(a).not.toBe(externalToolName({ id: 'two', name: 'Atlassian' }, 'search issues'))
   expect(externalToolName({ id: 'one', name: 'x' }, 'a b')).not.toBe(externalToolName({ id: 'one', name: 'x' }, 'a_b'))
   const long = externalToolName({ id: 'one', name: 'A very long connection name' }, 't'.repeat(200))
-  expect(`mcp__ramu_external__${long}`.length).toBeLessThanOrEqual(64)
+  expect(`mcp__shared_mcp__${long}`.length).toBeLessThanOrEqual(64)
   expect(long).toMatch(/^[A-Za-z0-9_-]+$/)
 })
 
@@ -93,4 +93,28 @@ it('offers external tools to no restricted, helper or out-of-scope session', () 
   expect(hasExternalConnections(service, { ...source, projectId: null })).toBe(false)
   expect(hasExternalConnections(service, { ...source, provider: 'claude-code' })).toBe(false)
   expect(hasExternalConnections(service, { ...source, connectionIds: [] })).toBe(false)
+})
+
+it('queues parallel calls on one connection instead of rejecting the second', async () => {
+  const { service, connection, source } = fixture()
+  const inspection = await service.check(connection.id, { provider: 'codex', accountId: 'a', projectId: 'project' })
+  service.approve({
+    connectionId: connection.id,
+    revision: inspection.revision,
+    catalogRevision: inspection.catalogRevision,
+    provider: 'codex',
+    accountId: 'a',
+    scope: connection.scope,
+    tools: [{ name: 'inspect_environment', action: 'read', approval: 'connection' }],
+  })
+  const gateway = service.gateway(
+    'parallel',
+    { ...source, hostId: service.storage.hostId, externalToolsAllowed: true },
+    async () => true,
+  )
+  cleanup.push(() => gateway.close())
+  const results = await Promise.all(
+    [1, 2, 3].map(() => gateway.invoke(connection.id, inspection.catalogRevision, 'inspect_environment', {})),
+  )
+  expect(results.map((result) => result.isError)).toEqual([undefined, undefined, undefined])
 })

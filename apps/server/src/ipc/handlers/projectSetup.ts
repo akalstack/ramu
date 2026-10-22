@@ -4,6 +4,7 @@ import {
   MCP_IMPORTS_KEY,
   MCP_SHARING_KEY,
   SKILL_SHARING_KEY,
+  type McpImports,
   type McpSharing,
   type SkillSharing,
 } from '../../agent/projectSetup'
@@ -43,8 +44,9 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
     /**
      * Copies a declared server's non-secret definition into Shared MCP for this project. Values of its environment and
      * headers are never read: the person provides credentials or signs in afterwards, and nothing connects until they
-     * choose Connect. A declared copy that Ramu was sharing stops being added to other providers, so one server is
-     * not offered twice; the provider that declares it keeps its own copy, and removing the connection restores sharing.
+     * choose Connect. A declared copy that Ramu was sharing stops being added to other providers only at the
+     * connection's first approval, so one server is not offered twice and no provider loses it before the Shared MCP
+     * copy works; the provider that declares it keeps its own copy, and removing the connection restores sharing.
      */
     'mcp.import': {
       args: z.tuple([id, z.string().regex(/^[0-9a-f]{16}$/)]),
@@ -73,11 +75,11 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
               ? { type: 'http', url: transport.url, headerSecretRefs: {} }
               : { type: 'stdio', command: transport.command, args: transport.args, cwd: cwd!, envSecretRefs: {} },
         })
-        if (sharing()[key] ?? transport.type === 'http') {
-          const imports = workspace.getAppState<Record<string, string>>(MCP_IMPORTS_KEY, {})
-          workspace.setAppState(MCP_IMPORTS_KEY, { ...imports, [connection.id]: key })
-          workspace.setAppState(MCP_SHARING_KEY, { ...sharing(), [key]: false })
-        }
+        if (sharing()[key] ?? transport.type === 'http')
+          workspace.setAppState<McpImports>(MCP_IMPORTS_KEY, {
+            ...workspace.getAppState<McpImports>(MCP_IMPORTS_KEY, {}),
+            [connection.id]: { key, wasShared: true, applied: false },
+          })
         ctx.host.send('mcp:changed', {})
         return connection
       },

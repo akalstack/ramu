@@ -72,7 +72,7 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     if (!administrator()) throw new Error('Change GitHub connections on the host running Ramu')
   }
   /** Provider and store errors reach the client only after secrets are stripped. */
-  const redacted = async <T,>(work: () => Promise<T>): Promise<T> => {
+  const redacted = async <T>(work: () => Promise<T>): Promise<T> => {
     try {
       return await work()
     } catch (error) {

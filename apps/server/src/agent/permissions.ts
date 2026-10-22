@@ -30,6 +30,9 @@ export function createCanUseTool({ settings, pending, record, setState, restrict
       // Their handlers still enforce session scope and any tool-specific checks.
       if (settings.access === 'auto' && /^mcp__ramu__/.test(toolName))
         return resolve({ behavior: 'allow', updatedInput: toolInput })
+      // Shared MCP tools are authorized again on the host for every call, and its gateway asks the person itself when
+      // the approval requires it, so asking here too would show two cards for one call. Review chats never get here.
+      if (/^mcp__shared_mcp__/.test(toolName)) return resolve({ behavior: 'allow', updatedInput: toolInput })
       // Browser handlers enforce their own run-scoped approval, including deferred calls. Asking twice would grant
       // nothing extra; the browser approval never authorizes another app tool or a native provider browser.
       if (

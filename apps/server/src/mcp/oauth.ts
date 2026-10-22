@@ -20,7 +20,37 @@ export interface StoredOAuth {
 
 export interface OAuthRecordStore {
   load(): Promise<StoredOAuth>
-  save(value: StoredOAuth): Promise<void>
+  /** Reads, changes and writes the record as one step no other provider can interleave with. */
+  modify(change: (current: StoredOAuth) => StoredOAuth): Promise<void>
+}
+
+const locks = new Map<string, Promise<void>>()
+
+/**
+ * Every gateway and management session for one connection shares one lock over its credential entry, so a rotated
+ * refresh token saved by one is never overwritten by a stale copy from another.
+ */
+export function lockedOAuthRecord(
+  key: string,
+  read: () => Promise<StoredOAuth>,
+  write: (value: StoredOAuth) => Promise<void>,
+): OAuthRecordStore {
+  const exclusive = <T>(work: () => Promise<T>): Promise<T> => {
+    const run = (locks.get(key) ?? Promise.resolve()).then(work)
+    const tail = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    locks.set(key, tail)
+    void tail.then(() => {
+      if (locks.get(key) === tail) locks.delete(key)
+    })
+    return run
+  }
+  return {
+    load: () => exclusive(read),
+    modify: (change) => exclusive(async () => write(change(await read()))),
+  }
 }
 
 /**
@@ -62,15 +92,21 @@ export class HostOAuthProvider implements OAuthClientProvider {
   }
 
   async saveClientInformation(clientInformation: OAuthClientInformationMixed) {
-    await this.store.save({ ...(await this.store.load()), clientInformation })
+    await this.store.modify((current) => ({ ...current, clientInformation }))
   }
 
+  /** The refresh token this provider last read, so a stale copy cannot clear what another provider just refreshed. */
+  private loaded: string | undefined
+
   async tokens() {
-    return (await this.store.load()).tokens
+    const tokens = (await this.store.load()).tokens
+    this.loaded = tokens?.refresh_token
+    return tokens
   }
 
   async saveTokens(tokens: OAuthTokens) {
-    await this.store.save({ ...(await this.store.load()), tokens })
+    await this.store.modify((current) => ({ ...current, tokens }))
+    this.loaded = tokens.refresh_token
   }
 
   redirectToAuthorization(url: URL) {
@@ -92,10 +128,17 @@ export class HostOAuthProvider implements OAuthClientProvider {
   async invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery') {
     if (scope === 'verifier') this.verifier = ''
     if (scope !== 'all' && scope !== 'client' && scope !== 'tokens') return
-    const next = scope === 'all' ? {} : { ...(await this.store.load()) }
-    if (scope === 'client') delete next.clientInformation
-    if (scope === 'tokens') delete next.tokens
-    await this.store.save(next)
+    const loaded = this.loaded
+    await this.store.modify((current) => {
+      // Another login of this connection may have refreshed since this one read its tokens: leave those alone.
+      if ((scope === 'tokens' || scope === 'all') && current.tokens?.refresh_token !== loaded && loaded !== undefined)
+        return current
+      if (scope === 'all') return {}
+      const next = { ...current }
+      if (scope === 'client') delete next.clientInformation
+      if (scope === 'tokens') delete next.tokens
+      return next
+    })
   }
 }
 
@@ -140,7 +183,10 @@ export class OAuthSignIn {
     // Registration is fresh for each sign-in because the redirect port is chosen per transaction.
     const record: StoredOAuth = {}
     this.provider = new HostOAuthProvider(
-      { load: async () => structuredClone(record), save: async (next) => void Object.assign(record, next) },
+      {
+        load: async () => structuredClone(record),
+        modify: async (change) => void Object.assign(record, change(structuredClone(record))),
+      },
       { redirectUrl, state: this.state },
     )
     this.record = record

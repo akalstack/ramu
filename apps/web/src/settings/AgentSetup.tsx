@@ -361,7 +361,7 @@ export function AgentSetup() {
           )}
           <p>
             {t(
-              'Ramu stops adding the declared copy to other providers and offers its approved tools instead. The provider that declares it keeps its own copy. Removing the connection restores sharing.',
+              'Once you approve the Shared MCP copy, Ramu stops adding the declared copy to other providers and offers the approved tools instead. The provider that declares it keeps its own copy. Removing the connection restores sharing.',
             )}
           </p>
         </Dialog>

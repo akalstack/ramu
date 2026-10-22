@@ -9,9 +9,12 @@ import type { ExternalMcpGateway } from './gateway'
 import type { ExternalMcpSession } from './policy'
 import type { SharedMcpService } from './service'
 
-/** Provider-side server name. It is deliberately not `ramu`, whose tools some permission modes trust. */
-export const EXTERNAL_MCP_SERVER = 'ramu_external'
-/** Claude limits a full tool name to 64 characters; `mcp__ramu_external__` takes 19 of them. */
+/**
+ * Provider-side server name. It deliberately does not start with `ramu`: permission modes and the ACP and OpenCode
+ * tool-name rewrites trust that prefix, and an external tool must never inherit it.
+ */
+export const EXTERNAL_MCP_SERVER = 'shared_mcp'
+/** Claude limits a full tool name to 64 characters; `mcp__shared_mcp__` takes 19 of them. */
 const NAME_BUDGET = 64 - `mcp__${EXTERNAL_MCP_SERVER}__`.length
 
 const safe = (value: string) => value.replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '')
@@ -65,12 +68,14 @@ export function hasExternalConnections(service: SharedMcpService, source: Extern
 }
 
 const IDLE_MS = 10 * 60_000
+const RECENT_MS = 20_000
 
 /**
  * Serves each chat's approved external tools on a separate MCP endpoint. Every list and call goes through the same
  * per-session gateway and policy, so a forged tool name or a stale catalog never reaches an upstream.
  */
 export class ExternalSessionTools {
+  private recent = new Map<string, { at: number; entries: ExternalToolEntry[] }>()
   private gateways = new Map<string, { gateway: ExternalMcpGateway; timer: ReturnType<typeof setTimeout> }>()
 
   constructor(
@@ -141,6 +146,7 @@ export class ExternalSessionTools {
     const entry = this.gateways.get(key)
     if (!entry) return
     this.gateways.delete(key)
+    this.recent.delete(key)
     clearTimeout(entry.timer)
     await entry.gateway.close()
   }
@@ -175,6 +181,7 @@ export class ExternalSessionTools {
         // Not approved, out of scope, offline or signed out: the thread's setup list reports why.
       }
     }
+    this.recent.set(this.key(source), { at: Date.now(), entries })
     return entries
   }
 
@@ -198,7 +205,15 @@ export class ExternalSessionTools {
     server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const failure = (message: string) => ({ isError: true, content: [{ type: 'text' as const, text: message }] })
       try {
-        const entry = (await this.list(source, extra.signal)).find((item) => item.name === request.params.name)
+        // Parallel calls resolve their tool from the list the model just saw; only a miss reads the catalogs again.
+        // The gateway re-checks the catalog revision and the grant on every call either way.
+        const key = this.key(source)
+        const recent = this.recent.get(key)
+        let entry =
+          recent && Date.now() - recent.at < RECENT_MS
+            ? recent.entries.find((item) => item.name === request.params.name)
+            : undefined
+        if (!entry) entry = (await this.list(source, extra.signal)).find((item) => item.name === request.params.name)
         if (!entry) return failure('Unknown or unapproved external tool. Review access in Settings → Agent setup.')
         return await this.gateway(source).invoke(
           entry.connectionId,
