@@ -31,7 +31,7 @@ export function ruleDelivery(provider: AgentProvider): RuleDelivery {
     path: 'first-message',
     limit: RULE_TOTAL_LIMIT,
     detail:
-      'This runtime has no separate instruction slot, so the rules went ahead of the first message in a labelled block. That is weaker than system instructions, and a resumed session does not receive them again.',
+      'This runtime has no separate instruction slot, so the rules went ahead of the first message in a labelled block. That is weaker than system instructions, and a restarted session does not receive them again. Changed rules are sent with your next message.',
   }
 }
 

@@ -1034,6 +1034,43 @@ describe('AgentService', () => {
     },
   )
 
+  it('hands a first-message runtime changed rules with the next message of the same session, and not again', async () => {
+    const prompts: string[] = []
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
+      const complete = (prompt: string) => {
+        prompts.push(prompt)
+        emit({ kind: 'init', providerSessionId: 'native-1', model: 'm', tools: [], mcpServers: [] } as never)
+        emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+      }
+      return {
+        setTools: () => {},
+        start: async (prompt) => complete(prompt),
+        send: async (prompt) => complete(prompt),
+        steer: async () => {},
+        interrupt: async () => {},
+        stop: async () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
+      }
+    }
+    const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
+    vi.spyOn(svc, 'catalog').mockResolvedValue([])
+    svc.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 'test' })
+    let rules = 'RULES: always say hello'
+    svc.rulesInstructions = () => rules
+    const chat = svc.start('t', scopeOf(cwd), 'first', { ...full, provider: 'opencode' })
+    await until(() => svc.get(chat.id).state === 'idle')
+    rules = 'RULES: always say goodbye'
+    await svc.send(chat.id, 'second')
+    await until(() => prompts.length === 2 && svc.get(chat.id).state === 'idle')
+    expect(prompts[1]).toContain('Your rules changed')
+    expect(prompts[1]).toContain('always say goodbye')
+    await svc.send(chat.id, 'third')
+    await until(() => prompts.length === 3 && svc.get(chat.id).state === 'idle')
+    expect(prompts[2]).not.toContain('Your rules changed')
+    svc.stopAll()
+  })
+
   it('keeps the checkout while a background agent works, without holding back the thread itself', async () => {
     vi.stubEnv('RAMU_FAKE_AGENT_DELAY', '500')
     try {

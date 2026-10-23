@@ -229,6 +229,7 @@ export class AgentService {
       refreshContext: (...a) => parts.contexts.refreshContext(...a),
       rememberSession: (...a) => parts.process.rememberSession(...a),
       refreshProviderTools: (...a) => parts.process.refreshProviderTools(...a),
+      rulesUpdate: (...a) => parts.process.rulesUpdate(...a),
       retryQuietly: (...a) => parts.router.retryQuietly(...a),
       get lowConfidenceRetried() {
         return parts.router.lowConfidenceRetried

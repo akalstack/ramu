@@ -38,7 +38,7 @@ export interface SessionStarterHost
       | 'workspaceReservations'
     >,
     Pick<GoalManager, 'controlGoal' | 'getGoal' | 'goalPreferences'>,
-    Pick<SessionProcess, 'fail' | 'goalPolicySent' | 'launch' | 'refreshProviderTools'>,
+    Pick<SessionProcess, 'fail' | 'goalPolicySent' | 'launch' | 'refreshProviderTools' | 'rulesUpdate'>,
     Pick<ProviderWaits, 'providerWait' | 'scheduleProvider'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
     Pick<
@@ -61,6 +61,7 @@ export interface SessionStarterHost
   shutdown(): AgentService['shutdown']
   toolConnection(): AgentService['toolConnection']
   setupOmissions(): AgentService['setupOmissions']
+  rulesInstructions(): AgentService['rulesInstructions']
 }
 
 /** Starting a chat and sending it follow-ups. */
@@ -232,7 +233,16 @@ export class SessionStarter {
     const sendPolicy = !!goal && !this.host.goalPolicySent.has(id)
     if (sendPolicy) this.host.goalPolicySent.add(id)
     const goalText = goal && (sendPolicy ? goalInstructions(this.host.goalPreferences(), goal) : goalState(goal))
-    const actualText = goalText ? `${text}\n\n<ramu-goals>\n${goalText}\n</ramu-goals>` : text
+    const withGoal = goalText ? `${text}\n\n<ramu-goals>\n${goalText}\n</ramu-goals>` : text
+    // A running session keeps the rules it started with; a runtime without a system slot is handed the changed set here.
+    let rulesText: string | undefined
+    try {
+      rulesText = this.host.rulesInstructions()?.(s)
+    } catch {
+      // An oversize set blocks a launch; a running session just keeps what it has.
+    }
+    const running = !!this.host.runners.get(id) || !!this.host.live.get(id)
+    const actualText = `${running ? (this.host.rulesUpdate(id, s.provider, rulesText, true) ?? '') : ''}${withGoal}`
     this.host.attempted.set(id, new Set([stepKey(s.settings)]))
     this.host.attemptedAccounts.delete(id)
     this.host.lowConfidenceRetried.delete(id)

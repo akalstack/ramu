@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { ruleDelivery } from '@ramu/shared/rules'
 import { UPDATE_EVENT_SQL } from './eventRevision'
 import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import { requestOutcomes } from '@ramu/shared/chat/questions'
@@ -95,6 +97,29 @@ export class SessionProcess {
     private readonly host: SessionProcessHost,
     private readonly db: Db,
   ) {}
+
+  /**
+   * A digest of the rules each session was last handed. A runtime that takes rules only ahead of its first message gets
+   * the changed set with the next message of a resumed session; after a restart nothing is known, so nothing repeats.
+   */
+  private readonly rulesDelivered = new Map<string, string>()
+
+  /**
+   * The changed rules for a session that already has them, as a labelled block to put ahead of its next message; only for
+   * runtimes that take rules ahead of the first message. Undefined when nothing changed or nothing is known to compare.
+   */
+  rulesUpdate(id: string, provider: AgentProvider, rulesText: string | undefined, native: boolean): string | undefined {
+    if (!rulesText) {
+      this.rulesDelivered.delete(id)
+      return undefined
+    }
+    const digest = createHash('sha256').update(rulesText).digest('hex')
+    const before = this.rulesDelivered.get(id)
+    this.rulesDelivered.set(id, digest)
+    if (native && before && before !== digest && ruleDelivery(provider).path === 'first-message')
+      return `Your rules changed since this session started. Follow this set from now on instead of the earlier one:\n\n${rulesText}\n\n`
+    return undefined
+  }
 
   /** Whether a Codex chat's process was started without its own sub-agent tools. */
   private readonly nativeOffAtLaunch = new Map<string, boolean>()
@@ -327,6 +352,7 @@ export class SessionProcess {
       this.fail(id, e)
       return
     }
+    const rulesUpdate = this.rulesUpdate(id, s.provider, rulesText, !!resume)
     // The conversation reaches a provider session that has not seen it: a switch, a lost session, a rewind. Built first so
     // the checkpoint goes out once, in the handoff, and not again in the session guidance.
     const carried = this.carry(id, resume, !!connection, prompt, attachments)
@@ -381,7 +407,7 @@ export class SessionProcess {
     if ((isAcpProvider(s.provider) || s.provider === 'claude-code') && connection && !s.parentId)
       this.nativeOffAtLaunch.set(id, connection.nativeSubagents === false)
     const request = explicitGoal ? prompt.replace(/^\s*\/goal\s+/, 'Work toward this Ramu goal: ') : prompt
-    const actualPrompt = carried ? `${carried.built.prompt}\n\nNext request: ${request}` : request
+    const actualPrompt = `${rulesUpdate ?? ''}${carried ? `${carried.built.prompt}\n\nNext request: ${request}` : request}`
     const deltaResume = carried?.built.info.mode === 'delta' && !!carried.resume
     if (this.host.usesRunner(s.provider)) {
       let runner: AgentRunner
