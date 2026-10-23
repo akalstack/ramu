@@ -13,7 +13,7 @@ import { SharedMcpPolicy, type ExternalMcpSession } from './policy'
 import { ExternalMcpGateway, type ExternalMcpGatewayHost } from './gateway'
 import { connectSharedMcpStdio, RESERVED_ENV } from './stdio'
 import { connectSharedMcpHttp, sharedMcpHttpFetch } from './http'
-import { OAUTH_REFERENCE_NAME, OAuthSignIn } from './oauth'
+import { OAUTH_REFERENCE_NAME, OAuthSignIn, revokeUpstream, type RevocationResult, type StoredOAuth } from './oauth'
 import { SharedMcpConnectionError } from './errors'
 import { SharedMcpStorage } from './storage'
 
@@ -614,11 +614,17 @@ export class SharedMcpService {
     )
   }
 
-  async disconnect(id: string) {
+  /**
+   * Removes Ramu's credentials for a connection and tells the service to revoke the OAuth tokens it issued, when it can
+   * be told. The answer says which of the two happened, so the person is never led to believe a token was revoked
+   * upstream when only Ramu's copy was deleted.
+   */
+  async disconnect(id: string): Promise<RevocationResult> {
     const connection = this.connection(id)
     this.policy.revokeConnection(id)
     this.inspections.delete(id)
     await this.release(id)
+    const upstream = await this.revokeSignIn(connection)
     const references =
       connection.transport.type === 'http' ? connection.transport.headerSecretRefs : connection.transport.envSecretRefs
     for (const reference of new Set(Object.values(references))) {
@@ -643,6 +649,24 @@ export class SharedMcpService {
       )
     }
     this.changed()
+    return upstream
+  }
+
+  private async revokeSignIn(connection: SharedMcpConnection): Promise<RevocationResult> {
+    if (connection.transport.type !== 'http') return 'none'
+    const reference = connection.transport.headerSecretRefs[OAUTH_REFERENCE_NAME]
+    if (!reference) return 'none'
+    const transport = connection.transport
+    const network = sharedMcpHttpFetch(transport.url, transport.allowPrivateNetwork === true, undefined, true)
+    try {
+      const raw = await this.credentials.read(this.scopeOf(connection), reference)
+      const record = JSON.parse(raw) as StoredOAuth
+      return await revokeUpstream(record, transport.url, network.fetch)
+    } catch {
+      return 'failed'
+    } finally {
+      void network.close()
+    }
   }
 
   async remove(id: string) {

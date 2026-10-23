@@ -14,6 +14,7 @@ import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
+import { revocationNotice } from './mcpRevocation'
 import { ramu } from '../ipc'
 import { useWorkspace } from '../workspace/workspace'
 import { useModelSets } from '../models/ModelSets'
@@ -397,6 +398,7 @@ export function McpSettings() {
   } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [signingIn, setSigningIn] = useState<string | null>(null)
   const epoch = useRef(0)
@@ -500,6 +502,11 @@ export function McpSettings() {
           {t('Refresh')}
         </Button>
       </div>
+      {notice && (
+        <p role="status" className="m-0 text-caption text-muted-foreground">
+          {t(notice)}
+        </p>
+      )}
       {!data && !query.error && <p role="status">{t('Loading…')}</p>}
       {data?.connections.length === 0 && (
         <p className="m-0 text-caption text-muted-foreground">{t('No servers connected through Ramu yet.')}</p>
@@ -609,7 +616,13 @@ export function McpSettings() {
                   size="sm"
                   variant="ghost"
                   disabled={!canAdminister || busy}
-                  onClick={() => void act(() => invoke('mcp.disconnect', connection.id))}
+                  onClick={() => {
+                    setNotice(null)
+                    void act(async () => {
+                      const text = revocationNotice(await invoke('mcp.disconnect', connection.id))
+                      if (text) setNotice(text)
+                    })
+                  }}
                 >
                   {t('Disconnect')}
                 </Button>

@@ -1,7 +1,13 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { auth, UnauthorizedError, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
+import {
+  auth,
+  discoverOAuthServerInfo,
+  isHttpsUrl,
+  UnauthorizedError,
+  type OAuthClientProvider,
+} from '@modelcontextprotocol/sdk/client/auth.js'
 import type {
   OAuthClientInformationMixed,
   OAuthClientMetadata,
@@ -271,4 +277,53 @@ export class OAuthSignIn {
     if (reason && wasOpen) this.host.failed(reason)
     this.host.close()
   }
+}
+
+/**
+ * What disconnecting did upstream. `none`: nothing was signed in. `revoked`: the service accepted a revocation for every
+ * token Ramu held. `unsupported`: the service offers no (HTTPS) revocation endpoint, so only Ramu's copy was removed.
+ * `failed`: it has an endpoint but refused or could not be reached; the local tokens are removed regardless.
+ */
+export type RevocationResult = 'none' | 'revoked' | 'unsupported' | 'failed'
+
+/**
+ * Asks the authorization server to revoke the refresh and access tokens Ramu holds (RFC 7009), best effort. Called
+ * before the local copy is deleted; it never blocks the disconnect and sends nothing but the token and client id to the
+ * HTTPS endpoint the server's own metadata names.
+ */
+export async function revokeUpstream(
+  record: StoredOAuth,
+  serverUrl: string,
+  fetchFn: FetchLike,
+): Promise<RevocationResult> {
+  const tokens = record.tokens
+  if (!tokens?.refresh_token && !tokens?.access_token) return 'none'
+  let endpoint: string | undefined
+  try {
+    const info = await discoverOAuthServerInfo(serverUrl, { fetchFn })
+    endpoint = (info.authorizationServerMetadata as { revocation_endpoint?: string } | undefined)?.revocation_endpoint
+  } catch {
+    return 'failed'
+  }
+  if (!endpoint || !isHttpsUrl(endpoint)) return 'unsupported'
+  const clientId = (record.clientInformation as { client_id?: string } | undefined)?.client_id
+  const pending: [string, string][] = []
+  // The refresh token first: revoking it usually ends the access token too.
+  if (tokens.refresh_token) pending.push([tokens.refresh_token, 'refresh_token'])
+  if (tokens.access_token) pending.push([tokens.access_token, 'access_token'])
+  for (const [token, hint] of pending) {
+    try {
+      const body = new URLSearchParams({ token, token_type_hint: hint, ...(clientId ? { client_id: clientId } : {}) })
+      const response = await fetchFn(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body,
+        signal: AbortSignal.timeout(8000),
+      })
+      if (!response.ok) return 'failed'
+    } catch {
+      return 'failed'
+    }
+  }
+  return 'revoked'
 }

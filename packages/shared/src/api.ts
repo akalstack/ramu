@@ -675,7 +675,8 @@ export interface RamuMethods {
   /** Write-only: the value is stored on the host and never returned by any method. */
   'mcp.setCredential'(connectionId: string, name: string, value: string): Promise<void>
   'mcp.removeCredential'(connectionId: string, name: string): Promise<void>
-  'mcp.disconnect'(connectionId: string): Promise<void>
+  /** Removes Ramu's credentials and asks the service to revoke its OAuth tokens: `revoked`, `unsupported`, `failed` or `none`. */
+  'mcp.disconnect'(connectionId: string): Promise<'none' | 'revoked' | 'unsupported' | 'failed'>
   'mcp.remove'(connectionId: string): Promise<void>
   'mcp.checkCredentialStore'(): Promise<'available' | 'unavailable' | 'not-checked'>
   /** Copy a declared server's non-secret definition into Shared MCP for one project. Connects nothing. */

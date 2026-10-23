@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { HostOAuthProvider, lockedOAuthRecord, OAuthSignIn, type StoredOAuth } from '../src/mcp/oauth'
+import { HostOAuthProvider, lockedOAuthRecord, OAuthSignIn, revokeUpstream, type StoredOAuth } from '../src/mcp/oauth'
 
 const open: OAuthSignIn[] = []
 afterEach(() => {
@@ -158,4 +158,62 @@ it('does not let a stale provider clear tokens another one just refreshed, nor l
   ])
   expect(state.record.clientInformation?.client_id).toBe('c2')
   expect(state.record.tokens?.refresh_token).toBe('r3')
+})
+
+/** A service whose authorization server may or may not offer revocation, and may refuse it. */
+function revocableService(options: { revocation?: string | null; status?: number }) {
+  const revoked: { token: string; hint: string; client: string | null }[] = []
+  const fetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
+    const url = new URL(input)
+    if (url.origin === 'https://mcp.example' && url.pathname.startsWith('/.well-known/oauth-protected-resource'))
+      return json({ resource: 'https://mcp.example/mcp', authorization_servers: ['https://auth.example'] })
+    if (url.origin === 'https://auth.example' && url.pathname.startsWith('/.well-known/'))
+      return json({
+        issuer: 'https://auth.example',
+        authorization_endpoint: 'https://auth.example/authorize',
+        token_endpoint: 'https://auth.example/token',
+        response_types_supported: ['code'],
+        ...(options.revocation === null
+          ? {}
+          : { revocation_endpoint: options.revocation ?? 'https://auth.example/revoke' }),
+      })
+    if (url.pathname === '/revoke') {
+      const body = new URLSearchParams(String(init?.body))
+      revoked.push({ token: body.get('token')!, hint: body.get('token_type_hint')!, client: body.get('client_id') })
+      return new Response(null, { status: options.status ?? 200 })
+    }
+    return json({}, 404)
+  })
+  return { fetch: fetch as never, revoked }
+}
+const signedIn: StoredOAuth = {
+  tokens: { access_token: 'access-1', refresh_token: 'refresh-1', token_type: 'Bearer' },
+  clientInformation: { client_id: 'ramu-client', redirect_uris: [] },
+}
+
+it('asks the service to revoke the refresh and access tokens Ramu holds, with only the token and client id', async () => {
+  const service = revocableService({})
+  expect(await revokeUpstream(signedIn, 'https://mcp.example/mcp', service.fetch)).toBe('revoked')
+  expect(service.revoked).toEqual([
+    { token: 'refresh-1', hint: 'refresh_token', client: 'ramu-client' },
+    { token: 'access-1', hint: 'access_token', client: 'ramu-client' },
+  ])
+})
+
+it('says when nothing was signed in, the service offers no revocation, or it refused', async () => {
+  expect(await revokeUpstream({}, 'https://mcp.example/mcp', revocableService({}).fetch)).toBe('none')
+  expect(await revokeUpstream(signedIn, 'https://mcp.example/mcp', revocableService({ revocation: null }).fetch)).toBe(
+    'unsupported',
+  )
+  // A revocation endpoint that is not HTTPS is never contacted.
+  const plain = revocableService({ revocation: 'http://auth.example/revoke' })
+  expect(await revokeUpstream(signedIn, 'https://mcp.example/mcp', plain.fetch)).toBe('unsupported')
+  expect(plain.revoked).toEqual([])
+  expect(await revokeUpstream(signedIn, 'https://mcp.example/mcp', revocableService({ status: 500 }).fetch)).toBe(
+    'failed',
+  )
+  const down = vi.fn(async () => {
+    throw new Error('offline')
+  })
+  expect(await revokeUpstream(signedIn, 'https://mcp.example/mcp', down as never)).toBe('failed')
 })
