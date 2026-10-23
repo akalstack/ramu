@@ -69,7 +69,7 @@ Use optimistic revision checks, explicit Save/Cancel, history and restore-as-new
 
 ## Effective setup and session lifecycle
 
-**Already in place:** the thread's MCP dialog lists a server-built snapshot of rules, shared servers, shared skills and Shared MCP connections with Configured, Delivered, Runtime confirmed, Needs refresh and Not sent states (`agent.setup`). Remaining: provider/account-specific delivery paths and size limits per adapter, stale-source warnings and queued refreshes, per-turn frozen revisions, and re-resolution with omissions reported on fallback, resume and helper launch.
+**Already in place:** the thread's MCP dialog lists a server-built snapshot of rules, shared servers, shared skills and Shared MCP connections with Configured, Delivered, Runtime confirmed, Needs refresh and Not sent states (`agent.setup`). Remaining: provider/account-specific delivery paths and size limits per adapter, stale-source warnings and queued refreshes, per-turn frozen revisions. Fallback reports omissions, and a helper's own transcript says which Shared MCP tools it starts without. Remaining: the same report on resume.
 
 Add **Agent setup** details to the existing thread settings/details surface, with links back to Settings. Build a server-produced snapshot from the same resolver used to launch the session: host/project/workspace, provider/account, configuration revisions, enabled/omitted items and reasons, rule delivery paths, skill catalog and MCP availability. A desired configuration is not proof a runtime loaded it.
 

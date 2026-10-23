@@ -55,6 +55,7 @@ export interface SubagentRunnerHost
     Pick<AgentTasks, 'updateTask'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   isolationRoot(): AgentService['isolationRoot']
+  helperSetupNote(): AgentService['helperSetupNote']
   preferences(): AppPreferences | undefined
   shutdown(): AgentService['shutdown']
 }
@@ -233,6 +234,19 @@ export class SubagentRunner {
       'starting',
       parentId,
     )
+    // A helper never inherits Shared MCP access, so say what it starts without instead of leaving it to be discovered.
+    try {
+      const note = this.host.helperSetupNote()?.(child)
+      if (note)
+        this.host.record(child.id, {
+          kind: 'settings',
+          settings: target.settings,
+          reason: note,
+          handoff: false,
+        })
+    } catch {
+      // The note is informational; a helper still starts without it.
+    }
     const run: ChildRun = {
       parentId,
       name,

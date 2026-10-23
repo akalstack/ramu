@@ -2460,6 +2460,18 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
+  it('tells a helper’s own transcript what it starts without from Shared MCP', async () => {
+    const svc = routed()
+    svc.helperSetupNote = () => 'This helper starts without Shared MCP tools (Tracker).'
+    const parent = await parentOf(svc)
+    const result = await svc.spawnSubagent(parent.id, { description: 'Look', prompt: 'Look around', type: 'Explore' })
+    expect(
+      svc.events(result.agentId).some((e) => e.kind === 'settings' && !e.handoff && e.reason.includes('Tracker')),
+    ).toBe(true)
+    expect(svc.events(parent.id).some((e) => e.kind === 'settings' && e.reason.includes('Tracker'))).toBe(false)
+    svc.stopAll()
+  })
+
   it('reports a background sub-agent to its thread as a message when it finishes', async () => {
     const svc = routed()
     const parent = await parentOf(svc)

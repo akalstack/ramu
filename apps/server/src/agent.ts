@@ -88,6 +88,8 @@ export class AgentService {
     | undefined
   /** What a destination provider login lacks from the thread's setup, for the settings event of a switch or fallback. */
   setupOmissions: ((session: AgentSessionInfo, settings: AgentSettings) => SetupOmission[]) | undefined
+  /** What a helper starts without that its chat has from Shared MCP, in one sentence; null when nothing is left out. */
+  helperSetupNote: ((helper: AgentSessionInfo) => string | null) | undefined
   /** Guidance from the learning job. `checkpoint: false` leaves the progress summary out, when a handoff already carries it. */
   learningInstructions: ((session: AgentSessionInfo, options?: { checkpoint?: boolean }) => string) | undefined
   sessionCheckpoint: ((id: string) => { seq: number; summary: string } | null) | undefined
@@ -196,6 +198,7 @@ export class AgentService {
       rulesInstructions: () => this.rulesInstructions,
       mcpDestination: () => this.mcpDestination,
       setupOmissions: () => this.setupOmissions,
+      helperSetupNote: () => this.helperSetupNote,
       mirrorChild: (...a) => parts.subagents.mirrorChild(...a),
       nativeSubagentsOff: (...a) => parts.subagents.nativeSubagentsOff(...a),
       noteRoute: (...a) => parts.router.noteRoute(...a),

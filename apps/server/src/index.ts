@@ -457,6 +457,15 @@ const externalSource = (session: AgentSessionInfo): ExternalSessionSource => {
   }
 }
 // Before a switch or fallback launches, say what the destination login lacks from the thread's setup.
+// Helpers are sub-agents of a chat and never inherit Shared MCP: name what they start without.
+agents.helperSetupNote = (helper) => {
+  const names = getSharedMcp()
+    .sessionConnections(helper.provider, helper.settings.accountId ?? 'default', projectOf(helper))
+    .map((connection) => connection.name)
+  return names.length
+    ? `This helper starts without Shared MCP tools (${names.join(', ')}); helpers do not inherit external access. Use the chat for work that needs them.`
+    : null
+}
 agents.setupOmissions = (session, settings) => {
   const projectId = projectOf(session)
   const omitted: SetupOmission[] = []
