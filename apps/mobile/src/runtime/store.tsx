@@ -1,3 +1,4 @@
+import { saveIssuedCredential } from './saveCredential'
 import { inputSummary } from '@ramu/shared/chat/inputSummary'
 import type { BranchNamingIntent, BranchChoice } from '@ramu/shared/workspaceDefaults'
 import { normalizeHelperGroups } from './threadActivity'
@@ -1058,7 +1059,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!response.ok || !result.token || !result.deviceId)
           throw new Error(result.error || `Pairing failed (${response.status})`)
         const id = ref.current.computers.find((c) => c.address === url)?.id ?? uid()
-        await saveToken(id, result.token)
+        await saveIssuedCredential(() => saveToken(id, result.token))
         const computer: Computer = {
           id,
           name: name || new URL(url).hostname,
