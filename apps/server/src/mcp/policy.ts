@@ -36,6 +36,8 @@ const definition = z.strictObject({
         }, 'Use an HTTPS server URL without credentials, query parameters or fragments'),
       headerSecretRefs: secretRefs,
       allowPrivateNetwork: z.boolean().optional(),
+      /** A client ID the service issued to Ramu in advance, for servers that offer no dynamic registration. */
+      oauthClientId: z.string().trim().min(1).max(500).optional(),
     }),
     z.strictObject({
       type: z.literal('stdio'),

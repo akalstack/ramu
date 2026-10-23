@@ -39,7 +39,7 @@ function fakeService() {
   return { fetch, requests }
 }
 
-function start(overrides: { current?: () => boolean } = {}) {
+function start(overrides: { current?: () => boolean; clientId?: string } = {}) {
   const service = fakeService()
   const completed: StoredOAuth[] = []
   const failures: string[] = []
@@ -47,6 +47,7 @@ function start(overrides: { current?: () => boolean } = {}) {
     stillCurrent: overrides.current ?? (() => true),
     serverUrl: 'https://mcp.example/mcp',
     fetch: service.fetch as never,
+    clientId: overrides.clientId,
     complete: async (record) => {
       completed.push(record)
     },
@@ -89,6 +90,16 @@ it('offers an HTTPS sign-in page with PKCE and a state, then stores tokens only 
     (await fetch(`${redirect.origin}/callback?code=abc&state=${state}`).catch(() => ({ status: 400 }))).status,
   ).toBe(400)
   expect(completed).toHaveLength(1)
+})
+
+it('signs in with a pre-registered client ID and never registers dynamically', async () => {
+  const { sign, completed, service } = start({ clientId: 'issued-for-ramu' })
+  const result = await sign.begin()
+  expect(new URL(result!.url).searchParams.get('client_id')).toBe('issued-for-ramu')
+  const { redirect, state } = callbackOf(result!.url)
+  expect((await fetch(`${redirect.origin}/callback?code=abc&state=${state}`)).status).toBe(200)
+  expect(completed[0]!.clientInformation?.client_id).toBe('issued-for-ramu')
+  expect(service.requests).not.toContain('POST https://auth.example/register')
 })
 
 it('refuses a callback once the connection changed or the sign-in was cancelled', async () => {

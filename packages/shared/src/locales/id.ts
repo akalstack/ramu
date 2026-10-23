@@ -3559,4 +3559,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "System default": "Bawaan sistem",
   "No browser is running for this thread yet. Open Ramu on the computer, or turn on Host browser in Settings → Browser.": "Belum ada browser yang berjalan untuk thread ini. Buka Ramu di komputer, atau aktifkan Browser host di Pengaturan → Browser.",
   "Could not check the host browser. Update Ramu on the host and try again.": "Tidak dapat memeriksa browser host. Perbarui Ramu di host lalu coba lagi.",
+  "OAuth client ID (optional)": "ID klien OAuth (opsional)",
+  "Only for servers that do not register apps automatically. Use the ID the service issued for Ramu.": "Hanya untuk server yang tidak mendaftarkan aplikasi secara otomatis. Gunakan ID yang diberikan layanan untuk Ramu.",
 }

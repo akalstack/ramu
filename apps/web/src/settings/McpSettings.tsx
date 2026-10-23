@@ -5,7 +5,7 @@ import type { SharedMcpConnection, SharedMcpInspection, SharedMcpSelection } fro
 import { AGENT_PROVIDERS, providerName, providerAccountRows } from '@ramu/shared/providers/providers'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
-import { Field, FieldLabel } from '@/components/ui/field'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -138,6 +138,7 @@ function ConnectionEditor({
   const [kind, setKind] = useState<'http' | 'stdio'>(first?.type ?? 'http')
   const [url, setUrl] = useState(first?.type === 'http' ? first.url : '')
   const [privateNetwork, setPrivateNetwork] = useState(first?.type === 'http' && first.allowPrivateNetwork === true)
+  const [clientId, setClientId] = useState(first?.type === 'http' ? (first.oauthClientId ?? '') : '')
   const [command, setCommand] = useState(first?.type === 'stdio' ? first.command : '')
   const [args, setArgs] = useState(first?.type === 'stdio' ? first.args.join('\n') : '')
   const [cwd, setCwd] = useState(first?.type === 'stdio' ? first.cwd : '')
@@ -164,6 +165,7 @@ function ConnectionEditor({
               url,
               headerSecretRefs: live?.type === 'http' ? live.headerSecretRefs : {},
               ...(privateNetwork ? { allowPrivateNetwork: true } : {}),
+              ...(clientId.trim() ? { oauthClientId: clientId.trim() } : {}),
             }
           : {
               type: 'stdio',
@@ -230,6 +232,21 @@ function ConnectionEditor({
                   onChange={(event) => setUrl(event.target.value)}
                   required
                 />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${id}-client`}>{t('OAuth client ID (optional)')}</FieldLabel>
+                <Input
+                  id={`${id}-client`}
+                  value={clientId}
+                  onChange={(event) => setClientId(event.target.value)}
+                  maxLength={500}
+                  autoComplete="off"
+                />
+                <FieldDescription>
+                  {t(
+                    'Only for servers that do not register apps automatically. Use the ID the service issued for Ramu.',
+                  )}
+                </FieldDescription>
               </Field>
               <Field orientation="horizontal">
                 <Checkbox

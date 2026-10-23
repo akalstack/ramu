@@ -156,6 +156,8 @@ export interface OAuthSignInHost {
   stillCurrent(): boolean
   serverUrl: string
   fetch: FetchLike
+  /** A client ID registered with the service ahead of time; dynamic registration is then skipped. */
+  clientId?: string
   /** Persist the finished record. Called once, after a verified callback. */
   complete(record: StoredOAuth): Promise<void>
   failed(reason: string): void
@@ -187,7 +189,14 @@ export class OAuthSignIn {
     })
     const redirectUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/callback`
     // Registration is fresh for each sign-in because the redirect port is chosen per transaction.
-    const record: StoredOAuth = {}
+    const record: StoredOAuth = this.host.clientId
+      ? {
+          clientInformation: {
+            client_id: this.host.clientId,
+            redirect_uris: [redirectUrl],
+          } as OAuthClientInformationMixed,
+        }
+      : {}
     this.provider = new HostOAuthProvider(
       {
         load: async () => structuredClone(record),

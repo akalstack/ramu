@@ -11,7 +11,7 @@ export interface SharedMcpConnection {
   scope: { projectIds: string[]; hostWide: boolean }
   providers: AgentProvider[]
   transport:
-    | { type: 'http'; url: string; headerSecretRefs: Record<string, string>; allowPrivateNetwork?: boolean }
+    | { type: 'http'; url: string; headerSecretRefs: Record<string, string>; allowPrivateNetwork?: boolean; oauthClientId?: string }
     | { type: 'stdio'; command: string; args: string[]; cwd: string; envSecretRefs: Record<string, string> }
 }
 

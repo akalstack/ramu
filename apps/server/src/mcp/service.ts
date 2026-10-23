@@ -338,6 +338,7 @@ export class SharedMcpService {
       stillCurrent,
       serverUrl: transport.url,
       fetch: network.fetch,
+      clientId: transport.oauthClientId,
       complete: async (record) => {
         const current = this.connection(connectionId)
         const reference =
