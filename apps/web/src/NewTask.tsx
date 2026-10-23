@@ -34,6 +34,7 @@ import { ownHostId } from './hosts'
 import { Combobox, Menu } from './Menu'
 import { AnimatedMark } from './Brand'
 import { errorText } from './workspace/TaskPane'
+import { orWhenUnknown } from './lib/errors'
 import { useHostRuntime, useWorkspace } from './workspace/workspace'
 import { HomeFeed } from './Home'
 import { hostStorageFor } from './hostStorage'
@@ -301,7 +302,8 @@ export function NewTask({
     queryKey: optionsKey,
     enabled: !general,
     retry: false,
-    queryFn: () => host.invoke('tasks.workspaceOptions', projectId),
+    // A host without workspace options starts in the current checkout, as before they existed.
+    queryFn: () => orWhenUnknown(() => host.invoke('tasks.workspaceOptions', projectId), null),
   })
   useEffect(() => {
     const refresh = () => {
@@ -480,7 +482,8 @@ export function NewTask({
           )
         }
         sendSettings = routedSettings
-        const destinationOptions = await host.invoke('tasks.workspaceOptions', destination)
+        const destinationOptions: Partial<NonNullable<typeof options.data>> =
+          (await orWhenUnknown(() => host.invoke('tasks.workspaceOptions', destination), null)) ?? {}
         const checkout = resolveCheckoutMode({
           defaultMode: destinationOptions.defaultCheckoutMode ?? 'current',
           manual: null,

@@ -56,6 +56,7 @@ import {
   type HostRuntime,
 } from './hostRuntime'
 import { commitUnread, inboxUnread, loadUnread, statusUnread } from './unread'
+import { orWhenUnknown } from '../lib/errors'
 import { createUiPersistence } from './uiPersistence'
 import {
   EMPTY_TASK_UI,
@@ -393,7 +394,8 @@ const HostWorkspace = memo(function HostWorkspace({
     setProjects(ps)
     setRepos(rs)
     const chats = await invoke('tasks.list')
-    const isolated = await invoke('workspaces.list')
+    // A host that predates isolated workspaces still lists its projects and threads.
+    const isolated = await orWhenUnknown(() => invoke('workspaces.list'), [])
     if (!newest()) return
     setTasks((current) => keepNewerTasks(current, chats))
     setWorkspaces(isolated)
@@ -454,7 +456,7 @@ const HostWorkspace = memo(function HostWorkspace({
       const known = new Set([
         ...(await invoke('tasks.list')).map((t) => t.id),
         ...(await invoke('projects.list')).map((p) => projectCtx(p.id)),
-        ...(await invoke('workspaces.list')).map((w) => worktreeCtx(w.id)),
+        ...(await orWhenUnknown(() => invoke('workspaces.list'), [])).map((w) => worktreeCtx(w.id)),
       ])
       const openTaskIds = saved.workspace.openTaskIds.filter((t) => known.has(t))
       setUi({
