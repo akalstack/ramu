@@ -34,6 +34,9 @@ const copy = (key: string, id: boolean) =>
       }[key] ?? key)
     : key
 /** Only this visible label ticks; backgrounding or leaving the route stops its timer. */
+/** How much of a helper's output the sheet reveals at a time, counted from the end. */
+const OUTPUT_PAGE = 6000
+
 function HelperTime({ task, online }: { task: AgentTask; online: boolean }) {
   const [now, setNow] = useState(Date.now())
   const active = online && helperActive(task)
@@ -66,6 +69,8 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
   const store = useStore()
   const { c } = useTheme()
   const [draft, setDraft] = useState('')
+  // The helper's whole output is on hand; the sheet shows its tail and reveals earlier parts a page at a time.
+  const [shown, setShown] = useState(OUTPUT_PAGE)
   const [sending, setSending] = useState(false)
   const inFlight = useRef(false)
   const id = store.language === 'id'
@@ -136,8 +141,17 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
         ) : null}
         {task.log ? (
           <>
-            <T weight="600">{id ? 'Cuplikan keluaran' : 'Output excerpt'}</T>
-            <Markdown text={task.log.slice(-6000)} />
+            <T weight="600">
+              {task.log.length > shown ? (id ? 'Cuplikan keluaran' : 'Output excerpt') : id ? 'Keluaran' : 'Output'}
+            </T>
+            <Markdown text={task.log.slice(-shown)} />
+            {task.log.length > shown ? (
+              <Button
+                kind="ghost"
+                title={id ? 'Tampilkan keluaran sebelumnya' : 'Show earlier output'}
+                onPress={() => setShown((current) => current + OUTPUT_PAGE)}
+              />
+            ) : null}
           </>
         ) : null}
         {task.summary || task.error ? (
