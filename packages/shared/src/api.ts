@@ -671,6 +671,7 @@ export interface RamuMethods {
    * Only the host's own window can run it: the callback is a loopback listener on the host.
    */
   'mcp.signIn'(connectionId: string): Promise<{ url: string } | null>
+  'mcp.completeSignIn'(connectionId: string, address: string): Promise<boolean>
   'mcp.cancelSignIn'(connectionId: string): void
   /** Write-only: the value is stored on the host and never returned by any method. */
   'mcp.setCredential'(connectionId: string, name: string, value: string): Promise<void>

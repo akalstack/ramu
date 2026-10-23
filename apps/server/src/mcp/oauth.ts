@@ -230,7 +230,26 @@ export class OAuthSignIn {
   }
 
   private async callback(path: string, res: import('node:http').ServerResponse) {
-    const url = new URL(path, 'http://127.0.0.1')
+    const outcome = await this.accept(new URL(path, 'http://127.0.0.1'))
+    res.writeHead(outcome.ok ? 200 : 400, { 'content-type': 'text/html' }).end(page(outcome.message))
+  }
+
+  /**
+   * Finishes the sign-in from the address the browser ended on, for a person who opened the sign-in page on another
+   * device than this host: the redirect there fails to load, and they send the address it shows. The same state, one-time
+   * and still-current checks apply as for the loopback listener.
+   */
+  async completeFrom(address: string): Promise<boolean> {
+    let url: URL
+    try {
+      url = new URL(address.trim())
+    } catch {
+      return false
+    }
+    return (await this.accept(url)).ok
+  }
+
+  private async accept(url: URL): Promise<{ ok: boolean; message: string }> {
     const given = Buffer.from(url.searchParams.get('state') ?? '')
     const expected = Buffer.from(this.state)
     if (
@@ -238,23 +257,19 @@ export class OAuthSignIn {
       url.pathname !== '/callback' ||
       given.length !== expected.length ||
       !timingSafeEqual(given, expected)
-    ) {
-      res.writeHead(400, { 'content-type': 'text/html' }).end(page('This sign-in link is not valid any more.'))
-      return
-    }
+    )
+      return { ok: false, message: 'This sign-in link is not valid any more.' }
     // One callback only: a replay or a second tab finds the transaction already consumed.
     this.done = true
     const code = url.searchParams.get('code')
     if (url.searchParams.get('error') || !code || !this.host.stillCurrent()) {
-      res
-        .writeHead(400, { 'content-type': 'text/html' })
-        .end(page('Sign-in was not completed. Return to Ramu and try again.'))
       this.host.failed(
         this.host.stillCurrent() ? 'The service declined the sign-in.' : 'The connection changed during sign-in.',
       )
       this.finish()
-      return
+      return { ok: false, message: 'Sign-in was not completed. Return to Ramu and try again.' }
     }
+    let outcome = { ok: true, message: 'Signed in. You can close this tab and return to Ramu.' }
     try {
       const result = await auth(this.provider, {
         serverUrl: this.host.serverUrl,
@@ -263,16 +278,12 @@ export class OAuthSignIn {
       })
       if (result !== 'AUTHORIZED' || !this.record.tokens || !this.host.stillCurrent()) throw new Error('not authorized')
       await this.host.complete(this.record)
-      res
-        .writeHead(200, { 'content-type': 'text/html' })
-        .end(page('Signed in. You can close this tab and return to Ramu.'))
     } catch {
-      res
-        .writeHead(400, { 'content-type': 'text/html' })
-        .end(page('Sign-in could not be finished. Return to Ramu and try again.'))
+      outcome = { ok: false, message: 'Sign-in could not be finished. Return to Ramu and try again.' }
       this.host.failed('Sign-in could not be finished.')
     }
     this.finish()
+    return outcome
   }
 
   private finish(reason?: string) {

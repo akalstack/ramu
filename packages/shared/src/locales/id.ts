@@ -3561,4 +3561,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Could not check the host browser. Update Ramu on the host and try again.": "Tidak dapat memeriksa browser host. Perbarui Ramu di host lalu coba lagi.",
   "OAuth client ID (optional)": "ID klien OAuth (opsional)",
   "Only for servers that do not register apps automatically. Use the ID the service issued for Ramu.": "Hanya untuk server yang tidak mendaftarkan aplikasi secara otomatis. Gunakan ID yang diberikan layanan untuk Ramu.",
+  "Signed in on another device? Paste the address the page ended on": "Login di perangkat lain? Tempel alamat tempat halaman berakhir",
+  "Finish sign-in": "Selesaikan login",
+  "That address did not finish the sign-in. Copy it again after the page fails to load.": "Alamat itu tidak menyelesaikan login. Salin lagi setelah halaman gagal dimuat.",
 }

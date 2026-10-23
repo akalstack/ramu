@@ -386,6 +386,11 @@ export class SharedMcpService {
     return sign.begin()
   }
 
+  /** Finishes a sign-in whose browser was on another device than this host, from the address its redirect ended on. */
+  async completeSignIn(connectionId: string, address: string): Promise<boolean> {
+    return (await this.signIns.get(connectionId)?.completeFrom(address)) ?? false
+  }
+
   cancelSignIn(connectionId: string) {
     this.signIns.get(connectionId)?.cancel()
   }

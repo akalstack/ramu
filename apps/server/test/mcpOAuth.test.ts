@@ -102,6 +102,19 @@ it('signs in with a pre-registered client ID and never registers dynamically', a
   expect(service.requests).not.toContain('POST https://auth.example/register')
 })
 
+it('finishes from a pasted redirect address, once, and refuses a wrong state', async () => {
+  const { sign, completed } = start()
+  const result = await sign.begin()
+  const { redirect, state } = callbackOf(result!.url)
+  expect(await sign.completeFrom('not an address')).toBe(false)
+  expect(await sign.completeFrom(`${redirect.origin}/callback?code=abc&state=forged`)).toBe(false)
+  expect(completed).toEqual([])
+  expect(await sign.completeFrom(`  ${redirect.origin}/callback?code=abc&state=${state}  `)).toBe(true)
+  expect(completed).toHaveLength(1)
+  expect(await sign.completeFrom(`${redirect.origin}/callback?code=abc&state=${state}`)).toBe(false)
+  expect(completed).toHaveLength(1)
+})
+
 it('refuses a callback once the connection changed or the sign-in was cancelled', async () => {
   let current = true
   const changed = start({ current: () => current })

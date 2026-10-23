@@ -35,6 +35,36 @@ const statusLabels = {
   'insufficient-permission': 'Insufficient permission',
 }
 
+/** For a sign-in opened on another device than the host: the redirect fails to load there, and its address finishes it. */
+function PasteSignInAddress({ onSubmit }: { onSubmit(address: string): void }) {
+  const id = useId()
+  const [address, setAddress] = useState('')
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{t('Signed in on another device? Paste the address the page ended on')}</FieldLabel>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          value={address}
+          onChange={(event) => setAddress(event.target.value)}
+          placeholder="http://127.0.0.1:…/callback?code=…"
+          autoComplete="off"
+        />
+        <Button
+          size="sm"
+          disabled={!address.trim()}
+          onClick={() => {
+            onSubmit(address)
+            setAddress('')
+          }}
+        >
+          {t('Finish sign-in')}
+        </Button>
+      </div>
+    </Field>
+  )
+}
+
 function CredentialFields({
   names,
   kind,
@@ -606,6 +636,17 @@ export function McpSettings() {
                     >
                       {t('Cancel sign-in')}
                     </Button>
+                    <PasteSignInAddress
+                      onSubmit={(address) =>
+                        void act(async () => {
+                          if (await invoke('mcp.completeSignIn', connection.id, address)) setSigningIn(null)
+                          else
+                            throw new Error(
+                              t('That address did not finish the sign-in. Copy it again after the page fails to load.'),
+                            )
+                        })
+                      }
+                    />
                   </>
                 )}
                 <Button

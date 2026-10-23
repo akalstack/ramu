@@ -69,6 +69,10 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'mcp.signIn': { args: z.tuple([id]), run: (connectionId: string) => admin().signIn(connectionId) },
+    'mcp.completeSignIn': {
+      args: z.tuple([id, z.string().min(1).max(4000)]),
+      run: (connectionId: string, address: string) => admin().completeSignIn(connectionId, address),
+    },
     'mcp.cancelSignIn': { args: z.tuple([id]), run: (connectionId: string) => admin().cancelSignIn(connectionId) },
     'mcp.setCredential': {
       args: z.tuple([id, z.string().regex(/^[A-Za-z_][A-Za-z0-9_-]{0,127}$/), z.string().min(1).max(65536)]),
