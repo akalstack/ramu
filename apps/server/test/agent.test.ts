@@ -215,6 +215,22 @@ describe('AgentService', () => {
     restored.stopAll()
   })
 
+  it('reports what the setup lacks when a person continues a restored thread by hand', async () => {
+    const svc = new AgentService(db, () => {}, demoQuery)
+    const chat = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
+    await until(() => svc.get(chat.id).state === 'idle')
+    svc.stopAll()
+    db.prepare("UPDATE agent_sessions SET state='stopped' WHERE id = ?").run(chat.id)
+    const restored = new AgentService(db, () => {}, demoQuery)
+    restored.markRestoredOnBoot()
+    restored.setupOmissions = () => [{ kind: 'shared-mcp', name: 'Tracker', status: 'approval-needed' }]
+    await restored.send(chat.id, 'carry on')
+    expect(restored.events(chat.id).filter((e) => e.kind === 'recovery')).toEqual([
+      expect.objectContaining({ setupOmissions: [{ kind: 'shared-mcp', name: 'Tracker', status: 'approval-needed' }] }),
+    ])
+    restored.stopAll()
+  })
+
   it('records one human background stop per session without waking idle work, including after restart', async () => {
     const svc = new AgentService(db, (id, event) => events.push({ id, event }), demoQuery)
     const session = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })

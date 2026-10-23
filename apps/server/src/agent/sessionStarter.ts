@@ -60,6 +60,7 @@ export interface SessionStarterHost
   reviewHooks(): AgentService['reviewHooks']
   shutdown(): AgentService['shutdown']
   toolConnection(): AgentService['toolConnection']
+  setupOmissions(): AgentService['setupOmissions']
 }
 
 /** Starting a chat and sending it follow-ups. */
@@ -194,6 +195,15 @@ export class SessionStarter {
     }
     await this.host.refreshProviderTools(id)
     s = this.host.get(id)
+    // A person continuing a thread Ramu restored after a restart gets the same report as an automatic resume.
+    if (recordUser && s.state === 'restored' && !s.parentId) {
+      try {
+        const setupOmissions = this.host.setupOmissions()?.(s, s.settings) ?? []
+        if (setupOmissions.length) this.host.record(id, { kind: 'recovery', state: 'resumed', setupOmissions })
+      } catch {
+        // Unreadable Shared MCP configuration is reported in Settings; it must not stop a message.
+      }
+    }
     this.host.transitioning.add(id)
     try {
       if (reviewId) await this.host.reviewHooks()?.validateFeedback?.(reviewId)
