@@ -37,6 +37,8 @@ export interface RuntimeSocketOptions {
   onState?(state: SocketState): void
   /** The host's run identity changed: it restarted and every cursor held is void. */
   onRestart?(): void
+  /** False asks the host for calls only, for a client whose events already arrive on another stream. */
+  events?: boolean
   connectTimeoutMs?: number
   heartbeatMs?: number
   random?: () => number
@@ -49,7 +51,8 @@ export interface SocketInvokeOptions {
 }
 
 /** Shaped like a socket-level failure so `isTransportFailure` treats it as one: the outcome of the call is unknown. */
-const lost = (message: string) => Object.assign(new Error(message), { code: 'ECONNRESET' })
+const lost = (message: string, notSent = false) =>
+  Object.assign(new Error(message), { code: 'ECONNRESET', ...(notSent ? { notSent: true } : {}) })
 
 /**
  * One authenticated WebSocket to a host, kept connected with bounded, jittered reconnects. Calls are matched to answers by
@@ -92,6 +95,7 @@ export class RuntimeSocket {
     this.set('connecting')
     const url = new URL(SOCKET_PATH, this.options.url)
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+    if (this.options.events === false) url.searchParams.set('events', 'none')
     const headers = {
       Authorization: `${AUTH_SCHEME} ${this.options.token}`,
       [PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
@@ -169,7 +173,7 @@ export class RuntimeSocket {
   /** Rejects at once when the socket is not ready, so the caller can use HTTP instead of waiting on a connection. */
   invoke(method: string, args: unknown[] = [], options: SocketInvokeOptions = {}): Promise<unknown> {
     const socket = this.socket
-    if (!socket || !this.ready) return Promise.reject(lost('The socket is not connected'))
+    if (!socket || !this.ready) return Promise.reject(lost('The socket is not connected', true))
     if (options.signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'))
     const id = this.nextId++
     return new Promise((resolve, reject) => {

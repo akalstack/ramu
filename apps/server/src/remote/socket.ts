@@ -110,7 +110,9 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
       ws.send(encodeSocketFrame(frame))
     }
     send({ t: 'ready', epoch: host.epoch })
-    host.attach(sink, req, device)
+    // A client that already has an event stream asks for calls only, so nothing is delivered twice.
+    const callsOnly = new URL(req.url ?? '/', 'http://host').searchParams.get('events') === 'none'
+    if (!callsOnly) host.attach(sink, req, device)
     let inFlight = 0
     let alive = true
     ws.on('pong', () => (alive = true))
@@ -152,7 +154,7 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     ws.on('close', () => {
       clearInterval(probe)
       open.delete(ws)
-      host.detach(sink)
+      if (!callsOnly) host.detach(sink)
     })
     ws.on('error', () => ws.terminate())
   }

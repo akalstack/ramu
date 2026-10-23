@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, expect, it } from 'vitest'
 import WebSocket from 'ws'
-import { nodeSocketFactory, RuntimeSocket } from '@ramu/client-runtime'
+import { nodeSocketFactory, RuntimeSocket, runtimeInvoke, setSocketTransport } from '@ramu/client-runtime'
 import { decodeSocketFrame, encodeSocketFrame, SOCKET_PATH, type SocketServerFrame } from '@ramu/contracts'
 import { serveSockets, type EventSink, type SocketHost } from '../src/remote/socket'
 
@@ -166,4 +166,22 @@ it('works end to end with the client runtime over a real socket, and learns a re
   bad.start()
   for (let i = 0; i < 200 && bad.state === 'connecting'; i++) await new Promise((resolve) => setTimeout(resolve, 10))
   expect(bad.state).toBe('rejected')
+})
+
+it('sends runtime calls over the socket only when opted in and ready, and asks for calls only', async () => {
+  const { port, sinks, invoked } = await start()
+  const endpoint = { kind: 'http' as const, url: `http://127.0.0.1:${port}`, token: 'good' }
+  cleanup.push(() => setSocketTransport(false))
+  // Off by default: the call goes to HTTP, which this server does not serve, and no socket is opened.
+  await expect(runtimeInvoke(endpoint, 'echo', [1])).rejects.toBeTruthy()
+  expect(invoked).toHaveLength(0)
+  setSocketTransport(true)
+  // The first call finds the socket still connecting and falls back to HTTP without sending anything on it.
+  await runtimeInvoke(endpoint, 'echo', [1]).catch(() => {})
+  for (let i = 0; i < 200 && invoked.length === 0; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await runtimeInvoke(endpoint, 'echo', [2], { operationKey: 'operation-key-9' }).catch(() => {})
+  }
+  expect(invoked.at(-1)).toMatchObject({ method: 'echo', args: [2], operationKey: 'operation-key-9' })
+  expect(sinks.size).toBe(0)
 })

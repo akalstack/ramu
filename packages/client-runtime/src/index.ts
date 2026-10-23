@@ -5,11 +5,13 @@ import { request as httpsRequest } from 'node:https'
 import { tmpdir } from 'node:os'
 import { connectionAttempts, remoteRequests, type WorkLimiter } from './limits'
 import { runtimeNetwork, type NetworkMonitor } from './network'
+import { socketFor } from './socketPool'
 export { refreshRuntimeNetwork } from './network'
 export { runtimeNetwork } from './network'
 export { PresenceListener, presenceKey, presenceMessage } from './presence'
 export { RuntimeSocket, type SocketFactory, type SocketState } from './socket'
 export { nodeSocketFactory } from './nodeSocket'
+export { setSocketTransport } from './socketPool'
 import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import {
@@ -81,6 +83,20 @@ export async function runtimeInvoke(
   const release =
     endpoint.kind === 'http' ? await remoteRequests.acquire(new URL(endpoint.url).origin, policy.signal) : () => {}
   try {
+    // Opt-in socket: used only while it is ready. A call that was never sent falls back to HTTP; one that was sent and
+    // lost is an unknown outcome and is reported as such, exactly as a lost HTTP reply is.
+    const socket = endpoint.kind === 'http' ? socketFor(endpoint) : null
+    if (socket?.state === 'ready') {
+      try {
+        return await socket.invoke(method, args, {
+          ...(policy.operationKey ? { operationKey: policy.operationKey } : {}),
+          ...(policy.timeoutMs ? { timeoutMs: policy.timeoutMs } : {}),
+          ...(policy.signal ? { signal: policy.signal } : {}),
+        })
+      } catch (error) {
+        if (!(error as { notSent?: boolean }).notSent) throw error
+      }
+    }
     return await new Promise((resolve, reject) => {
       const { options, send } = prepare(target, '/invoke', 'POST', { 'Content-Type': 'application/json' })
       options.signal = policy.signal
