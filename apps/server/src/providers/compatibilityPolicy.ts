@@ -7,8 +7,18 @@ import type { AgentProvider } from '@ramu/shared/types'
  * guessed to fill a matrix. Rules are exact releases until a wider range has been tested.
  */
 export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
-  revision: 3,
+  revision: 4,
   rules: [
+    {
+      id: 'opencode-http-2.1.3',
+      provider: 'opencode',
+      runtime: 'http',
+      min: '2.1.3',
+      below: '2.1.4',
+      status: 'supported',
+      evidence:
+        'opencode v2.1.3 on macOS, 2026-10-23: `opencode serve` printed its address, the event stream (via @opencode/client 2.0.30) delivered server.connected and mcp.list answered, with no model call and no session created.',
+    },
     {
       id: 'codex-app-server-0.150.0',
       provider: 'codex',
@@ -43,4 +53,11 @@ export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
 }
 
 /** The runtime kind Ramu launches for each provider with an audited policy; others are not evaluated yet. */
-export const COMPATIBILITY_RUNTIME: Partial<Record<AgentProvider, RuntimeKind>> = { codex: 'app-server' }
+/**
+ * OpenCode 2 runs over its HTTP API; OpenCode 1 runs over ACP and has no rule, so it reports Unverified here until its
+ * own ACP handshake is probed.
+ */
+export const COMPATIBILITY_RUNTIME: Partial<Record<AgentProvider, RuntimeKind>> = {
+  codex: 'app-server',
+  opencode: 'http',
+}
