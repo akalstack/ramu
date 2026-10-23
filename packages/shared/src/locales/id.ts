@@ -3575,4 +3575,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Native only": "Hanya bawaan",
   "This provider already has a server with this name that only it manages, and Ramu does not share this one with it.": "Penyedia ini sudah memiliki server bernama sama yang hanya dikelolanya sendiri, dan Ramu tidak membagikan yang ini kepadanya.",
   "Not available after resuming: {0}": "Tidak tersedia setelah dilanjutkan: {0}",
+  "Manage connectors": "Kelola konektor",
 }

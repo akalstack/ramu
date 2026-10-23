@@ -13,6 +13,7 @@ import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/set
 import { Dialog, Dropdown } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
+import { ramu } from '../ipc'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { useWorkspace } from '../workspace/workspace'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
@@ -23,6 +24,9 @@ import { RulesSettings } from './RulesSettings'
 const CAPTION = 'm-0 text-caption text-muted-foreground'
 
 /** Provider logos, dimmed where the item is missing, with the same information as text for screen readers. */
+/** Where a Claude account's own connectors are managed. Other providers have no page Ramu can point to yet. */
+const CLAUDE_CONNECTORS_URL = 'https://claude.ai/settings/connectors'
+
 function ProviderStrip({ providers }: { providers: AgentProvider[] }) {
   const missing = AGENT_PROVIDERS.filter((provider) => !providers.includes(provider))
   return (
@@ -428,6 +432,15 @@ export function AgentSetup() {
               <li key={`${item.provider}:${item.name}`} className="flex items-center gap-2">
                 <strong className="min-w-0 truncate">{item.name}</strong>
                 <span className={CAPTION}>{providerName(item.provider)}</span>
+                {item.provider === 'claude-code' && (
+                  <button
+                    type="button"
+                    className="cursor-pointer border-0 bg-transparent p-0 text-caption text-brand underline-offset-2 hover:underline"
+                    onClick={() => void ramu.invoke('app.openExternal', CLAUDE_CONNECTORS_URL).catch(() => {})}
+                  >
+                    {t('Manage connectors')}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
