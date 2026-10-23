@@ -31,6 +31,7 @@ import type { AgentProvider, AgentSettings, ChatGoal, FileContext, QueuedMessage
 import { font, radius, space, useTheme } from '../theme'
 import { providerNames } from '../runtime/types'
 import { useStore } from '../runtime/store'
+import { BUSY_MODE_DEVICE_KEY, otherBusyMode, resolveBusyMode } from '../runtime/busyMode'
 import { useModelFlow } from '../runtime/useModelFlow'
 import { fill, useT } from '../i18n'
 import { Chip, IconButton, Row, Segmented, Sheet, T, tap } from './ui'
@@ -776,7 +777,8 @@ export function Composer({
       setContext((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next))
     }, [draftKey, storedContext]),
   )
-  const mode = 'steer' as const
+  const { mode } = resolveBusyMode(store.drafts?.[BUSY_MODE_DEVICE_KEY], store.appPreferences?.[pc]?.busyMessageAction)
+  const otherMode = otherBusyMode(mode)
   useEffect(() => {
     if (restore) setText(restore.text)
   }, [restore])
@@ -1067,11 +1069,11 @@ export function Composer({
           <View style={{ flex: 1 }} />
           {running && has && !offline ? (
             <IconButton
-              icon={ListPlus}
-              label={t.queue}
+              icon={otherMode === 'queue' ? ListPlus : CornerDownRight}
+              label={otherMode === 'queue' ? t.queue : t.steer}
               size={34}
               tone="muted"
-              onPress={() => void submit('queue')}
+              onPress={() => void submit(otherMode)}
               disabled={busy || uploading || viewOnly || dictating}
             />
           ) : null}
@@ -1116,7 +1118,17 @@ export function Composer({
           ) : (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={offline ? 'Add to outbox' : limited ? t.queue : running ? t.steer : 'Send'}
+              accessibilityLabel={
+                offline
+                  ? 'Add to outbox'
+                  : limited
+                    ? t.queue
+                    : running
+                      ? mode === 'queue'
+                        ? t.queue
+                        : t.steer
+                      : 'Send'
+              }
               disabled={!has || viewOnly || busy || uploading || dictating}
 
               onPress={() => {

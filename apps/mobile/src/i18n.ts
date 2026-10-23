@@ -265,6 +265,9 @@ const en = {
   newPlaceholder: 'What should the agent do?',
   queue: 'Queue',
   steer: 'Steer',
+  busyOnPhone: 'Messages while working, on this phone',
+  busyHint:
+    'Steer adds your message after the current tools finish; Queue waits for the whole turn. The other action stays one tap away beside Send. Only this phone changes.',
   queued: 'Queued',
   stop: 'Stop',
   changes: 'Changes',
@@ -755,6 +758,9 @@ const id: typeof en = {
   newPlaceholder: 'Apa yang harus dikerjakan agen?',
   queue: 'Antrekan',
   steer: 'Arahkan',
+  busyOnPhone: 'Pesan saat agen bekerja, di ponsel ini',
+  busyHint:
+    'Arahkan menambahkan pesan Anda setelah alat yang berjalan selesai; Antre menunggu seluruh giliran. Aksi lainnya tetap satu ketukan di samping Kirim. Hanya ponsel ini yang berubah.',
   queued: 'Dalam antrean',
   stop: 'Hentikan',
   changes: 'Perubahan',

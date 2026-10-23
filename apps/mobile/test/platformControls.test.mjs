@@ -81,6 +81,11 @@ function load(file, os, overrides = {}, globals = {}) {
       useDictation: () => ({ snapshot: { state: { phase: 'idle' } }, session: { cancel() {} } }),
     },
     '@ramu/shared/voice/dictation': { dictationBusy: () => false },
+    '../runtime/busyMode': {
+      BUSY_MODE_DEVICE_KEY: 'pref-device:queueWhileBusy',
+      resolveBusyMode: () => ({ mode: 'steer', source: 'default' }),
+      otherBusyMode: () => 'queue',
+    },
     '../runtime/computerUse': { useComputerUse: () => ({ session: undefined, refresh() {} }) },
     'expo-glass-effect': {
       isGlassEffectAPIAvailable: () => true,
@@ -4935,6 +4940,11 @@ test('computer-use stop revokes only the displayed thread and refreshes the shar
       useDictation: () => ({ snapshot: { state: { phase: 'idle' } }, session: { cancel() {} } }),
     },
     '@ramu/shared/voice/dictation': { dictationBusy: () => false },
+    '../runtime/busyMode': {
+      BUSY_MODE_DEVICE_KEY: 'pref-device:queueWhileBusy',
+      resolveBusyMode: () => ({ mode: 'steer', source: 'default' }),
+      otherBusyMode: () => 'queue',
+    },
     '../runtime/computerUse': {
       useComputerUse: () => ({
         session: { target: { name: 'Chrome' }, controller: { kind: 'agent' }, paused: false },

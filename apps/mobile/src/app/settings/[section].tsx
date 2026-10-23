@@ -6,6 +6,7 @@ import { font, space, useTheme, type Appearance, type TextSize } from '../../the
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
+import { BUSY_MODE_DEVICE_KEY, resolveBusyMode, type BusyMode } from '../../runtime/busyMode'
 import {
   PUSH_CATEGORIES,
   PUSH_MUTED_KEY,
@@ -95,6 +96,38 @@ function AppearancePage() {
         />
       </Card>
       <VoiceSettings />
+    </>
+  )
+}
+
+/** How a message sent while the agent works behaves on this phone: the computer's setting unless this phone overrides it. */
+function BusyBehavior({ computerId }: { computerId: string }) {
+  const { drafts, setDraft, appPreferences } = useStore()
+  const t = useT()
+  const resolved = resolveBusyMode(drafts[BUSY_MODE_DEVICE_KEY], appPreferences[computerId]?.busyMessageAction)
+  const own = resolved.source === 'device'
+  const hostMode = resolveBusyMode(undefined, appPreferences[computerId]?.busyMessageAction)
+  return (
+    <>
+      <SectionLabel>{t.busyOnPhone}</SectionLabel>
+      <Card style={{ marginHorizontal: space.l }}>
+        <Segmented<BusyMode>
+          style={{ margin: space.m }}
+          value={resolved.mode}
+          onChange={(mode) => setDraft(BUSY_MODE_DEVICE_KEY, mode)}
+          options={[
+            { key: 'steer', label: t.steer },
+            { key: 'queue', label: t.queue },
+          ]}
+        />
+      </Card>
+      <Hint>{t.busyHint}</Hint>
+      <ScopeControl
+        field="queueWhileBusy"
+        overridden={own}
+        inheritedLabel={hostMode.mode === 'queue' ? t.queue : t.steer}
+        onUseInherited={() => setDraft(BUSY_MODE_DEVICE_KEY, '')}
+      />
     </>
   )
 }
@@ -292,6 +325,7 @@ export default function SettingsSectionPage() {
         {id === 'about' ? <About /> : null}
         {id === 'providers' ? <ProviderCompatibility key={selected} hostId={selected} /> : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
+        {id === 'chats' ? <BusyBehavior key={selected} computerId={selected} /> : null}
         {id === 'git' ? <HostingStatus key={selected} hostId={selected} /> : null}
         {id === 'rules' ? <RulesSettings key={selected} hostId={selected} /> : null}
         {section.scope === 'host' ? <HostGroups section={id} host={host} name={name} /> : null}
