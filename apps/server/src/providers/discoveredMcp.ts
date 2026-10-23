@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { AgentScope, AgentMcpStatus, McpConnection } from '@ramu/shared/types'
 import { claudeMcpServers } from './claudeMcp'
 import type { DiscoveredMcpServer } from '../context'
@@ -94,6 +95,28 @@ export function sessionMcpServers(
         ]
       : []),
   ]
+}
+
+/**
+ * A digest of the servers a session is launched with, values included but never kept: only whether something a runtime
+ * would load has changed since it started.
+ */
+export function serversDigest(servers: readonly NormalizedMcp[]): string {
+  const sorted = (values: Record<string, string>) => Object.entries(values).sort(([a], [b]) => a.localeCompare(b))
+  return createHash('sha256')
+    .update(
+      JSON.stringify(
+        servers.map((server) => [
+          server.name,
+          server.url ?? null,
+          server.command ?? null,
+          server.args,
+          sorted(server.headers),
+          sorted(server.env),
+        ]),
+      ),
+    )
+    .digest('hex')
 }
 
 /** Codex `-c` overrides; values are JSON strings, which TOML reads as basic strings. */

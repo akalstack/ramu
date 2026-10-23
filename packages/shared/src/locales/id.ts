@@ -3577,4 +3577,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Not available after resuming: {0}": "Tidak tersedia setelah dilanjutkan: {0}",
   "Manage connectors": "Kelola konektor",
   "Changed after this thread started. The changed rules are sent with your next message.": "Berubah setelah thread ini dimulai. Aturan yang berubah dikirim bersama pesan Anda berikutnya.",
+  "The file it comes from changed after this thread started. It applies with your next message, once no work is running.": "Berkas sumbernya berubah setelah thread ini dimulai. Perubahan berlaku pada pesan Anda berikutnya, setelah tidak ada pekerjaan yang berjalan.",
 }

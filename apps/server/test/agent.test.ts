@@ -3,7 +3,7 @@ import { elicitationRequest, elicitationContent } from '../src/agent/elicitation
 import { AcpResumeUnavailable } from '../src/providers/acp'
 import { configureProviderBinaries } from '../src/providers/providerBinaries'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { query, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -1068,6 +1068,43 @@ describe('AgentService', () => {
     await svc.send(chat.id, 'third')
     await until(() => prompts.length === 3 && svc.get(chat.id).state === 'idle')
     expect(prompts[2]).not.toContain('Your rules changed')
+    svc.stopAll()
+  })
+
+  it('restarts a runner on the same session with the next message when the servers it was launched with changed', async () => {
+    let launches = 0
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
+      launches++
+      const complete = () => {
+        emit({ kind: 'init', providerSessionId: 'native-1', model: 'm', tools: [], mcpServers: [] } as never)
+        emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+      }
+      return {
+        setTools: () => {},
+        start: async () => complete(),
+        send: async () => complete(),
+        steer: async () => {},
+        interrupt: async () => {},
+        stop: async () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
+      }
+    }
+    const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
+    vi.spyOn(svc, 'catalog').mockResolvedValue([])
+    svc.preferences = () => DEFAULT_APP_PREFERENCES
+    svc.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 'test' })
+    const config = join(cwd, '.mcp.json')
+    writeFileSync(config, JSON.stringify({ mcpServers: { docs: { type: 'http', url: 'https://one.example/mcp' } } }))
+    const chat = svc.start('t', scopeOf(cwd), 'first', { ...full, provider: 'opencode' })
+    await until(() => svc.get(chat.id).state === 'idle')
+    await svc.send(chat.id, 'second')
+    await until(() => svc.get(chat.id).state === 'idle')
+    expect(launches).toBe(1)
+    writeFileSync(config, JSON.stringify({ mcpServers: { docs: { type: 'http', url: 'https://two.example/mcp' } } }))
+    await svc.send(chat.id, 'third')
+    await until(() => launches === 2 && svc.get(chat.id).state === 'idle')
+    expect(svc.get(chat.id).providerSessionId).toBe('native-1')
     svc.stopAll()
   })
 

@@ -121,8 +121,11 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
     })
   }
   const stale = new Set(input.changedSources ?? [])
+  // Runtimes Ramu launches as runners restart on the same session with the next message; Claude keeps what it started with.
   const staleReason =
-    'The file it comes from changed after this thread started. A new thread uses the current version; this one keeps what it was given.'
+    input.provider === 'claude-code'
+      ? 'The file it comes from changed after this thread started. A new thread uses the current version; this one keeps what it was given.'
+      : 'The file it comes from changed after this thread started. It applies with your next message, once no work is running.'
   for (const name of input.addedServers) {
     const reported = input.runtimeServers?.find((server) => server.name === name)
     if (stale.has(`server:${name}`)) {

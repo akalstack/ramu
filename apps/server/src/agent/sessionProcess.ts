@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { serversDigest, sessionMcpServers } from '../providers/discoveredMcp'
 import { ruleDelivery } from '@ramu/shared/rules'
 import { UPDATE_EVENT_SQL } from './eventRevision'
 import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
@@ -9,10 +10,12 @@ import type {
   GoalPreferences,
   AgentEvent,
   AgentProvider,
+  AgentSessionInfo,
   AgentSettings,
   Attachment,
   HandoffCause,
   HandoffInfo,
+  McpConnection,
 } from '@ramu/shared/types'
 import { DEFAULT_INTELLIGENCE_PREFERENCES, DEFAULT_MEMORY_PREFERENCES } from '@ramu/shared/types'
 import { goalInstructions } from './goals'
@@ -98,6 +101,15 @@ export class SessionProcess {
     private readonly db: Db,
   ) {}
 
+  /** A digest of the servers each runner was launched with, to notice when its sources change under a running thread. */
+  private readonly launchServers = new Map<string, string>()
+
+  private serversNow(s: AgentSessionInfo, connection: McpConnection | undefined): string {
+    return serversDigest(
+      sessionMcpServers(s, connection, s.provider, s.settings.accountId, connection?.sharingProjectId),
+    )
+  }
+
   /**
    * A digest of the rules each session was last handed. A runtime that takes rules only ahead of its first message gets
    * the changed set with the next message of a resumed session; after a restart nothing is known, so nothing repeats.
@@ -161,7 +173,13 @@ export class SessionProcess {
     const s = this.host.get(id)
     const prefs = this.host.preferences()
     if (s.parentId || !prefs || !this.host.runners.has(id) || this.host.hasRunningTasks(id)) return
-    if (isAcpProvider(s.provider) || s.provider === 'claude-code') {
+    // Servers the person changed in Agent setup are fixed when a runner starts; the next message restarts it on the same
+    // session, once no work is running, so the change reaches this thread without a new one.
+    const launched = this.launchServers.get(id)
+    const serversChanged = launched !== undefined && launched !== this.serversNow(s, this.host.toolConnection()?.(s))
+    if (serversChanged) {
+      // fall through to the restart below
+    } else if (isAcpProvider(s.provider) || s.provider === 'claude-code') {
       // Sub-agent switches for OpenCode, Cursor and Antigravity are fixed when the runner starts; it resumes the same session.
       if (!this.nativeOffAtLaunch.has(id) || this.host.nativeSubagentsOff(s) === this.nativeOffAtLaunch.get(id)) return
     } else {
@@ -447,6 +465,7 @@ export class SessionProcess {
           }
         })
         if (connection) runner.setTools?.(connection)
+        this.launchServers.set(id, this.serversNow(s, connection))
         this.host.runners.set(id, runner)
         if (recordUser)
           this.host.record(id, { kind: 'user', text: prompt, ...(attachments.length ? { attachments } : {}) })
