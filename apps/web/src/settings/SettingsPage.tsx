@@ -30,6 +30,7 @@ import { fuzzy } from '../lib/fuzzy'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { APP_AUTO_UPDATE } from '@ramu/shared/updates'
 import { useComputers } from '../workspace/computers'
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 
 export const SETTINGS_GROUPS = ['Workspace', 'Agents', 'System'] as const
 
@@ -397,12 +398,14 @@ export function SettingsPage({
                       .filter((entry) => entry.error)
                       .map((entry) => `${entry.name}: ${entry.error}`)
                       .join(' · ')
-                  : (scope.message ??
-                    (scope.target === 'all'
-                      ? t('Changes apply to {0} connected hosts. Offline hosts keep their settings.', {
-                          0: scope.targets.length,
-                        })
-                      : t('Changes apply to the selected host.')))}
+                  : scope.readOnlyHosts.length
+                    ? `${scope.readOnlyHosts.join(', ')}: ${t(VIEW_ONLY_WRITE_NOTICE)}`
+                    : (scope.message ??
+                      (scope.target === 'all'
+                        ? t('Changes apply to {0} connected hosts. Offline hosts keep their settings.', {
+                            0: scope.targets.length,
+                          })
+                        : t('Changes apply to the selected host.')))}
             </span>
             {scope.restartTarget && (
               <Button
@@ -528,7 +531,7 @@ export function SettingsPage({
           <Button
             variant="default"
             className={PRIMARY_ACTION_CLASS}
-            disabled={busy || !hasChanges || (scope && !scope.ready) || undefined}
+            disabled={busy || !hasChanges || (scope && !scope.ready) || !!scope?.readOnlyHosts.length || undefined}
             onClick={onSave}
           >
             {busy ? t('Saving…') : t('Save changes')}

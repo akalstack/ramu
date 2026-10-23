@@ -21,6 +21,7 @@ import type { Task } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
 import { copyText } from '../../ipc'
 import { useContextMenu, type MenuEntry } from '../../Menu'
+import { useViewOnly } from '../../composer/useViewOnly'
 import { DeleteThreadDialog } from '../../chat/DeleteThreadDialog'
 import { errorText } from '../../workspace/TaskPane'
 import { notifyError } from '../../chat/Notifications'
@@ -101,6 +102,7 @@ export function TaskRow({
   const done = !!task.doneAt
   const { initialSettings } = useModelSets()
   const [naming, setNaming] = useState(false)
+  const viewOnly = useViewOnly()
   const titleRequest = useRef(false)
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -310,7 +312,9 @@ export function TaskRow({
     },
   ]
 
-  const contextMenu = useContextMenu(`${task.title} actions`, group ? groupItems : items)
+  // A view-only device may copy a thread's ID; everything else here changes the host and would be refused.
+  const shownItems = viewOnly ? items.filter((entry) => 'key' in entry && entry.key === 'copy-id') : items
+  const contextMenu = useContextMenu(`${task.title} actions`, group && !viewOnly ? groupItems : shownItems)
 
   const status = threadStatus(task, onScreen && !!ws?.unread.has(task.id), task.goalState)
   return (
@@ -414,7 +418,7 @@ export function TaskRow({
               />
             </span>
           )}
-          <span className={`${ROW_ACTIONS_CLASS} task-actions`}>
+          <span className={`${ROW_ACTIONS_CLASS} task-actions`} hidden={viewOnly}>
             {!archived && (
               <Button
                 variant="ghost"

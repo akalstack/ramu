@@ -10,7 +10,8 @@ import {
   type SettingsSnapshot,
 } from '@ramu/shared/settingsCompatibility'
 import { recommendedSets } from '@ramu/shared/providers/modelDefaults'
-import { invoke, ramu } from '../ipc'
+import { invoke, invokeOn, ramu } from '../ipc'
+import { isViewOnly } from '../composer/viewerAccess'
 import { useComputers, statusText } from '../workspace/computers'
 import { errorText } from '../lib/errors'
 import { readSettingsSnapshot, SettingsUpdateRequired } from './settingsAvailability'
@@ -47,6 +48,8 @@ interface Target {
   snapshot?: SettingsSnapshot
   error?: string
   updateRequired?: boolean
+  /** This device is paired view-only on that host, so a save there would be refused. Advisory; the host decides. */
+  viewOnly?: boolean
 }
 
 /** These pages configure one machine (binaries, login, service, network), so "all environments" has no meaning. */
@@ -99,7 +102,9 @@ export function useSettingsScope(section: string) {
           return { id, name, error: t('This host is offline.') }
         try {
           const snapshot = await readSettingsSnapshot(() => read(id))
-          return { id, name, snapshot }
+          // This computer's own role is always full access; another host may have paired this device view-only.
+          const viewOnly = id ? await invokeOn(id, 'background.status').then(isViewOnly, () => false) : false
+          return { id, name, snapshot, ...(viewOnly ? { viewOnly } : {}) }
         } catch (reason) {
           const updateRequired = reason instanceof SettingsUpdateRequired
           const local = available.find((computer) => computer.id === id)?.local ?? !id
@@ -259,6 +264,8 @@ export function useSettingsScope(section: string) {
     catalogs,
     currentId: computers?.current ?? '',
     primaryId: primary?.id,
+    /** Names of the selected hosts where this device is view-only; saving there is refused, so it is not offered. */
+    readOnlyHosts: targets.filter((entry) => entry.viewOnly).map((entry) => entry.name),
     loading,
     stale,
     ready,
