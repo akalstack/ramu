@@ -1,5 +1,12 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { HostOAuthProvider, lockedOAuthRecord, OAuthSignIn, revokeUpstream, type StoredOAuth } from '../src/mcp/oauth'
+import {
+  completeOAuthCallback,
+  HostOAuthProvider,
+  lockedOAuthRecord,
+  OAuthSignIn,
+  revokeUpstream,
+  type StoredOAuth,
+} from '../src/mcp/oauth'
 
 const open: OAuthSignIn[] = []
 afterEach(() => {
@@ -10,7 +17,7 @@ const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } })
 
 /** A fake MCP server plus authorization server: discovery, dynamic registration and the token endpoint. */
-function fakeService() {
+function fakeService(cimd = false) {
   const requests: string[] = []
   const fetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = new URL(input)
@@ -27,6 +34,7 @@ function fakeService() {
         code_challenge_methods_supported: ['S256'],
         grant_types_supported: ['authorization_code', 'refresh_token'],
         token_endpoint_auth_methods_supported: ['none'],
+        ...(cimd ? { client_id_metadata_document_supported: true } : {}),
       })
     if (url.href === 'https://auth.example/register') {
       const body = JSON.parse(String(init?.body))
@@ -39,8 +47,16 @@ function fakeService() {
   return { fetch, requests }
 }
 
-function start(overrides: { current?: () => boolean; clientId?: string } = {}) {
-  const service = fakeService()
+function start(
+  overrides: {
+    current?: () => boolean
+    clientId?: string
+    cimd?: boolean
+    metadataUrl?: string
+    redirectUrl?: string
+  } = {},
+) {
+  const service = fakeService(overrides.cimd)
   const completed: StoredOAuth[] = []
   const failures: string[] = []
   const sign = new OAuthSignIn({
@@ -48,6 +64,8 @@ function start(overrides: { current?: () => boolean; clientId?: string } = {}) {
     serverUrl: 'https://mcp.example/mcp',
     fetch: service.fetch as never,
     clientId: overrides.clientId,
+    clientMetadataUrl: overrides.metadataUrl,
+    redirectUrl: overrides.redirectUrl,
     complete: async (record) => {
       completed.push(record)
     },
@@ -112,6 +130,36 @@ it('finishes from a pasted redirect address, once, and refuses a wrong state', a
   expect(await sign.completeFrom(`  ${redirect.origin}/callback?code=abc&state=${state}  `)).toBe(true)
   expect(completed).toHaveLength(1)
   expect(await sign.completeFrom(`${redirect.origin}/callback?code=abc&state=${state}`)).toBe(false)
+  expect(completed).toHaveLength(1)
+})
+
+it('uses a published client metadata document as the client ID only where the server supports one', async () => {
+  const url = 'https://ramu.example/oauth/client.json'
+  const supported = start({ cimd: true, metadataUrl: url })
+  const first = await supported.sign.begin()
+  expect(new URL(first!.url).searchParams.get('client_id')).toBe(url)
+  expect(supported.service.requests).not.toContain('POST https://auth.example/register')
+  const unsupported = start({ cimd: false, metadataUrl: url })
+  const second = await unsupported.sign.begin()
+  expect(new URL(second!.url).searchParams.get('client_id')).toBe('ramu-client')
+  expect(unsupported.service.requests).toContain('POST https://auth.example/register')
+})
+
+it('finishes from a redirect to the host’s own address with no listener and nothing pasted, once, by state', async () => {
+  const redirect = 'https://studio.example/mcp/oauth/callback'
+  const { sign, completed } = start({ redirectUrl: redirect })
+  const result = await sign.begin()
+  const authorization = new URL(result!.url)
+  expect(authorization.searchParams.get('redirect_uri')).toBe(redirect)
+  const state = authorization.searchParams.get('state')!
+  const through = (query: string) => completeOAuthCallback(new URL(`${redirect}?${query}`))
+  expect((await through('code=abc&state=forged')).ok).toBe(false)
+  expect((await through('code=abc')).ok).toBe(false)
+  expect(completed).toEqual([])
+  expect((await through(`code=abc&state=${state}`)).ok).toBe(true)
+  expect(completed).toHaveLength(1)
+  // The transaction is consumed: the same redirect replayed finds nothing.
+  expect((await through(`code=abc&state=${state}`)).ok).toBe(false)
   expect(completed).toHaveLength(1)
 })
 

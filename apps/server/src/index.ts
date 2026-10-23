@@ -46,6 +46,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod'
 import { runtimeInvoke, runtimeNetwork } from '@ramu/client-runtime'
 import { HostPresence } from './remote/presence'
+import { completeOAuthCallback, HOSTED_CALLBACK_PATH, oauthPage } from './mcp/oauth'
 import { serveSockets, type EventSink, type SocketHost } from './remote/socket'
 import {
   CAPABILITIES,
@@ -721,6 +722,14 @@ async function performInvoke(
 const handle = (remote: boolean) => async (req: import('node:http').IncomingMessage, res: ServerResponse) => {
   try {
     let device: DeviceInfo | undefined
+    // A service's redirect after sign-in arrives from a browser with no device token; the transaction's state is the proof.
+    if (remote && req.method === 'GET' && (req.url ?? '').split('?')[0] === HOSTED_CALLBACK_PATH) {
+      const outcome = await completeOAuthCallback(new URL(req.url ?? '/', 'http://host'))
+      res
+        .writeHead(outcome.ok ? 200 : 400, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' })
+        .end(oauthPage(outcome.message))
+      return
+    }
     if (remote) {
       const authenticated = await remoteAccess.accept(req, res)
       if (authenticated === undefined) return

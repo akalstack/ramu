@@ -13,7 +13,14 @@ import { SharedMcpPolicy, type ExternalMcpSession } from './policy'
 import { ExternalMcpGateway, type ExternalMcpGatewayHost } from './gateway'
 import { connectSharedMcpStdio, RESERVED_ENV } from './stdio'
 import { connectSharedMcpHttp, sharedMcpHttpFetch } from './http'
-import { OAUTH_REFERENCE_NAME, OAuthSignIn, revokeUpstream, type RevocationResult, type StoredOAuth } from './oauth'
+import {
+  HOSTED_CALLBACK_PATH,
+  OAUTH_REFERENCE_NAME,
+  OAuthSignIn,
+  revokeUpstream,
+  type RevocationResult,
+  type StoredOAuth,
+} from './oauth'
 import { SharedMcpConnectionError } from './errors'
 import { SharedMcpStorage } from './storage'
 import { runtimeLacksHttpMcp } from '../providers/runtimeTransports'
@@ -21,6 +28,16 @@ import { runtimeLacksHttpMcp } from '../providers/runtimeTransports'
 type Health = SharedMcpManagement['connections'][number]
 
 /** The host manager is shared by Settings and, separately, authenticated provider sessions. */
+/** The HTTPS address on this host a service can redirect to, from `RAMU_PUBLIC_URL`; absent when none is published. */
+function hostedRedirect(): string | undefined {
+  try {
+    const base = new URL(process.env.RAMU_PUBLIC_URL ?? '')
+    return base.protocol === 'https:' ? new URL(HOSTED_CALLBACK_PATH, base).toString() : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export class SharedMcpService {
   readonly policy: SharedMcpPolicy
   private checks = new Map<
@@ -344,6 +361,11 @@ export class SharedMcpService {
       serverUrl: transport.url,
       fetch: network.fetch,
       clientId: transport.oauthClientId,
+      ...(hostedRedirect() ? { redirectUrl: hostedRedirect()! } : {}),
+      // Set by the host operator once a metadata document is published; servers without support still register dynamically.
+      ...(process.env.RAMU_MCP_CLIENT_METADATA_URL
+        ? { clientMetadataUrl: process.env.RAMU_MCP_CLIENT_METADATA_URL }
+        : {}),
       complete: async (record) => {
         const current = this.connection(connectionId)
         const reference =

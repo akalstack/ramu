@@ -71,6 +71,8 @@ export class HostOAuthProvider implements OAuthClientProvider {
   constructor(
     private readonly store: OAuthRecordStore,
     private readonly transaction?: { redirectUrl: string; state: string },
+    /** An HTTPS document describing this client, used as its client ID with servers that accept one. */
+    readonly clientMetadataUrl?: string,
   ) {}
 
   get redirectUrl() {
@@ -158,6 +160,13 @@ export interface OAuthSignInHost {
   fetch: FetchLike
   /** A client ID registered with the service ahead of time; dynamic registration is then skipped. */
   clientId?: string
+  /**
+   * An HTTPS address on this host that the service redirects to, served by `completeOAuthCallback`. With it no loopback
+   * listener is opened and a person on any device finishes sign-in without copying anything back.
+   */
+  redirectUrl?: string
+  /** The host's published client metadata document; used only with servers that advertise support for one. */
+  clientMetadataUrl?: string
   /** Persist the finished record. Called once, after a verified callback. */
   complete(record: StoredOAuth): Promise<void>
   failed(reason: string): void
@@ -165,6 +174,21 @@ export interface OAuthSignInHost {
 }
 
 const TIMEOUT_MS = 10 * 60_000
+
+/** Where a service redirects to when this host publishes an HTTPS address for sign-in. */
+export const HOSTED_CALLBACK_PATH = '/mcp/oauth/callback'
+const hostedSignIns = new Map<string, OAuthSignIn>()
+
+/**
+ * Finishes the sign-in a redirect to the host's own address belongs to, found by its `state`. Anyone can reach this
+ * path, so it grants nothing by itself: an unknown or reused state, or a connection that changed, completes nothing.
+ */
+export async function completeOAuthCallback(url: URL): Promise<{ ok: boolean; message: string }> {
+  const sign = hostedSignIns.get(url.searchParams.get('state') ?? '')
+  return sign ? sign.deliver(url) : { ok: false, message: 'This sign-in link is not valid any more.' }
+}
+
+export const oauthPage = page
 
 /**
  * One sign-in: a loopback listener on the host that accepts exactly one callback carrying this transaction's `state`.
@@ -181,13 +205,17 @@ export class OAuthSignIn {
 
   /** Starts discovery and registration and returns the page the person must open, or null when stored tokens were enough. */
   async begin(): Promise<{ url: string } | null> {
-    const server = createServer((req, res) => void this.callback(req.url ?? '', res))
-    this.server = server
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject)
-      server.listen(0, '127.0.0.1', resolve)
-    })
-    const redirectUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/callback`
+    let redirectUrl = this.host.redirectUrl
+    if (redirectUrl) hostedSignIns.set(this.state, this)
+    else {
+      const server = createServer((req, res) => void this.callback(req.url ?? '', res))
+      this.server = server
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(0, '127.0.0.1', resolve)
+      })
+      redirectUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/callback`
+    }
     // Registration is fresh for each sign-in because the redirect port is chosen per transaction.
     const record: StoredOAuth = this.host.clientId
       ? {
@@ -203,6 +231,7 @@ export class OAuthSignIn {
         modify: async (change) => void Object.assign(record, change(structuredClone(record))),
       },
       { redirectUrl, state: this.state },
+      this.host.clientMetadataUrl,
     )
     this.record = record
     this.timer = setTimeout(() => this.finish('Sign-in timed out. Start it again from Settings.'), TIMEOUT_MS)
@@ -227,6 +256,11 @@ export class OAuthSignIn {
 
   cancel() {
     this.finish('Sign-in was cancelled.')
+  }
+
+  /** Delivers a redirect that arrived at this host's own address; the same state, one-time and still-current checks apply. */
+  deliver(url: URL) {
+    return this.accept(url)
   }
 
   private async callback(path: string, res: import('node:http').ServerResponse) {
@@ -254,7 +288,7 @@ export class OAuthSignIn {
     const expected = Buffer.from(this.state)
     if (
       this.done ||
-      url.pathname !== '/callback' ||
+      (url.pathname !== '/callback' && url.pathname !== HOSTED_CALLBACK_PATH) ||
       given.length !== expected.length ||
       !timingSafeEqual(given, expected)
     )
@@ -287,6 +321,7 @@ export class OAuthSignIn {
   }
 
   private finish(reason?: string) {
+    hostedSignIns.delete(this.state)
     if (this.timer) clearTimeout(this.timer)
     this.timer = undefined
     const wasOpen = !this.done
