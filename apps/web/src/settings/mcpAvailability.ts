@@ -2,7 +2,7 @@ import type { AgentProvider } from '@ramu/shared/types'
 import type { SharedMcpAccountReadiness, SharedMcpConnection, SharedMcpManagement } from '@ramu/shared/mcp'
 
 export type ConnectionAvailability =
-  'shared' | 'approval-needed' | 'sign-in-required' | 'not-checked' | 'disabled' | 'unsupported'
+  'shared' | 'approval-needed' | 'sign-in-required' | 'not-checked' | 'disabled' | 'unsupported' | 'native-only'
 
 /**
  * What one provider gets from a Shared MCP connection, with a reason in English the caller translates. Only a checked
@@ -14,8 +14,19 @@ export function connectionAvailability(
   status: SharedMcpManagement['connections'][number]['status'],
   readiness: readonly SharedMcpAccountReadiness[] | undefined,
   provider: AgentProvider,
+  providerManaged: SharedMcpManagement['providerManaged'] = [],
 ): { state: ConnectionAvailability; reason: string } {
   if (!connection.enabled) return { state: 'disabled', reason: 'The connection is disabled.' }
+  if (
+    connection.enabled &&
+    !connection.providers.includes(provider) &&
+    providerManaged.some((entry) => entry.provider === provider && entry.name === connection.name)
+  )
+    return {
+      state: 'native-only',
+      reason:
+        'This provider already has a server with this name that only it manages, and Ramu does not share this one with it.',
+    }
   if (!connection.providers.includes(provider))
     return { state: 'disabled', reason: 'This connection is not enabled for this provider.' }
   if (status === 'unsupported')
@@ -47,4 +58,5 @@ export const availabilityLabels: Record<ConnectionAvailability, string> = {
   'not-checked': 'Not checked',
   disabled: 'Disabled',
   unsupported: 'Unsupported',
+  'native-only': 'Native only',
 }

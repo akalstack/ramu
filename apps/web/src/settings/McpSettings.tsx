@@ -571,7 +571,7 @@ export function McpSettings() {
               {reason && <p className="m-0 text-caption text-muted-foreground">{t(reason)}</p>}
               <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-0.5 p-0 text-caption text-muted-foreground">
                 {AGENT_PROVIDERS.map((provider) => {
-                  const availability = connectionAvailability(connection, status, data.readiness, provider)
+                  const availability = connectionAvailability(connection, status, data.readiness, provider, data.providerManaged)
                   return (
                     <li key={provider} title={t(availability.reason)}>
                       {providerName(provider)}: {t(availabilityLabels[availability.state])}

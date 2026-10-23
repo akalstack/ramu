@@ -6,7 +6,14 @@ import type {
   SharedMcpSelection,
 } from '@ramu/shared/mcp'
 import { sharedMcpAccount, sharedMcpApproval, sharedMcpDefinition, sharedMcpSelection } from '../../mcp/policy'
-import { MCP_IMPORTS_KEY, MCP_SHARING_KEY, type McpImports } from '../../agent/projectSetup'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
+import {
+  MCP_IMPORTS_KEY,
+  MCP_SHARING_KEY,
+  PROVIDER_MANAGED_KEY,
+  type McpImports,
+  type ProviderManaged,
+} from '../../agent/projectSetup'
 import type { RegisterHandlers } from '../types'
 
 const id = z.string().min(1).max(200)
@@ -24,7 +31,17 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
   return {
     'mcp.status': {
       args: z.tuple([]),
-      run: () => ({ ...service().list(), canAdminister: ctx.host.canAdministerIntegrations?.() === true }),
+      run: () => {
+        const seen = ctx.workspace.getAppState<ProviderManaged>(PROVIDER_MANAGED_KEY, {})
+        const providerManaged = AGENT_PROVIDERS.flatMap((provider) =>
+          (seen[provider] ?? []).map((name) => ({ provider, name })),
+        )
+        return {
+          ...service().list(),
+          ...(providerManaged.length ? { providerManaged } : {}),
+          canAdminister: ctx.host.canAdministerIntegrations?.() === true,
+        }
+      },
     },
     'mcp.save': {
       args: z.tuple([sharedMcpDefinition, id.optional()]),

@@ -43,3 +43,16 @@ it('separates disabled, not enabled for the provider, sign-in and unsupported', 
   expect(connectionAvailability(connection, 'sign-in-required', [], 'codex').state).toBe('sign-in-required')
   expect(connectionAvailability(connection, 'unsupported', [], 'codex').state).toBe('unsupported')
 })
+
+it('reads Native only when the provider is not offered this connection but already has a server of that name', () => {
+  const managed = [{ provider: 'cursor' as const, name: 'Tracker' }]
+  expect(connectionAvailability(connection, 'connected', [], 'cursor', managed).state).toBe('native-only')
+  // Another provider, another name, or a connection the provider is offered are unaffected.
+  expect(connectionAvailability(connection, 'connected', [], 'antigravity', managed).state).toBe('disabled')
+  expect(
+    connectionAvailability(connection, 'connected', [], 'cursor', [{ provider: 'cursor', name: 'Other' }]).state,
+  ).toBe('disabled')
+  expect(
+    connectionAvailability(connection, 'connected', [], 'codex', [{ provider: 'codex', name: 'Tracker' }]).state,
+  ).not.toBe('native-only')
+})

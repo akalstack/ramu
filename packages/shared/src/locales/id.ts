@@ -3572,4 +3572,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Use the provider's copy only": "Gunakan salinan penyedia saja",
   "Managed by the provider": "Dikelola oleh penyedia",
   "Seen in an earlier thread. Only the provider has these servers’ definitions, so Ramu cannot share them. To share one, add it below as a Ramu MCP server.": "Terlihat di thread sebelumnya. Hanya penyedia yang memiliki definisi server ini, jadi Ramu tidak dapat membagikannya. Untuk membagikannya, tambahkan di bawah sebagai server MCP Ramu.",
+  "Native only": "Hanya bawaan",
+  "This provider already has a server with this name that only it manages, and Ramu does not share this one with it.": "Penyedia ini sudah memiliki server bernama sama yang hanya dikelolanya sendiri, dan Ramu tidak membagikan yang ini kepadanya.",
 }
