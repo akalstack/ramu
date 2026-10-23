@@ -17,6 +17,8 @@ export interface InboxChat {
   /** Mobile has the live goal; desktop supplies the compact task summary. */
   goal?: Pick<ChatGoal, 'status' | 'pausedBy'> | null
   goalState?: Pick<ChatGoal, 'status' | 'pausedBy'> | null
+  /** Independently running helpers; the phone has them in its helper groups, the desktop in `tasks.list`. */
+  helperSummary?: { active: number } | null
   lastActiveAt: number
   sessionId: string | null
   doneAt?: number | null
@@ -109,8 +111,12 @@ export function buildInbox(input: {
     )
   }
   const waiting = live.filter(needsInput).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  // Independent helpers keep a thread running after its own turn ends, as the finished-thread gate does for notices.
+  const helpersRunning = (chat: InboxChat) => (chat.helperSummary?.active ?? 0) > 0
   const running = live
-    .filter((chat) => (chat.status === 'running' || goalContinues(goalOf(chat))) && !needsInput(chat))
+    .filter(
+      (chat) => (chat.status === 'running' || goalContinues(goalOf(chat)) || helpersRunning(chat)) && !needsInput(chat),
+    )
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   const enabled = input.recapsEnabled ?? (() => true)
   const recaps = splitRecaps(
@@ -131,6 +137,7 @@ export function buildInbox(input: {
         (chat.status === 'ready-for-review' || chat.status === 'idle' || chat.status === 'failed') &&
         !needsInput(chat) &&
         !unfinished(chat) &&
+        !helpersRunning(chat) &&
         chat.sessionId,
     )
     .filter((chat) => chat.lastActiveAt >= since)

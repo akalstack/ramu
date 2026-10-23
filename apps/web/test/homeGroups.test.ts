@@ -28,4 +28,15 @@ describe('Home groups', () => {
       }),
     ).toBe('Limit reached')
   })
+
+  it('keeps a thread among running work while its independent helpers run, like the finished-thread gate', () => {
+    const withHelpers = (active: number) =>
+      ({ helperSummary: { active, waiting: 0 }, goalState: null }) as unknown as Task
+    expect(groupOf(session(), withHelpers(2))).toBe('Running')
+    expect(groupOf(session(), withHelpers(0))).toBe('Done')
+    // A helper's own row never counts its parent's helpers, and a request or limit still comes first.
+    expect(groupOf(session({ parentId: 'p' } as never), withHelpers(2))).toBe('Done')
+    expect(groupOf(session({ state: 'needs-input' }), withHelpers(2))).toBe('Waiting for your input')
+    expect(groupOf(session({ waitingUntil: 5 } as never), withHelpers(2))).toBe('Limit reached')
+  })
 })

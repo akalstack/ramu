@@ -30,6 +30,24 @@ it('keeps unfinished goals out of Completed between turns and offers held goals 
   expect(result.completed.map((item) => item.taskId)).toEqual(['completed'])
 })
 
+it('keeps a thread with independent helpers still running out of Completed, like the finished-thread gate', () => {
+  const idle = { ...chat('host', 'helpers'), status: 'ready-for-review' as const }
+  const result = buildInbox({
+    chats: [
+      { ...idle, helperSummary: { active: 2 } },
+      { ...idle, taskId: 'settled', id: 'settled', helperSummary: { active: 0 } },
+      { ...idle, taskId: 'asks', id: 'asks', status: 'needs-input' as const, helperSummary: { active: 1 } },
+    ],
+    recaps: [],
+    summaries: [],
+    now,
+  })
+  expect(result.running.map((item) => item.taskId)).toEqual(['helpers'])
+  expect(result.completed.map((item) => item.taskId)).toEqual(['settled'])
+  // A request waiting on the person still comes first, whatever the helpers are doing.
+  expect(result.waiting.map((item) => item.taskId)).toEqual(['asks'])
+})
+
 it('prefers a refreshed mobile goal over a stale task summary, including an explicitly cleared goal', () => {
   const base = { ...chat('host'), status: 'idle' as const, goalState: { status: 'active' as const } }
   const result = buildInbox({

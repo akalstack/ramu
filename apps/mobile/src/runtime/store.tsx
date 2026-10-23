@@ -35,6 +35,7 @@ import { deleteToken, readLocal, readRenewedAt, readToken, saveRenewedAt, saveTo
 import { renewalDue, renewCredential } from './tokenRenewal'
 import { HostClient, HostError, normalizeAddress, operationKey } from './transport'
 import { verifyHost } from '@ramu/shared/hostProof'
+import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
 import { transcript, visibleText } from './transcript'
 import { isOutdated, type Language } from './settingsModel'
 import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } from './pushCategories'
@@ -601,7 +602,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...s.chats.filter(
             (c) => c.computerId !== id || (c.pending && !chats.some((next) => c.taskId && next.taskId === c.taskId)),
           ),
-          ...chats,
+          // A read that finished late never brings back a state the host has since moved past: of two reads of the same
+          // thread, the one with the newer `snapshotAt` stays (an older host sends none, so its read always replaces).
+          ...chats.map((next) =>
+            newerTaskSnapshot(
+              s.chats.find((c) => c.computerId === id && c.taskId === next.taskId),
+              next,
+            ),
+          ),
         ],
         catalogs: { ...s.catalogs, [id]: catalogs },
         usage: { ...s.usage, [id]: usage },
