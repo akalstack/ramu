@@ -200,8 +200,22 @@ describe('the remote a branch publishes to', () => {
     sh(repo, 'remote', 'add', 'fork', fork)
     sh(repo, 'remote', 'add', 'upstream', bare('upstream'))
     expect(await git.publishRemote(repo, 'main')).toEqual({ remote: null, remotes: ['fork', 'upstream'] })
-    await expect(git.push(repo)).rejects.toThrow(/several remotes \(fork, upstream\).*remote\.pushDefault/)
+    await expect(git.push(repo)).rejects.toThrow(/several remotes \(fork, upstream\).*Choose one when you publish/)
     expect(sh(tmp, '--git-dir', fork, 'branch', '--list')).toBe('')
+  })
+
+  it('offers the remotes to choose between, publishes to the chosen one and refuses a name that is not a remote', async () => {
+    const fork = bare('fork')
+    sh(repo, 'remote', 'add', 'fork', fork)
+    expect(await git.remoteChoices(repo)).toBeNull()
+    sh(repo, 'remote', 'add', 'upstream', bare('upstream'))
+    expect(await git.remoteChoices(repo)).toEqual(['fork', 'upstream'])
+    await expect(git.push(repo, undefined, 'nowhere')).rejects.toThrow(/no remote named nowhere/)
+    await git.push(repo, undefined, 'fork')
+    expect(sh(repo, 'rev-parse', '--abbrev-ref', 'main@{upstream}')).toBe('fork/main')
+    expect(sh(tmp, '--git-dir', fork, 'rev-parse', 'main')).toBe(sh(repo, 'rev-parse', 'HEAD'))
+    // Once the branch has an upstream there is nothing left to choose.
+    expect(await git.remoteChoices(repo)).toBeNull()
   })
 
   it("follows the branch's pushRemote, then remote.pushDefault, and ignores names that are not remotes", async () => {

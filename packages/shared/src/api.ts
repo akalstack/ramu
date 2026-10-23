@@ -807,7 +807,9 @@ export interface RamuMethods {
   'git.sync'(taskId: string, repoId: string, approval?: import('./protectedBranch').SyncApproval): void
   'git.continueOperation'(taskId: string, repoId: string): void
   'git.abortOperation'(taskId: string, repoId: string): void
-  'git.push'(taskId: string, repoId: string, expectedBranch?: string): void
+  'git.push'(taskId: string, repoId: string, expectedBranch?: string, remote?: string): void
+  /** Remotes to choose between before publishing a branch with no upstream; null when nothing needs choosing. */
+  'git.remoteChoices'(taskId: string, repoId: string): string[] | null
   'git.commitFiles'(taskId: string, repoId: string, oid: string): GitCommitFile[]
   'git.commitFileDiff'(taskId: string, repoId: string, oid: string, path: string): DiffContents
   'git.commitDetails'(taskId: string, repoId: string, oid: string): string

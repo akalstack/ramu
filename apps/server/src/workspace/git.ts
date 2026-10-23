@@ -393,9 +393,20 @@ export async function publishRemote(
   return { remote, remotes }
 }
 
+/**
+ * The remotes to choose between before publishing a branch that has no upstream, or null when nothing needs choosing
+ * (an upstream exists, one remote is the clear destination, or there is no remote at all).
+ */
+export async function remoteChoices(cwd: string): Promise<string[] | null> {
+  const s = await status(cwd)
+  if (!s.branch || s.upstream) return null
+  const { remote, remotes } = await publishRemote(cwd, s.branch)
+  return remote || remotes.length < 2 ? null : remotes
+}
+
 /** Why a branch cannot be published when several remotes leave the destination ambiguous. */
 export function ambiguousRemoteMessage(remotes: string[]): string {
-  return `This repository has several remotes (${remotes.join(', ')}) and none is named origin. Choose one with git config remote.pushDefault <name>, then try again.`
+  return `This repository has several remotes (${remotes.join(', ')}) and none is named origin. Choose one when you publish, or set git config remote.pushDefault <name>.`
 }
 
 /** Prefer the remote's recorded HEAD; common names cover repositories without one. No network request. */
@@ -701,7 +712,7 @@ export async function abortOperation(cwd: string): Promise<void> {
   if (!op) throw new Error('No rebase or merge is in progress.')
   await git(cwd, [op, '--abort'])
 }
-export async function push(cwd: string, expectedBranch?: string): Promise<void> {
+export async function push(cwd: string, expectedBranch?: string, chosenRemote?: string): Promise<void> {
   const s = await status(cwd)
   if (expectedBranch !== undefined && s.branch !== expectedBranch)
     throw new Error(
@@ -712,7 +723,11 @@ export async function push(cwd: string, expectedBranch?: string): Promise<void> 
     await git(cwd, ['push'])
     return
   }
-  const { remote, remotes } = await publishRemote(cwd, s.branch)
+  const found = await publishRemote(cwd, s.branch)
+  const { remotes } = found
+  if (chosenRemote !== undefined && !remotes.includes(chosenRemote))
+    throw new Error(`This repository has no remote named ${chosenRemote}.`)
+  const remote = chosenRemote ?? found.remote
   if (!remote)
     throw new Error(
       remotes.length

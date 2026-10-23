@@ -11,6 +11,7 @@ import { ChangeRow } from './ChangeRow'
 import { REPO_SECTION } from './classes'
 import { CommitBox } from './CommitBox'
 import { ConfirmationDialog } from './ConfirmationDialog'
+import { RemoteChoiceDialog } from './RemoteChoiceDialog'
 import { ConflictList } from './ConflictList'
 import { GitInspector } from './GitInspector'
 import { OperationBanner } from './OperationBanner'
@@ -163,6 +164,15 @@ export function RepositoryControl({
   return (
     <div ref={root} className={`scm-repo-body${compact ? ' compact' : ''}${collapsed ? ' collapsed' : ''}`}>
       {fileContext.contextMenu.menu}
+      {actions.remoteChoices && (
+        <RemoteChoiceDialog
+          branch={status?.branch ?? null}
+          remotes={actions.remoteChoices}
+          busy={busy}
+          onCancel={actions.cancelRemoteChoice}
+          onChoose={actions.pushTo}
+        />
+      )}
       {dialog.confirmation && (
         <ConfirmationDialog
           confirmation={dialog.confirmation}

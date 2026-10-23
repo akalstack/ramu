@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { syncRepositories } from '../../git/syncRepositories'
 import type { GitStash, PullMode, RepositoryBinding } from '@ramu/shared/types'
 import { errorText } from '../../workspace/TaskPane'
@@ -37,7 +38,18 @@ export function useGitActions({
   const stagePaths = (paths: string[], stage: boolean) =>
     void run(() => invoke(stage ? 'git.stage' : 'git.unstage', taskId, binding.repoId, paths))
   const fetchRepo = () => void run(() => invoke('git.fetch', taskId, binding.repoId))
-  const pushRepo = () => void run(() => invoke('git.push', taskId, binding.repoId))
+  // Several remotes with no clear destination: the person picks one, and nothing is pushed before that.
+  const [remoteChoices, setRemoteChoices] = useState<string[] | null>(null)
+  const pushRepo = () =>
+    void run(async () => {
+      const choices = await invoke('git.remoteChoices', taskId, binding.repoId)
+      if (choices) setRemoteChoices(choices)
+      else await invoke('git.push', taskId, binding.repoId)
+    })
+  const pushTo = (remote: string) => {
+    setRemoteChoices(null)
+    void run(() => invoke('git.push', taskId, binding.repoId, undefined, remote))
+  }
   const sync = () =>
     void run(async () => {
       requireSaved()
@@ -58,7 +70,20 @@ export function useGitActions({
       requireSaved()
       await invoke('git.applyStash', taskId, binding.repoId, stash.oid)
     })
-  return { run, requireSaved, stagePaths, fetchRepo, pushRepo, sync, pull, popStash, applyStash }
+  return {
+    run,
+    requireSaved,
+    stagePaths,
+    fetchRepo,
+    pushRepo,
+    pushTo,
+    remoteChoices,
+    cancelRemoteChoice: () => setRemoteChoices(null),
+    sync,
+    pull,
+    popStash,
+    applyStash,
+  }
 }
 
 export type GitActions = ReturnType<typeof useGitActions>

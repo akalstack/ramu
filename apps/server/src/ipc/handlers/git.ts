@@ -266,9 +266,14 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
         }),
     },
     'git.push': {
-      args: z.tuple([id, id, branchName.optional()]),
-      run: (t: string, r: string, expectedBranch?: string) =>
-        gitExclusive(ctx, t, r, (cwd) => git.push(cwd, expectedBranch)),
+      args: z.tuple([id, id, branchName.optional(), z.string().min(1).max(255).optional()]),
+      run: (t: string, r: string, expectedBranch?: string, remote?: string) =>
+        gitExclusive(ctx, t, r, (cwd) => git.push(cwd, expectedBranch, remote)),
+    },
+    /** The remotes to choose between before publishing the branch, or null when nothing needs choosing. */
+    'git.remoteChoices': {
+      args: z.tuple([id, id]),
+      run: (t: string, r: string) => gitExclusive(ctx, t, r, (cwd) => git.remoteChoices(cwd)),
     },
     'git.pull': {
       args: z.tuple([id, id, pullMode.optional()]),

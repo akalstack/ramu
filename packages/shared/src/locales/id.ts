@@ -3578,4 +3578,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Manage connectors": "Kelola konektor",
   "Changed after this thread started. The changed rules are sent with your next message.": "Berubah setelah thread ini dimulai. Aturan yang berubah dikirim bersama pesan Anda berikutnya.",
   "The file it comes from changed after this thread started. It applies with your next message, once no work is running.": "Berkas sumbernya berubah setelah thread ini dimulai. Perubahan berlaku pada pesan Anda berikutnya, setelah tidak ada pekerjaan yang berjalan.",
+  "Choose a remote": "Pilih remote",
+  "{branch} has no upstream and this repository has several remotes. Where should it be published?": "{branch} belum punya upstream dan repositori ini memiliki beberapa remote. Ke mana cabang ini harus dipublikasikan?",
+  "This repository has several remotes. Where should the branch be published?": "Repositori ini memiliki beberapa remote. Ke mana cabang harus dipublikasikan?",
 }
