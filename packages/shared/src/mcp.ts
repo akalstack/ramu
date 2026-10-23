@@ -171,4 +171,6 @@ export interface ProjectSetup {
   mcp: ProjectMcpServer[]
   skills: ProjectSkill[]
   diagnostics: { file: string; message: string }[]
+  /** Servers a provider reported in an earlier thread that no readable file declares: only that provider can manage them. */
+  providerManaged?: { provider: AgentProvider; name: string }[]
 }

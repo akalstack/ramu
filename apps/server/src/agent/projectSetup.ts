@@ -49,6 +49,10 @@ function readBounded(path: string): string | null {
 }
 
 /** JSON with comments and trailing commas, as OpenCode and VS Code-style configs allow. */
+/** What each provider last reported that no readable file declares, by provider. Names only, from live threads. */
+export const PROVIDER_MANAGED_KEY = 'mcp.providerManaged'
+export type ProviderManaged = Partial<Record<AgentProvider, string[]>>
+
 export function parseJsonc(text: string): unknown {
   let out = ''
   for (let i = 0; i < text.length; i++) {

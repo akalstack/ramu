@@ -3570,4 +3570,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Hidden for this thread: the provider's own copy of this server is used. Ramu did not change the provider's configuration.": "Disembunyikan untuk thread ini: salinan server milik penyedia yang digunakan. Ramu tidak mengubah konfigurasi penyedia.",
   "Use both copies": "Gunakan kedua salinan",
   "Use the provider's copy only": "Gunakan salinan penyedia saja",
+  "Managed by the provider": "Dikelola oleh penyedia",
+  "Seen in an earlier thread. Only the provider has these servers’ definitions, so Ramu cannot share them. To share one, add it below as a Ramu MCP server.": "Terlihat di thread sebelumnya. Hanya penyedia yang memiliki definisi server ini, jadi Ramu tidak dapat membagikannya. Untuk membagikannya, tambahkan di bawah sebagai server MCP Ramu.",
 }

@@ -9,7 +9,8 @@ import {
   type DuplicateChoices,
 } from '../../mcp/duplicates'
 import { projectSetupOf } from './projectSetup'
-import { buildSetupSnapshot } from '../../agent/effectiveSetup'
+import { PROVIDER_MANAGED_KEY, type ProviderManaged } from '../../agent/projectSetup'
+import { buildSetupSnapshot, providerManagedServers } from '../../agent/effectiveSetup'
 import {
   accountEnvironment,
   sharedSessionServers,
@@ -86,6 +87,17 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
           workspace.getAppState<SkillSharing>(SKILL_SHARING_KEY, {}),
           { projectId },
         )
+        const connections = getSharedMcp?.().sessionConnections(session.provider, accountId, projectId) ?? []
+        if (runtimeServers) {
+          const seen = workspace.getAppState<ProviderManaged>(PROVIDER_MANAGED_KEY, {})
+          const names = providerManagedServers({
+            addedServers: servers.map((server) => server.name),
+            connections,
+            runtimeServers,
+          }).map((server) => server.name)
+          if (JSON.stringify(seen[session.provider] ?? []) !== JSON.stringify(names))
+            workspace.setAppState(PROVIDER_MANAGED_KEY, { ...seen, [session.provider]: names })
+        }
         return buildSetupSnapshot({
           sessionId,
           provider: session.provider,
@@ -100,7 +112,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
           ],
           ...(runtimeServers ? { runtimeServers } : {}),
           sharedSkills: skills.map((skill) => skill.name),
-          connections: getSharedMcp?.().sessionConnections(session.provider, accountId, projectId) ?? [],
+          connections,
           duplicates,
           hidden: workspace.getAppState<DuplicateChoices>(DUPLICATE_CHOICE_KEY, {})[sessionId] ?? [],
           now: Date.now(),

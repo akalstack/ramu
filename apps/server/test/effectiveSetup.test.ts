@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { Rule } from '@ramu/shared/types'
-import { buildSetupSnapshot, type SetupInputs } from '../src/agent/effectiveSetup'
+import { buildSetupSnapshot, providerManagedServers, type SetupInputs } from '../src/agent/effectiveSetup'
 
 const rule = (patch: Partial<Rule>): Rule => ({
   id: 'r',
@@ -125,4 +125,20 @@ it('marks a server only the provider reports as provider-managed, and never list
   ])
   expect(managed[0]!.reason).toContain('cannot share it')
   expect(items.map((item) => item.name)).not.toContain('ramu')
+})
+
+it('lists provider-managed servers for later use, leaving out declared, shared and Ramu’s own', () => {
+  expect(
+    providerManagedServers({
+      addedServers: ['docs'],
+      connections: [{ name: 'Shared docs', status: 'ready' }],
+      runtimeServers: [
+        { name: 'docs', status: 'connected' },
+        { name: 'Shared docs', status: 'connected' },
+        { name: 'shared_mcp', status: 'connected' },
+        { name: 'claude.ai Figma', status: 'connected' },
+      ],
+    }).map((server) => server.name),
+  ).toEqual(['claude.ai Figma'])
+  expect(providerManagedServers({ addedServers: [], connections: [] })).toEqual([])
 })

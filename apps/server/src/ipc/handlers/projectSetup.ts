@@ -1,9 +1,12 @@
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
+import type { ProjectSetup } from '@ramu/shared/mcp'
 import { z } from 'zod'
 import {
   discoverProjectSetup,
   MCP_IMPORTS_KEY,
+  PROVIDER_MANAGED_KEY,
+  type ProviderManaged,
   MCP_SHARING_KEY,
   projectSharingKey,
   SKILL_SHARING_KEY,
@@ -18,6 +21,14 @@ import type { HandlerContext, RegisterHandlers } from '../types'
 const choose = (all: Record<string, boolean>, key: string, shared: boolean | null) => {
   const { [key]: _old, ...rest } = all
   return shared === null ? rest : { ...rest, [key]: shared }
+}
+
+function withProviderManaged(setup: ProjectSetup, seen: ProviderManaged): ProjectSetup {
+  const declared = new Set(setup.mcp.map((server) => server.name))
+  const providerManaged = AGENT_PROVIDERS.flatMap((provider) =>
+    (seen[provider] ?? []).filter((name) => !declared.has(name)).map((name) => ({ provider, name })),
+  )
+  return providerManaged.length ? { ...setup, providerManaged } : setup
 }
 
 /** Discovery for one project from its folders and the Shared MCP connections on this host. Nothing is executed. */
@@ -38,7 +49,10 @@ export function projectSetupOf(
     .map(({ connection }) => ({ id: connection.id, transport: connection.transport }))
   return {
     project,
-    setup: discoverProjectSetup(projectId, roots, managed, sharing, undefined, undefined, skillSharing),
+    setup: withProviderManaged(
+      discoverProjectSetup(projectId, roots, managed, sharing, undefined, undefined, skillSharing),
+      workspace.getAppState<ProviderManaged>(PROVIDER_MANAGED_KEY, {}),
+    ),
   }
 }
 

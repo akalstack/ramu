@@ -416,6 +416,23 @@ export function AgentSetup() {
           {servers('project')}
         </Group>
       )}
+      {data?.providerManaged && data.providerManaged.length > 0 && (
+        <Group
+          title={t('Managed by the provider')}
+          help={t(
+            'Seen in an earlier thread. Only the provider has these servers’ definitions, so Ramu cannot share them. To share one, add it below as a Ramu MCP server.',
+          )}
+        >
+          <ul className="m-0 flex list-none flex-col gap-1 p-0">
+            {data.providerManaged.map((item) => (
+              <li key={`${item.provider}:${item.name}`} className="flex items-center gap-2">
+                <strong className="min-w-0 truncate">{item.name}</strong>
+                <span className={CAPTION}>{providerName(item.provider)}</span>
+              </li>
+            ))}
+          </ul>
+        </Group>
+      )}
       {data && data.diagnostics.length > 0 && (
         <details className={`${CAPTION} mb-4`}>
           <summary className="cursor-pointer select-none">

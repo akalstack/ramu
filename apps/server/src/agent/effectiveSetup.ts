@@ -61,6 +61,14 @@ const connectionReasons: Record<SharedMcpAccountReadiness['status'], string> = {
   'not-checked': 'Check this connection in Settings → Agent setup → MCP servers.',
 }
 
+/** Servers the runtime reports that neither Ramu's launch nor a shared connection explains. */
+export function providerManagedServers(
+  input: Pick<SetupInputs, 'addedServers' | 'connections' | 'runtimeServers'>,
+): { name: string; status: string }[] {
+  const known = new Set([...input.addedServers, ...input.connections.map((connection) => connection.name), ...INTERNAL])
+  return (input.runtimeServers ?? []).filter((server) => !known.has(server.name))
+}
+
 /**
  * What a thread has from Ramu's agent setup, from the same resolvers a launch uses. It lists names and states only,
  * never rule text, server addresses, headers or credentials, and never claims a runtime loaded or used something it
@@ -146,9 +154,7 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
   }
   // Servers only the provider knows (its own account connectors, plugins, managed config): Ramu cannot read a definition,
   // so it cannot share them, and it never rewrites the provider's configuration to change that.
-  const known = new Set([...input.addedServers, ...input.connections.map((connection) => connection.name), ...INTERNAL])
-  for (const server of input.runtimeServers ?? []) {
-    if (known.has(server.name)) continue
+  for (const server of providerManagedServers(input)) {
     items.push({
       kind: 'native-mcp',
       name: server.name,
