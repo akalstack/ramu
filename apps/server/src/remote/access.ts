@@ -90,6 +90,8 @@ export class RemoteAccess {
       browserOrigins: string[]
       /** The host's durable id, proved to a paired device on request. Absent: the endpoint does not exist (older hosts). */
       hostId?: string
+      /** This host's own addresses, named in the identity answer so a paired device can find it when its address changes. */
+      routes?: () => string[]
       now?: () => number
     },
   ) {}
@@ -156,9 +158,13 @@ export class RemoteAccess {
         rejected()
         return
       }
-      res
-        .writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
-        .end(JSON.stringify({ hostId: this.options.hostId, proof: hostProof(key, this.options.hostId, challenge) }))
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(
+        JSON.stringify({
+          hostId: this.options.hostId,
+          proof: hostProof(key, this.options.hostId, challenge),
+          routes: this.options.routes?.() ?? [],
+        }),
+      )
       return
     }
     if (path === PAIR_PATH && req.method === 'POST') {

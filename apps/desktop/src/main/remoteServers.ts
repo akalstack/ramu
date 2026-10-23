@@ -25,6 +25,8 @@ interface StoredServer {
   /** What pairing bound: this device's id on the host and the host's own durable id. Absent for older pairings. */
   deviceId?: string
   hostId?: string
+  /** Other addresses the host named in a proven identity answer; tried only when the saved one stops answering. */
+  routes?: string[]
 }
 interface StoredFile {
   servers: StoredServer[]
@@ -241,6 +243,20 @@ export class RemoteServers {
     server.sealed = this.sealer.available
     server.token = server.sealed ? this.sealer.seal(token) : token
     server.renewedAt = now
+    this.write(file)
+  }
+
+  routesOf(id: string): string[] {
+    this.load()
+    return this.records.get(id)?.routes ?? []
+  }
+
+  setRoutes(id: string, routes: string[]) {
+    const file = this.read(),
+      server = file.servers.find((entry) => entry.id === id)
+    if (!server) return
+    if (JSON.stringify(server.routes ?? []) === JSON.stringify(routes)) return
+    server.routes = routes
     this.write(file)
   }
 

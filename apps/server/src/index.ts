@@ -58,7 +58,7 @@ import { loadConfig } from './config'
 import { TokenStore } from './remote/auth'
 import { DeviceStore, validLifetime, type DeviceInfo } from './remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
-import { HostAdvertiser, discoveryName, readDiscoveryHostId } from './remote/discovery'
+import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
   candidateUrls,
   localAddresses,
@@ -107,6 +107,16 @@ const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
 const remoteAccess = new RemoteAccess({
   devices,
   hostId,
+  // The addresses the listener really serves, for a paired device to try when its saved one stops answering.
+  routes: () =>
+    network.enabled
+      ? advertisedInterfaces(network.host).flatMap((entry) =>
+          entry.addresses.map(
+            (address) =>
+              `${config.tls ? 'https' : 'http'}://${address.includes(':') ? `[${address}]` : address}:${network.port}`,
+          ),
+        )
+      : [],
   browserOrigins: config.browserOrigins,
   ...(remoteTokens ? { legacyToken: () => remoteTokens.current() } : {}),
 })

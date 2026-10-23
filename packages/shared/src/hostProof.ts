@@ -21,7 +21,8 @@ export function verifyHostProof(key: string, hostId: string, challenge: string, 
 }
 
 export type HostVerification =
-  | { state: 'verified'; hostId: string }
+  /** `routes` are other addresses the host named in this same proven answer; each still has to prove itself before use. */
+  | { state: 'verified'; hostId: string; routes: string[] }
   /** The address answered, but not as the host this device paired with: do not send it the credential. */
   | { state: 'mismatch' }
   /** An older host that has no identity endpoint: continuity cannot be proven, so pairing again is explicit. */
@@ -53,7 +54,7 @@ export async function verifyHost(input: {
   }
   if (response.status === 404) return { state: 'unsupported' }
   if (!response.ok) return { state: 'unreachable' }
-  let body: { hostId?: unknown; proof?: unknown }
+  let body: { hostId?: unknown; proof?: unknown; routes?: unknown }
   try {
     body = (await response.json()) as typeof body
   } catch {
@@ -62,6 +63,21 @@ export async function verifyHost(input: {
   if (typeof body.hostId !== 'string' || typeof body.proof !== 'string') return { state: 'mismatch' }
   if (input.expectedHostId && body.hostId !== input.expectedHostId) return { state: 'mismatch' }
   return verifyHostProof(deviceProofKey(input.token), body.hostId, input.challenge, body.proof)
-    ? { state: 'verified', hostId: body.hostId }
+    ? { state: 'verified', hostId: body.hostId, routes: learnedRoutes(body.routes) }
     : { state: 'mismatch' }
+}
+
+export const MAX_LEARNED_ROUTES = 8
+
+/** The addresses a host's proven answer names: a few short http(s) origins, nothing else. */
+export function learnedRoutes(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [
+    ...new Set(
+      value.filter(
+        (entry): entry is string =>
+          typeof entry === 'string' && entry.length <= 200 && /^https?:\/\/[^\s/]+$/.test(entry),
+      ),
+    ),
+  ].slice(0, MAX_LEARNED_ROUTES)
 }

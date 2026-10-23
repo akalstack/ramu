@@ -375,14 +375,14 @@ it('rotates a host token after connecting, once a month, and keeps the old one w
 })
 
 const HOST = 'c'.repeat(32)
-function answeringAs(hostId: string, token = 'tok') {
+function answeringAs(hostId: string, token = 'tok', routes: string[] = []) {
   const seen: string[] = []
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
       seen.push(url)
       const challenge = new URL(url).searchParams.get('challenge')!
-      return Response.json({ hostId, proof: hostProof(deviceProofKey(token), hostId, challenge) })
+      return Response.json({ hostId, proof: hostProof(deviceProofKey(token), hostId, challenge), routes })
     }),
   )
   return seen
@@ -396,6 +396,19 @@ it('moves a saved host to a new address only after the address proves it is the 
   expect(servers.get(saved.id)?.url).toBe('http://10.0.0.9:7788')
   // Only the device id and a challenge were sent; no credential travelled to the new address.
   expect(seen[0]).toMatch(/^http:\/\/10\.0\.0\.9:7788\/identity\?device=dev1&challenge=[0-9a-f]{32}$/)
+  vi.unstubAllGlobals()
+})
+
+it('remembers the other addresses a verified host names, and uses them only after they prove it too', async () => {
+  const { servers, registry } = setup()
+  const saved = servers.add('10.0.0.2:7788', 'Studio', 'tok', Date.now(), undefined, { deviceId: 'dev1', hostId: HOST })
+  answeringAs(HOST, 'tok', ['http://10.0.0.9:7788'])
+  expect(await registry.reviewAddress(saved.id, '10.0.0.5:7788')).toBe('moved')
+  expect(servers.routesOf(saved.id)).toEqual(['http://10.0.0.9:7788'])
+  // Another host answering on a learned address is not followed.
+  answeringAs('d'.repeat(32))
+  expect(await registry.reviewAddress(saved.id, servers.routesOf(saved.id)[0]!)).toBe('mismatch')
+  expect(servers.get(saved.id)?.url).toBe('http://10.0.0.5:7788')
   vi.unstubAllGlobals()
 })
 

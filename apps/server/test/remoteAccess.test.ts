@@ -11,7 +11,7 @@ const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => {
   for (const close of cleanup.splice(0)) await close()
 })
-async function fixture(hostId?: string) {
+async function fixture(hostId?: string, routes?: () => string[]) {
   let now = Date.now()
   const dir = mkdtempSync(join(tmpdir(), 'ramu-access-'))
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }))
@@ -20,6 +20,7 @@ async function fixture(hostId?: string) {
     devices,
     browserOrigins: ['https://companion.example'],
     ...(hostId ? { hostId } : {}),
+    ...(routes ? { routes } : {}),
     now: () => now,
   })
   const server: Server = createServer(async (req, res) => {
@@ -167,8 +168,8 @@ it('renews a device token over HTTP without a gap, and refuses renewal without a
 const HOST = 'a'.repeat(32)
 const CHALLENGE = 'challenge-0123456789abcdef'
 
-async function pairedHost(hostId = HOST) {
-  const f = await fixture(hostId)
+async function pairedHost(hostId = HOST, routes?: () => string[]) {
+  const f = await fixture(hostId, routes)
   const code = f.devices.createCode(f.now()).code
   const data = (await (await f.pair(code)).json()) as { token: string; deviceId: string; hostId?: string }
   const check = (token: string, expectedHostId?: string, baseUrl?: string) =>
@@ -186,7 +187,7 @@ async function pairedHost(hostId = HOST) {
 it('binds the host id at pairing and proves it later without any credential on the wire', async () => {
   const { data, check } = await pairedHost()
   expect(data.hostId).toBe(HOST)
-  expect(await check(data.token, data.hostId)).toEqual({ state: 'verified', hostId: HOST })
+  expect(await check(data.token, data.hostId)).toEqual({ state: 'verified', hostId: HOST, routes: [] })
 })
 
 it('does not verify a host that is not the one paired with, or a token it does not hold', async () => {
@@ -217,4 +218,21 @@ it('refuses unknown devices and malformed challenges alike', async () => {
   const { f, data } = await pairedHost()
   expect((await f.request(`/identity?device=nope&challenge=${CHALLENGE}`)).status).toBe(401)
   expect((await f.request(`/identity?device=${data.deviceId}&challenge=short`)).status).toBe(401)
+})
+
+it('names the host’s own addresses in the proven answer, and keeps only well-formed origins', async () => {
+  const { data, check } = await pairedHost(HOST, () => [
+    'http://10.0.0.9:7788',
+    'https://studio.example',
+    'http://10.0.0.9:7788',
+    'javascript:alert(1)',
+    'http://evil.example/path?x=1',
+  ])
+  expect(await check(data.token, data.hostId)).toEqual({
+    state: 'verified',
+    hostId: HOST,
+    routes: ['http://10.0.0.9:7788', 'https://studio.example'],
+  })
+  // A token the host does not hold learns nothing: the answer is only believed once its proof checks out.
+  expect((await check('someone-elses-token', data.hostId)).state).toBe('mismatch')
 })

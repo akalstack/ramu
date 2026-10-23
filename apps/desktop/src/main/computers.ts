@@ -155,9 +155,11 @@ export class ComputerRegistry {
           live.waiting = payload.waiting
           live.retryAt = payload.retryAt
           if (payload.connected) {
+            this.routeWork('learn', id, 3_600_000, (host) => this.learnRoutes(host))
             this.countSoon(id)
             void this.renewIfDue(id)
           } else if (!payload.connected) {
+            if (!payload.rejected && !payload.paused) this.routeWork('try', id, 60_000, (host) => this.tryRoutes(host))
             this.clearCount(id)
             live.running = 0
             live.needsInput = 0
@@ -409,21 +411,54 @@ export class ComputerRegistry {
     if (!saved.hostId || !deviceId) return 'unsupported'
     // A credential issued over HTTPS never moves to plain HTTP on its own: the person pairs that address explicitly.
     if (saved.url.startsWith('https:') && url.startsWith('http:')) return 'insecure'
-    const { verifyHost } = await import('@ramu/shared/hostProof')
-    const { randomBytes } = await import('node:crypto')
-    const result = await verifyHost({
-      fetch: (target, init) => fetch(target, { ...init, redirect: 'error', signal: AbortSignal.timeout(8000) }),
-      baseUrl: url,
-      deviceId,
-      token: endpoint.token,
-      expectedHostId: saved.hostId,
-      challenge: randomBytes(16).toString('hex'),
-    })
+    const result = await this.verify(url, deviceId, endpoint.token, saved.hostId)
     if (result.state !== 'verified') return result.state
+    this.deps.servers.setRoutes(id, result.routes)
     this.deps.servers.setUrl(id, url)
     this.connect(id)
     this.deps.changed()
     return 'moved'
+  }
+
+  private async verify(url: string, deviceId: string, token: string, hostId: string) {
+    const { verifyHost } = await import('@ramu/shared/hostProof')
+    const { randomBytes } = await import('node:crypto')
+    return verifyHost({
+      fetch: (target, init) => fetch(target, { ...init, redirect: 'error', signal: AbortSignal.timeout(8000) }),
+      baseUrl: url,
+      deviceId,
+      token,
+      expectedHostId: hostId,
+      challenge: randomBytes(16).toString('hex'),
+    })
+  }
+
+  /** While the host answers, keep the other addresses it names. Only a proven answer is believed. */
+  private async learnRoutes(id: string) {
+    const saved = this.deps.servers.get(id)
+    const endpoint = this.deps.servers.endpoint(id)
+    const deviceId = this.deps.servers.deviceIdOf(id)
+    if (!saved?.hostId || !endpoint || !deviceId || saved.ssh) return
+    const result = await this.verify(saved.url, deviceId, endpoint.token, saved.hostId)
+    if (result.state === 'verified' && this.deps.servers.get(id)) this.deps.servers.setRoutes(id, result.routes)
+  }
+
+  /** When the saved address stops answering, try the learned ones; each must prove it is this host before it is used. */
+  private async tryRoutes(id: string) {
+    for (const route of this.deps.servers.routesOf(id)) {
+      if (this.stopped || !this.deps.servers.get(id)) return
+      if ((await this.reviewAddress(id, route).catch(() => 'unreachable')) === 'moved') return
+    }
+  }
+
+  private routeTimes = new Map<string, number>()
+  /** Runs `work` for a host at most once per `every` ms. */
+  private routeWork(kind: 'learn' | 'try', id: string, every: number, work: (id: string) => Promise<void>) {
+    const now = Date.now()
+    const key = `${kind}:${id}`
+    if (now - (this.routeTimes.get(key) ?? -Infinity) < every) return
+    this.routeTimes.set(key, now)
+    void work(id).catch(() => {})
   }
 
   forget(id: string) {
