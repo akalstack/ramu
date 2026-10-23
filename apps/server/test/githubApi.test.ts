@@ -8,7 +8,7 @@ import {
   reviewDecisionOf,
   type ApiAccess,
   type ApiFetch,
-} from '../src/workspace/githubApi'
+} from '../src/workspace/forge/githubApi'
 import { parsePullRequest } from '../src/workspace/forge'
 
 const access: ApiAccess = { origin: 'github.com', token: 'ghp_' + 'a'.repeat(30), owner: 'o', repo: 'r' }

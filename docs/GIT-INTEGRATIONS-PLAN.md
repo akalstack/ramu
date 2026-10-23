@@ -73,7 +73,7 @@ Clone from GitHub and publish use the existing project/host-folder flow; the pas
 
 ## Remaining and acceptance
 
-Unwritten: the `workspace/forge/` adapter directory (the facade in `workspace/forge.ts` and `githubApi.ts` is the boundary today; split it only when a second provider is built). Everything else here is written and awaits acceptance below. Coming soon rows stay informational and their implementation is not an acceptance requirement.
+Written: the `workspace/forge/` adapter boundary (`adapter.ts`: the `ForgeAdapter` interface and registry; `github.ts` and `githubApi.ts`: the GitHub adapter), with `workspace/forge.ts` kept as the facade the rest of the server imports. A second provider adds its own adapter beside GitHub and registers it; GitLab, Bitbucket Cloud and Azure DevOps stay informational rows. Everything else here is written and awaits acceptance below. Coming soon rows stay informational and their implementation is not an acceptance requirement.
 
 Focused shared/server tests cover remote parsing and identity collisions; capability normalization; selected-account precedence and ambiguity; disabled connections; scope failures; pagination; rate-limit/offline errors; secret redaction and storage failure; atomic replacement; redirects; paired-client authorization; stale responses; watch migration/deduplication; and lost acknowledgements after remote writes. Use the existing forge/watch suites and temporary Git repositories where a real boundary matters, with fake HTTP/CLI adapters for external services.
 
