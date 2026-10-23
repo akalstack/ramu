@@ -18,15 +18,6 @@ export const activeSummaries = (summaries: LibrarySummary[]): LibrarySummary[] =
 export const unreadCount = (summaries: LibrarySummary[]): number =>
   summaries.filter((summary) => summary.status === 'unread').length
 
-/** The one summary Home shows: the newest that is not dismissed, and only while Home display is on. */
-export function homeSummary(
-  snapshot: SummariesSnapshot | null,
-  preferences: Pick<IntelligencePreferences, 'summaryOnHome' | 'summaryInterval'>,
-): LibrarySummary | null {
-  if (!snapshot || !preferences.summaryOnHome) return null
-  return activeSummaries(snapshot.summaries)[0] ?? null
-}
-
 /** When the next summary is due, or null while summaries are off or have not started. */
 export function nextSummaryAt(
   interval: IntelligencePreferences['summaryInterval'],

@@ -1,6 +1,6 @@
 # Assistant workflow implementation plan
 
-This plan covers unfinished, incremental improvements to project selection, memory, verification/recovery, Inbox and existing PR automation. Existing behavior remains documented in feature guides; the additions below are not implemented yet. Remove completed items as they land, move lasting behavior into feature guides, and delete this plan when finished.
+This plan covers unfinished, incremental improvements to project selection, memory, verification/recovery, Inbox and existing PR automation. Existing behavior remains documented in feature guides. Auto routing and several audit fixes are written; the sections below identify remaining evaluations, targeted audits and native/live-provider acceptance. Remove completed items as they land, move lasting behavior into feature guides, and delete this plan when finished.
 
 ## Delivery
 

@@ -56,10 +56,8 @@ export function ProviderLoginRow({
   onToggleAccount: (enabled: boolean) => void
   onRename: (name: string) => void
   onRemove: () => void
-  /** Reuse of approved Shared MCP connections for this login; absent hides the control. */
+  /** Shared MCP state for this login; absent hides it. Sharing itself is one switch for the provider. */
   mcpSharing?: {
-    value: boolean | undefined
-    onChange: (on: boolean) => void
     /** Whether the login can use the shared connections now; absent on hosts that predate readiness. */
     readiness?: SharedMcpAccountReadiness
     rechecking?: boolean
@@ -169,19 +167,6 @@ export function ProviderLoginRow({
           </span>
         )}
       </span>
-      {mcpSharing && (
-        <label
-          className="flex flex-none items-center gap-1.5 small text-caption text-muted-foreground"
-          title={t('Keep approved MCP connections and permissions shared when switching between these accounts.')}
-        >
-          <Switch
-            aria-label={t('Share MCP approvals across accounts for {0}', { '0': row.name })}
-            checked={mcpSharing.value === true}
-            onCheckedChange={mcpSharing.onChange}
-          />
-          {t('Share MCP approvals')}
-        </label>
-      )}
       {peak && (
         <span
           className={`flex-none tabular-nums small text-caption ${usageTone(peak) === 'bad' ? 'text-bad' : usageTone(peak) === 'warn' ? 'text-warn' : 'text-soft'}`}

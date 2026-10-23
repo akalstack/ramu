@@ -84,7 +84,8 @@ export function ProviderCard({
   onAddAccount: () => void
   /** Whether an account shares approved Shared MCP connections; undefined hides the control (not the host's administrator). */
   mcpSharing?: (id: string) => boolean | undefined
-  onMcpSharing?: (id: string, on: boolean) => void
+  /** Turns sharing on or off for every login of the provider at once. */
+  onMcpSharing?: (ids: string[], on: boolean) => void
   /** Readiness of each login for the shared connections, and the check-again action. */
   mcpReadiness?: (id: string) => SharedMcpAccountReadiness | undefined
   mcpRechecking?: (id: string) => boolean
@@ -203,8 +204,6 @@ export function ProviderCard({
                           mcpSharing={
                             mcpSharing && accounts
                               ? {
-                                  value: mcpSharing(id),
-                                  onChange: (on) => onMcpSharing?.(id, on),
                                   readiness: mcpReadiness?.(id),
                                   rechecking: mcpRechecking?.(id),
                                   onRecheck: onMcpRecheck ? () => onMcpRecheck(id) : undefined,
@@ -218,6 +217,26 @@ export function ProviderCard({
                 </SettingsField>
               </SortableContext>
             </DndContext>
+          )}
+          {accounts && mcpSharing && order.length > 1 && (
+            <SettingsRow className="settings-toggle [&:not(:has(+_.settings-row))]:mb-0">
+              <span className="small text-caption">
+                {t('Share MCP approvals between logins')}
+                <span className="muted text-muted-foreground block small text-caption">
+                  {order.every((id) => mcpSharing(id) === true) || !order.some((id) => mcpSharing(id) === true)
+                    ? t('Switching logins at a limit keeps your approved MCP connections, with no new approval.')
+                    : t('On for {0} of {1} logins. Turn on to share between all of them.', {
+                        0: order.filter((id) => mcpSharing(id) === true).length,
+                        1: order.length,
+                      })}
+                </span>
+              </span>
+              <Switch
+                aria-label={t('Share MCP approvals between {0} logins', { 0: providerName(provider) })}
+                checked={order.every((id) => mcpSharing(id) === true)}
+                onCheckedChange={(on) => onMcpSharing?.(order, on)}
+              />
+            </SettingsRow>
           )}
           {accounts && <ProviderAddAccount preferences={preferences} onAdd={onAddAccount} />}
           {accounts && (
@@ -234,7 +253,7 @@ export function ProviderCard({
             >
               <span className="small text-caption">
                 {t(provider === 'antigravity' ? 'Auto-update runtime' : 'Auto-update CLI')}
-                <span className="muted text-muted-foreground block block small text-caption">
+                <span className="muted text-muted-foreground block small text-caption">
                   {t('Applies to new threads. Running threads stay connected.')}
                 </span>
               </span>

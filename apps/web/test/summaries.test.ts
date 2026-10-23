@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LibrarySummary, LibrarySummaryItem, SummariesSnapshot } from '@ramu/shared/types'
-import {
-  activeSummaries,
-  groupItems,
-  homeSummary,
-  nextSummaryAt,
-  runMessage,
-  unreadCount,
-} from '../src/summaries/summaryLogic'
+import { activeSummaries, groupItems, nextSummaryAt, runMessage, unreadCount } from '../src/summaries/summaryLogic'
 
 const summary = (id: string, status: LibrarySummary['status'], createdAt: number): LibrarySummary => ({
   id,
@@ -28,18 +21,10 @@ const snapshot = (summaries: LibrarySummary[]): SummariesSnapshot => ({
   error: null,
   lastRunAt: null,
 })
-const prefs = (summaryOnHome: boolean) => ({ summaryOnHome, summaryInterval: 'weekly' as const })
-
-describe('summaries on Home', () => {
-  it('shows the newest summary that is not dismissed', () => {
+describe('summaries list', () => {
+  it('hides dismissed summaries from the active list', () => {
     const all = [summary('c', 'dismissed', 3), summary('b', 'read', 2), summary('a', 'unread', 1)]
-    expect(homeSummary(snapshot(all), prefs(true))?.id).toBe('b')
     expect(activeSummaries(all).map((entry) => entry.id)).toEqual(['b', 'a'])
-  })
-  it('shows nothing when turned off, not loaded, or everything is dismissed', () => {
-    expect(homeSummary(snapshot([summary('a', 'unread', 1)]), prefs(false))).toBeNull()
-    expect(homeSummary(null, prefs(true))).toBeNull()
-    expect(homeSummary(snapshot([summary('a', 'dismissed', 1)]), prefs(true))).toBeNull()
   })
   it('counts unread summaries for the dot', () => {
     expect(unreadCount([summary('a', 'unread', 1), summary('b', 'read', 2), summary('c', 'unread', 3)])).toBe(2)

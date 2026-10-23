@@ -1,6 +1,6 @@
 # Microphone input and composer suggestions
 
-Proposal, 2026-10-18. All implementation and acceptance below remain unfinished. Add speech-to-text into Ramu's existing mobile and desktop composers, preserve native keyboard assistance, and improve the existing command/file/skill pickers where an audit finds gaps. Use T3 Code as a reference while keeping Ramu's architecture, navigation, controls and design tokens. Move shipped behavior into [UI](UI.md) and the [mobile guide](../apps/mobile/README.md), remove completed work, then delete this plan when finished.
+Remaining delivery, reconciled on 2026-10-23. The speech adapters below are written and fake-tested; real-device/package acceptance and the keyboard/contextual-picker parity audit remain open. Add speech-to-text into Ramu's existing mobile and desktop composers, preserve native keyboard assistance, and improve the existing command/file/skill pickers where an audit finds gaps. Use T3 Code as a reference while keeping Ramu's architecture, navigation, controls and design tokens. Move shipped behavior into [UI](UI.md) and the [mobile guide](../apps/mobile/README.md), remove completed work, then delete this plan when finished.
 
 ## Already in place
 
@@ -20,11 +20,11 @@ A person taps the microphone in the existing composer, dictates, reviews the ins
 
 Without the exact screen/recording, the observed effect cannot be identified conclusively. Distinguish these cases:
 
-| What appears | Owner and evidence | Ramu scope |
-| --- | --- | --- |
-| Word candidates above the iPhone keyboard, or gray inline word/phrase predictions accepted with Space | iOS predictive text, subject to keyboard settings and language support. See [Apple's predictive text guide](https://support.apple.com/en-gw/guide/iphone/iphd4ea90231/ios). | Preserve native text-input behavior. Do not build a model service to reproduce a keyboard feature. |
-| Commands, skills or files after typing `/`, `$` or `@` | T3-owned contextual pickers, described in its [composer guide](https://github.com/pingdotgg/t3code/blob/9c161462c94f7d9d6d9169da5c841457cbadf213/docs/user/composer.md). | Ramu already has `/` commands/skills and `@` files on mobile and desktop. Audit parity and improve missing triggers, selection and availability instead of replacing the system. |
-| An app-generated continuation of an ordinary sentence | No general model-generated prose completion is established by the inspected editor/voice sources. | Keep it out of this implementation unless a specific reference establishes the behavior and a separate product decision approves its latency, privacy and cost. |
+| What appears                                                                                          | Owner and evidence                                                                                                                                                          | Ramu scope                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Word candidates above the iPhone keyboard, or gray inline word/phrase predictions accepted with Space | iOS predictive text, subject to keyboard settings and language support. See [Apple's predictive text guide](https://support.apple.com/en-gw/guide/iphone/iphd4ea90231/ios). | Preserve native text-input behavior. Do not build a model service to reproduce a keyboard feature.                                                                               |
+| Commands, skills or files after typing `/`, `$` or `@`                                                | T3-owned contextual pickers, described in its [composer guide](https://github.com/pingdotgg/t3code/blob/9c161462c94f7d9d6d9169da5c841457cbadf213/docs/user/composer.md).    | Ramu already has `/` commands/skills and `@` files on mobile and desktop. Audit parity and improve missing triggers, selection and availability instead of replacing the system. |
+| An app-generated continuation of an ordinary sentence                                                 | No general model-generated prose completion is established by the inspected editor/voice sources.                                                                           | Keep it out of this implementation unless a specific reference establishes the behavior and a separate product decision approves its latency, privacy and cost.                  |
 
 T3's native iOS editor uses `UITextView` and exposes autocorrection/spellcheck controls. It explicitly avoids assigning an unchanged selection because that resets the keyboard's predictive/autocorrect context. This is source evidence of preserving OS assistance, not a bespoke text-prediction model. See the pinned [native editor](https://github.com/pingdotgg/t3code/blob/9c161462c94f7d9d6d9169da5c841457cbadf213/apps/mobile/modules/t3-composer-editor/ios/T3ComposerEditorView.swift).
 
@@ -59,13 +59,13 @@ Use an initial five-minute recording cap plus enforced byte/memory limits. At th
 
 Add a **Voice input** group to each client's existing composer/input settings section, searchable for microphone, dictation, speech and voice. Do not introduce a new navigation destination just for dictation.
 
-| Device setting | Recommended default and behavior |
-| --- | --- |
-| Show microphone button | On when a supported local engine is ready; show a setup action when local capability can be installed. No permission request until the user starts setup/recording. |
-| Speech language | **System language**, resolved against installed/downloadable engine languages, with explicit supported language choices. Test Indonesian, English and mixed technical speech; never silently force English. |
-| Transcription | **On this device**. Use the native local engine when supported; otherwise offer an explicitly installed local engine. No automatic cloud fallback or remote audio upload. |
-| Microphone | **System default**; desktop can select a permitted input device where supported. Do not enumerate/access microphones before OS authorization permits it. |
-| Recording retention | Temporary only; no audio history or save-by-default option. Inserted text follows ordinary draft persistence. |
+| Device setting         | Recommended default and behavior                                                                                                                                                                            |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Show microphone button | On when a supported local engine is ready; show a setup action when local capability can be installed. No permission request until the user starts setup/recording.                                         |
+| Speech language        | **System language**, resolved against installed/downloadable engine languages, with explicit supported language choices. Test Indonesian, English and mixed technical speech; never silently force English. |
+| Transcription          | **On this device**. Use the native local engine when supported; otherwise offer an explicitly installed local engine. No automatic cloud fallback or remote audio upload.                                   |
+| Microphone             | **System default**; desktop can select a permitted input device where supported. Do not enumerate/access microphones before OS authorization permits it.                                                    |
+| Recording retention    | Temporary only; no audio history or save-by-default option. Inserted text follows ordinary draft persistence.                                                                                               |
 
 Language-model downloads require an explicit action with size/location/progress/cancel/delete information. Separate speech model assets from the agent's provider/model picker. Show a truthful readiness matrix: device unsupported, language unsupported, model needed, permission needed, ready, recording, transcribing and cleanup pending. Unsupported devices still support ordinary typing and any system keyboard dictation; local unavailability must not block the composer.
 

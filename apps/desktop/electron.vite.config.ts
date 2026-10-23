@@ -31,7 +31,9 @@ export default defineConfig({
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/main/index.ts'), daemon: resolve(__dirname, '../server/src/index.ts') },
         // Playwright ships its own runtime files; keep it as a packaged production dependency.
-        external: ['playwright-core'],
+        // ws probes these optional native accelerators inside try/catch. Leave resolution to Node
+        // so Vite's development-only missing-peer stubs cannot throw before ws can fall back.
+        external: ['playwright-core', 'bufferutil', 'utf-8-validate'],
         output: { entryFileNames: '[name].js' },
       },
     },

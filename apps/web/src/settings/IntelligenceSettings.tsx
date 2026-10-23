@@ -1,5 +1,7 @@
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { InstalledSkills } from './InstalledSkills'
+import { SearchInput } from '../SearchInput'
+import { Badge } from '@/components/ui/badge'
 import { useSettingsInvoke } from './SettingsScope'
 import { useCallback, useEffect, useState } from 'react'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
@@ -80,7 +82,7 @@ export function MaintenanceModelSettings({ value, onChange, cleanup }: Props & {
 }
 
 /** Limits on background learning. */
-export function LearningLimitsSettings({ value, onChange }: Props) {
+function LearningLimitsSettings({ value, onChange }: Props) {
   if (value.learning === 'off') return null
   return (
     <>
@@ -115,29 +117,12 @@ export function LearningLimitsSettings({ value, onChange }: Props) {
   )
 }
 
-export function LearningSettings({ value, onChange }: Props) {
+/** The learning snapshot, refreshed whenever memory changes, with one guarded way to change it. */
+function useLearning() {
   const invoke = useSettingsInvoke()
   const [snapshot, setSnapshot] = useState<LearningSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
-  const [history, setHistory] = useState<ManagedSkill[]>([])
-  const [selected, setSelected] = useState<string | null>(null)
-  const reload = useCallback(() => invoke('learning.get').then(setSnapshot), [])
-  // A summary item that was clicked: scroll to the skill and flash it.
-  useEffect(() => {
-    const take = () => {
-      const item = takeLibraryFocus('skill')
-      if (!item) return
-      window.setTimeout(() => {
-        const card = document.getElementById(`skill-${item.id}`)
-        card?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-        card?.classList.add('flash')
-        window.setTimeout(() => card?.classList.remove('flash'), 1400)
-      }, 150)
-    }
-    take()
-    window.addEventListener('ramu:library-focus', take)
-    return () => window.removeEventListener('ramu:library-focus', take)
-  }, [snapshot?.skills.length])
+  const reload = useCallback(() => invoke('learning.get').then(setSnapshot), [invoke])
   useEffect(() => {
     void reload().catch((e) => notifyError(errorText(e), 'Learning'))
     return ramu.on('memory:changed', () => {
@@ -155,6 +140,11 @@ export function LearningSettings({ value, onChange }: Props) {
       setBusy(false)
     }
   }
+  return { invoke, snapshot, busy, act }
+}
+
+export function LearningSettings({ value, onChange }: Props) {
+  const { invoke, snapshot, busy, act } = useLearning()
   const reviews = snapshot?.jobs.filter((job) => {
     if (job.status !== 'applied' || !job.proposal || job.error) return true
     const change = JSON.parse(job.proposal) as { memories: unknown[]; skills: unknown[]; archive: unknown[] }
@@ -193,10 +183,11 @@ export function LearningSettings({ value, onChange }: Props) {
           onChange={(learning) => onChange({ ...value, learning: learning as IntelligencePreferences['learning'] })}
         />
       </SettingsRow>
+      <LearningLimitsSettings value={value} onChange={onChange} />
       <Button
         disabled={busy || snapshot?.running || value.learning === 'off'}
         variant="secondary"
-        className="bg-fill hover:bg-fill-hover self-start mb-4 mt-1"
+        className="bg-fill hover:bg-fill-hover self-start mb-4"
         onClick={() => void act(() => invoke('learning.run'))}
       >
         {snapshot?.running ? t('Reviewing…') : t('Run learning maintenance')}
@@ -263,72 +254,149 @@ export function LearningSettings({ value, onChange }: Props) {
         ))}
         {pagedReviews.more}
       </SettingsCardList>
-      <InstalledSkills />
-      <SettingsGroupTitle className="mt-5!">{t('Managed skills')}</SettingsGroupTitle>
-      {!snapshot?.skills.length && (
-        <p className="muted text-muted-foreground small text-caption py-6 text-center">
-          {t('No skills yet. Ramu adds them here when it learns a repeatable procedure.')}
+    </div>
+  )
+}
+
+const SKILL_STATUS_FILTERS = ['active', 'disabled', 'archived', 'all'] as const
+type SkillStatusFilter = (typeof SKILL_STATUS_FILTERS)[number]
+const SKILL_STATUS_LABELS: Record<SkillStatusFilter, string> = {
+  active: 'Active',
+  disabled: 'Disabled',
+  archived: 'Archived',
+  all: 'All',
+}
+
+/** The skills Ramu wrote itself, searchable and a page at a time; installed skills are managed above them. */
+export function ManagedSkills() {
+  const { invoke, snapshot, busy, act } = useLearning()
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<SkillStatusFilter>('active')
+  const [history, setHistory] = useState<ManagedSkill[]>([])
+  const [selected, setSelected] = useState<string | null>(null)
+  const [focusId, setFocusId] = useState<string | null>(null)
+  // A summary item that was clicked: show just that skill, then scroll to it and flash it.
+  useEffect(() => {
+    const take = () => {
+      const item = takeLibraryFocus('skill')
+      if (!item) return
+      setQuery(item.title)
+      setStatus('all')
+      setFocusId(item.id)
+    }
+    take()
+    window.addEventListener('ramu:library-focus', take)
+    return () => window.removeEventListener('ramu:library-focus', take)
+  }, [])
+  useEffect(() => {
+    if (!focusId || !snapshot) return
+    const timer = window.setTimeout(() => {
+      const card = document.getElementById(`skill-${focusId}`)
+      card?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      card?.classList.add('flash')
+      window.setTimeout(() => card?.classList.remove('flash'), 1400)
+      setFocusId(null)
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [focusId, snapshot])
+  const own = (snapshot?.skills ?? []).filter((skill) => !skill.installation)
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const shown = own.filter(
+    (skill) =>
+      (status === 'all' || skill.status === status) &&
+      words.every((word) => `${skill.name} ${skill.description}`.toLowerCase().includes(word)),
+  )
+  const paged = usePaged(shown, 10, `${query}|${status}`)
+  return (
+    <div className="settings-form flex flex-col gap-2 mt-6">
+      <SettingsGroupTitle className="mb-1">{t('Managed skills')}</SettingsGroupTitle>
+      {own.length > 0 && (
+        <div className="flex items-center gap-2">
+          <SearchInput
+            className="flex-1 min-w-0"
+            aria-label={t('Search skills')}
+            placeholder={t('Search skills')}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onClear={() => setQuery('')}
+          />
+          <Dropdown
+            className="w-[120px]! flex-none"
+            label={t('Status')}
+            value={status}
+            options={SKILL_STATUS_FILTERS.map((value) => ({ value, label: t(SKILL_STATUS_LABELS[value]) }))}
+            onChange={(next) => setStatus(next as SkillStatusFilter)}
+          />
+        </div>
+      )}
+      {snapshot && !shown.length && (
+        <p className="muted text-muted-foreground small text-caption py-6 text-center m-0">
+          {own.length
+            ? t('No skills match your search.')
+            : t('No skills yet. Ramu adds them here when it learns a repeatable procedure.')}
         </p>
       )}
-      {snapshot?.skills
-        .filter((skill) => !skill.installation)
-        .map((skill) => (
-          <article
+      <SettingsCardList>
+        {paged.shown.map((skill) => (
+          <SettingsCard
             key={skill.id}
             id={`skill-${skill.id}`}
-            className="[&.flash]:[animation:settings-flash_1.4s_ease-out] bg-card rounded-(--radius-m) px-3 py-2 mb-1.5 flex flex-col gap-1"
+            className="[&.flash]:[animation:settings-flash_1.4s_ease-out]"
+            title={skill.name}
+            badges={
+              <>
+                {skill.status !== 'active' && <Badge variant="secondary">{t(skill.status)}</Badge>}
+                {skill.pinned && <Badge variant="outline">{t('Pinned')}</Badge>}
+              </>
+            }
+            meta={`${skill.description} · ${t('Read {0} times', { 0: skill.useCount })}`}
+            actions={
+              <>
+                {(['pin', 'unpin', 'disable', 'archive', 'restore'] as const)
+                  .filter((action) =>
+                    action === 'pin'
+                      ? !skill.pinned
+                      : action === 'unpin'
+                        ? skill.pinned
+                        : action === 'restore'
+                          ? skill.status !== 'active'
+                          : skill.status === 'active',
+                  )
+                  .map((action) => (
+                    <Button
+                      key={action}
+                      disabled={busy}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void act(() => invoke('learning.control', skill.id, action))}
+                    >
+                      {t(
+                        { pin: 'Pin', unpin: 'Unpin', disable: 'Disable', archive: 'Archive', restore: 'Restore' }[
+                          action
+                        ],
+                      )}
+                    </Button>
+                  ))}
+                <Button
+                  disabled={busy}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    void act(async () => {
+                      setSelected(skill.id)
+                      setHistory(await invoke('learning.history', skill.id))
+                    })
+                  }
+                >
+                  {t('History')}
+                </Button>
+              </>
+            }
           >
-            <strong className="font-medium">
-              {skill.name} · {t(skill.status)}
-              {skill.pinned ? ` · ${t('Pinned')}` : ''}
-            </strong>
-            <p className="muted text-muted-foreground small text-caption m-0!">
-              {skill.description} · {t('Read {0} times', { 0: skill.useCount })}
-            </p>
             <details className="text-caption">
               <summary className="cursor-pointer text-muted-foreground hover:text-foreground">{t('Procedure')}</summary>
               <pre className="whitespace-pre-wrap text-caption text-muted-foreground m-0 mt-2">{skill.content}</pre>
             </details>
-            <div className="flex gap-2 flex-wrap">
-              {(['pin', 'unpin', 'disable', 'archive', 'restore'] as const)
-                .filter((action) =>
-                  action === 'pin'
-                    ? !skill.pinned
-                    : action === 'unpin'
-                      ? skill.pinned
-                      : action === 'restore'
-                        ? skill.status !== 'active'
-                        : skill.status === 'active',
-                )
-                .map((action) => (
-                  <Button
-                    key={action}
-                    disabled={busy}
-                    variant="secondary"
-                    className="bg-fill hover:bg-fill-hover"
-                    onClick={() => void act(() => invoke('learning.control', skill.id, action))}
-                  >
-                    {t(
-                      { pin: 'Pin', unpin: 'Unpin', disable: 'Disable', archive: 'Archive', restore: 'Restore' }[
-                        action
-                      ],
-                    )}
-                  </Button>
-                ))}
-              <Button
-                disabled={busy}
-                variant="secondary"
-                className="bg-fill hover:bg-fill-hover"
-                onClick={() =>
-                  void act(async () => {
-                    setSelected(skill.id)
-                    setHistory(await invoke('learning.history', skill.id))
-                  })
-                }
-              >
-                {t('History')}
-              </Button>
-            </div>
             {selected === skill.id &&
               history.map((revision) => (
                 <details key={revision.revision}>
@@ -349,8 +417,11 @@ export function LearningSettings({ value, onChange }: Props) {
                   </Button>
                 </details>
               ))}
-          </article>
+          </SettingsCard>
         ))}
+        {paged.more}
+      </SettingsCardList>
+      <InstalledSkills />
     </div>
   )
 }

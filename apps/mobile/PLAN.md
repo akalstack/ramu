@@ -1,6 +1,6 @@
 # Remaining mobile work
 
-Audited on 2026-10-18. The companion implementation is present; completed bootstrap, pairing, host state, thread, Git, schedule and push implementation phases have been removed from this plan. [README](README.md) describes current behavior and setup. [Verification](VERIFICATION.md) tracks outstanding acceptance checks.
+Reconciled with the linked feature plans on 2026-10-23; native acceptance remains open. The companion implementation is present; completed bootstrap, pairing, host state, thread, Git, schedule and push implementation phases have been removed from this plan. [README](README.md) describes current behavior and setup. [Verification](VERIFICATION.md) tracks outstanding acceptance checks.
 
 ## Delivery
 
@@ -14,17 +14,17 @@ Follow [Architecture](../../docs/ARCHITECTURE.md) and [UI](../../docs/UI.md). Pr
 
 ## Product work
 
-- Make [automatic host discovery](../../docs/HOST-DISCOVERY-PLAN.md) the default Pair / Add host flow: nearby hosts first, QR scanning second, manual address/code entry last. Replace immediate camera opening and keep both fallbacks accessible while discovery runs or is unavailable.
+- Validate the written [automatic host discovery](../../docs/HOST-DISCOVERY-PLAN.md) flow on physical devices: Nearby hosts first, QR scanning second, manual entry last. Include permissions, blocked multicast, verified identity/address changes and pairing completion/storage recovery; the camera no longer opens automatically.
 - Finish the remaining scope selection, context actions, large-directory continuation and native acceptance in [Explorer from threads and Home](../../docs/EXPLORER-PLAN.md).
-- Add [microphone dictation and composer suggestion improvements](../../docs/VOICE-INPUT-PLAN.md): local transcription into a reviewable draft, permission/language readiness, native keyboard prediction compatibility and command/file/skill picker parity. The shared plan also includes desktop microphone input.
+- Validate the written [microphone dictation](../../docs/VOICE-INPUT-PLAN.md) adapters on physical iOS/Android: local transcription into the original draft, permission/language readiness and cancellation. Finish native keyboard prediction and command/file/skill picker parity acceptance, implementing demonstrated gaps.
 - Finish draft restoration, reused-workspace selection, generated naming and offline acceptance in the [workspace defaults and branch naming plan](../../docs/WORKSPACE-DEFAULTS-PLAN.md) for new-thread settings/selection and offline outbox delivery, preserving the chosen host, checkout mode and naming intent through reconnects.
-- Finish routing/account projection, localization and native acceptance for [plan usage](../../docs/PLAN-USAGE-UX-PLAN.md) in the Threads header and beside the thread's model, opening a shared host/account sheet. Keep the existing four tabs.
-- Implement the mobile stages of the [browser plan](../../docs/BROWSER-PLAN.md#remote-hosts-and-mobile): capability-aware status and system links first, then an authenticated remote viewer with human/agent control. Browser-session import remains on the browser's owning desktop.
-- Add [computer use and screen viewing](../../docs/COMPUTER-USE-PLAN.md): watch the selected computer's current app/display from its thread, see freshness/ownership, take over with touch/keyboard, return control to the agent, stop work and recover after disconnect. Use the host's authorized Open Computer Use integration; viewing and interactive takeover ship together in the first computer-use flow. Desktop also shows the screen when using another computer; same-computer desktop use shows activity, takeover and Stop without mirroring.
+- Validate the written routing/account projection, localization and native behavior for [plan usage](../../docs/PLAN-USAGE-UX-PLAN.md) in the Threads header and beside the thread's model, opening a shared host/account sheet. Keep the existing four tabs.
+- Validate the written mobile [browser viewer](../../docs/BROWSER-PLAN.md#remote-hosts-and-mobile), capability-aware status, system links, authenticated host access, Take/Give control and disconnect recovery. Browser-session import remains on the browser's owning host.
+- Validate the written [computer-use viewer](../../docs/COMPUTER-USE-PLAN.md) on devices: phone WebRTC/image fallback, touch/keyboard takeover, freshness, ownership, Stop and disconnect recovery. Run the representative cross-device task, local-input pause and controller handoff on real computers; source and fake tests do not complete these gates.
 - Finish the advanced desktop-input parity audit. Verify command/skill discovery, host context references, external keyboard/IME interactions, advanced question/elicitation fields and review/helper interactions; implement gaps found against the actual desktop/provider capabilities. Existing transcript forms, queue/steer and model controls are not new work.
 - Finish terminal customization: configurable extra-key toolbar and gesture mappings, explicit navigation/selection/mouse-mode feedback, external-keyboard behavior and multiline-paste preview. The current console, modifier latches, arrow-hold gesture and PTY recovery already exist.
 - Measure long-thread/transcript payloads and terminal responsiveness on devices before deciding whether pagination or additional replay cursors are needed.
-- Finish the remaining native transcript/recovery and device acceptance in [thread activity](../../docs/THREAD-ACTIVITY-PLAN.md), and implement [themes](../../docs/AI-THEMES-PLAN.md). Interactive Content is implemented; its remaining native-device acceptance is tracked in the [roadmap](../../docs/ROADMAP.md#interactive-content-acceptance).
+- Finish the remaining native transcript/recovery and device acceptance in [thread activity](../../docs/THREAD-ACTIVITY-PLAN.md), and complete remaining [theme integration and native acceptance](../../docs/AI-THEMES-PLAN.md). Interactive Content is implemented; its remaining native-device acceptance is tracked in the [roadmap](../../docs/ROADMAP.md#interactive-content-acceptance).
 
 ## Release gates
 

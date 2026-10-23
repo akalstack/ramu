@@ -48,10 +48,13 @@ export function ProviderSettings({
   /** Account consent to reuse approved Shared MCP connections; absent until someone saves it. */
   const sharing = (provider: AgentProvider, id: string) =>
     mcp.data?.accounts.find((entry) => entry.provider === provider && entry.accountId === id)?.shareApprovals
-  const setSharing = async (provider: AgentProvider, id: string, shareApprovals: boolean) => {
+  const setSharing = async (provider: AgentProvider, ids: string[], shareApprovals: boolean) => {
     setError(null)
     try {
-      await invoke('mcp.account', { provider, accountId: id, shareApprovals })
+      // One at a time: each save updates the same host policy.
+      for (const accountId of ids)
+        if (sharing(provider, accountId) !== shareApprovals)
+          await invoke('mcp.account', { provider, accountId, shareApprovals })
       await refetchMcp()
     } catch (reason) {
       setError(errorText(reason))
@@ -192,14 +195,14 @@ export function ProviderSettings({
     const id = crypto.randomUUID()
     arrange(provider, [...providerAccountRows(config, provider), id], [...(config[provider]?.accounts ?? []), { id }])
     // A backup account starts out sharing approved MCP connections; it stays editable in its row.
-    if (canShare) void setSharing(provider, id, true)
+    if (canShare) void setSharing(provider, [id], true)
   }
   return (
     <div className="settings-form [&_p]:m-0 [&_p]:leading-[1.55] flex flex-col gap-3 provider-settings">
       <SettingsRow setting="providerUpdateChecks" className="settings-toggle [&:not(:has(+_.settings-row))]:mb-0">
         <span>
           <strong>{t('Check provider updates')}</strong>
-          <span className="muted text-muted-foreground block block small text-caption">
+          <span className="muted text-muted-foreground block small text-caption">
             {t('Runs in the background, even while Ramu is closed.')}
           </span>
         </span>
@@ -245,7 +248,7 @@ export function ProviderSettings({
             onRemove={(id) => remove(provider, id)}
             onAddAccount={() => add(provider)}
             mcpSharing={canShare ? (id) => sharing(provider, id) : undefined}
-            onMcpSharing={(id, on) => void setSharing(provider, id, on)}
+            onMcpSharing={(ids, on) => void setSharing(provider, ids, on)}
             mcpReadiness={canShare ? (id) => readiness(provider, id) : undefined}
             mcpRechecking={(id) => rechecking === `${provider}:${id}`}
             onMcpRecheck={canShare ? (id) => void recheck(provider, id) : undefined}

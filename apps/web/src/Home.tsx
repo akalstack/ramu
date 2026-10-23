@@ -3,7 +3,6 @@ import { Button } from '@/components/desktop-button'
 import { ChevronRight, Inbox } from 'lucide-react'
 import { useWorkspace } from './workspace/workspace'
 import { BackgroundControls } from './Automation'
-import { LearnedCard } from './summaries/LearnedCard'
 import { AgentList, recentlyCompleted, rowsOf, useAgentOverview } from './HomeAgents'
 import { FeedSection } from './HomeSection'
 import { RecapCard, useRecaps } from './inbox/recaps'
@@ -62,7 +61,6 @@ export function HomeFeed() {
           ))}
         </FeedSection>
       )}
-      <LearnedCard />
     </div>
   )
 }

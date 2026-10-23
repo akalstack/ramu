@@ -1,6 +1,6 @@
 import { SettingsScopeContext, useSettingsScope } from './SettingsScope'
 import { sameValue, settingValue } from '@ramu/shared/settingsCompatibility'
-import { LearningLimitsSettings, LearningSettings, MaintenanceModelSettings } from './IntelligenceSettings'
+import { LearningSettings, MaintenanceModelSettings, ManagedSkills } from './IntelligenceSettings'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { t, useLanguage } from '../i18n'
 import { ProviderSettings } from './ProviderSettings'
@@ -196,21 +196,18 @@ export function SettingsPanel({
                   value={appDraft.intelligence}
                   onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
                 />
-                <SummarySettings
-                  value={appDraft.intelligence}
-                  onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
-                  hasChanges={hasChanges}
-                />
                 <MaintenanceModelSettings
                   value={appDraft.intelligence}
                   cleanup={appDraft.memory.enabled && appDraft.memory.dream}
                   onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
                 />
-                <LearningLimitsSettings
+                <SummarySettings
                   value={appDraft.intelligence}
                   onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
+                  hasChanges={hasChanges}
                 />
                 {appDraft.memory.enabled && <MemoryBrowser />}
+                <ManagedSkills />
               </>
             )}
             {page === 'workflows' && (

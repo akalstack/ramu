@@ -162,7 +162,7 @@ export function MemoryBrowser() {
       (scope === 'all' || (scope === GLOBAL ? m.projectId === null : m.projectId === scope)) &&
       words.every((w) => `${m.title} ${m.content} ${m.tags.join(' ')}`.toLowerCase().includes(w)),
   )
-  const paged = usePaged(shown, 20)
+  const paged = usePaged(shown, 20, `${query}|${scope}|${status}`)
   const author = (m: Memory) =>
     m.source.actor === 'agent' && m.source.provider
       ? providerName(m.source.provider)
@@ -177,7 +177,10 @@ export function MemoryBrowser() {
     })
   return (
     <div className="memory-browser flex flex-col gap-2 mt-2">
-      <SettingsGroupTitle className="mt-4 mb-1">{t('Saved memories')}</SettingsGroupTitle>
+      <SettingsGroupTitle className="mt-6 mb-1">
+        {t('Saved memories')}
+        {snapshot && shown.length > 0 ? ` · ${shown.length}` : ''}
+      </SettingsGroupTitle>
       <div className="flex items-center gap-2">
         <SearchInput
           className="flex-1 min-w-0"

@@ -13,6 +13,7 @@ import { ownHostId } from '../hosts'
 import { useHostSelection } from '../workspace/HostSelection'
 import { nextSummaryAt, runMessage } from './summaryLogic'
 import { useSummaries } from './useSummaries'
+import { usePaged } from '../settings/cards'
 
 type Props = { value: IntelligencePreferences; onChange: (value: IntelligencePreferences) => void; hasChanges: boolean }
 
@@ -40,6 +41,7 @@ export function SummarySettings({ value, onChange, hasChanges }: Props) {
       setBusy(false)
     }
   }
+  const paged = usePaged(snapshot?.summaries ?? [], 5)
   const next = nextSummaryAt(value.summaryInterval, snapshot?.lastRunAt ?? null)
   return (
     <div className="settings-form flex flex-col gap-0 mt-6">
@@ -82,14 +84,6 @@ export function SummarySettings({ value, onChange, hasChanges }: Props) {
               onCheckedChange={(summarySkills) => onChange({ ...value, summarySkills })}
             />
           </SettingsRow>
-          <SettingsRow setting="intelligence.summaryOnHome">
-            <SettingsLabel title={t('Show on Home')} help={t('Show the latest summary next to your recaps.')} />
-            <Switch
-              aria-label={t('Show on Home')}
-              checked={value.summaryOnHome}
-              onCheckedChange={(summaryOnHome) => onChange({ ...value, summaryOnHome })}
-            />
-          </SettingsRow>
         </>
       )}
       <div className="mb-3 mt-1 flex flex-wrap items-center gap-3">
@@ -113,7 +107,7 @@ export function SummarySettings({ value, onChange, hasChanges }: Props) {
                   : '')}
         </span>
       </div>
-      {snapshot?.summaries.map((summary) => (
+      {paged.shown.map((summary) => (
         <Button
           key={summary.id}
           variant="secondary"
@@ -138,6 +132,7 @@ export function SummarySettings({ value, onChange, hasChanges }: Props) {
           <span className="text-body text-foreground">{summary.headline}</span>
         </Button>
       ))}
+      {paged.more}
       {snapshot && !snapshot.summaries.length && (
         <p className="muted text-muted-foreground small text-caption py-3">
           {t('No summaries yet. The first one appears after a period with something new to report.')}

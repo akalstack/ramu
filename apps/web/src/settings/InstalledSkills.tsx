@@ -56,8 +56,8 @@ export function InstalledSkills() {
     setPreview(value)
   }
   return (
-    <div className="flex flex-col gap-3 mt-6">
-      <SettingsGroupTitle>{t('Installed skills')}</SettingsGroupTitle>
+    <div className="flex flex-col gap-2 mt-6">
+      <SettingsGroupTitle className="mb-1">{t('Installed skills')}</SettingsGroupTitle>
       {!available && (
         <p role="status">
           {t('Install Node.js to install skills.')}{' '}
@@ -66,48 +66,58 @@ export function InstalledSkills() {
           </a>
         </p>
       )}
-      <Input
-        aria-label={t('Skill source')}
-        placeholder={t('Repository, URL or local path')}
-        value={source}
-        onChange={(e) => setSource(e.target.value)}
-      />
-      <Input
-        aria-label={t('Skill name (optional)')}
-        placeholder={t('Skill name (optional)')}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <Dropdown
-        label={t('Skill scope')}
-        value={projectId}
-        options={[
-          { value: '', label: t('All projects') },
-          ...projects.map((project) => ({ value: project.id, label: project.name })),
-        ]}
-        onChange={setProjectId}
-      />
-      <Button
-        variant="outline"
-        disabled={!source.trim() || busy || !available}
-        onClick={() =>
-          void act(async () =>
-            stage(
-              await invoke('skills.stage', {
-                source: source.trim(),
-                skill: name.trim() || undefined,
-                projectId: projectId || null,
-              }),
-            ),
-          )
-        }
-      >
-        {busy ? t('Preparing…') : t('Preview skill')}
-      </Button>
+      <div className="flex flex-col gap-2 rounded-(--radius-m) bg-fill p-3">
+        <Input
+          aria-label={t('Skill source')}
+          placeholder={t('Repository, URL or local path')}
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+        />
+        <div className="flex items-center gap-2">
+          <Input
+            className="min-w-0 flex-1"
+            aria-label={t('Skill name (optional)')}
+            placeholder={t('Skill name (optional)')}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Dropdown
+            className="w-[150px]! flex-none"
+            label={t('Skill scope')}
+            value={projectId}
+            options={[
+              { value: '', label: t('All projects') },
+              ...projects.map((project) => ({ value: project.id, label: project.name })),
+            ]}
+            onChange={setProjectId}
+          />
+          <Button
+            variant="secondary"
+            className="bg-card hover:bg-card-hover flex-none"
+            disabled={!source.trim() || busy || !available}
+            onClick={() =>
+              void act(async () =>
+                stage(
+                  await invoke('skills.stage', {
+                    source: source.trim(),
+                    skill: name.trim() || undefined,
+                    projectId: projectId || null,
+                  }),
+                ),
+              )
+            }
+          >
+            {busy ? t('Preparing…') : t('Preview skill')}
+          </Button>
+        </div>
+      </div>
       {error && (
         <p role="alert" className="text-bad">
           {error}
         </p>
+      )}
+      {skills.length === 0 && (
+        <p className="m-0 py-3 text-center text-caption text-muted-foreground">{t('No installed skills yet.')}</p>
       )}
       <SettingsCardList>
         {paged.shown.map((skill) => (

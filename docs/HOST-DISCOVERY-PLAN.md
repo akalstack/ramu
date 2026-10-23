@@ -29,10 +29,10 @@ Still to do for the experience:
 
 Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md).
 
-## Implementation work
+## Remaining implementation and acceptance
 
 1. **Platform spike and acceptance.** Verify advertisement and browsing on packaged desktops and physical iOS/Android devices, including multicast-blocked networks, VPNs and IPv6-only interfaces (the advertiser joins multicast over IPv4 and publishes AAAA for that interface). Record supported OS/network combinations, latency and idle traffic. The metadata contract (`_ramu._tcp`; TXT `v`, `id`, `scheme`, `name`) is versioned and documents its name and identifier disclosure.
-2. **Verified pairing identity** (below), then address and route continuity.
+2. Validate the written **verified pairing identity**, address and route continuity below on real desktop/mobile devices; fix gaps found without treating those foundations as unstarted work.
 
 ## T3 Code reference and pairing enhancements
 

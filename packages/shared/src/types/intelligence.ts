@@ -11,7 +11,6 @@ export interface IntelligencePreferences {
   summaryInterval: 'off' | 'daily' | 'weekly'
   summaryMemory: boolean
   summarySkills: boolean
-  summaryOnHome: boolean
 }
 export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
   toolSearch: true,
@@ -23,7 +22,6 @@ export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
   summaryInterval: 'weekly',
   summaryMemory: true,
   summarySkills: true,
-  summaryOnHome: true,
 }
 export interface ManagedSkill {
   /** Present only for approved external installs. Supporting files are base64, never executed by Ramu. */

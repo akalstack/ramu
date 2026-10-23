@@ -2,7 +2,7 @@
 
 Current behavior is in [UI](UI.md#workspace-defaults-and-branch-names).
 
-Automatic project selection (the Auto/manual dropdown, Settings control, ambiguity handling and pre-thread routing) is delivered in [Assistant workflow](ASSISTANT-WORKFLOW-PLAN.md#1-automatic-project-selection-default). Resolve the project before applying workspace defaults; explicit project and draft choices take precedence over routing and global defaults.
+Automatic project selection (the Auto/manual dropdown, Settings control, ambiguity handling and pre-thread routing) is implemented with remaining acceptance tracked in [Assistant workflow](ASSISTANT-WORKFLOW-PLAN.md#1-automatic-project-selection-default). Resolve the project before applying workspace defaults; explicit project and draft choices take precedence over routing and global defaults.
 
 ## Delivery
 

@@ -23,11 +23,11 @@ import { RulesSettings } from './RulesSettings'
 
 const CAPTION = 'm-0 text-caption text-muted-foreground'
 
-/** Provider logos, dimmed where the item is missing, with the same information as text for screen readers. */
 /** Claude's own help page on connectors, which says where to manage them. Other providers have no such page Ramu can point to yet. */
 const CLAUDE_CONNECTORS_URL =
   'https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities'
 
+/** Provider logos, dimmed where the item is missing, with the same information as text for screen readers. */
 function ProviderStrip({ providers }: { providers: AgentProvider[] }) {
   const missing = AGENT_PROVIDERS.filter((provider) => !providers.includes(provider))
   return (
@@ -125,7 +125,6 @@ function ShareRow({
             </>
           )}
         </span>
-        {extra}
       </span>
       <span className="flex flex-none items-center gap-2">
         {extra}
@@ -230,13 +229,16 @@ function Skills({
   disabled,
   onShare,
   onWiden,
+  query,
 }: {
   skills: ProjectSkill[]
   disabled: boolean
   onShare(name: string, shared: boolean): void
   onWiden(name: string): void
+  /** Paging starts over when the search changes. */
+  query: string
 }) {
-  const paged = usePaged(skills, 10)
+  const paged = usePaged(skills, 10, query)
   return (
     <>
       {paged.shown.map((skill) => (
@@ -288,7 +290,6 @@ export function AgentSetup() {
     setPicked(undefined)
     setImporting(null)
     setPending(null)
-    setImporting(null)
     setError('')
   }, [hostKey])
   const projectId =
@@ -324,7 +325,7 @@ export function AgentSetup() {
   const mcp = (scopeName: 'user' | 'project') => (data?.mcp ?? []).filter((server) => server.scope === scopeName)
   const query = search.trim().toLowerCase()
   const skills = (data?.skills ?? []).filter(
-    (skill) => !query || skill.name.includes(query) || skill.description.toLowerCase().includes(query),
+    (skill) => !query || skill.name.toLowerCase().includes(query) || skill.description.toLowerCase().includes(query),
   )
   const skillsIn = (scopeName: 'user' | 'project') => skills.filter((skill) => skill.scope === scopeName)
   const locked = !canAdminister || pending !== null
@@ -364,6 +365,7 @@ export function AgentSetup() {
   const skillList = (scopeName: 'user' | 'project') => (
     <Skills
       skills={skillsIn(scopeName)}
+      query={query}
       disabled={locked}
       onShare={(name, shared) => void share(name, () => invoke('skills.share', name, shared, projectId))}
       onWiden={(name) =>
@@ -402,7 +404,7 @@ export function AgentSetup() {
       <SettingsGroupTitle>{t('MCP servers')}</SettingsGroupTitle>
       <p className={`${CAPTION} mb-4`}>
         {t(
-          'Tools agents can call. Share a server to give it to every provider and account in this project, using the sign-in it already has. New threads pick up changes.',
+          'Tools agents can call. Sharing a server gives it to every provider and account in this project. New threads pick up changes.',
         )}
       </p>
       {data && mcp('user').length + mcp('project').length === 0 && (
@@ -425,7 +427,7 @@ export function AgentSetup() {
         <Group
           title={t('Managed by the provider')}
           help={t(
-            'Seen in an earlier thread. Only the provider has these servers’ definitions, so Ramu cannot share them. To share one, add it below as a Ramu MCP server.',
+            'Seen in an earlier thread. Only the provider holds their definitions, so Ramu cannot share them. To share one, add it below as a Ramu MCP server.',
           )}
         >
           <ul className="m-0 flex list-none flex-col gap-1 p-0">
@@ -488,7 +490,7 @@ export function AgentSetup() {
       <SettingsGroupTitle className="mt-8">{t('Skills')}</SettingsGroupTitle>
       <p className={`${CAPTION} mb-4`}>
         {t(
-          'Instructions agents can load. Share a skill to copy it to every provider and account in this project that does not have it. Your original files are not changed.',
+          'Instructions agents can load. Sharing a skill copies it to every provider and account in this project that lacks it. Original files stay unchanged.',
         )}
       </p>
       {(data?.skills.length ?? 0) > 10 && (
@@ -502,6 +504,11 @@ export function AgentSetup() {
         </div>
       )}
       {data?.skills.length === 0 && <p className={CAPTION}>{t('No skills found yet.')}</p>}
+      {!!data?.skills.length && skills.length === 0 && (
+        <p role="status" className={CAPTION}>
+          {t('No skills match your search.')}
+        </p>
+      )}
       {skillsIn('user').length > 0 && (
         <Group title={t('Your settings')} help={t('From your own provider folders, so every project has them.')}>
           {skillList('user')}
