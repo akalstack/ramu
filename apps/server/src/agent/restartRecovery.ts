@@ -1,5 +1,5 @@
 import { UPDATE_EVENT_SQL } from './eventRevision'
-import type { AppPreferences, AgentTask, AgentEvent, AgentSessionState } from '@ramu/shared/types'
+import type { AppPreferences, AgentTask, AgentEvent, AgentSessionState, SetupOmission } from '@ramu/shared/types'
 import { questionState } from '@ramu/shared/chat/questions'
 import { helperRecoverySources, type HelperHistoryLoader } from './helperHistory'
 import { latestTasks } from '@ramu/shared/chat/agentTasks'
@@ -29,6 +29,7 @@ export interface RestartRecoveryHost
   helperHistory(): AgentService['helperHistory']
   preferences(): AppPreferences | undefined
   sessionCheckpoint(): AgentService['sessionCheckpoint']
+  setupOmissions(): AgentService['setupOmissions']
   shutdown(): AgentService['shutdown']
 }
 
@@ -296,7 +297,17 @@ export class RestartRecovery {
             ? instruction
             : `${conversationHandoff(events, this.host.sessionCheckpoint()?.(id))}\n\n${instruction}`
           this.host.updateQueue(id, this.host.queued(id), !!paused)
-          this.host.record(id, { kind: 'recovery', state: 'resumed' })
+          let setupOmissions: SetupOmission[] = []
+          try {
+            setupOmissions = this.host.setupOmissions()?.(session, session.settings) ?? []
+          } catch {
+            // Unreadable Shared MCP configuration is reported in Settings; it must not stop a resume.
+          }
+          this.host.record(id, {
+            kind: 'recovery',
+            state: 'resumed',
+            ...(setupOmissions.length ? { setupOmissions } : {}),
+          })
           await this.host.send(id, prompt, [], undefined, false)
           if (!this.host.isRecoveryPending(id)) continue // Stopped or manually continued during recovery.
           this.db.prepare('DELETE FROM agent_recovery WHERE session_id = ?').run(id)

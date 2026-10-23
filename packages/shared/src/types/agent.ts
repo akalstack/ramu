@@ -405,7 +405,12 @@ type AgentEventBody =
       waiting?: boolean
       reason?: string
     }
-  | { kind: 'recovery'; state: 'resumed' }
+  | {
+      kind: 'recovery'
+      state: 'resumed'
+      /** What the thread's setup lacks now that it continues: re-resolved on this host before the resume prompt. */
+      setupOmissions?: SetupOmission[]
+    }
   | { kind: 'request-resolved'; requestId: string; outcome: string; savedApprovalId?: string }
   | { kind: 'result'; isError: boolean; text: string; costUsd: number | null }
   | {

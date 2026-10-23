@@ -3124,6 +3124,7 @@ describe('thread continuation after restart', () => {
     const calls: Options[] = []
     const restored = new AgentService(db, () => {}, fakeQuery(calls))
     restored.markRestoredOnBoot()
+    restored.setupOmissions = () => [{ kind: 'shared-mcp', name: 'Tracker', status: 'sign-in-required' }]
     await restored.resumeInterruptedChats()
     await until(() => restored.get(chat.id).state === 'needs-input')
     expect(calls.at(-1)?.resume).toBe('provider-1')
@@ -3131,7 +3132,11 @@ describe('thread continuation after restart', () => {
     expect(restored.events(chat.id)).toContainEqual(
       expect.objectContaining({ kind: 'request-resolved', requestId: oldRequest.requestId, outcome: 'cancelled' }),
     )
-    expect(restored.events(chat.id).filter((e) => e.kind === 'recovery')).toHaveLength(1)
+    expect(restored.events(chat.id).filter((e) => e.kind === 'recovery')).toEqual([
+      expect.objectContaining({
+        setupOmissions: [{ kind: 'shared-mcp', name: 'Tracker', status: 'sign-in-required' }],
+      }),
+    ])
     expect(restored.events(chat.id).filter((e) => e.kind === 'permission-request')).toHaveLength(2)
     await restored.resumeInterruptedChats()
     expect(calls).toHaveLength(1)

@@ -75,6 +75,7 @@ export function EventRow({
             <RotateCcw size={14} aria-hidden="true" />
             {translate('Resumed after restart')}
           </span>
+          {omissionsLine(e.setupOmissions, 'resume') && <small>{omissionsLine(e.setupOmissions, 'resume')}</small>}
         </div>
       )
     case 'compaction': {

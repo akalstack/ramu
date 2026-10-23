@@ -9,9 +9,14 @@ export function omissionLabel(omission: SetupOmission): string {
 }
 
 /** The notice under a switch, or null when nothing was left behind. */
-export function omissionsLine(omissions: readonly SetupOmission[] | undefined): string | null {
+export function omissionsLine(
+  omissions: readonly SetupOmission[] | undefined,
+  after: 'switch' | 'resume' = 'switch',
+): string | null {
   if (!omissions?.length) return null
-  return t('Not available after this switch: {0}', { '0': omissions.map(omissionLabel).join(', ') })
+  return t(after === 'resume' ? 'Not available after resuming: {0}' : 'Not available after this switch: {0}', {
+    '0': omissions.map(omissionLabel).join(', '),
+  })
 }
 
 /** Whether Review access can help: only a Shared MCP connection has an access dialog to open. */

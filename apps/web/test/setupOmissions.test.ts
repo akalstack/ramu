@@ -9,3 +9,9 @@ it('names what a switch left behind and offers access review only for shared con
   expect(canReviewAccess([{ kind: 'shared-mcp', name: 'Atlassian', status: 'approval-needed' }])).toBe(true)
   expect(canReviewAccess([{ kind: 'rule', name: 'Rules', status: 'too-large' }])).toBe(false)
 })
+
+it('words the same omissions for a resume differently from a switch', () => {
+  const omissions = [{ kind: 'shared-mcp' as const, name: 'Atlassian', status: 'sign-in-required' as const }]
+  expect(omissionsLine(omissions, 'resume')).toContain('resuming')
+  expect(omissionsLine(omissions, 'switch')).toContain('switch')
+})
