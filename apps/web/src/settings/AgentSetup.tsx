@@ -24,8 +24,9 @@ import { RulesSettings } from './RulesSettings'
 const CAPTION = 'm-0 text-caption text-muted-foreground'
 
 /** Provider logos, dimmed where the item is missing, with the same information as text for screen readers. */
-/** Where a Claude account's own connectors are managed. Other providers have no page Ramu can point to yet. */
-const CLAUDE_CONNECTORS_URL = 'https://claude.ai/settings/connectors'
+/** Claude's own help page on connectors, which says where to manage them. Other providers have no such page Ramu can point to yet. */
+const CLAUDE_CONNECTORS_URL =
+  'https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities'
 
 function ProviderStrip({ providers }: { providers: AgentProvider[] }) {
   const missing = AGENT_PROVIDERS.filter((provider) => !providers.includes(provider))
