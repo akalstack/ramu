@@ -6,7 +6,13 @@ import { font, space, useTheme, type Appearance, type TextSize } from '../../the
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
-import { BUSY_MODE_DEVICE_KEY, resolveBusyMode, type BusyMode } from '../../runtime/busyMode'
+import {
+  BUSY_MODE_DEVICE_KEY,
+  MODEL_WARNING_DEVICE_KEY,
+  resolveBusyMode,
+  resolveModelChangeWarning,
+  type BusyMode,
+} from '../../runtime/busyMode'
 import {
   PUSH_CATEGORIES,
   PUSH_MUTED_KEY,
@@ -107,6 +113,11 @@ function BusyBehavior({ computerId }: { computerId: string }) {
   const resolved = resolveBusyMode(drafts[BUSY_MODE_DEVICE_KEY], appPreferences[computerId]?.busyMessageAction)
   const own = resolved.source === 'device'
   const hostMode = resolveBusyMode(undefined, appPreferences[computerId]?.busyMessageAction)
+  const warning = resolveModelChangeWarning(
+    drafts[MODEL_WARNING_DEVICE_KEY],
+    appPreferences[computerId]?.warnModelChange,
+  )
+  const hostWarning = resolveModelChangeWarning(undefined, appPreferences[computerId]?.warnModelChange)
   return (
     <>
       <SectionLabel>{t.busyOnPhone}</SectionLabel>
@@ -127,6 +138,25 @@ function BusyBehavior({ computerId }: { computerId: string }) {
         overridden={own}
         inheritedLabel={hostMode.mode === 'queue' ? t.queue : t.steer}
         onUseInherited={() => setDraft(BUSY_MODE_DEVICE_KEY, '')}
+      />
+      <SectionLabel>{t.modelWarnOnPhone}</SectionLabel>
+      <Card style={{ marginHorizontal: space.l }}>
+        <Segmented<'on' | 'off'>
+          style={{ margin: space.m }}
+          value={warning.warn ? 'on' : 'off'}
+          onChange={(value) => setDraft(MODEL_WARNING_DEVICE_KEY, value)}
+          options={[
+            { key: 'on', label: t.modelWarnOn },
+            { key: 'off', label: t.modelWarnOff },
+          ]}
+        />
+      </Card>
+      <Hint>{t.modelWarnHint}</Hint>
+      <ScopeControl
+        field="modelChangeWarning"
+        overridden={warning.source === 'device'}
+        inheritedLabel={hostWarning.warn ? t.modelWarnOn : t.modelWarnOff}
+        onUseInherited={() => setDraft(MODEL_WARNING_DEVICE_KEY, '')}
       />
     </>
   )

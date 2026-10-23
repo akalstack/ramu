@@ -19,6 +19,7 @@ import {
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
+import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../runtime/busyMode'
 import { foldTurns } from '../../../runtime/turns'
 import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
 import { fill, useT } from '../../../i18n'
@@ -394,7 +395,15 @@ export default function ChatScreen() {
     const switching =
       (m.provider !== chat.provider || m.model !== chat.model) && !(m.provider === chat.provider && !chat.model)
     const started = chat.sessionId && rows.some((item) => item.kind === 'user' || item.kind === 'summary')
-    if (!switching || !started || store.appPreferences[chat.computerId]?.warnModelChange === false) return applyModel(m)
+    if (
+      !switching ||
+      !started ||
+      !resolveModelChangeWarning(
+        store.drafts?.[MODEL_WARNING_DEVICE_KEY],
+        store.appPreferences[chat.computerId]?.warnModelChange,
+      ).warn
+    )
+      return applyModel(m)
     Alert.alert(
       'Change model mid-conversation?',
       'The new model cannot reuse the cache built for this conversation, so the first message after the change uses more of your usage than usual.',

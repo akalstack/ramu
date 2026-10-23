@@ -266,6 +266,11 @@ const en = {
   queue: 'Queue',
   steer: 'Steer',
   busyOnPhone: 'Messages while working, on this phone',
+  modelWarnOnPhone: 'Warn before changing model, on this phone',
+  modelWarnOn: 'Warn',
+  modelWarnOff: 'Don’t warn',
+  modelWarnHint:
+    'A new model can’t reuse the cache of a conversation in progress, so the first message after switching uses more of your usage. Only this phone changes.',
   busyHint:
     'Steer adds your message after the current tools finish; Queue waits for the whole turn. The other action stays one tap away beside Send. Only this phone changes.',
   queued: 'Queued',
@@ -759,6 +764,11 @@ const id: typeof en = {
   queue: 'Antrekan',
   steer: 'Arahkan',
   busyOnPhone: 'Pesan saat agen bekerja, di ponsel ini',
+  modelWarnOnPhone: 'Peringatan sebelum mengganti model, di ponsel ini',
+  modelWarnOn: 'Peringatkan',
+  modelWarnOff: 'Jangan peringatkan',
+  modelWarnHint:
+    'Model baru tidak dapat memakai ulang cache percakapan yang sedang berjalan, jadi pesan pertama setelah beralih memakai lebih banyak jatah Anda. Hanya ponsel ini yang berubah.',
   busyHint:
     'Arahkan menambahkan pesan Anda setelah alat yang berjalan selesai; Antre menunggu seluruh giliran. Aksi lainnya tetap satu ketukan di samping Kirim. Hanya ponsel ini yang berubah.',
   queued: 'Dalam antrean',

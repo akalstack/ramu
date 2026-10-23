@@ -19,3 +19,12 @@ test('the other action is the one offered beside Send', () => {
   assert.equal(otherBusyMode('steer'), 'queue')
   assert.equal(otherBusyMode('queue'), 'steer')
 })
+
+test('the model-change warning follows this phone, then the computer, then warns', async () => {
+  const { resolveModelChangeWarning } = await import('../src/runtime/busyMode.ts')
+  assert.deepEqual(resolveModelChangeWarning('off', true), { warn: false, source: 'device' })
+  assert.deepEqual(resolveModelChangeWarning('on', false), { warn: true, source: 'device' })
+  assert.deepEqual(resolveModelChangeWarning('', false), { warn: false, source: 'all' })
+  assert.deepEqual(resolveModelChangeWarning(undefined, undefined), { warn: true, source: 'default' })
+  assert.deepEqual(resolveModelChangeWarning('never', 'x'), { warn: true, source: 'default' })
+})

@@ -23,3 +23,16 @@ export function resolveBusyMode(deviceRaw: string | undefined, hostValue: unknow
 }
 
 export const otherBusyMode = (mode: BusyMode): BusyMode => (mode === 'steer' ? 'queue' : 'steer')
+
+/** This phone's choice about the warning before changing model mid-conversation: 'on', 'off', or unset to follow the computer. */
+export const MODEL_WARNING_DEVICE_KEY = 'pref-device:modelChangeWarning'
+
+/** Whether to warn: this phone's choice, then the computer's `warnModelChange` setting, then warn. */
+export function resolveModelChangeWarning(
+  deviceRaw: string | undefined,
+  hostValue: unknown,
+): { warn: boolean; source: 'device' | 'all' | 'default' } {
+  if (deviceRaw === 'on' || deviceRaw === 'off') return { warn: deviceRaw === 'on', source: 'device' }
+  if (typeof hostValue === 'boolean') return { warn: hostValue, source: 'all' }
+  return { warn: true, source: 'default' }
+}
