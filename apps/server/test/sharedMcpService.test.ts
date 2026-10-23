@@ -1,3 +1,4 @@
+import { noteRuntimeTransports } from '../src/providers/runtimeTransports'
 import { afterEach, expect, it, vi } from 'vitest'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
@@ -245,6 +246,23 @@ it('reports each login as not checked, approval needed or ready, and unsupported
   const again = (await invoke('mcp.recheckAccount', 'codex', 'a', 'project')) as { accountId: string; status: string }[]
   expect(again.find((entry) => entry.accountId === 'a')?.status).toBe('ready')
   await expect(invoke('mcp.recheckAccount', 'codex', 'missing', null)).rejects.toThrow('Unknown provider account')
+})
+
+it('reports a runtime that said it has no HTTP MCP as unsupported, with that reason, until it says otherwise', () => {
+  const { invoke, input, status } = fixture()
+  invoke('mcp.account', { provider: 'codex', accountId: 'a', shareApprovals: true })
+  invoke('mcp.save', input)
+  noteRuntimeTransports('codex', { http: false })
+  try {
+    expect(status().readiness?.[0]).toMatchObject({
+      status: 'unsupported',
+      reason: expect.stringContaining('HTTP MCP'),
+    })
+    noteRuntimeTransports('codex', { http: true })
+    expect(status().readiness?.[0]?.status).toBe('not-checked')
+  } finally {
+    noteRuntimeTransports('codex', undefined)
+  }
 })
 
 it('stores a credential write-only, replaces it without losing the old one on failure, and drops it on an account change', async () => {

@@ -27,6 +27,7 @@ import { attachmentPrompt } from '../attachments'
 import { elicitationContent, elicitationRequest } from '../agent/elicitation'
 import { classifyLimit, limitSignal } from './limitClassifier'
 import { limitedReading } from './usageLimit'
+import { noteRuntimeTransports } from './runtimeTransports'
 import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 
 type Wire = Record<string, any>
@@ -445,6 +446,7 @@ class AcpSession implements AgentRunner {
     // HTTP MCP is optional in ACP. A runtime that lists its MCP support without HTTP cannot reach Ramu's tools, so say so instead of losing them silently.
     const mcp = capabilities.mcpCapabilities
     this.mcpHttp = mcp?.http === true || !mcp
+    noteRuntimeTransports(provider, mcp)
     const tools = this.connection && !(mcp && mcp.http !== true) ? this.connection : undefined
     if (this.connection && !tools)
       this.emit({

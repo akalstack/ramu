@@ -16,6 +16,7 @@ import { connectSharedMcpHttp, sharedMcpHttpFetch } from './http'
 import { OAUTH_REFERENCE_NAME, OAuthSignIn, revokeUpstream, type RevocationResult, type StoredOAuth } from './oauth'
 import { SharedMcpConnectionError } from './errors'
 import { SharedMcpStorage } from './storage'
+import { runtimeLacksHttpMcp } from '../providers/runtimeTransports'
 
 type Health = SharedMcpManagement['connections'][number]
 
@@ -101,6 +102,8 @@ export class SharedMcpService {
     provider: SharedMcpProviderAccount['provider'],
     accountId: string,
   ): { status: SharedMcpAccountReadiness['status']; checkedAt: number | null } {
+    // The gateway is HTTP: a runtime that has said it has no HTTP MCP cannot use any connection.
+    if (runtimeLacksHttpMcp(provider)) return { status: 'unsupported', checkedAt: null }
     const check = this.checks.get(connection.id)
     const current = check?.revision === connection.revision ? check : undefined
     const inspection = this.inspections.get(connection.id)
@@ -184,7 +187,9 @@ export class SharedMcpService {
         ready: 'Every shared connection for this login is checked and approved.',
         'approval-needed': 'Review access for this login on a connection.',
         'sign-in-required': 'A connection needs its service sign-in before this login can use it.',
-        unsupported: 'No shared connection is enabled for this provider.',
+        unsupported: runtimeLacksHttpMcp(account.provider)
+          ? 'This runtime does not accept HTTP MCP servers, so it cannot reach shared connections.'
+          : 'No shared connection is enabled for this provider.',
         'not-checked': 'A connection has not been checked since Ramu started or changed it.',
       }
       const times = connections.flatMap((entry) => (entry.checkedAt === null ? [] : [entry.checkedAt]))
