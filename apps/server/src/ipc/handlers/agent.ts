@@ -23,6 +23,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.counts': { args: z.tuple([]), run: () => agents.counts() },
     'agent.get': { args: z.tuple([id]), run: (sessionId: string) => agents.get(sessionId) },
     'agent.goal': { args: z.tuple([id]), run: (s: string) => agents.getGoal(s) },
+    'agent.markAdviceRead': { args: z.tuple([id]), run: (s: string) => agents.markAdviceRead(s) },
     'agent.goal.control': {
       args: z.tuple([id, z.enum(['pause', 'resume', 'clear'])]),
       run: (s: string, action: 'pause' | 'resume' | 'clear') => agents.controlGoal(s, action),

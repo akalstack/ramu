@@ -870,6 +870,8 @@ export interface RamuMethods {
   'agent.list'(taskId: string): AgentSessionInfo[]
   'agent.get'(sessionId: string): AgentSessionInfo
   'agent.goal'(sessionId: string): ChatGoal | null
+  /** Records that the person has looked at this session's advisor consultations, clearing the unread count. */
+  'agent.markAdviceRead'(sessionId: string): void
   'agent.goal.control'(sessionId: string, action: 'pause' | 'resume' | 'clear'): ChatGoal | null
   /**
    * Sets, changes or removes (null or blank) the command Ramu runs when the agent claims the goal is done. Only the user

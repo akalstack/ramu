@@ -310,6 +310,12 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     }
     db.exec('CREATE INDEX IF NOT EXISTS agent_events_rev ON agent_events(session_id, rev);')
   },
+  // Where a person last looked at a thread's advisor consultations: the thread's change counter at that moment, so a
+  // consultation that settles afterwards is unread without any wall-clock comparison.
+  `CREATE TABLE IF NOT EXISTS advice_reads (
+    session_id TEXT PRIMARY KEY REFERENCES agent_sessions(id) ON DELETE CASCADE,
+    read_rev INTEGER NOT NULL
+  );`,
 ]
 
 export type Db = DatabaseSync

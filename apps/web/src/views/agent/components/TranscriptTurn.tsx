@@ -76,6 +76,7 @@ function TranscriptBlock({
           <AdvisorActivity
             task={b.event}
             live={ctx.live}
+            sessionId={ctx.sessionId}
             onOpen={() => ctx.onOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)}
           />
         ) : (

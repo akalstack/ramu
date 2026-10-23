@@ -56,10 +56,17 @@ export class LaunchCompatibility {
   constructor(
     private readonly policy: CompatibilityPolicy = COMPATIBILITY_POLICY,
     private readonly runtimes: Partial<Record<AgentProvider, RuntimeKind>> = COMPATIBILITY_RUNTIME,
-    private readonly probe: Probe = (provider, binary, config) =>
+    private probe: Probe = (provider, binary, config) =>
       providerAdapter(provider).probeVersion(binary, providerEnvironment(provider, config)),
     private readonly locate: Locate = (provider, config) => findExecutable(providerBinary(provider, config)),
   ) {}
+
+  /** Replaces how versions are read. For tests, which must not run a real provider executable. */
+  useProbe(probe: Probe): void {
+    this.probe = probe
+    this.entries.clear()
+    this.inflight.clear()
+  }
 
   /** The runtime kind to evaluate, only when this policy has at least one rule for the provider. */
   private audited(provider: AgentProvider): RuntimeKind | null {
@@ -69,9 +76,18 @@ export class LaunchCompatibility {
       : null
   }
 
-  /** Whether a rule exists for this provider's runtime, so callers can skip the asynchronous check entirely. */
+  /**
+   * Whether a launch needs the asynchronous check at all: only a rule that declares a version incompatible can block it,
+   * so a provider whose rules are all Supported or Limited starts without waiting for a version probe.
+   */
   applies(provider: AgentProvider): boolean {
-    return this.audited(provider) !== null
+    const runtime = this.audited(provider)
+    return (
+      runtime !== null &&
+      this.policy.rules.some(
+        (rule) => rule.provider === provider && rule.runtime === runtime && rule.status === 'incompatible',
+      )
+    )
   }
 
   private identity(provider: AgentProvider, path: string): string {

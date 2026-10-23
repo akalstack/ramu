@@ -27,6 +27,7 @@ import { realGoalProbes, type GoalProbes } from './agent/goalProbes'
 import type { QueryFn } from './agent/types'
 import { SessionStore } from './agent/sessionStore'
 import { readHelperSummaries } from './agent/helperSummaries'
+import { markAdviceRead, readUnreadAdvice } from './agent/adviceUnread'
 import { SessionRegistry } from './agent/sessionRegistry'
 import { SessionRecorder } from './agent/sessionRecorder'
 import { MessageDispatcher } from './agent/messageDispatcher'
@@ -398,6 +399,17 @@ export class AgentService {
   /** Independently running helpers per thread for list views, from one query. */
   helperSummaries(taskId?: string) {
     return readHelperSummaries(this.db, taskId)
+  }
+
+  /** Settled advisor consultations not yet seen, per thread, for list views, from one query. */
+  unreadAdvice(taskId?: string) {
+    return readUnreadAdvice(this.db, taskId)
+  }
+
+  /** The person has looked at this session's advice. */
+  markAdviceRead(sessionId: string) {
+    this.get(sessionId)
+    markAdviceRead(this.db, sessionId)
   }
 
   /** The latest goal of a session for list views; cheap to call for every thread. */

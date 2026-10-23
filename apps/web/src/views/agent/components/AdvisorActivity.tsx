@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { helperActive } from '@ramu/shared/chat/helperPresentation'
+import { useHost } from '../../../workspace/HostProvider'
 import { useHostConnection } from '../../../workspace/computers'
 import { Spinner } from '@/components/ui/spinner'
 import { t as translate, useLanguage } from '../../../i18n'
@@ -12,11 +14,41 @@ import { formatDuration } from '../lib/format'
 import { useElapsed } from '../hooks/useElapsed'
 import { TaskStatusIcon } from './TaskStatus'
 
-/** A consultation remains visible in the main chat even with Agents closed. */
-export function AdvisorActivity({ task, live, onOpen }: { task: AgentTask; live: boolean; onOpen: () => void }) {
+const marking = new Map<string, ReturnType<typeof setTimeout>>()
+
+/**
+ * A consultation remains visible in the main chat even with Agents closed. A settled one showing in an open transcript
+ * counts as seen: the host clears the thread's unread-advice count (one call per session, however many cards show).
+ */
+export function AdvisorActivity({
+  task,
+  live,
+  onOpen,
+  sessionId,
+}: {
+  task: AgentTask
+  live: boolean
+  onOpen: () => void
+  sessionId?: string
+}) {
   useLanguage()
   const { offline } = useHostConnection()
+  const { id: host, invoke } = useHost()
   const status = effectiveStatus(task, live)
+  const settled = status === 'completed' || status === 'failed'
+  useEffect(() => {
+    if (!settled || !sessionId || offline) return
+    const key = `${host}:${sessionId}`
+    clearTimeout(marking.get(key))
+    marking.set(
+      key,
+      setTimeout(() => {
+        marking.delete(key)
+        // A view-only device is refused and an older host has no such method; neither needs saying.
+        void Promise.resolve(invoke('agent.markAdviceRead', sessionId)).catch(() => {})
+      }, 600),
+    )
+  }, [settled, sessionId, offline, host, invoke])
   const elapsed = useElapsed(task.startedAt, !offline && helperActive(task))
   const label =
     task.waitingFor === 'provider' && status === 'running'

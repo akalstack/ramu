@@ -146,6 +146,11 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
           ))}
         </div>
       )}
+      {!!task.unreadAdvice && (
+        <span className="text-caption text-muted-foreground">
+          {t(task.unreadAdvice === 1 ? '1 new advisor note' : '{0} new advisor notes', { 0: task.unreadAdvice })}
+        </span>
+      )}
       {task.goalState && (
         <div className="flex flex-col gap-0.5 text-caption">
           {task.goalState.sessionId ? (

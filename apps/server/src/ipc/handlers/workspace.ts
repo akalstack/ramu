@@ -176,6 +176,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         const snapshotAt = nextSnapshotAt()
         const tasks = workspace.listTasks()
         const helpers = tasks.length ? agents.helperSummaries() : new Map<string, never>()
+        const advice = tasks.length ? agents.unreadAdvice() : new Map<string, number>()
         return tasks.map((task) => {
           const sessions = agents.list(task.id).filter((session) => !session.parentId)
           const main = sessions.at(-1)
@@ -187,6 +188,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
             inputSummary,
             executionState,
             helperSummary: helpers.get(task.id) ?? null,
+            ...(advice.get(task.id) ? { unreadAdvice: advice.get(task.id) } : {}),
             snapshotAt,
           }
           if (!goal || goal.status === 'completed') return { ...base, goalState: null }

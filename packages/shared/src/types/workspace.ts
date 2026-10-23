@@ -117,6 +117,8 @@ export interface Task {
   inputSummary?: ThreadInputSummary | null
   /** Independent helper work after the parent goes idle. Absent from older hosts (unknown); null means none. */
   helperSummary?: ThreadHelperSummary | null
+  /** Settled advisor consultations nobody has opened yet; absent when none or on an older host. */
+  unreadAdvice?: number
   /**
    * When the host read this task, never moving backwards. A client keeps the newer of two reads of the same task, so a
    * late response cannot bring back stopped or completed work. Absent from older hosts.
