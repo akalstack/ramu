@@ -16,7 +16,7 @@ import { openDb } from '../src/db'
 import { PathEscapeError, listFolderFiles, readText, resolveInRoot, writeText } from '../src/workspace/files'
 import { withContext } from '../src/context'
 import { createDispatcher, type Services } from '../src/ipc'
-import { NO_PROJECT } from '@ramu/shared/types'
+import { NO_PROJECT, type WorktreePlanEntry } from '@ramu/shared/types'
 import * as git from '../src/workspace/git'
 import { Workspace } from '../src/workspace/workspace'
 
@@ -209,6 +209,41 @@ describe('current checkout (default)', () => {
 })
 
 describe('isolated worktrees (optional)', () => {
+  it('refuses a folder or branch another process on the same database already holds, and re-plans once', async () => {
+    const file = join(tmp, 'shared.db')
+    const first = new Workspace(openDb(file), join(tmp, 'worktrees'))
+    const second = new Workspace(openDb(file), join(tmp, 'worktrees'))
+    const project = first.createProject('Shop')
+    const repo = await first.addRepository(project.id, web)
+    const taken = await first.createTask({ projectId: project.id, title: 'Fix checkout', mode: 'worktree' })
+    const held = first.listBindings(taken.id)[0]!
+    // The second process planned before the first one claimed its names, so its plan still proposes them.
+    const stale: WorktreePlanEntry = {
+      repoId: repo.id,
+      repoName: 'web app',
+      baseRef: held.baseRef ?? 'main',
+      taskBranch: held.taskBranch!,
+      path: held.cwd,
+    }
+    const plan = second.planWorktrees.bind(second)
+    let plans = 0
+    second.planWorktrees = async (...args: Parameters<Workspace['planWorktrees']>) =>
+      ++plans === 1 ? [stale] : plan(...args)
+    const other = await second.createTask({ projectId: project.id, title: 'Fix checkout', mode: 'worktree' })
+    const claimed = second.listBindings(other.id)[0]!
+    expect(plans).toBe(2)
+    expect(claimed.cwd).not.toBe(held.cwd)
+    expect(claimed.taskBranch).not.toBe(held.taskBranch)
+    // The database itself refuses the same claim, whatever process makes it.
+    const duplicate = () =>
+      openDb(file)
+        .prepare(
+          'INSERT INTO bindings (task_id, repo_id, mode, cwd, task_branch, base_ref, setup_state) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run('other-task', repo.id, 'worktree', held.cwd, 'ramu/another', 'main', 'pending')
+    expect(duplicate).toThrow(/UNIQUE constraint failed: bindings\.cwd/)
+  })
+
   it('creates task-owned worktrees and routes every path through them', async () => {
     const project = ws.createProject('Shop')
     const rWeb = await ws.addRepository(project.id, web)

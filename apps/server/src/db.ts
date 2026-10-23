@@ -316,6 +316,21 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     session_id TEXT PRIMARY KEY REFERENCES agent_sessions(id) ON DELETE CASCADE,
     read_rev INTEGER NOT NULL
   );`,
+  // Two server processes sharing one database cannot both claim the same worktree folder or task branch: the in-process
+  // allocation lock does not reach across processes, so the database refuses the second claim. A profile that already
+  // holds a duplicate keeps working without the index rather than failing to open.
+  (db) => {
+    for (const statement of [
+      "CREATE UNIQUE INDEX IF NOT EXISTS bindings_worktree_path ON bindings(cwd) WHERE mode = 'worktree'",
+      "CREATE UNIQUE INDEX IF NOT EXISTS bindings_worktree_branch ON bindings(repo_id, task_branch) WHERE mode = 'worktree' AND task_branch IS NOT NULL",
+    ]) {
+      try {
+        db.exec(statement)
+      } catch {
+        // Existing duplicates: the allocation itself still checks names before it claims them.
+      }
+    }
+  },
 ]
 
 export type Db = DatabaseSync

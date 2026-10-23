@@ -593,7 +593,15 @@ export class Workspace {
     const promise = (async () => {
       const choice =
         input.mode === 'worktree' && !input.workspaceId ? (input.branchChoice ?? (await prepareName?.())) : undefined
-      return this.allocation.run('create', () => this.allocateTask(input, plan, choice))
+      const allocate = () => this.allocation.run('create', () => this.allocateTask(input, plan, choice))
+      try {
+        return await allocate()
+      } catch (error) {
+        // Another process on this database claimed the same folder or branch between planning and claiming it. The
+        // re-plan sees the other claim and picks a free name; a second collision is reported as it is.
+        if (!/UNIQUE constraint failed: bindings\./.test(String(error))) throw error
+        return await allocate()
+      }
     })()
     if (input.requestId) {
       const key = input.requestId
