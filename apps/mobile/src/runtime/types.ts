@@ -19,6 +19,8 @@ export interface Computer {
   /** What pairing bound: this phone's id on the host and the host's durable id. Absent for older pairings. */
   deviceId?: string
   hostId?: string
+  /** Other addresses the host named in a proven identity answer; tried only when the saved one stops answering. */
+  routes?: string[]
 }
 
 export type ToolKind = 'read' | 'edit' | 'search' | 'execute' | 'think' | 'fetch' | 'other'

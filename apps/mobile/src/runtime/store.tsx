@@ -757,6 +757,68 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       flushing.current.delete(id)
     }
   }
+  const routeTimes = useRef(new Map<string, number>())
+  const due = (key: string, every: number) => {
+    const now = Date.now()
+    if (now - (routeTimes.current.get(key) ?? -Infinity) < every) return false
+    routeTimes.current.set(key, now)
+    return true
+  }
+
+  /** While the host answers, keep the other addresses it names. Only a proven answer is believed. */
+  async function learnRoutes(id: string) {
+    const computer = ref.current.computers.find((c) => c.id === id)
+    if (!computer?.hostId || !computer.deviceId || !due(`learn:${id}`, 3_600_000)) return
+    const token = await readToken(id)
+    if (!token) return
+    const result = await verifyHost({
+      fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
+      baseUrl: computer.address,
+      deviceId: computer.deviceId,
+      token,
+      expectedHostId: computer.hostId,
+      challenge: operationKey(),
+      signal: AbortSignal.timeout(8000),
+    }).catch(() => null)
+    if (result?.state !== 'verified') return
+    change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? { ...c, routes: result.routes } : c)) }))
+  }
+
+  /** When the saved address stops answering, try the learned ones; each must prove it is this host before it is used. */
+  async function tryRoutes(id: string) {
+    if (!due(`try:${id}`, 60_000)) return
+    for (const route of ref.current.computers.find((c) => c.id === id)?.routes ?? []) {
+      if (!active.current || !ref.current.computers.some((c) => c.id === id)) return
+      if ((await reviewAddressFor(id, route).catch(() => 'unreachable')) === 'moved') return
+    }
+  }
+
+  async function reviewAddressFor(id: string, address: string): Promise<ReviewAddressResult> {
+    const computer = ref.current.computers.find((c) => c.id === id)
+    if (!computer) throw new Error('That host is no longer saved')
+    const url = normalizeAddress(address, true)
+    if (url === computer.address) return 'unchanged'
+    if (!computer.hostId || !computer.deviceId) return 'unsupported'
+    // A credential issued over HTTPS never moves to plain HTTP on its own.
+    if (computer.address.startsWith('https:') && url.startsWith('http:')) return 'insecure'
+    const token = await readToken(id)
+    if (!token) return 'unsupported'
+    const result = await verifyHost({
+      fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
+      baseUrl: url,
+      deviceId: computer.deviceId,
+      token,
+      expectedHostId: computer.hostId,
+      challenge: operationKey(),
+      signal: AbortSignal.timeout(8000),
+    })
+    if (result.state !== 'verified') return result.state
+    const moved: Computer = { ...computer, address: url, routes: result.routes, status: 'connecting', error: undefined }
+    change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? moved : c)) }))
+    void connect(moved).catch(report)
+    return 'moved'
+  }
+
   const connect = async (computer: Computer) => {
     const old = connections.current.get(computer.id)
     old?.controller.abort()
@@ -826,6 +888,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             if (!connection.controller.signal.aborted) {
               attempt = 0
               status(computer.id, 'online')
+              void learnRoutes(computer.id)
               if (pushToken.current) void registerPushOn(computer.id).catch(report)
               void flush(computer.id)
             }
@@ -839,6 +902,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           break
         }
         status(computer.id, 'offline', error instanceof Error ? error.message : 'Host unreachable')
+        void tryRoutes(computer.id)
         await new Promise<void>((resolve) => {
           const done = () => {
             clearTimeout(timer)
@@ -1013,31 +1077,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         clearTimeout(timer)
       }
     },
-    reviewAddress: async (id, address) => {
-      const computer = ref.current.computers.find((c) => c.id === id)
-      if (!computer) throw new Error('That host is no longer saved')
-      const url = normalizeAddress(address, true)
-      if (url === computer.address) return 'unchanged'
-      if (!computer.hostId || !computer.deviceId) return 'unsupported'
-      // A credential issued over HTTPS never moves to plain HTTP on its own.
-      if (computer.address.startsWith('https:') && url.startsWith('http:')) return 'insecure'
-      const token = await readToken(id)
-      if (!token) return 'unsupported'
-      const result = await verifyHost({
-        fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
-        baseUrl: url,
-        deviceId: computer.deviceId,
-        token,
-        expectedHostId: computer.hostId,
-        challenge: operationKey(),
-        signal: AbortSignal.timeout(8000),
-      })
-      if (result.state !== 'verified') return result.state
-      const moved: Computer = { ...computer, address: url, status: 'connecting', error: undefined }
-      change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? moved : c)) }))
-      void connect(moved).catch(report)
-      return 'moved'
-    },
+    reviewAddress: reviewAddressFor,
     forget: async (id) => {
       await invoke(id, 'notifications.unregister').catch(() => {})
       const current = ref.current
