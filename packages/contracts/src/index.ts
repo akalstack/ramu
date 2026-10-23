@@ -25,6 +25,8 @@ export const CAPABILITIES = {
   renewal: 'renewal',
   /** POST /invoke accepts an `operationKey` so a mutation retried after a lost reply runs once. */
   operationKeys: 'operation-keys',
+  /** GET /socket upgrades to one WebSocket carrying the same calls and events; HTTP and SSE stay available. */
+  webSocket: 'websocket',
 } as const
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES]
 
@@ -77,6 +79,24 @@ export const RECOVERABLE_MUTATIONS: ReadonlySet<string> = new Set([
   'agent.send',
   'agent.sendQueuedNow',
 ])
+
+/** Path of the WebSocket upgrade. Credentials travel in the upgrade's Authorization header, never in the URL. */
+export const SOCKET_PATH = '/socket'
+/** Largest single frame either side accepts. */
+export const MAX_SOCKET_FRAME_BYTES = MAX_REQUEST_BYTES
+
+/**
+ * Frames on the socket. `id` correlates one request with its answer and is unrelated to an `operationKey`, which
+ * identifies a logical mutation across retries. Events carry the same `{ channel, payload }` as the SSE stream.
+ */
+export type SocketClientFrame =
+  { t: 'invoke'; id: number; method: string; args: unknown[]; operationKey?: string } | { t: 'ping' }
+export type SocketServerFrame =
+  | { t: 'ready'; epoch: string }
+  | { t: 'result'; id: number; value: unknown }
+  | { t: 'error'; id: number; error: string; status?: number }
+  | { t: 'event'; channel: string; payload: unknown }
+  | { t: 'pong' }
 
 const UNDEFINED_MARKER = '$ramuUndefined'
 
@@ -211,4 +231,49 @@ export function parseSshTarget(input: string): string {
   if (!/^(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9._:[\]-]+$/.test(text) || text.startsWith('-') || text.length > 255)
     throw new Error('Enter user@host or an alias from your SSH config')
   return text
+}
+
+const mark = (_key: string, value: unknown) => (value === undefined ? { [UNDEFINED_MARKER]: true } : value)
+const unmark = (_key: string, value: any) =>
+  value && typeof value === 'object' && Object.keys(value).length === 1 && value[UNDEFINED_MARKER] === true
+    ? undefined
+    : value
+
+export const encodeSocketFrame = (frame: SocketClientFrame | SocketServerFrame): string => JSON.stringify(frame, mark)
+
+/** Parses one frame, or returns null for anything that is not a well-formed frame of the expected direction. */
+export function decodeSocketFrame(text: string, from: 'client'): SocketClientFrame | null
+export function decodeSocketFrame(text: string, from: 'server'): SocketServerFrame | null
+export function decodeSocketFrame(
+  text: string,
+  from: 'client' | 'server',
+): SocketClientFrame | SocketServerFrame | null {
+  let frame: any
+  try {
+    frame = JSON.parse(text, unmark)
+  } catch {
+    return null
+  }
+  if (!frame || typeof frame !== 'object' || typeof frame.t !== 'string') return null
+  const int = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+  if (from === 'client') {
+    if (frame.t === 'ping') return { t: 'ping' }
+    if (
+      frame.t === 'invoke' &&
+      int(frame.id) &&
+      typeof frame.method === 'string' &&
+      frame.method.length <= 200 &&
+      Array.isArray(frame.args) &&
+      (frame.operationKey === undefined ||
+        (typeof frame.operationKey === 'string' && OPERATION_KEY_PATTERN.test(frame.operationKey)))
+    )
+      return frame
+    return null
+  }
+  if (frame.t === 'pong') return frame
+  if (frame.t === 'ready' && typeof frame.epoch === 'string') return frame
+  if (frame.t === 'result' && int(frame.id)) return frame
+  if (frame.t === 'error' && int(frame.id) && typeof frame.error === 'string') return frame
+  if (frame.t === 'event' && typeof frame.channel === 'string') return frame
+  return null
 }

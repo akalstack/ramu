@@ -46,6 +46,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod'
 import { runtimeInvoke, runtimeNetwork } from '@ramu/client-runtime'
 import { HostPresence } from './remote/presence'
+import { serveSockets, type EventSink, type SocketHost } from './remote/socket'
 import {
   CAPABILITIES,
   MAX_REQUEST_BYTES,
@@ -53,6 +54,7 @@ import {
   PROTOCOL_VERSION,
   decodeInvoke,
   type Capability,
+  type InvokeRequest,
 } from '@ramu/contracts'
 import { loadConfig } from './config'
 import { TokenStore } from './remote/auth'
@@ -198,7 +200,7 @@ process.once('exit', () => {
 try {
   unlinkSync(socketPath)
 } catch {}
-const clients = new Set<ServerResponse>()
+const clients = new Set<EventSink>()
 // Only clients on the local socket can answer native dialogs; a remote client's folder picker would open on the wrong machine.
 const hostClients = new Set<ServerResponse>()
 const desktopClients = new Map<string, ServerResponse>()
@@ -238,7 +240,7 @@ const send = (channel: string, payload: unknown) => {
     if (client.writableLength > 8 * 1024 * 1024) {
       client.destroy()
       clients.delete(client)
-      hostClients.delete(client)
+      hostClients.delete(client as ServerResponse)
     } else client.write(message)
   }
 }
@@ -583,6 +585,7 @@ async function stop(intentional = false) {
   clearTimeout(remoteRetry)
   mcpHttp.close()
   runtime.close()
+  sockets?.close()
   try {
     remote?.close()
   } catch {}
@@ -611,10 +614,10 @@ const capabilities = (): Capability[] => [
   CAPABILITIES.hostBrowser,
   CAPABILITIES.hostRequests,
   CAPABILITIES.operationKeys,
-  ...(network.enabled ? [CAPABILITIES.remote, CAPABILITIES.pairing, CAPABILITIES.renewal] : []),
+  ...(network.enabled ? [CAPABILITIES.remote, CAPABILITIES.pairing, CAPABILITIES.renewal, CAPABILITIES.webSocket] : []),
 ]
 // Event streams of network clients stay open, so a revoked device must be cut off here, not only refused on its next request.
-const remoteStreams = new Map<ServerResponse, string | undefined>()
+const remoteStreams = new Map<EventSink, string | undefined>()
 const stillAuthorized = (header: string | undefined) => remoteAccess.authorized(header)
 const dropRevoked = () => {
   for (const [stream, header] of remoteStreams) if (!stillAuthorized(header)) stream.end()
@@ -624,6 +627,96 @@ const json = { 'Content-Type': 'application/json' }
 const operations = new OperationLog<unknown>(10 * 60_000, 500)
 // Identifies this server run; a client that sees it change knows the host restarted and every cursor it held is void.
 const runEpoch = randomUUID()
+/** A call the device may not make: answered as a refusal, not as a failure of the call. */
+class InvokeRefused extends Error {}
+/**
+ * Runs one named call for a client of either transport. `after` is work to start once the answer has been sent, for a
+ * call that stops this process. Both the HTTP route and the WebSocket go through here, so they share authorization,
+ * local-only restrictions and keyed-mutation recovery.
+ */
+async function performInvoke(
+  remote: boolean,
+  device: DeviceInfo | undefined,
+  { method, args, operationKey }: Pick<InvokeRequest, 'method' | 'operationKey'> & { args: any },
+): Promise<{ value: unknown; after?: () => void }> {
+  const deviceId = device?.id
+  if (operationKey !== undefined && !(typeof operationKey === 'string' && OPERATION_KEY_PATTERN.test(operationKey)))
+    throw new Error('Invalid operation key.')
+  if (remote && !deviceMayInvoke(device, method))
+    throw new InvokeRefused('This device is a viewer. This action requires full access.')
+  let value: unknown
+  if (method === 'browser.bridge.attach') {
+    if (remote || typeof args?.[0] !== 'string' || !desktopClients.has(args[0]))
+      throw new Error('A local desktop event stream is required.')
+    // A desktop that is gone (quit, crashed) must not keep the browser from a new one that is connected.
+    const owner = browserBroker.owner()
+    if (owner && owner !== args[0] && !desktopClients.has(owner)) browserBroker.detach(owner)
+    value = browserBroker.attach(args[0])
+  } else if (method === 'browser.bridge.ready') {
+    if (remote || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string')
+      throw new Error('Invalid local browser connection.')
+    browserBroker.ready(args[0], args[1])
+  } else if (method === 'browser.bridge.reply') {
+    if (
+      remote ||
+      !Array.isArray(args) ||
+      !args.slice(0, 3).every((item) => typeof item === 'string' && item.length <= 100)
+    )
+      throw new Error('Invalid local browser response.')
+    browserBroker.reply(args[0], args[1], args[2], args[3], typeof args[4] === 'string' ? args[4] : undefined)
+  } else if (method === 'host.reply') {
+    if (remote) throw new Error('Desktop actions are only available on this host')
+    const request = nativeRequests.get(args?.[0])
+    if (request) {
+      clearTimeout(request.timer)
+      nativeRequests.delete(args[0])
+      args[2] ? request.reject(new Error(String(args[2]))) : request.resolve(args[1])
+    }
+  } else if (method === 'notifications.register') {
+    if (!deviceId || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string')
+      throw new Error('Push registration requires a paired phone')
+    mobilePush.register(deviceId, args[0], args[1], args[2])
+  } else if (method === 'notifications.unregister') {
+    if (!deviceId) throw new Error('Push registration requires a paired phone')
+    mobilePush.remove(deviceId)
+  } else if (method === 'liveActivity.status') {
+    if (!deviceId) throw new Error('Live Activities require a paired phone')
+    value = { enabled: mobileLiveActivities.enabled }
+  } else if (method === 'liveActivity.register') {
+    if (!deviceId) throw new Error('Live Activities require a paired phone')
+    value = mobileLiveActivities.register(deviceId, args?.[0])
+  } else if (method === 'liveActivity.unregister') {
+    if (!deviceId || typeof args?.[0] !== 'string') throw new Error('Live Activities require a paired phone')
+    mobileLiveActivities.remove(deviceId, args[0])
+  } else if (method === 'background.status')
+    value = {
+      running: true,
+      hostname: hostname(),
+      platform: process.platform,
+      pid: process.pid,
+      startedAt,
+      build: serviceBuild,
+      version: serviceVersion,
+      protocol: PROTOCOL_VERSION,
+      capabilities: capabilities(),
+      access: accessOf(device),
+      ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}),
+    }
+  else if (method.startsWith('network.')) {
+    if (remote) throw new Error('Network access is managed from the host running Ramu')
+    value = await networkMethod(method, args)
+  } else if (method === 'background.stop') {
+    return { value: {}, after: () => void stop(true) }
+  } else if (method === 'background.restart') {
+    return { value: {}, after: () => void stop() }
+  } else {
+    const dispatch = async () => await origin.run({ network: remote, deviceId }, () => dispatcher.invoke(method, args))
+    value = operationKey
+      ? await runOnce(operations, deviceId ?? 'local', operationKey, method, args, dispatch)
+      : await dispatch()
+  }
+  return { value }
+}
 // One handler serves both transports. Requests over TCP (`remote`) must present the bearer token.
 const handle = (remote: boolean) => async (req: import('node:http').IncomingMessage, res: ServerResponse) => {
   try {
@@ -670,92 +763,17 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
       res.writeHead(404).end()
       return
     }
-    const { method, args, operationKey } = await body(req)
-    if (operationKey !== undefined && !(typeof operationKey === 'string' && OPERATION_KEY_PATTERN.test(operationKey)))
-      throw new Error('Invalid operation key.')
-    if (remote && !deviceMayInvoke(device, method)) {
-      res
-        .writeHead(403, json)
-        .end(JSON.stringify({ error: 'This device is a viewer. This action requires full access.' }))
+    const request = await body(req)
+    let result
+    try {
+      result = await performInvoke(remote, device, request)
+    } catch (error) {
+      if (!(error instanceof InvokeRefused)) throw error
+      res.writeHead(403, json).end(JSON.stringify({ error: error.message }))
       return
     }
-    let value: unknown
-    if (method === 'browser.bridge.attach') {
-      if (remote || typeof args?.[0] !== 'string' || !desktopClients.has(args[0]))
-        throw new Error('A local desktop event stream is required.')
-      // A desktop that is gone (quit, crashed) must not keep the browser from a new one that is connected.
-      const owner = browserBroker.owner()
-      if (owner && owner !== args[0] && !desktopClients.has(owner)) browserBroker.detach(owner)
-      value = browserBroker.attach(args[0])
-    } else if (method === 'browser.bridge.ready') {
-      if (remote || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string')
-        throw new Error('Invalid local browser connection.')
-      browserBroker.ready(args[0], args[1])
-    } else if (method === 'browser.bridge.reply') {
-      if (
-        remote ||
-        !Array.isArray(args) ||
-        !args.slice(0, 3).every((item) => typeof item === 'string' && item.length <= 100)
-      )
-        throw new Error('Invalid local browser response.')
-      browserBroker.reply(args[0], args[1], args[2], args[3], typeof args[4] === 'string' ? args[4] : undefined)
-    } else if (method === 'host.reply') {
-      if (remote) throw new Error('Desktop actions are only available on this host')
-      const request = nativeRequests.get(args?.[0])
-      if (request) {
-        clearTimeout(request.timer)
-        nativeRequests.delete(args[0])
-        args[2] ? request.reject(new Error(String(args[2]))) : request.resolve(args[1])
-      }
-    } else if (method === 'notifications.register') {
-      if (!deviceId || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string')
-        throw new Error('Push registration requires a paired phone')
-      mobilePush.register(deviceId, args[0], args[1], args[2])
-    } else if (method === 'notifications.unregister') {
-      if (!deviceId) throw new Error('Push registration requires a paired phone')
-      mobilePush.remove(deviceId)
-    } else if (method === 'liveActivity.status') {
-      if (!deviceId) throw new Error('Live Activities require a paired phone')
-      value = { enabled: mobileLiveActivities.enabled }
-    } else if (method === 'liveActivity.register') {
-      if (!deviceId) throw new Error('Live Activities require a paired phone')
-      value = mobileLiveActivities.register(deviceId, args?.[0])
-    } else if (method === 'liveActivity.unregister') {
-      if (!deviceId || typeof args?.[0] !== 'string') throw new Error('Live Activities require a paired phone')
-      mobileLiveActivities.remove(deviceId, args[0])
-    } else if (method === 'background.status')
-      value = {
-        running: true,
-        hostname: hostname(),
-        platform: process.platform,
-        pid: process.pid,
-        startedAt,
-        build: serviceBuild,
-        version: serviceVersion,
-        protocol: PROTOCOL_VERSION,
-        capabilities: capabilities(),
-        access: accessOf(device),
-        ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}),
-      }
-    else if (method.startsWith('network.')) {
-      if (remote) throw new Error('Network access is managed from the host running Ramu')
-      value = await networkMethod(method, args)
-    } else if (method === 'background.stop') {
-      res.writeHead(200, json).end('{}')
-      void stop(true)
-      return
-    } else if (method === 'background.restart') {
-      res.writeHead(200, json).end('{}')
-      void stop()
-      return
-    } else {
-      const dispatch = async () =>
-        await origin.run({ network: remote, deviceId }, () => dispatcher.invoke(method, args))
-      value = operationKey
-        ? await runOnce(operations, deviceId ?? 'local', operationKey, method, args, dispatch)
-        : await dispatch()
-    }
-    res.writeHead(200, json).end(JSON.stringify({ value }))
+    res.writeHead(200, json).end(JSON.stringify({ value: result.value }))
+    result.after?.()
   } catch (error) {
     if (!res.headersSent) res.writeHead(400, json)
     res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }))
@@ -1175,12 +1193,42 @@ function listenRemote(server: NonNullable<typeof remote>, attempt = 0) {
     )
   })
 }
+let sockets: ReturnType<typeof serveSockets> | null = null
+// The WebSocket is one more transport for the same calls and events: it registers for the same broadcast as an SSE
+// stream and runs every call through `performInvoke`, so authorization and keyed-mutation recovery are shared.
+const socketHost: SocketHost = {
+  accept: (req, res) => remoteAccess.accept(req, res),
+  invoke: async (device, request) => {
+    try {
+      const result = await performInvoke(true, device, request)
+      return { ok: true, value: result.value, ...(result.after ? { after: result.after } : {}) }
+    } catch (error) {
+      return {
+        ok: false,
+        status: error instanceof InvokeRefused ? 403 : 400,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  },
+  epoch: runEpoch,
+  attach: (sink, req, device) => {
+    if (device && req.socket.remoteAddress)
+      presence.register(device.id, req.socket.remoteAddress, Number(req.headers['x-ramu-presence-port']))
+    clients.add(sink)
+    remoteStreams.set(sink, req.headers.authorization)
+  },
+  detach: (sink) => {
+    clients.delete(sink)
+    remoteStreams.delete(sink)
+  },
+}
 function startRemote() {
   if (!network.enabled || stopping) return
   remoteError = null
   const server = (remote = config.tls
     ? createHttpsServer({ cert: readFileSync(config.tls.cert), key: readFileSync(config.tls.key) }, handle(true))
     : createServer(handle(true)))
+  sockets = serveSockets(server, socketHost)
   listenRemote(server)
 }
 /** Advertises the address the listener bound, and only while both settings allow it. Never affects the listener. */
@@ -1195,6 +1243,8 @@ function stopRemote() {
   const old = remote
   remote = null
   remoteError = null
+  sockets?.close()
+  sockets = null
   // Event streams from paired devices would keep a closing server open; they reconnect (or are refused) afterwards.
   if (old) {
     try {

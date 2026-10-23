@@ -1,0 +1,161 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { decodeSocketFrame, encodeSocketFrame, type SocketServerFrame } from '@ramu/contracts'
+import { isTransportFailure } from '../src'
+import { RuntimeSocket, type SocketFactory, type SocketHandlers, type SocketState } from '../src/socket'
+
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => vi.useRealTimers())
+
+/** A scripted platform socket: the test plays the host. */
+function fake() {
+  const opened: {
+    url: string
+    headers: Record<string, string>
+    handlers: SocketHandlers
+    sent: string[]
+    closed: boolean
+  }[] = []
+  const factory: SocketFactory = (url, headers, handlers) => {
+    const entry = { url, headers, handlers, sent: [] as string[], closed: false }
+    opened.push(entry)
+    return {
+      send: (text) => entry.sent.push(text),
+      close: () => {
+        entry.closed = true
+        handlers.onclose({})
+      },
+    }
+  }
+  const host = (index: number, frame: SocketServerFrame) => opened[index]!.handlers.onmessage(encodeSocketFrame(frame))
+  const calls = (index: number) =>
+    opened[index]!.sent.map((text) => decodeSocketFrame(text, 'client')).filter((frame) => frame?.t === 'invoke') as {
+      id: number
+      method: string
+      args: unknown[]
+      operationKey?: string
+    }[]
+  return { opened, factory, host, calls }
+}
+
+function make(extra: Partial<ConstructorParameters<typeof RuntimeSocket>[0]> = {}) {
+  const { opened, factory, host, calls } = fake()
+  const events: [string, unknown][] = []
+  const states: SocketState[] = []
+  let restarts = 0
+  const socket = new RuntimeSocket({
+    url: 'https://studio.example:7788',
+    token: 'secret-token',
+    factory,
+    onEvent: (channel, payload) => events.push([channel, payload]),
+    onState: (state) => states.push(state),
+    onRestart: () => restarts++,
+    random: () => 0,
+    ...extra,
+  })
+  return { socket, opened, host, calls, events, states, restarts: () => restarts }
+}
+
+it('connects over wss with the token in a header, never in the URL, and is ready only after the host says so', () => {
+  const { socket, opened, host, states } = make()
+  socket.start()
+  expect(opened[0]!.url).toBe('wss://studio.example:7788/socket')
+  expect(opened[0]!.url).not.toContain('secret')
+  expect(opened[0]!.headers.Authorization).toBe('Bearer secret-token')
+  opened[0]!.handlers.onopen()
+  expect(socket.state).toBe('connecting')
+  host(0, { t: 'ready', epoch: 'e1' })
+  expect(states).toEqual(['connecting', 'ready'])
+  socket.close()
+})
+
+it('matches answers to calls by id, carries the operation key and delivers events', async () => {
+  const { socket, host, calls, events } = make()
+  socket.start()
+  host(0, { t: 'ready', epoch: 'e1' })
+  const first = socket.invoke('agent.send', ['a', undefined], { operationKey: 'operation-key-1' })
+  const second = socket.invoke('agent.list', [])
+  const [one, two] = calls(0)
+  expect(one).toMatchObject({ method: 'agent.send', args: ['a', undefined], operationKey: 'operation-key-1' })
+  host(0, { t: 'event', channel: 'automation:changed', payload: { n: 1 } })
+  host(0, { t: 'result', id: two!.id, value: ['x'] })
+  host(0, { t: 'error', id: one!.id, error: 'Not allowed', status: 403 })
+  await expect(second).resolves.toEqual(['x'])
+  await expect(first).rejects.toMatchObject({ message: 'Not allowed', status: 403 })
+  expect(isTransportFailure(await first.catch((error) => error))).toBe(false)
+  expect(events).toEqual([['automation:changed', { n: 1 }]])
+  socket.close()
+})
+
+it('settles pending calls as an unknown outcome when the connection drops, then reconnects with a growing delay', async () => {
+  const { socket, opened, host, states } = make()
+  socket.start()
+  host(0, { t: 'ready', epoch: 'e1' })
+  const pending = socket.invoke('agent.send', ['a'])
+  opened[0]!.handlers.onclose({})
+  const error = await pending.catch((reason) => reason)
+  expect(isTransportFailure(error)).toBe(true)
+  expect(states.at(-1)).toBe('closed')
+  // The first retry waits at least half of the base delay; the next one doubles.
+  await vi.advanceTimersByTimeAsync(499)
+  expect(opened).toHaveLength(1)
+  await vi.advanceTimersByTimeAsync(2)
+  expect(opened).toHaveLength(2)
+  opened[1]!.handlers.onclose({})
+  await vi.advanceTimersByTimeAsync(999)
+  expect(opened).toHaveLength(2)
+  await vi.advanceTimersByTimeAsync(2)
+  expect(opened).toHaveLength(3)
+  socket.close()
+})
+
+it('tells the app when the host restarted, and stops for refused credentials or a host without sockets', () => {
+  const restarted = make()
+  restarted.socket.start()
+  restarted.host(0, { t: 'ready', epoch: 'e1' })
+  restarted.opened[0]!.handlers.onclose({})
+  vi.advanceTimersByTime(1000)
+  restarted.host(1, { t: 'ready', epoch: 'e2' })
+  expect(restarted.restarts()).toBe(1)
+  restarted.socket.close()
+
+  const refused = make()
+  refused.socket.start()
+  refused.opened[0]!.handlers.onclose({ status: 401 })
+  vi.advanceTimersByTime(60_000)
+  expect(refused.socket.state).toBe('rejected')
+  expect(refused.opened).toHaveLength(1)
+
+  const old = make()
+  old.socket.start()
+  old.opened[0]!.handlers.onclose({ status: 404 })
+  vi.advanceTimersByTime(60_000)
+  expect(old.socket.state).toBe('unsupported')
+  expect(old.opened).toHaveLength(1)
+})
+
+it('refuses calls at once when not connected, times out a silent host and honors an abort', async () => {
+  const { socket, host } = make()
+  await expect(socket.invoke('agent.list')).rejects.toMatchObject({ code: 'ECONNRESET' })
+  socket.start()
+  host(0, { t: 'ready', epoch: 'e1' })
+  const silent = socket.invoke('agent.list', [], { timeoutMs: 1000 })
+  const caught = silent.catch((error) => error)
+  await vi.advanceTimersByTimeAsync(1001)
+  expect(isTransportFailure(await caught)).toBe(true)
+  const controller = new AbortController()
+  const aborted = socket.invoke('agent.list', [], { signal: controller.signal })
+  controller.abort()
+  await expect(aborted).rejects.toMatchObject({ name: 'AbortError' })
+  socket.close()
+})
+
+it('drops a connection whose host stops answering heartbeats', async () => {
+  const { socket, opened, host } = make({ heartbeatMs: 1000 })
+  socket.start()
+  host(0, { t: 'ready', epoch: 'e1' })
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(opened[0]!.sent.map((text) => decodeSocketFrame(text, 'client'))).toContainEqual({ t: 'ping' })
+  await vi.advanceTimersByTimeAsync(3000)
+  expect(opened[0]!.closed).toBe(true)
+  socket.close()
+})

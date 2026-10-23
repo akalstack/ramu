@@ -370,6 +370,9 @@ importers:
       werift:
         specifier: 0.25.1
         version: 0.25.1(supports-color@8.1.1)
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0
       yaml:
         specifier: 2.9.1
         version: 2.9.1
@@ -392,6 +395,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.1
+      '@types/ws':
+        specifier: ^8.18.2
+        version: 8.18.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -579,10 +585,16 @@ importers:
       '@ramu/contracts':
         specifier: workspace:*
         version: link:../contracts
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.1
+      '@types/ws':
+        specifier: ^8.18.2
+        version: 8.18.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -3377,6 +3389,9 @@ packages:
 
   '@types/validate-npm-package-name@4.0.2':
     resolution: {integrity: sha512-lrpDziQipxCEeK5kWxvljWYhUvOiB2A9izZd9B2AFarYAkqZshb4lPbRs7zKEic6eGtH8V/2qJW+dPp9OtF6bw==}
+
+  '@types/ws@8.18.2':
+    resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
 
   '@types/yargs-parser@21.0.3':
     resolution: {integrity: sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ==}
@@ -11113,6 +11128,10 @@ snapshots:
   '@types/unist@3.0.3': {}
 
   '@types/validate-npm-package-name@4.0.2': {}
+
+  '@types/ws@8.18.2':
+    dependencies:
+      '@types/node': 24.19.1
 
   '@types/yargs-parser@21.0.3': {}
 

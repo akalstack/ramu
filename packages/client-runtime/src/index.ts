@@ -8,6 +8,8 @@ import { runtimeNetwork, type NetworkMonitor } from './network'
 export { refreshRuntimeNetwork } from './network'
 export { runtimeNetwork } from './network'
 export { PresenceListener, presenceKey, presenceMessage } from './presence'
+export { RuntimeSocket, type SocketFactory, type SocketState } from './socket'
+export { nodeSocketFactory } from './nodeSocket'
 import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import {

@@ -103,7 +103,7 @@ Ramu does not look for a particular VPN. It listens where you tell it to and rep
 
 ## Protocol
 
-`packages/contracts` defines the wire format: `POST /invoke` with `{ method, args }`, and `GET /events` as server-sent events. `background.status` returns `protocol` and `capabilities` so clients that update independently can check compatibility. `packages/client-runtime` is the Node client for both transports.
+`packages/contracts` defines the wire format: `POST /invoke` with `{ method, args }`, and `GET /events` as server-sent events. `background.status` returns `protocol` and `capabilities` so clients that update independently can check compatibility. `packages/client-runtime` is the Node client for both transports. Hosts with network access also advertise `websocket`: `GET /socket` upgrades, authenticated by the `Authorization` header on the upgrade (never in the URL), to one socket carrying the same calls and events as `/invoke` and `/events` through the same handlers, authorization and `operationKey` recovery. HTTP and SSE stay available; `RuntimeSocket` in `packages/client-runtime` is the client, and nothing uses the socket by default.
 
 ## Run it as a service
 
