@@ -3576,4 +3576,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   "This provider already has a server with this name that only it manages, and Ramu does not share this one with it.": "Penyedia ini sudah memiliki server bernama sama yang hanya dikelolanya sendiri, dan Ramu tidak membagikan yang ini kepadanya.",
   "Not available after resuming: {0}": "Tidak tersedia setelah dilanjutkan: {0}",
   "Manage connectors": "Kelola konektor",
+  "Changed after this thread started. The changed rules are sent with your next message.": "Berubah setelah thread ini dimulai. Aturan yang berubah dikirim bersama pesan Anda berikutnya.",
 }

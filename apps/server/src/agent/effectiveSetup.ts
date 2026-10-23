@@ -114,7 +114,9 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
       name: rule.name,
       state: changed ? 'needs-refresh' : 'delivered',
       reason: changed
-        ? 'Changed after this thread started. It applies to a new thread; a running thread keeps what it was given.'
+        ? ruleDelivery(input.provider).path === 'first-message'
+          ? 'Changed after this thread started. The changed rules are sent with your next message.'
+          : 'Changed after this thread started. It applies to a new thread; a running thread keeps what it was given.'
         : `${ruleDelivery(input.provider).detail} Whether the model followed it is not observable.`,
     })
   }
