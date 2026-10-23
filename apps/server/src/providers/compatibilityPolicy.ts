@@ -7,8 +7,28 @@ import type { AgentProvider } from '@ramu/shared/types'
  * guessed to fill a matrix. Rules are exact releases until a wider range has been tested.
  */
 export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
-  revision: 2,
+  revision: 3,
   rules: [
+    {
+      id: 'codex-app-server-0.150.0',
+      provider: 'codex',
+      runtime: 'app-server',
+      min: '0.150.0',
+      below: '0.150.1',
+      status: 'supported',
+      evidence:
+        'codex-cli 0.150.0 (darwin-arm64 from npm) on macOS, 2026-10-23: `codex app-server --stdio` answered initialize, then model/list (3 models) and account/rateLimits/read, with no model call.',
+    },
+    {
+      id: 'codex-app-server-0.162.1',
+      provider: 'codex',
+      runtime: 'app-server',
+      min: '0.162.1',
+      below: '0.162.2',
+      status: 'supported',
+      evidence:
+        'codex-cli 0.162.1 (darwin-arm64 from npm) on macOS, 2026-10-23: `codex app-server --stdio` answered initialize, then model/list (7 models) and account/rateLimits/read, with no model call.',
+    },
     {
       id: 'codex-app-server-0.163.0',
       provider: 'codex',
@@ -17,7 +37,7 @@ export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
       below: '0.163.1',
       status: 'supported',
       evidence:
-        'codex-cli 0.163.0 on macOS, 2026-10-23: `codex app-server --stdio` answered initialize, then model/list (7 models) and account/rateLimits/read, with no model call. A reproduced mismatch on an older release is still to be recorded.',
+        'codex-cli 0.163.0 on macOS, 2026-10-23: `codex app-server --stdio` answered initialize, then model/list (7 models) and account/rateLimits/read, with no model call. 0.120.0 and 0.100.0 could not be probed: macOS killed their binaries on this machine (exit 137), which says nothing about the protocol.',
     },
   ],
 }

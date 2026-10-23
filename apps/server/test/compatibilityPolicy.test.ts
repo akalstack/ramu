@@ -11,7 +11,11 @@ it('marks the exact Codex release that was probed as supported and every other r
   const evaluate = (observedVersion: string | null) =>
     evaluateCompatibility(COMPATIBILITY_POLICY, 'codex', 'app-server', observedVersion)
   expect(evaluate('0.163.0')).toMatchObject({ status: 'supported', ruleId: 'codex-app-server-0.163.0' })
+  expect(evaluate('0.162.1')).toMatchObject({ status: 'supported', ruleId: 'codex-app-server-0.162.1' })
+  expect(evaluate('0.150.0')).toMatchObject({ status: 'supported', ruleId: 'codex-app-server-0.150.0' })
   expect(evaluate('0.163.1').status).toBe('unverified')
+  expect(evaluate('0.162.0').status).toBe('unverified')
+  expect(evaluate('0.151.0').status).toBe('unverified')
   expect(evaluate('0.162.9').status).toBe('unverified')
   expect(evaluate(null).status).toBe('unverified')
 })
