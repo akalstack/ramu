@@ -7,8 +7,18 @@ import type { AgentProvider } from '@ramu/shared/types'
  * guessed to fill a matrix. Rules are exact releases until a wider range has been tested.
  */
 export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
-  revision: 4,
+  revision: 5,
   rules: [
+    {
+      id: 'claude-code-sdk-2.1.308',
+      provider: 'claude-code',
+      runtime: 'sdk',
+      min: '2.1.308',
+      below: '2.1.309',
+      status: 'supported',
+      evidence:
+        'Claude Code 2.1.308 (the installed executable) driven by @anthropic-ai/claude-agent-sdk 0.3.295 on macOS, 2026-10-23: initializationResult (118 commands, 8 agents, 13 models), supportedCommands and getContextUsage answered, with no model call. The rule keys on the executable; a Ramu release that moves the SDK pin needs its own probe.',
+    },
     {
       id: 'opencode-http-2.1.3',
       provider: 'opencode',
@@ -60,4 +70,5 @@ export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
 export const COMPATIBILITY_RUNTIME: Partial<Record<AgentProvider, RuntimeKind>> = {
   codex: 'app-server',
   opencode: 'http',
+  'claude-code': 'sdk',
 }
