@@ -94,7 +94,8 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
 export function offeredScopes(
   id: string,
   kind: DeviceKind,
-  available: { shared: boolean },
+  /** `shared`: a transport follows the person across devices. `mobile`: the paired host holds the all-mobile layer. */
+  available: { shared: boolean; mobile?: boolean },
 ): { scope: PreferenceScope; enabled: boolean; reason?: string }[] {
   const field = fieldById(id)
   if (!field) return []
@@ -102,7 +103,7 @@ export function offeredScopes(
   return ORDER.filter((scope) => field.scopes.some((s) => s === scope))
     .filter((scope) => (scope === 'mobile' ? mobile : true))
     .map((scope) =>
-      scope !== 'device' && !available.shared
+      scope !== 'device' && !(scope === 'mobile' ? (available.mobile ?? available.shared) : available.shared)
         ? { scope, enabled: false, reason: 'Needs a paired device or account that syncs preferences.' }
         : { scope, enabled: true },
     )

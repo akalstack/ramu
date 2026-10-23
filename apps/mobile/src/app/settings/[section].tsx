@@ -6,6 +6,7 @@ import { font, space, useTheme, type Appearance, type TextSize } from '../../the
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
+import { useSharedField, type SharedFieldControl } from '../../runtime/useSharedField'
 import {
   BUSY_MODE_DEVICE_KEY,
   MODEL_WARNING_DEVICE_KEY,
@@ -106,18 +107,56 @@ function AppearancePage() {
   )
 }
 
-/** How a message sent while the agent works behaves on this phone: the computer's setting unless this phone overrides it. */
+/** One shared-mobile row: "All your phones" with the computer's setting as the way back, or the reason it is unavailable. */
+function SharedRow<T extends string>({
+  title,
+  control,
+  options,
+  inheritLabel,
+}: {
+  title: string
+  control: SharedFieldControl
+  options: { key: T; label: string }[]
+  inheritLabel: string
+}) {
+  const t = useT()
+  const current = (typeof control.value === 'string' ? control.value : undefined) as T | undefined
+  return (
+    <>
+      <SectionLabel>{title}</SectionLabel>
+      {control.available ? (
+        <Card style={{ marginHorizontal: space.l }}>
+          <Segmented<T | 'inherit'>
+            style={{ margin: space.m }}
+            value={current ?? 'inherit'}
+            onChange={(key) => void control.setMobile(key === 'inherit' ? null : key)}
+            options={[{ key: 'inherit', label: inheritLabel }, ...options]}
+          />
+        </Card>
+      ) : (
+        <Hint>{t.sharedNeedsHost}</Hint>
+      )}
+      {control.pending ? <Hint>{t.sharedSaving}</Hint> : null}
+      {control.error ? <Hint>{control.error}</Hint> : null}
+    </>
+  )
+}
+
+/**
+ * How a message sent while the agent works, and the warning before a model change, behave here: this phone's own choice
+ * first, then the setting shared by all your phones on this computer, then the computer's own setting.
+ */
 function BusyBehavior({ computerId }: { computerId: string }) {
   const { drafts, setDraft, appPreferences } = useStore()
   const t = useT()
-  const resolved = resolveBusyMode(drafts[BUSY_MODE_DEVICE_KEY], appPreferences[computerId]?.busyMessageAction)
-  const own = resolved.source === 'device'
-  const hostMode = resolveBusyMode(undefined, appPreferences[computerId]?.busyMessageAction)
-  const warning = resolveModelChangeWarning(
-    drafts[MODEL_WARNING_DEVICE_KEY],
-    appPreferences[computerId]?.warnModelChange,
-  )
-  const hostWarning = resolveModelChangeWarning(undefined, appPreferences[computerId]?.warnModelChange)
+  const sharedBusy = useSharedField(computerId, 'queueWhileBusy')
+  const sharedWarning = useSharedField(computerId, 'modelChangeWarning')
+  const hostBusy = appPreferences[computerId]?.busyMessageAction
+  const hostWarn = appPreferences[computerId]?.warnModelChange
+  const resolved = resolveBusyMode(drafts[BUSY_MODE_DEVICE_KEY], sharedBusy.value, hostBusy)
+  const inheritedBusy = resolveBusyMode(undefined, sharedBusy.value, hostBusy)
+  const warning = resolveModelChangeWarning(drafts[MODEL_WARNING_DEVICE_KEY], sharedWarning.value, hostWarn)
+  const inheritedWarning = resolveModelChangeWarning(undefined, sharedWarning.value, hostWarn)
   return (
     <>
       <SectionLabel>{t.busyOnPhone}</SectionLabel>
@@ -135,9 +174,19 @@ function BusyBehavior({ computerId }: { computerId: string }) {
       <Hint>{t.busyHint}</Hint>
       <ScopeControl
         field="queueWhileBusy"
-        overridden={own}
-        inheritedLabel={hostMode.mode === 'queue' ? t.queue : t.steer}
+        overridden={resolved.source === 'device'}
+        inheritedLabel={inheritedBusy.mode === 'queue' ? t.queue : t.steer}
         onUseInherited={() => setDraft(BUSY_MODE_DEVICE_KEY, '')}
+        sharedMobile={sharedBusy.available}
+      />
+      <SharedRow<BusyMode>
+        title={t.sharedForPhones}
+        control={sharedBusy}
+        inheritLabel={t.sharedInherit}
+        options={[
+          { key: 'steer', label: t.steer },
+          { key: 'queue', label: t.queue },
+        ]}
       />
       <SectionLabel>{t.modelWarnOnPhone}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
@@ -155,9 +204,29 @@ function BusyBehavior({ computerId }: { computerId: string }) {
       <ScopeControl
         field="modelChangeWarning"
         overridden={warning.source === 'device'}
-        inheritedLabel={hostWarning.warn ? t.modelWarnOn : t.modelWarnOff}
+        inheritedLabel={inheritedWarning.warn ? t.modelWarnOn : t.modelWarnOff}
         onUseInherited={() => setDraft(MODEL_WARNING_DEVICE_KEY, '')}
+        sharedMobile={sharedWarning.available}
       />
+      <SectionLabel>{t.sharedForPhonesWarn}</SectionLabel>
+      {sharedWarning.available ? (
+        <Card style={{ marginHorizontal: space.l }}>
+          <Segmented<'on' | 'off' | 'inherit'>
+            style={{ margin: space.m }}
+            value={typeof sharedWarning.value === 'boolean' ? (sharedWarning.value ? 'on' : 'off') : 'inherit'}
+            onChange={(key) => void sharedWarning.setMobile(key === 'inherit' ? null : key === 'on')}
+            options={[
+              { key: 'inherit', label: t.sharedInherit },
+              { key: 'on', label: t.modelWarnOn },
+              { key: 'off', label: t.modelWarnOff },
+            ]}
+          />
+        </Card>
+      ) : (
+        <Hint>{t.sharedNeedsHost}</Hint>
+      )}
+      {sharedWarning.pending ? <Hint>{t.sharedSaving}</Hint> : null}
+      {sharedWarning.error ? <Hint>{sharedWarning.error}</Hint> : null}
     </>
   )
 }

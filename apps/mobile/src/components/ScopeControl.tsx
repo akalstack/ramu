@@ -40,6 +40,7 @@ export function ScopeControl({
   overridden,
   inheritedLabel,
   onUseInherited,
+  sharedMobile = false,
 }: {
   field: string
   /** True when this device holds its own value for the field. */
@@ -47,13 +48,15 @@ export function ScopeControl({
   /** Display text for the value the field falls back to when the device override is removed. */
   inheritedLabel: string
   onUseInherited: () => void
+  /** The selected computer holds the all-mobile layer for this field, so that scope is offered, not described as missing. */
+  sharedMobile?: boolean
 }) {
   const t = useT()
   const { c } = useTheme()
   const kind = deviceKind()
   const layers = overridden ? setOverride(emptyLayers(), 'device', field, true, 'this-device', 0) : emptyLayers()
   const { source } = resolvePreference(layers, field)
-  const unavailable = offeredScopes(field, kind, { shared: false }).filter((o) => !o.enabled)
+  const unavailable = offeredScopes(field, kind, { shared: false, mobile: sharedMobile }).filter((o) => !o.enabled)
   const preview = overridden ? inheritedPreview(layers, field, 'device') : null
   return (
     <View style={{ paddingHorizontal: space.l, paddingTop: space.s, gap: space.xs }}>

@@ -8,7 +8,7 @@ The selection flow resolves through the shared scopes: the host setting (all dev
 
 - Cross-host sharing: the mobile layer lives on each paired host, so a phone paired to two hosts can hold different shared values. A profile or account transport that follows the person across hosts is not designed; extend the same layers only after a concrete mechanism exists, and keep showing the host prerequisite until then.
 - Clearing a shared override deletes it without a tombstone, so a much older offline write from another phone could reapply it. Add tombstones if this appears in acceptance.
-- Extending the same transport to the other fields in the [mobile settings plan](MOBILE-SETTINGS-PLAN.md).
+- The same shared mobile layer now carries two composer fields (**Messages while working** and the **model-change warning**), each validated by the host with its own revision (`packages/shared/src/sharedFields.ts`, `preferences.layers.set`), shown in Settings → Threads as "for all your phones" with the computer's setting as the way back. Still to extend, only when the person needs them: appearance, accent, language, reduced motion, favorite models and the alert fields, which still follow this phone or the computer.
 
 **Easier for the person:** One choice can cover every device, with a one-click clear for the exceptions, so the person does not reconfigure each phone.
 

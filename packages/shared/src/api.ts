@@ -715,9 +715,10 @@ export interface RamuMethods {
   'settings.app.get'(): AppPreferences
   /** Shared mobile display preferences kept on the host the phones are paired with. */
   'preferences.layers.get'(): import('./modelFlow').PreferenceLayersSnapshot
+  /** Sets or clears (no `value`) one shared mobile field; the host refuses any other field or value. */
   'preferences.layers.set'(edit: {
-    id: 'modelFlow'
-    value?: import('./modelFlow').ModelFlow
+    id: import('./sharedFields').SharedMobileField
+    value?: string | boolean
     at: number
     by: string
   }): import('./modelFlow').PreferenceLayersSnapshot & { applied: boolean }

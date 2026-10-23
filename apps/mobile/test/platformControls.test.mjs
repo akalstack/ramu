@@ -81,6 +81,7 @@ function load(file, os, overrides = {}, globals = {}) {
       useDictation: () => ({ snapshot: { state: { phase: 'idle' } }, session: { cancel() {} } }),
     },
     '@ramu/shared/voice/dictation': { dictationBusy: () => false },
+    '@ramu/shared/sharedFields': { sharedValue: () => undefined },
     '../runtime/busyMode': {
       BUSY_MODE_DEVICE_KEY: 'pref-device:queueWhileBusy',
       resolveBusyMode: () => ({ mode: 'steer', source: 'default' }),
@@ -4940,6 +4941,7 @@ test('computer-use stop revokes only the displayed thread and refreshes the shar
       useDictation: () => ({ snapshot: { state: { phase: 'idle' } }, session: { cancel() {} } }),
     },
     '@ramu/shared/voice/dictation': { dictationBusy: () => false },
+    '@ramu/shared/sharedFields': { sharedValue: () => undefined },
     '../runtime/busyMode': {
       BUSY_MODE_DEVICE_KEY: 'pref-device:queueWhileBusy',
       resolveBusyMode: () => ({ mode: 'steer', source: 'default' }),

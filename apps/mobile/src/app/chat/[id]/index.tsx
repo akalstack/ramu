@@ -20,6 +20,7 @@ import {
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../runtime/busyMode'
+import { sharedValue } from '@ramu/shared/sharedFields'
 import { foldTurns } from '../../../runtime/turns'
 import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
 import { fill, useT } from '../../../i18n'
@@ -400,6 +401,7 @@ export default function ChatScreen() {
       !started ||
       !resolveModelChangeWarning(
         store.drafts?.[MODEL_WARNING_DEVICE_KEY],
+        sharedValue(store.mobileLayers?.[chat.computerId], 'modelChangeWarning'),
         store.appPreferences[chat.computerId]?.warnModelChange,
       ).warn
     )

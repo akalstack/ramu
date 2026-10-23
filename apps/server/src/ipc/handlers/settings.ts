@@ -9,6 +9,7 @@ import {
 } from '@ramu/shared/settingsCompatibility'
 import type { AppPreferences, ModelPreferences } from '@ramu/shared/types'
 import { MODEL_FLOW_FIELD, applyLayerEdit } from '@ramu/shared/modelFlow'
+import type { SharedMobileField } from '@ramu/shared/sharedFields'
 import { parseLayer, type PreferenceLayer } from '@ramu/shared/preferenceScopes'
 import { migrateModelDefaults, recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { applySettingEdits, validateSettingModels } from '../../sharedSettings'
@@ -58,16 +59,31 @@ export const registerSettingsHandlers: RegisterHandlers = ({
     'preferences.layers.get': { args: z.tuple([]), run: layerSnapshot },
     'preferences.layers.set': {
       args: z.tuple([
-        z.object({
-          id: z.literal(MODEL_FLOW_FIELD),
-          value: selectionMode.optional(),
-          at: z.number().finite(),
-          by: z.string().min(1).max(80),
-        }),
+        // Each shared field accepts only its own values; `value` absent clears the override.
+        z.discriminatedUnion('id', [
+          z.object({
+            id: z.literal(MODEL_FLOW_FIELD),
+            value: selectionMode.optional(),
+            at: z.number().finite(),
+            by: z.string().min(1).max(80),
+          }),
+          z.object({
+            id: z.literal('queueWhileBusy'),
+            value: z.enum(['steer', 'queue']).optional(),
+            at: z.number().finite(),
+            by: z.string().min(1).max(80),
+          }),
+          z.object({
+            id: z.literal('modelChangeWarning'),
+            value: z.boolean().optional(),
+            at: z.number().finite(),
+            by: z.string().min(1).max(80),
+          }),
+        ]),
       ]),
-      run: (edit: { id: typeof MODEL_FLOW_FIELD; value?: 'model' | 'effort'; at: number; by: string }) => {
+      run: (edit: { id: SharedMobileField; value?: string | boolean; at: number; by: string }) => {
         const { layer, applied } = applyLayerEdit(mobileLayer(), edit.id, {
-          ...(edit.value ? { value: edit.value } : {}),
+          ...(edit.value !== undefined ? { value: edit.value } : {}),
           at: Math.min(edit.at, Date.now() + 5 * 60_000),
           by: edit.by,
         })

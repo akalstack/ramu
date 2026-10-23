@@ -32,6 +32,7 @@ import { font, radius, space, useTheme } from '../theme'
 import { providerNames } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { BUSY_MODE_DEVICE_KEY, otherBusyMode, resolveBusyMode } from '../runtime/busyMode'
+import { sharedValue } from '@ramu/shared/sharedFields'
 import { useModelFlow } from '../runtime/useModelFlow'
 import { fill, useT } from '../i18n'
 import { Chip, IconButton, Row, Segmented, Sheet, T, tap } from './ui'
@@ -777,7 +778,11 @@ export function Composer({
       setContext((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next))
     }, [draftKey, storedContext]),
   )
-  const { mode } = resolveBusyMode(store.drafts?.[BUSY_MODE_DEVICE_KEY], store.appPreferences?.[pc]?.busyMessageAction)
+  const { mode } = resolveBusyMode(
+    store.drafts?.[BUSY_MODE_DEVICE_KEY],
+    sharedValue(store.mobileLayers?.[pc], 'queueWhileBusy'),
+    store.appPreferences?.[pc]?.busyMessageAction,
+  )
   const otherMode = otherBusyMode(mode)
   useEffect(() => {
     if (restore) setText(restore.text)
