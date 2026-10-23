@@ -22,6 +22,7 @@ vi.mock('../src/settings/SettingsScope', async () => {
 })
 vi.mock('../src/workspace/workspace', () => ({ useWorkspace: () => ({ composing: 'project' }) }))
 vi.mock('../src/Menu', () => ({ Dialog: () => null, Dropdown: () => null }))
+vi.mock('../src/ipc', () => ({ ramu: { invoke: vi.fn(async () => undefined) } }))
 vi.mock('../src/settings/McpSettings', () => ({ McpSettings: () => null }))
 
 const server = (overrides: Partial<ProjectMcpServer>): ProjectMcpServer => ({
@@ -132,4 +133,18 @@ it('separates your own settings from the project and names the project', () => {
   expect(html).toContain('Lionparcel only')
   expect(html.indexOf('atlassian')).toBeLessThan(html.indexOf('Lionparcel only'))
   expect(html.indexOf('Lionparcel only')).toBeLessThan(html.indexOf('local-db'))
+})
+
+it('lists provider-managed servers apart from declared ones, with a connectors link only where one exists', () => {
+  const html = render({
+    providerManaged: [
+      { provider: 'claude-code', name: 'claude.ai Figma' },
+      { provider: 'codex', name: 'Codex connector' },
+    ],
+  })
+  expect(html).toContain('Managed by the provider')
+  expect(html).toContain('claude.ai Figma')
+  expect(html).toContain('Codex connector')
+  expect(html.match(/Manage connectors/g)).toHaveLength(1)
+  expect(render({})).not.toContain('Managed by the provider')
 })
