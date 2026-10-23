@@ -3564,4 +3564,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Signed in on another device? Paste the address the page ended on": "Login di perangkat lain? Tempel alamat tempat halaman berakhir",
   "Finish sign-in": "Selesaikan login",
   "That address did not finish the sign-in. Copy it again after the page fails to load.": "Alamat itu tidak menyelesaikan login. Salin lagi setelah halaman gagal dimuat.",
+  "Provider-managed: only this provider has this server's definition, so Ramu cannot share it with other logins. Manage it in the provider.": "Dikelola penyedia: hanya penyedia ini yang memiliki definisi server ini, jadi Ramu tidak dapat membagikannya ke login lain. Kelola di penyedia.",
+  "Provider-managed and not connected: only this provider has this server's definition, so Ramu cannot share or repair it. Manage it in the provider.": "Dikelola penyedia dan tidak terhubung: hanya penyedia ini yang memiliki definisi server ini, jadi Ramu tidak dapat membagikan atau memperbaikinya. Kelola di penyedia.",
 }

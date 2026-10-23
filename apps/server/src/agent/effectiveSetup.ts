@@ -23,8 +23,17 @@ export interface SetupInputs {
   now: number
 }
 
+/** Ramu's own tool servers, never provider-managed. */
+const INTERNAL = ['ramu', 'shared_mcp']
+
+const PROVIDER_MANAGED =
+  "Provider-managed: only this provider has this server's definition, so Ramu cannot share it with other logins. Manage it in the provider."
+const PROVIDER_MANAGED_DOWN =
+  "Provider-managed and not connected: only this provider has this server's definition, so Ramu cannot share or repair it. Manage it in the provider."
+
 const connectionReasons: Record<SharedMcpAccountReadiness['status'], string> = {
-  ready: 'Checked and approved for this login. Its approved tools reach the thread on the shared_mcp server; each call asks first.',
+  ready:
+    'Checked and approved for this login. Its approved tools reach the thread on the shared_mcp server; each call asks first.',
   'approval-needed': 'Review access for this login in Settings → Agent setup → MCP servers.',
   'sign-in-required': 'Sign in to the service in Settings → Agent setup → MCP servers.',
   unsupported: 'This connection cannot be used from this provider.',
@@ -113,6 +122,18 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
                 : 'Added to the launch; this runtime does not report its servers.',
             },
     )
+  }
+  // Servers only the provider knows (its own account connectors, plugins, managed config): Ramu cannot read a definition,
+  // so it cannot share them, and it never rewrites the provider's configuration to change that.
+  const known = new Set([...input.addedServers, ...input.connections.map((connection) => connection.name), ...INTERNAL])
+  for (const server of input.runtimeServers ?? []) {
+    if (known.has(server.name)) continue
+    items.push({
+      kind: 'native-mcp',
+      name: server.name,
+      state: server.status === 'connected' ? 'runtime-confirmed' : 'configured',
+      reason: server.status === 'connected' ? PROVIDER_MANAGED : PROVIDER_MANAGED_DOWN,
+    })
   }
   for (const name of input.sharedSkills)
     items.push(

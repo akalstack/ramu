@@ -103,3 +103,26 @@ it('says how each runtime receives rules and omits them all when they are over i
   const big = buildSetupSnapshot(base({ rules: [rule({ id: 'a', body: 'x'.repeat(25_000) })] }))
   expect(big.items.map((item) => item.state)).toEqual(['omitted'])
 })
+
+it('marks a server only the provider reports as provider-managed, and never lists Ramu’s own servers', () => {
+  const { items } = buildSetupSnapshot(
+    base({
+      addedServers: ['docs'],
+      connections: [{ name: 'Shared docs', status: 'ready' }],
+      runtimeServers: [
+        { name: 'docs', status: 'connected' },
+        { name: 'Shared docs', status: 'connected' },
+        { name: 'ramu', status: 'connected' },
+        { name: 'claude.ai Figma', status: 'connected' },
+        { name: 'claude.ai Atlassian', status: 'needs-auth' },
+      ],
+    }),
+  )
+  const managed = items.filter((item) => item.reason.startsWith('Provider-managed'))
+  expect(managed.map((item) => [item.name, item.state])).toEqual([
+    ['claude.ai Figma', 'runtime-confirmed'],
+    ['claude.ai Atlassian', 'configured'],
+  ])
+  expect(managed[0]!.reason).toContain('cannot share it')
+  expect(items.map((item) => item.name)).not.toContain('ramu')
+})
