@@ -1013,6 +1013,8 @@ export interface RamuMethods {
   'agent.mcpStatus'(sessionId: string): Promise<AgentMcpStatus>
   /** Rules, servers, skills and Shared MCP connections this thread has, with how far each got. Names and states only. */
   'agent.setup'(sessionId: string): Promise<AgentSetupSnapshot>
+  /** For a shared connection this provider also loads itself: hide the shared copy (`native`) or serve both. Takes effect on the next launch of the thread. */
+  'agent.chooseDuplicate'(sessionId: string, connectionId: string, use: 'native' | 'both'): void
   'agent.reloadMcp'(sessionId: string): Promise<void>
   'agent.reconnectMcp'(sessionId: string, name: string): Promise<void>
   'agent.providerHold'(sessionId: string): 'message' | 'chat' | 'picked' | null

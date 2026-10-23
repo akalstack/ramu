@@ -114,7 +114,7 @@ export class ExternalSessionTools {
 
   /** A gateway is bound to one provider login and project, so a switch within a chat never reuses another's access. */
   private key(source: ExternalSessionSource) {
-    return JSON.stringify([source.sessionId, source.provider, source.accountId, source.projectId, source.role])
+    return JSON.stringify([source.sessionId, source.provider, source.accountId, source.projectId, source.role, source.connectionIds ?? null])
   }
 
   private gateway(source: ExternalSessionSource) {

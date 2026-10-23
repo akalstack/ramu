@@ -19,7 +19,10 @@ export interface SetupInputs {
   runtimeServers?: readonly { name: string; status: string }[]
   /** Skills Ramu copies into this login's skill export for the person (names only). */
   sharedSkills: readonly string[]
-  connections: readonly { name: string; status: SharedMcpAccountReadiness['status'] }[]
+  connections: readonly { connectionId?: string; name: string; status: SharedMcpAccountReadiness['status'] }[]
+  /** Connection ids the provider also loads from its own configuration, and the ones this thread hides. */
+  duplicates?: ReadonlySet<string>
+  hidden?: readonly string[]
   now: number
 }
 
@@ -30,6 +33,24 @@ const PROVIDER_MANAGED =
   "Provider-managed: only this provider has this server's definition, so Ramu cannot share it with other logins. Manage it in the provider."
 const PROVIDER_MANAGED_DOWN =
   "Provider-managed and not connected: only this provider has this server's definition, so Ramu cannot share or repair it. Manage it in the provider."
+
+const DUPLICATE_BOTH =
+  'This provider also loads the same server from its own configuration, so the model sees two copies. Choose one for this thread.'
+const DUPLICATE_NATIVE =
+  "Hidden for this thread: the provider's own copy of this server is used. Ramu did not change the provider's configuration."
+
+function hiddenOrBoth(
+  connectionId: string,
+  status: SharedMcpAccountReadiness['status'],
+  hidden: readonly string[],
+): Pick<SetupItem, 'state' | 'reason' | 'duplicate'> {
+  const native = hidden.includes(connectionId)
+  return {
+    state: native ? 'omitted' : status === 'ready' ? 'configured' : 'omitted',
+    reason: native ? DUPLICATE_NATIVE : status === 'ready' ? DUPLICATE_BOTH : connectionReasons[status],
+    duplicate: { connectionId, use: native ? 'native' : 'both' },
+  }
+}
 
 const connectionReasons: Record<SharedMcpAccountReadiness['status'], string> = {
   ready:
@@ -151,8 +172,12 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
     items.push({
       kind: 'shared-mcp',
       name: connection.name,
-      state: connection.status === 'ready' ? 'configured' : 'omitted',
-      reason: connectionReasons[connection.status],
+      ...(connection.connectionId && input.duplicates?.has(connection.connectionId)
+        ? hiddenOrBoth(connection.connectionId, connection.status, input.hidden ?? [])
+        : {
+            state: connection.status === 'ready' ? 'configured' : 'omitted',
+            reason: connectionReasons[connection.status],
+          }),
     })
   return {
     sessionId: input.sessionId,

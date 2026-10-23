@@ -13,11 +13,33 @@ import {
 } from '../../agent/projectSetup'
 import { isAbsolute } from 'node:path'
 import { id } from '../schemas'
-import type { RegisterHandlers } from '../types'
+import type { HandlerContext, RegisterHandlers } from '../types'
 
 const choose = (all: Record<string, boolean>, key: string, shared: boolean | null) => {
   const { [key]: _old, ...rest } = all
   return shared === null ? rest : { ...rest, [key]: shared }
+}
+
+/** Discovery for one project from its folders and the Shared MCP connections on this host. Nothing is executed. */
+export function projectSetupOf(
+  { workspace, getSharedMcp }: Pick<HandlerContext, 'workspace' | 'getSharedMcp'>,
+  projectId: string,
+) {
+  const sharing = workspace.getAppState<McpSharing>(MCP_SHARING_KEY, {})
+  const skillSharing = workspace.getAppState<SkillSharing>(SKILL_SHARING_KEY, {})
+  const project = workspace.listProjects().find((entry) => entry.id === projectId)
+  if (!project) throw new Error('Unknown project.')
+  const roots = workspace.listRepositories(projectId).map((repo) => ({ label: repo.name, path: repo.root }))
+  // A multi-repository workspace folder may hold its own configuration beside the repositories.
+  if (project.root && !roots.some((root) => root.path === project.root))
+    roots.unshift({ label: project.name, path: project.root })
+  const managed = (getSharedMcp?.().list().connections ?? [])
+    .filter(({ connection }) => connection.scope.hostWide || connection.scope.projectIds.includes(projectId))
+    .map(({ connection }) => ({ id: connection.id, transport: connection.transport }))
+  return {
+    project,
+    setup: discoverProjectSetup(projectId, roots, managed, sharing, undefined, undefined, skillSharing),
+  }
 }
 
 /** What agents get in a project, merged across providers and repositories, and which servers Ramu shares. */
@@ -29,21 +51,7 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
     if (ctx.host.canAdministerIntegrations?.() !== true)
       throw new Error('Manage MCP connections and credentials on the host running Ramu')
   }
-  const setupOf = (projectId: string) => {
-    const project = workspace.listProjects().find((entry) => entry.id === projectId)
-    if (!project) throw new Error('Unknown project.')
-    const roots = workspace.listRepositories(projectId).map((repo) => ({ label: repo.name, path: repo.root }))
-    // A multi-repository workspace folder may hold its own configuration beside the repositories.
-    if (project.root && !roots.some((root) => root.path === project.root))
-      roots.unshift({ label: project.name, path: project.root })
-    const managed = (getSharedMcp?.().list().connections ?? [])
-      .filter(({ connection }) => connection.scope.hostWide || connection.scope.projectIds.includes(projectId))
-      .map(({ connection }) => ({ id: connection.id, transport: connection.transport }))
-    return {
-      project,
-      setup: discoverProjectSetup(projectId, roots, managed, sharing(), undefined, undefined, skillSharing()),
-    }
-  }
+  const setupOf = (projectId: string) => projectSetupOf(ctx, projectId)
   return {
     'projects.setup': {
       args: z.tuple([id]),

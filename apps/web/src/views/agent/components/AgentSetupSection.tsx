@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSetupSnapshot, SetupItem } from '@ramu/shared/agentSetup'
 import { estimatedTokens } from '@ramu/shared/rules'
 import { useHost } from '../../../workspace/HostProvider'
 import { t, useLanguage } from '../../../i18n'
 import { errorText } from '../../../lib/errors'
+import { Button } from '@/components/ui/button'
 
 const stateLabel = (state: SetupItem['state']) => {
   switch (state) {
@@ -45,19 +46,22 @@ export function AgentSetupSection({ sessionId }: { sessionId: string }) {
   const [snapshot, setSnapshot] = useState<AgentSetupSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const request = useRef(0)
-  useEffect(() => {
+  const refresh = useCallback(() => {
     const current = ++request.current
-    invoke('agent.setup', sessionId)
+    return invoke('agent.setup', sessionId)
       .then((next) => {
         if (request.current === current) setSnapshot(next)
       })
       .catch((reason: unknown) => {
         if (request.current === current) setError(errorText(reason))
       })
+  }, [invoke, sessionId])
+  useEffect(() => {
+    void refresh()
     return () => {
       request.current++
     }
-  }, [invoke, sessionId])
+  }, [refresh])
   return (
     <section className="mt-4 flex flex-col gap-2" aria-label={t('Agent setup for this thread')}>
       <h3 className="m-0 text-sm font-medium">{t('Agent setup')}</h3>
@@ -84,6 +88,26 @@ export function AgentSetupSection({ sessionId }: { sessionId: string }) {
                   <span>{stateLabel(item.state)}</span>
                 </div>
                 <span className="text-caption text-muted-foreground">{t(item.reason)}</span>
+                {item.duplicate && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="self-start"
+                    onClick={() => {
+                      const { connectionId, use } = item.duplicate!
+                      void invoke(
+                        'agent.chooseDuplicate',
+                        sessionId,
+                        connectionId,
+                        use === 'native' ? 'both' : 'native',
+                      )
+                        .then(refresh)
+                        .catch((reason: unknown) => setError(errorText(reason)))
+                    }}
+                  >
+                    {t(item.duplicate.use === 'native' ? 'Use both copies' : "Use the provider's copy only")}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

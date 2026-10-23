@@ -2,6 +2,13 @@ import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
 import type { AgentSettings, FileContext, PermissionScope } from '@ramu/shared/types'
 import { MAX_ATTACHMENT_BYTES } from '../../attachments'
+import {
+  chooseDuplicate,
+  DUPLICATE_CHOICE_KEY,
+  duplicateConnectionIds,
+  type DuplicateChoices,
+} from '../../mcp/duplicates'
+import { projectSetupOf } from './projectSetup'
 import { buildSetupSnapshot } from '../../agent/effectiveSetup'
 import {
   accountEnvironment,
@@ -66,6 +73,12 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
           // The runtime could not be asked; its servers stay unconfirmed.
         }
         const servers = sharedSessionServers(dirs, session.provider, env, { projectId })
+        let duplicates = new Set<string>()
+        try {
+          if (projectId) duplicates = duplicateConnectionIds(projectSetupOf(ctx, projectId).setup, session.provider)
+        } catch {
+          // Unreadable project setup shows up in Settings; it must not hide the thread's own setup.
+        }
         const skills = sharedSessionSkills(
           dirs,
           session.provider,
@@ -88,8 +101,25 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
           ...(runtimeServers ? { runtimeServers } : {}),
           sharedSkills: skills.map((skill) => skill.name),
           connections: getSharedMcp?.().sessionConnections(session.provider, accountId, projectId) ?? [],
+          duplicates,
+          hidden: workspace.getAppState<DuplicateChoices>(DUPLICATE_CHOICE_KEY, {})[sessionId] ?? [],
           now: Date.now(),
         })
+      },
+    },
+    'agent.chooseDuplicate': {
+      args: z.tuple([id, id, z.enum(['native', 'both'])]),
+      run: (sessionId: string, connectionId: string, use: 'native' | 'both') => {
+        agents.get(sessionId)
+        workspace.setAppState(
+          DUPLICATE_CHOICE_KEY,
+          chooseDuplicate(
+            workspace.getAppState<DuplicateChoices>(DUPLICATE_CHOICE_KEY, {}),
+            sessionId,
+            connectionId,
+            use,
+          ),
+        )
       },
     },
     'agent.reloadMcp': { args: z.tuple([id]), run: (s: string) => agents.reloadMcp(s) },

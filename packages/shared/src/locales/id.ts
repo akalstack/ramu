@@ -3566,4 +3566,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "That address did not finish the sign-in. Copy it again after the page fails to load.": "Alamat itu tidak menyelesaikan login. Salin lagi setelah halaman gagal dimuat.",
   "Provider-managed: only this provider has this server's definition, so Ramu cannot share it with other logins. Manage it in the provider.": "Dikelola penyedia: hanya penyedia ini yang memiliki definisi server ini, jadi Ramu tidak dapat membagikannya ke login lain. Kelola di penyedia.",
   "Provider-managed and not connected: only this provider has this server's definition, so Ramu cannot share or repair it. Manage it in the provider.": "Dikelola penyedia dan tidak terhubung: hanya penyedia ini yang memiliki definisi server ini, jadi Ramu tidak dapat membagikan atau memperbaikinya. Kelola di penyedia.",
+  "This provider also loads the same server from its own configuration, so the model sees two copies. Choose one for this thread.": "Penyedia ini juga memuat server yang sama dari konfigurasinya sendiri, jadi model melihat dua salinan. Pilih satu untuk thread ini.",
+  "Hidden for this thread: the provider's own copy of this server is used. Ramu did not change the provider's configuration.": "Disembunyikan untuk thread ini: salinan server milik penyedia yang digunakan. Ramu tidak mengubah konfigurasi penyedia.",
+  "Use both copies": "Gunakan kedua salinan",
+  "Use the provider's copy only": "Gunakan salinan penyedia saja",
 }

@@ -14,6 +14,8 @@ export interface SetupItem {
   state: SetupItemState
   /** Why it is in this state, in one sentence of English that the client translates. */
   reason: string
+  /** A shared connection the provider also loads natively; `use` is what this thread currently does about it. */
+  duplicate?: { connectionId: string; use: 'native' | 'both' }
 }
 
 /** The setup the execution server resolved for one thread, built from the same resolvers a launch uses. Names only. */

@@ -26,6 +26,7 @@ import { SettingsStore } from './settings/settingsStore'
 import { SharedMcpStorage } from './mcp/storage'
 import { SharedMcpService } from './mcp/service'
 import { ExternalSessionTools, hasExternalConnections, type ExternalSessionSource } from './mcp/sessionTools'
+import { allowedConnections, DUPLICATE_CHOICE_KEY, type DuplicateChoices } from './mcp/duplicates'
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
 import { createServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
@@ -437,6 +438,12 @@ const externalSource = (session: AgentSessionInfo): ExternalSessionSource => {
     // Review chats are restricted; sub-agents are helpers and never inherit external access by default.
     role: summaries.isReviewChat(session.taskId) ? 'restricted' : 'interactive',
     externalToolsAllowed: !session.parentId,
+    // A connection the thread chose to take from the provider's own copy is not offered a second time.
+    connectionIds: allowedConnections(
+      workspace.getAppState<DuplicateChoices>(DUPLICATE_CHOICE_KEY, {}),
+      session.id,
+      getSharedMcp().policy.snapshot().connections,
+    ),
   }
 }
 // Before a switch or fallback launches, say what the destination login lacks from the thread's setup.
