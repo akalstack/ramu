@@ -22,12 +22,19 @@ export interface DeviceInfo {
   expiresAt: number | null
   role: DeviceRole
 }
+/**
+ * A grant whose credential never made an authenticated request is dropped after this long: the pairing response was lost
+ * or the device could not save it, so nobody holds the token and the grant would otherwise sit in the list forever.
+ */
+export const ORPHAN_GRANT_MS = 7 * 24 * 60 * 60_000
 /** A renewed token is accepted until the client first uses it; an unused one is dropped after this long. */
 export const RENEWAL_PENDING_MS = 7 * 24 * 60 * 60_000
 /** The replaced token keeps working briefly so requests already in flight finish. */
 export const RENEWAL_OVERLAP_MS = 2 * 60_000
 interface DeviceRecord extends DeviceInfo {
   tokenHash: string
+  /** Set when pairing redeems and cleared by the first authenticated request: nobody has proven they hold the token. */
+  unclaimed?: true
   /** Issued by `renew` and not used yet; promoted on its first authenticated request. */
   nextTokenHash?: string
   nextIssuedAt?: number
@@ -227,6 +234,7 @@ export class DeviceStore {
       expiresAt: lifetime === null ? null : now + lifetime,
       role: match.role ?? 'owner',
       tokenHash: sha256(token),
+      unclaimed: true,
     }
     this.write({
       ...file,
@@ -241,7 +249,7 @@ export class DeviceStore {
   authenticate(header: string | undefined, now = Date.now()): DeviceInfo | null {
     if (!header?.startsWith(`${AUTH_SCHEME} `)) return null
     const hash = sha256(header.slice(AUTH_SCHEME.length + 1))
-    const file = this.read(),
+    const file = this.dropOrphans(this.read(), now),
       record = file.devices.find(
         (d) =>
           d.tokenHash === hash ||
@@ -250,6 +258,9 @@ export class DeviceStore {
       )
     if (!record) return null
     const lifetime = this.lifetimeOf(file)
+    // The first request that carries the token proves the device saved it.
+    const claimed = record.unclaimed === true
+    if (claimed) delete record.unclaimed
     // Older records get a bounded migration window based on their last use, never an immortal grant.
     const expiry =
       record.expiresAt === undefined
@@ -269,7 +280,7 @@ export class DeviceStore {
     }
     // Remembered in memory and written rarely, so a busy client does not rewrite the file the CLI also edits.
     const lastWrite = this.seen.get(record.id) ?? 0
-    if (promote || now - lastWrite >= LAST_SEEN_WRITE_MS || record.expiresAt === undefined) {
+    if (claimed || promote || now - lastWrite >= LAST_SEEN_WRITE_MS || record.expiresAt === undefined) {
       this.seen.set(record.id, now)
       record.lastSeenAt = now
       record.expiresAt = lifetime === null ? null : now + lifetime
@@ -301,8 +312,8 @@ export class DeviceStore {
     return { token, expiresAt: record.expiresAt }
   }
 
-  list(): DeviceInfo[] {
-    const file = this.read()
+  list(now = Date.now()): DeviceInfo[] {
+    const file = this.dropOrphans(this.read(), now)
     const lifetime = this.lifetimeOf(file)
     return file.devices.map((record) =>
       strip({
@@ -316,6 +327,15 @@ export class DeviceStore {
       }),
     )
   }
+  /** Removes grants nobody ever used, so a lost pairing response does not leave a credential no one holds. */
+  private dropOrphans(file: DeviceFile, now: number): DeviceFile {
+    const kept = file.devices.filter((d) => !(d.unclaimed && now - d.createdAt >= ORPHAN_GRANT_MS))
+    if (kept.length === file.devices.length) return file
+    const next = { ...file, devices: kept }
+    this.write(next)
+    return next
+  }
+
   /** Hash-derived key for signed availability announcements. Never sent to a client. */
   presenceKey(id: string): string | null {
     return this.read().devices.find((device) => device.id === id)?.tokenHash ?? null

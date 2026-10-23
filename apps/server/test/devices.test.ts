@@ -2,7 +2,13 @@ import { afterEach, expect, it } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir, type NetworkInterfaceInfo, type networkInterfaces } from 'node:os'
 import { join } from 'node:path'
-import { DeviceStore, PAIRING_TTL_MS, RENEWAL_OVERLAP_MS, RENEWAL_PENDING_MS } from '../src/remote/devices'
+import {
+  DeviceStore,
+  ORPHAN_GRANT_MS,
+  PAIRING_TTL_MS,
+  RENEWAL_OVERLAP_MS,
+  RENEWAL_PENDING_MS,
+} from '../src/remote/devices'
 import { candidateUrls } from '../src/remote/network'
 
 const dirs: string[] = []
@@ -124,6 +130,7 @@ it('supports never-expiring devices only through an explicit lifetime choice', (
   const devices = new DeviceStore(path, null)
   const paired = devices.redeem(devices.createCode(1000).code, 'phone', 1000)!
   expect(paired.device.expiresAt).toBeNull()
+  expect(devices.authenticate(`Bearer ${paired.token}`, 1100)).not.toBeNull()
   expect(devices.authenticate(`Bearer ${paired.token}`, 1e12)).not.toBeNull()
 })
 
@@ -133,6 +140,8 @@ it('bounds old device records by their last recorded use', () => {
   const file = JSON.parse(readFileSync(path, 'utf8'))
   delete file.devices[0].expiresAt
   delete file.devices[0].role
+  // Records from before claiming existed carry no marker.
+  delete file.devices[0].unclaimed
   writeFileSync(path, JSON.stringify(file))
   const migrated = new DeviceStore(path, 600_000)
   expect(migrated.list()[0]?.expiresAt).toBe(601_000)
@@ -157,6 +166,7 @@ it('lets the host choose how long devices stay paired, keeps the choice across p
   devices.setLifetime('never')
   const second = devices.redeem(devices.createCode(now).code, 'Tablet', now)!
   expect(second.device.expiresAt).toBeNull()
+  devices.authenticate(`Bearer ${second.token}`, now)
   expect(devices.authenticate(`Bearer ${second.token}`, now + 3650 * day)?.id).toBe(second.device.id)
 
   devices.setLifetime(null)
@@ -174,6 +184,7 @@ it('rejects lifetimes outside 1 to 3650 days and ignores an invalid saved value'
 it('renews a token: the old one keeps working until the new one is used, then stops after a short overlap', () => {
   const { devices } = store()
   const paired = devices.redeem(devices.createCode().code, 'phone', 1000)!
+  devices.authenticate(`Bearer ${paired.token}`, 1500)
   const renewed = devices.renew(`Bearer ${paired.token}`, 2000)!
   expect(renewed.token).not.toBe(paired.token)
   // A lost response: the old token is still the credential and the unused new one has not replaced it.
@@ -200,6 +211,7 @@ it('asking again before the new token is used replaces the unused one, and a rep
 it('drops an unused renewed token after its window, and a revoked or expired device cannot renew', () => {
   const { devices } = store()
   const paired = devices.redeem(devices.createCode().code, 'phone', 1000)!
+  devices.authenticate(`Bearer ${paired.token}`, 1500)
   const renewed = devices.renew(`Bearer ${paired.token}`, 2000)!
   expect(devices.authenticate(`Bearer ${renewed.token}`, 2000 + RENEWAL_PENDING_MS + 1)).toBeNull()
   expect(devices.authenticate(`Bearer ${paired.token}`, 2000 + RENEWAL_PENDING_MS + 1)).not.toBeNull()
@@ -263,8 +275,27 @@ it('a code spent on one writer cannot also be cancelled by another', () => {
   const { path, devices } = store()
   const cli = new DeviceStore(path)
   const offer = devices.createCode(1000)
-  expect(devices.redeem(offer.code, 'phone', 1100)).not.toBeNull()
+  const phone = devices.redeem(offer.code, 'phone', 1100)!
+  devices.authenticate(`Bearer ${phone.token}`, 1150)
   expect(cli.cancelOffer(offer.offerId, 1200)).toBe(false)
   expect(cli.offerStatus(offer.offerId, 1200)).toMatchObject({ state: 'redeemed' })
   expect(cli.list()).toHaveLength(1)
+})
+
+it('drops a grant whose token never made a request, and keeps one that did', () => {
+  const { devices } = store()
+  const now = Date.now()
+  const lost = devices.redeem(devices.createCode().code, 'Lost response')!
+  const used = devices.redeem(devices.createCode().code, 'Used')!
+  expect(devices.authenticate(`Bearer ${used.token}`)?.id).toBe(used.device.id)
+  // Before the window nothing is removed; afterwards only the grant nobody ever used goes.
+  expect(
+    devices
+      .list(now + ORPHAN_GRANT_MS - 1)
+      .map((device) => device.name)
+      .sort(),
+  ).toEqual(['Lost response', 'Used'])
+  expect(devices.list(now + ORPHAN_GRANT_MS + 1000).map((device) => device.name)).toEqual(['Used'])
+  expect(devices.authenticate(`Bearer ${lost.token}`, now + ORPHAN_GRANT_MS + 2000)).toBeNull()
+  expect(devices.authenticate(`Bearer ${used.token}`, now + ORPHAN_GRANT_MS + 2000)?.id).toBe(used.device.id)
 })

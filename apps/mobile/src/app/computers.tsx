@@ -69,6 +69,11 @@ export default function Computers() {
                   </View>
                   {pc.id === selected ? <Check size={18} color={c.accent} /> : null}
                 </Row>
+                {pc.deviceId && pc.status === 'offline' && !pc.lastSeen ? (
+                  <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.m }}>
+                    {t.grantedUnreachable}
+                  </T>
+                ) : null}
                 {pc.error ? (
                   <T tone="bad" size={font.caption} style={{ paddingHorizontal: space.m }}>
                     {pc.error}

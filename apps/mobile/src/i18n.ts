@@ -141,6 +141,7 @@ const en = {
   forgetHostDraftHint:
     'Removes phone credentials, current messages, and the outbox. Uploaded attachments and agents remain on this host. Revoke the old device there to invalidate its token.',
   forgetHostFailed: 'Could not forget host',
+  grantedUnreachable: 'Access was granted, but this host has not answered yet. Check that it is on and reachable.',
 
   attachmentNeedsCheck: 'Attachment needs a host check before sending',
   savedAttachmentOffline:
@@ -643,6 +644,8 @@ const id: typeof en = {
   forgetHostDraftHint:
     'Menghapus kredensial, pesan saat ini, serta kotak keluar di ponsel. Lampiran yang diunggah dan agen tetap ada di host ini. Cabut perangkat lama di sana untuk membatalkan tokennya.',
   forgetHostFailed: 'Tidak dapat melupakan host',
+  grantedUnreachable:
+    'Akses sudah diberikan, tetapi host ini belum menjawab. Pastikan host menyala dan dapat dijangkau.',
 
   attachmentNeedsCheck: 'Lampiran perlu diperiksa di host sebelum dikirim',
   savedAttachmentOffline:
