@@ -1,3 +1,4 @@
+import { useViewOnly } from '../../composer/useViewOnly'
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import type { DirEntry, RepositoryBinding } from '@ramu/shared/types'
@@ -15,12 +16,14 @@ export function useRepoListing(
   selectedRow: RefObject<HTMLButtonElement | null>,
 ) {
   const host = useHost()
+  const viewOnly = useViewOnly()
   const { invoke } = host
   const { on } = useHostRuntime()
   const [open, setOpen] = useState<Set<string>>(new Set(['']))
   const directories = [...open]
   const listings = useQueries({
     queries: directories.map((dir) => ({
+      enabled: !viewOnly,
       queryKey: ipcQueryKeyOn(host.id, 'files.list', taskId, binding.repoId, dir),
       queryFn: () => queryInvokerFor(host.id)('files.list', taskId, binding.repoId, dir),
     })),
@@ -34,9 +37,10 @@ export function useRepoListing(
 
   const load = useCallback(
     async (dir: string) => {
+      if (viewOnly) return
       await invoke('files.list', taskId, binding.repoId, dir).catch(() => [])
     },
-    [invoke, taskId, binding.repoId],
+    [invoke, taskId, binding.repoId, viewOnly],
   )
 
   useEffect(() => {

@@ -16,9 +16,10 @@ export function BrowserNotice({ chat, onOpen }: { chat: Chat; onOpen(): void }) 
   const host = chat.computerId
   const task = chat.taskId
   const online = store.isOnline(host)
+  const viewOnly = store.computers?.find((computer) => computer.id === host)?.access === 'viewer'
   const [tabs, setTabs] = useState<BrowserTabInfo[]>([])
   useEffect(() => {
-    if (!task || !online) return
+    if (viewOnly || !task || !online) return
     let active = true
     const load = async () => {
       try {
@@ -43,9 +44,9 @@ export function BrowserNotice({ chat, onOpen }: { chat: Chat; onOpen(): void }) 
       off()
       clearInterval(timer)
     }
-  }, [host, task, online])
+  }, [host, task, online, viewOnly])
   const tab = tabs[0]
-  if (!task || !tab) return null
+  if (viewOnly || !task || !tab) return null
   const id = store.language === 'id'
   const agent = tabs.some((entry) => entry.controller === 'agent' && !entry.paused)
   const label = agent ? (id ? 'Menggunakan browser' : 'Using browser') : id ? 'Browser' : 'Browser'

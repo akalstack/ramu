@@ -1,3 +1,10 @@
+import {
+  beginHostAccessRead,
+  rememberHostAccess,
+  workspaceAccessDenied,
+  VIEW_ONLY_WRITE_NOTICE,
+} from './composer/viewerAccess'
+import type { BackgroundStatus } from '@ramu/shared/types'
 import { CancelledError } from '@tanstack/react-query'
 import type { RamuMethods } from '@ramu/shared/api'
 import { queryClient, ipcQueryKeyOn, isDataQuery, invalidateDataOn } from './dataQueries'
@@ -30,8 +37,24 @@ type Invoke = typeof ramu.invoke
  * A call on one host. The window's own host goes through `ramu.invoke` exactly as before; any other host goes through
  * `ramu.invokeOn`, which the desktop shell routes (and allow-lists) by host id. Reads are cached per host.
  */
+/** Uncached host call for query functions; access is checked again at the actual transport boundary. */
+export function invokeUncachedOn<M extends keyof RamuMethods>(
+  host: string,
+  method: M,
+  ...args: Parameters<RamuMethods[M]>
+) {
+  if (workspaceAccessDenied(host, method)) return Promise.reject(new Error(VIEW_ONLY_WRITE_NOTICE))
+  const request = method === 'background.status' ? beginHostAccessRead(host) : undefined
+  const pending = host === ownHostId() ? ramu.invoke(method, ...args) : ramu.invokeOn(host, method, ...args)
+  return pending.then((value) => {
+    if (method === 'background.status') rememberHostAccess(host, value as unknown as BackgroundStatus, request!)
+    return value
+  })
+}
+
 function callOn<M extends keyof RamuMethods>(host: string, method: M, args: Parameters<RamuMethods[M]>) {
-  const call = () => (host === ownHostId() ? ramu.invoke(method, ...args) : ramu.invokeOn(host, method, ...args))
+  if (workspaceAccessDenied(host, method)) return Promise.reject(new Error(VIEW_ONLY_WRITE_NOTICE))
+  const call = () => invokeUncachedOn(host, method, ...args)
   if (isDataQuery(method)) return read(ipcQueryKeyOn(host, method, ...args), call)
   return call().finally(() => {
     const domain = method.split('.')[0]!

@@ -1,3 +1,4 @@
+import { VIEW_ONLY_BROWSER_NOTICE } from '../runtime/viewerAccess'
 import { useEffect, useRef, useState } from 'react'
 import { Linking, View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
@@ -20,10 +21,11 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
   const [status, setStatus] = useState('')
   const [revision, refresh] = useState(0)
   const online = store.isOnline(chat.computerId)
+  const viewOnly = store.computers?.find((host) => host.id === chat.computerId)?.access === 'viewer'
   const io = useRef(store)
   io.current = store
   useEffect(() => {
-    if (!open || !online || !chat.taskId) return
+    if (viewOnly || !open || !online || !chat.taskId) return
     let active = true
     setStatus('Loading…')
     void io.current
@@ -60,7 +62,7 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
     return () => {
       active = false
     }
-  }, [chat.computerId, chat.taskId, open, online, revision])
+  }, [chat.computerId, chat.taskId, open, online, revision, viewOnly])
   if (!chat.taskId) return null
   const host = store.computers.find((computer) => computer.id === chat.computerId)?.name ?? chat.computerId
   return (
@@ -68,6 +70,10 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
       <Sheet presentation="screen" open={open} onClose={onClose} title={`${t('Browser')} · ${host}`} scroll={!hosted}>
         {open && hosted ? (
           <BrowserViewer chat={chat} embedded onClose={onClose} />
+        ) : viewOnly ? (
+          <View style={{ padding: space.m }}>
+            <T tone="muted">{VIEW_ONLY_BROWSER_NOTICE[store.language]}</T>
+          </View>
         ) : (
           <View style={{ padding: space.m, gap: space.m }}>
             <T tone="muted">

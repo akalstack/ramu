@@ -1,3 +1,4 @@
+import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
 import { useState } from 'react'
 import { syncRepositories } from '../../git/syncRepositories'
 import type { GitStash, PullMode, RepositoryBinding } from '@ramu/shared/types'
@@ -21,9 +22,13 @@ export function useGitActions({
 }) {
   const ws = useWorkspace()
   const { invoke } = useHost()
+  const { canWrite } = useHostWriteAccess()
   const run: GitRun = async (fn) => {
+    if (!canWrite()) return
     try {
-      await withGitBusy(taskId, binding.repoId, fn)
+      await withGitBusy(taskId, binding.repoId, async () => {
+        if (canWrite()) await fn()
+      })
     } catch (e) {
       reportError(errorText(e))
     } finally {

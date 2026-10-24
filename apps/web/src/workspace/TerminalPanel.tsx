@@ -12,7 +12,7 @@ import { useTabScroll } from '../lib/useTabScroll'
 import { TerminalView } from '../views/TerminalView'
 import { useHostRuntime, useWorkspace } from './workspace'
 import { useHost } from './HostProvider'
-import { useViewOnly } from '../composer/useViewOnly'
+import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { VIEW_ONLY_TERMINAL_NOTICE } from '../composer/viewerAccess'
 import { beginDrag, setActiveDrag, TERMINAL_DRAG_TYPE } from '../lib/dragState'
 
@@ -32,7 +32,7 @@ export function TerminalPanel({
   const ws = useWorkspace()
   const runtime = useHostRuntime()
   const { invoke } = useHost()
-  const viewOnly = useViewOnly()
+  const { viewOnly, canWrite } = useHostWriteAccess()
   const { forgetTerminal, isOpening, queueAdopt, shellOf, adoptQueued } = runtime.terminals
   const { preferences } = useAppSettings()
   const panel = useRef<HTMLElement>(null)
@@ -57,11 +57,13 @@ export function TerminalPanel({
   const views = useRef(terminals)
   views.current = terminals
   useEffect(() => {
+    if (viewOnly) return
     let timer: ReturnType<typeof setTimeout> | undefined,
       disposed = false
     const reconcile = async () => {
+      if (!canWrite()) return
       const list = await invoke('term.list', taskId).catch(() => null)
-      if (disposed || !list) return
+      if (disposed || !list || !canWrite()) return
       // This window is still opening its own shell; look again once the host's answer has been recorded.
       if (isOpening(taskId)) {
         timer = setTimeout(reconcile, 300)
@@ -95,7 +97,7 @@ export function TerminalPanel({
       clearTimeout(timer)
       off()
     }
-  }, [taskId, runtime])
+  }, [taskId, runtime, viewOnly, canWrite])
   const ready = (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready')
   const repoLabel = (repoId?: string) => (repoId ? (ws.binding(taskId, repoId)?.repoName ?? 'Terminal') : 'Workspace')
   const label = (view?: { repoId?: string; title?: string }) => view?.title ?? repoLabel(view?.repoId)

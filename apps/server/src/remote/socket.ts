@@ -5,6 +5,7 @@ import {
   decodeSocketFrame,
   encodeSocketFrame,
   MAX_SOCKET_FRAME_BYTES,
+  SOCKET_EVENT_KEYS,
   SOCKET_PATH,
   type InvokeRequest,
   type SocketServerFrame,
@@ -84,11 +85,31 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
 
   const connect = (ws: WebSocket, req: IncomingMessage, device: DeviceInfo | undefined) => {
     open.add(ws)
+    // Until a client subscribes it receives every event, as an SSE client does. A subscription narrows delivery to the
+    // listed channels, and for resource channels to the listed ids; it is replaced whole by the next one.
+    let filter: { channels: Set<string>; keys: Map<string, Set<string>> } | null = null
+    // The channel is read from the front of the event text, so an unwanted or unkeyed event is never fully parsed; only
+    // a keyed channel the client narrowed to particular ids is.
+    const wanted = (json: string) => {
+      if (!filter) return true
+      const channel = /^\{"channel":"((?:[^"\\]|\\.)*)"/.exec(json)?.[1]
+      if (channel === undefined || !filter.channels.has(channel)) return false
+      const keys = filter.keys.get(channel)
+      const field = SOCKET_EVENT_KEYS[channel]
+      if (!keys || !field) return true
+      try {
+        const event = JSON.parse(json) as { payload?: Record<string, unknown> }
+        return keys.has(String(event.payload?.[field]))
+      } catch {
+        return false
+      }
+    }
     const sink: EventSink = {
       write(chunk) {
         // Only data lines are events; SSE comments (keep-alives) have no meaning here.
         if (!chunk.startsWith('data: ') || ws.readyState !== ws.OPEN) return true
         const json = chunk.slice(6).trimEnd()
+        if (!wanted(json)) return true
         ws.send(`{"t":"event",${json.slice(1)}`)
         return ws.bufferedAmount < maxBuffered
       },
@@ -134,6 +155,18 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
       }
       if (frame.t === 'ping') {
         send({ t: 'pong' })
+        return
+      }
+      if (frame.t === 'subscribe') {
+        if (callsOnly) {
+          send({ t: 'error', id: frame.id, error: 'This connection carries no events.', status: 400 })
+          return
+        }
+        filter = {
+          channels: new Set(frame.channels),
+          keys: new Map(Object.entries(frame.keys ?? {}).map(([channel, list]) => [channel, new Set(list)])),
+        }
+        send({ t: 'result', id: frame.id, value: { channels: frame.channels.length } })
         return
       }
       if (inFlight >= maxInFlight) {

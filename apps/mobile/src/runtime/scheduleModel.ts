@@ -4,6 +4,24 @@ import type { AgentSettings, Schedule, ScheduleInput, ScheduleRule, ScheduleRun 
 
 export type Lang = 'en' | 'id'
 
+export const VIEW_ONLY_SCHEDULE_NOTICE: Record<Lang, string> = {
+  en: 'This device can view schedules, but cannot change or run them. Ask the host owner to pair it with full access.',
+  id: 'Perangkat ini dapat melihat jadwal, tetapi tidak dapat mengubah atau menjalankannya. Minta pemilik host memasangkannya dengan akses penuh.',
+}
+
+/** Advisory client guard; the host still authorizes every operation. Older hosts can omit access. */
+export function scheduleWriteProblem(
+  computer: { status: string; access?: 'owner' | 'viewer' } | undefined,
+  language: Lang,
+): string | null {
+  if (computer?.access === 'viewer') return VIEW_ONLY_SCHEDULE_NOTICE[language]
+  if (computer?.status !== 'online')
+    return language === 'id'
+      ? 'Hubungkan ke host ini sebelum mengubah jadwal.'
+      : 'Connect to this host before changing schedules.'
+  return null
+}
+
 export const NO_PROJECT = 'no-project'
 export const MIN_INTERVAL_MINUTES = 5
 

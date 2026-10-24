@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { AppState } from 'react-native'
 import { WebView } from 'react-native-webview'
 import type { InteractiveFrameProps } from './InteractiveFrame'
 /** Separate from the terminal renderer: this bridge accepts only document state and size. */
@@ -13,7 +12,7 @@ export default function InteractiveFrame({
   onStop,
 }: InteractiveFrameProps) {
   const source = useMemo(() => ({ html, baseUrl: 'https://ramu-content.invalid/' }), [html])
-  const view = useRef<WebView>(null)
+  const view = useRef<WebView<object>>(null)
   const sendTheme = () =>
     view.current?.injectJavaScript(
       `window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify({ ramuInteractive: 1, instance, type: 'theme', value: theme })}}));true;`,
@@ -24,14 +23,8 @@ export default function InteractiveFrame({
     view.current?.injectJavaScript(`window.dispatchEvent(new MessageEvent('message',{data:${data}}));true;`)
   }, [snapshot, instance])
   useEffect(sendTheme, [theme, instance])
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') onStop()
-    })
-    return () => sub.remove()
-  }, [onStop])
   return (
-    <WebView
+    <WebView<object>
       ref={view}
       onLoadEnd={sendTheme}
       source={source}

@@ -1,3 +1,4 @@
+import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
 import { ChevronDown, type LucideIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
@@ -21,9 +22,8 @@ export function SectionHead({
 }) {
   return (
     <div className="section-head group/head flex min-h-8 items-center justify-between gap-2 px-2 pb-1 pt-3 first:pt-1 text-caption font-medium text-muted-foreground">
-      <button
-        type="button"
-        className="inline-flex min-w-0 items-center gap-2 bg-transparent p-0 [border:0] text-inherit cursor-default hover:text-foreground focus-visible:text-foreground"
+      <SidebarDisclosureButton
+        className="w-auto p-0 text-[length:var(--font-caption)]"
         aria-expanded={open}
         aria-controls={controls}
         onClick={onToggle}
@@ -40,7 +40,7 @@ export function SectionHead({
           aria-hidden="true"
           className={`flex-none transition-transform ${open ? '' : '-rotate-90'}`}
         />
-      </button>
+      </SidebarDisclosureButton>
       {children}
     </div>
   )

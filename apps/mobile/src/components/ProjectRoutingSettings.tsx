@@ -9,6 +9,9 @@ import { Button, Sheet, T } from './ui'
 /** Host-owned routing metadata, edited without creating a thread or changing a draft destination. */
 export function ProjectRoutingSettings({ project, onClose }: { project: MobileProject; onClose: () => void }) {
   const store = useStore()
+  const scope = `${project.computerId}:${project.id}`
+  const latest = useRef({ store, scope })
+  latest.current = { store, scope }
   const { c } = useTheme()
   const t = (key: string) => translate(store.language, key)
   const [aliases, setAliases] = useState((project.aliases ?? []).join(', '))
@@ -31,7 +34,15 @@ export function ProjectRoutingSettings({ project, onClose }: { project: MobilePr
   const online = store.isOnline(project.computerId)
   const owner = store.computers.find((computer) => computer.id === project.computerId)?.access !== 'viewer'
   const save = async () => {
-    if (pending.current || invalid || !online || !owner) return
+    const current = latest.current
+    if (
+      current.scope !== scope ||
+      pending.current ||
+      invalid ||
+      !current.store.isOnline(project.computerId) ||
+      current.store.computers.find((host) => host.id === project.computerId)?.access === 'viewer'
+    )
+      return
     pending.current = true
     setBusy(true)
     setError(null)

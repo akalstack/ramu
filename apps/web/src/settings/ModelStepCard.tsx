@@ -1,5 +1,6 @@
+import { DragHandle } from '@/components/drag-handle'
 import { Button } from '@/components/desktop-button'
-import { ArrowDown, ArrowUp, GripVertical, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { providerName } from '@ramu/shared/providers/providers'
@@ -65,18 +66,15 @@ export function ModelStepCard({
       }}
     >
       <div className="settings-step-heading flex items-center gap-2">
-        <button
-          type="button"
+        <DragHandle
           ref={setActivatorNodeRef}
-          className="settings-step-grip [&:hover]:text-foreground [&:hover]:bg-hover [&:active]:[cursor:grabbing] inline-grid place-items-center w-[18px] h-[22px] flex-none ml-[-4px] text-muted-foreground cursor-grab touch-none rounded-(--radius-xs) disabled:cursor-default"
+          className="settings-step-grip ml-[-4px]"
           aria-label={t('Drag step {0} to reorder', { '0': index + 1 })}
           title={t('Drag to reorder')}
           disabled={busy || count < 2}
           {...attributes}
           {...listeners}
-        >
-          <GripVertical size={14} />
-        </button>
+        />
         <span className="settings-step-number w-[18px] flex-none text-muted-foreground text-caption text-center">
           {index + 1}
         </span>

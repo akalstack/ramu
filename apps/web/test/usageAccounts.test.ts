@@ -1,9 +1,11 @@
+import { SettingsFieldContext } from '../src/settings/settingsField'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { DEFAULT_APP_PREFERENCES, type UsageReading } from '@ramu/shared/types'
 
 const state = vi.hoisted(() => ({
+  accounts: [{ id: 'second', name: 'Second account' }],
   own: [
     { provider: 'claude-code', window: 'five_hour', usedPercent: 100, status: 'limited', updatedAt: Date.now() },
   ] as UsageReading[],
@@ -48,7 +50,7 @@ vi.mock('../src/settings/AppSettings', () => ({
     preferences: {
       ...DEFAULT_APP_PREFERENCES,
       showUsageLimits: true,
-      providerBinaries: { 'claude-code': { binary: '', accounts: [{ id: 'second', name: 'Second account' }] } },
+      providerBinaries: { 'claude-code': { binary: '', accounts: state.accounts } },
     },
   }),
 }))
@@ -68,4 +70,21 @@ it('shows every allowance for other accounts and explicitly labels percentages a
   expect(html).toContain('98% used')
   expect(html).toContain('5-hour')
   expect(html).toContain('Weekly')
+})
+
+afterEach(() => {
+  state.accounts = [{ id: 'second', name: 'Second account' }]
+})
+it('keeps cached account disclosure usable inside an unavailable host field', () => {
+  state.accounts = ['second', 'third', 'fourth'].map((id) => ({ id, name: id }))
+  const html = renderToStaticMarkup(
+    createElement(SettingsFieldContext.Provider, {
+      value: { path: 'usage', disabled: true, mixed: false, mark() {} },
+      children: createElement(UsageFooter),
+    }),
+  )
+  const more = html.match(/<button\b[^>]*>\+1 more<\/button>/)?.[0]
+  expect(more).toBeDefined()
+  expect(more).toContain('aria-expanded="false"')
+  expect(more).not.toMatch(/\sdisabled=""/)
 })

@@ -22,7 +22,7 @@ export function TerminalTabs({
   onNew(): void
 }) {
   const { c } = useTheme()
-  const scroll = useRef<ScrollView>(null)
+  const scroll = useRef<import('react-native').ScrollViewInstance>(null)
   const frames = useRef(new Map<string, { x: number; width: number }>())
   const viewport = useRef(0)
   // Keep the active tab in view when it changes or a new shell opens.

@@ -1,3 +1,4 @@
+import { Button } from '@/components/desktop-button'
 import { SettingsFieldContext } from './settingsField'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { AppPreferences, ModelPreferences } from '@ramu/shared/types'
@@ -11,7 +12,7 @@ import {
 } from '@ramu/shared/settingsCompatibility'
 import { recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { invoke, invokeOn, ramu } from '../ipc'
-import { isViewOnly } from '../composer/viewerAccess'
+import { isViewOnly, VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useComputers, statusText } from '../workspace/computers'
 import { errorText } from '../lib/errors'
 import { readSettingsSnapshot, SettingsUpdateRequired } from './settingsAvailability'
@@ -69,6 +70,9 @@ export function useSettingsScope(section: string) {
       ? current
       : requested
   const [targets, setTargets] = useState<Target[]>([])
+  const confirmedRoles = useRef(new Map<string, boolean>())
+  const latestTargets = useRef(targets)
+  latestTargets.current = targets
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
   const [edited, setEdited] = useState<Set<string>>(new Set())
@@ -103,7 +107,14 @@ export function useSettingsScope(section: string) {
         try {
           const snapshot = await readSettingsSnapshot(() => read(id))
           // This computer's own role is always full access; another host may have paired this device view-only.
-          const viewOnly = id ? await invokeOn(id, 'background.status').then(isViewOnly, () => false) : false
+          const viewOnly = id
+            ? await invokeOn(id, 'background.status').then(
+                (status) =>
+                  status?.access === undefined ? (confirmedRoles.current.get(id) ?? false) : isViewOnly(status),
+                () => confirmedRoles.current.get(id) ?? false,
+              )
+            : false
+          confirmedRoles.current.set(id, viewOnly)
           return { id, name, snapshot, ...(viewOnly ? { viewOnly } : {}) }
         } catch (reason) {
           const updateRequired = reason instanceof SettingsUpdateRequired
@@ -176,7 +187,7 @@ export function useSettingsScope(section: string) {
     }
     return {
       schema,
-      disabled: !definition || !ready,
+      disabled: !definition || !ready || targets.some((entry) => entry.viewOnly),
       mixed:
         !edited.has(path) &&
         snapshots.some((snapshot) => !sameValue(currentValue(snapshot, path), currentValue(primary!.snapshot!, path))),
@@ -211,6 +222,10 @@ export function useSettingsScope(section: string) {
   }
   const save = async (draft: AppPreferences, modelDraft: ModelPreferences, paths: string[]) => {
     if (!ready || stale || saving) return false
+    if (latestTargets.current.some((entry) => entry.viewOnly)) {
+      setError(t(VIEW_ONLY_WRITE_NOTICE))
+      return false
+    }
     setSaving(true)
     setError(null)
     setMessage(null)
@@ -304,18 +319,22 @@ export function SettingsField({
       {!compact && state.mixed && (
         <span className="inline-flex items-center gap-2 text-caption text-muted-foreground" role="status">
           {t('Mixed')}
-          <button
+          <Button
+            variant="link"
+            size="xs"
             type="button"
             disabled={state.disabled}
-            className="text-brand underline"
+            className="min-h-0 p-0 text-caption text-brand underline"
             onClick={() => scope.mark(path)}
           >
             {t('Use this value for all')}
-          </button>
+          </Button>
         </span>
       )}
       {!compact && state.disabled && (
-        <span className="text-caption text-muted-foreground">{t('Not supported by every selected host.')}</span>
+        <span className="text-caption text-muted-foreground">
+          {t(scope.readOnlyHosts.length ? VIEW_ONLY_WRITE_NOTICE : 'Not supported by every selected host.')}
+        </span>
       )}
       {compact ? (
         children
@@ -333,16 +352,33 @@ export function SettingsFieldNotice({ path }: { path: string }) {
   if (!scope) return null
   const state = scope.field(path)
   return state.disabled ? (
-    <span className="block mt-1 text-caption text-muted-foreground">{t('Not supported by every selected host.')}</span>
+    <span className="block mt-1 text-caption text-muted-foreground">
+      {t(scope.readOnlyHosts.length ? VIEW_ONLY_WRITE_NOTICE : 'Not supported by every selected host.')}
+    </span>
   ) : state.mixed ? (
     <span className="flex flex-wrap items-center gap-2 mt-1 text-caption text-muted-foreground" role="status">
       {t('Mixed')}
-      <button className="text-brand underline" type="button" onClick={() => scope.mark(path)}>
+      <Button
+        variant="link"
+        size="xs"
+        className="min-h-0 p-0 text-caption text-brand underline"
+        type="button"
+        onClick={() => scope.mark(path)}
+      >
         {t('Use this value for all')}
-      </button>
+      </Button>
     </span>
   ) : null
 }
+
+// Only the settings reads allowed by the host's viewer boundary. A method's suffix is not access evidence.
+const VIEWER_SETTINGS_READS = new Set([
+  'background.status',
+  'settings.app.get',
+  'settings.app.snapshot',
+  'preferences.layers.get',
+  'settings.models.get',
+])
 
 /** Machine actions use the same explicit target; bulk preference edits never run an action on an arbitrary computer. */
 export function useSettingsInvoke(): typeof invoke {
@@ -350,24 +386,36 @@ export function useSettingsInvoke(): typeof invoke {
 }
 /** The same routing for the settings panel itself, which owns the scope rather than reading it from context. */
 export function useScopedInvoke(scope: SettingsScope | null): typeof invoke {
+  const current = useRef(scope)
+  current.current = scope
+  const origin = scope?.primaryId
+  const scoped = scope !== null
   return useMemo(() => {
-    if (!scope) return invoke
     return (async (method: string, ...args: unknown[]) => {
+      const scope = current.current
       if (method.startsWith('computers.')) return (invoke as any)(method, ...args)
+      if ((scope?.primaryId ?? null) !== (origin ?? null) || (scope !== null) !== scoped)
+        throw new Error(t('The selected host changed. Reopen this action before continuing.'))
+      if (!scope) return (invoke as any)(method, ...args)
       if (!scope.ready || scope.stale) throw new Error(t('Select a connected host.'))
       const readOnly = /\.(get|list|status|history|catalog|connections)$/.test(method) || method === 'advisor.claude'
       if (scope.target === 'all' && scope.targets.length > 1 && !readOnly)
         throw new Error(t('Choose one host in the settings header for this action.'))
       const id = scope.primaryId
+      if (scope.targets.find((entry) => entry.id === id)?.viewOnly && !VIEWER_SETTINGS_READS.has(method))
+        throw new Error(t(VIEW_ONLY_WRITE_NOTICE))
       return id ? invoke('computers.settings.invoke', id, method, args) : (invoke as any)(method, ...args)
     }) as typeof invoke
-  }, [scope?.target, scope?.ready, scope?.stale, scope?.primaryId, scope?.revision])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- route identity invalidates host-bound loads; retained callbacks read live access above.
+  }, [origin, scoped, scope?.target, scope?.ready, scope?.stale, scope?.revision, scope?.targets])
 }
+
+const NO_SETTINGS_EVENTS: typeof ramu.on = () => () => {}
 
 export function useSettingsEvents(): typeof ramu.on {
   const scope = useContext(SettingsScopeContext)
   const computers = useComputers()
-  return scope?.primaryId && scope.primaryId !== computers?.current ? () => () => {} : ramu.on
+  return scope?.primaryId && scope.primaryId !== computers?.current ? NO_SETTINGS_EVENTS : ramu.on
 }
 
 export function SettingsTargetSelector({ disabled }: { disabled: boolean }) {

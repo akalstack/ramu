@@ -1,3 +1,4 @@
+import { VIEW_ONLY_WRITE_NOTICE } from '../../../composer/viewerAccess'
 import { helperActions, helperActive } from '@ramu/shared/chat/helperPresentation'
 import { useHostConnection } from '../../../workspace/computers'
 import { t as translate, useLanguage } from '../../../i18n'
@@ -44,6 +45,7 @@ export function AgentTaskPanel({
   onSelect,
   onClose,
   onStop,
+  readOnly = false,
   onMessage,
 }: {
   tasks: AgentTask[]
@@ -56,6 +58,7 @@ export function AgentTaskPanel({
   taskId?: string
   onSelect: (id: string | null) => void
   onClose: () => void
+  readOnly?: boolean
   onStop: (task: AgentTask) => void
   onMessage: (task: AgentTask, text: string) => Promise<void>
 }) {
@@ -112,7 +115,7 @@ export function AgentTaskPanel({
   const actions = task ? helperActions(task, !offline) : { canStop: false, canMessage: false }
   const status = task ? effectiveStatus(task, live) : 'stopped'
   const send = async () => {
-    if (!task || !draft.trim() || sending) return
+    if (readOnly || !task || !draft.trim() || sending) return
     setSending(true)
     try {
       await onMessage(task, draft.trim())
@@ -153,7 +156,7 @@ export function AgentTaskPanel({
           </>
         )}
         <span className="grow flex-1 min-w-0 text-left" />
-        {task && actions.canStop && (
+        {task && actions.canStop && !readOnly && (
           <Button variant="ghost" size="sm" className={GHOST_TEXT_BUTTON_CLASS} onClick={() => onStop(task)}>
             <Square size={11} />
             {translate('Stop')}
@@ -179,6 +182,7 @@ export function AgentTaskPanel({
               live={live}
               onOpen={() => onSelect(entry.agentId)}
               onStop={onStop}
+              readOnly={readOnly}
             />
           ))}
           {historical.length > 0 && (
@@ -199,6 +203,7 @@ export function AgentTaskPanel({
                     live={live}
                     onOpen={() => onSelect(entry.agentId)}
                     onStop={onStop}
+                    readOnly={readOnly}
                   />
                 ))}
             </>
@@ -212,6 +217,7 @@ export function AgentTaskPanel({
                 live={live}
                 onOpen={() => onSelect(entry.agentId)}
                 onStop={onStop}
+                readOnly={readOnly}
               />
             ))}
         </div>
@@ -293,6 +299,11 @@ export function AgentTaskPanel({
                 </div>
               )}
           </div>
+          {readOnly && (
+            <p className="px-3 text-caption text-muted-foreground" role="status">
+              {translate(VIEW_ONLY_WRITE_NOTICE)}
+            </p>
+          )}
           {actions.canMessage ? (
             <form
               className="agent-panel-compose [&_textarea]:min-h-[56px] [&_textarea]:max-h-[160px] [&_textarea]:p-[8px_44px_8px_12px] [&_textarea]:[border:1px_solid_transparent] [&_textarea]:rounded-(--radius-m) [&_textarea]:[background:var(--field)] [&_textarea]:resize-none [&_textarea]:text-control relative flex-none m-[0_10px_10px] min-w-0"
@@ -304,6 +315,7 @@ export function AgentTaskPanel({
               <Textarea
                 aria-label={translate('Message {0}', { '0': task.name })}
                 placeholder={translate('Message {0}…', { '0': task.name })}
+                disabled={readOnly}
                 value={draft}
                 rows={2}
                 onChange={(event) => setDraft(event.target.value)}
@@ -321,7 +333,7 @@ export function AgentTaskPanel({
                 className="bg-fill hover:bg-fill-hover icon p-0 size-(--action-size) flex-none justify-center agent-panel-send [&:hover:not(:disabled)]:[background:var(--soft)] [&:hover:not(:disabled)]:[border:0] absolute right-2 bottom-2 w-7 h-7 rounded-full [background:var(--text)] [color:var(--canvas)] [border:0]"
                 aria-label={translate('Send to agent')}
                 title={translate('Send through the main agent')}
-                disabled={!draft.trim() || sending}
+                disabled={readOnly || !draft.trim() || sending}
               >
                 <Send size={14} />
               </Button>

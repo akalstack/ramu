@@ -1,3 +1,4 @@
+import { SettingsScopeContext, type SettingsScope } from '../src/settings/SettingsScope'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -43,12 +44,32 @@ const snapshot: SharedMcpManagement = {
     },
   ],
 }
-function render(canAdminister: boolean, state = snapshot) {
+function render(canAdminister: boolean, state = snapshot, viewer = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(['mcp-settings', ''], { ...state, canAdminister })
   client.setQueryData(['mcp-projects', ''], [{ id: 'project', name: 'Selected project' }])
   try {
-    return renderToStaticMarkup(createElement(QueryClientProvider, { client }, createElement(McpSettings)))
+    return renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(
+          SettingsScopeContext.Provider,
+          {
+            value: viewer
+              ? ({
+                  primaryId: '',
+                  available: [],
+                  ready: true,
+                  stale: false,
+                  targets: [{ viewOnly: true }],
+                } as unknown as SettingsScope)
+              : null,
+          },
+          createElement(McpSettings),
+        ),
+      ),
+    )
   } finally {
     client.clear()
   }
@@ -94,4 +115,11 @@ it('keeps authentication failures distinct and presents an actionable empty stat
   expect(html).toMatch(/<button[^>]*>Sign in again<\/button>/)
   const empty = render(true, { ...snapshot, connections: [] })
   expect(empty).toContain('No servers connected through Ramu yet.')
+})
+
+it('does not reuse a cached administrator grant after viewer access is known', () => {
+  const html = render(true, snapshot, true)
+  expect(html).toContain('Project tracker')
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>Add server<\/button>/)
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>Connect<\/button>/)
 })

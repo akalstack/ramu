@@ -22,7 +22,7 @@ const newer = (a: PreferenceEntry, b: PreferenceEntry) => a.at > b.at || (a.at =
 
 /**
  * Apply one edit to a layer. An edit older than what the layer already holds is discarded, so a stale write from a
- * device that was offline cannot undo a newer choice. `value: undefined` removes the override (use the inherited one).
+ * device that was offline cannot undo a newer choice. `value: undefined` clears the override (use the inherited one) and leaves a marker so it stays cleared.
  */
 export function applyLayerEdit(
   layer: PreferenceLayer,
@@ -30,11 +30,12 @@ export function applyLayerEdit(
   edit: { value?: PreferenceValue; at: number; by: string },
 ): { layer: PreferenceLayer; applied: boolean } {
   const mine = layer.fields[id]
-  const incoming: PreferenceEntry = { value: edit.value ?? null, at: edit.at, by: edit.by }
+  const incoming: PreferenceEntry =
+    edit.value === undefined
+      ? { value: null, at: edit.at, by: edit.by, cleared: true }
+      : { value: edit.value, at: edit.at, by: edit.by }
   if (mine && !newer(incoming, mine)) return { layer, applied: false }
-  const { [id]: _removed, ...rest } = layer.fields
-  if (edit.value === undefined) return { layer: { ...layer, fields: rest }, applied: true }
-  return { layer: { ...layer, fields: { ...rest, [id]: incoming } }, applied: true }
+  return { layer: { ...layer, fields: { ...layer.fields, [id]: incoming } }, applied: true }
 }
 
 /** What a host answers for the shared mobile layer; absent on older hosts. */

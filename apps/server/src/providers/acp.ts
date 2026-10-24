@@ -28,6 +28,7 @@ import { elicitationContent, elicitationRequest } from '../agent/elicitation'
 import { classifyLimit, limitSignal } from './limitClassifier'
 import { limitedReading } from './usageLimit'
 import { noteRuntimeTransports } from './runtimeTransports'
+import { ACP_TERMINAL_METHODS, type AcpTerminalHost } from './acpTerminals'
 import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 
 type Wire = Record<string, any>
@@ -148,13 +149,15 @@ export class AcpRpc {
       this.write({ id, method, params })
     })
   }
+  /** Advertised only when the session was given a terminal host; set before `initialize`. */
+  terminal = false
   async initialize(): Promise<Wire> {
     const result = await this.request('initialize', {
       protocolVersion: 1,
       clientInfo: { name: 'ramu', version: '0.0.1' },
       clientCapabilities: {
         fs: { readTextFile: false, writeTextFile: false },
-        terminal: false,
+        terminal: this.terminal,
         session: { compaction: {} },
         ...(this.provider === 'opencode' ? { _meta: { 'opencode/child-session-updates': true } } : {}),
       },
@@ -387,6 +390,10 @@ class AcpSession implements AgentRunner {
   setTools(connection: McpConnection): void {
     this.connection = connection
   }
+  private terminals?: AcpTerminalHost
+  setTerminals(host: AcpTerminalHost): void {
+    this.terminals = host
+  }
   async mcpStatus() {
     return configuredMcpStatus(this.scope, this.connection, this.mcpHttp)
   }
@@ -419,6 +426,7 @@ class AcpSession implements AgentRunner {
           )
         : {},
     )
+    this.rpc.terminal = !!this.terminals
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => {
       if (!this.stopped) {
@@ -664,6 +672,7 @@ class AcpSession implements AgentRunner {
   }
   async stop(): Promise<void> {
     this.stopped = true
+    this.terminals?.dispose()
     this.cancelPending()
     await this.rpc?.close()
   }
@@ -909,6 +918,19 @@ class AcpSession implements AgentRunner {
         // A form Ramu cannot render is declined rather than left waiting.
         this.rpc?.write({ id: m.id, result: { action: 'decline' } })
       }
+      return
+    }
+    if (this.terminals && ACP_TERMINAL_METHODS.has(m.method)) {
+      const rpc = this.rpc
+      const requestId = m.id
+      this.terminals.handle(m.method, p).then(
+        (result) => rpc?.write({ id: requestId, result }),
+        (error) =>
+          rpc?.write({
+            id: requestId,
+            error: { code: -32602, message: error instanceof Error ? error.message : String(error) },
+          }),
+      )
       return
     }
     this.rpc?.write({ id: m.id, error: { code: -32601, message: `Unsupported client method: ${m.method}` } })

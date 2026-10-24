@@ -1,3 +1,4 @@
+import { useHostWriteAccess } from './composer/useHostWriteAccess'
 import { ownHostId } from './hosts'
 import { openBrowser, presentBrowser } from './views/browserPane'
 import { animateThreadListChange } from './workspace/threadListMotion'
@@ -317,9 +318,13 @@ function Shell() {
       }),
     [activeHost, ws],
   )
-  useEffect(() => hostEvents.on('hostBrowser:present', tab => {
-    presentBrowser(ws, activeHost, { ...tab, hostId: activeHost })
-  }), [hostEvents, activeHost, ws])
+  useEffect(
+    () =>
+      hostEvents.on('hostBrowser:present', (tab) => {
+        presentBrowser(ws, activeHost, { ...tab, hostId: activeHost })
+      }),
+    [hostEvents, activeHost, ws],
+  )
 
   // A clicked link the person chose to open in the integrated browser opens as a tab in the thread on screen; with no
   // thread open there is nowhere to put it, so it goes to their own browser instead of being lost.
@@ -739,6 +744,7 @@ function Shell() {
 }
 
 function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode }) {
+  const { viewOnly, canWrite } = useHostWriteAccess()
   useLanguage()
   const computers = useComputers()
   const { activeHost } = useHostSelection()
@@ -758,8 +764,9 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
   useEffect(() => input.current?.select(), [renaming])
 
   const rename = async (title: string) => {
+    if (!canWrite()) return
     setRenaming(false)
-    if (!task || !title.trim() || title.trim() === task.title) return
+    if (!canWrite() || !task || !title.trim() || title.trim() === task.title) return
     try {
       await invoke('tasks.rename', task.id, title)
       await ws.refresh()
@@ -777,31 +784,38 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
             label: t('Copy thread ID'),
             onSelect: () => void copyText(task.id).catch((reason) => setError(errorText(reason))),
           },
-          {
-            key: 'rename',
-            label: (
-              <>
-                <Pencil size={14} />
-                {t('Rename')}
-              </>
-            ),
-            onSelect: () => setRenaming(true),
-          },
-          {
-            key: 'archive',
-            label: (
-              <>
-                <Archive size={14} />
-                {t('Archive')}
-              </>
-            ),
-            onSelect: () =>
-              animateThreadListChange(async () => {
-                await invoke('tasks.archive', task.id, true)
-                ws.forgetTask(task.id)
-                await ws.refresh()
-              }),
-          },
+          ...(!viewOnly
+            ? [
+                {
+                  key: 'rename',
+                  label: (
+                    <>
+                      <Pencil size={14} />
+                      {t('Rename')}
+                    </>
+                  ),
+                  onSelect: () => {
+                    if (canWrite()) setRenaming(true)
+                  },
+                },
+                {
+                  key: 'archive',
+                  label: (
+                    <>
+                      <Archive size={14} />
+                      {t('Archive')}
+                    </>
+                  ),
+                  onSelect: () =>
+                    animateThreadListChange(async () => {
+                      if (!canWrite()) return
+                      await invoke('tasks.archive', task.id, true)
+                      ws.forgetTask(task.id)
+                      await ws.refresh()
+                    }),
+                },
+              ]
+            : []),
         ]
       : [],
   )
@@ -833,6 +847,7 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
             <Input
               ref={input}
               className="inline-edit flex-1 min-w-0 p-[2px_6px] text-body font-medium text-soft bg-canvas [border-color:var(--line-strong)] header-edit max-w-[420px] no-drag [-webkit-app-region:no-drag]"
+              readOnly={viewOnly}
               aria-label={t('Thread title')}
               maxLength={200}
               defaultValue={task.title}
@@ -846,7 +861,9 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
             <span
               className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default no-drag [-webkit-app-region:no-drag]"
               title={`${task.title} (${t('Double-click to rename')})`}
-              onDoubleClick={() => setRenaming(true)}
+              onDoubleClick={() => {
+                if (canWrite()) setRenaming(true)
+              }}
             >
               {task.title}
             </span>

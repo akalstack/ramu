@@ -1,3 +1,4 @@
+import { VIEW_ONLY_WRITE_NOTICE } from '../../composer/viewerAccess'
 import { useEffect, useRef, useState } from 'react'
 import type { Project } from '@ramu/shared/types'
 import { Input } from '../../components/desktop-input'
@@ -10,7 +11,9 @@ export function ProjectRoutingDialog({
   project,
   onSave,
   onClose,
+  readOnly = false,
 }: {
+  readOnly?: boolean
   project: Pick<Project, 'id' | 'name' | 'aliases' | 'description'>
   onSave: (aliases: string[], description: string) => Promise<void>
   onClose: () => void
@@ -21,6 +24,8 @@ export function ProjectRoutingDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const pending = useRef(false)
+  const access = useRef(readOnly)
+  access.current = readOnly
   const live = useRef(true)
   useEffect(() => {
     live.current = true
@@ -34,7 +39,7 @@ export function ProjectRoutingDialog({
     .filter(Boolean)
   const invalid = list.length > 8 || list.some((alias) => alias.length > 80) || description.length > 280
   const save = async () => {
-    if (invalid || pending.current) return
+    if (access.current || invalid || pending.current) return
     pending.current = true
     setBusy(true)
     setError(null)
@@ -57,7 +62,7 @@ export function ProjectRoutingDialog({
     <Dialog
       title={t('Help Auto find {0}', { '0': project.name })}
       confirmLabel={t('Save')}
-      confirmDisabled={invalid}
+      confirmDisabled={readOnly || invalid}
       busy={busy}
       error={error}
       onConfirm={() => void save()}
@@ -65,6 +70,7 @@ export function ProjectRoutingDialog({
         if (!pending.current) onClose()
       }}
     >
+      {readOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <p>
         {t('Auto matches these names in your first message. The description is shared with the model that chooses.')}
       </p>
@@ -73,7 +79,7 @@ export function ProjectRoutingDialog({
         aria-label={t('Other names, separated by commas')}
         placeholder={t('Other names, separated by commas')}
         value={aliases}
-        disabled={busy}
+        disabled={readOnly || busy}
         onChange={(event) => setAliases(event.target.value)}
       />
       <Input
@@ -81,7 +87,7 @@ export function ProjectRoutingDialog({
         placeholder={t('What this project is')}
         value={description}
         maxLength={280}
-        disabled={busy}
+        disabled={readOnly || busy}
         onChange={(event) => setDescription(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.nativeEvent.isComposing) {

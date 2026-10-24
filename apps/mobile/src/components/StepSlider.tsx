@@ -68,6 +68,7 @@ export function StepSlider({
       }),
     [disabled, onPreview, onCommit],
   )
+  const track = useRef<import('react-native').ViewInstance>(null)
   const trackLeft = useRef(0)
   const shown = drag ?? index
   const fraction = count > 1 && shown >= 0 ? shown / (count - 1) : 0
@@ -87,11 +88,12 @@ export function StepSlider({
       }}
       onLayout={(event) => {
         setWidth(event.nativeEvent.layout.width)
-        event.target.measureInWindow?.((x: number) => {
+        track.current?.measureInWindow((x: number) => {
           trackLeft.current = x
         })
       }}
       ref={(node) => {
+        track.current = node
         node?.measureInWindow?.((x: number) => {
           trackLeft.current = x
         })

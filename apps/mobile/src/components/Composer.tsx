@@ -536,7 +536,7 @@ export function Composer({
   limited?: boolean
   onCancelEdit?: () => void
 }) {
-  const textInput = useRef<TextInput>(null)
+  const textInput = useRef<import('react-native').TextInputInstance>(null)
   useEffect(() => {
     if (!autoFocus) return
     const frame = requestAnimationFrame(() => textInput.current?.focus())

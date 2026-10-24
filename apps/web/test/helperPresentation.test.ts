@@ -38,3 +38,18 @@ it('marks disconnected helper state last-known and removes actions', () => {
   expect(html).toContain('Last known')
   expect(html).not.toContain('Stop agent A')
 })
+
+it('keeps helper details available without offering Stop to a viewer', () => {
+  connection.offline = false
+  const html = renderToStaticMarkup(
+    createElement(AgentTaskCard, {
+      task: { agentId: 'a', name: 'A', status: 'running', canStop: true },
+      live: true,
+      readOnly: true,
+      onOpen() {},
+      onStop() {},
+    }),
+  )
+  expect(html).toContain('Open agent A')
+  expect(html).not.toContain('Stop agent A')
+})

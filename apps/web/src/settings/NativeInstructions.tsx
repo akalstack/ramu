@@ -64,7 +64,8 @@ export function NativeInstructions({ projects }: { projects: { id: string; name:
   const invoke = useSettingsInvoke()
   const scope = useContext(SettingsScopeContext)
   const hostKey = scope?.primaryId ?? ''
-  const ready = !scope || (scope.ready && !scope.stale)
+  const viewOnly = scope?.targets?.some((target) => target.viewOnly) ?? false
+  const ready = !viewOnly && (!scope || (scope.ready && !scope.stale))
   const [projectId, setProjectId] = useState(NONE)
   const files = useQuery({
     queryKey: ['native-instructions', hostKey, projectId],

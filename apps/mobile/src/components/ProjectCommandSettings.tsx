@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { ArrowDown, ArrowUp, Eye, EyeOff } from 'lucide-react-native'
 import type { ProjectActionSettings } from '@ramu/shared/types'
+import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { useStore } from '../runtime/store'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { useT } from '../i18n'
@@ -41,10 +42,18 @@ export function ProjectCommandSettings({
   }>({ key })
   const [busy, setBusy] = useState(false)
   const online = store.isOnline(hostId)
+  const viewOnly = store.computers?.find((host) => host.id === hostId)?.access === 'viewer'
+  const viewerNow = () => runtime.current.store.computers?.find((host) => host.id === hostId)?.access === 'viewer'
   const settings = data.key === key ? data.settings : undefined
   const read = useCallback(
     async (version: number) => {
-      if (version !== lifecycle.version || active.current !== key || !open || !runtime.current.store.isOnline(hostId))
+      if (
+        version !== lifecycle.version ||
+        active.current !== key ||
+        !open ||
+        !runtime.current.store.isOnline(hostId) ||
+        runtime.current.store.computers?.find((host) => host.id === hostId)?.access === 'viewer'
+      )
         return
       const request = ++sequence.current
       try {
@@ -71,7 +80,7 @@ export function ProjectCommandSettings({
     const version = ++lifecycle.version
     pending.current = null
     setBusy(false)
-    if (!open || !online) return
+    if (!open || !online || viewOnly) return
     void read(version)
     const off = runtime.current.store.subscribe(hostId, (channel) => {
       if (channel === 'workspace:changed') void read(version)
@@ -80,10 +89,17 @@ export function ProjectCommandSettings({
       ++lifecycle.version
       off()
     }
-  }, [lifecycle, hostId, open, online, read])
-  const disabled = Boolean(busy || !online || !settings || data.unsupported)
+  }, [lifecycle, hostId, open, online, viewOnly, read])
+  const disabled = Boolean(viewOnly || busy || !online || !settings || data.unsupported)
   const mutate = async (operation: () => Promise<unknown>) => {
-    if (disabled || pending.current !== null || active.current !== key || !store.isOnline(hostId)) return
+    if (
+      viewerNow() ||
+      disabled ||
+      pending.current !== null ||
+      active.current !== key ||
+      !runtime.current.store.isOnline(hostId)
+    )
+      return
     const version = lifecycle.version
     pending.current = version
     setBusy(true)
@@ -119,17 +135,18 @@ export function ProjectCommandSettings({
     <Sheet open={open} onClose={onClose} title={t.manageProjectActions}>
       <View style={{ padding: space.m, gap: space.m }}>
         <T tone="muted">{`${store.computers?.find((host) => host.id === hostId)?.name ?? hostId} · ${projectName ?? projectId}`}</T>
+        {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[store.language]}</T> : null}
         {!online ? <T tone="muted">{t.actionSettingsOffline}</T> : null}
         {data.key === key && data.error ? <T tone="bad">{data.error}</T> : null}
         {data.key === key && data.error && !data.unsupported ? (
           <Button
             title={t.retryProjectActions}
             kind="secondary"
-            disabled={!online || busy}
+            disabled={viewOnly || !online || busy}
             onPress={() => void read(lifecycle.version)}
           />
         ) : null}
-        {online && !settings && !data.error ? <ActivityIndicator color={c.accent} /> : null}
+        {!viewOnly && online && !settings && !data.error ? <ActivityIndicator color={c.accent} /> : null}
         {settings && !settings.actions.length ? <T tone="muted">{t.noProjectActions}</T> : null}
         {settings?.actions.map((action) => {
           const isHidden = hidden.has(action.id)

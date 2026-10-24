@@ -20,11 +20,12 @@ import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { visibleText } from '../lib/messages'
 import { MessageTime } from './MessageTime'
 import { CopyButton } from './CopyButton'
-import { Bubble, BubbleContent } from '@/components/ui/bubble'
+import { UserBubble } from '../../../chat/UserBubble'
+export { UserBubble } from '../../../chat/UserBubble'
 import { Message, MessageContent, MessageHeader } from '@/components/ui/message'
 import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
 import { MessageActions } from './MessageActions'
-import { CARET_CLASS, ICON_BUTTON_CLASS, MSG_CLASS, USER_BUBBLE_CLASS } from '../styles'
+import { CARET_CLASS, ICON_BUTTON_CLASS, MSG_CLASS } from '../styles'
 
 /** Review comments that went out with a message, as small cards under it. */
 function SentComments({ comments }: { comments: ReturnType<typeof sentComments> }) {
@@ -100,15 +101,6 @@ function UserShell({
         {children}
       </MessageContent>
     </Message>
-  )
-}
-
-/** The user's bubble, tinted by the shadcn `secondary` variant. */
-export function UserBubble({ children }: { children: React.ReactNode }) {
-  return (
-    <Bubble variant="secondary" align="end">
-      <BubbleContent className={USER_BUBBLE_CLASS}>{children}</BubbleContent>
-    </Bubble>
   )
 }
 

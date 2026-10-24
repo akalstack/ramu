@@ -416,6 +416,32 @@ export interface RamuMethods {
     updatingId?: string
   }): import('./types').SkillInstallPreview
   'skills.confirm'(stageId: string, includeScripts: boolean): import('./types').ManagedSkill
+  /** Writes a skill the person authored. It is pinned, so learning never rewrites it. */
+  'skills.create'(input: {
+    name: string
+    description: string
+    content: string
+    projectId: string | null
+  }): import('./types').ManagedSkill
+  /** Edit a copy: a separate authored skill with the same instructions; the original is untouched. */
+  'skills.fork'(id: string, name?: string): import('./types').ManagedSkill
+  /** A new revision of an authored skill; refused when the revision is stale or the skill is installed or learned. */
+  'skills.edit'(
+    id: string,
+    changes: { description?: string; content?: string },
+    expectedRevision: number,
+  ): import('./types').ManagedSkill
+  'skills.copyUpdate'(id: string): import('./types').SkillCopyUpdate
+  'skills.applyCopyUpdate'(
+    id: string,
+    revision: number,
+    sourceRevision: number,
+    changes: {
+      description: string
+      content: string
+      files: Record<string, 'copy' | 'source'>
+    },
+  ): import('./types').ManagedSkill
   'skills.cancel'(stageId: string): void
   'skills.updateSource'(id: string): import('./types').SkillInstallPreview
   'skills.move'(id: string, projectId: string | null): void

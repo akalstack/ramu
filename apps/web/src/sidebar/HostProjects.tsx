@@ -1,3 +1,4 @@
+import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
 import { useEffect, useState } from 'react'
 import {
   CheckCheck,
@@ -78,9 +79,8 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
     <section aria-label={computer.name} className="min-w-0">
       {grouped && (
         <div className="group/host flex min-h-8 items-center gap-0.5 px-1">
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 border-0 bg-transparent px-1 py-1 text-left text-control text-muted-foreground hover:text-foreground"
+          <SidebarDisclosureButton
+            className="flex-1"
             title={computer.name}
             aria-expanded={open}
             onClick={() => chrome.setExpanded(key, !open)}
@@ -108,7 +108,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
                 {computer.running}
               </span>
             )}
-          </button>
+          </SidebarDisclosureButton>
           <Button
             variant="ghost"
             size="icon-xs"

@@ -1,3 +1,4 @@
+import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Monitor } from 'lucide-react'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
@@ -14,6 +15,9 @@ import { controllerLabel } from './computerLabels'
 import { useComputerVideo } from './useComputerVideo'
 import { ComputerSharing } from './ComputerSharing'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
+
+const VIEW_ONLY_COMPUTER_NOTICE =
+  'This device can watch screens the host owner has shared with this thread. Control requires full access.'
 
 type Invoke = ReturnType<typeof useHost>['invoke']
 
@@ -71,6 +75,7 @@ function Viewer({
   onAsked(): void
 }) {
   const { invoke } = useHost()
+  const { viewOnly, canWrite } = useHostWriteAccess()
   const [frame, setFrame] = useState<Frame | null>(null)
   const [now, setNow] = useState(Date.now())
   const [text, setText] = useState('')
@@ -78,7 +83,7 @@ function Viewer({
   const video = useComputerVideo(taskId, session.target.kind === 'display' && session.runtime.id === 'local')
   const live = video.status === 'live'
   const [liveSession, setLiveSession] = useState(session)
-  const human = (live ? liveSession : session).controller.kind === 'human'
+  const human = !viewOnly && (live ? liveSession : session).controller.kind === 'human'
   // With video there is no image to carry the control generation, so read it from the session once a second.
   useEffect(() => {
     if (!live) return
@@ -94,9 +99,14 @@ function Viewer({
       active = false
       clearInterval(timer)
     }
-  }, [invoke, taskId, live])
+  }, [invoke, taskId, live, canWrite])
   // Closing the viewer ends human control's input even when the picture came as video.
-  useEffect(() => () => void invoke('computer.disconnect', taskId).catch(() => {}), [invoke, taskId])
+  useEffect(
+    () => () => {
+      if (canWrite()) void invoke('computer.disconnect', taskId).catch(() => {})
+    },
+    [invoke, taskId, canWrite],
+  )
   useEffect(() => {
     if (live) return
     let active = true
@@ -127,11 +137,12 @@ function Viewer({
       active = false
       clearInterval(timer)
       // A human controller that closes the viewer pauses input rather than leaving it open unseen.
-      void invoke('computer.disconnect', taskId).catch(() => {})
+      canWrite() && void invoke('computer.disconnect', taskId).catch(() => {})
     }
-  }, [invoke, taskId, live])
+  }, [invoke, taskId, live, canWrite])
   const stale = !live && !!frame && now - frame.capturedAt > COMPUTER_FRAME_STALE_MS
   const send = (action: ComputerAction) => {
+    if (!canWrite()) return
     if (live) {
       void run(() => invoke('computer.input', taskId, liveSession.generation, Date.now(), action))
       return
@@ -150,7 +161,7 @@ function Viewer({
         <DialogHeader>
           <DialogTitle>{session.target.name}</DialogTitle>
           <DialogDescription>
-            {t(controllerLabel(session))} ·{' '}
+            {viewOnly ? t('View only') : t(controllerLabel(session))} ·{' '}
             {live
               ? t('Live video')
               : error
@@ -211,57 +222,63 @@ function Viewer({
           />
         )}
         <div className="flex flex-wrap items-center gap-2">
-          {human ? (
-            <>
-              <form
-                className="flex min-w-0 flex-1 gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  if (!text) return
-                  send({ kind: 'type', text })
-                  setText('')
-                }}
-              >
-                <Input
-                  aria-label={t('Type on the computer')}
-                  value={text}
-                  maxLength={2000}
-                  onChange={(event) => setText(event.target.value)}
-                />
-                <Button size="sm" disabled={!text || stale}>
-                  {t('Send')}
-                </Button>
-              </form>
-              {(['Enter', 'Tab', 'Escape', 'Backspace'] as const).map((key) => (
-                <Button
-                  key={key}
-                  size="sm"
-                  variant="secondary"
-                  disabled={stale}
-                  onClick={() => send({ kind: 'key', key })}
+          {!viewOnly &&
+            (human ? (
+              <>
+                <form
+                  className="flex min-w-0 flex-1 gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    if (!canWrite() || !text) return
+                    send({ kind: 'type', text })
+                    setText('')
+                  }}
                 >
-                  {key}
+                  <Input
+                    aria-label={t('Type on the computer')}
+                    value={text}
+                    maxLength={2000}
+                    onChange={(event) => setText(event.target.value)}
+                  />
+                  <Button size="sm" disabled={!text || stale}>
+                    {t('Send')}
+                  </Button>
+                </form>
+                {(['Enter', 'Tab', 'Escape', 'Backspace'] as const).map((key) => (
+                  <Button
+                    key={key}
+                    size="sm"
+                    variant="secondary"
+                    disabled={stale}
+                    onClick={() => send({ kind: 'key', key })}
+                  >
+                    {key}
+                  </Button>
+                ))}
+                <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
+                  {t('Give control to agent')}
                 </Button>
-              ))}
-              <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
-                {t('Give control to agent')}
+              </>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() =>
+                  void run(async () => {
+                    if ((await takeOrRequest(invoke, taskId)) === 'asked') onAsked()
+                  })
+                }
+              >
+                {t('Take control')}
               </Button>
-            </>
-          ) : (
-            <Button
-              size="sm"
-              onClick={() =>
-                void run(async () => {
-                  if ((await takeOrRequest(invoke, taskId)) === 'asked') onAsked()
-                })
-              }
-            >
-              {t('Take control')}
-            </Button>
-          )}
+            ))}
         </div>
-        <HandoffNotice taskId={taskId} session={session} run={run} />
-        {showsLocalInputLimit(session) && (
+        {viewOnly && (
+          <p role="status" className="text-caption text-muted-foreground">
+            {t(VIEW_ONLY_COMPUTER_NOTICE)}
+          </p>
+        )}
+        {!viewOnly && <HandoffNotice taskId={taskId} session={session} run={run} />}
+        {!viewOnly && showsLocalInputLimit(session) && (
           <span className="text-caption text-muted-foreground">{t(LOCAL_INPUT_LIMIT)}</span>
         )}
       </DialogContent>
@@ -272,7 +289,11 @@ function Viewer({
 /** Shows only when computer use is on for this host. The grant is per thread and explicit. */
 export function ComputerActivity({ taskId, visible }: { taskId: string | undefined; visible: boolean }) {
   useLanguage()
-  const { invoke } = useHost()
+  const { invoke, id: hostId } = useHost()
+  const { viewOnly, canWrite } = useHostWriteAccess()
+  const scope = `${hostId}:${taskId}`
+  const current = useRef(scope)
+  current.current = scope
   const [enabled, setEnabled] = useState(false)
   const [session, setSession] = useState<ComputerSessionSummary | null>(null)
   const [error, setError] = useState('')
@@ -284,19 +305,38 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   const [app, setApp] = useState('')
   const [runtimes, setRuntimes] = useState<{ id: string; name: string; online: boolean }[]>([])
   const [runtime, setRuntime] = useState('local')
+  const requests = useRef(0)
   const load = useCallback(async () => {
-    if (!taskId) return
+    if (!taskId || current.current !== scope) return
+    const request = ++requests.current
+    const valid = () => current.current === scope && requests.current === request
+    if (viewOnly) {
+      const granted = await invoke('computer.session', taskId).catch(() => null)
+      if (valid()) {
+        setSession(granted)
+        setEnabled(true)
+      }
+      return
+    }
     const status = await invoke('computer.status').catch(() => null)
+    if (!valid() || !canWrite()) return
     const appsReady = !!status?.apps?.available
+    const granted = status?.enabled ? await invoke('computer.session', taskId).catch(() => null) : null
+    if (!valid() || !canWrite()) return
+    const apps =
+      status?.enabled && (appsReady || runtime !== 'local')
+        ? await invoke('computer.apps', ...(runtime === 'local' ? [] : [runtime])).catch(() => [])
+        : []
+    if (!valid() || !canWrite()) return
+    const runtimes = status?.enabled ? await invoke('computer.runtimes').catch(() => []) : []
+    if (!valid() || !canWrite()) return
     setEnabled(!!status?.enabled && (status.runtime.available || appsReady))
     setKeepAwake(status?.keepAwake ?? true)
     setAppHint(status?.apps && !status.apps.available ? (status.apps.detail ?? '') : '')
-    setSession(status?.enabled ? await invoke('computer.session', taskId).catch(() => null) : null)
-    if (status?.enabled && (appsReady || runtime !== 'local'))
-      setApps(await invoke('computer.apps', ...(runtime === 'local' ? [] : [runtime])).catch(() => []))
-    else setApps([])
-    if (status?.enabled) setRuntimes(await invoke('computer.runtimes').catch(() => []))
-  }, [invoke, taskId, runtime])
+    setSession(granted)
+    setApps(apps)
+    setRuntimes(runtimes)
+  }, [invoke, taskId, runtime, viewOnly, scope, canWrite])
   useEffect(() => {
     if (!taskId || !visible) return
     void load()
@@ -304,6 +344,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
     return () => clearInterval(timer)
   }, [load, taskId, visible])
   const run = async (work: () => Promise<unknown>) => {
+    if (!canWrite()) return
     setError('')
     setAsked(false)
     try {
@@ -313,54 +354,63 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
     }
     await load()
   }
-  if (!taskId || !enabled) return null
+  if (!taskId || (!enabled && !viewOnly)) return null
   return (
     <ComposerTraySection aria-label={t('Computer')} title={t('Computer')} icon={<Monitor />}>
       <div className="flex flex-col gap-2 text-control">
+        {viewOnly && (
+          <p role="status" className="text-caption text-muted-foreground">
+            {t(VIEW_ONLY_COMPUTER_NOTICE)}
+          </p>
+        )}
         {session ? (
           <>
             <span className="text-caption text-muted-foreground">
-              {session.target.name} · {t(controllerLabel(session))}
+              {session.target.name} · {viewOnly ? t('View only') : t(controllerLabel(session))}
             </span>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" onClick={() => setViewing(true)}>
                 {t('View computer')}
               </Button>
-              {session.controller.kind === 'human' ? (
-                <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
-                  {t('Give control to agent')}
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    void run(async () => {
-                      if ((await takeOrRequest(invoke, taskId)) === 'asked') setAsked(true)
-                    })
-                  }
-                >
-                  {t('Take control')}
-                </Button>
+              {!viewOnly && (
+                <>
+                  {session.controller.kind === 'human' ? (
+                    <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
+                      {t('Give control to agent')}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        void run(async () => {
+                          if ((await takeOrRequest(invoke, taskId)) === 'asked') setAsked(true)
+                        })
+                      }
+                    >
+                      {t('Take control')}
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => void run(() => invoke('computer.stop', taskId))}>
+                    {t('Stop computer use')}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => void run(() => invoke('computer.revoke', taskId))}>
+                    {t('Revoke access')}
+                  </Button>
+                </>
               )}
-              <Button size="sm" variant="ghost" onClick={() => void run(() => invoke('computer.stop', taskId))}>
-                {t('Stop computer use')}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => void run(() => invoke('computer.revoke', taskId))}>
-                {t('Revoke access')}
-              </Button>
             </div>
-            <HandoffNotice taskId={taskId} session={session} run={run} />
+            {!viewOnly && <HandoffNotice taskId={taskId} session={session} run={run} />}
             {asked && (
               <span className="text-caption text-muted-foreground">
                 {t('Waiting for the device in control to allow it.')}
               </span>
             )}
-            {showsLocalInputLimit(session) && (
+            {!viewOnly && showsLocalInputLimit(session) && (
               <span className="text-caption text-muted-foreground">{t(LOCAL_INPUT_LIMIT)}</span>
             )}
           </>
-        ) : (
+        ) : viewOnly ? null : (
           <>
             <span className="text-caption text-muted-foreground">
               {t(
@@ -419,7 +469,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
             {t('This Mac may sleep when idle and stop the agent. Turn on Keep awake in Settings → System.')}
           </span>
         )}
-        {session && <ComputerSharing taskId={taskId} />}
+        {session && !viewOnly && <ComputerSharing taskId={taskId} />}
         {error && (
           <span role="alert" className="text-caption text-destructive">
             {error}

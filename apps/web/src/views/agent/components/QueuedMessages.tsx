@@ -1,3 +1,4 @@
+import { DragHandle } from '@/components/drag-handle'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import { ComposerTraySection } from '../../../composer/ComposerTraySection'
@@ -21,7 +22,6 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   CircleAlert,
   CornerDownRight,
-  GripVertical,
   ListEnd,
   ListOrdered,
   LoaderCircle,
@@ -146,18 +146,14 @@ function HostQueuedRow({
       }}
     >
       {reorderDisabled ? null : (
-        <button
-          type="button"
+        <DragHandle
           ref={setActivatorNodeRef}
-          className="flex-none cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing disabled:cursor-default"
           aria-label={translate('Drag to reorder')}
           title={translate('Drag to reorder')}
           disabled={configuring}
           {...attributes}
           {...listeners}
-        >
-          <GripVertical size={14} />
-        </button>
+        />
       )}
       <ListEnd size={15} className="queued-icon flex-none text-muted-foreground" aria-hidden="true" />
       <span className="queued-text" title={text}>
@@ -178,6 +174,7 @@ function HostQueuedRow({
       </div>
       <QueuedRowActions
         removeDisabled={configuring}
+        editDisabled={configuring}
         onRemove={() => void act(() => invoke('agent.removeQueued', sessionId, message.id))}
         onEdit={recall}
       />
@@ -190,11 +187,13 @@ function OutboxRow({
   item,
   hostName,
   hostOffline,
+  readOnly,
   onRecall,
 }: {
   item: OutboxItem
   hostName: string
   hostOffline: boolean
+  readOnly: boolean
   onRecall: (attachments: Attachment[], text: string) => void
 }) {
   const host = useHost().id
@@ -236,7 +235,7 @@ function OutboxRow({
             size="icon-xs"
             className={`${ICON_BUTTON_CLASS} queued-steer gap-[5px] text-soft disabled:pointer-events-none`}
             aria-label={translate('Retry')}
-            disabled={hostOffline}
+            disabled={hostOffline || readOnly}
             onClick={() => outbox(host).retry(item.id)}
           >
             <RotateCcw size={14} />
@@ -267,6 +266,7 @@ export function QueuedMessages({
   busyAgent,
   supportsSteering,
   configuring,
+  readOnly = false,
   act,
   onRecall,
 }: {
@@ -279,6 +279,7 @@ export function QueuedMessages({
   busyAgent: boolean
   supportsSteering: boolean
   configuring: boolean
+  readOnly?: boolean
   act: Act
   onRecall: (attachments: Attachment[], text: string) => void
 }) {
@@ -292,7 +293,7 @@ export function QueuedMessages({
   const reorder = (event: DragEndEvent) => {
     const from = ids.indexOf(String(event.active.id)),
       to = event.over ? ids.indexOf(String(event.over.id)) : -1
-    if (from < 0 || to < 0 || from === to) return
+    if (readOnly || configuring || from < 0 || to < 0 || from === to) return
     void act(() => invoke('agent.reorderQueued', sessionId, arrayMove(ids, from, to)))
   }
   return (
@@ -315,7 +316,10 @@ export function QueuedMessages({
               variant="ghost"
               size="sm"
               className={GHOST_TEXT_BUTTON_CLASS}
-              onClick={() => void act(() => invoke('agent.resumeQueue', sessionId))}
+              disabled={readOnly || configuring}
+              onClick={() => {
+                if (!readOnly) void act(() => invoke('agent.resumeQueue', sessionId))
+              }}
             >
               {translate('Resume messages')}
             </Button>
@@ -333,8 +337,8 @@ export function QueuedMessages({
                 sessionId={sessionId}
                 busyAgent={busyAgent}
                 supportsSteering={supportsSteering}
-                configuring={configuring}
-                reorderDisabled={queued.length < 2}
+                configuring={configuring || readOnly}
+                reorderDisabled={readOnly || queued.length < 2}
                 act={act}
                 onRecall={onRecall}
               />
@@ -343,7 +347,14 @@ export function QueuedMessages({
         </DndContext>
         {/* Outbox messages wait on this device, after everything the host already queued. Same row, but the host can't send them early. */}
         {pending.map((item) => (
-          <OutboxRow key={item.id} item={item} hostName={hostName} hostOffline={hostOffline} onRecall={onRecall} />
+          <OutboxRow
+            key={item.id}
+            item={item}
+            hostName={hostName}
+            hostOffline={hostOffline}
+            readOnly={readOnly}
+            onRecall={onRecall}
+          />
         ))}
       </div>
     </ComposerTraySection>

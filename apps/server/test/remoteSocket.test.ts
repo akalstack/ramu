@@ -185,3 +185,77 @@ it('sends runtime calls over the socket only when opted in and ready, and asks f
   expect(invoked.at(-1)).toMatchObject({ method: 'echo', args: [2], operationKey: 'operation-key-9' })
   expect(sinks.size).toBe(0)
 })
+
+const push = (sinks: Set<EventSink>, channel: string, payload: unknown) => {
+  for (const sink of sinks) sink.write(`data: ${JSON.stringify({ channel, payload })}\n\n`)
+}
+const events = (frames: SocketServerFrame[]) =>
+  frames.filter((f) => f.t === 'event').map((f) => `${(f as any).channel}:${JSON.stringify((f as any).payload)}`)
+
+it('delivers every event until the client subscribes, then only what it asked for', async () => {
+  const { connect, sinks } = await start()
+  const { ws, frames, until } = connect()
+  await until(() => sinks.size === 1)
+  push(sinks, 'workspace:changed', {})
+  await until(() => events(frames).length === 1)
+  ws.send(
+    encodeSocketFrame({
+      t: 'subscribe',
+      id: 1,
+      channels: ['agent:event', 'term:data'],
+      keys: { 'agent:event': ['s1'], 'term:data': ['t1'] },
+    }),
+  )
+  await until(() => frames.some((f) => f.t === 'result' && f.id === 1))
+  push(sinks, 'workspace:changed', {})
+  push(sinks, 'agent:event', { sessionId: 's2', event: {} })
+  push(sinks, 'term:data', { id: 't2', data: 'x' })
+  push(sinks, 'agent:event', { sessionId: 's1', event: {} })
+  push(sinks, 'term:data', { id: 't1', data: 'y' })
+  await until(() => events(frames).length === 3)
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(events(frames).slice(1)).toEqual([
+    'agent:event:{"sessionId":"s1","event":{}}',
+    'term:data:{"id":"t1","data":"y"}',
+  ])
+  // A listed channel without ids delivers every resource.
+  ws.send(encodeSocketFrame({ t: 'subscribe', id: 2, channels: ['term:data'] }))
+  await until(() => frames.some((f) => f.t === 'result' && f.id === 2))
+  push(sinks, 'term:data', { id: 't9', data: 'z' })
+  await until(() => events(frames).length === 3)
+})
+
+it('refuses a malformed subscription and a subscription on a calls-only connection', async () => {
+  const { connect, sinks } = await start()
+  const calls = connect(`${SOCKET_PATH}?events=none`)
+  await calls.until(() => calls.frames.some((f) => f.t === 'ready'))
+  calls.ws.send(encodeSocketFrame({ t: 'subscribe', id: 1, channels: ['agent:event'] }))
+  await calls.until(() => calls.frames.some((f) => f.t === 'error' && f.id === 1))
+  expect(sinks.size).toBe(0)
+  const bad = connect()
+  await bad.until(() => bad.frames.some((f) => f.t === 'ready'))
+  bad.ws.send('{"t":"subscribe","id":1,"channels":[1]}')
+  await new Promise<void>((resolve) => bad.ws.on('close', () => resolve()))
+})
+
+it('filters keyed channels by id without needing the id on unkeyed ones, and drops unlisted channels', async () => {
+  const { connect, sinks } = await start()
+  const { ws, frames, until } = connect()
+  await until(() => sinks.size === 1)
+  ws.send(
+    encodeSocketFrame({
+      t: 'subscribe',
+      id: 1,
+      channels: ['agent:event', 'usage:changed'],
+      keys: { 'agent:event': ['s1'] },
+    }),
+  )
+  await until(() => frames.some((f) => f.t === 'result' && f.id === 1))
+  push(sinks, 'usage:changed', [])
+  push(sinks, 'workspace:changed', {})
+  push(sinks, 'agent:event', { event: {}, sessionId: 's1' })
+  push(sinks, 'agent:event', { sessionId: 's2', event: { sessionId: 's1' } })
+  await until(() => events(frames).length === 2)
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(events(frames).map((e) => e.split(':')[0] + ':' + e.split(':')[1])).toEqual(['usage:changed', 'agent:event'])
+})

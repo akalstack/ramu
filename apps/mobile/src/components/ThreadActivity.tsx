@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { mobileThreadActivity } from '../runtime/threadActivity'
@@ -29,6 +29,17 @@ export function ThreadActivity({
   const id = store.language === 'id'
   const activity = mobileThreadActivity(chat, online)
   const [opened, setOpened] = useState<ActivityKind | 'more' | null>(null)
+  const [adviceSeen, setAdviceSeen] = useState(false)
+  const unread = adviceSeen ? 0 : (chat.unreadAdvice ?? 0)
+  // A fresh host count (new advice arrived, or the host cleared it) replaces the local "seen" mark.
+  useEffect(() => setAdviceSeen(false), [chat.unreadAdvice])
+  const settledAdvice = activity.advisors.length > 0 && !activity.advisors.some(helperActive)
+  // Opening settled advisor notes counts as reading them; a view-only device is refused and an older host has no such method.
+  useEffect(() => {
+    if (opened !== 'advisor' || !online || !chat.sessionId || !settledAdvice || adviceSeen || !chat.unreadAdvice) return
+    setAdviceSeen(true)
+    void store.invoke(chat.computerId, 'agent.markAdviceRead', chat.sessionId).catch(() => {})
+  }, [opened, online, chat.sessionId, chat.computerId, chat.unreadAdvice, settledAdvice, adviceSeen, store])
   const primary = activity.model.primary
   if (!primary && !actions.length && !children && !leading) return null
   const label = (kind: ActivityKind | 'more'): string =>
@@ -46,9 +57,13 @@ export function ThreadActivity({
         ? id
           ? 'Penasihat meninjau'
           : 'Advisor reviewing'
-        : id
-          ? 'Riwayat penasihat'
-          : 'Advisor history',
+        : unread
+          ? id
+            ? `Riwayat penasihat · ${unread} baru`
+            : `Advisor history · ${unread} new`
+          : id
+            ? 'Riwayat penasihat'
+            : 'Advisor history',
       goal: id
         ? {
             active: 'Tujuan aktif',

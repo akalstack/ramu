@@ -1,4 +1,8 @@
+import './socketTransport'
+import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
+import { VIEW_ONLY_WRITE_NOTICE } from './viewerAccess'
 import { saveIssuedCredential } from './saveCredential'
+import { planLayerSync } from '@ramu/shared/sharedFields'
 import { inputSummary } from '@ramu/shared/chat/inputSummary'
 import type { BranchNamingIntent, BranchChoice } from '@ramu/shared/workspaceDefaults'
 import { normalizeHelperGroups } from './threadActivity'
@@ -249,6 +253,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   >({})
   const [missingMethods, setMissingMethods] = useState<Record<string, string[]>>({})
   const [startSettings, setStartSettings] = useState<Record<string, AgentSettings>>({})
+  // The phone carries shared mobile settings between its paired hosts: any host holding an older value (or none) is
+  // given the newest one, and a clear spreads as a clear. Each (host, field, revision) is tried once at a time; a failure clears
+  // it, so a viewer-role or unreachable host causes no retry loop and is tried again on the next change to the layers.
+  const syncAttempts = useRef(new Set<string>())
+  useEffect(() => {
+    const plan = planLayerSync(mobileLayers)
+    for (const [host, edits] of Object.entries(plan))
+      for (const edit of edits) {
+        const key = `${host}|${edit.id}|${edit.at}|${edit.by}|${edit.value ?? ''}`
+        if (syncAttempts.current.has(key)) continue
+        syncAttempts.current.add(key)
+        void invoke(host, 'preferences.layers.set', edit).then(
+          (result) => setMobileLayers((p) => ({ ...p, [host]: result.mobile })),
+          // A failed attempt is not final: the next change to the layers plans it again.
+          () => syncAttempts.current.delete(key),
+        )
+      }
+  }, [mobileLayers])
   const loadDefaults = (id: string) => {
     // Older computers have no shared mobile layer; they keep working with the computer's own setting and this phone's.
     void invoke(id, 'preferences.layers.get').then(
@@ -303,6 +325,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     method: M,
     ...args: Parameters<RamuMethods[M]>
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>> {
+    if (ref.current.computers.find((computer) => computer.id === id)?.access === 'viewer' && !viewerMayInvoke(method))
+      throw new HostError(VIEW_ONLY_WRITE_NOTICE[ref.current.language], 403)
     const connection = connections.current.get(id)
     if (!connection || connection.controller.signal.aborted)
       throw new HostError('This host is offline. Reconnect before taking this action.')
@@ -720,12 +744,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (flushing.current.has(id)) return
     flushing.current.add(id)
     try {
-      while (ref.current.computers.find((c) => c.id === id)?.status === 'online') {
+      while (
+        ref.current.computers.find((c) => c.id === id)?.status === 'online' &&
+        ref.current.computers.find((c) => c.id === id)?.access !== 'viewer'
+      ) {
         const item = ref.current.outbox.find((o) => o.computerId === id)
         if (!item || item.state === 'uncertain' || item.state === 'sending' || item.state === 'review') break
         change((s) => ({ ...s, outbox: s.outbox.map((o) => (o.id === item.id ? { ...o, state: 'sending' } : o)) }))
         // Let the tap, composer clear and sending state paint before the synchronous full-state persist below.
         await new Promise((resolve) => setTimeout(resolve, 0))
+        if (ref.current.computers.find((computer) => computer.id === id)?.access === 'viewer') {
+          change((s) => ({
+            ...s,
+            outbox: s.outbox.map((queued) =>
+              queued.id === item.id
+                ? { ...queued, state: 'waiting', error: VIEW_ONLY_WRITE_NOTICE[s.language] }
+                : queued,
+            ),
+          }))
+          break
+        }
         try {
           writeLocal({ ...ref.current, ready: undefined, error: undefined, usage: undefined, catalogs: undefined })
           await deliver(item)
@@ -852,7 +890,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               c.id === computer.id
                 ? {
                     ...c,
-                    access: info.access,
+                    access: info.access ?? c.access,
                     os: info.platform === 'darwin' ? 'macos' : info.platform === 'win32' ? 'windows' : 'linux',
                     ...(c.auto && info.hostname ? { name: info.hostname, auto: false } : {}),
                   }
@@ -1137,6 +1175,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     send: async (id, text, mode, attachments, context) => {
       const chat = ref.current.chats.find((c) => c.id === id)
       if (!chat) throw new Error('Thread not found')
+      if (ref.current.computers.find((computer) => computer.id === chat.computerId)?.access === 'viewer')
+        throw new Error(VIEW_ONLY_WRITE_NOTICE[ref.current.language])
       if (ref.current.computers.find((c) => c.id === chat.computerId)?.status === 'revoked')
         throw new Error('Pair this host again before sending.')
       const item: OutboxItem = {
@@ -1162,6 +1202,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ref.current.projects,
         STANDALONE,
       )
+      if (ref.current.computers.find((computer) => computer.id === computerId)?.access === 'viewer')
+        throw new Error(VIEW_ONLY_WRITE_NOTICE[ref.current.language])
       const id = scoped(computerId, `pending-${uid()}`)
       const chat: Chat = {
         id,

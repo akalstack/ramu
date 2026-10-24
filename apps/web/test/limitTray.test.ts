@@ -5,7 +5,7 @@ import type { ProviderWaitState } from '@ramu/shared/chat/providerWait'
 import { limitTrayView } from '@ramu/shared/chat/providerWait'
 import { GOAL_LABELS } from '../src/chat/goalLabels'
 
-const state = vi.hoisted(() => ({ menus: [] as { label: string; items: any[] }[] }))
+const state = vi.hoisted(() => ({ menus: [] as { label: string; items: any[]; disabled?: boolean }[] }))
 vi.mock('../src/i18n', () => ({
   useLanguage: () => {},
   formatLocale: () => 'en-US',
@@ -166,4 +166,19 @@ it('keeps "Limit reached" and "Goal paused" as separate labels', () => {
   expect(GOAL_LABELS.paused).toBe('Goal paused')
   expect(GOAL_LABELS.limit).not.toBe(GOAL_LABELS.paused)
   expect(Object.values(GOAL_LABELS)).not.toContain('Waiting for provider')
+})
+
+it('keeps limit information visible but disables retry and auto-resume changes for viewers', () => {
+  const html = renderToStaticMarkup(
+    createElement(LimitTrayRow, {
+      wait: known,
+      now: NOW,
+      autoResume: autoResumeControl({}, undefined, vi.fn()),
+      onTry: vi.fn(),
+      readOnly: true,
+    }),
+  )
+  expect(html).toContain('Limit reached')
+  expect(html).toMatch(/<button[^>]*disabled=""/)
+  expect(state.menus[0]?.disabled).toBe(true)
 })

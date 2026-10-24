@@ -2,7 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { t, useLanguage } from '../../i18n'
 
-export function InlineEdit({ value, onDone }: { value: string; onDone: (v: string | null) => void }) {
+export function InlineEdit({
+  value,
+  onDone,
+  readOnly = false,
+}: {
+  value: string
+  onDone: (v: string | null) => void
+  readOnly?: boolean
+}) {
   useLanguage()
   const [v, setV] = useState(value)
   const ref = useRef<HTMLInputElement>(null)
@@ -14,13 +22,16 @@ export function InlineEdit({ value, onDone }: { value: string; onDone: (v: strin
       aria-label={t('Name')}
       maxLength={200}
       value={v}
+      readOnly={readOnly}
       autoFocus
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => setV(e.target.value)}
-      onBlur={() => onDone(v.trim() || null)}
+      onBlur={() => {
+        if (!readOnly) onDone(v.trim() || null)
+      }}
       onKeyDown={(e) => {
         e.stopPropagation()
-        if (e.key === 'Enter') onDone(v.trim() || null)
+        if (!readOnly && e.key === 'Enter') onDone(v.trim() || null)
         if (e.key === 'Escape') onDone(null)
       }}
     />

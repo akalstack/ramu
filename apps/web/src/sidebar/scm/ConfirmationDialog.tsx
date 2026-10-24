@@ -1,3 +1,5 @@
+import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
+import { VIEW_ONLY_WRITE_NOTICE } from '../../composer/viewerAccess'
 import { Input } from '@/components/ui/input'
 import { t } from '../../i18n'
 import { Dialog } from '../../Menu'
@@ -62,6 +64,7 @@ export function ConfirmationDialog({
   onCancel: () => void
   onConfirm: () => void
 }) {
+  const { viewOnly, canWrite } = useHostWriteAccess()
   return (
     <Dialog
       title={confirmTitle(confirmation)}
@@ -70,9 +73,13 @@ export function ConfirmationDialog({
         confirmation.kind === 'discard' || confirmation.kind === 'drop-stash' || confirmation.kind === 'delete-branch'
       }
       busy={busy}
+      confirmDisabled={viewOnly}
       onCancel={onCancel}
-      onConfirm={onConfirm}
+      onConfirm={() => {
+        if (canWrite()) onConfirm()
+      }}
     >
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       {confirmation.kind === 'discard' ? (
         <>
           <p>
@@ -96,7 +103,12 @@ export function ConfirmationDialog({
         <>
           <label className="explorer-name-field [&_input]:w-full flex flex-col items-stretch">
             {confirmation.kind === 'stash' ? t('Stash message') : t('Branch name')}
-            <Input autoFocus value={operationName} onChange={(event) => onOperationName(event.target.value)} />
+            <Input
+              readOnly={viewOnly}
+              autoFocus
+              value={operationName}
+              onChange={(event) => onOperationName(event.target.value)}
+            />
           </label>
           <p className="muted text-muted-foreground small text-caption">
             {confirmation.kind === 'branch'

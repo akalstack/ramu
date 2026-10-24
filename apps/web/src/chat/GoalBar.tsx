@@ -1,3 +1,4 @@
+import { GoalFacts } from './GoalFacts'
 import { useState } from 'react'
 import {
   ChevronRight,
@@ -17,12 +18,12 @@ import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import type { ChatGoal } from '@ramu/shared/types'
-import { goalFacts, type GoalChange, type GoalChangeType } from '@ramu/shared/chat/goalHistory'
+import { type GoalChange, type GoalChangeType } from '@ramu/shared/chat/goalHistory'
 import { t, useLanguage } from '../i18n'
 import { useAppSettings } from '../settings/AppSettings'
 import { resumeTime } from '../models/limitCopy'
 import { goalContinues, goalState, isLimitHold } from '@ramu/shared/chat/goalHold'
-import { checkOutcomeCopy, goalLabel, GOAL_NOTE_LABELS, VERIFY_LIMIT, verifyDraft } from './goalLabels'
+import { goalLabel, GOAL_NOTE_LABELS, VERIFY_LIMIT, verifyDraft } from './goalLabels'
 
 const goalIcon = (goal: ChatGoal) => {
   const state = goalState(goal)
@@ -37,66 +38,7 @@ const goalIcon = (goal: ChatGoal) => {
           : Target
 }
 
-const FILES_SHOWN = 8
-const code = 'font-mono text-caption [overflow-wrap:anywhere] select-text'
-
-/**
- * What a goal knows beyond its objective: the verification command and its latest result (a failure shows the command,
- * how it ended and the end of its output), and the evidence the agent gave for completion.
- */
-export function GoalFacts({ goal }: { goal: ChatGoal }) {
-  useLanguage()
-  const { verify, check, evidence } = goalFacts(goal)
-  if (!verify && !check && !evidence) return null
-  const files = evidence?.changedFiles ?? []
-  return (
-    <div className="goal-facts flex flex-col gap-1.5 text-caption text-soft">
-      {verify && (
-        <p className="goal-verify m-0 [overflow-wrap:anywhere]">
-          <span className="text-muted-foreground">{t('Verification')}</span> <code className={code}>{verify}</code>
-        </p>
-      )}
-      {check &&
-        (check.ok ? (
-          <p className="goal-check m-0 [overflow-wrap:anywhere]">
-            <span className="text-ok">{t('Verified')}</span> <code className={code}>{check.command}</code>
-          </p>
-        ) : (
-          <div className="goal-check goal-check-failed flex flex-col gap-1">
-            <p className="m-0 [overflow-wrap:anywhere]">
-              <span className="text-warn">{t('Verification failed')}</span> · {t(...checkOutcomeCopy(check.outcome))}
-              {' · '}
-              <code className={code}>{check.command}</code>
-            </p>
-            {check.tail && (
-              <pre className="goal-check-output m-0 max-h-40 overflow-auto whitespace-pre-wrap rounded-(--radius-s) bg-fill p-1.5 font-mono text-caption select-text [overflow-wrap:anywhere]">
-                {check.tail}
-              </pre>
-            )}
-          </div>
-        ))}
-      {evidence && evidence.checks.length > 0 && (
-        <div className="goal-evidence-checks flex flex-col gap-0.5">
-          <span className="text-muted-foreground">{t('Checks')}</span>
-          {evidence.checks.map((item, index) => (
-            <span key={index} className={`[overflow-wrap:anywhere] ${item.passed ? '' : 'text-warn'}`}>
-              {item.passed ? '✓' : '✗'} {item.name}
-            </span>
-          ))}
-        </div>
-      )}
-      {files.length > 0 && (
-        <div className="goal-evidence-files flex flex-col gap-0.5">
-          <span className="text-muted-foreground">{t('Changed files')}</span>
-          <code className={code}>{files.slice(0, FILES_SHOWN).join(', ')}</code>
-          {files.length > FILES_SHOWN && (
-            <span className="text-muted-foreground">{t('+{0} more', { '0': files.length - FILES_SHOWN })}</span>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
+export { GoalFacts } from './GoalFacts'
 
 function GoalDetails({ goal }: { goal: ChatGoal }) {
   const { preferences } = useAppSettings()
@@ -127,7 +69,9 @@ export function GoalVerifyEditor({
   current,
   onSave,
   onClose,
+  readOnly = false,
 }: {
+  readOnly?: boolean
   current: string | undefined
   onSave: (command: string | null) => void
   onClose: () => void
@@ -136,7 +80,7 @@ export function GoalVerifyEditor({
   const [draft, setDraft] = useState(current ?? '')
   const view = verifyDraft(draft, current)
   const save = () => {
-    if (view.tooLong) return
+    if (readOnly || view.tooLong) return
     if (view.changed) onSave(view.command)
     onClose()
   }
@@ -151,6 +95,7 @@ export function GoalVerifyEditor({
       <div className="flex items-center gap-1">
         <Input
           autoFocus
+          disabled={readOnly}
           value={draft}
           aria-label={t('Verification command')}
           aria-invalid={view.tooLong || undefined}
@@ -164,7 +109,7 @@ export function GoalVerifyEditor({
             }
           }}
         />
-        <Button type="submit" size="xs" disabled={view.tooLong || !view.changed}>
+        <Button type="submit" size="xs" disabled={readOnly || view.tooLong || !view.changed}>
           {view.command || !current ? t('Save') : t('Remove')}
         </Button>
         <Button type="button" variant="ghost" size="xs" onClick={onClose}>
@@ -185,7 +130,9 @@ export function GoalBar({
   goal,
   onControl,
   onVerify,
+  readOnly = false,
 }: {
+  readOnly?: boolean
   goal: ChatGoal
   onControl: (action: 'pause' | 'resume' | 'clear') => void
   /** Sets the goal's verification command, or removes it with null. */
@@ -229,6 +176,7 @@ export function GoalBar({
         <>
           {onVerify && goal.status !== 'completed' && (
             <Button
+              disabled={readOnly}
               variant="ghost"
               size="icon-xs"
               className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action goal-verify-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)"
@@ -245,6 +193,7 @@ export function GoalBar({
           )}
           {goal.status !== 'completed' && (
             <Button
+              disabled={readOnly}
               variant="ghost"
               size="icon-xs"
               className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)"
@@ -256,6 +205,7 @@ export function GoalBar({
             </Button>
           )}
           <Button
+            disabled={readOnly}
             variant="ghost"
             size="icon-xs"
             className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)"
@@ -269,7 +219,12 @@ export function GoalBar({
       }
     >
       {editing && onVerify && (
-        <GoalVerifyEditor current={goal.verify} onSave={onVerify} onClose={() => setEditing(false)} />
+        <GoalVerifyEditor
+          readOnly={readOnly}
+          current={goal.verify}
+          onSave={onVerify}
+          onClose={() => setEditing(false)}
+        />
       )}
       <GoalDetails goal={goal} />
     </ComposerTraySection>

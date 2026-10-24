@@ -32,7 +32,8 @@ it('keeps the shared mobile model flow per field, discards stale writes and clea
   expect((await set({ id: 'modelFlow', value: 'model', at: 1, by: 'phone-b' })).applied).toBe(false)
   expect((await get()).mobile.fields.modelFlow?.value).toBe('effort')
   expect((await set({ id: 'modelFlow', at: Date.now() + 1000, by: 'phone-b' })).applied).toBe(true)
-  expect((await get()).mobile.fields).toEqual({})
+  // A clear leaves a marker, so an older copy on another host cannot bring the value back.
+  expect((await get()).mobile.fields.modelFlow).toMatchObject({ cleared: true, value: null })
   expect(() => set({ id: 'modelFlow', value: 'sideways', at: 5, by: 'x' })).toThrow()
   expect(() => set({ id: 'other', value: 'model', at: 5, by: 'x' })).toThrow()
 })
@@ -52,7 +53,7 @@ it('carries the composer fields on the same layer, each with its own values and 
   expect((await set({ id: 'modelChangeWarning', at: 200, by: 'phone-b' })).applied).toBe(true)
   const after = (await get()).mobile.fields
   expect(after.queueWhileBusy?.value).toBe('queue')
-  expect(after.modelChangeWarning).toBeUndefined()
+  expect(after.modelChangeWarning).toMatchObject({ cleared: true, value: null })
   // Each field refuses values that belong to another one.
   expect(() => set({ id: 'queueWhileBusy', value: 'effort', at: 300, by: 'x' })).toThrow()
   expect(() => set({ id: 'queueWhileBusy', value: true, at: 300, by: 'x' })).toThrow()

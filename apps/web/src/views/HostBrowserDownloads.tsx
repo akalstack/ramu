@@ -7,25 +7,37 @@ import { Input } from '@/components/desktop-input'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
 
-export function HostBrowserDownloads({ taskId, tabId, own }: { taskId: string; tabId?: string; own: boolean }) {
+export function HostBrowserDownloads({
+  taskId,
+  tabId,
+  own,
+  canAccess,
+}: {
+  taskId: string
+  tabId?: string
+  own: boolean
+  canAccess: () => boolean
+}) {
   const host = useHost()
+  const permitted = canAccess()
   const [open, setOpen] = useState(false)
   const [entries, setEntries] = useState<BrowserDownloadInfo[]>([])
   const [paths, setPaths] = useState<Record<string, string>>({})
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   useEffect(() => {
-    if (!open) return
+    if (!open || !canAccess()) return
     let active = true
     let timer: ReturnType<typeof setTimeout>
     const refresh = async () => {
+      if (!canAccess()) return
       try {
         const entries = await host.invoke('hostBrowser.downloads', taskId)
-        if (active) setEntries(entries)
+        if (active && canAccess()) setEntries(entries)
       } catch (error) {
         if (active) setMessage(t(errorText(error)))
       } finally {
-        if (active) timer = setTimeout(() => void refresh(), 1000)
+        if (active && canAccess()) timer = setTimeout(() => void refresh(), 1000)
       }
     }
     void refresh()
@@ -33,8 +45,9 @@ export function HostBrowserDownloads({ taskId, tabId, own }: { taskId: string; t
       active = false
       clearTimeout(timer)
     }
-  }, [host, taskId, open])
+  }, [host, taskId, open, canAccess, permitted])
   const act = async (work: () => Promise<unknown>, success = '') => {
+    if (!canAccess()) return
     setBusy(true)
     setMessage('')
     try {
@@ -47,7 +60,12 @@ export function HostBrowserDownloads({ taskId, tabId, own }: { taskId: string; t
     }
   }
   return (
-    <BrowserDownloadsPopover open={open} onOpenChange={setOpen}>
+    <BrowserDownloadsPopover
+      open={open && permitted}
+      onOpenChange={(next) => {
+        if (!next || canAccess()) setOpen(next)
+      }}
+    >
       <p className="text-muted-foreground">
         {t(
           'Downloads stay on the execution host. Save into a new relative workspace file; existing files are never overwritten.',

@@ -1,3 +1,5 @@
+import { useViewOnly } from '../composer/useViewOnly'
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { McpStatusDialog } from './agent/components/McpStatusDialog'
 import { ComputerActivity } from '../chat/ComputerActivity'
 import { BrowserActivity, OpenBrowserButton, useBrowserActivity } from '../chat/BrowserActivity'
@@ -119,6 +121,7 @@ export const AgentView = memo(function AgentView({
   const host = useHost()
   // Every call of this chat goes to its own host.
   const { invoke } = host
+  const viewOnly = useViewOnly()
   const { preferences, save } = useAppSettings()
   const { reviews } = useReviews()
   const {
@@ -237,6 +240,7 @@ export const AgentView = memo(function AgentView({
   const act = async (fn: () => Promise<unknown>, propagate = false) => {
     setError(null)
     try {
+      if (viewOnly) throw new Error(translate(VIEW_ONLY_WRITE_NOTICE))
       await fn()
     } catch (e) {
       if (propagate) throw e
@@ -406,7 +410,7 @@ export const AgentView = memo(function AgentView({
     setDraft((current) => (current ? `${current}\n${text}` : text))
   }
   const editMessage = (text: string, files: Attachment[], seq?: number) => {
-    if (seq === undefined) return
+    if (viewOnly || seq === undefined) return
     setEditing({ seq, text, files })
   }
   /** After a rewind the message comes back into the box above anything already typed there, ready to change and send. */
@@ -553,7 +557,8 @@ export const AgentView = memo(function AgentView({
     onStopTask: stopTask,
     onOpenQuestion: openQuestion,
     onReviewAccess: () => setMcpOpen(true),
-    onEditMessage: editMessage,
+    readOnly: viewOnly,
+    onEditMessage: viewOnly ? undefined : editMessage,
   }
 
   return (
@@ -597,6 +602,7 @@ export const AgentView = memo(function AgentView({
         onToggleAside={toggleAside}
         commands={commands}
         onStopTask={stopTask}
+        readOnly={viewOnly}
         tasks={helperSelection.selected}
         runningTasks={runningTasks}
         agentsOpen={openAgent !== null}
@@ -621,6 +627,7 @@ export const AgentView = memo(function AgentView({
           {editing && (
             <EditFromHereDialog
               edit={editing}
+              readOnly={viewOnly}
               sessionId={view.sessionId}
               live={live || busyAgent}
               offlineHost={hostOffline ? hostName : undefined}
@@ -742,6 +749,7 @@ export const AgentView = memo(function AgentView({
               </MessageScroller>
               <SelectionActions
                 scroller={scroller}
+                readOnly={viewOnly}
                 onQuote={quoteIntoDraft}
                 onQuoteNew={quoteIntoNewChat}
                 onAside={(quote, from) => setOpenAside({ id: null, quote, from })}
@@ -787,10 +795,11 @@ export const AgentView = memo(function AgentView({
                   {backgroundTerminals.terminals.length > 0 && (
                     <BackgroundTerminalsSection state={backgroundTerminals} />
                   )}
-                  {providerWait && <ProviderWaitNote retry={limitRetry} autoResume={autoResume} />}
+                  {providerWait && <ProviderWaitNote retry={limitRetry} autoResume={autoResume} readOnly={viewOnly} />}
                   {liveGoal && (
                     <GoalBar
                       goal={liveGoal}
+                      readOnly={viewOnly}
                       onControl={(action) => {
                         void act(() => invoke('agent.goal.control', view.sessionId, action))
                       }}
@@ -803,6 +812,7 @@ export const AgentView = memo(function AgentView({
                     <QueuedMessages
                       sessionId={view.sessionId}
                       queued={queued}
+                      readOnly={viewOnly}
                       pending={pending}
                       paused={queuePaused}
                       hostName={hostName}
@@ -850,6 +860,7 @@ export const AgentView = memo(function AgentView({
                         sessionId={view.sessionId}
                         settings={pendingSettings ?? session.settings}
                         limited={!!providerWait}
+                        readOnly={viewOnly}
                         autoResume={autoResume}
                         onSession={setSession}
                       />
@@ -884,7 +895,7 @@ export const AgentView = memo(function AgentView({
                         settings={pendingSettings ?? session.settings}
                         current={session.settings}
                         onChange={changeSettings}
-                        disabled={false}
+                        disabled={viewOnly}
                         running={working}
                         trailing={<ContextMeter sessionId={view.sessionId} />}
                       />
@@ -892,7 +903,7 @@ export const AgentView = memo(function AgentView({
                   )
                 }
                 onChange={setDraft}
-                onArrowUpEmpty={editing ? undefined : editLast}
+                onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
                 chat
                 onSubmit={(context) => send(action, context)}
                 onAlternateSubmit={
@@ -926,6 +937,7 @@ export const AgentView = memo(function AgentView({
             <AsidePanel
               sessionId={view.sessionId}
               asides={asides}
+              readOnly={viewOnly}
               open={openAside}
               taskId={session?.taskId}
               onOpen={setOpenAside}
@@ -946,6 +958,7 @@ export const AgentView = memo(function AgentView({
               onSelect={setOpenAgent}
               onClose={() => setOpenAgent(null)}
               onStop={stopTask}
+              readOnly={viewOnly}
               onMessage={(task, text) => act(() => invoke('agent.messageTask', view.sessionId, task.agentId, text))}
             />
           )}

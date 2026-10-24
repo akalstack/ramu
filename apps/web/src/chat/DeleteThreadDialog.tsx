@@ -8,6 +8,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
+import { useHostWriteAccess } from '../composer/useHostWriteAccess'
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useHost } from '../workspace/HostProvider'
 
 /** Deletion approval belongs to the displayed host/thread and the exact commands the host reported. */
@@ -26,6 +28,7 @@ export function DeleteThreadDialog({
 }) {
   useLanguage()
   const host = useHost()
+  const { viewOnly, canWrite } = useHostWriteAccess()
   const scope = `${host.id}:${task.id}`
   const lastScope = useRef(scope)
   const latest = useRef(scope)
@@ -47,6 +50,7 @@ export function DeleteThreadDialog({
     }
     let active = true
     setReading({ scope, status: 'loading', commands: [] })
+    if (viewOnly) return
     void readRemovalCommands(host.invoke, task.id)
       .then((commands) => {
         if (active) setReading({ scope, status: 'ready', commands })
@@ -59,7 +63,7 @@ export function DeleteThreadDialog({
     return () => {
       active = false
     }
-  }, [host.invoke, scope, task.id, attempt])
+  }, [host.invoke, scope, task.id, attempt, viewOnly])
   const commands = reading.scope === scope ? reading.commands : []
   const unknown = commands.some((command) => command.state === 'unknown')
   const live = commands.some((command) => command.state !== 'unknown')
@@ -77,13 +81,14 @@ export function DeleteThreadDialog({
             ? 'Delete thread and forget records'
             : 'Delete thread',
       )}
-      confirmDisabled={reading.scope !== scope || reading.status !== 'ready' || host.status !== 'connected'}
+      confirmDisabled={viewOnly || reading.scope !== scope || reading.status !== 'ready' || host.status !== 'connected'}
       danger
       busy={busy}
       error={error}
       onCancel={onCancel}
       onConfirm={() =>
         animateThreadListChange(async () => {
+          if (!canWrite() || latest.current !== scope || reading.scope !== scope || reading.status !== 'ready') return
           const approvedScope = scope
           setBusy(true)
           setError(null)
@@ -104,6 +109,7 @@ export function DeleteThreadDialog({
     >
       <p>{t('This removes the thread and its agent transcripts. Its running agents are stopped.')}</p>
       <p className="text-caption text-muted-foreground">{t('Host: {0}', { 0: hostName ?? host.id })}</p>
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       {host.status !== 'connected' && <p role="status">{t('Reconnect to this host before deleting the thread.')}</p>}
       {reading.status === 'loading' && <p role="status">{t('Checking background commands…')}</p>}
       {reading.status === 'error' && (

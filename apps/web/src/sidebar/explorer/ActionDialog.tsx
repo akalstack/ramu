@@ -1,3 +1,5 @@
+import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
+import { VIEW_ONLY_WRITE_NOTICE } from '../../composer/viewerAccess'
 import type { RefObject } from 'react'
 import { Input } from '@/components/ui/input'
 import { t, useLanguage } from '../../i18n'
@@ -27,6 +29,7 @@ export function ActionDialog({
   onConfirm: () => void
 }) {
   useLanguage()
+  const { viewOnly, canWrite } = useHostWriteAccess()
   return (
     <Dialog
       title={
@@ -41,10 +44,14 @@ export function ActionDialog({
       confirmLabel={action.type === 'create' ? t('Create') : action.type === 'rename' ? t('Rename') : t('Delete')}
       danger={action.type === 'delete'}
       busy={busy}
+      confirmDisabled={viewOnly}
       error={error}
       onCancel={onCancel}
-      onConfirm={onConfirm}
+      onConfirm={() => {
+        if (canWrite()) onConfirm()
+      }}
     >
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       {action.type === 'delete' ? (
         <>
           <p>
@@ -64,11 +71,12 @@ export function ActionDialog({
             {t('Name')}
             <Input
               ref={nameInput}
+              readOnly={viewOnly}
               value={name}
               maxLength={255}
               onChange={(event) => setName(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && !busy) onConfirm()
+                if (event.key === 'Enter' && !busy && canWrite()) onConfirm()
               }}
             />
           </label>

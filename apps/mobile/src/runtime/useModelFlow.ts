@@ -67,8 +67,8 @@ export function useModelFlow(computerId: string): ModelFlowControl {
     host,
     sharedAvailable: shared !== null && shared !== undefined,
     overridden: {
-      mobile: !!layers.mobile.fields[MODEL_FLOW_FIELD],
-      device: !!layers.device.fields[MODEL_FLOW_FIELD],
+      mobile: !!layers.mobile.fields[MODEL_FLOW_FIELD] && !layers.mobile.fields[MODEL_FLOW_FIELD]?.cleared,
+      device: !!layers.device.fields[MODEL_FLOW_FIELD] && !layers.device.fields[MODEL_FLOW_FIELD]?.cleared,
     },
     inherited: (scope) => inheritedModelFlow(host, layers, scope),
     pending,

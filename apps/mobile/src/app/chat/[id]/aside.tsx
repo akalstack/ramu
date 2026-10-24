@@ -6,6 +6,7 @@ import { ArrowUp, Plus, Trash2 } from 'lucide-react-native'
 import type { Aside } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
+import { canWriteHost, VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { Header, HeaderButton, PageScrollView as ScrollView, Screen } from '../../../components/Screen'
 import { Markdown } from '../../../components/Markdown'
 import { Glass } from '../../../components/Glass'
@@ -23,13 +24,15 @@ export default function AsideScreen() {
   const [pendingQuote, setPendingQuote] = useState(quoteParam ?? '')
   const chat = useChat(id)
   const store = useStore()
+  const latestStore = useRef(store)
+  latestStore.current = store
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const [asides, setAsides] = useState<Aside[]>([])
   const [selected, setSelected] = useState<string | null>(quoteParam ? null : (initial ?? null))
   const [question, setQuestion] = useState('')
   const [busy, setBusy] = useState(false)
-  const scroll = useRef<import('react-native').ScrollView>(null)
+  const scroll = useRef<import('react-native').ScrollViewInstance>(null)
   const computerId = chat?.computerId,
     sessionId = chat?.sessionId
 
@@ -63,11 +66,13 @@ export default function AsideScreen() {
         <Header title="Side questions" />
       </Screen>
     )
+  const viewOnly = store.computers.find((host) => host.id === chat.computerId)?.access === 'viewer'
+  const writable = () => canWriteHost(latestStore.current.computers.find((host) => host.id === chat.computerId))
   const current = asides.find((a) => a.id === selected)
   const waiting = current ? current.messages.at(-1)?.role === 'user' : false
   const ask = async () => {
     const text = question.trim()
-    if (!text || busy) return
+    if (!writable() || !text || busy) return
     setBusy(true)
     try {
       const made = await store.invoke(
@@ -91,14 +96,15 @@ export default function AsideScreen() {
     }
   }
   const remove = () => {
-    if (!current) return
+    if (!writable() || !current) return
     Alert.alert('Delete this side question?', 'The thread itself is not affected.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () =>
-          void store
+          writable() &&
+          void latestStore.current
             .invoke(chat.computerId, 'aside.delete', sessionId, current.id)
             .then(() => {
               setSelected(null)
@@ -114,7 +120,7 @@ export default function AsideScreen() {
         title="Side questions"
         subtitle={chat.title}
         right={
-          current ? (
+          current && !viewOnly ? (
             <HeaderButton icon={Trash2} label="Delete side question" systemIcon="trash" onPress={remove} />
           ) : null
         }
@@ -139,13 +145,15 @@ export default function AsideScreen() {
                 onPress={() => setSelected(a.id)}
               />
             ))}
-            <Chip
-              label="New"
-              accessibilityLabel="New side question"
-              icon={Plus}
-              selected={selected === null}
-              onPress={() => setSelected(null)}
-            />
+            {!viewOnly ? (
+              <Chip
+                label="New"
+                accessibilityLabel="New side question"
+                icon={Plus}
+                selected={selected === null}
+                onPress={() => setSelected(null)}
+              />
+            ) : null}
           </View>
           {!current && pendingQuote ? (
             <View style={{ borderLeftWidth: 2, borderLeftColor: c.lineStrong, paddingLeft: space.m }}>
@@ -184,7 +192,8 @@ export default function AsideScreen() {
             ),
           )}
           {waiting ? <ActivityIndicator style={{ alignSelf: 'flex-start' }} color={c.accent} /> : null}
-          {!current && !asides.length ? <T tone="muted">No side questions yet. Ask one below.</T> : null}
+          {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[store.language]}</T> : null}
+          {!viewOnly && !current && !asides.length ? <T tone="muted">No side questions yet. Ask one below.</T> : null}
         </ScrollView>
         <View style={{ paddingBottom: Math.max(insets.bottom, space.s), paddingHorizontal: space.s + 2 }}>
           <Glass radius={radius.xl}>
@@ -198,6 +207,7 @@ export default function AsideScreen() {
               }}
             >
               <TextInput
+                editable={!viewOnly}
                 value={question}
                 onChangeText={setQuestion}
                 multiline
@@ -217,7 +227,7 @@ export default function AsideScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Ask"
-                disabled={!question.trim() || busy}
+                disabled={viewOnly || !question.trim() || busy}
                 onPress={() => {
                   tap()
                   void ask()

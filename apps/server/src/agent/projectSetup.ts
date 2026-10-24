@@ -11,7 +11,7 @@ import type {
   SharedMcpConnection,
 } from '@ramu/shared/mcp'
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
-import { skillMetadata } from '../memory/skillFiles'
+import { skillMcpTools, skillMetadata } from '../memory/skillFiles'
 import { providerAccountEnv, providerAccountHome } from '../providers/providerBinaries'
 
 const MAX_FILE = 1024 * 1024
@@ -74,7 +74,11 @@ export function parseJsonc(text: string): unknown {
 }
 
 /** Claude, Cursor and repository `.mcp.json` entries: `{ command, args, env }` or `{ url, headers }`. */
-function standardServers(entries: unknown): Declared[] {
+/** Called for an entry that cannot be used (no URL or command) so the rest of its file still loads. */
+type Skip = (name: string, reason: string) => void
+const NO_TRANSPORT = 'has neither a url nor a command, so Ramu cannot share it.'
+
+function standardServers(entries: unknown, skip?: Skip): Declared[] {
   return Object.entries(object(entries) ?? {}).flatMap(([name, value]) => {
     const c = object(value)
     if (!c || name === 'ramu') return []
@@ -84,13 +88,17 @@ function standardServers(entries: unknown): Declared[] {
         : typeof c.command === 'string'
           ? { type: 'stdio', command: c.command, args: strings(c.args) }
           : null
-    if (!transport) throw new Error(`Server "${name}" has neither a url nor a command.`)
+    if (!transport) {
+      if (!skip) throw new Error(`Server "${name}" has neither a url nor a command.`)
+      skip(name, NO_TRANSPORT)
+      return []
+    }
     return [{ name, transport, env: record(c.env), headers: record(c.headers), enabled: c.disabled !== true }]
   })
 }
 
 /** OpenCode's `mcp` map: `{ type: 'local', command: [...], environment }` or `{ type: 'remote', url, headers }`. */
-function openCodeServers(entries: unknown): Declared[] {
+function openCodeServers(entries: unknown, skip?: Skip): Declared[] {
   return Object.entries(object(entries) ?? {}).flatMap(([name, value]) => {
     const c = object(value)
     if (!c || name === 'ramu') return []
@@ -101,7 +109,11 @@ function openCodeServers(entries: unknown): Declared[] {
         : command.length
           ? { type: 'stdio', command: command[0]!, args: command.slice(1) }
           : null
-    if (!transport) throw new Error(`Server "${name}" has neither a url nor a command.`)
+    if (!transport) {
+      if (!skip) throw new Error(`Server "${name}" has neither a url nor a command.`)
+      skip(name, NO_TRANSPORT)
+      return []
+    }
     return [{ name, transport, env: record(c.environment), headers: record(c.headers), enabled: c.enabled !== false }]
   })
 }
@@ -110,7 +122,7 @@ function openCodeServers(entries: unknown): Declared[] {
  * Codex `[mcp_servers.<name>]` tables from config.toml: strings, string arrays, booleans and the `env` /
  * `http_headers` string tables, which is all a server definition uses. Other tables are skipped.
  */
-export function codexServers(toml: string, env: NodeJS.ProcessEnv = process.env): Declared[] {
+export function codexServers(toml: string, env: NodeJS.ProcessEnv = process.env, skip?: Skip): Declared[] {
   const servers = new Map<string, Json & { env: Record<string, string>; headers: Record<string, string> }>()
   const server = (name: string) => {
     let entry = servers.get(name)
@@ -170,7 +182,10 @@ export function codexServers(toml: string, env: NodeJS.ProcessEnv = process.env)
         : typeof c.command === 'string'
           ? { type: 'stdio', command: c.command, args: strings(c.args) }
           : null
-    if (!transport) return []
+    if (!transport) {
+      skip?.(name, NO_TRANSPORT)
+      return []
+    }
     const headers = { ...c.headers }
     // Codex can read a bearer token from an environment variable; other providers need the header itself.
     if (typeof c.bearer_token_env_var === 'string' && env[c.bearer_token_env_var])
@@ -262,6 +277,11 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
       result.diagnostics.push({ file: display(file), message: error instanceof Error ? error.message : String(error) })
     }
   }
+  // One unusable entry is reported on its own and never costs the rest of its file.
+  const skip =
+    (file: string): Skip =>
+    (name, reason) =>
+      result.diagnostics.push({ file: display(file), message: `Server "${name}" ${reason}` })
   const add = (declared: Declared[], origin: Origin, forwarded = false) => {
     for (const server of declared) {
       const key = mcpServerKey(server.transport)
@@ -284,7 +304,7 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
   attempt(files.claude, () => {
     const config = readJson(files.claude)
     claudeProjects = object(config?.projects) ?? {}
-    add(standardServers(config?.mcpServers), {
+    add(standardServers(config?.mcpServers, skip(files.claude)), {
       scope: 'user',
       label: 'Claude',
       file: display(files.claude),
@@ -294,10 +314,15 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
   attempt(files.codex, () => {
     const raw = readBounded(files.codex)
     if (raw !== null)
-      add(codexServers(raw, env), { scope: 'user', label: 'Codex', file: display(files.codex), provider: 'codex' })
+      add(codexServers(raw, env, skip(files.codex)), {
+        scope: 'user',
+        label: 'Codex',
+        file: display(files.codex),
+        provider: 'codex',
+      })
   })
   attempt(files.cursor, () =>
-    add(standardServers(readJson(files.cursor)?.mcpServers), {
+    add(standardServers(readJson(files.cursor)?.mcpServers, skip(files.cursor)), {
       scope: 'user',
       label: 'Cursor',
       file: display(files.cursor),
@@ -306,7 +331,7 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
   )
   for (const file of files.opencode)
     attempt(file, () =>
-      add(openCodeServers(readJson(file, true)?.mcp), {
+      add(openCodeServers(readJson(file, true)?.mcp, skip(file)), {
         scope: 'user',
         label: 'OpenCode',
         file: display(file),
@@ -325,27 +350,36 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
     attempt(at('.mcp.json'), () => {
       const config = readJson(at('.mcp.json'))
       if (config && !object(config.mcpServers)) throw new Error('Expected an "mcpServers" object.')
-      add(standardServers(config?.mcpServers), origin('.mcp.json'), true)
+      add(standardServers(config?.mcpServers, skip(at('.mcp.json'))), origin('.mcp.json'), true)
     })
     const local = object(claudeProjects[path])
     if (local) {
       touch(files.claude)
       const disabled = strings(local.disabledMcpServers)
       add(
-        standardServers(local.mcpServers).map((s) => ({ ...s, enabled: s.enabled && !disabled.includes(s.name) })),
+        standardServers(local.mcpServers, skip(files.claude)).map((s) => ({
+          ...s,
+          enabled: s.enabled && !disabled.includes(s.name),
+        })),
         origin(`${display(files.claude)} (local)`),
         true,
       )
     }
     attempt(at('.cursor/mcp.json'), () =>
-      add(standardServers(readJson(at('.cursor/mcp.json'))?.mcpServers), origin('.cursor/mcp.json', 'cursor')),
+      add(
+        standardServers(readJson(at('.cursor/mcp.json'))?.mcpServers, skip(at('.cursor/mcp.json'))),
+        origin('.cursor/mcp.json', 'cursor'),
+      ),
     )
     attempt(at('.codex/config.toml'), () => {
       const raw = readBounded(at('.codex/config.toml'))
-      if (raw !== null) add(codexServers(raw, env), origin('.codex/config.toml', 'codex'))
+      if (raw !== null)
+        add(codexServers(raw, env, skip(at('.codex/config.toml'))), origin('.codex/config.toml', 'codex'))
     })
     for (const name of ['opencode.json', 'opencode.jsonc'])
-      attempt(at(name), () => add(openCodeServers(readJson(at(name), true)?.mcp), origin(name, 'opencode')))
+      attempt(at(name), () =>
+        add(openCodeServers(readJson(at(name), true)?.mcp, skip(at(name))), origin(name, 'opencode')),
+      )
   }
 
   return result
@@ -678,7 +712,7 @@ export function sharedSessionSkills(
   accountEnv: NodeJS.ProcessEnv,
   sharing: SkillSharing,
   options: { env?: NodeJS.ProcessEnv; home?: string; projectId?: string | null } = {},
-): { name: string; dir: string; changedAt: number }[] {
+): { name: string; dir: string; changedAt: number; tools: string[] }[] {
   if (!Object.values(sharing).some(Boolean)) return []
   const env = options.env ?? process.env,
     home = options.home ?? homedir()
@@ -693,6 +727,7 @@ export function sharedSessionSkills(
             name: skill.name,
             dir: skill.folders[0]!,
             changedAt: statSync(join(skill.folders[0]!, 'SKILL.md'), { throwIfNoEntry: false })?.mtimeMs ?? 0,
+            tools: skillMcpTools(readBounded(join(skill.folders[0]!, 'SKILL.md')) ?? ''),
           },
         ]
       : [],

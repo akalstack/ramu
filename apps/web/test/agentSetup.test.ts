@@ -1,3 +1,4 @@
+import { SettingsScopeContext, type SettingsScope } from '../src/settings/SettingsScope'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -41,7 +42,7 @@ const server = (overrides: Partial<ProjectMcpServer>): ProjectMcpServer => ({
   ...overrides,
 })
 
-function render(setup: Partial<ProjectSetup>) {
+function render(setup: Partial<ProjectSetup>, viewer = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(['mcp-projects', ''], [{ id: 'project', name: 'Lionparcel' }])
   client.setQueryData(['mcp-settings', ''], { canAdminister: true, connections: [] })
@@ -54,7 +55,26 @@ function render(setup: Partial<ProjectSetup>) {
     ...setup,
   })
   try {
-    return renderToStaticMarkup(createElement(QueryClientProvider, { client }, createElement(AgentSetup)))
+    return renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(
+          SettingsScopeContext.Provider,
+          {
+            value: viewer
+              ? ({
+                  primaryId: '',
+                  ready: true,
+                  stale: false,
+                  targets: [{ viewOnly: true }],
+                } as unknown as SettingsScope)
+              : null,
+          },
+          createElement(AgentSetup),
+        ),
+      ),
+    )
   } finally {
     client.clear()
   }
@@ -146,5 +166,14 @@ it('lists provider-managed servers apart from declared ones, with a connectors l
   expect(html).toContain('claude.ai Figma')
   expect(html).toContain('Codex connector')
   expect(html.match(/Manage connectors/g)).toHaveLength(1)
+  expect(html).toMatch(/<a\b[^>]*href="[^"]+"[^>]*>Manage connectors<\/a>/)
   expect(render({})).not.toContain('Managed by the provider')
+})
+
+it('keeps setup readable but disables sharing when a cached admin snapshot belongs to a viewer', () => {
+  const html = render({ mcp: [server({})] }, true)
+  expect(html).toContain('atlassian')
+  expect(html).toMatch(
+    /aria-label="Share atlassian with every provider and account"[^>]*disabled|disabled[^>]*aria-label="Share atlassian/,
+  )
 })

@@ -85,6 +85,7 @@ function TranscriptBlock({
             live={ctx.live}
             onOpen={() => ctx.onOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)}
             onStop={ctx.onStopTask}
+            readOnly={ctx.readOnly}
           />
         )
       ) : (
@@ -101,8 +102,8 @@ function TranscriptBlock({
           questionStates={ctx.questionStates}
           latest={latest}
           onEdit={
-            ctx.eventSequences.has(b.event)
-              ? (text, files) => ctx.onEditMessage(text, files, ctx.eventSequences.get(b.event))
+            ctx.onEditMessage && ctx.eventSequences.has(b.event)
+              ? (text, files) => ctx.onEditMessage?.(text, files, ctx.eventSequences.get(b.event))
               : undefined
           }
           onOpenAgent={ctx.onOpenAgent}
@@ -158,7 +159,13 @@ export function TranscriptTurn({
     groupToolThinking(groupAgentRuns(list)).map((item) =>
       Array.isArray(item) ? (
         <div key={blockIndex(item[0]!, blocks)} data-block-index={blockIndex(item[0]!, blocks)}>
-          <AgentGroup tasks={item.map(agentOf)} live={ctx.live} onOpen={ctx.onOpenAgent} onStop={ctx.onStopTask} />
+          <AgentGroup
+            tasks={item.map(agentOf)}
+            live={ctx.live}
+            onOpen={ctx.onOpenAgent}
+            onStop={ctx.onStopTask}
+            readOnly={ctx.readOnly}
+          />
         </div>
       ) : item.kind === 'work' ? (
         renderBlock(item.block, false, item.entries)

@@ -62,7 +62,7 @@ export function PageScrollView({
   ref,
   horizontal,
   ...props
-}: ComponentProps<typeof ScrollView> & { ref?: Ref<ScrollView> }) {
+}: ComponentProps<typeof ScrollView> & { ref?: Ref<import('react-native').ScrollViewInstance> }) {
   const view = <ScrollView {...props} ref={ref} horizontal={horizontal} />
   return horizontal ? view : <PrimaryScroll>{view}</PrimaryScroll>
 }

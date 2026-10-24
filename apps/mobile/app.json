@@ -66,14 +66,6 @@
         }
       ],
       [
-        "expo-build-properties",
-        {
-          "ios": {
-            "enableSceneSupport": true
-          }
-        }
-      ],
-      [
         "expo-splash-screen",
         {
           "backgroundColor": "#ffffff",
@@ -93,7 +85,9 @@
           "bundleIdentifier": "dev.ramu.mobile.activities",
           "widgets": []
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": false

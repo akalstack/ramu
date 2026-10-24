@@ -1,3 +1,5 @@
+import { WorkspaceAccessBoundary } from '../components/workspace-access-boundary'
+import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { cn } from 'cn'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { t, useLanguage } from './../i18n'
@@ -42,8 +44,9 @@ interface Conflict {
 
 function TextFileView({ taskId, view, binding }: { taskId: string; view: FileViewDesc; binding: RepositoryBinding }) {
   useLanguage()
+  const { viewOnly, canWrite } = useHostWriteAccess()
   const ws = useWorkspace()
-  const { invoke } = useHost()
+  const { invoke, status: hostStatus } = useHost()
   const { on: onHostEvent } = useHostRuntime()
   const { preferences } = useAppSettings()
   const changingBuffer = useRef(false)
@@ -52,6 +55,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const selection = useRef(view.selection)
   selection.current = view.selection
+  const loadRef = useRef<(() => void) | null>(null)
   const loaded = useRef(false)
   const [loadedTick, setLoadedTick] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -147,7 +151,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
     editorRef.current = editor
 
     const save = async () => {
-      if (saving || !loaded.current || disposed) return
+      if (!canWrite() || saving || !loaded.current || disposed) return
       saving = true
       normalizeForSave(model, editorConfig)
       const version = model.getAlternativeVersionId()
@@ -192,38 +196,51 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
       if (loaded.current && !changingBuffer.current) setDirty(view.id, isDirty())
     })
 
-    Promise.all([
-      invoke('files.read', taskId, binding.repoId, view.path),
-      invoke('files.editorconfig', taskId, binding.repoId, view.path).catch((): EditorConfigProps => ({})),
-    ]).then(
-      ([f, config]) => {
-        if (disposed) return
-        editorConfig = config
-        model.setValue(f.content)
-        applyEditorConfig(model, config)
-        baseHash.current = f.hash
-        savedVersion.current = model.getAlternativeVersionId()
-        setDirty(view.id, false)
-        editor.updateOptions({ readOnly: false })
-        loaded.current = true
-        setLoading(false)
-        setLoadedTick((tick) => tick + 1)
-        revealMatch()
-      },
-      (e) => {
-        if (!disposed) {
-          setError(errorText(e))
-          setLoading(false)
-        }
-      },
-    )
+    let reading = false
+    const load = () => {
+      if (reading || loaded.current || disposed || !canWrite()) return
+      reading = true
+      setLoading(true)
+      setError(null)
+      void Promise.all([
+        invoke('files.read', taskId, binding.repoId, view.path),
+        invoke('files.editorconfig', taskId, binding.repoId, view.path).catch((): EditorConfigProps => ({})),
+      ])
+        .then(
+          ([f, config]) => {
+            if (disposed) return
+            editorConfig = config
+            model.setValue(f.content)
+            applyEditorConfig(model, config)
+            baseHash.current = f.hash
+            savedVersion.current = model.getAlternativeVersionId()
+            setDirty(view.id, false)
+            editor.updateOptions({ readOnly: !canWrite() })
+            loaded.current = true
+            setLoading(false)
+            setLoadedTick((tick) => tick + 1)
+            revealMatch()
+          },
+          (e) => {
+            if (!disposed) {
+              setError(errorText(e))
+              setLoading(false)
+            }
+          },
+        )
+        .finally(() => {
+          reading = false
+        })
+    }
+    loadRef.current = load
+    load()
 
     // Agents, terminals and other tools write to the same files.
     const readDisk = async () => {
-      if (!loaded.current || !workspaceVisible()) return
+      if (!canWrite() || !loaded.current || !workspaceVisible()) return
       const current = ++diskRequest
       const disk = await invoke('files.read', taskId, binding.repoId, view.path).catch(() => null)
-      if (disposed || current !== diskRequest) return
+      if (!canWrite() || disposed || current !== diskRequest) return
       const diskHash = disk?.hash ?? ''
       if (diskHash === baseHash.current || (conflictRef.current && conflictRef.current.diskHash === diskHash)) return
       if (!isDirty() && disk) {
@@ -244,6 +261,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
 
     return () => {
       disposed = true
+      loadRef.current = null
       off()
       visibility()
       window.removeEventListener('ramu:save-all', saveAll)
@@ -254,7 +272,12 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
       model.dispose()
       editorRef.current = null
     }
-  }, [taskId, binding.repoId, binding.cwd, view.path, view.id, setDirty, invoke, onHostEvent])
+  }, [taskId, binding.repoId, binding.cwd, view.path, view.id, setDirty, invoke, onHostEvent, canWrite])
+
+  useEffect(() => {
+    editorRef.current?.updateOptions({ readOnly: viewOnly || !loaded.current })
+    if (!viewOnly) loadRef.current?.()
+  }, [viewOnly, hostStatus])
 
   const [wrap, setWrapState] = useState(readWrap)
   const setWrap = (on: boolean) => {
@@ -372,6 +395,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
                 variant="secondary"
                 className="bg-fill hover:bg-fill-hover"
                 onClick={() => {
+                  if (!canWrite()) return
                   replaceBuffer(conflict.disk!)
                   baseHash.current = conflict.diskHash
                   savedVersion.current = editorRef.current!.getModel()!.getAlternativeVersionId()
@@ -389,6 +413,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
             variant="secondary"
             className="bg-fill hover:bg-fill-hover"
             onClick={() => {
+              if (!canWrite()) return
               baseHash.current = conflict.diskHash || null
               setConflict(null)
               setComparing(false)
@@ -479,5 +504,9 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
 
 /** Images, PDFs, audio and video open in a preview; everything else opens in the editor. */
 export function FileView(props: { taskId: string; view: FileViewDesc; binding: RepositoryBinding }) {
-  return isMedia(props.view.path) ? <MediaFileView {...props} /> : <TextFileView {...props} />
+  return (
+    <WorkspaceAccessBoundary>
+      {isMedia(props.view.path) ? <MediaFileView {...props} /> : <TextFileView {...props} />}
+    </WorkspaceAccessBoundary>
+  )
 }

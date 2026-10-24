@@ -1,5 +1,5 @@
 import { ruleCharacters, ruleDelivery, ruleDeliveryBlock } from '@ramu/shared/rules'
-import type { AgentSetupSnapshot, SetupItem } from '@ramu/shared/agentSetup'
+import type { AgentSetupSnapshot, SetupItem, ToolRequirementStatus } from '@ramu/shared/agentSetup'
 import { RULE_TOTAL_LIMIT, type AgentProvider, type Rule } from '@ramu/shared/types'
 import type { SharedMcpAccountReadiness } from '@ramu/shared/mcp'
 
@@ -19,11 +19,53 @@ export interface SetupInputs {
   runtimeServers?: readonly { name: string; status: string }[]
   /** Skills Ramu copies into this login's skill export for the person (names only). */
   sharedSkills: readonly string[]
+  /** MCP tools each shared skill asks for (`allowed-tools`), by skill name. */
+  skillTools?: Readonly<Record<string, readonly string[]>>
   connections: readonly { connectionId?: string; name: string; status: SharedMcpAccountReadiness['status'] }[]
   /** Connection ids the provider also loads from its own configuration, and the ones this thread hides. */
   duplicates?: ReadonlySet<string>
   hidden?: readonly string[]
   now: number
+}
+
+/** The provider-side name of Ramu's shared MCP gateway (`EXTERNAL_MCP_SERVER`). */
+const EXTERNAL_SERVER = 'shared_mcp'
+
+/**
+ * What this thread has for the MCP server a skill's tool names. Resolved to the server: the shared gateway
+ * (`shared_mcp`) by its connections' readiness, other servers by what the launch added or the runtime reports. A tool's own
+ * approval is only known when it is called, so `available` means the server is usable, not that every tool is allowed.
+ */
+export function resolveSkillTools(
+  tools: readonly string[],
+  input: Pick<SetupInputs, 'addedServers' | 'runtimeServers' | 'connections'>,
+): NonNullable<SetupItem['requires']> {
+  return tools.flatMap((tool) => {
+    const match = /^mcp__(.+?)__(.+)$/.exec(tool)
+    if (!match) return []
+    const server = match[1]!
+    let status: ToolRequirementStatus
+    if (server === EXTERNAL_SERVER) {
+      const states = input.connections.map((c) => c.status)
+      status = states.includes('ready')
+        ? 'available'
+        : states.includes('sign-in-required')
+          ? 'sign-in-required'
+          : states.includes('approval-needed')
+            ? 'approval-needed'
+            : 'missing'
+    } else {
+      const reported = input.runtimeServers?.find((s) => s.name === server)
+      status = reported
+        ? reported.status === 'connected'
+          ? 'available'
+          : 'not-connected'
+        : input.addedServers.includes(server)
+          ? 'not-connected'
+          : 'missing'
+    }
+    return [{ tool, server, status }]
+  })
 }
 
 /** Ramu's own tool servers, never provider-managed. */
@@ -167,18 +209,23 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
       reason: server.status === 'connected' ? PROVIDER_MANAGED : PROVIDER_MANAGED_DOWN,
     })
   }
-  for (const name of input.sharedSkills)
-    items.push(
-      stale.has(`skill:${name}`)
-        ? { kind: 'skill', name, state: 'needs-refresh', reason: staleReason }
+  for (const name of input.sharedSkills) {
+    const requires = resolveSkillTools(input.skillTools?.[name] ?? [], input)
+    const unmet = requires.some((r) => r.status !== 'available')
+    items.push({
+      ...(stale.has(`skill:${name}`)
+        ? { kind: 'skill' as const, name, state: 'needs-refresh' as const, reason: staleReason }
         : {
-            kind: 'skill',
+            kind: 'skill' as const,
             name,
-            state: 'configured',
-            reason:
-              "Copied into this login's skill export for new threads. Whether the model reads a skill is not observable.",
-          },
-    )
+            state: 'configured' as const,
+            reason: unmet
+              ? "Copied into this login's skill export for new threads. Some MCP tools it asks for are not ready for this thread; the skill may not work fully."
+              : "Copied into this login's skill export for new threads. Whether the model reads a skill is not observable.",
+          }),
+      ...(requires.length ? { requires } : {}),
+    })
+  }
   for (const connection of input.connections)
     items.push({
       kind: 'shared-mcp',

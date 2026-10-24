@@ -2,6 +2,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TerminalView } from '../src/views/TerminalView'
 
 const control = vi.hoisted(() => ({
+  viewer: false,
+  status: 'connected',
+  refs: [] as { current: unknown }[],
+  cursor: 0,
+  recovery: undefined as (() => unknown) | undefined,
   effects: [] as (() => unknown)[],
   cleanups: [] as (() => void)[],
   input: (_data: string) => {},
@@ -15,9 +20,12 @@ const control = vi.hoisted(() => ({
 }))
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
-  useRef: (current: unknown) => ({ current }),
+  useRef: (current: unknown) => (control.refs[control.cursor++] ??= { current }),
   useState: (value: unknown) => [value, (next: unknown) => control.errors.push(next)],
-  useEffect: (effect: () => unknown) => control.effects.push(effect),
+  useEffect: (effect: () => unknown, deps: unknown[]) => {
+    control.effects.push(effect)
+    if (deps.length === 2 && typeof deps[0] === 'boolean' && !control.recovery) control.recovery = effect
+  },
 }))
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
@@ -53,8 +61,16 @@ vi.mock('@xterm/addon-webgl', () => ({
     dispose() {}
   },
 }))
+vi.mock('../src/composer/useHostWriteAccess', () => ({
+  useHostWriteAccess: () => ({
+    viewOnly: control.viewer,
+    canWrite: () => !control.viewer && control.status === 'connected',
+  }),
+}))
 vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: { terminalFontSize: 13 } }) }))
-vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ invoke: control.invoke }) }))
+vi.mock('../src/workspace/HostProvider', () => ({
+  useHost: () => ({ invoke: control.invoke, status: control.status }),
+}))
 vi.mock('../src/workspace/workspace', () => ({
   useWorkspace: () => ({ workspaceOf: () => 'task' }),
   useHostRuntime: () => ({
@@ -91,6 +107,11 @@ const observer = class {
   disconnect() {}
 }
 beforeEach(() => {
+  control.viewer = false
+  control.status = 'connected'
+  control.refs = []
+  control.cursor = 0
+  control.recovery = undefined
   control.effects = []
   control.cleanups = []
   control.errors = []
@@ -109,7 +130,8 @@ afterEach(() => {
   for (const cleanup of control.cleanups.reverse()) cleanup()
   vi.unstubAllGlobals()
 })
-async function mount() {
+function RenderTerminal() {
+  control.cursor = 0
   TerminalView({
     taskId: 'task',
     repoId: null,
@@ -119,6 +141,9 @@ async function mount() {
     backgroundId: 'command',
     onExit: control.onExit,
   })
+}
+async function mount() {
+  RenderTerminal()
   for (const effect of control.effects) {
     const cleanup = effect()
     if (typeof cleanup === 'function') control.cleanups.push(cleanup as () => void)
@@ -183,4 +208,57 @@ it('advances the replay cursor across live output and marks a stream gap instead
   expect(control.writes.filter((chunk) => chunk === 'cd')).toHaveLength(1)
   expect(control.writes.some((chunk) => chunk.includes('Older output was truncated'))).toBe(true)
   expect(control.writes.at(-1)).toBe('gh')
+})
+
+it('refuses retained terminal input after viewer access replaces full access', async () => {
+  control.invoke.mockImplementation(async (method: string) => {
+    if (method === 'term.snapshot') return { output: 'running', cursor: 7, exited: false }
+    if (method === 'term.list')
+      return [{ id: 'command', taskId: 'task', repoId: null, cwd: '/checkout', exited: false, background: true }]
+  })
+  await mount()
+  control.invoke.mockClear()
+  control.viewer = true
+  control.input('must-not-run\r')
+  expect(control.invoke).not.toHaveBeenCalled()
+})
+it('does not read or attach a terminal when mounted as a viewer', async () => {
+  control.viewer = true
+  await mount()
+  expect(control.invoke).not.toHaveBeenCalled()
+})
+
+it('attaches an initially restricted tab after full access returns', async () => {
+  control.viewer = true
+  await mount()
+  expect(control.invoke).not.toHaveBeenCalled()
+  control.invoke.mockImplementation(async (method: string) => {
+    if (method === 'term.snapshot') return { output: 'recovered', cursor: 9, exited: false }
+    if (method === 'term.list')
+      return [{ id: 'command', taskId: 'task', repoId: null, cwd: '/checkout', exited: false, background: true }]
+  })
+  control.viewer = false
+  control.recovery = undefined
+  RenderTerminal()
+  ;(control.recovery as (() => unknown) | undefined)?.()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(control.writes.join('')).toContain('recovered')
+  expect(control.invoke.mock.calls.some(([method]) => method === 'term.open')).toBe(false)
+})
+
+it('waits for a disconnected host before attaching a restored terminal tab', async () => {
+  control.status = 'disconnected'
+  await mount()
+  expect(control.invoke).not.toHaveBeenCalled()
+  control.invoke.mockImplementation(async (method: string) => {
+    if (method === 'term.snapshot') return { output: 'after reconnect', cursor: 15, exited: false }
+    if (method === 'term.list')
+      return [{ id: 'command', taskId: 'task', repoId: null, cwd: '/checkout', exited: false, background: true }]
+  })
+  control.status = 'connected'
+  control.recovery = undefined
+  RenderTerminal()
+  ;(control.recovery as (() => unknown) | undefined)?.()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(control.writes.join('')).toContain('after reconnect')
 })

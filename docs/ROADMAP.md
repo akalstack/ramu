@@ -10,18 +10,18 @@ The linked plans distinguish **implementation remaining** (missing or partial be
 
 ### Implementation remaining and related acceptance
 
-- [Client–server communication](COMMUNICATION-PLAN.md): finish transport integration of bounded replay/snapshot recovery, resource subscriptions and terminal flow control; add a mobile WebSocket adapter; measure the HTTP/SSE and WebSocket alternatives before choosing defaults. The Node WebSocket call path is opt-in, not the default event transport.
-- [Background terminal management](BACKGROUND-TERMINALS-PLAN.md): native Claude/Codex/ACP/OpenCode/Cursor command handles are unstarted and require verified owner lifecycle contracts. Managed-command permissions, removal/recovery, native interaction and platform termination still need acceptance.
-- [Agent setup](AGENT-SETUP-PLAN.md): extend skill provenance/discovery, create/edit-copy, compatibility and owned-link lifecycle; finish adapter-specific rule delivery and capability-gated activation. Validate effective setup across account/provider switches, helpers and recovery.
+- [Client–server communication](COMMUNICATION-PLAN.md): finish transport integration of bounded replay/snapshot recovery, resource subscriptions and terminal flow control; verify the opt-in mobile WebSocket adapter on devices; measure the HTTP/SSE and WebSocket alternatives before choosing defaults. The Node WebSocket call path is opt-in, not the default event transport.
+- [Background terminal management](BACKGROUND-TERMINALS-PLAN.md): native Claude/Codex/OpenCode/Cursor command handles are unstarted and require verified owner lifecycle contracts; the ACP client-terminal boundary is written but enabled for no provider until one is verified. Managed-command permissions, removal/recovery, native interaction and platform termination still need acceptance.
+- [Agent setup](AGENT-SETUP-PLAN.md): extend skill provenance/discovery, compatibility and owned-link lifecycle; finish adapter-specific rule delivery and capability-gated activation. Validate effective setup across account/provider switches, helpers and recovery.
 - [Shared MCP](MCP-MANAGEMENT-PLAN.md): finish and validate provider-session integration, external-tool trust boundaries, credential provisioning, approval/authentication recovery and account-switch readiness. Require live two-provider service acceptance and packaged/headless secret-store checks before claiming shared access works end to end.
 - [Mobile settings preferences](MOBILE-SETTINGS-PLAN.md): establish cross-host profile/account synchronization, extend supported preference fields and validate inheritance, concurrent/offline changes and migration. Existing paired-host layers do not provide person-wide synchronization.
 - [Model selection preferences](MODEL-SELECTION-PLAN.md): cross-host sharing remains undesigned; extend preference fields only for demonstrated needs. Validate generated defaults, flow switching, unavailable selections, inheritance and recovery on native clients.
-- [Themes](AI-THEMES-PLAN.md): finish the specialized/shared-control audit and use more production components in the preview. Validate remaining native, accessibility, sharing and appearance behavior; do not treat manual/AI theme creation as unstarted work.
+- [Themes](AI-THEMES-PLAN.md): finish the specialized/shared-control audit and remaining production state coverage. Validate remaining native, accessibility, sharing and appearance behavior; do not treat manual/AI theme creation as unstarted work.
 - [Explorer](EXPLORER-PLAN.md): finish desktop Home/project coherence and directory/search race coverage, plus remaining capability-aware file-management work. Validate native scope selection, file actions, draft insertion, restoration, continuation, selected-path reveal and watcher disposal.
 - [Thread activity](THREAD-ACTIVITY-PLAN.md): finish historical turn membership and native helper transcript/child-navigation behavior where supported. Validate waiting transitions, restored caches, exact child identity, two-host recovery and accessibility.
 - [Thread state visibility](THREAD-STATE-PLAN.md): shared summaries, desktop popovers, mobile labels and completion/notification consistency remain partial or pending validation. Finish the named gaps and verify stale snapshots, exact request actions, old hosts and two-host/native behavior.
 - [Thread titles](THREAD-TITLES-PLAN.md): verify and enable a provider-title integration; native explicit regeneration remains unimplemented. Validate provider/fallback races, naming quality, refinement, tool restrictions and packaged/native synchronization.
-- [Remote security](REMOTE-SECURITY-PLAN.md): finish native host/certificate enforcement across fetch and SSE, token-lifetime display and remaining viewer write-surface controls. Validate rotating renewal, expiry/re-pairing, revocation and role hydration on paired devices; see [Security](#security).
+- [Remote security](REMOTE-SECURITY-PLAN.md): remaining viewer write-surface controls (native certificate pinning is deferred, see the plan). Validate rotating renewal, expiry/re-pairing, revocation and role hydration on paired devices; see [Security](#security).
 
 ### Written behavior with acceptance remaining
 
@@ -43,9 +43,8 @@ These plans contain written implementation or audit foundations; fixes remain po
 The [implemented contract](INTERACTIVE-CONTENT.md) covers publication, immutable revision browsing, named scenarios, explicitly compatible scenario copying, selected-value drafts and desktop/mobile export. Remaining implementation and evidence:
 
 - Run representative calculators, branching walkthroughs, comparisons and a new subject through live provider sessions on desktop, iOS and Android; include reconnect/restart and offline cached reopening. Direct/deferred MCP publication and synthetic desktop interaction already have automated evidence; they do not replace live-provider/native acceptance.
-- On real iOS/Android devices, verify gestures versus feed scrolling, expansion/close, offscreen and screen-focus lifecycle, selection/keyboard, VoiceOver/TalkBack, Android back, large text, appearance, reduced motion, scenario copies and HTML/source sharing.
+- On real iOS/Android devices, verify gestures versus feed scrolling, expansion/close, offscreen and screen-focus lifecycle, selection/keyboard, VoiceOver/TalkBack, Android back, large text, appearance, reduced motion, scenario copies, automatic card visibility/recovery, project Code navigation and HTML/source sharing.
 - Verify native WebView navigation, private-address/redirect egress denial, credential isolation, stale/forged bridge messages and renderer process termination. The browser companion deliberately keeps static viewing until an independent document origin is available.
-- Bring desktop's always-open card to native mobile: open on screen without **Open**/**Pause**, the compact header and menu, and the **Code** view for multi-file projects. Mobile **Share source** sends the bundled document for projects until it can share the files.
 - Observe script loops and platform CPU/memory behavior. Up to three isolated desktop frames and bounded persisted state are not hard CPU quotas; determine additional containment from actual platform evidence.
 - Compare matched tasks before claiming an advantage over another application. Record environment, task, output and failures; source inspection or a single successful demo does not establish general superiority.
 
@@ -71,7 +70,7 @@ Automated checks establish only the behavior and environments they exercised. Th
 
 ## Security
 
-[Remote security](REMOTE-SECURITY-PLAN.md) still requires native mobile transport/certificate enforcement, token-lifetime display, remaining viewer client controls and paired-device acceptance. Rotating renewal and server expiry are written; verify lost replies, overlap and revocation across real desktop/mobile connections. Host-bound viewer pairing, the RPC allowlist and browser-origin restrictions remain server-enforced; hiding controls is not authorization. Native transport and distribution prerequisites still apply.
+[Remote security](REMOTE-SECURITY-PLAN.md) still requires remaining viewer client controls and paired-device acceptance. Rotating renewal and server expiry are written; verify lost replies, overlap and revocation across real desktop/mobile connections. Host-bound viewer pairing, the RPC allowlist and browser-origin restrictions remain server-enforced; hiding controls is not authorization. Native transport and distribution prerequisites still apply.
 
 ## Deferred implementation and acceptance blockers
 

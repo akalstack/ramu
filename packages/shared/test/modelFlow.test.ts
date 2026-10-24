@@ -36,6 +36,11 @@ describe('model flow scopes', () => {
     })
     const cleared = applyLayerEdit(withOther, 'modelFlow', { at: 11, by: 'a' })
     expect(cleared.applied).toBe(true)
-    expect(Object.keys(cleared.layer.fields)).toEqual(['textSize'])
+    expect(Object.keys(cleared.layer.fields).sort()).toEqual(['modelFlow', 'textSize'])
+    // The marker keeps an older value from coming back, and reads as not set.
+    expect(cleared.layer.fields.modelFlow).toMatchObject({ cleared: true, at: 11 })
+    expect(applyLayerEdit(cleared.layer, 'modelFlow', { value: 'model', at: 10, by: 'b' }).applied).toBe(false)
+    expect(parseLayer(JSON.parse(JSON.stringify(cleared.layer))).fields.modelFlow?.cleared).toBe(true)
+    expect(resolveModelFlow('effort', layers(cleared.layer))).toEqual({ value: 'effort', source: 'all' })
   })
 })

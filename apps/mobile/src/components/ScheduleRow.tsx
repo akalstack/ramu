@@ -5,7 +5,7 @@ import type { Schedule, ScheduleRun } from '@ramu/shared/types'
 import { font, useTheme } from '../theme'
 import { useAutomation } from '../runtime/automation'
 import { useStore } from '../runtime/store'
-import { RUN_LABELS, describeRule, nextRunText, runTone } from '../runtime/scheduleModel'
+import { RUN_LABELS, describeRule, nextRunText, runTone, scheduleWriteProblem } from '../runtime/scheduleModel'
 import { ago, useT } from '../i18n'
 import { Row, T, tap } from './ui'
 import { SwipeRow } from './SwipeRow'
@@ -13,6 +13,8 @@ import { SwipeRow } from './SwipeRow'
 export function useScheduleCommands(computerId: string, schedule: Schedule) {
   const auto = useAutomation()
   const t = useT()
+  const store = useStore()
+  const computer = store.computers.find((pc) => pc.id === computerId)
   const run = async (action: () => Promise<unknown>) => {
     try {
       await action()
@@ -22,6 +24,8 @@ export function useScheduleCommands(computerId: string, schedule: Schedule) {
   }
   return {
     paused: schedule.state === 'paused',
+    disabled: scheduleWriteProblem(computer, store.language) !== null,
+    viewOnly: computer?.access === 'viewer',
     toggle: () => run(() => auto.pauseSchedule(computerId, schedule.id, schedule.state !== 'paused')),
     runNow: () => run(() => auto.runScheduleNow(computerId, schedule.id)),
     remove: (after?: () => void) =>
@@ -61,16 +65,20 @@ export function ScheduleRow({
   return (
     <SwipeRow
       background={c.raised2}
-      actions={[
-        {
-          icon: commands.paused ? Play : Pause,
-          label: commands.paused ? t.resume : t.pause,
-          color: c.primary,
-          onPress: () => void commands.toggle(),
-        },
-        { icon: Zap, label: t.runNow, color: c.warn, onPress: () => void commands.runNow() },
-        { icon: Trash2, label: t.delete, color: c.bad, onPress: () => commands.remove() },
-      ]}
+      actions={
+        commands.disabled
+          ? []
+          : [
+              {
+                icon: commands.paused ? Play : Pause,
+                label: commands.paused ? t.resume : t.pause,
+                color: c.primary,
+                onPress: () => void commands.toggle(),
+              },
+              { icon: Zap, label: t.runNow, color: c.warn, onPress: () => void commands.runNow() },
+              { icon: Trash2, label: t.delete, color: c.bad, onPress: () => commands.remove() },
+            ]
+      }
     >
       <Row
         onPress={() => {

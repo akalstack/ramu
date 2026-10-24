@@ -14,6 +14,7 @@ import type { AgentTask } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import { providerNames, type Chat, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
+import { canWriteHost, VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { formatDuration } from '../runtime/turns'
 import { ProviderIcon } from './Logos'
 import { Markdown } from './Markdown'
@@ -73,13 +74,17 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
   const [shown, setShown] = useState(OUTPUT_PAGE)
   const [sending, setSending] = useState(false)
   const inFlight = useRef(false)
+  const latestStore = useRef(store)
+  latestStore.current = store
   const id = store.language === 'id'
   useEffect(() => setDraft(''), [task?.agentId])
   if (!task) return null
   const online = store.isOnline(chat.computerId)
+  const viewOnly = store.computers?.find((host) => host.id === chat.computerId)?.access === 'viewer'
+  const writable = () => canWriteHost(latestStore.current.computers?.find((host) => host.id === chat.computerId))
   const actions = helperActions(task, online)
   const send = async () => {
-    if (!draft.trim() || !chat.sessionId || !actions.canMessage || inFlight.current) return
+    if (!writable() || !draft.trim() || !chat.sessionId || !actions.canMessage || inFlight.current) return
     const text = draft.trim()
     inFlight.current = true
     setSending(true)
@@ -97,6 +102,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
     }
   }
   const stop = () =>
+    writable() &&
     chat.sessionId &&
     Alert.alert(
       id ? 'Hentikan agen ini?' : 'Stop this agent?',
@@ -107,7 +113,8 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
           text: id ? 'Hentikan' : 'Stop',
           style: 'destructive',
           onPress: () =>
-            void store
+            writable() &&
+            void latestStore.current
               .invoke(chat.computerId, 'agent.stopTask', chat.sessionId!, task.agentId)
               .catch((error) => Alert.alert('Could not stop', String(error))),
         },
@@ -177,7 +184,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
               value={draft}
               onChangeText={setDraft}
               multiline
-              editable={!sending}
+              editable={!viewOnly && !sending}
               placeholder={`${id ? 'Pesan untuk' : 'Message'} ${task.name}`}
               placeholderTextColor={c.placeholder}
               style={{
@@ -190,7 +197,11 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
                 borderRadius: radius.m,
               }}
             />
-            <Button title={id ? 'Kirim' : 'Send'} disabled={!draft.trim() || sending} onPress={() => void send()} />
+            <Button
+              title={id ? 'Kirim' : 'Send'}
+              disabled={viewOnly || !draft.trim() || sending}
+              onPress={() => void send()}
+            />
           </View>
         ) : (
           <T tone="muted" size={font.caption}>
@@ -203,7 +214,8 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
                 : 'This agent does not support direct messages.'}
           </T>
         )}
-        {chat.sessionId && actions.canStop ? (
+        {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[id ? 'id' : 'en']}</T> : null}
+        {chat.sessionId && actions.canStop && !viewOnly ? (
           <Button kind="danger" title={id ? 'Hentikan agen' : 'Stop agent'} onPress={stop} />
         ) : null}
         <Button kind="ghost" title={id ? 'Kembali ke thread' : 'Back to thread'} onPress={onClose} />

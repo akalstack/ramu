@@ -56,7 +56,7 @@ export default defineConfig({
     build: {
       outDir: resolve(__dirname, 'out/renderer'),
       emptyOutDir: true,
-      rollupOptions: { input: resolve(web, 'index.html') },
+      rollupOptions: { input: { index: resolve(web, 'index.html'), themeEditor: resolve(web, 'theme-editor.html') } },
     },
     plugins: [
       react({ babel: { plugins: [['babel-plugin-react-compiler', { logger: compilerLogger }]] } }),

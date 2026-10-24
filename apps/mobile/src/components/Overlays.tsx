@@ -190,18 +190,20 @@ export function useStartThread() {
  * The actions every tab carries in its navigation bar: a primary one (start a thread unless the screen says otherwise)
  * and Settings, always last on the right.
  */
-export function useTabActions(primary?: {
-  icon: Icon
-  label: string
-  systemIcon: ComponentProps<typeof HeaderButton>['systemIcon']
-  onPress: () => void
-}) {
+export function useTabActions(
+  primary?: {
+    icon: Icon
+    label: string
+    systemIcon: ComponentProps<typeof HeaderButton>['systemIcon']
+    onPress: () => void
+  } | null,
+) {
   const t = useT()
   const router = useRouter()
   const start = useStartThread()
   return (
     <>
-      {primary ? (
+      {primary === null ? null : primary ? (
         <HeaderButton {...primary} />
       ) : (
         <HeaderButton icon={SquarePen} label={t.newChat} systemIcon="square.and.pencil" onPress={start} />

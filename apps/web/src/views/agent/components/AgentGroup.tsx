@@ -19,10 +19,12 @@ export function AgentGroup({
   live,
   onOpen,
   onStop,
+  readOnly = false,
 }: {
   tasks: AgentTask[]
   live: boolean
   onOpen: (agentId: string) => void
+  readOnly?: boolean
   onStop: (task: AgentTask) => void
 }) {
   useLanguage()
@@ -83,6 +85,7 @@ export function AgentGroup({
               live={live}
               onOpen={() => onOpen(task.agentId)}
               onStop={onStop}
+              readOnly={readOnly}
             />
           ))}
         </div>

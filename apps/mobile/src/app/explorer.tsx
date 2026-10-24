@@ -579,7 +579,7 @@ export default function Explorer() {
                       ) : null
                     })}
                 </View>
-              ) : null
+              ) : undefined
             }
             renderItem={({ item: row }) => {
               const binding = bindings.find((b) => b.repoId === row.repoId)!
@@ -653,7 +653,7 @@ export default function Explorer() {
                 <T tone="muted" style={{ padding: space.l }}>
                   {query ? t.explorerNoMatches : t.explorerNoFiles}
                 </T>
-              ) : null
+              ) : undefined
             }
           />
         </>

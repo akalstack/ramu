@@ -1,3 +1,4 @@
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { LINK_TARGET_KEY, linkTargetFrom } from '@ramu/shared/browserLinks'
 import type { AgentBrowserPreferences, LinkTarget } from '@ramu/shared/browser'
@@ -29,12 +30,18 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
   )
   const scope = useContext(SettingsScopeContext)
   const selectedHost = scope?.primaryId ?? ownHostId()
+  const viewOnly = !!scope?.targets.find((target) => target.id === selectedHost)?.viewOnly
+  const access = useRef({ host: selectedHost, viewOnly })
+  access.current = { host: selectedHost, viewOnly }
+  const changeHost: typeof onChange = (next) => {
+    if (access.current.host === selectedHost && !access.current.viewOnly) onChange(next)
+  }
   const bulkHosts = scope?.target === 'all' && scope.targets.length > 1
   const [providerStatus, setProviderStatus] = useState<ProviderStatus[]>([])
   useEffect(() => {
     let active = true
     setProviderStatus([])
-    if (!bulkHosts)
+    if (!bulkHosts && !viewOnly)
       void invokeOn(selectedHost, 'providers.status', undefined, false, false)
         .then((status) => {
           if (active) setProviderStatus(status)
@@ -43,7 +50,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
     return () => {
       active = false
     }
-  }, [selectedHost, bulkHosts])
+  }, [selectedHost, bulkHosts, viewOnly])
   const draftRef = useRef(draft)
   draftRef.current = draft
   const [profiles, setProfiles] = useState<{ host: string; catalog: BrowserProfileCatalog } | null>(null)
@@ -51,11 +58,18 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
   const profileGeneration = useRef(0)
   const refreshProfiles = useCallback(async () => {
     const mine = ++profileGeneration.current
+    if (access.current.host !== selectedHost) return
     try {
-      const hostStatus = await invokeOn(selectedHost, 'hostBrowser.status').catch(() => null)
+      const hostStatus =
+        viewOnly || access.current.viewOnly
+          ? null
+          : await invokeOn(selectedHost, 'hostBrowser.status').catch(() => null)
       if (mine !== profileGeneration.current) return
-      setHosted(!!hostStatus?.enabled)
-      const catalog = hostStatus?.enabled ? await invokeOn(selectedHost, 'hostBrowser.profiles') : await ramu.invoke('browser.profiles.list', selectedHost)
+      setHosted(!access.current.viewOnly && !!hostStatus?.enabled)
+      const catalog =
+        !access.current.viewOnly && hostStatus?.enabled
+          ? await invokeOn(selectedHost, 'hostBrowser.profiles')
+          : await ramu.invoke('browser.profiles.list', selectedHost)
       if (mine === profileGeneration.current) setProfiles({ host: selectedHost, catalog })
     } catch {
       if (mine === profileGeneration.current)
@@ -67,14 +81,16 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
           },
         })
     }
-  }, [selectedHost])
+  }, [selectedHost, viewOnly])
   useEffect(() => {
     setProfiles(null)
     void refreshProfiles()
     const off = ramu.on('browser:changed', () => {
       void refreshProfiles()
     })
-    const offHost = bridge.on('hostBrowser:changed', (_payload, from) => { if (from === selectedHost || (!from && selectedHost === ownHostId())) void refreshProfiles() })
+    const offHost = bridge.on('hostBrowser:changed', (_payload, from) => {
+      if (from === selectedHost || (!from && selectedHost === ownHostId())) void refreshProfiles()
+    })
     return () => {
       profileGeneration.current += 1
       off()
@@ -87,10 +103,15 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
     let active = true,
       revision = 0
     setReadiness(null)
+    if (viewOnly) {
+      setReadiness({ available: false, reason: VIEW_ONLY_WRITE_NOTICE })
+      return
+    }
     const read = async () => {
       const mine = ++revision
       try {
         const hostStatus = await invokeOn(selectedHost, 'hostBrowser.status').catch(() => null)
+        if (access.current.host !== selectedHost || access.current.viewOnly) return
         const next = hostStatus?.enabled ? hostStatus : await ramu.invoke('browser.runtimeStatus', selectedHost)
         if (active && mine === revision) setReadiness(next)
       } catch {
@@ -106,7 +127,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
       active = false
       off()
     }
-  }, [selectedHost])
+  }, [selectedHost, viewOnly])
   const browser: AgentBrowserPreferences = draft.agentBrowser ?? {
     agentBrowser: 'integrated' as const,
     providerOverrides: {},
@@ -133,100 +154,102 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
   ]
   return (
     <div className="settings-form flex flex-col gap-0">
-      <SettingsGroupTitle>{t('Agent browser')}</SettingsGroupTitle>
-      <p role="status" className="m-[0_0_12px] text-caption text-muted-foreground">
-        {readiness
-          ? readiness.available
-            ? t('Integrated browser ready on this computer')
-            : t(readiness.reason ?? 'Integrated browser unavailable')
-          : t('Checking browser availability…')}
-      </p>
-      {readiness?.warning && (
-        <p role="alert" className="m-[0_0_12px] text-caption text-bad">
-          {t(readiness.warning)}
+      <fieldset disabled={viewOnly} className="contents">
+        <SettingsGroupTitle>{t('Agent browser')}</SettingsGroupTitle>
+        <p role="status" className="m-[0_0_12px] text-caption text-muted-foreground">
+          {readiness
+            ? readiness.available
+              ? t('Integrated browser ready on this computer')
+              : t(readiness.reason ?? 'Integrated browser unavailable')
+            : t('Checking browser availability…')}
         </p>
-      )}
-      <SettingsRow setting="agentBrowser.agentBrowser">
-        <SettingsLabel
-          title={t('Agent browser')}
-          help={t(
-            'Applies on the selected execution host. Keep Ramu desktop open there. Helpers and other access modes require browser-only approval. Changes apply on the next provider launch.',
-          )}
-        />
-        <Dropdown
-          label={t('Agent browser')}
-          value={browser.agentBrowser}
-          disabled={busy}
-          options={[
-            { value: 'provider', label: t('Provider browser setup') },
-            { value: 'integrated', label: t('Ramu integrated browser') },
-          ]}
-          onChange={(value) =>
-            onChange({
-              ...draft,
-              agentBrowser: { ...browser, agentBrowser: value === 'integrated' ? 'integrated' : 'provider' },
-            })
-          }
-        />
-      </SettingsRow>
-      <SettingsRow setting="agentBrowser.defaultProfileId">
-        <SettingsLabel
-          title={t('Default integrated profile')}
-          help={t(
-            'Default shares website sign-ins on this desktop. Temporary keeps this run separate and is cleared when the run ends.',
-          )}
-        />
-        <Dropdown
-          label={t('Default integrated profile')}
-          value={browser.defaultProfileId}
-          disabled={busy}
-          options={profileOptions}
-          onChange={(value) => onChange({ ...draft, agentBrowser: { ...browser, defaultProfileId: value } })}
-        />
-      </SettingsRow>
-      {providers.map(([provider, name]) => (
-        <SettingsRow key={provider} setting={`agentBrowser.providerOverrides.${provider}`}>
+        {readiness?.warning && (
+          <p role="alert" className="m-[0_0_12px] text-caption text-bad">
+            {t(readiness.warning)}
+          </p>
+        )}
+        <SettingsRow setting="agentBrowser.agentBrowser">
           <SettingsLabel
-            title={name}
+            title={t('Agent browser')}
             help={t(
-              (browser.providerOverrides[provider] ?? browser.agentBrowser) === 'provider'
-                ? 'Uses this provider’s external setup; Ramu cannot inspect its browser sessions.'
-                : providerStatus.find((entry) => entry.provider === provider)?.browser?.integratedTools === false
-                  ? 'This provider cannot use the integrated browser. Open Provider setup to update it.'
-                  : !readiness?.available
-                    ? 'Needs the integrated browser on this execution host. Runtime setup is shown above.'
-                    : 'Integrated tools use this host’s desktop. Provider-native tools may remain available; MCP support is checked when the runtime connects.',
+              'Applies on the selected execution host. Keep Ramu desktop open there. Helpers and other access modes require browser-only approval. Changes apply on the next provider launch.',
             )}
           />
           <Dropdown
-            label={name}
-            keepOptions
-            value={browser.providerOverrides[provider] ?? 'default'}
+            label={t('Agent browser')}
+            value={browser.agentBrowser}
             disabled={busy}
             options={[
-              { value: 'default', label: t('Use default') },
               { value: 'provider', label: t('Provider browser setup') },
-              {
-                value: 'integrated',
-                label: t('Ramu integrated browser'),
-                disabled:
-                  providerStatus.find((entry) => entry.provider === provider)?.browser?.integratedTools === false,
-              },
+              { value: 'integrated', label: t('Ramu integrated browser') },
             ]}
-            onChange={(value) => {
-              const overrides = { ...browser.providerOverrides }
-              if (value === 'default') delete overrides[provider]
-              else overrides[provider] = value === 'integrated' ? 'integrated' : 'provider'
-              onChange({ ...draft, agentBrowser: { ...browser, providerOverrides: overrides } })
-            }}
+            onChange={(value) =>
+              changeHost({
+                ...draft,
+                agentBrowser: { ...browser, agentBrowser: value === 'integrated' ? 'integrated' : 'provider' },
+              })
+            }
           />
         </SettingsRow>
-      ))}
-      <p className="m-[0_0_20px] text-caption text-muted-foreground">
-        {t(
-          'Use this provider’s existing browser tools and sessions. Ramu cannot show or import them here. Provider tools may remain available when the integrated browser is selected.',
-        )}
-      </p>
+        <SettingsRow setting="agentBrowser.defaultProfileId">
+          <SettingsLabel
+            title={t('Default integrated profile')}
+            help={t(
+              'Default shares website sign-ins on this desktop. Temporary keeps this run separate and is cleared when the run ends.',
+            )}
+          />
+          <Dropdown
+            label={t('Default integrated profile')}
+            value={browser.defaultProfileId}
+            disabled={busy}
+            options={profileOptions}
+            onChange={(value) => changeHost({ ...draft, agentBrowser: { ...browser, defaultProfileId: value } })}
+          />
+        </SettingsRow>
+        {providers.map(([provider, name]) => (
+          <SettingsRow key={provider} setting={`agentBrowser.providerOverrides.${provider}`}>
+            <SettingsLabel
+              title={name}
+              help={t(
+                (browser.providerOverrides[provider] ?? browser.agentBrowser) === 'provider'
+                  ? 'Uses this provider’s external setup; Ramu cannot inspect its browser sessions.'
+                  : providerStatus.find((entry) => entry.provider === provider)?.browser?.integratedTools === false
+                    ? 'This provider cannot use the integrated browser. Open Provider setup to update it.'
+                    : !readiness?.available
+                      ? 'Needs the integrated browser on this execution host. Runtime setup is shown above.'
+                      : 'Integrated tools use this host’s desktop. Provider-native tools may remain available; MCP support is checked when the runtime connects.',
+              )}
+            />
+            <Dropdown
+              label={name}
+              keepOptions
+              value={browser.providerOverrides[provider] ?? 'default'}
+              disabled={busy}
+              options={[
+                { value: 'default', label: t('Use default') },
+                { value: 'provider', label: t('Provider browser setup') },
+                {
+                  value: 'integrated',
+                  label: t('Ramu integrated browser'),
+                  disabled:
+                    providerStatus.find((entry) => entry.provider === provider)?.browser?.integratedTools === false,
+                },
+              ]}
+              onChange={(value) => {
+                const overrides = { ...browser.providerOverrides }
+                if (value === 'default') delete overrides[provider]
+                else overrides[provider] = value === 'integrated' ? 'integrated' : 'provider'
+                changeHost({ ...draft, agentBrowser: { ...browser, providerOverrides: overrides } })
+              }}
+            />
+          </SettingsRow>
+        ))}
+        <p className="m-[0_0_20px] text-caption text-muted-foreground">
+          {t(
+            'Use this provider’s existing browser tools and sessions. Ramu cannot show or import them here. Provider tools may remain available when the integrated browser is selected.',
+          )}
+        </p>
+      </fieldset>
       {bulkHosts ? (
         <p className="m-[0_0_20px] text-caption text-muted-foreground">
           {t('Choose one host to manage browser profiles. Named profiles belong to their owning computer.')}
@@ -239,14 +262,23 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
           onRemoved={(id) => {
             const current = draftRef.current
             if (current.agentBrowser?.defaultProfileId === id)
-              onChange({ ...current, agentBrowser: { ...current.agentBrowser, defaultProfileId: 'default' } })
+              changeHost({ ...current, agentBrowser: { ...current.agentBrowser, defaultProfileId: 'default' } })
           }}
         />
       ) : null}
-      {!bulkHosts && <HostBrowserSettings key={selectedHost} hostId={selectedHost} refreshed={refreshProfiles} onRemoved={id => {
-        const current = draftRef.current
-        if (current.agentBrowser?.defaultProfileId === id) onChange({ ...current, agentBrowser: { ...current.agentBrowser, defaultProfileId: 'default' } })
-      }}/>}
+      {!bulkHosts && (
+        <HostBrowserSettings
+          key={selectedHost}
+          readOnly={viewOnly}
+          hostId={selectedHost}
+          refreshed={refreshProfiles}
+          onRemoved={(id) => {
+            const current = draftRef.current
+            if (current.agentBrowser?.defaultProfileId === id)
+              changeHost({ ...current, agentBrowser: { ...current.agentBrowser, defaultProfileId: 'default' } })
+          }}
+        />
+      )}
       <SettingsGroupTitle>{t('Links & viewing')}</SettingsGroupTitle>
 
       <SettingsRow>

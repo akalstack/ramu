@@ -1,3 +1,4 @@
+import { DragHandle } from '@/components/drag-handle'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -13,7 +14,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, LogIn, Pencil, Trash2 } from 'lucide-react'
+import { LogIn, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
@@ -92,18 +93,14 @@ export function ProviderLoginRow({
         zIndex: isDragging ? 1 : undefined,
       }}
     >
-      <button
-        type="button"
+      <DragHandle
         ref={setActivatorNodeRef}
-        className="inline-grid place-items-center w-[18px] h-[22px] flex-none text-muted-foreground cursor-grab touch-none rounded-(--radius-xs) hover:text-foreground hover:bg-hover active:cursor-grabbing disabled:cursor-default disabled:opacity-40"
         aria-label={t('Drag {0} to change its priority', { '0': row.name })}
         title={t('Drag to reorder')}
         disabled={!sortable}
         {...attributes}
         {...listeners}
-      >
-        <GripVertical size={14} />
-      </button>
+      />
       <span className="w-[18px] flex-none text-center text-caption text-muted-foreground tabular-nums">{position}</span>
       <span className={`grow flex-1 min-w-0 text-left ${off ? 'opacity-60' : ''}`}>
         {renaming ? (

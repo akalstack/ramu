@@ -24,7 +24,7 @@ vi.mock('@/components/desktop-button', () => ({
     createElement('button', { 'data-variant': variant, ...props }),
 }))
 
-const { GoalFacts, GoalVerifyEditor } = await import('../src/chat/GoalBar')
+const { GoalFacts, GoalVerifyEditor, GoalBar } = await import('../src/chat/GoalBar')
 
 const goal = (patch: Partial<ChatGoal> = {}): ChatGoal => ({
   id: 'g1',
@@ -119,4 +119,20 @@ it('offers Save for a command, Remove for a blank field over a command, and no s
   expect(html()).toContain('disabled')
   expect(html('pnpm test')).toContain('value="pnpm test"')
   expect(html()).toContain('Only you can set it')
+})
+
+it('keeps the goal readable while disabling its mutation controls for a viewer', () => {
+  const html = renderToStaticMarkup(
+    createElement(GoalBar, { goal: goal(), onControl: vi.fn(), onVerify: vi.fn(), readOnly: true }),
+  )
+  expect(html).toContain('Login works')
+  for (const label of ['Set verification command', 'Pause goal', 'Clear goal']) {
+    const button = html.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0]
+    expect(button).toBeDefined()
+    expect(button).toContain('disabled=""')
+  }
+  const editor = renderToStaticMarkup(
+    createElement(GoalVerifyEditor, { current: 'pnpm test', onSave: vi.fn(), onClose: vi.fn(), readOnly: true }),
+  )
+  expect(editor).toMatch(/<input[^>]*disabled=""/)
 })

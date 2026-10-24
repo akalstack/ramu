@@ -10,6 +10,7 @@ import { useWorkspace } from '../../workspace/workspace'
 import { errorText } from '../../workspace/TaskPane'
 import { DeleteThreadDialog } from '../../chat/DeleteThreadDialog'
 import { ICON_BUTTON_CLASS } from './constants'
+import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
 import { threadSelection, useThreadSelection } from './threadSelection'
 
 /** A thread that is working or waiting for an answer is finished or archived deliberately, one at a time. */
@@ -22,12 +23,15 @@ const busy = (task: Task) => task.status === 'running' || task.status === 'needs
 export function useBulkThreadActions() {
   const ws = useWorkspace()
   const host = useHost()
+  const { viewOnly, canWrite } = useHostWriteAccess()
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Task[]>([])
   const run = async (work: () => Promise<unknown>) => {
+    if (!canWrite()) return
     setError(null)
     try {
       await animateThreadListChange(async () => {
+        if (!canWrite()) return
         await work()
         await ws.refresh()
       })
@@ -38,33 +42,42 @@ export function useBulkThreadActions() {
   const pick = (ids: ReadonlySet<string>) => ws.tasks.filter((task) => ids.has(task.id))
   return {
     error,
+    viewOnly,
     deleting,
     clearError: () => setError(null),
     pin(tasks: Task[]) {
       const pin = !tasks.every((task) => task.pinnedAt)
       void run(async () => {
-        for (const task of tasks) if (!!task.pinnedAt !== pin) await host.invoke('tasks.pin', task.id, pin)
+        for (const task of tasks) {
+          if (!canWrite()) return
+          if (!!task.pinnedAt !== pin) await host.invoke('tasks.pin', task.id, pin)
+        }
       })
     },
     done(tasks: Task[]) {
       const done = !tasks.every((task) => task.doneAt)
       void run(async () => {
-        for (const task of tasks)
+        for (const task of tasks) {
+          if (!canWrite()) return
           if (task.status !== 'archived' && !!task.doneAt !== done && (done ? !busy(task) : true))
             await host.invoke('tasks.done', task.id, done)
+        }
         threadSelection.clear()
       })
     },
     archive(tasks: Task[]) {
       void run(async () => {
         for (const task of tasks) {
+          if (!canWrite()) return
           await host.invoke('tasks.archive', task.id, true)
           ws.forgetTask(task.id)
         }
         threadSelection.clear()
       })
     },
-    requestDelete: (tasks: Task[]) => setDeleting(tasks),
+    requestDelete: (tasks: Task[]) => {
+      if (canWrite()) setDeleting(tasks)
+    },
     pick,
     finishDelete: async () => {
       ws.forgetTask(deleting[0]!.id)
@@ -104,7 +117,7 @@ export function ThreadSelectionBar({ actions }: { actions: BulkThreadActions }) 
     return () => window.removeEventListener('keydown', onKey)
   }, [ids.size])
   const current = actions.deleting[0]
-  const unavailable = tasks.some((task) => task.status === 'archived')
+  const unavailable = actions.viewOnly || tasks.some((task) => task.status === 'archived')
   if (!tasks.length && !current) return null
   const allPinned = tasks.every((task) => task.pinnedAt)
   const allDone = tasks.every((task) => task.doneAt)
@@ -156,6 +169,7 @@ export function ThreadSelectionBar({ actions }: { actions: BulkThreadActions }) 
             variant="ghost"
             size="icon-xs"
             className={ICON_BUTTON_CLASS}
+            disabled={actions.viewOnly}
             aria-label={t('Delete selected…')}
             title={t('Delete selected…')}
             onClick={() => actions.requestDelete(tasks)}

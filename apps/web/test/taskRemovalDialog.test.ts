@@ -19,6 +19,7 @@ interface DialogProps {
   onConfirm: () => Promise<void>
 }
 const state = vi.hoisted(() => ({
+  viewer: false,
   slots: [] as unknown[],
   cursor: 0,
   effects: [] as (() => void)[],
@@ -52,6 +53,7 @@ vi.mock('react', async (original) => ({
       })
   },
 }))
+vi.mock('../src/composer/useViewOnly', () => ({ useViewOnly: () => state.viewer }))
 vi.mock('../src/Menu', () => ({ Dialog: 'dialog' }))
 vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => state.host }))
 vi.mock('../src/i18n', () => ({ useLanguage() {}, t: (text: string) => text }))
@@ -89,6 +91,7 @@ function find(node: unknown, type: string): TestNode | undefined {
   }
 }
 beforeEach(() => {
+  state.viewer = false
   state.slots = []
   state.effects = []
   state.host = { id: 'a', status: 'connected', invoke: vi.fn() }
@@ -163,4 +166,23 @@ it('ignores a late deletion response after switching hosts and makes the new dia
   await pending
   expect(state.deleted).not.toHaveBeenCalled()
   expect(other).toHaveBeenCalledExactlyOnceWith('term.background.list', 'task')
+})
+
+it('refuses a retained deletion approval after viewer access or a disconnect, and does not load viewer command records', async () => {
+  state.host.invoke.mockResolvedValue([])
+  render()
+  await flush()
+  const approved = render().props.onConfirm
+  state.viewer = true
+  expect(render().props.confirmDisabled).toBe(true)
+  state.host.invoke.mockClear()
+  await flush()
+  await approved()
+  expect(state.host.invoke).not.toHaveBeenCalled()
+  expect(state.deleted).not.toHaveBeenCalled()
+  state.viewer = false
+  state.host = { ...state.host, status: 'disconnected' }
+  render()
+  await approved()
+  expect(state.host.invoke).not.toHaveBeenCalled()
 })

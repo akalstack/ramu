@@ -115,3 +115,13 @@ test('runs of one schedule list newest first', () => {
     ['c', 'a'],
   )
 })
+
+test('schedule writes require an online non-viewer host while older hosts retain server-authorized actions', async () => {
+  const { scheduleWriteProblem, VIEW_ONLY_SCHEDULE_NOTICE } = await import('../src/runtime/scheduleModel.ts')
+  assert.equal(scheduleWriteProblem({ status: 'online', access: 'owner' }, 'en'), null)
+  assert.equal(scheduleWriteProblem({ status: 'online' }, 'en'), null)
+  assert.equal(scheduleWriteProblem({ status: 'online', access: 'viewer' }, 'en'), VIEW_ONLY_SCHEDULE_NOTICE.en)
+  assert.equal(scheduleWriteProblem({ status: 'offline', access: 'viewer' }, 'id'), VIEW_ONLY_SCHEDULE_NOTICE.id)
+  assert.match(scheduleWriteProblem(undefined, 'en'), /Connect/)
+  assert.match(scheduleWriteProblem({ status: 'offline', access: 'owner' }, 'id'), /Hubungkan/)
+})

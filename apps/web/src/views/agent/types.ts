@@ -61,8 +61,9 @@ export interface TranscriptContext {
   claimArrival?: (event: AgentEvent) => boolean
   onBackground: ((toolUseId: string) => void) | undefined
   onOpenAgent: (agentId: string | null) => void
+  readOnly?: boolean
   onStopTask: (task: AgentTask) => void
   onOpenQuestion: (requestId: string) => void
   onReviewAccess: () => void
-  onEditMessage: (text: string, files: Attachment[], seq?: number) => void
+  onEditMessage?: (text: string, files: Attachment[], seq?: number) => void
 }

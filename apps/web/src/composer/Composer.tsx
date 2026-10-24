@@ -210,7 +210,7 @@ export function Composer({
   const pendingUploads = useRef(0)
   const pastedCount = useRef(0)
   const importFiles = (files?: File[], dropped = false): Promise<boolean> => {
-    if (!onAttachmentsChange) return Promise.resolve(false)
+    if (viewOnly || !onAttachmentsChange) return Promise.resolve(false)
     if (!files && !isLocal)
       return new Promise<boolean>((resolve) => {
         const picker = document.createElement('input')
@@ -289,7 +289,7 @@ export function Composer({
   }
   const send = async (handler: (context: FileContext[]) => void | Promise<void>) => {
     // Lock immediately: repeated Enter presses can arrive before React renders the disabled button.
-    if (submissionPending.current) return
+    if (viewOnly || submissionPending.current) return
     submissionPending.current = true
     submissionOrigin.current = currentScope.current
     flushSync(() => setSubmitting(true))
@@ -336,7 +336,7 @@ export function Composer({
   }, [hasAlternate])
   const hasPinned = suggestions.pinned.length > 0
   const hasContent = allowEmpty || hasPinned || value.trim().length > 0 || attachments.length > 0
-  const canAlternate = !submitting && !alternateDisabled && !uploading && !dictating && hasContent
+  const canAlternate = !viewOnly && !submitting && !alternateDisabled && !uploading && !dictating && hasContent
   const showStop =
     !submitting && !allowEmpty && !hasPinned && !!stop?.active && !value.trim() && attachments.length === 0
   const showAlternate = modHeld && hasAlternate
@@ -352,6 +352,7 @@ export function Composer({
   const [showAllChips, setShowAllChips] = useState(false)
   // Explorer entries become context; desktop files become attachments and folders become path references.
   const handleDrop = (dragged: string, files: File[]) => {
+    if (viewOnly) return
     if (dragged) {
       pendingUploads.current++
       setUploading(true)
@@ -645,7 +646,7 @@ export function Composer({
               className="icon small-icon"
               aria-label={t('Attach files')}
               title={t('Attach files')}
-              disabled={uploading || attachments.length >= 10}
+              disabled={viewOnly || uploading || attachments.length >= 10}
               onClick={() => void importFiles()}
             >
               <Paperclip size={15} />
@@ -703,7 +704,7 @@ export function Composer({
                     ? t(resume?.title ?? 'Resume where it stopped')
                     : `${t(submitLabel)} (Enter)${onAlternateSubmit && alternateLabel ? ` · ${t(alternateLabel)} (⌘Enter / Ctrl+Enter)` : ''}`
             }
-            disabled={showStop || showResume ? false : !canSend}
+            disabled={viewOnly || (showStop || showResume ? false : !canSend)}
             onClick={
               showStop
                 ? stop!.onStop

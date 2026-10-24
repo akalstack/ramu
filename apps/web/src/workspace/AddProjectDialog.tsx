@@ -1,3 +1,4 @@
+import { RowButton } from '@/components/row-button'
 import { t, useLanguage } from '../i18n'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useEffect, useRef, useState } from 'react'
@@ -183,11 +184,11 @@ function CloneFromGitHub({
         aria-busy={searching}
       >
         {results?.map((repository) => (
-          <button
+          <RowButton
+            stacked
             key={repository.fullName}
-            type="button"
             disabled={!!cloning}
-            className="[&:hover]:bg-hover flex w-full flex-col items-start gap-0.5 p-[4px_6px] rounded-(--radius-s) cursor-default border-0 bg-transparent text-left text-body disabled:opacity-60"
+            className="px-1.5 py-1"
             onClick={() => void clone(repository.cloneUrl, folderOf(repository.fullName))}
           >
             <span className="flex items-center gap-1.5 font-semibold">
@@ -197,7 +198,7 @@ function CloneFromGitHub({
             {repository.description && (
               <span className="text-caption text-muted-foreground">{repository.description}</span>
             )}
-          </button>
+          </RowButton>
         ))}
         {results && !results.length && !searching && !error && (
           <p className="muted text-muted-foreground small text-caption m-0 p-[2px_6px]">{t('No repositories found')}</p>
@@ -272,8 +273,6 @@ function HostFolderDialog() {
     resolve(dir)
   }
   const rows = listing ? listing.folders : roots.map((path) => ({ name: path, path }))
-  const rowClass =
-    '[&:hover]:bg-hover flex w-full items-center justify-start gap-2.5 min-h-[32px] p-[2px_6px] rounded-(--radius-s) cursor-default border-0 bg-transparent text-left text-body'
   return (
     <Dialog
       title={t('Choose a folder on the host')}
@@ -309,20 +308,16 @@ function HostFolderDialog() {
         className={`flex flex-col gap-0.5 max-h-[min(50vh,420px)] overflow-y-auto overscroll-contain${cloning ? ' hidden' : ''}`}
       >
         {listing && (
-          <button
-            type="button"
-            className={rowClass}
-            onClick={() => (listing.parent ? void browse(listing.parent) : setListing(null))}
-          >
+          <RowButton size="sm" onClick={() => (listing.parent ? void browse(listing.parent) : setListing(null))}>
             <ChevronLeft size={15} className="flex-none text-muted-foreground" />
             <span>{t('Parent folder')}</span>
-          </button>
+          </RowButton>
         )}
         {rows.map((folder) => (
-          <button key={folder.path} type="button" className={rowClass} onClick={() => void browse(folder.path)}>
+          <RowButton key={folder.path} size="sm" onClick={() => void browse(folder.path)}>
             <Folder size={15} className="flex-none text-muted-foreground" />
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">{folder.name}</span>
-          </button>
+          </RowButton>
         ))}
         {listing && !rows.length && (
           <p className="muted text-muted-foreground small text-caption m-0 p-[2px_6px]">{t('No folders here')}</p>

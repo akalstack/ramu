@@ -1,5 +1,6 @@
+import { BrowserTabFrame, BrowserTabButton, BrowserTabCloseButton } from '@/components/browser-tab-controls'
 import { Copy, CopyPlus, ExternalLink, Globe, Plus, RotateCw, X, XCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { browserFaviconFrom } from '@ramu/shared/browserLinks'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { t, useLanguage } from '../i18n'
@@ -34,6 +35,25 @@ export function BrowserTabChip({
   actions: BrowserTabActions
 }) {
   useLanguage()
+  const identity = JSON.stringify([tab.hostId, tab.threadId, tab.id])
+  const latest = useRef({ identity, disabled, tab, actions, index, count })
+  latest.current = { identity, disabled, tab, actions, index, count }
+  const canAct = () => latest.current.identity === identity && !latest.current.disabled
+  const act = (
+    action: 'select' | 'close' | 'closeOthers' | 'closeToRight' | 'duplicate' | 'reload' | 'openExternal',
+  ) => {
+    if (!canAct()) return
+    if (action === 'reload' && !latest.current.tab.inputReady) return
+    if (action === 'closeOthers' && latest.current.count < 2) return
+    if (action === 'closeToRight' && latest.current.index >= latest.current.count - 1) return
+    latest.current.actions[action](latest.current.tab)
+  }
+  useEffect(
+    () => () => {
+      if (latest.current.identity === identity) latest.current.disabled = true
+    },
+    [identity],
+  )
   const items: MenuEntry[] = [
     {
       key: 'new',
@@ -42,7 +62,10 @@ export function BrowserTabChip({
           <Plus size={14} /> {t('New tab')}
         </>
       ),
-      onSelect: actions.newTab,
+      disabled,
+      onSelect: () => {
+        if (canAct()) latest.current.actions.newTab()
+      },
     },
     { key: 'sep1', separator: true },
     {
@@ -52,17 +75,18 @@ export function BrowserTabChip({
           <RotateCw size={14} /> {t('Reload')}
         </>
       ),
-      disabled: !tab.inputReady,
-      onSelect: () => actions.reload(tab),
+      disabled: disabled || !tab.inputReady,
+      onSelect: () => act('reload'),
     },
     {
       key: 'duplicate',
+      disabled,
       label: (
         <>
           <CopyPlus size={14} /> {t('Duplicate')}
         </>
       ),
-      onSelect: () => actions.duplicate(tab),
+      onSelect: () => act('duplicate'),
     },
     { key: 'sep2', separator: true },
     {
@@ -76,22 +100,24 @@ export function BrowserTabChip({
     },
     {
       key: 'external',
+      disabled,
       label: (
         <>
           <ExternalLink size={14} /> {t('Open in system browser')}
         </>
       ),
-      onSelect: () => actions.openExternal(tab),
+      onSelect: () => act('openExternal'),
     },
     { key: 'sep3', separator: true },
     {
       key: 'close',
+      disabled,
       label: (
         <>
           <X size={14} /> {t('Close tab')}
         </>
       ),
-      onSelect: () => actions.close(tab),
+      onSelect: () => act('close'),
     },
     {
       key: 'close-others',
@@ -100,8 +126,8 @@ export function BrowserTabChip({
           <XCircle size={14} /> {t('Close other tabs')}
         </>
       ),
-      disabled: count < 2,
-      onSelect: () => actions.closeOthers(tab),
+      disabled: disabled || count < 2,
+      onSelect: () => act('closeOthers'),
     },
     {
       key: 'close-right',
@@ -110,8 +136,8 @@ export function BrowserTabChip({
           <XCircle size={14} /> {t('Close tabs to the right')}
         </>
       ),
-      disabled: index >= count - 1,
-      onSelect: () => actions.closeToRight(tab),
+      disabled: disabled || index >= count - 1,
+      onSelect: () => act('closeToRight'),
     },
   ]
   const menu = useContextMenu(`${tab.title || tab.url} actions`, items)
@@ -119,29 +145,21 @@ export function BrowserTabChip({
   const icon = browserFaviconFrom(tab.url, tab.faviconUrl)
   const [failedIcon, setFailedIcon] = useState<string | null>(null)
   return (
-    <div
-      className={`flex min-w-0 max-w-44 flex-none items-center rounded-(--radius-s) text-caption ${active ? 'bg-hover text-foreground' : 'text-muted-foreground hover:bg-hover'}`}
+    <BrowserTabFrame
+      active={active}
       onContextMenu={menu.onContextMenu}
       onKeyDown={menu.onKeyDown}
       // Middle-click closes, as in a browser.
       onAuxClick={(event) => {
-        if (event.button !== 1 || disabled) return
+        if (event.button !== 1 || !canAct()) return
         event.preventDefault()
-        actions.close(tab)
+        act('close')
       }}
       onMouseDown={(event) => {
         if (event.button === 1) event.preventDefault()
       }}
     >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={active}
-        disabled={disabled}
-        title={title}
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 border-0 bg-transparent px-2 py-1 text-left text-inherit"
-        onClick={() => actions.select(tab)}
-      >
+      <BrowserTabButton aria-selected={active} disabled={disabled} title={title} onClick={() => act('select')}>
         {icon && failedIcon !== icon ? (
           <img
             src={icon}
@@ -157,17 +175,11 @@ export function BrowserTabChip({
           <Globe size={14} className="flex-none" aria-hidden="true" />
         )}
         <span className="min-w-0 truncate">{title}</span>
-      </button>
-      <button
-        type="button"
-        aria-label={t('Close tab')}
-        disabled={disabled}
-        className="flex-none cursor-pointer border-0 bg-transparent px-1 py-1 text-inherit"
-        onClick={() => actions.close(tab)}
-      >
+      </BrowserTabButton>
+      <BrowserTabCloseButton aria-label={t('Close tab')} disabled={disabled} onClick={() => act('close')}>
         <X size={12} />
-      </button>
+      </BrowserTabCloseButton>
       {menu.menu}
-    </div>
+    </BrowserTabFrame>
   )
 }

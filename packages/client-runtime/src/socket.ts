@@ -68,6 +68,7 @@ export class RuntimeSocket {
   private nextId = 1
   private readonly pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>()
   private timers = new Set<ReturnType<typeof setTimeout>>()
+  private subscription: { channels: string[]; keys?: Record<string, string[]> } | null = null
   private beat: ReturnType<typeof setInterval> | undefined
   private lastHeard = 0
   private connectedAt = 0
@@ -118,6 +119,8 @@ export class RuntimeSocket {
           this.epoch = frame.epoch
           this.set('ready')
           this.startHeartbeat(socket)
+          // A new connection starts unfiltered; the interest the caller declared is restored before it matters.
+          if (this.subscription) void this.sendSubscription(this.subscription).catch(() => {})
         } else if (frame.t === 'event') this.options.onEvent(frame.channel, frame.payload)
         else if (frame.t === 'result') this.settle(frame.id, (call) => call.resolve(frame.value))
         else if (frame.t === 'error')
@@ -160,7 +163,7 @@ export class RuntimeSocket {
       }
       socket.send(encodeSocketFrame({ t: 'ping' }))
     }, every)
-    this.beat.unref?.()
+    ;(this.beat as { unref?: () => void }).unref?.()
   }
 
   private settle(id: number, finish: (call: NonNullable<ReturnType<typeof this.pending.get>>) => void) {
@@ -217,6 +220,39 @@ export class RuntimeSocket {
         reject(lost(error instanceof Error ? error.message : 'The socket could not send'))
       }
     })
+  }
+
+  private sendSubscription(subscription: { channels: string[]; keys?: Record<string, string[]> }) {
+    const socket = this.socket
+    if (!socket || !this.ready) return Promise.reject(lost('The socket is not connected', true))
+    const id = this.nextId++
+    return new Promise<unknown>((resolve, reject) => {
+      // A host that does not know `subscribe` never answers; the caller must not wait forever.
+      const timer = this.after(10_000, () => {
+        this.pending.delete(id)
+        reject(lost('The host did not answer the subscription'))
+      })
+      this.pending.set(id, {
+        resolve: (value) => (clearTimeout(timer), this.timers.delete(timer), resolve(value)),
+        reject: (error) => (clearTimeout(timer), this.timers.delete(timer), reject(error)),
+      })
+      try {
+        socket.send(encodeSocketFrame({ t: 'subscribe', id, ...subscription }))
+      } catch (error) {
+        this.pending.delete(id)
+        reject(lost(error instanceof Error ? error.message : 'The socket could not send'))
+      }
+    })
+  }
+
+  /**
+   * Narrows the events this connection delivers to `channels` and, for resource channels (agent transcripts, terminals),
+   * to the listed ids. Replaces any earlier subscription, and is restored after a reconnect. Without a subscription every
+   * event arrives, as on the SSE stream.
+   */
+  subscribe(channels: string[], keys?: Record<string, string[]>): Promise<unknown> {
+    this.subscription = { channels, ...(keys ? { keys } : {}) }
+    return this.ready ? this.sendSubscription(this.subscription) : Promise.resolve()
   }
 
   close() {

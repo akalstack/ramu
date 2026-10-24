@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { VIEW_ONLY_COMPUTER_NOTICE } from '../runtime/viewerAccess'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Image, Modal, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { translate } from '@ramu/shared/i18n'
@@ -41,6 +42,17 @@ function ComputerViewer({
   const t = (text: string) => translate(store.language, text)
   const io = useRef(store)
   io.current = store
+  const viewOnly = store.computers?.find((host) => host.id === chat.computerId)?.access === 'viewer'
+  const target = `${chat.computerId}:${chat.taskId}`
+  const scope = useRef(target)
+  scope.current = target
+  const writable = useCallback(
+    () =>
+      scope.current === target &&
+      io.current.computers?.find((host) => host.id === chat.computerId)?.access !== 'viewer' &&
+      io.current.isOnline(chat.computerId),
+    [target, chat.computerId],
+  )
   const [active, setActive] = useState(AppState.currentState === 'active')
   const [frame, setFrame] = useState<Frame | null>(null)
   const [now, setNow] = useState(Date.now())
@@ -64,7 +76,7 @@ function ComputerViewer({
     active,
   )
   const live = video.status === 'live'
-  const human = current.controller.kind === 'human' && !current.paused
+  const human = !viewOnly && current.controller.kind === 'human' && !current.paused
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => setActive(state === 'active'))
     return () => subscription.remove()
@@ -72,13 +84,13 @@ function ComputerViewer({
   // Losing the viewer pauses human control whichever transport it used: backgrounding or closing releases input.
   useEffect(() => {
     if (active) return
-    void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
-  }, [active, chat.computerId, taskId])
+    if (writable()) void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
+  }, [active, chat.computerId, taskId, writable])
   useEffect(
     () => () => {
-      void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
+      if (writable()) void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
     },
-    [chat.computerId, taskId],
+    [chat.computerId, taskId, writable],
   )
   // Frames stop and the last one is dropped when the app is backgrounded, so no screen lingers in the app switcher.
   useEffect(() => {
@@ -122,9 +134,9 @@ function ComputerViewer({
     return () => {
       mounted = false
       clearTimeout(timer)
-      void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
+      if (writable()) void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
     }
-  }, [active, live, chat.computerId, taskId])
+  }, [active, live, chat.computerId, taskId, writable])
   // With video there is no frame to carry the control generation, so read the session once a second.
   useEffect(() => {
     if (!live || !active) return
@@ -144,6 +156,7 @@ function ComputerViewer({
   const stale = !live && !!frame && now - frame.capturedAt > COMPUTER_FRAME_STALE_MS
   const surface = live && video.streamURL && webrtc() ? video : frame
   const act = async (work: () => Promise<unknown>) => {
+    if (!writable()) return
     try {
       await work()
       setError('')
@@ -179,7 +192,8 @@ function ComputerViewer({
       {!embedded && (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: space.m }}>
           <T weight="600">
-            {current.target.name} · {t(label(current))}
+            {current.target.name} ·{' '}
+            {viewOnly ? (store.language === 'id' ? 'Hanya melihat' : 'View only') : t(label(current))}
           </T>
           <Button kind="ghost" title={t('Close')} onPress={onClose} />
         </View>
@@ -285,42 +299,46 @@ function ComputerViewer({
             </ScrollView>
           </ScrollView>
         ) : null}
-        <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
-          {human ? (
+        {viewOnly ? (
+          <T tone="muted">{VIEW_ONLY_COMPUTER_NOTICE[store.language]}</T>
+        ) : (
+          <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
+            {human ? (
+              <Button
+                title={t('Give control to agent')}
+                onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.giveToAgent', taskId))}
+              />
+            ) : (
+              <Button
+                title={t('Take control')}
+                onPress={() =>
+                  void act(async () => {
+                    setAsked(false)
+                    try {
+                      await io.current.invoke(chat.computerId, 'computer.takeControl', taskId)
+                    } catch (reason) {
+                      if (!needsHandoff(reason instanceof Error ? reason.message : String(reason))) throw reason
+                      await io.current.invoke(chat.computerId, 'computer.requestHandoff', taskId)
+                      setAsked(true)
+                    }
+                  })
+                }
+              />
+            )}
             <Button
-              title={t('Give control to agent')}
-              onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.giveToAgent', taskId))}
-            />
-          ) : (
-            <Button
-              title={t('Take control')}
+              kind="ghost"
+              title={t('Stop computer use')}
               onPress={() =>
                 void act(async () => {
-                  setAsked(false)
-                  try {
-                    await io.current.invoke(chat.computerId, 'computer.takeControl', taskId)
-                  } catch (reason) {
-                    if (!needsHandoff(reason instanceof Error ? reason.message : String(reason))) throw reason
-                    await io.current.invoke(chat.computerId, 'computer.requestHandoff', taskId)
-                    setAsked(true)
-                  }
+                  await io.current.invoke(chat.computerId, 'computer.revoke', taskId)
+                  onClose()
                 })
               }
             />
-          )}
-          <Button
-            kind="ghost"
-            title={t('Stop computer use')}
-            onPress={() =>
-              void act(async () => {
-                await io.current.invoke(chat.computerId, 'computer.revoke', taskId)
-                onClose()
-              })
-            }
-          />
-        </View>
+          </View>
+        )}
         {asked ? <T tone="muted">{t('Waiting for the device in control to allow it.')}</T> : null}
-        {current.handoffRequest ? (
+        {!viewOnly && current.handoffRequest ? (
           <View style={{ gap: space.s }} accessibilityLiveRegion="polite">
             <T>{t('Another device is asking for control')}</T>
             <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
@@ -336,7 +354,7 @@ function ComputerViewer({
             </View>
           </View>
         ) : null}
-        {showsLocalInputLimit(current) ? <T tone="muted">{t(LOCAL_INPUT_LIMIT)}</T> : null}
+        {!viewOnly && showsLocalInputLimit(current) ? <T tone="muted">{t(LOCAL_INPUT_LIMIT)}</T> : null}
         {human && (
           <View style={{ gap: space.s }}>
             <TextInput
@@ -348,7 +366,7 @@ function ComputerViewer({
               autoCorrect={false}
               returnKeyType="send"
               onSubmitEditing={() => {
-                if (!text) return
+                if (!writable() || !text) return
                 send({ kind: 'type', text })
                 setText('')
               }}
@@ -367,7 +385,7 @@ function ComputerViewer({
                 title={t('Send text')}
                 disabled={!text || stale}
                 onPress={() => {
-                  if (!text) return
+                  if (!writable() || !text) return
                   send({ kind: 'type', text })
                   setText('')
                 }}
@@ -449,7 +467,28 @@ export function ComputerActivity({ chat, open, onClose }: { chat: Chat; open: bo
   const online = store.isOnline(chat.computerId)
   const viewOnly = store.computers.find((computer) => computer.id === chat.computerId)?.access === 'viewer'
   useEffect(() => {
-    if (!open || !chat.taskId || !online || viewOnly) return
+    if (!open || !chat.taskId || !online) return
+    if (viewOnly) {
+      let active = true
+      const read = () =>
+        io.current.invoke(chat.computerId, 'computer.session', chat.taskId!).then(
+          (session) => {
+            if (active) setSession(session)
+          },
+          (reason) => {
+            if (active) {
+              setSession(null)
+              setStatus(reason instanceof Error ? reason.message : String(reason))
+            }
+          },
+        )
+      void read()
+      const timer = setInterval(() => void read(), 2000)
+      return () => {
+        active = false
+        clearInterval(timer)
+      }
+    }
     let active = true
     setStatus('')
     void Promise.all([
@@ -487,11 +526,12 @@ export function ComputerActivity({ chat, open, onClose }: { chat: Chat; open: bo
   if (!chat.taskId) return null
   const host = store.computers.find((computer) => computer.id === chat.computerId)?.name ?? chat.computerId
   const grant = async (app?: string) => {
-    if (busy) return
+    if (busy || io.current.computers.find((host) => host.id === chat.computerId)?.access === 'viewer') return
     setBusy(true)
     setStatus('')
     try {
       if (!runtime?.enabled) await store.invoke(chat.computerId, 'computer.setEnabled', true)
+      if (io.current.computers.find((host) => host.id === chat.computerId)?.access === 'viewer') return
       const granted = await store.invoke(chat.computerId, 'computer.grant', chat.taskId!, {
         observe: true,
         input: true,
@@ -520,11 +560,15 @@ export function ComputerActivity({ chat, open, onClose }: { chat: Chat; open: bo
         />
       ) : (
         <View style={{ padding: space.l, gap: space.m }}>
-          <T>
-            {t('Choose what this thread can view and control. You can take control or stop computer use at any time.')}
-          </T>
+          {!viewOnly && (
+            <T>
+              {t(
+                'Choose what this thread can view and control. You can take control or stop computer use at any time.',
+              )}
+            </T>
+          )}
           {viewOnly ? (
-            <T tone="muted">{t('Pair an owner device to use this computer.')}</T>
+            <T tone="muted">{VIEW_ONLY_COMPUTER_NOTICE[store.language]}</T>
           ) : !online ? (
             <T tone="muted">{t('Reconnect to use this computer.')}</T>
           ) : (

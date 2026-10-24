@@ -10,6 +10,7 @@ import { scoped, useStore } from '../runtime/store'
 import { useAutomation } from '../runtime/automation'
 import {
   NO_PROJECT,
+  VIEW_ONLY_SCHEDULE_NOTICE,
   RULE_KINDS,
   RULE_LABELS,
   addDays,
@@ -72,7 +73,9 @@ export default function ScheduleEdit() {
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const online = store.computers.find((pc) => pc.id === computerId)?.status === 'online'
+  const pc = store.computers.find((pc) => pc.id === computerId)
+  const online = pc?.status === 'online'
+  const viewOnly = pc?.access === 'viewer'
   const projects = store.projects.filter((p) => p.computerId === computerId)
   const lang = store.language
   const patch = (next: Partial<ScheduleInput>) => setInput((current) => ({ ...current, ...next }))
@@ -80,7 +83,7 @@ export default function ScheduleEdit() {
   // Which times the rule produces, worked out by the computer so DST and month ends match what will really run.
   const ruleKey = JSON.stringify(rule)
   useEffect(() => {
-    if (!online) return
+    if (!online || viewOnly) return
     let alive = true
     const timer = setTimeout(() => {
       auto.previewRule(computerId, rule, input.timezone).then(
@@ -100,10 +103,11 @@ export default function ScheduleEdit() {
       alive = false
       clearTimeout(timer)
     }
-  }, [ruleKey, input.timezone, online, computerId])
+  }, [ruleKey, input.timezone, online, viewOnly, computerId])
 
   const problem = validateInput(input, Date.now(), lang)
   const save = async () => {
+    if (viewOnly || !online) return
     if (problem) {
       setError(problem)
       return
@@ -145,6 +149,18 @@ export default function ScheduleEdit() {
         serviceTier: m.settings?.serviceTier ?? input.settings.serviceTier,
       },
     })
+
+  if (viewOnly)
+    return (
+      <Screen bg="canvas">
+        <Header modal title={existing ? t.editSchedule : t.newSchedule} subtitle={pc?.name} />
+        <PageScrollView contentContainerStyle={{ padding: space.l }}>
+          <T accessibilityRole="alert" tone="muted">
+            {VIEW_ONLY_SCHEDULE_NOTICE[lang]}
+          </T>
+        </PageScrollView>
+      </Screen>
+    )
 
   return (
     <Screen bg="canvas" scrollable={false}>

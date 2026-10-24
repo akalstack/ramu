@@ -1,7 +1,7 @@
 // Metro config for the pnpm workspace (hoisted node_modules).
 // The desktop keeps the root `react` at the workspace catalog version; React Native
-// needs the exact version its renderer was built for, which lives in this app's
-// own node_modules. Every `react`/`react-dom` import in the bundle resolves here so
+// needs the exact version its renderer was built for. Resolve from this app's
+// dependency graph, including when both apps share a hoisted version. Every `react`/`react-dom` import in the bundle resolves here so
 // Metro ships a single React copy.
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- CommonJS Metro config
 const path = require('node:path')

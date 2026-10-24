@@ -163,7 +163,7 @@ Loopback HTTP addresses (localhost, 127/8 and ::1) do not show the network HTTP 
 Mobile launcher artwork uses `assets/Ramu.icon` directly on iOS for system Liquid
 Glass. Android uses separate full-canvas foreground, background and monochrome
 layers; no desktop rim or rounded mask is baked in. Regenerate the flat mobile
-assets on macOS with `pnpm --filter @ramu/mobile gen:icons`. SDK 57 opts into
+assets on macOS with `pnpm --filter @ramu/mobile gen:icons`. SDK 58 includes
 Expo scene support so Xcode 27 builds launch on iOS 27.
 
 ## Startup and terminal gestures
@@ -220,7 +220,7 @@ extension; rebuild after dependency/configuration changes.
 
 Design and lifecycle follow [Apple Live Activity guidance](https://developer.apple.com/design/human-interface-guidelines/live-activities/)
 and [ActivityKit lifecycle documentation](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities),
-using [Expo's native SwiftUI/ActivityKit integration](https://docs.expo.dev/versions/v57.0.0/sdk/widgets/).
+using [Expo's native SwiftUI/ActivityKit integration](https://docs.expo.dev/versions/v58.0.0/sdk/widgets/).
 
 ## Terminal console layout
 

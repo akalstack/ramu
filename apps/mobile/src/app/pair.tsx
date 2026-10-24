@@ -58,7 +58,7 @@ export default function Pair() {
   const [permission, requestPermission] = useCameraPermissions()
   const asked = useRef(false)
   const scanned = useRef(false)
-  const codeField = useRef<TextInput>(null)
+  const codeField = useRef<import('react-native').TextInputInstance>(null)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => setForeground(state === 'active'))
     return () => subscription.remove()

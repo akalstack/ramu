@@ -14,7 +14,8 @@ export function ThemeCard({ theme }: { theme: RamuTheme }) {
   const parsed = useMemo(() => parseTheme(theme), [theme])
   const [open, setOpen] = useState(false)
   if (!parsed.ok) return null
-  const variant = parsed.theme[resolvedAppearance()]
+  const appearance = resolvedAppearance()
+  const variant = parsed.theme[appearance]
   return (
     <div className="flex flex-col gap-2 rounded-(--radius-m) p-3 [border:1px_solid_var(--line)] max-w-[420px]">
       <div className="flex items-center justify-between gap-2">
@@ -23,7 +24,7 @@ export function ThemeCard({ theme }: { theme: RamuTheme }) {
           {t('Preview theme')}
         </Button>
       </div>
-      <ThemePreview variant={variant} compact />
+      <ThemePreview variant={variant} appearance={appearance} compact />
       <p className="m-0 text-caption text-muted-foreground">
         {t('Drafted by the agent. Nothing changes until you keep it.')}
       </p>

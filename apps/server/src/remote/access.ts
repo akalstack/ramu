@@ -1,81 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { CHALLENGE_PATTERN, IDENTITY_PATH, PAIR_PATH, PROTOCOL_VERSION, RENEW_PATH } from '@ramu/contracts'
+import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
 import { hostProof } from '@ramu/shared/hostProof'
 import { authorized } from './auth'
 import type { DeviceInfo, DeviceStore } from './devices'
 
-// Explicit allowlist: a new method never acquires viewer access by its spelling alone.
-const viewerMethods = new Set([
-  'background.status',
-  'agent.all',
-  'agent.list',
-  'agent.get',
-  'agent.events',
-  'agent.snapshot',
-  'agent.goal',
-  'agent.context',
-  'agent.checkpoint',
-  'agent.counts',
-  'agent.searchMessages',
-  'agent.scope',
-  'agent.catalog',
-  'agent.providerHold',
-  'agent.nextRoute',
-  'agent.mcpStatus',
-  'mcp.status',
-  'projects.setup',
-  'agent.replyPermission',
-  'agent.replyQuestion',
-  'agent.replyElicitation',
-  'agent.questionDraft',
-  'agent.elicitationDraft',
-  'agent.dismissQuestion',
-  'settings.app.get',
-  'settings.app.snapshot',
-  'preferences.layers.get',
-  'settings.models.get',
-  'recaps.get',
-  'summaries.get',
-  'schedules.list',
-  'schedules.runs',
-  'projects.list',
-  'repos.list',
-  'tasks.list',
-  'tasks.get',
-  'tasks.bindings',
-  'workspaces.list',
-  'ui.get',
-  'notices.list',
-  'activity.status',
-  'usage.get',
-  'usage.accounts',
-  'aside.list',
-  'interactive.get',
-  'interactive.list',
-  'attachments.text',
-  'attachments.preview',
-  'reviews.list',
-  'reviews.get',
-  'reviews.branches',
-  'reviews.inspect',
-  'notifications.register',
-  'notifications.unregister',
-  'liveActivity.status',
-  'liveActivity.register',
-  'liveActivity.unregister',
-])
-// A viewer-role device is read-only: it may watch a computer only when the host's owner granted it that thread's
-// screen (checked again by the handler on every call, including every frame). Input, control and every setup or
-// grant method stay owner-only whatever grant exists.
-const viewerComputerMethods = new Set([
-  'computer.session',
-  'computer.frame',
-  'computer.rtcOffer',
-  'computer.rtcKeyFrame',
-  'computer.rtcClose',
-])
 export const deviceMayInvoke = (device: DeviceInfo | undefined, method: string): boolean =>
-  device?.role !== 'viewer' || viewerMethods.has(method) || viewerComputerMethods.has(method)
+  device?.role !== 'viewer' || viewerMayInvoke(method)
 /** What this device is told about its own access so clients can hide actions the server would refuse. Advisory only. */
 export const accessOf = (device: DeviceInfo | undefined): 'owner' | 'viewer' =>
   device?.role === 'viewer' ? 'viewer' : 'owner'

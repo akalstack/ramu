@@ -1,3 +1,4 @@
+import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { useState } from 'react'
 import { useT } from '../i18n'
 import { WorktreeBaseReview } from './WorktreeBaseReview'
@@ -61,7 +62,9 @@ export function PendingBubble({
   onEdit: (text: string) => void
 }) {
   const { c } = useTheme()
-  const { cancelOutbox } = useStore()
+  const store = useStore()
+  const { cancelOutbox } = store
+  const viewOnly = store.computers?.find((host) => host.id === item.computerId)?.access === 'viewer'
   const t = useT()
   const [reviewing, setReviewing] = useState(false)
   const ModeIcon = item.mode === 'steer' ? CornerDownRight : item.mode === 'queue' ? ListPlus : Clock
@@ -105,14 +108,20 @@ export function PendingBubble({
                     : item.mode === 'queue'
                       ? 'Queued'
                       : 'Waiting'}{' '}
-            · {item.state === 'uncertain' || item.state === 'review' ? item.error : `sends when ${computer} is back`} ·{' '}
+            ·{' '}
+            {viewOnly
+              ? VIEW_ONLY_WRITE_NOTICE[store.language]
+              : item.state === 'uncertain' || item.state === 'review'
+                ? item.error
+                : `sends when ${computer} is back`}{' '}
+            ·{' '}
             <T size={font.caption} tone="accent" weight="600">
               Cancel
             </T>
           </T>
         </View>
       </Pressable>
-      {item.state === 'review' ? (
+      {!viewOnly && item.state === 'review' ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t.branchReviewBases}
@@ -121,7 +130,7 @@ export function PendingBubble({
           <T tone="accent">{t.branchReviewBases}</T>
         </Pressable>
       ) : null}
-      {reviewing && item.state === 'review' ? (
+      {!viewOnly && reviewing && item.state === 'review' ? (
         <WorktreeBaseReview item={item} onClose={() => setReviewing(false)} />
       ) : null}
     </>

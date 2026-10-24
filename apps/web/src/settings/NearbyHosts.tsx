@@ -1,3 +1,4 @@
+import { RowButton } from '@/components/row-button'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Monitor, RefreshCw } from 'lucide-react'
 import { reviewSelection, type NearbyHost, type NearbyHostsState } from '@ramu/shared/discovery/tracker'
@@ -87,7 +88,7 @@ export function NearbyHosts({
     ? computers?.computers.find((computer) => computer.id === current.pairedHostId)
     : undefined
   const newAddress = !!paired && !!selected && !!paired.url && shown(paired.url) !== shown(selected.url)
-  const useAddress = async () => {
+  const confirmAddress = async () => {
     if (!paired || !selected) return
     setMoving(true)
     try {
@@ -138,10 +139,9 @@ export function NearbyHosts({
             const active = selected?.key === host.key
             return (
               <li key={host.key}>
-                <button
-                  type="button"
+                <RowButton
                   aria-pressed={active}
-                  className={`flex w-full items-center gap-3 rounded-(--radius-s) border-0 p-2 text-left ${active ? 'bg-hover' : 'bg-transparent hover:bg-hover'}`}
+                  disabled={!route}
                   onClick={() => route && setSelected({ key: host.key, url: route.url })}
                 >
                   <Monitor size={16} className="flex-none text-muted-foreground" />
@@ -153,7 +153,7 @@ export function NearbyHosts({
                       {host.pairedHostId ? ` · ${t('Already paired')}` : ''}
                     </span>
                   </span>
-                </button>
+                </RowButton>
               </li>
             )
           })}
@@ -218,7 +218,7 @@ export function NearbyHosts({
           )}
           <div className="flex justify-end gap-2">
             {newAddress && moved !== 'moved' && (
-              <Button variant="secondary" disabled={moving} onClick={() => void useAddress()}>
+              <Button variant="secondary" disabled={moving} onClick={() => void confirmAddress()}>
                 {moving ? t('Checking…') : t('Use this address for {0}', { 0: paired!.name })}
               </Button>
             )}

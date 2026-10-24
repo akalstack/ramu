@@ -1,3 +1,4 @@
+import { DragHandle } from '@/components/drag-handle'
 import { useShowLegacyModels, visiblePickerModels } from './modelVisibility'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
@@ -390,7 +391,7 @@ export function ModelPicker({
                       id={keyOf(model)}
                       disabled={savingFavorites}
                       name={modelDisplayName(model.name)}
-                      className="bg-fill hover:bg-fill-hover mp-drag [&:active]:[cursor:grabbing] bg-transparent [border:none] text-muted-foreground p-[4px_0] cursor-grab shrink-0"
+                      className="mp-drag py-1"
                       onKeyDown={(event) => {
                         if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return
                         event.preventDefault()
@@ -508,20 +509,17 @@ function FavoriteHandle({
 }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id, disabled })
   return (
-    <Button
+    <DragHandle
       ref={setNodeRef}
-      variant="secondary"
-      type="button"
-      className={`${className} touch-none`}
+      className={className}
       {...attributes}
       {...listeners}
-      aria-disabled={disabled}
+      disabled={disabled}
+      focusableWhenDisabled
       aria-label={t('Reorder {0}', { '0': name })}
       title={t('Drag to reorder. Alt+↑/↓ moves this favorite.')}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={onKeyDown}
-    >
-      <GripVertical size={14} />
-    </Button>
+    />
   )
 }

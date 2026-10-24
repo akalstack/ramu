@@ -1,3 +1,4 @@
+import { InlineAction, InlineLink } from '@/components/inline-action'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentProvider } from '@ramu/shared/types'
@@ -114,14 +115,9 @@ function ShareRow({
           {onWiden && item.shared && item.shareScope === 'project' && (
             <>
               {' · '}
-              <button
-                type="button"
-                className="cursor-pointer border-0 bg-transparent p-0 text-caption text-brand underline-offset-2 hover:underline disabled:cursor-default disabled:no-underline"
-                disabled={disabled}
-                onClick={onWiden}
-              >
+              <InlineAction disabled={disabled} onClick={onWiden}>
                 {t('Share with every project')}
-              </button>
+              </InlineAction>
             </>
           )}
         </span>
@@ -271,6 +267,7 @@ export function AgentSetup() {
     on = useSettingsEvents()
   const scope = useContext(SettingsScopeContext)
   const hostKey = scope?.primaryId ?? ''
+  const viewOnly = scope?.targets?.some((target) => target.viewOnly) ?? false
   const ready = !scope || (scope.ready && !scope.stale)
   const ws = useWorkspace()
   const projects = useQuery({
@@ -307,7 +304,7 @@ export function AgentSetup() {
       }),
     [on, refetch],
   )
-  const canAdminister = status.data?.canAdminister === true && ready
+  const canAdminister = status.data?.canAdminister === true && ready && !viewOnly
   const share = async (id: string, work: () => Promise<unknown>) => {
     const current = epoch.current
     setPending(id)
@@ -436,13 +433,15 @@ export function AgentSetup() {
                 <strong className="min-w-0 truncate">{item.name}</strong>
                 <span className={CAPTION}>{providerName(item.provider)}</span>
                 {item.provider === 'claude-code' && (
-                  <button
-                    type="button"
-                    className="cursor-pointer border-0 bg-transparent p-0 text-caption text-brand underline-offset-2 hover:underline"
-                    onClick={() => void ramu.invoke('app.openExternal', CLAUDE_CONNECTORS_URL).catch(() => {})}
+                  <InlineLink
+                    href={CLAUDE_CONNECTORS_URL}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      void ramu.invoke('app.openExternal', CLAUDE_CONNECTORS_URL).catch(() => {})
+                    }}
                   >
                     {t('Manage connectors')}
-                  </button>
+                  </InlineLink>
                 )}
               </li>
             ))}

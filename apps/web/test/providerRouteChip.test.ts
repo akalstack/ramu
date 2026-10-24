@@ -10,7 +10,7 @@ import {
 } from '@ramu/shared/types'
 
 const state = vi.hoisted(() => ({
-  menus: [] as { label: string; className: string; items: any[] }[],
+  menus: [] as { label: string; className: string; items: any[]; disabled?: boolean }[],
   usage: [] as UsageReading[],
   accountUsage: [] as UsageReading[],
   providerBinaries: {} as ProviderConfiguration,
@@ -97,12 +97,13 @@ const settings: AgentSettings = {
   autoFallback: true,
 }
 const control = autoResumeControl({}, undefined, () => {})
-const render = (props: { limited?: boolean; withControl?: boolean; accountId?: string }) =>
+const render = (props: { limited?: boolean; withControl?: boolean; accountId?: string; readOnly?: boolean }) =>
   renderToStaticMarkup(
     createElement(ProviderRouteChip, {
       sessionId: 's',
       settings: { ...settings, accountId: props.accountId },
       limited: props.limited,
+      readOnly: props.readOnly,
       autoResume: props.withControl === false ? undefined : control,
     }),
   )
@@ -209,4 +210,13 @@ it('previews a switch to another Claude account before Codex and reads the threa
   render({ accountId: 'second' })
   expect(state.menus[0]!.label).not.toContain('Sending with')
   expect(state.menus[0]!.label).not.toContain('limited')
+})
+
+it('keeps provider status visible while disabling routing controls for a viewer', () => {
+  for (const limited of [false, true]) {
+    state.menus = []
+    const html = render({ limited, readOnly: true })
+    expect(html).toContain('data-menu=')
+    expect(state.menus.every((menu) => menu.disabled)).toBe(true)
+  }
 })

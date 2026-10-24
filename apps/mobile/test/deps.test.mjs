@@ -1,5 +1,5 @@
 // Guards the hoisted-workspace setup: React Native needs the exact React its
-// renderer was built for, while the desktop keeps the catalog version at the root.
+// renderer was built for, even when it shares the desktop catalog version.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -18,12 +18,12 @@ test('mobile React matches the Expo SDK pin', () => {
   assert.equal(pkg('react-native').version, bundled['react-native'])
 })
 
-test('Metro resolves react from this app, not the workspace root', () => {
+test('Metro pins React resolution to the mobile dependency graph', () => {
   const config = readFileSync(new URL('../metro.config.js', import.meta.url), 'utf8')
   assert.match(config, /pinned = new Set\(\['react', 'react-dom'\]\)/)
-  assert.ok(
-    require
-      .resolve('react', { paths: [new URL('..', import.meta.url).pathname] })
-      .includes('apps/mobile/node_modules/react'),
+  const mobileRequire = createRequire(new URL('../node_modules/index.js', import.meta.url))
+  assert.equal(
+    JSON.parse(readFileSync(mobileRequire.resolve('react/package.json'), 'utf8')).version,
+    require('expo/bundledNativeModules.json').react,
   )
 })

@@ -19,10 +19,12 @@ export function AgentTaskCard({
   live,
   onOpen,
   onStop,
+  readOnly = false,
 }: {
   task: AgentTask
   live: boolean
   onOpen: () => void
+  readOnly?: boolean
   onStop: (task: AgentTask) => void
 }) {
   useLanguage()
@@ -95,7 +97,7 @@ export function AgentTaskCard({
         </span>
         <ChevronRight size={14} className={CARET_CLASS} />
       </Button>
-      {actions.canStop && (
+      {actions.canStop && !readOnly && (
         <Button
           variant="ghost"
           size="icon-xs"

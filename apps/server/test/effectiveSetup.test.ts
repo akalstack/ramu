@@ -142,3 +142,37 @@ it('lists provider-managed servers for later use, leaving out declared, shared a
   ).toEqual(['claude.ai Figma'])
   expect(providerManagedServers({ addedServers: [], connections: [] })).toEqual([])
 })
+
+it('reports, per server, whether the MCP tools a skill asks for are ready for the thread', () => {
+  const snapshot = buildSetupSnapshot(
+    base({
+      addedServers: ['github', 'linear'],
+      runtimeServers: [
+        { name: 'github', status: 'connected' },
+        { name: 'linear', status: 'failed' },
+      ],
+      connections: [{ name: 'Atlassian', status: 'sign-in-required' }],
+      sharedSkills: ['triage', 'plain'],
+      skillTools: {
+        triage: [
+          'mcp__github__create_issue',
+          'mcp__linear__list_issues',
+          'mcp__shared_mcp__jira-1a2b3c__search',
+          'mcp__nowhere__thing',
+        ],
+        plain: [],
+      },
+    }),
+  )
+  const triage = snapshot.items.find((item) => item.kind === 'skill' && item.name === 'triage')!
+  expect(triage.requires?.map((r) => [r.server, r.status])).toEqual([
+    ['github', 'available'],
+    ['linear', 'not-connected'],
+    ['shared_mcp', 'sign-in-required'],
+    ['nowhere', 'missing'],
+  ])
+  expect(triage.reason).toContain('not ready')
+  const plain = snapshot.items.find((item) => item.kind === 'skill' && item.name === 'plain')!
+  expect(plain.requires).toBeUndefined()
+  expect(plain.reason).not.toContain('not ready')
+})

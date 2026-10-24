@@ -23,6 +23,7 @@ export function AgentHeader({
   onToggleAside,
   commands,
   onStopTask,
+  readOnly = false,
   tasks,
   runningTasks,
   agentsOpen,
@@ -43,6 +44,7 @@ export function AgentHeader({
   asideCount: number
   onToggleAside: () => void
   commands: AgentTask[]
+  readOnly?: boolean
   onStopTask: (task: AgentTask) => void
   tasks: AgentTask[]
   runningTasks: AgentTask[]
@@ -60,7 +62,7 @@ export function AgentHeader({
     <div className="agent-header [&_.path]:flex-1 [&:not(:has(>_:not(.grow)))]:hidden [&_.grow]:hidden [&_.state]:mr-auto [&_.small]:gap-1.5 [&_.small]:text-soft [&_>_*]:flex-none [&_>_*]:whitespace-nowrap flex items-center flex-none text-control min-w-0 justify-end h-auto min-h-[36px] p-[4px_10px_0] gap-1.5 flex-wrap gap-y-1 pb-1">
       {history}
       <SessionChangesButton sessionId={sessionId} taskId={taskId} />
-      {taskId && <CommitPushButton taskId={taskId} />}
+      {taskId && !readOnly && <CommitPushButton taskId={taskId} />}
       <SessionCheckpointButton sessionId={sessionId} />
       {state && STATE_LABEL[state] && (
         <span
@@ -110,6 +112,7 @@ export function AgentHeader({
           align="end"
           items={commands.map((task) => ({
             key: task.agentId,
+            disabled: readOnly,
             label: (
               <>
                 <Square size={12} /> {translate('Stop')} · {task.name}
@@ -169,6 +172,7 @@ export function AgentHeader({
           items={[
             {
               key: 'continue',
+              disabled: readOnly || continuing,
               label: (
                 <>
                   <GitFork size={13} /> {translate('Continue in new thread')}

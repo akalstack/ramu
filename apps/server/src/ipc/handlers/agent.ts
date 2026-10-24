@@ -112,6 +112,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
           ],
           ...(runtimeServers ? { runtimeServers } : {}),
           sharedSkills: skills.map((skill) => skill.name),
+          skillTools: Object.fromEntries(skills.map((skill) => [skill.name, skill.tools])),
           connections,
           duplicates,
           hidden: workspace.getAppState<DuplicateChoices>(DUPLICATE_CHOICE_KEY, {})[sessionId] ?? [],

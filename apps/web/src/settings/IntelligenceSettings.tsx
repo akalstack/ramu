@@ -2,14 +2,14 @@ import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { InstalledSkills } from './InstalledSkills'
 import { SearchInput } from '../SearchInput'
 import { Badge } from '@/components/ui/badge'
-import { useSettingsInvoke } from './SettingsScope'
-import { useCallback, useEffect, useState } from 'react'
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
+import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import { Dropdown } from '../Menu'
 import { t } from '../i18n'
-import { ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 import { useModelSets, modelStepName } from '../models/ModelSets'
@@ -120,31 +120,59 @@ function LearningLimitsSettings({ value, onChange }: Props) {
 /** The learning snapshot, refreshed whenever memory changes, with one guarded way to change it. */
 function useLearning() {
   const invoke = useSettingsInvoke()
-  const [snapshot, setSnapshot] = useState<LearningSnapshot | null>(null)
+  const on = useSettingsEvents()
+  const scope = useContext(SettingsScopeContext)
+  const host = scope?.primaryId ?? ''
+  const viewOnly = scope?.targets?.some((target) => target.viewOnly) ?? false
+  const access = useRef({ host, viewOnly, version: 0 })
+  if (access.current.host !== host || access.current.viewOnly !== viewOnly)
+    access.current = { host, viewOnly, version: access.current.version + 1 }
+  const reads = useRef(0)
+  const [snapshot, setSnapshot] = useState<{ host: string; value: LearningSnapshot } | null>(null)
   const [busy, setBusy] = useState(false)
-  const reload = useCallback(() => invoke('learning.get').then(setSnapshot), [invoke])
+  const reload = useCallback(async () => {
+    if (viewOnly || access.current.host !== host || access.current.viewOnly) return
+    const version = access.current.version
+    const request = ++reads.current
+    try {
+      const value = await invoke('learning.get')
+      if (
+        access.current.host === host &&
+        access.current.version === version &&
+        request === reads.current &&
+        !access.current.viewOnly
+      )
+        setSnapshot({ host, value })
+    } catch (reason) {
+      if (access.current.host === host && access.current.version === version && request === reads.current) throw reason
+    }
+  }, [invoke, host, viewOnly])
   useEffect(() => {
+    setBusy(false)
+    if (viewOnly) return
     void reload().catch((e) => notifyError(errorText(e), 'Learning'))
-    return ramu.on('memory:changed', () => {
+    return on('memory:changed', () => {
       void reload().catch(() => {})
     })
-  }, [reload])
+  }, [reload, on, viewOnly])
   const act = async (fn: () => Promise<unknown>) => {
+    if (access.current.host !== host || access.current.viewOnly) return
+    const version = access.current.version
     setBusy(true)
     try {
       await fn()
-      await reload()
+      if (access.current.version === version) await reload()
     } catch (e) {
-      notifyError(errorText(e), 'Learning')
+      if (access.current.version === version) notifyError(errorText(e), 'Learning')
     } finally {
-      setBusy(false)
+      if (access.current.version === version) setBusy(false)
     }
   }
-  return { invoke, snapshot, busy, act }
+  return { invoke, snapshot: snapshot?.host === host ? snapshot.value : null, busy, act, viewOnly }
 }
 
 export function LearningSettings({ value, onChange }: Props) {
-  const { invoke, snapshot, busy, act } = useLearning()
+  const { invoke, snapshot, busy, act, viewOnly } = useLearning()
   const reviews = snapshot?.jobs.filter((job) => {
     if (job.status !== 'applied' || !job.proposal || job.error) return true
     const change = JSON.parse(job.proposal) as { memories: unknown[]; skills: unknown[]; archive: unknown[] }
@@ -154,6 +182,7 @@ export function LearningSettings({ value, onChange }: Props) {
   return (
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 mt-6">
       <SettingsGroupTitle>{t('Learning & skills')}</SettingsGroupTitle>
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <SettingsRow setting="intelligence.crossThreadRecall">
         <SettingsLabel
           title={t('Recall past conversations')}
@@ -185,7 +214,7 @@ export function LearningSettings({ value, onChange }: Props) {
       </SettingsRow>
       <LearningLimitsSettings value={value} onChange={onChange} />
       <Button
-        disabled={busy || snapshot?.running || value.learning === 'off'}
+        disabled={viewOnly || busy || snapshot?.running || value.learning === 'off'}
         variant="secondary"
         className="bg-fill hover:bg-fill-hover self-start mb-4"
         onClick={() => void act(() => invoke('learning.run'))}
@@ -206,7 +235,7 @@ export function LearningSettings({ value, onChange }: Props) {
               <>
                 {job.status === 'pending' && (
                   <Button
-                    disabled={busy}
+                    disabled={viewOnly || busy}
                     variant="default"
                     size="sm"
                     className={PRIMARY_ACTION_CLASS}
@@ -217,7 +246,7 @@ export function LearningSettings({ value, onChange }: Props) {
                 )}
                 {['pending', 'failed'].includes(job.status) && (
                   <Button
-                    disabled={busy}
+                    disabled={viewOnly || busy}
                     variant="ghost"
                     size="sm"
                     onClick={() => void act(() => invoke('learning.retry', job.id))}
@@ -227,7 +256,7 @@ export function LearningSettings({ value, onChange }: Props) {
                 )}
                 {['queued', 'pending', 'failed'].includes(job.status) && (
                   <Button
-                    disabled={busy}
+                    disabled={viewOnly || busy}
                     variant="ghost"
                     size="sm"
                     onClick={() => void act(() => invoke('learning.dismiss', job.id))}
@@ -269,7 +298,7 @@ const SKILL_STATUS_LABELS: Record<SkillStatusFilter, string> = {
 
 /** The skills Ramu wrote itself, searchable and a page at a time; installed skills are managed above them. */
 export function ManagedSkills() {
-  const { invoke, snapshot, busy, act } = useLearning()
+  const { invoke, snapshot, busy, act, viewOnly } = useLearning()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<SkillStatusFilter>('active')
   const [history, setHistory] = useState<ManagedSkill[]>([])
@@ -310,6 +339,7 @@ export function ManagedSkills() {
   return (
     <div className="settings-form flex flex-col gap-2 mt-6">
       <SettingsGroupTitle className="mb-1">{t('Managed skills')}</SettingsGroupTitle>
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       {own.length > 0 && (
         <div className="flex items-center gap-2">
           <SearchInput
@@ -365,7 +395,7 @@ export function ManagedSkills() {
                   .map((action) => (
                     <Button
                       key={action}
-                      disabled={busy}
+                      disabled={viewOnly || busy}
                       variant="ghost"
                       size="sm"
                       onClick={() => void act(() => invoke('learning.control', skill.id, action))}
@@ -378,7 +408,7 @@ export function ManagedSkills() {
                     </Button>
                   ))}
                 <Button
-                  disabled={busy}
+                  disabled={viewOnly || busy}
                   variant="ghost"
                   size="sm"
                   onClick={() =>
@@ -403,7 +433,7 @@ export function ManagedSkills() {
                   <summary>{t('Revision {0}', { 0: revision.revision })}</summary>
                   <pre className="whitespace-pre-wrap text-caption">{revision.content}</pre>
                   <Button
-                    disabled={busy || revision.revision === skill.revision}
+                    disabled={viewOnly || busy || revision.revision === skill.revision}
                     variant="secondary"
                     className="bg-fill hover:bg-fill-hover"
                     onClick={() =>

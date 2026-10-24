@@ -16,7 +16,14 @@ export interface SetupItem {
   reason: string
   /** A shared connection the provider also loads natively; `use` is what this thread currently does about it. */
   duplicate?: { connectionId: string; use: 'native' | 'both' }
+  /**
+   * MCP tools a skill asks for (`allowed-tools: mcp__server__tool`) and what this thread has for each server. Resolved
+   * to the server only; a tool's own approval is not known until it is called. Guidance, never authorization.
+   */
+  requires?: { tool: string; server: string; status: ToolRequirementStatus }[]
 }
+
+export type ToolRequirementStatus = 'available' | 'sign-in-required' | 'approval-needed' | 'not-connected' | 'missing'
 
 /** The setup the execution server resolved for one thread, built from the same resolvers a launch uses. Names only. */
 export interface AgentSetupSnapshot {

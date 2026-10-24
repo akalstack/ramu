@@ -22,7 +22,7 @@ export default function TerminalView({
     const subscription = AppState.addEventListener('change', (state) => setAppActive(state === 'active'))
     return () => subscription.remove()
   }, [])
-  const view = useRef<WebView>(null)
+  const view = useRef<WebView<object>>(null)
   const [ready, setReady] = useState(false)
   const previous = useRef<TerminalOutputState>({ output: '' })
   const consumedKey = useRef<number | undefined>(undefined)
@@ -68,7 +68,7 @@ export default function TerminalView({
   }, [ready, keyboardAction])
   return (
     <View style={{ flex: 1 }} onLayout={(event) => setSize(event.nativeEvent.layout)}>
-      <WebView
+      <WebView<object>
         accessibilityLabel="Host terminal"
         accessibilityHint="Hold, then drag to move the cursor. Drag farther to repeat faster."
         ref={view}

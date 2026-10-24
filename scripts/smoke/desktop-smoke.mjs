@@ -1,3 +1,4 @@
+/* global document, window, parent */
 // One startup check for the built desktop app; no UI workflow suite.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
@@ -49,6 +50,95 @@ test('desktop shell starts without fatal errors', async () => {
     page = await app.firstWindow({ timeout: 15_000 })
     await page.waitForSelector('.shell', { state: 'attached', timeout: 15_000 })
     await delay(8_000)
+    // The built local preview must boot its own editor/worker realm without a workspace bridge.
+    await page.evaluate(
+      () =>
+        new Promise((resolve, reject) => {
+          const frame = document.createElement('iframe')
+          frame.name = 'theme-startup-preview'
+          frame.sandbox = 'allow-scripts allow-same-origin'
+          frame.style.cssText = 'position:fixed;inset:0;width:800px;height:240px'
+          frame.src = 'ramu-theme://preview/theme-editor.html#startup-check'
+          const roles = [
+            'window',
+            'canvas',
+            'raised',
+            'subtle',
+            'bubble',
+            'codeBackground',
+            'text',
+            'textBody',
+            'soft',
+            'muted',
+            'placeholder',
+            'primary',
+            'primaryHover',
+            'primaryInk',
+            'accent',
+            'ok',
+            'warn',
+            'bad',
+          ]
+          const variant = {
+            overlay: 'black',
+            colors: {
+              ...Object.fromEntries(roles.map((role) => [role, '#445566'])),
+              canvas: '#fafafa',
+              textBody: '#222222',
+            },
+          }
+          const send = (view, request) =>
+            frame.contentWindow.postMessage(
+              {
+                ramuThemePreview: 1,
+                instance: 'startup-check',
+                type: 'update',
+                request,
+                appearance: 'light',
+                view,
+                split: true,
+                variant,
+              },
+              '*',
+            )
+          const timeout = setTimeout(() => {
+            window.removeEventListener('message', receive)
+            reject(new Error('Local theme editor did not start'))
+          }, 20000)
+          function receive(event) {
+            if (event.source !== frame.contentWindow || event.data?.instance !== 'startup-check') return
+            if (event.data.type === 'ready') send('code', 1)
+            if (event.data.type === 'error') {
+              clearTimeout(timeout)
+              window.removeEventListener('message', receive)
+              reject(new Error('Local theme editor failed'))
+            }
+            if (event.data.type === 'applied' && event.data.request === 1) send('diff', 2)
+            if (event.data.type === 'applied' && event.data.request === 2) {
+              clearTimeout(timeout)
+              window.removeEventListener('message', receive)
+              resolve()
+            }
+          }
+          frame.onload = () => send('code', 1)
+          window.addEventListener('message', receive)
+          document.body.append(frame)
+        }),
+    )
+    const preview = page.frame({ name: 'theme-startup-preview' })
+    assert.ok(preview, 'Local theme preview frame is missing')
+    await preview.waitForSelector('.monaco-diff-editor .char-insert', { state: 'attached', timeout: 10000 })
+    assert.deepEqual(
+      await preview.evaluate(() => {
+        let parentAccess = false
+        try {
+          parentAccess = Boolean(parent.ramu)
+        } catch {}
+        return { bridge: typeof window.ramu, parentAccess }
+      }),
+      { bridge: 'undefined', parentAccess: false },
+    )
+    await page.locator('iframe[name="theme-startup-preview"]').evaluate((frame) => frame.remove())
     assert.equal(app.process().exitCode, null, 'Electron exited during startup')
     assert.equal(page.isClosed(), false, 'The desktop window closed during startup')
     assert.deepEqual(errors, [], 'Renderer errors during startup')

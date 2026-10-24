@@ -1,3 +1,4 @@
+import { VIEW_ONLY_BROWSER_NOTICE } from '../runtime/viewerAccess'
 import { useEffect, useRef, useState } from 'react'
 import { AppState, Image, Modal, PanResponder, ScrollView, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -26,6 +27,10 @@ export function BrowserViewer({
   embedded?: boolean
 }) {
   const store = useStore()
+  const viewOnly = store.computers?.find((host) => host.id === chat.computerId)?.access === 'viewer'
+  const target = `${chat.computerId}:${chat.taskId}`
+  const currentTarget = useRef(target)
+  currentTarget.current = target
   const { c: theme } = useTheme()
   const t = (text: string) => translate(store.language, text)
   const [tabs, setTabs] = useState<BrowserTabInfo[]>([])
@@ -53,11 +58,19 @@ export function BrowserViewer({
   const [width, setWidth] = useState(1)
   const current = useRef<BrowserTabInfo | undefined>(undefined)
   const editing = useRef(false)
+  const addressEdited = useRef(false)
+  const addressValue = useRef(address)
+  addressValue.current = address
   const io = useRef(store)
   io.current = store
+  const allowed = () =>
+    currentTarget.current === target &&
+    io.current.computers?.find((host) => host.id === chat.computerId)?.access !== 'viewer' &&
+    io.current.isOnline(chat.computerId)
   const tab = tabs.find((tab) => tab.id === selected) ?? tabs[0]
   current.current = tab
   const controlled =
+    !viewOnly &&
     !!tab &&
     tab.controller === 'human' &&
     tab.generation === owned &&
@@ -74,28 +87,29 @@ export function BrowserViewer({
     return () => subscription.remove()
   }, [])
   useEffect(() => {
-    if (!active || !chat.taskId || !store.isOnline(chat.computerId)) return
+    if (viewOnly || !active || !chat.taskId || !store.isOnline(chat.computerId)) return
     let mounted = true
     let timer: ReturnType<typeof setTimeout>
     const poll = async () => {
+      if (!allowed()) return
       try {
         const listed = await io.current.invoke(chat.computerId, 'hostBrowser.list', chat.taskId!)
-        if (!mounted) return
+        if (!mounted || !allowed()) return
         setTabs(listed)
         if (downloadsVisible.current) {
           const entries = await io.current.invoke(chat.computerId, 'hostBrowser.downloads', chat.taskId!)
-          if (!mounted) return
+          if (!mounted || !allowed()) return
           setDownloads(entries)
         }
         const tab = listed.find((tab) => tab.id === current.current?.id) ?? listed[0]
         if (tab) {
           const websiteDialog = await io.current.invoke(chat.computerId, 'hostBrowser.dialog', chat.taskId!, tab.id)
-          if (!mounted) return
+          if (!mounted || !allowed()) return
           setDialog(websiteDialog)
-          if (!editing.current) setAddress(tab.url)
+          if (!editing.current && !addressEdited.current) setAddress(tab.url)
           if (!websiteDialog) {
             const image = await io.current.invoke(chat.computerId, 'hostBrowser.frame', chat.taskId!, tab.id)
-            if (!mounted) return
+            if (!mounted || !allowed()) return
             setFrame(`data:${image.mimeType};base64,${image.data}`)
             if (image.width > 0 && image.height > 0) setFrameSize({ width: image.width, height: image.height })
           }
@@ -107,18 +121,18 @@ export function BrowserViewer({
       } catch (error) {
         if (mounted) setError(error instanceof Error ? error.message : String(error))
       } finally {
-        if (mounted) timer = setTimeout(() => void poll(), 750)
+        if (mounted && allowed()) timer = setTimeout(() => void poll(), 750)
       }
     }
     void poll()
     return () => {
       mounted = false
       clearTimeout(timer)
-      void io.current.invoke(chat.computerId, 'hostBrowser.disconnect').catch(() => {})
+      if (allowed()) void io.current.invoke(chat.computerId, 'hostBrowser.disconnect').catch(() => {})
     }
-  }, [chat.computerId, chat.taskId, active, store.isOnline(chat.computerId)])
+  }, [chat.computerId, chat.taskId, active, viewOnly, store.isOnline(chat.computerId)])
   const act = async (work: () => Promise<unknown>) => {
-    if (busy) return
+    if (!allowed() || busy) return
     setBusy(true)
     setError('')
     try {
@@ -172,6 +186,21 @@ export function BrowserViewer({
     fontSize: font.body,
   }
   const Container = embedded ? View : SafeAreaView
+  if (viewOnly) {
+    const notice = (
+      <Container style={{ flex: 1, padding: space.m, gap: space.m, backgroundColor: theme.canvas }}>
+        <T tone="muted">{VIEW_ONLY_BROWSER_NOTICE[store.language]}</T>
+        <Button kind="ghost" title={t('Close')} onPress={onClose} />
+      </Container>
+    )
+    return embedded ? (
+      notice
+    ) : (
+      <Modal visible animationType="slide" onRequestClose={onClose}>
+        {notice}
+      </Modal>
+    )
+  }
   const content = (
     <Container style={{ flex: 1, backgroundColor: theme.canvas }}>
       {!embedded && (
@@ -194,6 +223,8 @@ export function BrowserViewer({
             title={entry.title || entry.url}
             onPress={() => {
               setSelected(entry.id)
+              addressEdited.current = false
+              setAddress(entry.url)
               setOwned(null)
               setFrame('')
             }}
@@ -221,7 +252,10 @@ export function BrowserViewer({
         <TextInput
           accessibilityLabel={t('Address')}
           value={address}
-          onChangeText={setAddress}
+          onChangeText={(value) => {
+            addressEdited.current = true
+            setAddress(value)
+          }}
           autoCapitalize="none"
           autoCorrect={false}
           onFocus={() => {
@@ -243,6 +277,7 @@ export function BrowserViewer({
                 setOwned(result.tab.generation)
                 setNewTab(false)
               }
+              if (addressValue.current === address) addressEdited.current = false
             })
           }
         />
@@ -254,7 +289,8 @@ export function BrowserViewer({
               disabled={busy}
               onPress={() => {
                 setNewTab(!newTab)
-                setAddress('')
+                addressEdited.current = !newTab
+                setAddress(newTab ? tab.url : '')
               }}
             />
             <Button

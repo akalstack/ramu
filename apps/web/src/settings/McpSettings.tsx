@@ -418,6 +418,7 @@ export function McpSettings() {
     on = useSettingsEvents()
   const scope = useContext(SettingsScopeContext)
   const hostKey = scope?.primaryId ?? ''
+  const viewOnly = scope?.targets?.some((target) => target.viewOnly) ?? false
   const ws = useWorkspace()
   const models = useModelSets()
   const preferences = useAppSettings().preferences
@@ -488,7 +489,7 @@ export function McpSettings() {
     }
   }
   const data = query.data
-  const canAdminister = data?.canAdminister === true && (!scope || (scope.ready && !scope.stale))
+  const canAdminister = data?.canAdminister === true && !viewOnly && (!scope || (scope.ready && !scope.stale))
   const check = (connection: SharedMcpConnection, selectedProvider?: AgentProvider, selectedAccount?: string) => {
     const provider =
       selectedProvider ?? (connection.providers.includes(defaultProvider) ? defaultProvider : connection.providers[0]!)
@@ -571,7 +572,13 @@ export function McpSettings() {
               {reason && <p className="m-0 text-caption text-muted-foreground">{t(reason)}</p>}
               <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-0.5 p-0 text-caption text-muted-foreground">
                 {AGENT_PROVIDERS.map((provider) => {
-                  const availability = connectionAvailability(connection, status, data.readiness, provider, data.providerManaged)
+                  const availability = connectionAvailability(
+                    connection,
+                    status,
+                    data.readiness,
+                    provider,
+                    data.providerManaged,
+                  )
                   return (
                     <li key={provider} title={t(availability.reason)}>
                       {providerName(provider)}: {t(availabilityLabels[availability.state])}

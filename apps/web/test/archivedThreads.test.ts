@@ -4,7 +4,10 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { Task } from '@ramu/shared/types'
 import { ArchivedThreads } from '../src/settings/ArchivedThreads'
 
-const state = vi.hoisted(() => ({ tasks: [] as Task[] }))
+const state = vi.hoisted(() => ({ tasks: [] as Task[], viewer: false }))
+vi.mock('../src/composer/useHostWriteAccess', () => ({
+  useHostWriteAccess: () => ({ viewOnly: state.viewer, canWrite: () => !state.viewer }),
+}))
 vi.mock('../src/i18n', () => ({ useLanguage: () => {}, t: (text: string) => text }))
 vi.mock('../src/workspace/workspace', () => ({
   useWorkspace: () => ({ tasks: state.tasks, projects: [{ id: 'project', name: 'My project' }] }),
@@ -37,6 +40,7 @@ const task = (id: string, status: Task['status'], doneAt?: number): Task => ({
   pinnedAt: null,
 })
 beforeEach(() => {
+  state.viewer = false
   state.tasks = []
 })
 
@@ -53,4 +57,13 @@ it('shows an empty state without a bulk delete action when there are no archived
   const html = renderToStaticMarkup(createElement(ArchivedThreads))
   expect(html).toContain('No archived threads')
   expect(html).not.toContain('Delete all archived threads')
+})
+
+it('keeps archived history readable for a viewer without offering bulk deletion', () => {
+  state.tasks = [task('Archived example', 'archived')]
+  state.viewer = true
+  const html = renderToStaticMarkup(createElement(ArchivedThreads))
+  expect(html).toContain('My project: Archived example')
+  expect(html).not.toContain('Delete all archived threads')
+  expect(html).toContain('view-only')
 })

@@ -15,7 +15,7 @@ vi.mock('../src/components/settings-row', () => ({
 }))
 import { EnvironmentSettings, type ProviderEnvironment } from '../src/settings/EnvironmentSettings'
 
-const render = (status: ProviderEnvironmentStatus, cursorEnabled = true) =>
+const render = (status: ProviderEnvironmentStatus, cursorEnabled = true, readOnly = false) =>
   renderToStaticMarkup(
     createElement(EnvironmentSettings, {
       environment: {
@@ -27,6 +27,7 @@ const render = (status: ProviderEnvironmentStatus, cursorEnabled = true) =>
         load: async () => {},
         loading: false,
         error: null,
+        readOnly,
       } satisfies ProviderEnvironment,
       preferences: {
         ...DEFAULT_APP_PREFERENCES,
@@ -63,5 +64,22 @@ it('offers a retry when saved values cannot be read', () => {
   const html = render({ state: 'unavailable', canAdminister: true, keys: { global: ['X'] } })
   expect(html).toContain('Unlock the credential store')
   expect(html).toContain('Try again')
+  expect(html).not.toContain('Copy as .env')
+})
+
+it('keeps a cached viewer environment read-only even when an earlier snapshot allowed administration', () => {
+  const html = render(
+    {
+      state: 'available',
+      canAdminister: true,
+      keys: { global: ['TOKEN'] },
+      values: { global: [{ key: 'TOKEN', value: 'draft-secret' }] },
+    },
+    true,
+    true,
+  )
+  expect(html).toContain('view-only')
+  expect(html).toContain('TOKEN')
+  expect(html).not.toContain('draft-secret')
   expect(html).not.toContain('Copy as .env')
 })

@@ -24,6 +24,8 @@ export interface AgentRunner {
   reconnectMcp?(name: string): Promise<void>
   reloadMcp?(): Promise<void>
   setTools?(connection: McpConnection): void
+  /** Serves the runtime's client-terminal requests; given only to providers whose adapter enables `native.terminals`. */
+  setTerminals?(host: import('../providers/acpTerminals').AcpTerminalHost): void
   start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void>
   send(prompt: string, attachments?: Attachment[]): Promise<void>
   steer(prompt: string, attachments?: Attachment[]): Promise<void>

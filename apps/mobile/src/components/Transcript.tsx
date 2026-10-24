@@ -1,7 +1,7 @@
 import { translate } from '@ramu/shared/i18n'
 import { Helpers } from './Helpers'
 import { InteractiveContent } from './InteractiveContent'
-import { createContext, memo, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ActionSheetIOS, Alert, Image, Linking, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import type { Attachment } from '@ramu/shared/types'
@@ -70,6 +70,7 @@ export function ChatReferences({ chat, children }: { chat: Chat; children: React
 
 /** What a long-pressed message can do, as the desktop's selection menu: quote it into the message box, or ask an aside about it. */
 export const MessageMenu = createContext<{
+  readOnly?: boolean
   quote(text: string): void
   quoteNew(text: string): void
   edit(seq: number, text: string, files: Attachment[]): void
@@ -92,6 +93,8 @@ function MessageActions({
   children: ReactNode
 }) {
   const menu = useContext(MessageMenu)
+  const latestMenu = useRef(menu)
+  latestMenu.current = menu
   const open = () => {
     if (!text.trim()) return
     tap()
@@ -101,13 +104,23 @@ function MessageActions({
         ? ([
             ['Quote in reply', () => menu.quote(text)],
             ['Quote in new thread', () => menu.quoteNew(text)],
-            ...(from === 'user' && seq !== undefined
+            ...(!menu.readOnly && from === 'user' && seq !== undefined
               ? ([
-                  ['Edit and resend', () => menu.edit(seq, text, files ?? [])],
-                  ['Undo file changes from here', () => menu.undo(seq)],
+                  [
+                    'Edit and resend',
+                    () => !latestMenu.current?.readOnly && latestMenu.current?.edit(seq, text, files ?? []),
+                  ],
+                  ['Undo file changes from here', () => !latestMenu.current?.readOnly && latestMenu.current?.undo(seq)],
                 ] as [string, () => void][])
               : []),
-            ['Ask aside about this', () => menu.aside(text, from)],
+            ...(!menu.readOnly
+              ? ([
+                  [
+                    'Ask aside about this',
+                    () => !latestMenu.current?.readOnly && latestMenu.current?.aside(text, from),
+                  ],
+                ] as [string, () => void][])
+              : []),
           ] as [string, () => void][])
         : []),
     ]
@@ -123,7 +136,11 @@ function MessageActions({
       ])
   }
   return (
-    <Pressable onLongPress={open} delayLongPress={350} accessibilityHint="Long-press for Copy, Quote and Ask aside">
+    <Pressable
+      onLongPress={open}
+      delayLongPress={350}
+      accessibilityHint={menu?.readOnly ? 'Long-press for Copy and Quote' : 'Long-press for Copy, Quote and Ask aside'}
+    >
       {children}
     </Pressable>
   )

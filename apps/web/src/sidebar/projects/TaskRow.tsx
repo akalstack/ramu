@@ -21,7 +21,8 @@ import type { Task } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
 import { copyText } from '../../ipc'
 import { useContextMenu, type MenuEntry } from '../../Menu'
-import { useViewOnly } from '../../composer/useViewOnly'
+import { VIEW_ONLY_WRITE_NOTICE } from '../../composer/viewerAccess'
+import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
 import { DeleteThreadDialog } from '../../chat/DeleteThreadDialog'
 import { errorText } from '../../workspace/TaskPane'
 import { notifyError } from '../../chat/Notifications'
@@ -102,13 +103,15 @@ export function TaskRow({
   const done = !!task.doneAt
   const { initialSettings } = useModelSets()
   const [naming, setNaming] = useState(false)
-  const viewOnly = useViewOnly()
+  const { viewOnly, canWrite } = useHostWriteAccess()
   const titleRequest = useRef(false)
 
   const run = async (fn: () => Promise<unknown>) => {
+    if (!canWrite()) return
     setError(null)
     try {
       await animateThreadListChange(async () => {
+        if (!canWrite()) return
         await fn()
         await refresh()
       })
@@ -201,7 +204,9 @@ export function TaskRow({
           <Pencil size={14} /> {t(' Rename')}
         </>
       ),
-      onSelect: () => setRenaming(true),
+      onSelect: () => {
+        if (canWrite()) setRenaming(true)
+      },
     },
     {
       key: 'pin',
@@ -218,7 +223,9 @@ export function TaskRow({
             key: 'rename-workspace',
             label: t('Rename workspace…'),
             disabled: unavailable || host.status !== 'connected',
-            onSelect: () => setRenamingWorkspace({ host: host.id, openedOn: activeHost, workspace }),
+            onSelect: () => {
+              if (canWrite()) setRenamingWorkspace({ host: host.id, openedOn: activeHost, workspace })
+            },
           },
         ]
       : []),
@@ -239,7 +246,7 @@ export function TaskRow({
       // The model settings are this window's own host's, so naming stays with the host on screen.
       disabled: naming || task.titleGenerationState === 'pending' || !onScreen,
       onSelect: () => {
-        if (!onScreen || titleRequest.current) return
+        if (!canWrite() || !onScreen || titleRequest.current) return
         titleRequest.current = true
         setNaming(true)
         void run(() => host.invoke('tasks.generateTitle', task.id, initialSettings, true)).finally(() => {
@@ -308,12 +315,16 @@ export function TaskRow({
         </>
       ),
       danger: true,
-      onSelect: () => setDeleting(true),
+      onSelect: () => {
+        if (canWrite()) setDeleting(true)
+      },
     },
   ]
 
   // A view-only device may copy a thread's ID; everything else here changes the host and would be refused.
-  const shownItems = viewOnly ? items.filter((entry) => 'key' in entry && entry.key === 'copy-id') : items
+  const shownItems = viewOnly
+    ? items.filter((entry) => 'key' in entry && ['copy-id', 'close'].includes(entry.key))
+    : items
   const contextMenu = useContextMenu(`${task.title} actions`, group && !viewOnly ? groupItems : shownItems)
 
   const status = threadStatus(task, onScreen && !!ws?.unread.has(task.id), task.goalState)
@@ -356,7 +367,7 @@ export function TaskRow({
             open()
           }}
           onDoubleClick={() => {
-            if (!unavailable) setRenaming(true)
+            if (!unavailable && canWrite()) setRenaming(true)
           }}
           onKeyDown={(e) => {
             if (unavailable) return
@@ -367,8 +378,10 @@ export function TaskRow({
           {done && <Check size={14} className="flex-none text-muted-foreground" aria-label={t('Done')} />}
           {renaming ? (
             <InlineEdit
+              readOnly={viewOnly}
               value={task.title}
               onDone={(v) => {
+                if (v !== null && !canWrite()) return
                 setRenaming(false)
                 if (v && v !== task.title) void run(() => host.invoke('tasks.rename', task.id, v))
               }}
@@ -471,8 +484,9 @@ export function TaskRow({
         <WorkspaceNameDialog
           key={`${host.id}:${renamingWorkspace.workspace.id}`}
           workspace={renamingWorkspace.workspace}
-          online={host.status === 'connected'}
+          online={!viewOnly && host.status === 'connected'}
           onSave={async (name, before) => {
+            if (!canWrite()) throw new Error(t(VIEW_ONLY_WRITE_NOTICE))
             await host.invoke('workspaces.rename', renamingWorkspace.workspace.id, name, before)
             await refresh()
           }}

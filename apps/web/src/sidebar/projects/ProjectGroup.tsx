@@ -1,3 +1,5 @@
+import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
+import { VIEW_ONLY_WRITE_NOTICE } from '../../composer/viewerAccess'
 import { animateThreadListChange } from '../../workspace/threadListMotion'
 import { Button } from '@/components/desktop-button'
 import {
@@ -41,6 +43,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   useLanguage()
   const ws = useWorkspace()
   const host = useHost()
+  const { viewOnly, canWrite } = useHostWriteAccess()
   const repos = ws.repos[project.id] ?? []
   const { preferences } = useAppSettings()
   const recent = Math.min(preferences.recentChats, previewLimit ?? Infinity)
@@ -62,11 +65,12 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   const [hover, setHover] = useState(false)
   const active = ws.ui.activeTaskId === projectCtx(project.id) && !ws.composing
   const connect = async () => {
+    if (!canWrite()) return
     setError(null)
     try {
       // The native folder picker runs on this machine (see the plan ledger for other hosts).
       const dir = host.isLocal ? await invoke('repos.pick', 'repository') : await pickHostFolder(host.id)
-      if (!dir) return
+      if (!dir || !canWrite()) return
       await host.invoke('repos.add', project.id, dir)
       await ws.refresh()
     } catch (e) {
@@ -75,9 +79,11 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   }
 
   const act = async (fn: () => Promise<unknown>) => {
+    if (!canWrite()) return
     setError(null)
     try {
       await animateThreadListChange(async () => {
+        if (!canWrite()) return
         await fn()
         await ws.refresh()
       })
@@ -103,7 +109,9 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
           <Pencil size={14} /> {t(' Rename')}
         </>
       ),
-      onSelect: () => setRenaming(true),
+      onSelect: () => {
+        if (canWrite()) setRenaming(true)
+      },
     },
     {
       key: 'routing',
@@ -112,7 +120,9 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
           <Route size={14} /> {t(' Names for Auto…')}
         </>
       ),
-      onSelect: () => setRouting(true),
+      onSelect: () => {
+        if (canWrite()) setRouting(true)
+      },
     },
     { key: 'sep1', separator: true },
     {
@@ -170,6 +180,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
       onSelect: () =>
         void act(async () => {
           for (const t of tasks) {
+            if (!canWrite()) return
             await host.invoke('tasks.archive', t.id, true)
             ws.forgetTask(t.id)
           }
@@ -187,7 +198,10 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
     },
   ]
 
-  const contextMenu = useContextMenu(`${project.name} actions`, items)
+  const contextMenu = useContextMenu(
+    `${project.name} actions`,
+    viewOnly ? items.filter((entry) => entry.key === 'new') : items,
+  )
 
   return (
     <section
@@ -233,8 +247,10 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
           )}
           {renaming ? (
             <InlineEdit
+              readOnly={viewOnly}
               value={project.name}
               onDone={(v) => {
+                if (v !== null && !canWrite()) return
                 setRenaming(false)
                 if (v && v !== project.name) void act(() => host.invoke('projects.rename', project.id, v))
               }}
@@ -290,7 +306,9 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
       {routing && (
         <ProjectRoutingDialog
           project={project}
+          readOnly={viewOnly}
           onSave={async (aliases, description) => {
+            if (!canWrite()) throw new Error(t(VIEW_ONLY_WRITE_NOTICE))
             await host.invoke('projects.setRouting', project.id, aliases, description)
             await ws.refresh()
           }}

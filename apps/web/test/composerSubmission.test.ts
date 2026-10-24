@@ -1,4 +1,4 @@
-import { isValidElement, type ReactNode } from 'react'
+import { isValidElement, type ReactNode, type ComponentProps } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { FileContext } from '@ramu/shared/types'
 
@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   effects: [] as { deps: readonly unknown[]; cleanup?: () => void }[],
   pending: [] as (() => void)[],
   host: 'a',
+  viewOnly: false,
   scope: 'project:p',
   pinned: [{ repoId: 'repo', path: 'login.ts' }],
   context: [{ repoId: 'repo', path: 'login.ts', source: 'mention' }] as FileContext[],
@@ -85,9 +86,13 @@ vi.mock('../src/composer/ComposerSuggestions', () => ({
     clearPinned: state.cleared,
   }),
 }))
+vi.mock('../src/composer/useViewOnly', () => ({ useViewOnly: () => state.viewOnly }))
 import { Composer } from '../src/composer/Composer'
 
-function RenderComposer(onSubmit: (context: FileContext[]) => Promise<void>) {
+function RenderComposer(
+  onSubmit: (context: FileContext[]) => Promise<void>,
+  options: Partial<ComponentProps<typeof Composer>> = {},
+) {
   state.refIndex = state.valueIndex = state.effectIndex = 0
   const tree = Composer({
     value: 'Please inspect',
@@ -97,6 +102,7 @@ function RenderComposer(onSubmit: (context: FileContext[]) => Promise<void>) {
     placeholder: 'Message',
     submitLabel: 'Send',
     onAttachmentsChange() {},
+    ...options,
   })
   while (state.pending.length) state.pending.shift()!()
   return tree
@@ -149,6 +155,7 @@ beforeEach(() => {
   state.effects = []
   state.pending = []
   state.host = 'a'
+  state.viewOnly = false
   state.scope = 'project:p'
   state.pinned = [{ repoId: 'repo', path: 'login.ts' }]
   state.cleared.mockClear()
@@ -240,4 +247,36 @@ it('does not hide the new host draft while the previous host is sending', () => 
   send(RenderComposer(submit))
   state.host = 'b'
   expect(find(RenderComposer(submit), (props) => typeof props.onKeyDown === 'function')?.value).toBe('Please inspect')
+})
+
+it('disables Stop, Resume and attachment uploads when the host reports viewer access', () => {
+  state.viewOnly = true
+  state.pinned = []
+  const stopped = RenderComposer(async () => {}, { value: '', chat: true, stop: { active: true, onStop: vi.fn() } })
+  expect(find(stopped, (props) => props['aria-label'] === 'Stop')?.disabled).toBe(true)
+  expect(find(stopped, (props) => props['aria-label'] === 'Attach files')?.disabled).toBe(true)
+  const resume = RenderComposer(async () => {}, { value: '', chat: true, resume: { active: true, onResume: vi.fn() } })
+  expect(find(resume, (props) => props['aria-label'] === 'Resume')?.disabled).toBe(true)
+  state.viewOnly = false
+  const owner = RenderComposer(async () => {}, { value: '', chat: true, stop: { active: true, onStop: vi.fn() } })
+  expect(find(owner, (props) => props['aria-label'] === 'Stop')?.disabled).toBe(false)
+})
+
+it('blocks both submission callbacks for a viewer even if an event reaches a disabled control', async () => {
+  state.viewOnly = true
+  const submit = vi.fn(),
+    alternate = vi.fn()
+  const tree = RenderComposer(submit, { onAlternateSubmit: alternate, alternateLabel: 'Steer' })
+  send(tree)
+  const input = find(tree, (props) => typeof props.onKeyDown === 'function')!
+  ;(input.onKeyDown as (event: unknown) => void)({
+    key: 'Enter',
+    metaKey: true,
+    nativeEvent: { isComposing: false },
+    preventDefault: vi.fn(),
+  })
+  await settled()
+  expect(submit).not.toHaveBeenCalled()
+  expect(alternate).not.toHaveBeenCalled()
+  expect(state.cleared).not.toHaveBeenCalled()
 })

@@ -5,7 +5,7 @@ import { dirname, join, resolve, isAbsolute } from 'node:path'
 import { tmpdir } from 'node:os'
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { NO_PROJECT, type ManagedSkill, type SkillInstallPreview } from '@ramu/shared/types'
+import { NO_PROJECT, type ManagedSkill, type SkillInstallPreview, type SkillCopyUpdate } from '@ramu/shared/types'
 import type { LearningService } from './learning'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
@@ -30,6 +30,7 @@ export const skillInstallInput = z.object({
   updatingId: z.string().max(100).optional(),
 })
 type Input = z.infer<typeof skillInstallInput>
+type AuthoredSkillInput = { name: string; description: string; content: string; projectId: string | null }
 type Staged = {
   preview: SkillInstallPreview
   files: Record<string, string>
@@ -224,6 +225,229 @@ export class ExternalSkills {
     this.staged.delete(id)
     return skill
   }
+  private checkName(name: string, projectId: string | null, except?: string) {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || name.length > 64)
+      throw new Error('A skill name is short, lowercase and uses hyphens, like review-checklist.')
+    if (projectId && !this.workspace.listProjects().some((p) => p.id === projectId)) throw new Error('Unknown project.')
+    if (this.learning.skills().some((s) => s.id !== except && s.name === name && s.projectId === projectId))
+      throw new Error('A skill with this name already exists in that scope.')
+  }
+
+  /** A skill the person wrote (or copied) themselves: pinned, so learning never rewrites it, and not tied to a source. */
+  private authored(id: string): ManagedSkill {
+    const skill = this.learning.skills().find((s) => s.id === id)
+    if (!skill || skill.installation || skill.changedBy !== 'user' || skill.sourceSessionId)
+      throw new Error('Only a skill you created or copied can be edited here. Copy it first.')
+    return skill
+  }
+
+  /** Writes a new skill authored by the person. It is delivered like any managed skill and never changed by learning. */
+  create(input: AuthoredSkillInput): ManagedSkill {
+    return this.createAuthored(input)
+  }
+  private createAuthored(
+    input: AuthoredSkillInput,
+    extras: Pick<ManagedSkill, 'bundle' | 'providers' | 'copiedFrom'> = {},
+  ): ManagedSkill {
+    const description = input.description.trim()
+    if (!description || description.length > 4000)
+      throw new Error('Describe when to use the skill in 1 to 4000 characters.')
+    const content = input.content.trim()
+    if (!content || content.length > 24_000) throw new Error('Instructions must be 1 to 24,000 characters.')
+    this.checkName(input.name, input.projectId)
+    const now = Date.now()
+    const skill: ManagedSkill = {
+      id: randomUUID(),
+      projectId: input.projectId,
+      name: input.name,
+      description,
+      content,
+      pinned: true,
+      status: 'active',
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+      lastUsedAt: null,
+      useCount: 0,
+      sourceSessionId: '',
+      sourceSeq: 0,
+      changedBy: 'user',
+      ...extras,
+    }
+    this.learning.write(skill)
+    return skill
+  }
+
+  /**
+   * Edit a copy: an installed or learned skill is never edited in place. The copy is a separate, pinned skill named
+   * `name` (default `<name>-copy`) with the same instructions, approved files and provider selection. The original
+   * keeps updating from its source untouched; a copy owns its snapshot, including when copied again.
+   */
+  fork(id: string, name?: string): ManagedSkill {
+    const source = this.learning.skills().find((s) => s.id === id)
+    if (!source) throw new Error('Unknown skill.')
+    // Pick a free `-copy`, `-copy-2`, ... name unless the person gave one.
+    let chosen = name
+    if (!chosen) {
+      const taken = new Set(
+        this.learning
+          .skills()
+          .filter((s) => s.projectId === source.projectId)
+          .map((s) => s.name),
+      )
+      for (let n = 1; ; n++) {
+        const suffix = n === 1 ? '-copy' : `-copy-${n}`
+        chosen = `${source.name.slice(0, 64 - suffix.length).replace(/-+$/, '')}${suffix}`
+        if (!taken.has(chosen)) break
+      }
+    }
+    const bundle = source.installation ?? source.bundle
+    return this.createAuthored(
+      { name: chosen, description: source.description, content: source.content, projectId: source.projectId },
+      {
+        copiedFrom: { id: source.id, revision: source.revision },
+        ...(source.providers ? { providers: [...source.providers] } : {}),
+        ...(bundle ? { bundle: { markdown: bundle.markdown, files: { ...bundle.files } } } : {}),
+      },
+    )
+  }
+
+  /** Saves a new revision of a skill the person created or copied, refusing if it changed since they opened it. */
+  edit(id: string, changes: { description?: string; content?: string }, expectedRevision: number): ManagedSkill {
+    const skill = this.authored(id)
+    if (skill.revision !== expectedRevision)
+      throw new Error('This skill changed since you opened it. Reload and try again.')
+    const description = (changes.description ?? skill.description).trim()
+    const content = (changes.content ?? skill.content).trim()
+    if (!description || description.length > 4000)
+      throw new Error('Describe when to use the skill in 1 to 4000 characters.')
+    if (!content || content.length > 24_000) throw new Error('Instructions must be 1 to 24,000 characters.')
+    const next = { ...skill, description, content, revision: skill.revision + 1, updatedAt: Date.now() }
+    this.learning.write(next)
+    return next
+  }
+
+  private copySource(id: string) {
+    const copy = this.authored(id)
+    const origin = copy.copiedFrom
+    if (!origin) throw new Error('This copy has no recorded source revision. Update its instructions manually.')
+    const source = this.learning.skills().find((skill) => skill.id === origin.id)
+    if (!source) throw new Error('The source skill was removed. This copy can still be edited independently.')
+    if (source.projectId !== copy.projectId)
+      throw new Error('The source skill moved to another scope. Update this copy manually.')
+    if (source.content.trim().length > 24_000)
+      throw new Error('The updated source exceeds the editable copy instruction limit. Update this copy manually.')
+    const base = this.learning.history(source.id).find((skill) => skill.revision === origin.revision)
+    if (!base) throw new Error('The original source revision is unavailable. Update this copy manually.')
+    return { copy, source, base }
+  }
+
+  copyUpdate(id: string): SkillCopyUpdate {
+    const { copy, source, base } = this.copySource(id)
+    const files = this.mergeCopyFiles(copy, source, base)
+    let remaining = 64 * 1024
+    const version = (skill: ManagedSkill, path: string) => {
+      const bundle = skill.installation ?? skill.bundle
+      const data = path === 'SKILL.md' ? bundle?.markdown : bundle?.files[path]
+      if (data === undefined) return null
+      const bytes = Buffer.from(data, path === 'SKILL.md' ? 'utf8' : 'base64')
+      const text = bytes.length <= 8192 && bytes.length <= remaining ? bytes.toString('utf8') : undefined
+      // eslint-disable-next-line no-control-regex -- Binary control bytes cannot be displayed as skill text.
+      const binary = text !== undefined && /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(text)
+      const readable = text !== undefined && Buffer.from(text).equals(bytes) && !binary
+      if (readable) remaining -= bytes.length
+      return { bytes: bytes.length, ...(readable ? { text } : {}) }
+    }
+    const fileVersions = Object.fromEntries(
+      files.changes.map(({ path }) => [
+        path,
+        {
+          before: version(base, path),
+          local: version(copy, path),
+          source: version(source, path),
+        },
+      ]),
+    )
+    return {
+      id,
+      revision: copy.revision,
+      sourceRevision: source.revision,
+      sourceName: source.name,
+      description: mergeCopyText(base.description, copy.description, source.description),
+      content: mergeCopyText(base.content.trim(), copy.content.trim(), source.content.trim()),
+      files: files.changes,
+      fileVersions,
+    }
+  }
+
+  private mergeCopyFiles(
+    copy: ManagedSkill,
+    source: ManagedSkill,
+    base: ManagedSkill,
+    choices: Record<string, 'copy' | 'source'> = {},
+  ) {
+    const bundle = (skill: ManagedSkill) => skill.installation ?? skill.bundle
+    const old = bundle(base),
+      local = bundle(copy),
+      incoming = bundle(source)
+    const changes: SkillCopyUpdate['files'] = []
+    const merge = (path: string, before: string | undefined, mine: string | undefined, theirs: string | undefined) => {
+      const conflict = mine !== before && theirs !== before && mine !== theirs
+      const value = conflict ? (choices[path] === 'source' ? theirs : mine) : mine === before ? theirs : mine
+      if (mine !== value || conflict)
+        changes.push({
+          path,
+          conflict,
+          change: value === undefined ? 'removed' : mine === undefined ? 'added' : 'changed',
+        })
+      return value
+    }
+    const markdown = merge('SKILL.md', old?.markdown, local?.markdown, incoming?.markdown)
+    const files: Record<string, string> = {}
+    const paths = new Set([
+      ...Object.keys(old?.files ?? {}),
+      ...Object.keys(local?.files ?? {}),
+      ...Object.keys(incoming?.files ?? {}),
+    ])
+    for (const path of paths) {
+      if (path === 'SKILL.md') continue
+      const value = merge(path, old?.files[path], local?.files[path], incoming?.files[path])
+      if (value !== undefined) files[path] = value
+    }
+    return { bundle: markdown ? { markdown, files } : undefined, changes }
+  }
+
+  applyCopyUpdate(
+    id: string,
+    revision: number,
+    sourceRevision: number,
+    changes: { description: string; content: string; files: Record<string, 'copy' | 'source'> },
+  ): ManagedSkill {
+    const { copy, source, base } = this.copySource(id)
+    if (copy.revision !== revision || source.revision !== sourceRevision)
+      throw new Error('The copy or source changed during review. Review the update again.')
+    const merged = this.mergeCopyFiles(copy, source, base, changes.files)
+    for (const file of merged.changes)
+      if (file.conflict && !Object.hasOwn(changes.files, file.path))
+        throw new Error('Choose which version to keep for each conflicting file.')
+    const description = changes.description.trim(),
+      content = changes.content.trim()
+    if (!description || description.length > 4000 || !content || content.length > 24_000)
+      throw new Error('Provide a description up to 4000 characters and instructions up to 24000 characters.')
+    const next: ManagedSkill = {
+      ...copy,
+      description,
+      content,
+      bundle: merged.bundle,
+      copiedFrom: { id: source.id, revision: source.revision },
+      revision: copy.revision + 1,
+      updatedAt: Date.now(),
+      changedBy: 'user',
+    }
+    this.learning.write(next)
+    return next
+  }
+
   cancel(id: string, owner?: string) {
     if (this.staged.get(id)?.owner === owner) this.staged.delete(id)
   }
@@ -240,7 +464,7 @@ export class ExternalSkills {
     this.learning.write({ ...skill, projectId, revision: skill.revision + 1, updatedAt: Date.now() })
   }
   remove(id: string) {
-    this.installed(id)
+    if (!this.learning.skills().some((s) => s.id === id && s.installation)) this.authored(id)
     this.learning.remove(id)
   }
   update(id: string, owner?: string) {
@@ -473,4 +697,9 @@ export class ExternalSkills {
         }),
     )
   }
+}
+
+function mergeCopyText(before: string, local: string, source: string) {
+  const conflict = local !== before && source !== before && local !== source
+  return { before, local, source, conflict, proposed: local === before ? source : local }
 }

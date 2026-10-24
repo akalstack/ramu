@@ -1,5 +1,6 @@
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { Check } from 'lucide-react'
-import { useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { SettingsScopeContext } from './SettingsScope'
 import { SETTINGS_FORM_CLASS } from './constants'
 import { ownHostId } from '../hosts'
@@ -18,16 +19,28 @@ import { errorText } from '../lib/errors'
 type Status = ReturnType<RamuMethods['computer.status']>
 
 /** Turning this on lets you grant a thread the main display. Nothing is shared until you do, per thread. */
-export function ComputerSettings({ hostId, awakeControl }: { hostId: string; awakeControl?: ReactNode }) {
+export function ComputerSettings({
+  hostId,
+  awakeControl,
+  readOnly = false,
+}: {
+  hostId: string
+  awakeControl?: ReactNode
+  readOnly?: boolean
+}) {
   useLanguage()
+  const access = useRef({ hostId, readOnly })
+  access.current = { hostId, readOnly }
+  const canWrite = useCallback(() => access.current.hostId === hostId && !access.current.readOnly, [hostId])
   const [status, setStatus] = useState<Status | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [revision, setRevision] = useState(0)
   const [setupStarted, setSetupStarted] = useState(false)
   const refresh = useCallback(async () => {
+    if (readOnly || access.current.readOnly || access.current.hostId !== hostId) return
     setStatus(await invokeOn(hostId, 'computer.status'))
-  }, [hostId])
+  }, [hostId, readOnly])
   useEffect(() => {
     let active = true
     setStatus(null)
@@ -51,7 +64,7 @@ export function ComputerSettings({ hostId, awakeControl }: { hostId: string; awa
     }
   }, [status?.apps?.available, refresh])
   const toggle = async () => {
-    if (!status) return
+    if (!canWrite() || !status) return
     setBusy(true)
     setError('')
     try {
@@ -64,6 +77,7 @@ export function ComputerSettings({ hostId, awakeControl }: { hostId: string; awa
     }
   }
   const install = async () => {
+    if (!canWrite()) return
     setBusy(true)
     setError('')
     try {
@@ -88,6 +102,12 @@ export function ComputerSettings({ hostId, awakeControl }: { hostId: string; awa
       setBusy(false)
     }
   }
+  if (readOnly)
+    return (
+      <p role="status" className="text-caption text-muted-foreground">
+        {t(VIEW_ONLY_WRITE_NOTICE)}
+      </p>
+    )
   return (
     <>
       <SettingsGroupTitle>{t('Agent access')}</SettingsGroupTitle>
@@ -157,6 +177,7 @@ export function ComputerSettings({ hostId, awakeControl }: { hostId: string; awa
             checked={status.globalPointer}
             disabled={busy}
             onCheckedChange={async (checked) => {
+              if (!canWrite()) return
               setBusy(true)
               setError('')
               try {
@@ -175,9 +196,10 @@ export function ComputerSettings({ hostId, awakeControl }: { hostId: string; awa
       <LockedUseRow
         key={`locked:${revision}`}
         hostId={hostId}
+        canWrite={canWrite}
         visible={!!status?.enabled && !!status.apps?.available}
       />
-      <ScreenSharing key={`sharing:${revision}`} hostId={hostId} enabled={!!status?.enabled} />
+      <ScreenSharing key={`sharing:${revision}`} hostId={hostId} canWrite={canWrite} enabled={!!status?.enabled} />
       <p className="m-[0_0_12px] text-caption text-muted-foreground">
         {t(
           'macOS asks for Screen Recording and Accessibility the first time. Display control pauses when you use the mouse or keyboard where supported. Choose Take control to step in. Turning this off ends every thread’s access.',
@@ -195,13 +217,17 @@ export function ComputerSettings({ hostId, awakeControl }: { hostId: string; awa
           size="sm"
           disabled={busy || !status}
           onClick={async () => {
+            if (!canWrite()) return
             setBusy(true)
             setError('')
             try {
               await invokeOn(hostId, 'computer.resetDefaults')
               if (hostId === ownHostId()) {
                 const shared = await ramu.invoke('computers.screenSharing')
-                for (const id of shared) await ramu.invoke('computers.setScreenSharing', id, false)
+                for (const id of shared) {
+                  if (!canWrite()) return
+                  await ramu.invoke('computers.setScreenSharing', id, false)
+                }
               }
               await refresh()
               setRevision((value) => value + 1)
@@ -225,24 +251,27 @@ export function ComputerSettings({ hostId, awakeControl }: { hostId: string; awa
 }
 
 /** Both sides of using another computer's screen: this computer opts in per host, and this host's owner allows devices. */
-function ScreenSharing({ hostId, enabled }: { hostId: string; enabled: boolean }) {
+function ScreenSharing({ hostId, enabled, canWrite }: { hostId: string; enabled: boolean; canWrite: () => boolean }) {
   useLanguage()
   const computers = useComputers()
   const [shared, setShared] = useState<string[]>([])
   const [devices, setDevices] = useState<ReturnType<RamuMethods['computer.runtimeDevices']>>([])
   const [error, setError] = useState('')
   const load = useCallback(async () => {
+    if (!canWrite()) return
     try {
       setShared(await ramu.invoke('computers.screenSharing'))
+      if (!canWrite()) return
       setDevices(enabled ? await invokeOn(hostId, 'computer.runtimeDevices') : [])
     } catch (reason) {
       setError(t(errorText(reason)))
     }
-  }, [hostId, enabled])
+  }, [hostId, enabled, canWrite])
   useEffect(() => {
     void load()
   }, [load])
   const act = async (work: () => Promise<unknown>) => {
+    if (!canWrite()) return
     setError('')
     try {
       await work()
@@ -301,13 +330,14 @@ type LockedUse = ReturnType<RamuMethods['computer.lockedUse']>
  * Working through a locked screen. It installs signed components into macOS sign-in and needs an administrator password
  * at the Mac, so it is a two-step choice that explains that first, and it can be turned off again here.
  */
-function LockedUseRow({ hostId, visible }: { hostId: string; visible: boolean }) {
+function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: boolean; canWrite: () => boolean }) {
   useLanguage()
   const [state, setState] = useState<LockedUse | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [waiting, setWaiting] = useState(false)
   const [error, setError] = useState('')
   const read = useCallback(async () => {
+    if (!canWrite()) return
     try {
       const next = await invokeOn(hostId, 'computer.lockedUse')
       setState(next)
@@ -315,7 +345,7 @@ function LockedUseRow({ hostId, visible }: { hostId: string; visible: boolean })
     } catch (reason) {
       setError(t(errorText(reason)))
     }
-  }, [hostId])
+  }, [hostId, canWrite])
   useEffect(() => {
     if (visible) void read()
   }, [visible, read])
@@ -331,6 +361,7 @@ function LockedUseRow({ hostId, visible }: { hostId: string; visible: boolean })
   }, [waiting, read])
   if (!visible || !state) return null
   const act = async (work: () => Promise<LockedUse>, after?: () => void) => {
+    if (!canWrite()) return
     setError('')
     try {
       setState(await work())
@@ -413,7 +444,12 @@ export function ComputerUseSettings(props: DraftProps) {
     )
   return (
     <div className={SETTINGS_FORM_CLASS}>
-      <ComputerSettings key={`computer:${hostId}`} hostId={hostId} awakeControl={<KeepAwakeSettings {...props} />} />
+      <ComputerSettings
+        key={`computer:${hostId}`}
+        hostId={hostId}
+        readOnly={!!scope?.targets.find((target) => target.id === hostId)?.viewOnly}
+        awakeControl={<KeepAwakeSettings {...props} />}
+      />
     </div>
   )
 }

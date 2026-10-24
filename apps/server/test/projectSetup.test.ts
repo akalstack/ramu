@@ -344,3 +344,20 @@ describe('skills shared with every provider and account', () => {
     expect(() => copySharedSkill(join(root, 'src'), join(root, 'out/other'), 'ramu-other')).toThrow(/symlink/)
   })
 })
+
+it('reports an unusable server on its own and still loads the rest of its file', () => {
+  put(
+    join(root, 'api/.mcp.json'),
+    JSON.stringify({ mcpServers: { broken: { type: 'sse' }, docs: { url: 'https://docs/mcp' } } }),
+  )
+  put(
+    join(home, '.codex/config.toml'),
+    ['[mcp_servers.ok]', 'command = "npx"', '[mcp_servers.empty]', 'startup_timeout_sec = 5'].join('\n'),
+  )
+  const setup = discover(['api'])
+  expect(setup.mcp.map((s) => s.name).sort()).toEqual(['docs', 'ok'])
+  expect(setup.diagnostics.map((d) => d.message).sort()).toEqual([
+    'Server "broken" has neither a url nor a command, so Ramu cannot share it.',
+    'Server "empty" has neither a url nor a command, so Ramu cannot share it.',
+  ])
+})

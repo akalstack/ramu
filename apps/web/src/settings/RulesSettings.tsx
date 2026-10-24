@@ -1,3 +1,4 @@
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
@@ -27,7 +28,11 @@ function RuleEditor({
   projects,
   onClose,
   onSaved,
+  readOnly = false,
+  canWrite = () => true,
 }: {
+  readOnly?: boolean
+  canWrite?: () => boolean
   rule: Rule | null
   /** Every saved rule, to warn about a duplicate before saving. */
   rules: Rule[]
@@ -37,6 +42,10 @@ function RuleEditor({
 }) {
   useLanguage()
   const invoke = useSettingsInvoke()
+  const settingsScope = useContext(SettingsScopeContext)
+  const hostKey = settingsScope?.primaryId ?? ''
+  const access = useRef(readOnly)
+  access.current = readOnly
   const [name, setName] = useState(rule?.name ?? '')
   const [body, setBody] = useState(rule?.body ?? '')
   const [projectId, setProjectId] = useState(rule?.projectId ?? ALL)
@@ -49,9 +58,9 @@ function RuleEditor({
   const form = useRef<HTMLFormElement>(null)
   const id = useId()
   const history = useQuery({
-    queryKey: ['rule-history', rule?.id, rule?.revision],
+    queryKey: ['rule-history', hostKey, rule?.id, rule?.revision],
     queryFn: () => invoke('rules.history', rule!.id),
-    enabled: !!rule,
+    enabled: !!rule && !readOnly,
   })
   const duplicate = useMemo(() => {
     const draft = {
@@ -68,7 +77,7 @@ function RuleEditor({
   }, [rule?.id, rules, name, body, projectId, provider, activation, enabled])
   const invalid = !name.trim() || name.length > RULE_NAME_LIMIT || !body.trim() || body.length > RULE_BODY_LIMIT
   const save = async () => {
-    if (invalid || pending.current) return
+    if (access.current || !canWrite() || invalid || pending.current) return
     pending.current = true
     setBusy(true)
     setError(null)
@@ -92,7 +101,7 @@ function RuleEditor({
     }
   }
   const restore = async (revision: RuleRevision) => {
-    if (!rule || pending.current) return
+    if (access.current || !canWrite() || !rule || pending.current) return
     pending.current = true
     setBusy(true)
     setError(null)
@@ -111,14 +120,17 @@ function RuleEditor({
     <Dialog
       title={rule ? t('Edit rule') : t('New rule')}
       confirmLabel={t('Save')}
-      confirmDisabled={invalid}
+      confirmDisabled={readOnly || invalid}
       busy={busy}
       error={error}
-      onConfirm={() => form.current?.requestSubmit()}
+      onConfirm={() => {
+        if (!access.current && canWrite()) form.current?.requestSubmit()
+      }}
       onCancel={() => {
         if (!pending.current) onClose()
       }}
     >
+      {readOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <form
         ref={form}
         onSubmit={(event) => {
@@ -129,7 +141,7 @@ function RuleEditor({
         <p>
           {t('Rules are instructions for how agents work. They never grant permissions; use Permissions for access.')}
         </p>
-        <fieldset disabled={busy} className="m-0 flex flex-col gap-4 border-0 p-0">
+        <fieldset disabled={readOnly || busy} className="m-0 flex flex-col gap-4 border-0 p-0">
           <Field>
             <FieldLabel htmlFor={`${id}-name`}>{t('Name')}</FieldLabel>
             <Input
@@ -213,7 +225,7 @@ function RuleEditor({
                   {t('Revision {0}', { '0': String(entry.revision) })} · {timeAgo(entry.at)}
                 </span>
                 {entry.revision !== rule.revision && (
-                  <Button variant="ghost" size="xs" disabled={busy} onClick={() => void restore(entry)}>
+                  <Button variant="ghost" size="xs" disabled={readOnly || busy} onClick={() => void restore(entry)}>
                     {t('Restore')}
                   </Button>
                 )}
@@ -233,7 +245,11 @@ export function RulesSettings() {
     on = useSettingsEvents()
   const scope = useContext(SettingsScopeContext)
   const hostKey = scope?.primaryId ?? ''
-  const ready = !scope || (scope.ready && !scope.stale)
+  const viewOnly = scope?.targets?.some((target) => target.viewOnly) ?? false
+  const access = useRef({ hostKey, viewOnly })
+  access.current = { hostKey, viewOnly }
+  const allowed = () => access.current.hostKey === hostKey && !access.current.viewOnly
+  const ready = !viewOnly && (!scope || (scope.ready && !scope.stale))
   const rules = useQuery({ queryKey: ['rules', hostKey], queryFn: () => invoke('rules.list'), enabled: ready })
   const projects = useQuery({
     queryKey: ['rule-projects', hostKey],
@@ -254,6 +270,7 @@ export function RulesSettings() {
   const duplicates = useMemo(() => ruleDuplicates(list), [list])
   const costs = useMemo(() => ruleScopeCosts(list), [list])
   const act = async (work: () => Promise<unknown>) => {
+    if (!allowed()) return
     setError(null)
     try {
       await work()
@@ -265,6 +282,7 @@ export function RulesSettings() {
   return (
     <>
       <SettingsGroupTitle className="mt-8">{t('Rules')}</SettingsGroupTitle>
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <p className={`${CAPTION} mb-4`}>
         {t('Instructions for how agents work, sent at the start of a thread. They never grant permissions.')}
       </p>
@@ -307,6 +325,7 @@ export function RulesSettings() {
                 <Switch
                   aria-label={t('{0} enabled', { '0': rule.name })}
                   checked={rule.enabled}
+                  disabled={viewOnly}
                   onCheckedChange={(enabled) =>
                     void act(() =>
                       invoke('rules.save', {
@@ -322,13 +341,22 @@ export function RulesSettings() {
                     )
                   }
                 />
-                <Button variant="ghost" size="xs" onClick={() => setEditing(rule)}>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  disabled={viewOnly}
+                  onClick={() => {
+                    if (allowed()) setEditing(rule)
+                  }}
+                >
                   {t('Edit')}
                 </Button>
                 <Button
                   variant="ghost"
                   size="xs"
+                  disabled={viewOnly}
                   onClick={() => {
+                    if (!allowed()) return
                     if (confirm(t('Delete “{name}”?', { name: rule.name })))
                       void act(() => invoke('rules.remove', rule.id))
                   }}
@@ -348,13 +376,22 @@ export function RulesSettings() {
       </SettingsCardList>
       {rules.data?.length === 0 && <p className={CAPTION}>{t('No rules yet.')}</p>}
       <div className="mt-3">
-        <Button variant="secondary" size="sm" onClick={() => setEditing('new')}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={viewOnly}
+          onClick={() => {
+            if (allowed()) setEditing('new')
+          }}
+        >
           {t('New rule')}
         </Button>
       </div>
       {editing && (
         <RuleEditor
           key={editing === 'new' ? 'new' : `${editing.id}:${editing.revision}`}
+          readOnly={viewOnly}
+          canWrite={allowed}
           rule={editing === 'new' ? null : editing}
           rules={list}
           projects={projects.data ?? []}

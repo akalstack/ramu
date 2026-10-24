@@ -1,3 +1,5 @@
+import { useHostWriteAccess } from '../composer/useHostWriteAccess'
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useState } from 'react'
 import { readRemovalCommands } from '@ramu/shared/chat/taskRemoval'
 import { Button } from '@/components/desktop-button'
@@ -14,6 +16,7 @@ import { SETTINGS_FORM_CLASS } from './constants'
 export function ArchivedThreads() {
   useLanguage()
   const { invoke } = useHost()
+  const { viewOnly, canWrite } = useHostWriteAccess()
   const ws = useWorkspace()
   const [clearingArchived, setClearingArchived] = useState(false)
   const [clearBusy, setClearBusy] = useState(false)
@@ -36,11 +39,12 @@ export function ArchivedThreads() {
           />
         ))}
       </div>
-      {archivedChats.length > 0 && (
+      {archivedChats.length > 0 && !viewOnly && (
         <Button
           variant="outline"
           className="mt-3 self-start"
           onClick={() => {
+            if (!canWrite()) return
             setClearError(null)
             setClearingArchived(true)
           }}
@@ -48,11 +52,13 @@ export function ArchivedThreads() {
           {t('Delete all archived threads')}
         </Button>
       )}
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       {clearingArchived && (
         <Dialog
           title={t('Delete {0} archived threads?', { '0': archivedChats.length })}
           confirmLabel={t('Delete all')}
           danger
+          confirmDisabled={viewOnly}
           busy={clearBusy}
           error={clearError}
           onCancel={() => {
@@ -60,6 +66,7 @@ export function ArchivedThreads() {
             setClearError(null)
           }}
           onConfirm={async () => {
+            if (!canWrite()) return
             setClearBusy(true)
             setClearError(null)
             try {
@@ -69,6 +76,7 @@ export function ArchivedThreads() {
                   t('Some archived threads have background commands. Review deletion from each thread first.'),
                 )
               for (const task of archivedChats) {
+                if (!canWrite()) return
                 await invoke('tasks.delete', task.id, false)
                 ws.forgetTask(task.id)
               }

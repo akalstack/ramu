@@ -1,3 +1,4 @@
+import { scheduleWriteProblem } from './scheduleModel'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
 import type {
@@ -87,6 +88,15 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
     })
     return () => sub.remove()
   }, [])
+
+  const requireScheduleWrite = (id: string) => {
+    const current = storeRef.current
+    const problem = scheduleWriteProblem(
+      current.computers.find((computer) => computer.id === id),
+      current.language,
+    )
+    if (problem) throw new Error(problem)
+  }
 
   const recapsOn = (id: string) => store.appPreferences[id]?.recapsEnabled !== false
 
@@ -222,24 +232,31 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
       discussSummary: (id, summaryId, text, settings) =>
         call(id, (invoke) => invoke(id, 'summaries.discuss', summaryId, text, settings)),
       saveSchedule: async (id, input, scheduleId) => {
+        requireScheduleWrite(id)
         const saved = await call(id, (invoke) => invoke(id, 'schedules.save', input, scheduleId))
         await load(id, ['schedules'])
         return saved
       },
       pauseSchedule: async (id, scheduleId, paused) => {
+        requireScheduleWrite(id)
         await call(id, (invoke) => invoke(id, 'schedules.pause', scheduleId, paused))
         await load(id, ['schedules'])
       },
       deleteSchedule: async (id, scheduleId) => {
+        requireScheduleWrite(id)
         await call(id, (invoke) => invoke(id, 'schedules.delete', scheduleId))
         await load(id, ['schedules'])
       },
       runScheduleNow: async (id, scheduleId) => {
+        requireScheduleWrite(id)
         const run = await call(id, (invoke) => invoke(id, 'schedules.runNow', scheduleId))
         await Promise.all([load(id, ['schedules']), storeRef.current.refresh(id).catch(() => {})])
         return run
       },
-      previewRule: (id, rule, timezone) => call(id, (invoke) => invoke(id, 'schedules.preview', rule, timezone)),
+      previewRule: async (id, rule, timezone) => {
+        requireScheduleWrite(id)
+        return call(id, (invoke) => invoke(id, 'schedules.preview', rule, timezone))
+      },
     }
     return api
     // eslint-disable-next-line react-hooks/exhaustive-deps

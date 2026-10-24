@@ -1,4 +1,4 @@
-import type { RamuTheme } from '@ramu/shared/theme'
+import type { RamuTheme, ThemeVariant } from '@ramu/shared/theme'
 import { resolvedAppearance, type ResolvedAppearance } from '../appearance'
 
 /**
@@ -143,7 +143,12 @@ export const editorThemeName = (appearance: 'light' | 'dark' = resolvedAppearanc
 
 /** Ramu's editor colors with the surfaces, text and accent taken from the theme. */
 export function editorColorsFor(theme: RamuTheme, appearance: ResolvedAppearance): Record<string, string> {
-  const c = theme[appearance].colors
+  return editorColorsForVariant(theme[appearance], appearance)
+}
+
+/** The same workbench mapping for an isolated candidate preview. */
+export function editorColorsForVariant(variant: ThemeVariant, appearance: ResolvedAppearance): Record<string, string> {
+  const c = variant.colors
   const widget = c.raised
   return {
     ...(appearance === 'light' ? RAMU_EDITOR_COLORS_LIGHT : RAMU_EDITOR_COLORS),

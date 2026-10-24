@@ -1,3 +1,4 @@
+import { RowButton } from '@/components/row-button'
 import { useEffect, useRef, useState } from 'react'
 import type { BackgroundTerminalInfo } from '@ramu/shared/api'
 import { Button } from '@/components/desktop-button'
@@ -123,9 +124,10 @@ export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof
         <ul className="m-0 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
           {terminals.map((terminal) => (
             <li key={terminal.id} className="flex min-h-8 items-center gap-2 text-control">
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 cursor-pointer flex-col items-start border-0 bg-transparent p-0 text-left text-inherit disabled:cursor-default"
+              <RowButton
+                size="sm"
+                stacked
+                className="w-auto flex-1 px-0 py-1"
                 disabled={stale}
                 title={t('Open output')}
                 onClick={() => open(terminal)}
@@ -146,7 +148,7 @@ export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof
                     ? ` · ${t('Command status cannot be verified. Saved output is available.')}`
                     : ''}
                 </span>
-              </button>
+              </RowButton>
               {isLiveTerminal(terminal) && terminal.capabilities.stop && (
                 <Button
                   variant="ghost"

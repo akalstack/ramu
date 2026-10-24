@@ -159,3 +159,19 @@ it('drops a connection whose host stops answering heartbeats', async () => {
   expect(opened[0]!.closed).toBe(true)
   socket.close()
 })
+
+it('sends its subscription once ready and restores it on every reconnect', () => {
+  const { socket, opened, host } = make()
+  const subscriptions = (index: number) =>
+    opened[index]!.sent.map((text) => decodeSocketFrame(text, 'client')).filter((frame) => frame?.t === 'subscribe')
+  socket.start()
+  socket.subscribe(['agent:event'], { 'agent:event': ['s1'] }).catch(() => {})
+  host(0, { t: 'ready', epoch: 'e1' })
+  expect(subscriptions(0)).toMatchObject([{ channels: ['agent:event'], keys: { 'agent:event': ['s1'] } }])
+  socket.subscribe(['term:data']).catch(() => {})
+  expect(subscriptions(0)).toHaveLength(2)
+  opened[0]!.handlers.onclose({})
+  vi.advanceTimersByTime(2000)
+  host(1, { t: 'ready', epoch: 'e1' })
+  expect(subscriptions(1)).toMatchObject([{ channels: ['term:data'] }])
+})

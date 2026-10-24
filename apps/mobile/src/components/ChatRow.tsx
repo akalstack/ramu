@@ -63,22 +63,23 @@ export const ChatRow = memo(function ChatRow({
   const [shortKey, fullKey] = status ? SHORT[status.kind] : []
   // A thread with no project and nothing to preview is one line; its row is centered instead of leaving a blank line.
   const hasDetail = Boolean(project || chat.mode === 'worktree' || chat.preview)
-  const actions = chat.pending
-    ? []
-    : [
-        {
-          icon: commands.pinned ? PinOff : Pin,
-          label: commands.pinned ? 'Unpin' : 'Pin',
-          color: c.primary,
-          onPress: () => void commands.togglePin(),
-        },
-        {
-          icon: commands.archived ? ArchiveRestore : Archive,
-          label: commands.archived ? 'Unarchive' : 'Archive',
-          color: c.warn,
-          onPress: () => void commands.toggleArchive(),
-        },
-      ]
+  const actions =
+    chat.pending || commands.viewOnly
+      ? []
+      : [
+          {
+            icon: commands.pinned ? PinOff : Pin,
+            label: commands.pinned ? 'Unpin' : 'Pin',
+            color: c.primary,
+            onPress: () => void commands.togglePin(),
+          },
+          {
+            icon: commands.archived ? ArchiveRestore : Archive,
+            label: commands.archived ? 'Unarchive' : 'Archive',
+            color: c.warn,
+            onPress: () => void commands.toggleArchive(),
+          },
+        ]
   const meta = (
     <>
       {!online ? (

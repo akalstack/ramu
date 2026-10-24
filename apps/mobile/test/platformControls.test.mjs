@@ -1,3 +1,7 @@
+import * as browserViewerState from '../src/runtime/browserViewerState.ts'
+import * as sharedViewerAccess from '../../../packages/shared/src/viewerAccess.ts'
+import * as viewerAccess from '../src/runtime/viewerAccess.ts'
+import * as scheduleModel from '../src/runtime/scheduleModel.ts'
 import { goBackOrHome } from '../src/runtime/navigation.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -99,7 +103,12 @@ function load(file, os, overrides = {}, globals = {}) {
   mocks['react-native'] = { ...native, ...mocks['react-native'] }
   mocks['expo-router'] = { Stack, useRouter: () => ({ push() {} }), useFocusEffect() {}, ...mocks['expo-router'] }
   const code = ts.transpileModule(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: {
+      esModuleInterop: false,
+      module: ts.ModuleKind.CommonJS,
+      jsx: ts.JsxEmit.ReactJSX,
+      target: ts.ScriptTarget.ES2022,
+    },
   }).outputText
   runInNewContext(code, {
     setTimeout,
@@ -132,6 +141,9 @@ function load(file, os, overrides = {}, globals = {}) {
             useProjectDefault() {},
           }),
         }
+      if (id === '@ramu/shared/viewerAccess') return sharedViewerAccess
+      if (id.endsWith('/browserViewerState')) return browserViewerState
+      if (id.endsWith('/viewerAccess')) return viewerAccess
       if (id.endsWith('/navigation')) return { goBackOrHome }
       if (id.endsWith('/composerDrafts')) return explorerDrafts
       if (id.endsWith('/routingChoices')) return routingChoices
@@ -972,6 +984,7 @@ test('helper details honor capabilities and disconnected hosts without losing th
   const calls = []
   const store = {
     language: 'en',
+    computers: [{ id: 'remote', status: 'online' }],
     isOnline: () => online,
     invoke: async (...args) => {
       calls.push(args)
@@ -4993,3 +5006,1161 @@ test('tab and Settings stacks have blank initial titles and no generated back la
     assert.equal(options.headerStyle.backgroundColor, 'window')
   }
 })
+
+for (const os of ['ios', 'android']) {
+  test(`${os} viewer and offline schedule rows remain readable without mutation gestures`, () => {
+    const computer = { id: 'a', status: 'online', access: 'owner' }
+    const opened = []
+    const { ScheduleRow } = load('components/ScheduleRow.tsx', os, {
+      './ui': { Row: 'Row', T: 'T', tap() {} },
+      '../runtime/store': { useStore: () => ({ computers: [computer], language: 'en' }) },
+      '../runtime/automation': { useAutomation: () => ({}) },
+      '../runtime/scheduleModel': scheduleModel,
+      '../i18n': { useT: () => ({ resume: 'Resume', pause: 'Pause', runNow: 'Run now', delete: 'Delete' }) },
+      'expo-router': { useRouter: () => ({ push: (route) => opened.push(route) }) },
+    })
+    const schedule = { ...scheduleModel.defaultInput({}), id: 'schedule', state: 'active' }
+    const render = () => ScheduleRow({ computerId: 'a', schedule })
+    assert.equal(find(render(), 'SwipeRow').props.actions.length, 3)
+    computer.access = 'viewer'
+    assert.equal(find(render(), 'SwipeRow').props.actions.length, 0)
+    find(render(), 'Row').props.onPress()
+    assert.equal(opened[0].params.id, 'schedule')
+    computer.access = 'owner'
+    computer.status = 'offline'
+    assert.equal(find(render(), 'SwipeRow').props.actions.length, 0)
+  })
+
+  test(`${os} a schedule edit deep link becomes read-only without losing its local draft`, () => {
+    const hooks = hookHarness()
+    const computer = { id: 'a', status: 'online', access: 'owner', name: 'Host' }
+    const store = { computers: [computer], selected: 'a', defaults: {}, projects: [], language: 'en' }
+    const { default: ScheduleEdit } = load('app/schedule-edit.tsx', os, {
+      react: { ...hooks.react, useEffect() {} },
+      '../runtime/store': { useStore: () => store, scoped: (host, id) => `${host}:${id}` },
+      '../runtime/automation': { useAutomation: () => ({}) },
+      '../runtime/scheduleModel': scheduleModel,
+      '../i18n': { useT: () => ({ newSchedule: 'New schedule', save: 'Save' }) },
+      'expo-router': { useLocalSearchParams: () => ({ computer: 'a' }) },
+    })
+    const render = () => hooks.render(() => ScheduleEdit())
+    nodes(render())
+      .find((node) => node.type === 'TextField' && node.props.maxLength === 200)
+      .props.onChangeText('Keep my draft')
+    computer.access = 'viewer'
+    const readOnly = render()
+    assert.equal(find(readOnly, 'TextField'), undefined)
+    assert.equal(find(readOnly, 'GlassButton'), undefined)
+    assert.ok(nodes(readOnly).some((node) => node.props.children === scheduleModel.VIEW_ONLY_SCHEDULE_NOTICE.en))
+    computer.access = 'owner'
+    assert.equal(
+      nodes(render()).find((node) => node.type === 'TextField' && node.props.maxLength === 200).props.value,
+      'Keep my draft',
+    )
+    hooks.dispose()
+  })
+}
+
+test('schedule callbacks recheck the current host role before every RPC, including delayed callbacks', async () => {
+  const hooks = hookHarness()
+  const calls = []
+  const computer = { id: 'a', status: 'online', access: 'owner' }
+  const store = {
+    computers: [computer],
+    chats: [],
+    appPreferences: {},
+    language: 'en',
+    invoke: async (host, method) => {
+      calls.push([host, method])
+      return []
+    },
+    refresh: async () => {},
+  }
+  const { AutomationProvider } = load('runtime/automation.tsx', 'ios', {
+    react: { ...require('react'), ...hooks.react, useEffect() {} },
+    './store': { useStore: () => store },
+    './scheduleModel': scheduleModel,
+    './inbox': { buildInbox: () => null },
+    '../storage': { readLastVisit: () => 0 },
+  })
+  const render = () => hooks.render(() => AutomationProvider({ children: null })).props.value
+  const original = render()
+  const actions = [
+    () => original.saveSchedule('a', {}),
+    () => original.pauseSchedule('a', 'schedule', true),
+    () => original.deleteSchedule('a', 'schedule'),
+    () => original.runScheduleNow('a', 'schedule'),
+    () => original.previewRule('a', { kind: 'daily', at: '09:00' }, 'UTC'),
+  ]
+  computer.access = 'viewer'
+  render()
+  for (const action of actions) await assert.rejects(action, /view schedules/)
+  assert.equal(calls.length, 0)
+  computer.access = 'owner'
+  computer.status = 'offline'
+  render()
+  for (const action of actions) await assert.rejects(action, /Connect to this host/)
+  assert.equal(calls.length, 0)
+  computer.status = 'online'
+  render()
+  await original.pauseSchedule('a', 'schedule', true)
+  assert.equal(calls[0][1], 'schedules.pause')
+  assert.ok(calls.some((call) => call[1] === 'schedules.list'))
+  hooks.dispose()
+})
+
+test('a view-only tab can suppress its primary write action while keeping Settings', () => {
+  const { useTabActions } = load('components/Overlays.tsx', 'ios', {
+    '../runtime/store': { useStore: () => ({ computers: [], selected: 'a' }) },
+    '../i18n': { useT: () => ({ settings: 'Settings', newChat: 'New thread' }) },
+  })
+  assert.deepEqual(
+    nodes(useTabActions(null))
+      .filter((node) => node.type === 'HeaderButton')
+      .map((node) => node.props.label),
+    ['Settings'],
+  )
+  assert.deepEqual(
+    nodes(useTabActions())
+      .filter((node) => node.type === 'HeaderButton')
+      .map((node) => node.props.label),
+    ['New thread', 'Settings'],
+  )
+})
+
+for (const os of ['ios', 'android']) {
+  test(`${os} viewer schedule lists suppress creation and explain the role`, () => {
+    const hooks = hookHarness()
+    const store = { selected: 'a', language: 'en', computers: [{ id: 'a', status: 'online', access: 'viewer' }] }
+    let primary = 'unset'
+    const { default: SchedulesScreen } = load('app/(tabs)/schedules/index.tsx', os, {
+      react: hooks.react,
+      '../../../runtime/store': { useStore: () => store },
+      '../../../runtime/scheduleModel': scheduleModel,
+      '../../../runtime/automation': {
+        useAutomation: () => ({ of: () => ({ schedules: [], runs: [], loaded: true }) }),
+      },
+      '../../../components/Overlays': {
+        useTabActions: (action) => {
+          primary = action
+          return null
+        },
+      },
+      '../../../components/Screen': {
+        Screen: 'Screen',
+        Header: 'Header',
+        LargeTitle: 'LargeTitle',
+        PageScrollView: 'PageScrollView',
+        useScrolledUnderBar: () => ({ scrolled: false }),
+      },
+      '../../../i18n': { useT: () => ({ schedules: 'Schedules', newSchedule: 'New schedule' }) },
+      'react-native': { RefreshControl: 'RefreshControl' },
+    })
+    const tree = hooks.render(() => SchedulesScreen())
+    assert.equal(primary, null)
+    assert.equal(find(tree, 'GlassButton'), undefined)
+    assert.ok(nodes(tree).some((node) => node.props.children === scheduleModel.VIEW_ONLY_SCHEDULE_NOTICE.en))
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} viewer helper controls preserve drafts and refuse retained send/stop callbacks`, async () => {
+    const helpers = await import('../../../packages/shared/src/chat/helperPresentation.ts')
+    const hooks = hookHarness(),
+      calls = [],
+      confirmations = []
+    let store = {
+      language: 'en',
+      computers: [{ id: 'host', status: 'online', access: 'owner' }],
+      isOnline: () => true,
+      invoke: async (...args) => {
+        calls.push(args)
+      },
+    }
+    const { HelperDetails } = load('components/Helpers.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+      '@ramu/shared/chat/helperPresentation': helpers,
+      'react-native': { Alert: { alert: (...args) => confirmations.push(args) } },
+    })
+    const task = { agentId: 'helper', name: 'Helper', status: 'running', canMessage: true, canStop: true }
+    const render = () =>
+      hooks.render(() => HelperDetails({ task, chat: { computerId: 'host', sessionId: 'parent' }, onClose() {} }))
+    let tree = render()
+    find(tree, 'TextInput').props.onChangeText('keep my draft')
+    tree = render()
+    const send = nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'Send')
+    nodes(tree)
+      .find((node) => node.type === 'Button' && node.props.title === 'Stop agent')
+      .props.onPress()
+    store = { ...store, computers: [{ id: 'host', status: 'online', access: 'viewer' }] }
+    tree = render()
+    assert.equal(find(tree, 'TextInput').props.value, 'keep my draft')
+    assert.equal(find(tree, 'TextInput').props.editable, false)
+    assert.equal(nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'Send').props.disabled, true)
+    assert.equal(
+      nodes(tree).some((node) => node.props.title === 'Stop agent'),
+      false,
+    )
+    send.props.onPress()
+    confirmations[0][2].find((item) => item.style === 'destructive').onPress()
+    await settle()
+    assert.deepEqual(calls, [])
+    hooks.dispose()
+  })
+
+  test(`${os} viewer side questions stay readable and refuse retained ask/delete callbacks`, async () => {
+    const hooks = hookHarness(),
+      calls = [],
+      confirmations = []
+    const chat = { computerId: 'host', sessionId: 'parent', title: 'Parent' }
+    let store = {
+      language: 'en',
+      computers: [{ id: 'host', status: 'online', access: 'owner' }],
+      subscribe: () => () => {},
+      invoke: async (...args) => {
+        calls.push(args)
+        return [{ id: 'aside', quote: 'quote', messages: [{ id: 'm', role: 'user', text: 'existing question' }] }]
+      },
+    }
+    const { default: AsideScreen } = load('app/chat/[id]/aside.tsx', os, {
+      react: hooks.react,
+      'expo-router': { useLocalSearchParams: () => ({ id: 'chat', aside: 'aside' }) },
+      '../../../runtime/store': { useStore: () => store, useChat: () => chat },
+      '../../../components/ui': { T: 'T', Chip: 'Chip', tap() {} },
+      '../../../components/Screen': {
+        Screen: 'Screen',
+        Header: 'Header',
+        HeaderButton: 'HeaderButton',
+        PageScrollView: 'ScrollView',
+      },
+      'react-native': { Alert: { alert: (...args) => confirmations.push(args) } },
+    })
+    const render = () => hooks.render(() => AsideScreen())
+    render()
+    await settle()
+    let tree = render()
+    find(tree, 'TextInput').props.onChangeText('unsent follow-up')
+    tree = render()
+    const ask = nodes(tree).find((node) => node.props.accessibilityLabel === 'Ask')
+    find(tree, 'Header').props.right.props.onPress()
+    calls.length = 0
+    store = { ...store, computers: [{ id: 'host', status: 'online', access: 'viewer' }] }
+    tree = render()
+    assert.equal(find(tree, 'TextInput').props.value, 'unsent follow-up')
+    assert.equal(find(tree, 'TextInput').props.editable, false)
+    assert.equal(find(tree, 'Header').props.right, null)
+    assert.ok(nodes(tree).some((node) => node.props.children === 'existing question'))
+    ask.props.onPress()
+    confirmations[0][2].find((item) => item.style === 'destructive').onPress()
+    await settle()
+    assert.deepEqual(calls, [])
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} viewer message menus keep copy/quote and refuse actions from an already open sheet`, () => {
+    const calls = [],
+      sheets = [],
+      hooks = hookHarness()
+    let menu = {
+      readOnly: false,
+      quote: () => calls.push('quote'),
+      quoteNew: () => calls.push('new'),
+      edit: () => calls.push('edit'),
+      undo: () => calls.push('undo'),
+      aside: () => calls.push('aside'),
+    }
+    const component = load('components/Transcript.tsx', os, {
+      react: { ...require('react'), ...hooks.react, useContext: () => menu },
+      './ui': { ...components, tap() {} },
+      'react-native': {
+        ActionSheetIOS: {
+          showActionSheetWithOptions: (options, select) => sheets.push({ options: options.options, select }),
+        },
+        Alert: {
+          alert: (_title, _body, actions) =>
+            sheets.push({
+              options: actions.map((action) => action.text),
+              select: (index) => actions[index].onPress?.(),
+            }),
+        },
+      },
+      'expo-clipboard': { setStringAsync: async () => calls.push('copy') },
+    })
+    const root = component.TranscriptItemView({
+      item: { kind: 'user', seq: 7, text: 'Original request' },
+      chat: { id: 'chat' },
+    })
+    const block = nodes(root).find((node) => node.type?.name === 'TranscriptBlock')
+    const action = block.type(block.props)
+    const render = () => hooks.render(() => action.type(action.props))
+    find(render(), 'Pressable').props.onLongPress()
+    assert.ok(sheets[0].options.includes('Edit and resend'))
+    menu = { ...menu, readOnly: true }
+    find(render(), 'Pressable').props.onLongPress()
+    assert.deepEqual(Array.from(sheets[1].options), ['Copy', 'Quote in reply', 'Quote in new thread', 'Cancel'])
+    for (const label of ['Edit and resend', 'Undo file changes from here', 'Ask aside about this'])
+      sheets[0].select(sheets[0].options.indexOf(label))
+    assert.deepEqual(calls, [])
+    sheets[1].select(0)
+    sheets[1].select(1)
+    sheets[1].select(2)
+    assert.deepEqual(calls, ['copy', 'quote', 'new'])
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} viewer thread actions keep copying and refuse retained writes and deletion confirmation`, async () => {
+    const hooks = hookHarness(),
+      calls = [],
+      alerts = []
+    let store = {
+      language: 'en',
+      computers: [{ id: 'host', status: 'online', access: 'owner' }],
+      chats: [],
+      isOnline: () => true,
+      invoke: async (...args) => {
+        calls.push(args)
+        return []
+      },
+      refresh: async () => {},
+    }
+    const { ChatActionsSheet } = load('components/ChatActions.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+      '../i18n': { useT: () => ({ renameWithAI: 'Rename with AI' }) },
+      '@ramu/shared/chat/taskRemoval': taskRemoval,
+      'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
+    })
+    const chat = {
+      computerId: 'host',
+      taskId: 'task',
+      title: 'Thread',
+      status: 'idle',
+      pinnedAt: null,
+      mode: 'current',
+    }
+    const render = () => hooks.render(() => ChatActionsSheet({ chat, open: true, onClose() {} }))
+    const row = (tree, label) =>
+      nodes(tree).find((node) => node.type === 'Row' && nodes(node).some((child) => child.props.children === label))
+    let tree = render()
+    const pin = row(tree, 'Pin to top'),
+      rename = row(tree, 'Rename'),
+      archive = row(tree, 'Archive')
+    row(tree, 'Delete…').props.onPress()
+    await settle()
+    assert.equal(alerts.length, 1)
+    calls.length = 0
+    store = { ...store, computers: [{ id: 'host', status: 'online', access: 'viewer' }] }
+    tree = render()
+    assert.ok(row(tree, 'Copy thread ID'))
+    for (const label of ['Pin to top', 'Rename', 'Archive', 'Delete…']) assert.equal(row(tree, label), undefined)
+    pin.props.onPress()
+    rename.props.onPress()
+    archive.props.onPress()
+    alerts[0][2].find((item) => item.style === 'destructive').onPress()
+    await settle()
+    assert.deepEqual(calls, [])
+    assert.equal(find(render(), 'TextInput'), undefined)
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} the mobile store blocks retained viewer writes before transport and preserves permitted request answers`, async () => {
+    const hooks = hookHarness(),
+      refs = [],
+      calls = []
+    class HostError extends Error {
+      constructor(message, status = 0) {
+        super(message)
+        this.status = status
+      }
+    }
+    const initial = {
+      computers: [{ id: 'a', name: 'Host', status: 'online', access: 'owner' }],
+      chats: [{ id: 'a:chat', computerId: 'a', taskId: 'task', sessionId: 'session' }],
+      projects: [],
+      drafts: {},
+      outbox: [],
+    }
+    const { StoreProvider } = load('runtime/store.tsx', os, {
+      react: {
+        ...hooks.react,
+        createContext: () => ({ Provider: 'Store' }),
+        useEffect() {},
+        useRef(value) {
+          const ref = hooks.react.useRef(value)
+          refs.push(ref)
+          return ref
+        },
+      },
+      'react-native': { AppState: { currentState: 'active' } },
+      '../storage': { readLocal: (defaults) => ({ ...defaults, ...initial }), writeLocal() {} },
+      './transport': { HostError },
+      './newChatHost': { newChatHost: () => 'a' },
+      './threadActivity': { normalizeHelperGroups: (rows) => rows },
+    })
+    const render = () => hooks.render(() => StoreProvider({ children: null })).props.value
+    const retained = render(),
+      current = refs[0]
+    refs[1].current.set('a', {
+      controller: new AbortController(),
+      client: {
+        invoke: async (...args) => {
+          calls.push(args)
+          return []
+        },
+      },
+    })
+    current.current.computers[0].access = 'viewer'
+    for (const method of ['agent.submit', 'agent.stop', 'agent.goal.control', 'tasks.rename', 'remote.status'])
+      await assert.rejects(retained.invoke('a', method), /view-only/)
+    await assert.rejects(retained.send('a:chat', 'keep this draft'), /view-only/)
+    await assert.rejects(
+      retained.createChat({ computerId: 'a', projectId: 'standalone', text: 'new draft' }),
+      /view-only/,
+    )
+    assert.deepEqual(current.current.outbox, [])
+    assert.equal(current.current.chats.length, 1)
+    for (const method of [
+      'agent.replyPermission',
+      'agent.replyQuestion',
+      'agent.replyElicitation',
+      'agent.dismissQuestion',
+      'agent.snapshot',
+    ])
+      await retained.invoke('a', method)
+    assert.deepEqual(
+      calls.map(([method]) => method),
+      [
+        'agent.replyPermission',
+        'agent.replyQuestion',
+        'agent.replyElicitation',
+        'agent.dismissQuestion',
+        'agent.snapshot',
+      ],
+    )
+    current.current.computers[0].access = 'owner'
+    await retained.invoke('a', 'tasks.rename', 'task', 'New title')
+    assert.equal(calls.at(-1)[0], 'tasks.rename')
+    hooks.dispose()
+  })
+
+  test(`${os} a viewer role change during the outbox paint yield keeps the pending message unsent`, async () => {
+    const hooks = hookHarness(),
+      refs = [],
+      calls = []
+    class HostError extends Error {}
+    const initial = {
+      computers: [{ id: 'a', name: 'Host', status: 'online', access: 'owner' }],
+      chats: [{ id: 'a:chat', computerId: 'a', taskId: 'task', sessionId: 'session' }],
+      projects: [],
+      drafts: {},
+      outbox: [],
+    }
+    const { StoreProvider } = load('runtime/store.tsx', os, {
+      react: {
+        ...hooks.react,
+        createContext: () => ({ Provider: 'Store' }),
+        useEffect() {},
+        useRef(value) {
+          const ref = hooks.react.useRef(value)
+          refs.push(ref)
+          return ref
+        },
+      },
+      'react-native': { AppState: { currentState: 'active' } },
+      '../storage': { readLocal: (defaults) => ({ ...defaults, ...initial }), writeLocal() {} },
+      './transport': { HostError },
+      './threadActivity': { normalizeHelperGroups: (rows) => rows },
+    })
+    const store = hooks.render(() => StoreProvider({ children: null })).props.value
+    const current = refs[0]
+    refs[1].current.set('a', {
+      controller: new AbortController(),
+      client: {
+        invoke: async (...args) => {
+          calls.push(args)
+          return []
+        },
+      },
+    })
+    current.current.computers[0].status = 'online'
+    await store.send('a:chat', 'pending text', 'queue')
+    current.current.computers[0].access = 'viewer'
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.deepEqual(calls, [])
+    assert.equal(current.current.outbox.length, 1)
+    assert.equal(current.current.outbox[0].text, 'pending text')
+    assert.equal(current.current.outbox[0].state, 'waiting')
+    assert.match(current.current.outbox[0].error, /view-only/)
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} a viewer outbox item explains its paused delivery and keeps local cancellation available`, () => {
+    const hooks = hookHarness(),
+      alerts = []
+    const { PendingBubble } = load('components/Outbox.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': {
+        useStore: () => ({
+          language: 'en',
+          computers: [{ id: 'a', access: 'viewer' }],
+          cancelOutbox: () => 'kept text',
+        }),
+      },
+      '../i18n': { useT: () => ({ branchReviewBases: 'Review bases' }) },
+      './ui': { T: 'T', tap() {} },
+      'react-native': {
+        Alert: { alert: (...args) => alerts.push(args) },
+        ActionSheetIOS: { showActionSheetWithOptions: (options) => alerts.push(options) },
+      },
+    })
+    const tree = hooks.render(() =>
+      PendingBubble({
+        item: { id: 'pending', computerId: 'a', text: 'kept text', state: 'review', mode: 'queue' },
+        computer: 'Host',
+        onEdit() {},
+      }),
+    )
+    assert.ok(
+      nodes(tree).some((node) =>
+        [node.props?.children].flat(Infinity).includes(viewerAccess.VIEW_ONLY_WRITE_NOTICE.en),
+      ),
+    )
+    assert.equal(
+      nodes(tree).some((node) => node.props.accessibilityLabel === 'Review bases'),
+      false,
+    )
+    find(tree, 'Pressable').props.onPress()
+    assert.equal(alerts.length, 1)
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} viewer project menus keep local actions and block retained removal and delayed navigation`, async () => {
+    const hooks = hookHarness(),
+      calls = [],
+      alerts = [],
+      timers = [],
+      routes = []
+    let store = {
+      language: 'en',
+      computers: [{ id: 'a', access: 'owner' }],
+      isOnline: () => true,
+      refresh: async () => {},
+      invoke: async (...args) => calls.push(args),
+    }
+    const { ProjectActionsSheet } = load(
+      'components/ChatActions.tsx',
+      os,
+      {
+        react: hooks.react,
+        '../runtime/store': { useStore: () => store },
+        '../i18n': { useT: () => actionSettingsCopy },
+        'expo-router': { useRouter: () => ({ push: (route) => routes.push(route) }) },
+        'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
+      },
+      { setTimeout: (run) => timers.push(run) },
+    )
+    const render = () =>
+      hooks.render(() =>
+        ProjectActionsSheet({
+          project: { id: 'a:p', computerId: 'a', name: 'Project', root: '/project' },
+          open: true,
+          onClose() {},
+        }),
+      )
+    const row = (tree, label) =>
+      nodes(tree).find((node) => node.type === 'Row' && nodes(node).some((child) => child.props.children === label))
+    let tree = render()
+    const rename = row(tree, 'Rename'),
+      manage = row(tree, 'Manage actions')
+    row(tree, 'Open terminal').props.onPress()
+    row(tree, 'Remove project…').props.onPress()
+    store = { ...store, computers: [{ id: 'a', access: 'viewer' }] }
+    tree = render()
+    for (const label of [
+      'Rename',
+      'Manage actions',
+      'Names for Auto…',
+      'Browse files',
+      'Open terminal',
+      'Remove project…',
+    ])
+      assert.equal(row(tree, label), undefined)
+    assert.ok(row(tree, 'Copy folder path'))
+    assert.ok(row(tree, 'New thread'))
+    rename.props.onPress()
+    manage.props.onPress()
+    alerts[0][2].find((item) => item.style === 'destructive').onPress()
+    timers.splice(0).forEach((run) => run())
+    await settle()
+    assert.deepEqual(calls, [])
+    assert.deepEqual(routes, [])
+    assert.equal(find(render(), 'TextInput'), undefined)
+    row(tree, 'New thread').props.onPress()
+    timers.splice(0).forEach((run) => run())
+    assert.equal(routes[0].pathname, '/new')
+    hooks.dispose()
+  })
+
+  test(`${os} project routing preserves its draft and refuses an old save after viewer access or target change`, async () => {
+    const hooks = hookHarness(),
+      calls = []
+    let store = {
+      language: 'en',
+      computers: [{ id: 'a', access: 'owner' }],
+      isOnline: () => true,
+      refresh: async () => {},
+      invoke: async (...args) => calls.push(args),
+    }
+    let project = { id: 'a:p', computerId: 'a', name: 'Project' }
+    const { ProjectRoutingSettings } = load('components/ProjectRoutingSettings.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+    })
+    const render = () => hooks.render(() => ProjectRoutingSettings({ project, onClose() {} }))
+    let tree = render()
+    find(tree, 'TextInput').props.onChangeText('Draft alias')
+    tree = render()
+    const save = nodes(tree).find((node) => node.props.title === 'Save')
+    store = { ...store, computers: [{ id: 'a', access: 'viewer' }] }
+    tree = render()
+    assert.equal(find(tree, 'TextInput').props.value, 'Draft alias')
+    assert.equal(find(tree, 'TextInput').props.editable, false)
+    save.props.onPress()
+    await settle()
+    assert.deepEqual(calls, [])
+    store = { ...store, computers: [{ id: 'a', access: 'owner' }] }
+    project = { ...project, id: 'a:other' }
+    render()
+    save.props.onPress()
+    await settle()
+    assert.deepEqual(calls, [])
+    hooks.dispose()
+  })
+
+  test(`${os} project command management keeps cached commands read-only and blocks retained mutations`, async () => {
+    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+    const hooks = hookHarness(),
+      calls = []
+    const settings = {
+      actions: [{ id: 'test', name: 'Test', command: 'pnpm test', source: 'ramu.json' }],
+      hiddenIds: [],
+      customOrder: false,
+    }
+    let store = {
+      language: 'en',
+      computers: [{ id: 'a', access: 'owner' }],
+      isOnline: () => true,
+      subscribe: () => () => {},
+      invoke: async (...args) => {
+        calls.push(args)
+        return settings
+      },
+    }
+    const { ProjectCommandSettings } = load('components/ProjectCommandSettings.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+      '../i18n': { useT: () => actionSettingsCopy },
+      '../runtime/goalVerify': { isMethodMissing },
+    })
+    const render = () =>
+      hooks.render(() => ProjectCommandSettings({ hostId: 'a', projectId: 'p', open: true, onClose() {} }))
+    render()
+    await settle()
+    let tree = render()
+    const mutation = nodes(tree).find(
+      (node) => node.type === 'Button' && node.props.accessibilityLabel?.includes('Hide'),
+    )
+    assert.ok(mutation)
+    calls.length = 0
+    store = { ...store, computers: [{ id: 'a', access: 'viewer' }] }
+    tree = render()
+    assert.ok(nodes(tree).some((node) => [node.props?.children].flat(Infinity).includes('Test')))
+    assert.ok(
+      nodes(tree)
+        .filter((node) => node.type === 'Button')
+        .every((node) => node.props.disabled),
+    )
+    mutation.props.onPress()
+    await settle()
+    assert.deepEqual(calls, [])
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} a viewer browser entry explains its access without querying forbidden host methods`, async () => {
+    const hooks = hookHarness(),
+      calls = []
+    const store = {
+      language: 'en',
+      computers: [{ id: 'a', name: 'Host', access: 'viewer' }],
+      isOnline: () => true,
+      invoke: async (...args) => calls.push(args),
+    }
+    const { BrowserActivity } = load('components/BrowserActivity.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+    })
+    const tree = hooks.render(() =>
+      BrowserActivity({ chat: { computerId: 'a', taskId: 'task' }, open: true, onClose() {} }),
+    )
+    await settle()
+    assert.deepEqual(calls, [])
+    assert.ok(nodes(tree).some((node) => node.props.children === viewerAccess.VIEW_ONLY_BROWSER_NOTICE.en))
+    assert.equal(find(tree, 'BrowserViewer'), undefined)
+    hooks.dispose()
+  })
+
+  test(`${os} an open browser preserves its address draft and refuses retained navigation after viewer access`, async () => {
+    const hooks = hookHarness(),
+      calls = [],
+      timers = []
+    let listed = []
+    let store = {
+      language: 'en',
+      computers: [{ id: 'a', name: 'Host', access: 'owner' }],
+      isOnline: () => true,
+      invoke: async (...args) => {
+        calls.push(args)
+        return args[1] === 'hostBrowser.list' ? listed : []
+      },
+    }
+    const { BrowserViewer } = load(
+      'components/BrowserViewer.tsx',
+      os,
+      {
+        react: hooks.react,
+        '../runtime/store': { useStore: () => store },
+        'react-native': {
+          AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
+          PanResponder: { create: () => ({ panHandlers: {} }) },
+        },
+      },
+      { setTimeout: (run) => timers.push(run), clearTimeout() {} },
+    )
+    const render = () =>
+      hooks.render(() => BrowserViewer({ chat: { computerId: 'a', taskId: 'task' }, embedded: true, onClose() {} }))
+    render()
+    await settle()
+    let tree = render()
+    const field = nodes(tree).find((node) => node.props.accessibilityLabel === 'Address')
+    field.props.onChangeText('https://kept.example')
+    tree = render()
+    const retained = nodes(tree).find((node) => node.props.accessibilityLabel === 'Address').props.onSubmitEditing
+    store = { ...store, computers: [{ id: 'a', name: 'Host', access: 'viewer' }] }
+    tree = render()
+    calls.length = 0
+    retained()
+    timers.splice(0).forEach((run) => run())
+    await settle()
+    assert.deepEqual(calls, [])
+    assert.ok(nodes(tree).some((node) => node.props.children === viewerAccess.VIEW_ONLY_BROWSER_NOTICE.en))
+    assert.equal(
+      nodes(tree).some((node) => node.props.title === 'Take control'),
+      false,
+    )
+    listed = [
+      {
+        id: 'tab',
+        url: 'https://host.example',
+        profileId: 'default',
+        controller: 'agent',
+        generation: 1,
+        paused: false,
+      },
+    ]
+    field.props.onBlur()
+    store = { ...store, computers: [{ id: 'a', name: 'Host', access: 'owner' }] }
+    render()
+    await settle()
+    tree = render()
+    assert.equal(
+      nodes(tree).find((node) => node.props.accessibilityLabel === 'Address').props.value,
+      'https://kept.example',
+    )
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} viewers can open an owner-granted computer screen without querying administration`, async () => {
+    const hooks = hookHarness(),
+      calls = []
+    const granted = {
+      generation: 1,
+      target: { kind: 'display', id: 'display', name: 'Shared display' },
+      runtime: { id: 'local' },
+      controller: { kind: 'human' },
+    }
+    const store = {
+      language: 'en',
+      computers: [{ id: 'a', name: 'Host', access: 'viewer' }],
+      isOnline: () => true,
+      invoke: async (...args) => {
+        calls.push(args)
+        return granted
+      },
+    }
+    const { ComputerActivity } = load(
+      'components/ComputerActivity.tsx',
+      os,
+      {
+        react: hooks.react,
+        '../runtime/store': { useStore: () => store },
+      },
+      { setInterval: () => 1, clearInterval() {} },
+    )
+    const render = () =>
+      hooks.render(() => ComputerActivity({ chat: { computerId: 'a', taskId: 'task' }, open: true, onClose() {} }))
+    render()
+    await settle()
+    const viewer = nodes(render()).find((node) => node.type?.name === 'ComputerViewer')
+    assert.ok(viewer)
+    assert.equal(viewer.props.session.target.name, 'Shared display')
+    assert.deepEqual(
+      calls.map(([, method]) => method),
+      ['computer.session'],
+    )
+    hooks.dispose()
+  })
+
+  test(`${os} an open computer viewer keeps frames but refuses retained control after a viewer role change`, async () => {
+    const control = await import('../../../packages/shared/src/computerControl.ts')
+    const parent = hookHarness(),
+      calls = [],
+      timers = [],
+      react = { ...parent.react }
+    const granted = {
+      generation: 1,
+      target: { kind: 'display', id: 'display', name: 'Shared display' },
+      runtime: { id: 'local' },
+      controller: { kind: 'human' },
+      paused: false,
+    }
+    let store = {
+      language: 'en',
+      computers: [{ id: 'a', name: 'Host', access: 'viewer' }],
+      isOnline: () => true,
+      invoke: async (...args) => {
+        calls.push(args)
+        return args[1] === 'computer.frame'
+          ? { mimeType: 'image/png', data: 'AA', width: 10, height: 10, capturedAt: Date.now(), generation: 1 }
+          : granted
+      },
+    }
+    const { ComputerActivity } = load(
+      'components/ComputerActivity.tsx',
+      os,
+      {
+        react,
+        '../runtime/store': { useStore: () => store },
+        '@ramu/shared/computerControl': control,
+        '@ramu/shared/computerBridge': { COMPUTER_FRAME_STALE_MS: 5000 },
+        './useComputerVideo': { useComputerVideo: () => ({ status: 'idle' }), webrtc: () => null },
+        'react-native': { AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) } },
+      },
+      { setTimeout: (run) => timers.push(run), clearTimeout() {}, setInterval: () => 1, clearInterval() {} },
+    )
+    const renderParent = () =>
+      parent.render(() => ComputerActivity({ chat: { computerId: 'a', taskId: 'task' }, open: true, onClose() {} }))
+    renderParent()
+    await settle()
+    const viewer = nodes(renderParent()).find((node) => node.type?.name === 'ComputerViewer')
+    parent.dispose()
+    const child = hookHarness()
+    Object.assign(react, child.react)
+    store = { ...store, computers: [{ id: 'a', name: 'Host', access: 'owner' }] }
+    const render = () => child.render(() => viewer.type(viewer.props))
+    render()
+    await settle()
+    nodes(render())
+      .find((node) => node.props.accessibilityLabel === 'Type on the computer')
+      .props.onChangeText('Kept text')
+    const sendText = nodes(render()).find((node) => node.props.title === 'Send text')
+    const give = nodes(render()).find((node) => node.props.title === 'Give control to agent')
+    assert.ok(give)
+    store = { ...store, computers: [{ id: 'a', name: 'Host', access: 'viewer' }] }
+    const tree = render()
+    calls.length = 0
+    give.props.onPress()
+    sendText.props.onPress()
+    await settle()
+    assert.deepEqual(calls, [])
+    assert.ok(find(tree, 'Image'))
+    for (const title of ['Take control', 'Give control to agent', 'Stop computer use', 'Allow control'])
+      assert.equal(
+        nodes(tree).some((node) => node.props.title === title),
+        false,
+      )
+    assert.deepEqual(calls, [])
+    store = { ...store, computers: [{ id: 'a', name: 'Host', access: 'owner' }] }
+    assert.equal(
+      nodes(render()).find((node) => node.props.accessibilityLabel === 'Type on the computer').props.value,
+      'Kept text',
+    )
+    store = { ...store, computers: [{ id: 'a', name: 'Host', access: 'viewer' }] }
+    render()
+    child.dispose()
+    assert.deepEqual(calls, [])
+  })
+}
+
+function interactiveCardHarness(os, cached = true) {
+  const hooks = hookHarness()
+  let visible = true,
+    appListener,
+    evict,
+    savedState = null
+  const reference = { id: 'content', version: 1, sessionId: 'session', title: 'Calculator', summary: 'Compare costs' }
+  const document = {
+    reference,
+    html: '<main>bundled preview</main>',
+    preview: null,
+    files: [
+      { path: 'index.html', content: '<main>Original source</main>' },
+      { path: 'calc.js', content: 'globalThis.mustNeverExecute = true' },
+      { path: 'logo.png', content: 'secret-binary-base64', encoding: 'base64' },
+    ],
+  }
+  const calls = [],
+    shares = [],
+    asks = [],
+    leases = []
+  const cache = {
+    document: () => (cached ? document : null),
+    state: () => savedState,
+    scenarios: () => [],
+    saveDocument() {},
+    saveState: (_id, _version, state) => {
+      savedState = state
+    },
+  }
+  const store = {
+    language: 'en',
+    isOnline: () => true,
+    invoke: async (...args) => {
+      calls.push(args)
+      return document
+    },
+  }
+  const { InteractiveDocumentCard } = load('components/InteractiveContent.tsx', os, {
+    react: { ...hooks.react, useContext: () => visible },
+    'react-native': {
+      AppState: {
+        currentState: 'active',
+        addEventListener: (_event, callback) => {
+          appListener = callback
+          return {
+            remove() {
+              appListener = undefined
+            },
+          }
+        },
+      },
+    },
+    '../runtime/store': { useStore: () => store },
+    '../storage': { contentStorage: {} },
+    '@ramu/shared/interactiveStorage': { interactiveStorage: () => cache },
+    '@ramu/shared/interactiveTheme': { interactiveThemeVariables: () => ({ '--background': 'canvas' }) },
+    '@ramu/shared/interactiveLease': {
+      claimInteractive: (stop, limit) => {
+        evict = stop
+        leases.push(limit)
+        return () => {}
+      },
+    },
+    '@ramu/shared/interactive': {
+      interactiveHtml: (html, instance, state) => JSON.stringify({ html, instance, state }),
+      readInteractiveState: (state) => (state?.controls ? state : null),
+      interactiveFollowup: (_reference, state) => JSON.stringify(state),
+    },
+    './InteractiveFrame': { default: 'InteractiveFrame' },
+    './interactiveShare': {
+      shareInteractive: async (...args) => {
+        shares.push(args)
+      },
+    },
+  })
+  return {
+    render: () =>
+      hooks.render(() =>
+        InteractiveDocumentCard({ reference, chat: { computerId: 'host' }, onAsk: (text) => asks.push(text) }),
+      ),
+    visible: (value) => {
+      visible = value
+    },
+    app: (value) => appListener(value),
+    evict: () => evict(),
+    state: () => savedState,
+    calls,
+    shares,
+    asks,
+    leases,
+    dispose: () => hooks.dispose(),
+  }
+}
+for (const os of ['ios', 'android']) {
+  test(`${os} interactive cards run on screen, retain declared state and stop offscreen or in background`, async () => {
+    const card = interactiveCardHarness(os)
+    card.render()
+    await settle()
+    let tree = card.render()
+    let frame = find(tree, 'InteractiveFrame')
+    assert.ok(frame)
+    assert.equal(
+      nodes(tree).some((node) => ['Open interactive', 'Pause'].includes(node.props?.title)),
+      false,
+    )
+    assert.deepEqual(card.leases, [3])
+    const state = { controls: [{ key: 'cost', value: '42', checked: false }], custom: null }
+    frame.props.onMessage({ ramuInteractive: 1, instance: frame.props.instance, type: 'state', value: state })
+    const original = frame.props.instance
+    const retainedFrame = frame
+    card.visible(false)
+    assert.equal(find(card.render(), 'InteractiveFrame'), undefined)
+    retainedFrame.props.onMessage({
+      ramuInteractive: 1,
+      instance: original,
+      type: 'state',
+      value: { controls: [], custom: 'late' },
+    })
+    assert.deepEqual(card.state(), state)
+    card.visible(true)
+    card.render()
+    retainedFrame.props.onStop()
+    tree = card.render()
+    frame = find(tree, 'InteractiveFrame')
+    assert.notEqual(frame.props.instance, original)
+    assert.deepEqual(JSON.parse(frame.props.html).state, state)
+    card.app('background')
+    assert.equal(find(card.render(), 'InteractiveFrame'), undefined)
+    card.app('active')
+    tree = card.render()
+    assert.ok(find(tree, 'InteractiveFrame'))
+    nodes(tree)
+      .find((node) => node.type === 'IconButton' && node.props.label === 'Expand')
+      .props.onPress()
+    tree = card.render()
+    frame = find(tree, 'InteractiveFrame')
+    frame.props.onMessage({
+      ramuInteractive: 1,
+      instance: frame.props.instance,
+      type: 'state',
+      requestId: frame.props.snapshot,
+      value: state,
+    })
+    tree = card.render()
+    assert.equal(nodes(tree).filter((node) => node.type === 'InteractiveFrame').length, 1)
+    const expanded = nodes(tree).find((node) => node.type === 'Sheet' && node.props.presentation === 'screen')
+    assert.equal(expanded.props.open, true)
+    assert.deepEqual(JSON.parse(find(tree, 'InteractiveFrame').props.html).state, state)
+    expanded.props.onClose()
+    tree = card.render()
+    frame = find(tree, 'InteractiveFrame')
+    frame.props.onMessage({
+      ramuInteractive: 1,
+      instance: frame.props.instance,
+      type: 'state',
+      requestId: frame.props.snapshot,
+      value: state,
+    })
+    tree = card.render()
+    assert.equal(nodes(tree).filter((node) => node.type === 'InteractiveFrame').length, 1)
+    assert.equal(
+      nodes(tree).find((node) => node.type === 'Sheet' && node.props.presentation === 'screen').props.open,
+      false,
+    )
+    card.dispose()
+  })
+  test(`${os} interactive code captures current controls and shows exact text files without executing binary or script source`, async () => {
+    const card = interactiveCardHarness(os)
+    let tree = card.render()
+    await settle()
+    tree = card.render()
+    const press = (title) =>
+      nodes(tree)
+        .find((node) => node.type === 'Button' && node.props.title === title)
+        .props.onPress()
+    press('Code')
+    tree = card.render()
+    let frame = find(tree, 'InteractiveFrame')
+    assert.ok(frame, 'wait for a snapshot before unmounting the interactive document')
+    const state = { controls: [{ key: 'cost', value: '77', checked: false }], custom: null }
+    frame.props.onMessage({
+      ramuInteractive: 1,
+      instance: 'stale',
+      type: 'state',
+      requestId: frame.props.snapshot,
+      value: state,
+    })
+    assert.equal(card.state(), null)
+    frame.props.onMessage({
+      ramuInteractive: 1,
+      instance: frame.props.instance,
+      type: 'state',
+      requestId: frame.props.snapshot,
+      value: state,
+    })
+    tree = card.render()
+    assert.equal(find(tree, 'InteractiveFrame'), undefined)
+    assert.ok(nodes(tree).some((node) => node.type === 'T' && node.props.children === '<main>Original source</main>'))
+    press('calc.js')
+    tree = card.render()
+    assert.ok(
+      nodes(tree).some((node) => node.type === 'T' && node.props.children === 'globalThis.mustNeverExecute = true'),
+    )
+    assert.equal(globalThis.mustNeverExecute, undefined)
+    press('logo.png')
+    tree = card.render()
+    assert.equal(
+      nodes(tree).some((node) => node.props?.children === 'secret-binary-base64'),
+      false,
+    )
+    assert.ok(nodes(tree).some((node) => node.props?.children === 'Binary file'))
+    press('Share HTML')
+    await settle()
+    assert.deepEqual(card.shares[0][1], state)
+    press('Ask about this')
+    assert.deepEqual(JSON.parse(card.asks[0]), state)
+    press('Preview')
+    frame = find(card.render(), 'InteractiveFrame')
+    assert.deepEqual(JSON.parse(frame.props.html).state, state)
+    assert.equal(
+      card.calls.some((call) => call[1] !== 'interactive.get'),
+      false,
+    )
+    card.dispose()
+  })
+  test(`${os} stopped or evicted interactive cards wait for reload and uncached documents load without an Open step`, async () => {
+    const card = interactiveCardHarness(os, false)
+    assert.equal(find(card.render(), 'InteractiveFrame'), undefined)
+    await settle()
+    let tree = card.render()
+    assert.ok(find(tree, 'InteractiveFrame'))
+    card.evict()
+    tree = card.render()
+    assert.equal(find(tree, 'InteractiveFrame'), undefined)
+    assert.equal(find(card.render(), 'InteractiveFrame'), undefined, 'rendering cannot reclaim an evicted lease')
+    nodes(tree)
+      .find((node) => node.props?.title === 'Reload')
+      .props.onPress()
+    tree = card.render()
+    find(tree, 'InteractiveFrame').props.onStop()
+    tree = card.render()
+    assert.equal(find(tree, 'InteractiveFrame'), undefined)
+    assert.ok(nodes(tree).some((node) => node.props?.title === 'Reload'))
+    card.dispose()
+  })
+}

@@ -1,13 +1,14 @@
+import { ContentFrame } from './ContentFrame'
+import { useContentDocument } from './useContentDocument'
 import { InteractiveFollowupPicker } from './InteractiveFollowupPicker'
 import { interactiveExport } from '@ramu/shared/interactiveExport'
 import { Input } from '../components/desktop-input'
 import { interactiveVersions, canCopyInteractiveState } from '@ramu/shared/interactiveVersions'
-import { ramu } from '../ipc'
 import { t, useLanguage } from '../i18n'
 import { claimInteractive } from '@ramu/shared/interactiveLease'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InteractiveDocument, InteractiveReference, InteractiveState } from '@ramu/shared/interactive'
-import { interactiveHtml, interactiveFollowup, readInteractiveState } from '@ramu/shared/interactive'
+import { interactiveFollowup, readInteractiveState } from '@ramu/shared/interactive'
 import { interactiveStorage } from '@ramu/shared/interactiveStorage'
 import { INTERACTIVE_FOLLOWUP_EVENT, type InteractiveFollowupDetail } from './followup'
 import { interactivePaletteFromVariant, interactiveThemeVariables } from '@ramu/shared/interactiveTheme'
@@ -91,7 +92,6 @@ function InteractiveDocumentCard({
   const [, setScenarioRevision] = useState(0)
   const scenarios = cache.scenarios(reference.id, reference.version)
   const [error, setError] = useState('')
-  const [url, setUrl] = useState('')
   const [visible, setVisible] = useState(false)
   const [evicted, setEvicted] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -114,32 +114,16 @@ function InteractiveDocumentCard({
   const live = !!document && visible && !evicted && !failed && view === 'preview'
   const instance = `${key}:${generation}`
   const html = document?.html
+  const { url, error: mountError } = useContentDocument(html, instance, live, state)
   useEffect(() => {
-    if (!live || !html) return
-    // Built at mount time so returning to the card restores the latest saved scenario.
-    const source = interactiveHtml(html, instance, state.current)
-    let cancelled = false,
-      mounted = ''
-    setUrl('')
     setReady(false)
-    void ramu
-      .invoke('app.content.mount', source)
-      .then((value) => {
-        mounted = value
-        if (cancelled) void ramu.invoke('app.content.release', value)
-        else setUrl(value)
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setError(String(error))
-          setFailed(true)
-        }
-      })
-    return () => {
-      cancelled = true
-      if (mounted) void ramu.invoke('app.content.release', mounted)
-    }
   }, [live, html, instance])
+  useEffect(() => {
+    if (mountError) {
+      setError(mountError)
+      setFailed(true)
+    }
+  }, [mountError])
   useEffect(() => {
     let cancelled = false
     void invoke('interactive.get', reference.sessionId, reference.id, reference.version)
@@ -582,10 +566,10 @@ function InteractiveDocumentCard({
               style={{ height: live && url ? height : undefined, width }}
             >
               {live && url && (
-                <iframe
+                <ContentFrame
                   ref={frame}
                   key={url}
-                  aria-label={reference.title}
+                  title={reference.title}
                   onLoad={() => {
                     if (loaded.current === url) {
                       setError(t('Document navigation is unavailable. Reset to reload the saved version.'))
@@ -593,10 +577,8 @@ function InteractiveDocumentCard({
                     }
                     loaded.current = url
                   }}
-                  sandbox="allow-scripts"
-                  src={url}
-                  className="absolute inset-0 block size-full border-0 transition-opacity duration-150 motion-reduce:transition-none"
-                  style={{ opacity: ready ? 1 : 0 }}
+                  url={url}
+                  ready={ready}
                 />
               )}
               {!(live && url && ready) && (

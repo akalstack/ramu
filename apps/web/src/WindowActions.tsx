@@ -1,3 +1,4 @@
+import { DragHandle } from '@/components/drag-handle'
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { t, useLanguage } from './i18n'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -11,7 +12,6 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
-  GripVertical,
   Eye,
   EyeOff,
   Pencil,
@@ -408,18 +408,14 @@ function SortableActionRow({ id, busy, children }: { id: string; busy: boolean; 
         zIndex: isDragging ? 1 : undefined,
       }}
     >
-      <button
-        type="button"
+      <DragHandle
         ref={setActivatorNodeRef}
-        className="flex-none cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing disabled:cursor-default"
         aria-label={t('Drag to reorder')}
         title={t('Drag to reorder')}
         disabled={busy}
         {...attributes}
         {...listeners}
-      >
-        <GripVertical size={14} />
-      </button>
+      />
       {children}
     </div>
   )

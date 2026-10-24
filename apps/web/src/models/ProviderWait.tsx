@@ -33,7 +33,9 @@ export function LimitTrayRow({
   stillLimited = false,
   busy = false,
   onTry,
+  readOnly = false,
 }: {
+  readOnly?: boolean
   wait: ProviderWaitState
   autoResume: AutoResumeControl
   now?: number
@@ -52,7 +54,11 @@ export function LimitTrayRow({
     .filter(Boolean)
     .join('\n')
   return (
-    <div role="status" title={tooltip} className="provider-wait flex items-center gap-2 min-h-7 px-1 text-caption">
+    <div
+      role="status"
+      title={tooltip}
+      className="provider-wait flex flex-wrap items-center gap-2 min-h-7 px-1 text-caption"
+    >
       <Clock3 size={14} className="flex-none text-muted-foreground" aria-hidden="true" />
       <strong className="flex-none font-medium text-foreground">{title}</strong>
       <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground">
@@ -62,12 +68,13 @@ export function LimitTrayRow({
         variant={view.primary ? 'default' : 'ghost'}
         size="xs"
         className={view.primary ? 'flex-none' : 'flex-none text-muted-foreground'}
-        disabled={busy}
+        disabled={busy || readOnly}
         onClick={onTry}
       >
         {t(ACTION_LABEL[view.action])}
       </Button>
       <Menu
+        disabled={readOnly}
         label={autoResumeLabel(autoResume)}
         className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover flex-none h-6 gap-1 px-1.5 text-caption font-normal"
         align="end"
@@ -87,11 +94,20 @@ export function LimitTrayRow({
  * Shown in the chat tray while the thread is at a usage limit. The thread is not failed: messages are kept and sent
  * when it continues. Try again checks the limit now; Auto-resume is this thread's own choice or the default.
  */
-export function ProviderWaitNote({ retry, autoResume }: { retry: LimitRetry; autoResume: AutoResumeControl }) {
+export function ProviderWaitNote({
+  retry,
+  autoResume,
+  readOnly = false,
+}: {
+  retry: LimitRetry
+  autoResume: AutoResumeControl
+  readOnly?: boolean
+}) {
   if (!retry.wait) return null
   return (
     <LimitTrayRow
       wait={retry.wait}
+      readOnly={readOnly}
       autoResume={autoResume}
       stillLimited={retry.stillLimited}
       busy={retry.busy}

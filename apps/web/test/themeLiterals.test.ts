@@ -7,8 +7,9 @@ const SRC = join(import.meta.dirname, '../src')
 /** Files that legitimately define or mirror colors; everything else takes its colors from the theme tokens. */
 const TOKEN_FILES = new Set([
   'styles.css',
+  'components/theme-recovery-button.css', // Fixed recovery palette, independent of candidate tokens.
   'editor/editorTheme.ts', // workbench palettes for Monaco, which cannot read CSS variables
-  'views/TerminalView.tsx', // xterm palettes, for the same reason
+  'theme/terminalTheme.ts', // xterm palettes, for the same reason
   'settings/AppSettings.tsx', // accent choices of Ramu Default
   'Brand.tsx', // logo artwork
 ])
@@ -35,11 +36,6 @@ const ALLOWED = new Set([
   'interactive/InteractiveContent.tsx #eeeef0',
   'interactive/InteractiveContent.tsx #a78bfa',
   'interactive/InteractiveContent.tsx #a1a1aa',
-  'theme/ThemeEditor.tsx #202024', // Keep/Revert bar: fixed colors so it stays readable
-  'theme/ThemeEditor.tsx #f5f5f7',
-  'theme/ThemeEditor.tsx #55555c',
-  'theme/ThemeEditor.tsx #77777f',
-  'theme/ThemeEditor.tsx #17171a',
 ])
 
 const LITERAL = /#[0-9a-fA-F]{8}\b|#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3,4}\b(?![\w-])|\bbg-white\b|\btext-white\b/g

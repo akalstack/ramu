@@ -35,6 +35,52 @@ export const registerMemoryHandlers: RegisterHandlers = ({
     args: z.tuple([id, z.boolean()]),
     run: (stageId: string, scripts: boolean) => need(externalSkills).confirm(stageId, scripts),
   },
+  'skills.create': {
+    args: z.tuple([
+      z.object({
+        name: z.string().min(1).max(64),
+        description: z.string().min(1).max(4000),
+        content: z.string().min(1).max(24_000),
+        projectId: id.nullable(),
+      }),
+    ]),
+    run: (input: { name: string; description: string; content: string; projectId: string | null }) =>
+      need(externalSkills).create(input),
+  },
+  'skills.fork': {
+    args: z.tuple([id, z.string().min(1).max(64).optional()]),
+    run: (skillId: string, name?: string) => need(externalSkills).fork(skillId, name),
+  },
+  'skills.edit': {
+    args: z.tuple([
+      id,
+      z.object({ description: z.string().max(4000).optional(), content: z.string().max(24_000).optional() }),
+      z.number().int().nonnegative(),
+    ]),
+    run: (skillId: string, changes: { description?: string; content?: string }, revision: number) =>
+      need(externalSkills).edit(skillId, changes, revision),
+  },
+  'skills.copyUpdate': { args: z.tuple([id]), run: (skillId: string) => need(externalSkills).copyUpdate(skillId) },
+  'skills.applyCopyUpdate': {
+    args: z.tuple([
+      id,
+      z.number().int().positive(),
+      z.number().int().positive(),
+      z.object({
+        description: z.string().min(1).max(4000),
+        content: z.string().min(1).max(24_000),
+        files: z
+          .record(z.string().max(500), z.enum(['copy', 'source']))
+          .refine((files) => Object.keys(files).length <= 1001),
+      }),
+    ]),
+    run: (
+      skillId: string,
+      revision: number,
+      sourceRevision: number,
+      changes: { description: string; content: string; files: Record<string, 'copy' | 'source'> },
+    ) => need(externalSkills).applyCopyUpdate(skillId, revision, sourceRevision, changes),
+  },
   'skills.cancel': { args: z.tuple([id]), run: (stageId: string) => need(externalSkills).cancel(stageId) },
   'skills.updateSource': { args: z.tuple([id]), run: (skillId: string) => need(externalSkills).update(skillId) },
   'skills.remove': { args: z.tuple([id]), run: (skillId: string) => need(externalSkills).remove(skillId) },

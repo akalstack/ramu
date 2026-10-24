@@ -1,3 +1,4 @@
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useEffect, useRef, useState, type ClipboardEvent } from 'react'
 import { Check, ClipboardCopy, Eye, EyeOff, Globe, Plus, RefreshCw, X } from 'lucide-react'
 import { SettingsGroupTitle } from '@/components/settings-row'
@@ -27,41 +28,79 @@ import { GHOST_ICON_BUTTON_CLASS, SECONDARY_BUTTON_CLASS, SETTINGS_FORM_CLASS } 
 /** Owned by the settings panel so the shared Save button, unsaved-change guard and reload cover these values too. */
 export function useProviderEnvironment(scope: SettingsScope, active: boolean) {
   const invoke = useScopedInvoke(scope)
+  const readOnly = scope.targets?.some((target) => target.viewOnly) ?? false
+  const key = scope.loadKey
+  const access = useRef({ key, readOnly })
+  access.current = { key, readOnly }
+  const current = () => access.current.key === key && !access.current.readOnly
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  const sequence = useRef(0)
   const [status, setStatus] = useState<ProviderEnvironmentStatus | null>(null)
   const [draft, setDraft] = useState<ProviderEnvironmentValues>({})
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const load = async (retry = false) => {
+    if (!current()) return
+    const request = ++sequence.current
     setLoading(true)
     setError(null)
     try {
       const next = await invoke('providers.environment', retry)
+      if (!current() || request !== sequence.current) return
+      setLoadedKey(key)
       setStatus(next)
       setDraft(next.values ?? {})
     } catch (reason) {
-      setError(errorText(reason))
+      if (current() && request === sequence.current) setError(errorText(reason))
     } finally {
-      setLoading(false)
+      if (access.current.key === key && request === sequence.current) setLoading(false)
     }
   }
   // Fetched when the page is first shown for a host; returning to the page keeps unsaved edits.
   const loaded = useRef<string | null>(null)
   useEffect(() => {
-    setDraft(status?.values ?? {})
+    ++sequence.current
+    setLoadedKey(null)
+    setStatus(null)
+    setDraft({})
     loaded.current = null
   }, [scope.loadKey])
   useEffect(() => {
-    if (!active || scope.loading || loaded.current === scope.loadKey) return
+    if (!readOnly) return
+    ++sequence.current
+    setLoading(false)
+    if (loadedKey !== key) loaded.current = null
+  }, [readOnly, loadedKey, key])
+  useEffect(() => {
+    if (!active || readOnly || scope.loading || loaded.current === scope.loadKey) return
     loaded.current = scope.loadKey
     void load()
-  }, [active, scope.loadKey, scope.loading, invoke])
-  const changed = !!status?.values && !sameEnvironment(draft, status.values)
+  }, [active, scope.loadKey, scope.loading, invoke, readOnly])
+  const changed = loadedKey === key && !!status?.values && !sameEnvironment(draft, status.values)
   const save = async () => {
+    if (access.current.key !== key)
+      throw new Error(t('The selected host changed. Reload environment variables before saving.'))
+    if (!current()) throw new Error(t(VIEW_ONLY_WRITE_NOTICE))
+    if (loadedKey !== key) throw new Error(t('Reload environment variables before saving.'))
     const next = await invoke('providers.setEnvironment', draft)
+    if (!current()) return
     setStatus(next)
     setDraft(next.values ?? {})
   }
-  return { status, draft, setDraft, changed, save, load, loading, error }
+  const updateDraft: typeof setDraft = (next) => {
+    if (current() && loadedKey === key) setDraft(next)
+  }
+  return {
+    status: loadedKey === key ? status : null,
+    draft: loadedKey === key ? draft : {},
+    setDraft: updateDraft,
+    changed,
+    save,
+    load,
+    loading,
+    error,
+    readOnly,
+  }
 }
 export type ProviderEnvironment = ReturnType<typeof useProviderEnvironment>
 
@@ -87,7 +126,7 @@ export function EnvironmentSettings({
   const [copied, setCopied] = useState(false)
   const focus = useRef<{ row: number; field: 'key' | 'value' } | null>(null)
   const list = useRef<HTMLDivElement>(null)
-  const editable = !!status?.canAdminister && status.state !== 'unavailable'
+  const editable = !environment.readOnly && !!status?.canAdminister && status.state !== 'unavailable'
   // Turned-off providers stay listed while they still have variables, so nothing saved is hidden.
   const scopes: EnvironmentScope[] = [
     'global',
@@ -132,6 +171,7 @@ export function EnvironmentSettings({
   return (
     <div className={SETTINGS_FORM_CLASS}>
       <SettingsGroupTitle>{t('Environment variables')}</SettingsGroupTitle>
+      {environment.readOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <p className="muted text-muted-foreground small text-caption">
         {t(
           'Added to the agent processes Ramu starts on this host, over your shell environment. Values are kept in the host’s credential store. New threads use changes; running threads keep theirs.',
@@ -147,7 +187,12 @@ export function EnvironmentSettings({
           <p className="error text-bad small text-caption m-0!">
             {t('Saved variables could not be read. Unlock the credential store on this host, then try again.')}
           </p>
-          <Button variant="secondary" size="sm" disabled={loading} onClick={() => void load(true)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={environment.readOnly || loading}
+            onClick={() => void load(true)}
+          >
             <RefreshCw size={13} className={loading ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} />
             {t('Try again')}
           </Button>

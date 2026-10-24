@@ -1,3 +1,5 @@
+import { LocalInlineAction } from '@/components/inline-action'
+import { ThemeRecoveryButton } from '@/components/theme-recovery-button'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
@@ -83,9 +85,6 @@ async function share(theme: RamuTheme, how: 'download' | 'copy') {
   }
 }
 
-/** Fixed colors, so Keep and Revert stay readable whatever the draft theme does to the rest of the app. */
-const BAR_STYLE = { background: '#202024', color: '#f5f5f7', border: '1px solid #55555c' } as const
-
 function ColorField({
   label,
   value,
@@ -103,7 +102,7 @@ function ColorField({
     <div className="flex items-center gap-2 min-h-8">
       <input
         type="color"
-        aria-label={label}
+        aria-label={t(label)}
         value={value}
         onChange={(event) => {
           setText(null)
@@ -359,14 +358,13 @@ export function ThemeEditor({
           {references.map((reference) => (
             <span key={reference.id} className="inline-flex items-center gap-1 text-caption text-muted-foreground">
               <span className="max-w-[160px] truncate">{reference.name}</span>
-              <button
-                type="button"
-                className="bg-transparent p-0 border-0 underline"
+              <LocalInlineAction
+                tone="muted"
                 aria-label={`${t('Remove reference image')} ${reference.name}`}
                 onClick={() => setReferences((current) => current.filter((entry) => entry.id !== reference.id))}
               >
                 {t('Remove')}
-              </button>
+              </LocalInlineAction>
             </span>
           ))}
           {references.length > 0 && (
@@ -380,13 +378,9 @@ export function ThemeEditor({
             {generated && `${t('Drafted with')} ${generated}. ${t('This may use that provider’s usage.')} `}
             {locked.light.length + locked.dark.length > 0 && `${t('Colors you set by hand stay as they are.')} `}
             {locked.light.length + locked.dark.length > 0 && (
-              <button
-                type="button"
-                className="underline bg-transparent p-0 border-0"
-                onClick={() => setLocked(NO_LOCKED_ROLES)}
-              >
+              <LocalInlineAction tone="muted" onClick={() => setLocked(NO_LOCKED_ROLES)}>
                 {t('Let AI change them')}
-              </button>
+              </LocalInlineAction>
             )}
           </p>
         )}
@@ -394,7 +388,7 @@ export function ThemeEditor({
           <div className="flex gap-2" role="group" aria-label={t('Candidates')}>
             {candidates.map((candidate, index) => (
               <div key={candidate.id} className="flex-1 min-w-0 flex flex-col gap-1">
-                <ThemePreview variant={candidate[variant]} compact />
+                <ThemePreview variant={candidate[variant]} appearance={variant} compact />
                 <Button
                   variant="secondary"
                   onClick={() => {
@@ -415,7 +409,7 @@ export function ThemeEditor({
             </Button>
           </div>
         )}
-        <ThemePreview variant={draft[variant]} />
+        <ThemePreview variant={draft[variant]} appearance={variant} />
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
           {GROUPS.map((group) => (
             <section key={group.title} className="mb-3">
@@ -471,34 +465,17 @@ export function ThemeEditor({
           </Button>
         </div>
         <div
-          className="flex items-center justify-end gap-2 rounded-(--radius-s) p-2"
-          style={BAR_STYLE}
+          className="theme-recovery-bar flex items-center justify-end gap-2 rounded-(--radius-s) p-2"
           role="group"
           aria-label={t('Try this theme')}
         >
           <span className="flex-1 text-caption">
             {t('Trying this theme in the app. Revert restores the previous one.')}
           </span>
-          <button
-            type="button"
-            style={{ background: 'transparent', color: '#f5f5f7', border: '1px solid #77777f' }}
-            onClick={revert}
-          >
-            {t('Revert')}
-          </button>
-          <button
-            type="button"
-            style={{
-              background: '#f5f5f7',
-              color: '#17171a',
-              border: '1px solid transparent',
-              opacity: issues.length ? 0.45 : 1,
-            }}
-            disabled={issues.length > 0}
-            onClick={keep}
-          >
+          <ThemeRecoveryButton onClick={revert}>{t('Revert')}</ThemeRecoveryButton>
+          <ThemeRecoveryButton variant="solid" disabled={issues.length > 0} onClick={keep}>
             {t('Keep theme')}
-          </button>
+          </ThemeRecoveryButton>
         </div>
       </DialogContent>
     </Dialog>

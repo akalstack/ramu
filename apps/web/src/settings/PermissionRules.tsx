@@ -1,40 +1,53 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { PermissionRemoval, SavedPermissionRule } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dropdown } from '../Menu'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
-import { useSettingsInvoke } from './SettingsScope'
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
+import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
 import { SettingsCard, SettingsCardList, usePaged } from './cards'
 
 export function PermissionRules({ disabled }: { disabled: boolean }) {
   const invoke = useSettingsInvoke()
+  const scope = useContext(SettingsScopeContext)
+  const host = scope?.primaryId ?? ''
+  const viewOnly = scope?.targets?.some((target) => target.viewOnly) ?? false
+  const access = useRef({ host, viewOnly, disabled })
+  access.current = { host, viewOnly, disabled }
+  const [loadedHost, setLoadedHost] = useState(host)
+  const currentHost = loadedHost === host
   const [rules, setRules] = useState<SavedPermissionRule[]>([])
   const [target, setTarget] = useState('all')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const revision = useRef(0)
   const load = useCallback(async () => {
+    if (viewOnly || access.current.host !== host || access.current.viewOnly) return
     const current = ++revision.current
     try {
       const result = await invoke('settings.permissions.list')
-      if (revision.current !== current) return
+      if (revision.current !== current || access.current.host !== host || access.current.viewOnly) return
       setRules(result)
+      setLoadedHost(host)
       setError(null)
     } catch (error) {
       if (revision.current === current) setError(errorText(error))
     }
-  }, [invoke])
+  }, [invoke, host, viewOnly])
   const invalidate = useCallback(() => {
     revision.current++
   }, [])
   useEffect(() => {
+    if (viewOnly) return invalidate
     setRules([])
+    setTarget('all')
     void load()
     return invalidate
-  }, [load, invalidate])
+  }, [load, invalidate, viewOnly])
   const change = async (id?: string) => {
+    if (!currentHost || access.current.host !== host || access.current.viewOnly || access.current.disabled) return
     setBusy(true)
     setError(null)
     try {
@@ -53,11 +66,13 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
     }
   }
   const projects = [
-    ...new Map(rules.filter((rule) => rule.projectId).map((rule) => [rule.projectId!, rule.projectName!])).entries(),
+    ...new Map(
+      (currentHost ? rules : []).filter((rule) => rule.projectId).map((rule) => [rule.projectId!, rule.projectName!]),
+    ).entries(),
   ]
   if (target.startsWith('project:') && !projects.some(([id]) => target === `project:${id}`))
     projects.push([target.slice(8), target.slice(8)])
-  const shown = rules.filter(
+  const shown = (currentHost ? rules : []).filter(
     (rule) =>
       target === 'all' ||
       (target === 'user' && rule.scope === 'user') ||
@@ -68,6 +83,7 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
   return (
     <div className="space-y-3">
       <SettingsGroupTitle>{t('Saved approvals')}</SettingsGroupTitle>
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <p className="m-0 text-caption text-muted-foreground">
         {t(
           'Rules apply to the selected provider on this host. User rules cover all projects; project rules cover one project.',
@@ -85,10 +101,14 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
             ...projects.map(([id, name]) => ({ value: `project:${id}`, label: `${t('Project')}: ${name}` })),
           ]}
         />
-        <Button variant="secondary" disabled={disabled || busy || !shown.length} onClick={() => void change()}>
+        <Button
+          variant="secondary"
+          disabled={viewOnly || disabled || busy || !shown.length}
+          onClick={() => void change()}
+        >
           {t('Remove displayed approvals')}
         </Button>
-        <Button variant="ghost" disabled={busy} onClick={() => void load()}>
+        <Button variant="ghost" disabled={viewOnly || busy} onClick={() => void load()}>
           {t('Refresh')}
         </Button>
       </div>
@@ -104,7 +124,12 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
               rule.scope === 'user' ? t('User — all projects') : `${t('Project')}: ${rule.projectName}`
             }`}
             actions={
-              <Button variant="ghost" size="sm" disabled={disabled || busy} onClick={() => void change(rule.id)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={viewOnly || disabled || busy}
+                onClick={() => void change(rule.id)}
+              >
                 {t('Remove')}
               </Button>
             }

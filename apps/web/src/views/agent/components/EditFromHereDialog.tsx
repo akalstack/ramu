@@ -1,3 +1,4 @@
+import { VIEW_ONLY_WRITE_NOTICE } from '../../../composer/viewerAccess'
 import { useEffect, useState } from 'react'
 import { History, LoaderCircle, Paperclip, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
@@ -22,7 +23,9 @@ export function EditFromHereDialog({
   offlineHost,
   onCancel,
   onRewound,
+  readOnly = false,
 }: {
+  readOnly?: boolean
   edit: MessageEdit
   sessionId: string
   /** The agent is working: rewinding stops it first. */
@@ -39,7 +42,7 @@ export function EditFromHereDialog({
   const [error, setError] = useState<string | null>(null)
   // Which files a revert would restore, so the button can say so (or step aside when there are none).
   useEffect(() => {
-    if (offlineHost) return
+    if (offlineHost || readOnly) return
     let cancelled = false
     void invoke('reviews.chatUndoPreview', sessionId, edit.seq).then(
       (preview) => !cancelled && setPlan(preview),
@@ -48,11 +51,12 @@ export function EditFromHereDialog({
     return () => {
       cancelled = true
     }
-  }, [sessionId, edit.seq, offlineHost, invoke])
+  }, [sessionId, edit.seq, offlineHost, readOnly, invoke])
   const ready = plan?.files.filter((file) => file.status === 'ready') ?? []
   const skipped = (plan?.files.length ?? 0) - ready.length
 
   const rewind = async (revert: boolean) => {
+    if (readOnly || offlineHost || busy) return
     setBusy(revert ? 'revert' : 'keep')
     setError(null)
     try {
@@ -107,6 +111,11 @@ export function EditFromHereDialog({
             </span>
           )}
         </blockquote>
+        {readOnly && (
+          <p role="status" className="mx-5 mb-3 text-caption text-muted-foreground">
+            {t(VIEW_ONLY_WRITE_NOTICE)}
+          </p>
+        )}
         {(error || offlineHost) && (
           <p role="alert" className="mx-5 mb-3 text-caption text-bad">
             {error ?? t('{0} is offline. Rewinding needs it connected.', { '0': offlineHost })}
@@ -121,7 +130,7 @@ export function EditFromHereDialog({
             <Button
               variant="destructive"
               size="sm"
-              disabled={!!busy || !!offlineHost}
+              disabled={readOnly || !!busy || !!offlineHost}
               title={t('Restore the files the agent changed from this message on')}
               onClick={() => void rewind(true)}
             >
@@ -133,7 +142,7 @@ export function EditFromHereDialog({
             variant="default"
             size="sm"
             autoFocus
-            disabled={!!busy || !!offlineHost}
+            disabled={readOnly || !!busy || !!offlineHost}
             title={t('Files stay as they are')}
             onClick={() => void rewind(false)}
           >

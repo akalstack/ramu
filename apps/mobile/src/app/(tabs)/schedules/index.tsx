@@ -5,7 +5,7 @@ import { CalendarClock, Plus } from 'lucide-react-native'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { useAutomation } from '../../../runtime/automation'
-import { runsOf, sortSchedules } from '../../../runtime/scheduleModel'
+import { runsOf, sortSchedules, VIEW_ONLY_SCHEDULE_NOTICE } from '../../../runtime/scheduleModel'
 import { useT } from '../../../i18n'
 import {
   GlassButton,
@@ -33,6 +33,7 @@ export default function SchedulesScreen() {
   const data = auto.of(store.selected)
   const schedules = useMemo(() => sortSchedules(data.schedules), [data.schedules])
   const online = pc?.status === 'online'
+  const viewOnly = pc?.access === 'viewer'
   const [refreshing, setRefreshing] = useState(false)
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -40,12 +41,15 @@ export default function SchedulesScreen() {
     setRefreshing(false)
   }, [auto, store.selected, online])
   const create = () => {
+    if (viewOnly) return
     if (!pc) openNeedComputer('none')
     else if (pc.status === 'revoked') openNeedComputer('revoked')
     else if (!online) openNeedComputer('offline')
     else router.push({ pathname: '/schedule-edit', params: { computer: store.selected } })
   }
-  const actions = useTabActions({ icon: Plus, label: t.newSchedule, systemIcon: 'plus', onPress: create })
+  const actions = useTabActions(
+    viewOnly ? null : { icon: Plus, label: t.newSchedule, systemIcon: 'plus', onPress: create },
+  )
   return (
     <Screen>
       <Header back={false} large collapsed={edge.scrolled} title={t.schedules} right={actions} />
@@ -65,6 +69,16 @@ export default function SchedulesScreen() {
         >
           {t.schedulesHint}
         </T>
+        {viewOnly && (
+          <T
+            tone="muted"
+            size={font.control}
+            accessibilityRole="alert"
+            style={{ paddingHorizontal: space.l, paddingBottom: space.m }}
+          >
+            {VIEW_ONLY_SCHEDULE_NOTICE[store.language]}
+          </T>
+        )}
         {data.error ? (
           <T tone="bad" size={font.control} style={{ paddingHorizontal: space.l, paddingBottom: space.m }}>
             {data.error}
@@ -84,8 +98,12 @@ export default function SchedulesScreen() {
           </Group>
         ) : data.loaded || !online ? (
           <View>
-            <Nothing icon={CalendarClock} title={t.noSchedules} detail={online ? t.noSchedulesHint : t.offlineNeeded} />
-            {online ? (
+            <Nothing
+              icon={CalendarClock}
+              title={t.noSchedules}
+              detail={viewOnly ? '' : online ? t.noSchedulesHint : t.offlineNeeded}
+            />
+            {online && !viewOnly ? (
               <View style={{ alignItems: 'center' }}>
                 <GlassButton primary title={t.newSchedule} icon={Plus} onPress={create} />
               </View>

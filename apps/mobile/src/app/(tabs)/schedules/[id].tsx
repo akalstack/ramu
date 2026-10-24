@@ -8,6 +8,7 @@ import { scoped, useStore } from '../../../runtime/store'
 import { useAutomation } from '../../../runtime/automation'
 import {
   NO_PROJECT,
+  VIEW_ONLY_SCHEDULE_NOTICE,
   RUN_LABELS,
   describeRule,
   formatWhen,
@@ -70,7 +71,6 @@ function Detail({
     schedule.projectId === NO_PROJECT
       ? t.noProject
       : (store.projects.find((p) => p.id === scoped(computer, schedule.projectId))?.name ?? schedule.projectId)
-  const online = store.computers.find((pc) => pc.id === computer)?.status === 'online'
   const open = (run: (typeof runs)[number]) => {
     if (!run.taskId) return
     router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(computer, run.taskId) } })
@@ -80,12 +80,14 @@ function Detail({
       <Header
         title={schedule.name}
         right={
-          <HeaderButton
-            icon={Pencil}
-            label="Edit"
-            systemIcon="pencil"
-            onPress={() => router.push({ pathname: '/schedule-edit', params: { computer, id: schedule.id } })}
-          />
+          commands.viewOnly ? null : (
+            <HeaderButton
+              icon={Pencil}
+              label="Edit"
+              systemIcon="pencil"
+              onPress={() => router.push({ pathname: '/schedule-edit', params: { computer, id: schedule.id } })}
+            />
+          )
         }
       />
       <PageScrollView
@@ -99,19 +101,24 @@ function Detail({
           <Fact label={t.scope}>{`${project} · ${schedule.settings.model || schedule.settings.provider}`}</Fact>
           <Fact label={t.timezone}>{schedule.timezone}</Fact>
         </View>
+        {commands.viewOnly && (
+          <T tone="muted" accessibilityRole="alert">
+            {VIEW_ONLY_SCHEDULE_NOTICE[lang]}
+          </T>
+        )}
         <View style={{ flexDirection: 'row', gap: space.s }}>
           <Button
             title={commands.paused ? t.resume : t.pause}
             icon={commands.paused ? Play : Pause}
             kind="secondary"
-            disabled={!online}
+            disabled={commands.disabled}
             style={{ flex: 1 }}
             onPress={() => void commands.toggle()}
           />
           <Button
             title={t.runNow}
             icon={Zap}
-            disabled={!online}
+            disabled={commands.disabled}
             style={{ flex: 1 }}
             onPress={() => void commands.runNow()}
           />
@@ -161,7 +168,7 @@ function Detail({
           title={t.delete}
           icon={Trash2}
           kind="danger"
-          disabled={!online}
+          disabled={commands.disabled}
           onPress={() => commands.remove(() => goBackOrHome(router))}
         />
       </PageScrollView>

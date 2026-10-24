@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BrowserProfileCatalog } from '@ramu/shared/types/browser'
 import type { RamuMethods } from '@ramu/shared/api'
 import { invokeOn } from '../ipc'
@@ -16,11 +17,16 @@ export function HostBrowserSettings({
   hostId,
   refreshed,
   onRemoved,
+  readOnly = false,
 }: {
   hostId: string
+  readOnly?: boolean
   refreshed(): Promise<void>
   onRemoved(id: string): void
 }) {
+  const access = useRef({ hostId, readOnly })
+  access.current = { hostId, readOnly }
+  const allowed = () => access.current.hostId === hostId && !access.current.readOnly
   const [status, setStatus] = useState<ReturnType<RamuMethods['hostBrowser.status']> | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -31,12 +37,14 @@ export function HostBrowserSettings({
   const [review, setReview] = useState<ReturnType<RamuMethods['hostBrowser.profileReview']> | null>(null)
   const local = hostId === ownHostId()
   const refresh = useCallback(async () => {
+    if (readOnly || access.current.readOnly || access.current.hostId !== hostId) return
     const status = await invokeOn(hostId, 'hostBrowser.status')
+    if (access.current.readOnly || access.current.hostId !== hostId) return
     setStatus(status)
     if (local && status.enabled) {
       setProfiles(await invokeOn(hostId, 'hostBrowser.profiles'))
     }
-  }, [hostId, local])
+  }, [hostId, local, readOnly])
   useEffect(() => {
     let active = true
     void refresh().catch((error) => {
@@ -47,18 +55,25 @@ export function HostBrowserSettings({
     }
   }, [refresh])
   const act = async (work: () => Promise<unknown>) => {
+    if (!allowed()) return
     setBusy(true)
     setError('')
     try {
       await work()
       await refresh()
-      await refreshed()
+      if (allowed()) await refreshed()
     } catch (error) {
       setError(t(errorText(error)))
     } finally {
       setBusy(false)
     }
   }
+  if (readOnly)
+    return (
+      <p role="status" className="text-caption text-muted-foreground">
+        {t(VIEW_ONLY_WRITE_NOTICE)}
+      </p>
+    )
   return (
     <div className="flex flex-col gap-3">
       <SettingsGroupTitle>{t('Host browser')}</SettingsGroupTitle>

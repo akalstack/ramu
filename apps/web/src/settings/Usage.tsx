@@ -1,3 +1,4 @@
+import { LocalInlineAction } from '@/components/inline-action'
 import { usageTone, usagePercent, usageScopeHint } from '@ramu/shared/usage/presentation'
 export { usageTone } from '@ramu/shared/usage/presentation'
 import { t, useLanguage, formatLocale } from '../i18n'
@@ -356,14 +357,14 @@ function OtherAccounts({ provider, others }: { provider: AgentProvider; others: 
         </div>
       ))}
       {(hidden > 0 || expanded) && rows.length > VISIBLE_ACCOUNTS && (
-        <button
-          type="button"
-          className="self-start rounded-(--radius-s) text-caption text-muted-foreground hover:text-foreground"
+        <LocalInlineAction
+          tone="muted"
+          className="self-start"
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? t('Show fewer') : t('+{0} more', { '0': hidden })}
-        </button>
+        </LocalInlineAction>
       )}
     </div>
   )

@@ -1,3 +1,4 @@
+import { DragHandle } from '@/components/drag-handle'
 import { SubagentSelectionSettings } from './SubagentSelectionSettings'
 import { SettingsField, useSettingsInvoke } from './SettingsScope'
 import { SettingsGroupTitle, SettingsRow } from '@/components/settings-row'
@@ -7,7 +8,7 @@ import { t, useLanguage } from '../i18n'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { ArrowDown, ArrowUp, Copy, GripVertical, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react'
 import {
   DndContext,
   KeyboardSensor,
@@ -183,18 +184,14 @@ function SortableRow({
         zIndex: isDragging ? 1 : undefined,
       }}
     >
-      <button
-        type="button"
+      <DragHandle
         ref={setActivatorNodeRef}
-        className="inline-grid place-items-center w-[18px] h-[22px] flex-none text-muted-foreground cursor-grab touch-none rounded-(--radius-xs) hover:text-foreground hover:bg-hover active:cursor-grabbing disabled:cursor-default"
         aria-label={t('Drag fallback {0} to reorder', { '0': index + 1 })}
         title={t('Drag to reorder')}
         disabled={disabled}
         {...attributes}
         {...listeners}
-      >
-        <GripVertical size={14} />
-      </button>
+      />
       {children}
     </div>
   )

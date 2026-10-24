@@ -1,3 +1,4 @@
+import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
 import { errorText } from '../lib/errors'
 import { SettingsRow } from '@/components/settings-row'
@@ -36,12 +37,16 @@ export function ProviderSettings({
   const sequence = useRef(0),
     config = value.providerBinaries
   const host = scope?.primaryId || ownHostId()
+  const viewOnly = !!scope?.targets.find((target) => target.id === host)?.viewOnly
+  const access = useRef({ host, viewOnly })
+  access.current = { host, viewOnly }
+  const allowed = () => access.current.host === host && !access.current.viewOnly
   const status = (...args: Parameters<import('@ramu/shared/api').RamuMethods['providers.status']>) =>
     invoke('providers.status', ...args)
   const statusQuery = useQuery({ ...providerStatusQuery(host, config, status), enabled: false })
   const statuses = statusQuery.data ?? []
-  const busy = statusQuery.isFetching || (!statusQuery.data && !statusQuery.isError)
-  const ready = !scope || (scope.ready && !scope.stale)
+  const busy = !viewOnly && (statusQuery.isFetching || (!statusQuery.data && !statusQuery.isError))
+  const ready = !viewOnly && (!scope || (scope.ready && !scope.stale))
   const mcp = useQuery({ queryKey: ['mcp-accounts', host], queryFn: () => invoke('mcp.status'), enabled: ready })
   const canShare = mcp.data?.canAdminister === true
   const refetchMcp = mcp.refetch
@@ -79,6 +84,7 @@ export function ProviderSettings({
   const accountUsage = useAccountUsage()
   // Cache entries are host/configuration scoped, so reopening never shows another host’s logins.
   const refresh = async (latest = false, quiet = false) => {
+    if (!allowed()) return
     const request = ++sequence.current
     setError(null)
     try {
@@ -91,13 +97,15 @@ export function ProviderSettings({
     }
   }
   useEffect(() => {
+    if (viewOnly) return
     const timer = setTimeout(() => void refresh(false, true), 350)
     return () => {
       clearTimeout(timer)
       sequence.current++
     }
-  }, [config, invoke])
+  }, [config, invoke, viewOnly])
   const change = (provider: AgentProvider, patch: Partial<NonNullable<(typeof config)[AgentProvider]>>) =>
+    allowed() &&
     onChange({ ...value, providerBinaries: { ...config, [provider]: { binary: '', ...config[provider], ...patch } } })
   const browse = async (provider: AgentProvider, key: 'binary' | 'harness') => {
     try {
@@ -108,10 +116,11 @@ export function ProviderSettings({
     }
   }
   useEffect(() => {
+    if (viewOnly) return
     const onFocus = () => void refresh(false, true)
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, [config, invoke])
+  }, [config, invoke, viewOnly])
   /** The top enabled login is the one new threads use. */
   const arrange = (
     provider: AgentProvider,
@@ -155,6 +164,7 @@ export function ProviderSettings({
       }),
     })
   const login = async (provider: AgentProvider, accountId = config[provider]?.accountId || 'default') => {
+    if (!allowed()) return
     const target =
       accountId === (config[provider]?.accountId || 'default')
         ? config
@@ -162,6 +172,7 @@ export function ProviderSettings({
     setError(null)
     try {
       const command = await invoke('providers.loginCommand', provider, target)
+      if (!allowed()) return
       if (command) {
         loginPending.current = true
         runProviderCommand(`${providerName(provider)} · ${t('Login')}`, command)
@@ -199,67 +210,72 @@ export function ProviderSettings({
   }
   return (
     <div className="settings-form [&_p]:m-0 [&_p]:leading-[1.55] flex flex-col gap-3 provider-settings">
-      <SettingsRow setting="providerUpdateChecks" className="settings-toggle [&:not(:has(+_.settings-row))]:mb-0">
-        <span>
-          <strong>{t('Check provider updates')}</strong>
-          <span className="muted text-muted-foreground block small text-caption">
-            {t('Runs in the background, even while Ramu is closed.')}
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
+      <fieldset disabled={viewOnly} className="contents">
+        <SettingsRow setting="providerUpdateChecks" className="settings-toggle [&:not(:has(+_.settings-row))]:mb-0">
+          <span>
+            <strong>{t('Check provider updates')}</strong>
+            <span className="muted text-muted-foreground block small text-caption">
+              {t('Runs in the background, even while Ramu is closed.')}
+            </span>
           </span>
-        </span>
-        <span className="flex flex-none items-center gap-2.5">
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => void refresh(true)}>
-            <RefreshCw size={14} className={busy ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} />
-            {busy ? t('Checking providers…') : t('Check now')}
-          </Button>
-          <Switch
-            aria-label={t('Check provider updates')}
-            checked={value.providerUpdateChecks}
-            onCheckedChange={(checked) => onChange({ ...value, providerUpdateChecks: checked })}
-          />
-        </span>
-      </SettingsRow>
-      {error && (
-        <p className="error text-bad small text-caption" role="alert">
-          {error}
-        </p>
-      )}
-      {AGENT_PROVIDERS.map((provider) => {
-        const status = statuses.find((item) => item.provider === provider),
-          preferences = config[provider]
-        // The draft decides, so the switch answers instantly; the status only catches up after the next check.
-        const enabled = providerEnabled(config, provider),
-          onCount = AGENT_PROVIDERS.filter((item) => providerEnabled(config, item)).length
-        return (
-          <ProviderCard
-            key={provider}
-            provider={provider}
-            status={status}
-            preferences={preferences}
-            enabled={enabled}
-            lastEnabled={onCount <= 1}
-            accountUsage={accountUsage}
-            signingIn={signingIn === provider}
-            updating={updating}
-            onChange={(patch) => change(provider, patch)}
-            onLogin={(accountId) => void login(provider, accountId)}
-            onToggleAccount={(id, on) => toggleAccount(provider, id, on)}
-            onReorder={(order) => arrange(provider, order)}
-            onRename={(id, label) => rename(provider, id, label)}
-            onRemove={(id) => remove(provider, id)}
-            onAddAccount={() => add(provider)}
-            mcpSharing={canShare ? (id) => sharing(provider, id) : undefined}
-            onMcpSharing={(ids, on) => void setSharing(provider, ids, on)}
-            mcpReadiness={canShare ? (id) => readiness(provider, id) : undefined}
-            mcpRechecking={(id) => rechecking === `${provider}:${id}`}
-            onMcpRecheck={canShare ? (id) => void recheck(provider, id) : undefined}
-            onUpdate={() => void update(provider)}
-            stale={statusQuery.isError && !!statusQuery.data}
-            onCheckAgain={() => void refresh()}
-            onUpdateRamu={onOpenSection ? () => onOpenSection('system') : undefined}
-            onBrowse={(key) => void browse(provider, key)}
-          />
-        )
-      })}
+          <span className="flex flex-none items-center gap-2.5">
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => void refresh(true)}>
+              <RefreshCw size={14} className={busy ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} />
+              {busy ? t('Checking providers…') : t('Check now')}
+            </Button>
+            <Switch
+              aria-label={t('Check provider updates')}
+              checked={value.providerUpdateChecks}
+              onCheckedChange={(checked) => {
+                if (allowed()) onChange({ ...value, providerUpdateChecks: checked })
+              }}
+            />
+          </span>
+        </SettingsRow>
+        {error && (
+          <p className="error text-bad small text-caption" role="alert">
+            {error}
+          </p>
+        )}
+        {AGENT_PROVIDERS.map((provider) => {
+          const status = statuses.find((item) => item.provider === provider),
+            preferences = config[provider]
+          // The draft decides, so the switch answers instantly; the status only catches up after the next check.
+          const enabled = providerEnabled(config, provider),
+            onCount = AGENT_PROVIDERS.filter((item) => providerEnabled(config, item)).length
+          return (
+            <ProviderCard
+              key={provider}
+              provider={provider}
+              status={status}
+              preferences={preferences}
+              enabled={enabled}
+              lastEnabled={onCount <= 1}
+              accountUsage={accountUsage}
+              signingIn={signingIn === provider}
+              updating={updating}
+              onChange={(patch) => change(provider, patch)}
+              onLogin={(accountId) => void login(provider, accountId)}
+              onToggleAccount={(id, on) => toggleAccount(provider, id, on)}
+              onReorder={(order) => arrange(provider, order)}
+              onRename={(id, label) => rename(provider, id, label)}
+              onRemove={(id) => remove(provider, id)}
+              onAddAccount={() => add(provider)}
+              mcpSharing={canShare ? (id) => sharing(provider, id) : undefined}
+              onMcpSharing={(ids, on) => void setSharing(provider, ids, on)}
+              mcpReadiness={canShare ? (id) => readiness(provider, id) : undefined}
+              mcpRechecking={(id) => rechecking === `${provider}:${id}`}
+              onMcpRecheck={canShare ? (id) => void recheck(provider, id) : undefined}
+              onUpdate={() => void update(provider)}
+              stale={statusQuery.isError && !!statusQuery.data}
+              onCheckAgain={() => void refresh()}
+              onUpdateRamu={onOpenSection ? () => onOpenSection('system') : undefined}
+              onBrowse={(key) => void browse(provider, key)}
+            />
+          )
+        })}
+      </fieldset>
     </div>
   )
 }

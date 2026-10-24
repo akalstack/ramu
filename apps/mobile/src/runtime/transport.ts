@@ -67,6 +67,15 @@ export class EventParser {
     }
   }
 }
+/** The opt-in call socket for a host, registered by `socketTransport.ts`; absent in tests and when sockets are off. */
+interface CallSocket {
+  state: string
+  invoke(method: string, args: unknown[], options: { operationKey?: string; timeoutMs?: number }): Promise<unknown>
+}
+let socketProvider: ((address: string, token: string) => CallSocket | null) | null = null
+export function useSocketProvider(provider: typeof socketProvider) {
+  socketProvider = provider
+}
 export type Fetcher = typeof globalThis.fetch
 export class HostClient {
   private controllers = new Set<AbortController>()
@@ -120,6 +129,25 @@ export class HostClient {
     }
   }
   private async call(method: string, args: unknown[], operationKey?: string): Promise<any> {
+    // Opt-in socket, used only while ready. A call that was never sent falls back to HTTP; one that was sent and lost
+    // has an unknown outcome and is reported as such, exactly as a lost HTTP reply is.
+    const socket = socketProvider?.(this.address, this.token)
+    if (socket?.state === 'ready') {
+      try {
+        return await socket.invoke(method, args, { ...(operationKey ? { operationKey } : {}), timeoutMs: 45_000 })
+      } catch (error) {
+        const failure = error as { notSent?: boolean; status?: number; code?: string }
+        if (!failure.notSent) {
+          if (failure.code === 'ECONNRESET' || !(error instanceof Error))
+            throw new HostError(
+              'Connection interrupted. The host may have received this action. Refresh and check before retrying.',
+              0,
+              true,
+            )
+          throw new HostError(error.message, failure.status ?? 0)
+        }
+      }
+    }
     const controller = new AbortController()
     this.controllers.add(controller)
     const timer = setTimeout(() => controller.abort(), 45_000)

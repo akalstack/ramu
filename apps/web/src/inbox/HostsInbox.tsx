@@ -1,3 +1,4 @@
+import { RowButton } from '@/components/row-button'
 import { useState, useEffect } from 'react'
 import { buildInbox, INBOX_TABS, type InboxChat, type InboxTab } from '@ramu/shared/hostInbox'
 import { hostInboxInput } from '@ramu/shared/hostOverview'
@@ -53,8 +54,6 @@ export function HostsInbox() {
   }
   const available = (id: string) => pc(id)?.status === 'connected'
   const shown = <T,>(list: T[]) => (tab === 'all' ? list.slice(0, 5) : list)
-  const row =
-    'flex min-h-12 w-full cursor-default items-center gap-3 rounded-(--radius-s) border-0 bg-transparent px-2.5 py-1.5 text-left text-body leading-5 text-soft hover:bg-accent hover:text-foreground aria-disabled:opacity-60'
   // The same status as the sidebar, including goal states; a finished result shows its age instead of a mark.
   const state = (task?: Task) => {
     if (!task) return null
@@ -68,10 +67,9 @@ export function HostsInbox() {
         <HostProvider key={JSON.stringify([chat.computerId, chat.id])} hostId={chat.computerId}>
           <HoverCard open={!task ? false : undefined}>
             <HoverCardTrigger
-              render={<button />}
+              render={<RowButton size="lg" disabled={!available(chat.computerId)} focusableWhenDisabled />}
               delay={400}
               closeDelay={120}
-              className={row}
               aria-disabled={!available(chat.computerId)}
               onClick={() =>
                 available(chat.computerId) &&
@@ -243,9 +241,9 @@ export function HostsInbox() {
               t('What Ramu learned'),
               model.summaries.length,
               shown(model.summaries).map(({ computerId, summary }) => (
-                <button
+                <RowButton
+                  size="lg"
                   key={JSON.stringify([computerId, summary.id])}
-                  className={row}
                   disabled={!available(computerId)}
                   onClick={() => select(computerId, { kind: 'summary', summaryId: summary.id })}
                 >
@@ -256,7 +254,7 @@ export function HostsInbox() {
                   <span className="text-caption text-muted-foreground">
                     {summary.status === 'unread' ? t('Unread') : timeAgo(summary.periodEnd)}
                   </span>
-                </button>
+                </RowButton>
               )),
             )}
             {section('completed', t('Completed'), model.completed.length, chats(model.completed))}

@@ -12,7 +12,9 @@ export function SelectionActions({
   onQuote,
   onQuoteNew,
   onAside,
+  readOnly = false,
 }: {
+  readOnly?: boolean
   scroller: React.RefObject<HTMLDivElement | null>
   onQuote: (text: string) => void
   onQuoteNew: (text: string) => void
@@ -83,6 +85,7 @@ export function SelectionActions({
     }
   }
   const aside = () => {
+    if (readOnly) return
     if (pick) {
       onAside(pick.text, pick.from)
       document.getSelection()?.removeAllRanges()
@@ -110,7 +113,7 @@ export function SelectionActions({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [pick])
+  }, [pick, readOnly])
   if (!pick) return null
   // Pressing a half must not clear the selection it acts on.
   return createPortal(
@@ -149,6 +152,7 @@ export function SelectionActions({
         title={translate('Ask a side question about this, without interrupting the thread ({0})', {
           '0': formatKeys('mod+shift+a'),
         })}
+        disabled={readOnly}
         onClick={aside}
       >
         <MessageCircle size={13} />

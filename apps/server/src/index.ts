@@ -17,6 +17,7 @@ import { InteractiveStore } from './interactive/store'
 import { registerInteractiveTools } from './interactive/tools'
 import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
+import { setAcpTerminalService } from './providers/acpTerminals'
 import { SqliteBackgroundTerminalHistory } from './workspace/backgroundTerminalHistory'
 import { ToolRegistry } from './agent/toolRegistry'
 import { ExternalSkills } from './memory/externalSkills'
@@ -329,6 +330,7 @@ const terminals = new TerminalService(
   (taskId) => send('term:changed', { taskId }),
   new SqliteBackgroundTerminalHistory(db),
 )
+setAcpTerminalService(terminals)
 const inbox = new NoticeInbox(
   (items) => send('notices:changed', items),
   (taskId) => {

@@ -1,5 +1,5 @@
 diff --git a/ios/RNSScreen.mm b/ios/RNSScreen.mm
-index 9b66012dc8db1e3af0cb5457f8dad86e7f2fe5e3..6729f74658434917ec049f698c1b0d8fa79b62d7 100644
+index 049fd22427b2bde17fd7ca59b8de65d0ee07b4b5..e68c7816dc0ec67bf02728dd2089d3cca4a97f4b 100644
 --- a/ios/RNSScreen.mm
 +++ b/ios/RNSScreen.mm
 @@ -26,6 +26,7 @@
@@ -10,7 +10,7 @@ index 9b66012dc8db1e3af0cb5457f8dad86e7f2fe5e3..6729f74658434917ec049f698c1b0d8f
  #import "RNSScrollViewHelper.h"
  #import "RNSTabBarController.h"
  
-@@ -1105,6 +1106,16 @@ - (void)overrideScrollViewBehaviorInFirstDescendantChainIfNeeded
+@@ -1151,6 +1152,16 @@ - (void)overrideScrollViewBehaviorInFirstDescendantChainIfNeeded
    }
  }
  

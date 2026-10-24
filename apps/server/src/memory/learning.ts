@@ -3,7 +3,7 @@ import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, wri
 import { isAbsolute, join, sep } from 'node:path'
 import { z } from 'zod'
 import { toolResultLimit } from '../toolInputs'
-import { copySharedSkill, writeInstalledSkill } from './skillFiles'
+import { copySharedSkill, skillExportName, writeBundledSkill } from './skillFiles'
 import { historyScope, SessionSearch, visibleRecallEvent } from './sessionSearch'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
@@ -229,8 +229,8 @@ export class LearningService {
     this.writeSkill(join(this.root, skill.id), skill.name, skill)
   }
   private writeSkill(dir: string, name: string, skill: ManagedSkill) {
-    if (skill.installation) {
-      writeInstalledSkill(dir, name, skill)
+    if (skill.installation || skill.bundle) {
+      writeBundledSkill(dir, name, skill)
       return
     }
     mkdirSync(dir, { recursive: true })
@@ -324,10 +324,10 @@ export class LearningService {
     for (const skill of this.scoped(projectId)
       .filter((skill) => this.usable(skill) && (!skill.providers?.length || skill.providers.includes(provider)))
       .sort((a, b) => Number(a.projectId !== null) - Number(b.projectId !== null)))
-      wanted.set(`ramu-${skill.name}`.slice(0, 64).replace(/-+$/, ''), skill)
+      wanted.set(skillExportName(skill.name), skill)
     const copies = new Map<string, string>()
     for (const shared of this.sharedSkills?.({ projectId, provider, accountId, cwd }) ?? []) {
-      const name = `ramu-${shared.name}`.slice(0, 64).replace(/-+$/, '')
+      const name = skillExportName(shared.name)
       // A skill managed by Ramu under the same name wins over a shared copy.
       if (!wanted.has(name) && !copies.has(name)) copies.set(name, shared.dir)
     }

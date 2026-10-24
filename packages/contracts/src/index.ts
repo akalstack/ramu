@@ -90,7 +90,21 @@ export const MAX_SOCKET_FRAME_BYTES = MAX_REQUEST_BYTES
  * identifies a logical mutation across retries. Events carry the same `{ channel, payload }` as the SSE stream.
  */
 export type SocketClientFrame =
-  { t: 'invoke'; id: number; method: string; args: unknown[]; operationKey?: string } | { t: 'ping' }
+  | { t: 'invoke'; id: number; method: string; args: unknown[]; operationKey?: string }
+  | { t: 'subscribe'; id: number; channels: string[]; keys?: Record<string, string[]> }
+  | { t: 'ping' }
+
+/** Payload field that names the resource of a high-volume channel, so a client can ask for only the threads and terminals it shows. */
+export const SOCKET_EVENT_KEYS: Readonly<Record<string, 'sessionId' | 'id'>> = {
+  'agent:event': 'sessionId',
+  'agent:rewound': 'sessionId',
+  'context:changed': 'sessionId',
+  'aside:changed': 'sessionId',
+  'term:data': 'id',
+  'term:exit': 'id',
+}
+export const MAX_SUBSCRIBED_CHANNELS = 64
+export const MAX_SUBSCRIBED_KEYS = 200
 export type SocketServerFrame =
   | { t: 'ready'; epoch: string }
   | { t: 'result'; id: number; value: unknown }
@@ -266,6 +280,24 @@ export function decodeSocketFrame(
       Array.isArray(frame.args) &&
       (frame.operationKey === undefined ||
         (typeof frame.operationKey === 'string' && OPERATION_KEY_PATTERN.test(frame.operationKey)))
+    )
+      return frame
+    if (
+      frame.t === 'subscribe' &&
+      int(frame.id) &&
+      Array.isArray(frame.channels) &&
+      frame.channels.length <= MAX_SUBSCRIBED_CHANNELS &&
+      frame.channels.every((c: unknown) => typeof c === 'string' && c.length > 0 && c.length <= 64) &&
+      (frame.keys === undefined ||
+        (frame.keys &&
+          typeof frame.keys === 'object' &&
+          !Array.isArray(frame.keys) &&
+          Object.values(frame.keys).every(
+            (list) =>
+              Array.isArray(list) &&
+              list.length <= MAX_SUBSCRIBED_KEYS &&
+              list.every((k) => typeof k === 'string' && k.length <= 128),
+          )))
     )
       return frame
     return null

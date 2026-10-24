@@ -1,3 +1,4 @@
+import { isThemePreviewDocument, themePreviewResponse, THEME_PREVIEW_CSP } from './themePreview'
 import { INTERACTIVE_CSP } from '@ramu/shared/interactive'
 import { ContentDocuments } from './contentDocuments'
 import { HostNavigation } from './hostNavigation'
@@ -52,6 +53,7 @@ import {
   systemPreferences,
   powerMonitor,
   nativeTheme,
+  net,
   WebContentsView,
   type Session,
   type WebContents,
@@ -80,7 +82,10 @@ import { ScreenSharing } from './screenSharing'
 import { BrowserImporter, type ImportSourceId } from './browserImport'
 import { ensureRuntime, loginService, loginEnabled, loginPreferred } from './runtimeLauncher'
 
-protocol.registerSchemesAsPrivileged([{ scheme: 'ramu-content', privileges: { standard: true, secure: true } }])
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'ramu-content', privileges: { standard: true, secure: true } },
+  { scheme: 'ramu-theme', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+])
 
 // Set the native runtime identity before creating menus, windows or notifications.
 app.setName('Ramu')
@@ -102,7 +107,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "media-src 'self' data:",
-  'frame-src data: ramu-content:',
+  'frame-src data: ramu-content: ramu-theme:',
   "img-src 'self' data:",
   "worker-src 'self' blob:",
   "connect-src 'self'",
@@ -173,7 +178,8 @@ async function main() {
     dir: join(userData, 'voice'),
     microphone: {
       status: () => (process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('microphone') : 'unknown'),
-      ask: () => (process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : Promise.resolve(false)),
+      ask: () =>
+        process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : Promise.resolve(false),
     },
   })
   voice.cleanupOrphans()
@@ -186,7 +192,11 @@ async function main() {
           responseHeaders: {
             ...details.responseHeaders,
             'Content-Security-Policy': [
-              details.url.startsWith('ramu-content:') ? `${INTERACTIVE_CSP}; sandbox allow-scripts` : CSP,
+              details.url.startsWith('ramu-content:')
+                ? `${INTERACTIVE_CSP}; sandbox allow-scripts`
+                : details.url.startsWith('ramu-theme:')
+                  ? THEME_PREVIEW_CSP
+                  : CSP,
             ],
           },
         })
@@ -208,6 +218,14 @@ async function main() {
   }
   const contentDocuments = new ContentDocuments()
   session.defaultSession.protocol.handle('ramu-content', (request) => contentDocuments.response(request.url))
+  session.defaultSession.protocol.handle('ramu-theme', (request) =>
+    themePreviewResponse(request.url, {
+      rendererRoot: join(import.meta.dirname, '../renderer'),
+      sourceRoot: join(import.meta.dirname, '../../../..'),
+      devUrl: process.env.ELECTRON_RENDERER_URL,
+      fetch: (url) => net.fetch(url, { redirect: 'error' }),
+    }),
+  )
   secure(session.defaultSession)
 
   const languagePreferences = (await runtimeInvoke(runtime, 'settings.app.get')) as AppPreferences
@@ -385,7 +403,11 @@ async function main() {
     // No in-app navigation or new windows; external links open in the browser.
     contents.on('will-frame-navigate', (event) => {
       // Generated documents cannot navigate, including redirects, meta refresh and script-driven navigation.
-      if (!event.isMainFrame && !contentDocuments.has(event.url)) event.preventDefault()
+      const themePreview =
+        isThemePreviewDocument(event.url) &&
+        event.frame?.parent === contents.mainFrame &&
+        (!event.initiator || event.initiator === contents.mainFrame)
+      if (!event.isMainFrame && !contentDocuments.has(event.url) && !themePreview) event.preventDefault()
     })
     contents.on('will-navigate', (e, url) => {
       if (url !== contents.getURL()) e.preventDefault()
@@ -1151,13 +1173,12 @@ async function main() {
     voiceSender(event)
     return voice.capability(voiceText(language))
   })
-  ipcMain.handle('ramu:voice:begin', (event, language: unknown) =>
-    voice.begin(voiceSender(event), voiceText(language)),
-  )
+  ipcMain.handle('ramu:voice:begin', (event, language: unknown) => voice.begin(voiceSender(event), voiceText(language)))
   ipcMain.handle('ramu:voice:transcribe', (event, token: unknown, pcm: unknown, language: unknown) => {
     const owner = voiceSender(event)
     if (!(pcm instanceof ArrayBuffer) && !ArrayBuffer.isView(pcm)) throw new Error(voiceErrorMessage('empty'))
-    const bytes = pcm instanceof ArrayBuffer ? new Uint8Array(pcm) : new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength)
+    const bytes =
+      pcm instanceof ArrayBuffer ? new Uint8Array(pcm) : new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength)
     return voice.transcribe(owner, voiceText(token, 80), bytes, voiceText(language))
   })
   ipcMain.handle('ramu:voice:cancel', (event, token: unknown) => voice.cancel(voiceSender(event), voiceText(token, 80)))

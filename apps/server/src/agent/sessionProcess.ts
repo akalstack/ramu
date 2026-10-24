@@ -30,6 +30,7 @@ import { buildHandoff, handoffBudgetBytes, DEFAULT_CONTEXT_TOKENS, type BuiltHan
 import { ProviderSessions, pendingHandoff, planHandoff } from './providerSessions'
 import { classifyLimit } from '../providers/limitClassifier'
 import { providerAdapter } from '../providers/adapters'
+import { acpTerminalHostFor } from '../providers/acpTerminals'
 import { sameProviderIdentity } from '../providers/selectionTransition'
 import type { AdvisorService } from './advisorService'
 import type { ContextUsageTracker } from './contextUsage'
@@ -465,6 +466,10 @@ export class SessionProcess {
           }
         })
         if (connection) runner.setTools?.(connection)
+        if (runner.setTerminals && providerAdapter(s.provider).native?.terminals) {
+          const terminals = acpTerminalHostFor({ taskId: s.taskId, repoId: s.repoId, cwd: s.cwd })
+          if (terminals) runner.setTerminals(terminals)
+        }
         this.launchServers.set(id, this.serversNow(s, connection))
         this.host.runners.set(id, runner)
         if (recordUser)

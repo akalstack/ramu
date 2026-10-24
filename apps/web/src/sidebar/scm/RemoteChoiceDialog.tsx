@@ -1,3 +1,5 @@
+import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
+import { VIEW_ONLY_WRITE_NOTICE } from '../../composer/viewerAccess'
 import { useId, useState } from 'react'
 import { Dialog } from '../../Menu'
 import { t } from '../../i18n'
@@ -18,15 +20,19 @@ export function RemoteChoiceDialog({
 }) {
   const name = useId()
   const [chosen, setChosen] = useState(remotes[0] ?? '')
+  const { viewOnly, canWrite } = useHostWriteAccess()
   return (
     <Dialog
       title={t('Choose a remote')}
       confirmLabel={t('Publish')}
-      confirmDisabled={!chosen}
+      confirmDisabled={viewOnly || !chosen}
       busy={busy}
       onCancel={onCancel}
-      onConfirm={() => onChoose(chosen)}
+      onConfirm={() => {
+        if (canWrite()) onChoose(chosen)
+      }}
     >
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <p>
         {branch
           ? t('{branch} has no upstream and this repository has several remotes. Where should it be published?', {
@@ -34,7 +40,7 @@ export function RemoteChoiceDialog({
             })
           : t('This repository has several remotes. Where should the branch be published?')}
       </p>
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+      <fieldset disabled={viewOnly} className="m-0 flex flex-col gap-2 border-0 p-0">
         {remotes.map((remote) => (
           <label key={remote} className="flex items-center gap-2">
             <input type="radio" name={name} checked={chosen === remote} onChange={() => setChosen(remote)} />

@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar'
 import type { TerminalInfo } from '@ramu/shared/api'
 import TerminalView from './TerminalView'
 import * as Clipboard from 'expo-clipboard'
-import { terminalKeyGroups } from '../runtime/terminalKeys'
+import { DEFAULT_RAIL, parseRail, terminalKeyGroups, toggleRailKey } from '../runtime/terminalKeys'
 import { STANDALONE, type Chat } from '../runtime/types'
 import { TerminalDock } from './TerminalDock'
 import { TerminalTabs } from './TerminalTabs'
@@ -46,6 +46,9 @@ export function TerminalScreen({
   const chat = { computerId, taskId: ctx }
   const [sessionsOpen, setSessionsOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
+  // Which keys sit on the rail is a choice for this device, kept with the other device-local drafts.
+  const rail = parseRail(store.drafts?.['terminal-rail'])
+  const saveRail = (next: string[]) => store.setDraft('terminal-rail', JSON.stringify(next))
   const [opening, setOpening] = useState(false)
   const [keyboardVisible, setKeyboardVisible] = useState(false)
   const [keyAction, setKeyAction] = useState<{ sequence: number; key: string }>()
@@ -354,6 +357,7 @@ export function TerminalScreen({
             connected={connected}
             keyboardVisible={keyboardVisible}
             latch={latch}
+            rail={rail}
             onBack={onBack}
             onWorkspace={() => {
               keyboardBeforeSheet.current = keyboardVisible
@@ -431,6 +435,21 @@ export function TerminalScreen({
         })}
       </Sheet>
       <Sheet open={keysOpen} title="Terminal keys" onClose={() => setKeysOpen(false)}>
+        <T size={12} tone="muted" style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+          Press a key to send it. Long press to add or remove it on the key rail; highlighted keys are on the rail.
+        </T>
+        {rail.join() !== DEFAULT_RAIL.join() ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Reset key rail"
+            onPress={() => store.setDraft('terminal-rail', '')}
+            style={{ paddingHorizontal: 20, paddingBottom: 8 }}
+          >
+            <T size={13} tone="muted">
+              Reset key rail
+            </T>
+          </Pressable>
+        ) : null}
         {terminalKeyGroups.map((group) => (
           <View key={group.title}>
             <SectionLabel>{group.title}</SectionLabel>
@@ -440,7 +459,14 @@ export function TerminalScreen({
                   key={label}
                   accessibilityRole="button"
                   accessibilityLabel={label}
+                  accessibilityHint={
+                    rail.includes(label)
+                      ? 'On the key rail. Long press to remove it.'
+                      : 'Long press to add it to the key rail.'
+                  }
+                  accessibilityState={{ selected: rail.includes(label) }}
                   onPress={() => void press(label)}
+                  onLongPress={() => saveRail(toggleRailKey(rail, label))}
                   style={({ pressed }) => ({
                     minWidth: 52,
                     height: 44,
@@ -448,7 +474,7 @@ export function TerminalScreen({
                     borderRadius: 12,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: pressed ? c.pressed : c.fill,
+                    backgroundColor: pressed ? c.pressed : rail.includes(label) ? c.accentWash : c.fill,
                   })}
                 >
                   <T mono size={13}>

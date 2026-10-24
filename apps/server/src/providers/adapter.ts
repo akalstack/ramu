@@ -68,6 +68,12 @@ export interface NativeFeatures {
    * short grace period before its own generation. Leave unset until verified: titles are still accepted when offered.
    */
   titles?: boolean
+  /**
+   * The runtime runs commands through Ramu's ACP client terminals (`terminal/*`), which the host then owns as background
+   * terminals. Leave unset until the provider is verified to use them: advertising the capability changes how it runs shell
+   * commands.
+   */
+  terminals?: boolean
 }
 
 /** Everything that varies per provider. Shared mechanics (spawning, caching, timeouts) stay in providers.ts / providerBinaries.ts. */

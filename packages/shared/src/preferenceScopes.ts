@@ -16,6 +16,11 @@ export interface PreferenceEntry {
   at: number
   /** Breaks ties between edits made in the same millisecond. */
   by: string
+  /**
+   * A shared layer keeps a cleared override as a marker instead of dropping it, so an older value held by another host
+   * cannot bring it back when a phone copies settings between hosts. It reads as "not set".
+   */
+  cleared?: boolean
 }
 
 /** One scope's overrides. Fields this client does not know are carried through untouched. */
@@ -71,7 +76,7 @@ export interface ResolvedPreference {
 export function resolvePreference(layers: PreferenceLayers, id: string): ResolvedPreference {
   for (const scope of ORDER) {
     const entry = layers[scope].fields[id]
-    if (entry) return { value: entry.value, source: scope }
+    if (entry && !entry.cleared) return { value: entry.value, source: scope }
   }
   return { value: fieldById(id)?.fallback ?? null, source: 'default' }
 }
@@ -171,10 +176,10 @@ export function parseLayer(input: unknown): PreferenceLayer {
   if (raw.fields && typeof raw.fields === 'object')
     for (const [id, entry] of Object.entries(raw.fields as Record<string, unknown>)) {
       if (!entry || typeof entry !== 'object') continue
-      const { value, at, by } = entry as Partial<PreferenceEntry>
+      const { value, at, by, cleared } = entry as Partial<PreferenceEntry>
       if (typeof at !== 'number' || !Number.isFinite(at) || typeof by !== 'string') continue
       if (!isValue(value)) continue
-      fields[id] = { value, at, by }
+      fields[id] = cleared === true ? { value: null, at, by, cleared } : { value, at, by }
     }
   return { v: typeof raw.v === 'number' ? raw.v : PREFERENCE_VERSION, fields }
 }

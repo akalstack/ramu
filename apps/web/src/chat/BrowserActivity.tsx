@@ -1,3 +1,4 @@
+import { RowButton } from '@/components/row-button'
 import { useEffect, useState } from 'react'
 import { Globe, Plus } from 'lucide-react'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
@@ -29,8 +30,10 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
       try {
         const status = await invoke('hostBrowser.status').catch(() => null)
         const tabs = status?.enabled
-          ? (await invoke('hostBrowser.list', taskId)).map(tab => ({ ...tab, hostId: host }))
-          : host === ownHostId() ? await ramu.invoke('browser.list', host, taskId) : []
+          ? (await invoke('hostBrowser.list', taskId)).map((tab) => ({ ...tab, hostId: host }))
+          : host === ownHostId()
+            ? await ramu.invoke('browser.list', host, taskId)
+            : []
         if (active && mine === revision) setReading({ scope, tabs, stale: false })
       } catch {
         if (active && mine === revision)
@@ -103,9 +106,10 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
       <ul className="m-0 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
         {state.tabs.map((tab) => (
           <li key={tab.id} className="flex items-center gap-2 text-control">
-            <button
-              type="button"
-              className="flex h-auto min-h-8 min-w-0 flex-1 cursor-pointer flex-col items-start justify-center gap-0 border-0 bg-transparent px-0 py-1 text-left leading-snug text-inherit disabled:cursor-default"
+            <RowButton
+              size="sm"
+              stacked
+              className="w-auto flex-1 px-0 py-1"
               disabled={state.stale}
               title={t('Open browser')}
               onClick={() => showBrowserTab(ws, taskId, tab)}
@@ -114,7 +118,7 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
               <span className="w-full truncate text-caption text-muted-foreground">
                 {t(controllerLabel(tab))} · {tab.url}
               </span>
-            </button>
+            </RowButton>
           </li>
         ))}
       </ul>

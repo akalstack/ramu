@@ -26,6 +26,10 @@ export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
 export interface ManagedSkill {
   /** Present only for approved external installs. Supporting files are base64, never executed by Ramu. */
   installation?: { source: string; skill: string; cliVersion: string; markdown: string; files: Record<string, string> }
+  /** Approved files and original frontmatter retained by an independently editable copy. Updated only after explicit review. */
+  bundle?: { markdown: string; files: Record<string, string> }
+  /** The exact managed source revision this editable copy last incorporated. */
+  copiedFrom?: { id: string; revision: number }
   id: string
   projectId: string | null
   name: string
@@ -82,4 +86,16 @@ export interface SessionCheckpoint {
   seq: number
   summary: string
   updatedAt: number
+}
+
+export interface SkillCopyUpdate {
+  id: string
+  revision: number
+  sourceRevision: number
+  sourceName: string
+  description: { before: string; local: string; source: string; proposed: string; conflict: boolean }
+  content: { before: string; local: string; source: string; proposed: string; conflict: boolean }
+  files: { path: string; change: 'added' | 'changed' | 'removed'; conflict: boolean }[]
+  /** Bounded UTF-8 excerpts are included only when the whole file fits; binary/large files show byte counts. */
+  fileVersions: Record<string, Record<'before' | 'local' | 'source', { bytes: number; text?: string } | null>>
 }

@@ -15,24 +15,9 @@ import {
 import { Glass } from './Glass'
 import { T, tap, type Icon } from './ui'
 import { font, useTheme } from '../theme'
+import { DEFAULT_RAIL } from '../runtime/terminalKeys'
 
-const keys: { label: string; icon?: Icon }[] = [
-  { label: 'esc' },
-  { label: 'tab' },
-  { label: 'ctrl' },
-  { label: 'alt' },
-  { label: '/' },
-  { label: '|' },
-  { label: '~' },
-  { label: '-' },
-  { label: 'left', icon: ArrowLeft },
-  { label: 'up', icon: ArrowUp },
-  { label: 'down', icon: ArrowDown },
-  { label: 'right', icon: ArrowRight },
-  { label: '^C' },
-  { label: '^D' },
-  { label: '^Z' },
-]
+const railIcons: Record<string, Icon> = { left: ArrowLeft, up: ArrowUp, down: ArrowDown, right: ArrowRight }
 
 /**
  * Terminal-specific bottom console: back, the workspace switcher (project on top, host and folder below), the keyboard and a quiet, scrollable key rail.
@@ -54,6 +39,7 @@ export function TerminalDock({
   onKeyboard,
   onKey,
   onMoreKeys,
+  rail = DEFAULT_RAIL,
 }: {
   workspace: string
   kind?: 'project' | 'worktree' | 'chat'
@@ -70,6 +56,8 @@ export function TerminalDock({
   onKeyboard(): void
   onKey(label: string): void
   onMoreKeys?(): void
+  /** The keys on the quiet rail, in order; the person's own choice from the keys sheet. */
+  rail?: readonly string[]
 }) {
   const { c } = useTheme()
   const button = (I: Icon, label: string, onPress: () => void, disabled = false) => (
@@ -201,35 +189,38 @@ export function TerminalDock({
             keyboardShouldPersistTaps="always"
             contentContainerStyle={{ gap: 2 }}
           >
-            {keys.map(({ label, icon: I }) => (
-              <Pressable
-                key={label}
-                disabled={!connected || exited}
-                accessibilityRole="button"
-                accessibilityLabel={label === 'paste' ? 'Paste into terminal' : label}
-                aria-pressed={label === 'ctrl' || label === 'alt' ? latch === label : undefined}
-                accessibilityState={label === 'ctrl' || label === 'alt' ? { selected: latch === label } : undefined}
-                onPress={() => onKey(label)}
-                style={({ pressed }) => ({
-                  opacity: !connected || exited ? 0.4 : 1,
-                  minWidth: 42,
-                  height: 44,
-                  paddingHorizontal: 10,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 12,
-                  backgroundColor: latch === label ? c.primary : pressed ? c.pressed : 'transparent',
-                })}
-              >
-                {I ? (
-                  <I size={17} color={c.soft} strokeWidth={1.8} />
-                ) : (
-                  <T mono size={font.control} weight="500" style={{ color: latch === label ? c.primaryInk : c.soft }}>
-                    {label}
-                  </T>
-                )}
-              </Pressable>
-            ))}
+            {rail.map((label) => {
+              const I = railIcons[label]
+              return (
+                <Pressable
+                  key={label}
+                  disabled={!connected || exited}
+                  accessibilityRole="button"
+                  accessibilityLabel={label === 'paste' ? 'Paste into terminal' : label}
+                  aria-pressed={label === 'ctrl' || label === 'alt' ? latch === label : undefined}
+                  accessibilityState={label === 'ctrl' || label === 'alt' ? { selected: latch === label } : undefined}
+                  onPress={() => onKey(label)}
+                  style={({ pressed }) => ({
+                    opacity: !connected || exited ? 0.4 : 1,
+                    minWidth: 42,
+                    height: 44,
+                    paddingHorizontal: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 12,
+                    backgroundColor: latch === label ? c.primary : pressed ? c.pressed : 'transparent',
+                  })}
+                >
+                  {I ? (
+                    <I size={17} color={c.soft} strokeWidth={1.8} />
+                  ) : (
+                    <T mono size={font.control} weight="500" style={{ color: latch === label ? c.primaryInk : c.soft }}>
+                      {label}
+                    </T>
+                  )}
+                </Pressable>
+              )
+            })}
           </ScrollView>
           {onMoreKeys ? button(Grid2X2, 'More terminal keys', onMoreKeys, !connected || exited) : null}
           {button(ClipboardPaste, 'Paste into terminal', () => onKey('paste'), !connected || exited)}

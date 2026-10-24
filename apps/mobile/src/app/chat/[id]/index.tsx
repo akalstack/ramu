@@ -1,4 +1,5 @@
 import { goBackOrHome } from '../../../runtime/navigation'
+import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, FlatList, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -68,6 +69,8 @@ export default function ChatScreen() {
   const { c } = useTheme()
   const t = useT()
   const store = useStore()
+  const latestStore = useRef(store)
+  latestStore.current = store
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const scroll = useRef<FlatList<import('../../../runtime/types').TranscriptItem>>(null)
@@ -163,6 +166,12 @@ export default function ChatScreen() {
   }, [])
   const [restore, setRestore] = useState<{ text: string; n: number }>()
   const computer = store.computers.find((x) => x.id === chat?.computerId)
+  const viewOnly = computer?.access === 'viewer'
+  const viewerNow = () =>
+    latestStore.current.computers.find((host) => host.id === chat?.computerId)?.access === 'viewer'
+  const requireWriteAccess = () => {
+    if (viewerNow()) throw new Error(VIEW_ONLY_WRITE_NOTICE[latestStore.current.language])
+  }
   // Branch and change counts feed the header's git menu. Native menus have no on-open hook,
   // so refetch on focus, when a turn finishes, and after each action here.
   const [git, setGit] = useState<{
@@ -429,6 +438,7 @@ export default function ChatScreen() {
     attachments?: string[],
     context?: import('@ramu/shared/types').FileContext[],
   ) => {
+    requireWriteAccess()
     if (!editing || !chat.sessionId) return
     const online = store.isOnline(chat.computerId)
     let restored = false
@@ -455,6 +465,7 @@ export default function ChatScreen() {
             { cancelable: true, onDismiss: () => resolve('cancel') },
           ),
         )
+        requireWriteAccess()
         if (choice === 'cancel') throw new Error('Edit not sent. Your text is kept.')
         if (choice === 'restore') {
           await store.invoke(
@@ -467,6 +478,7 @@ export default function ChatScreen() {
         }
       }
     }
+    requireWriteAccess()
     const outgoing = `${text}\n\n<ramu-context>\nThis revises my earlier message ${editing.seq}.${restored ? ' Selected file changes from that message and later captured runs were restored using Ramu. Inspect current files before acting.' : ' Files have not been restored.'} Treat this revised request as replacing the earlier request; the previous transcript remains as historical evidence.\n</ramu-context>`
     const keep = editing.files.map((file) => file.id).filter((id) => !attachments?.includes(id))
     setEditing(null)
@@ -474,9 +486,9 @@ export default function ChatScreen() {
     await store.send(chat.id, outgoing, mode === 'send' ? 'queue' : mode, [...keep, ...(attachments ?? [])], context)
   }
   const offline = !store.isOnline(chat.computerId)
-  // Only stuck messages (offline or uncertain) show as pending; one being delivered to a connected computer would just flash.
+  // Only stuck messages (view-only, offline or uncertain) show as pending; one being delivered to a connected computer would just flash.
   const pending = store.outbox.filter(
-    (o) => o.chatId === chat.id && (o.state === 'uncertain' || !store.isOnline(chat.computerId)),
+    (o) => o.chatId === chat.id && (viewOnly || o.state === 'uncertain' || !store.isOnline(chat.computerId)),
   )
   const editPending = (text: string) => setRestore((r) => ({ text, n: (r?.n ?? 0) + 1 }))
   const openScm = () => router.push({ pathname: '/chat/[id]/scm', params: { id: chat.id } })
@@ -650,27 +662,39 @@ export default function ChatScreen() {
                                   ? ('chart.bar' as const)
                                   : ('tray' as const),
                     })),
-                  {
-                    label: chat.pinnedAt !== null ? 'Unpin' : 'Pin to top',
-                    icon: 'pin',
-                    onPress: () => {
-                      void store
-                        .invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null)
-                        .then(() => store.refresh(chat.computerId))
-                        .catch((error) => say(String(error)))
-                    },
-                  },
-                  { label: 'Rename', icon: 'pencil', onPress: () => setActions('rename') },
-                  {
-                    label: chat.status === 'archived' ? 'Unarchive' : 'Archive',
-                    icon: 'archivebox',
-                    onPress: () => {
-                      void store
-                        .invoke(chat.computerId, 'tasks.archive', chat.taskId, chat.status !== 'archived')
-                        .then(() => store.refresh(chat.computerId))
-                        .catch((error) => say(String(error)))
-                    },
-                  },
+                  ...(!viewOnly
+                    ? [
+                        {
+                          label: chat.pinnedAt !== null ? 'Unpin' : 'Pin to top',
+                          icon: 'pin' as const,
+                          onPress: () => {
+                            if (viewerNow()) return
+                            void latestStore.current
+                              .invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null)
+                              .then(() => store.refresh(chat.computerId))
+                              .catch((error) => say(String(error)))
+                          },
+                        },
+                        {
+                          label: 'Rename',
+                          icon: 'pencil' as const,
+                          onPress: () => {
+                            if (!viewerNow()) setActions('rename')
+                          },
+                        },
+                        {
+                          label: chat.status === 'archived' ? 'Unarchive' : 'Archive',
+                          icon: 'archivebox' as const,
+                          onPress: () => {
+                            if (viewerNow()) return
+                            void latestStore.current
+                              .invoke(chat.computerId, 'tasks.archive', chat.taskId, chat.status !== 'archived')
+                              .then(() => store.refresh(chat.computerId))
+                              .catch((error) => say(String(error)))
+                          },
+                        },
+                      ]
+                    : []),
                   { label: 'More thread actions…', icon: 'ellipsis', onPress: () => setActions('menu') },
                 ]}
               />
@@ -692,6 +716,7 @@ export default function ChatScreen() {
       />
       <MessageMenu.Provider
         value={{
+          readOnly: viewOnly,
           // Quote: "> line" blocks appended to the draft, as the desktop's Quote does.
           quote: (text) => {
             const key = `${chat.computerId}:chat:${chat.taskId || chat.id}`
@@ -708,7 +733,7 @@ export default function ChatScreen() {
           // Quote in new chat: opens New chat in this project with the passage already quoted in the box.
           // Puts back every file the agent changed after this message, after showing which ones.
           undo: async (seq) => {
-            if (!chat.sessionId) return
+            if (viewerNow() || !chat.sessionId) return
             try {
               const preview = await store.invoke(chat.computerId, 'reviews.chatUndoPreview', chat.sessionId, seq)
               const ready = preview.files.filter((f) => f.status === 'ready')
@@ -731,7 +756,8 @@ export default function ChatScreen() {
                     text: 'Undo',
                     style: 'destructive',
                     onPress: () =>
-                      void store
+                      !viewerNow() &&
+                      void latestStore.current
                         .invoke(
                           chat.computerId,
                           'reviews.chatUndoApply',
@@ -748,13 +774,14 @@ export default function ChatScreen() {
             }
           },
           edit: (seq, text, files) => {
+            if (viewerNow()) return
             setEditing({ seq, files })
             setRestore((r) => ({ text: text.split('\n\n<ramu-context>')[0]!, n: (r?.n ?? 0) + 1 }))
           },
           quoteNew: (text) =>
             router.push({ pathname: '/new', params: { project: chat.projectId, quote: text.slice(0, 20_000) } }),
           aside: (text, from) => {
-            if (chat.sessionId)
+            if (!viewerNow() && chat.sessionId)
               router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id, quote: text.slice(0, 20_000), from } })
           },
         }}

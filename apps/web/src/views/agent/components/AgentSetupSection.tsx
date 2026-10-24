@@ -40,6 +40,14 @@ const kindLabel = (kind: SetupItem['kind']) => {
  * What this thread has from Ramu's agent setup, resolved on the host. A desired configuration is not proof the runtime
  * loaded it, so each item says how far it got and why; names only, never rule text or credentials.
  */
+const requirementLabels = {
+  available: 'Tool server ready',
+  'sign-in-required': 'Sign in to use it',
+  'approval-needed': 'Needs your approval first',
+  'not-connected': 'Not connected',
+  missing: 'Not set up for this thread',
+} as const
+
 export function AgentSetupSection({ sessionId }: { sessionId: string }) {
   useLanguage()
   const { invoke } = useHost()
@@ -88,6 +96,11 @@ export function AgentSetupSection({ sessionId }: { sessionId: string }) {
                   <span>{stateLabel(item.state)}</span>
                 </div>
                 <span className="text-caption text-muted-foreground">{t(item.reason)}</span>
+                {item.requires?.map((need) => (
+                  <span key={need.tool} className="text-caption text-muted-foreground">
+                    {need.server} · {t(requirementLabels[need.status])}
+                  </span>
+                ))}
                 {item.duplicate && (
                   <Button
                     size="sm"

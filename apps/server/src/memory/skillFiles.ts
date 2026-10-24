@@ -4,6 +4,14 @@ import { dirname, join } from 'node:path'
 import { parse, stringify } from 'yaml'
 import type { ManagedSkill } from '@ramu/shared/types'
 
+/** Provider skill names are bounded to 64 characters; retain identity when the Ramu prefix needs room. */
+export function skillExportName(name: string): string {
+  const full = `ramu-${name}`
+  return full.length <= 64
+    ? full
+    : `ramu-${name.slice(0, 50).replace(/-+$/, '')}-${createHash('sha256').update(name).digest('hex').slice(0, 8)}`
+}
+
 export function safeSkillPath(path: string): boolean {
   return (
     path.length > 0 &&
@@ -78,12 +86,13 @@ export function skillMetadata(markdown: string) {
 }
 
 /** Reconcile Ramu-owned files without rewriting unchanged references during provider reads. */
-export function writeInstalledSkill(dir: string, name: string, skill: ManagedSkill): void {
-  if (!skill.installation) return
-  const { metadata } = skillMetadata(skill.installation.markdown)
+export function writeBundledSkill(dir: string, name: string, skill: ManagedSkill): void {
+  const bundle = skill.installation ?? skill.bundle
+  if (!bundle) return
+  const { metadata } = skillMetadata(bundle.markdown)
   const wanted = new Map<string, Buffer>()
-  for (const [path, data] of Object.entries(skill.installation.files)) {
-    if (!safeSkillPath(path)) throw new Error('Invalid installed skill path.')
+  for (const [path, data] of Object.entries(bundle.files)) {
+    if (!safeSkillPath(path)) throw new Error('Invalid skill bundle path.')
     if (path !== 'SKILL.md') wanted.set(path, Buffer.from(data, 'base64'))
   }
   wanted.set(
@@ -150,4 +159,24 @@ export function copySharedSkill(source: string, dir: string, name: string): void
     writeFileSync(join(dir, path), Buffer.from(data, 'base64'), { mode: 0o600 })
   }
   writeFileSync(marker, digest)
+}
+
+/** The MCP tools a skill's `allowed-tools` asks for (`mcp__<server>__<tool>`); built-in tool names are ignored. Bounded. */
+export function skillMcpTools(markdown: string): string[] {
+  const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(markdown)?.[1]
+  if (!front) return []
+  let allowed: unknown
+  try {
+    allowed = (parse(front, { maxAliasCount: 0 }) as Record<string, unknown> | null)?.['allowed-tools']
+  } catch {
+    return []
+  }
+  const names = Array.isArray(allowed) ? allowed : typeof allowed === 'string' ? allowed.split(/[\s,]+/) : []
+  return [
+    ...new Set(
+      names.filter(
+        (name): name is string => typeof name === 'string' && /^mcp__[^\s]{1,200}__[^\s]{1,200}$/.test(name),
+      ),
+    ),
+  ].slice(0, 50)
 }

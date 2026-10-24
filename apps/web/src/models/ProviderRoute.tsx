@@ -32,7 +32,9 @@ export function ProviderRouteChip({
   limited = false,
   autoResume,
   onSession,
+  readOnly = false,
 }: {
+  readOnly?: boolean
   sessionId: string
   settings: AgentSettings
   /** The thread is at a usage limit right now: the chip marks "Limit reached" and always shows. */
@@ -111,6 +113,7 @@ export function ProviderRouteChip({
     if (!autoResume) return null
     return (
       <Menu
+        disabled={readOnly}
         label={autoResumeLabel(autoResume)}
         className={QUIET_CHIP}
         icon={<Gauge size={13} />}
@@ -163,6 +166,7 @@ export function ProviderRouteChip({
   if (limited)
     return (
       <Menu
+        disabled={readOnly}
         label={t('{0} · Limit reached', { '0': providerName(settings.provider) })}
         className={`route-chip warn ${CHIP}`}
         icon={
@@ -194,6 +198,7 @@ export function ProviderRouteChip({
   if (!switching && (!peak || !warn))
     return (
       <Menu
+        disabled={readOnly}
         label={t('Keeping {0}', { '0': providerName(settings.provider) })}
         className={`route-chip ${CHIP}`}
         icon={
@@ -208,6 +213,7 @@ export function ProviderRouteChip({
   if (!switching)
     return (
       <Menu
+        disabled={readOnly}
         label={`${reason}${resetText(peak!.resetsAt) ? `, ${resetText(peak!.resetsAt)}` : ''}`}
         className={`route-chip ${tone} ${CHIP}`}
         icon={
@@ -226,6 +232,7 @@ export function ProviderRouteChip({
     )
   return (
     <Menu
+      disabled={readOnly}
       label={t('Sending with {0}: {1}', { '0': providerName(next!.provider), '1': reason })}
       className={`route-chip switching ${tone} ${CHIP}`}
       icon={

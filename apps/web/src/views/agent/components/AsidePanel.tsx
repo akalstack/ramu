@@ -1,3 +1,4 @@
+import { VIEW_ONLY_WRITE_NOTICE } from '../../../composer/viewerAccess'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import { ArrowLeft, Plus, MessageCircle, Quote, Send, X, Trash2 } from 'lucide-react'
@@ -32,7 +33,9 @@ export function AsidePanel({
   onOpen,
   onClose,
   onQuote,
+  readOnly = false,
 }: {
+  readOnly?: boolean
   sessionId: string
   asides: Aside[]
   open: AsideTarget | '*'
@@ -71,7 +74,7 @@ export function AsidePanel({
   const waiting = aside?.messages.at(-1)?.role === 'user'
   const send = async () => {
     const question = draft.trim()
-    if (!question || sending || waiting) return
+    if (readOnly || !question || sending || waiting) return
     setSending(true)
     setError(null)
     try {
@@ -84,13 +87,15 @@ export function AsidePanel({
       setSending(false)
     }
   }
-  const remove = (id: string) =>
+  const remove = (id: string) => {
+    if (readOnly) return
     void invoke('aside.delete', sessionId, id).then(
       () => {
         if (aside?.id === id) onOpen(asides.length > 1 ? '*' : null)
       },
       (e) => setError(errorText(e)),
     )
+  }
   const firstLine = (text: string) =>
     text
       .split('\n')
@@ -132,6 +137,7 @@ export function AsidePanel({
             className={ICON_BUTTON_CLASS}
             aria-label={translate('New aside')}
             title={translate('New aside')}
+            disabled={readOnly}
             onClick={() => onOpen({ id: null, quote: '', from: 'assistant' })}
           >
             <Plus size={14} />
@@ -142,6 +148,7 @@ export function AsidePanel({
             variant="ghost"
             size="icon-xs"
             className={ICON_BUTTON_CLASS}
+            disabled={readOnly}
             aria-label={translate('Delete aside')}
             title={translate('Delete aside')}
             onClick={() => remove(aside.id)}
@@ -166,6 +173,7 @@ export function AsidePanel({
             variant="secondary"
             type="button"
             className="bg-fill hover:bg-fill-hover aside-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border-color:var(--line)] flex flex-col items-start justify-start gap-0.5 h-auto p-[8px_10px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised text-left whitespace-normal aside-new"
+            disabled={readOnly}
             onClick={() => onOpen({ id: null, quote: '', from: 'assistant' })}
           >
             <span className={ASIDE_ROW_QUOTE_CLASS}>
@@ -264,6 +272,11 @@ export function AsidePanel({
               </p>
             )}
           </div>
+          {readOnly && (
+            <p role="status" className="px-3 text-caption text-muted-foreground">
+              {translate(VIEW_ONLY_WRITE_NOTICE)}
+            </p>
+          )}
           {error && <p className="error text-bad small text-caption aside-error m-[0_14px_6px]">{error}</p>}
           <form
             className="agent-panel-compose [&_textarea]:min-h-[56px] [&_textarea]:max-h-[160px] [&_textarea]:p-[10px_48px_10px_14px] [&_textarea]:border [&_textarea]:border-line [&_textarea]:rounded-(--radius-l) [&_textarea]:bg-fill [&_textarea]:resize-none [&_textarea]:text-control [&_textarea]:leading-[1.5] [&_textarea]:shadow-none [&_textarea]:ring-0 [&_textarea]:[transition:border-color_140ms_ease] [&_textarea:focus-visible]:border-line-strong [&_textarea:focus-visible]:ring-0 relative flex-none m-[0_10px_10px] min-w-0"
@@ -276,6 +289,7 @@ export function AsidePanel({
               ref={input}
               aria-label={translate('Ask aside')}
               placeholder={aside ? translate('Follow up…') : translate('Ask about this…')}
+              disabled={readOnly}
               value={draft}
               rows={2}
               maxLength={20000}
@@ -294,7 +308,7 @@ export function AsidePanel({
               className="icon p-0 size-(--action-size) flex-none justify-center agent-panel-send [&:hover:not(:disabled)]:[border:0] absolute right-2 bottom-2 w-7 h-7 rounded-full bg-primary text-primary-foreground [border:0] [transition:background-color_140ms_ease,opacity_140ms_ease] hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
               aria-label={translate('Ask')}
               title={translate('Ask aside')}
-              disabled={!draft.trim() || sending || waiting}
+              disabled={readOnly || !draft.trim() || sending || waiting}
             >
               <Send size={14} />
             </Button>
