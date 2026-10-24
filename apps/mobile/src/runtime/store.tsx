@@ -1096,12 +1096,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           throw new Error('Too many pairing attempts. Wait a minute, then use a fresh code from the host.')
         if (!response.ok || !result.token || !result.deviceId)
           throw new Error(result.error || `Pairing failed (${response.status})`)
-        const id = ref.current.computers.find((c) => c.address === url)?.id ?? uid()
+        // The host's own id says which computer this is, so pairing it again at a new address keeps its entry (and the
+        // drafts, unread state and queued messages keyed to it). The address decides only for a host without an id.
+        const known =
+          (typeof result.hostId === 'string'
+            ? ref.current.computers.find((c) => c.hostId === result.hostId)
+            : undefined) ?? ref.current.computers.find((c) => c.address === url)
+        const id = known?.id ?? uid()
         await saveIssuedCredential(() => saveToken(id, result.token))
         const computer: Computer = {
           id,
-          name: name || new URL(url).hostname,
-          auto: !name,
+          name: name || (known && !known.auto ? known.name : new URL(url).hostname),
+          auto: name ? false : known ? known.auto : true,
           address: url,
           os: 'linux',
           status: 'connecting',

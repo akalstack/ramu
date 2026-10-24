@@ -178,3 +178,13 @@ describe('browser import', () => {
     await expect(refused.importer.inspect('chrome', 'Default')).rejects.toThrow(/did not allow access/)
   })
 })
+
+it('finds Firefox profiles under the roaming folder on Windows', () => {
+  const env = { APPDATA: 'C:\\Users\\a\\AppData\\Roaming' } as NodeJS.ProcessEnv
+  expect(sourceRoot('firefox', 'C:\\Users\\a', 'win32', () => false, env).replace(/\\/g, '/')).toMatch(
+    /AppData\/Roaming\/Mozilla\/Firefox$/,
+  )
+  expect(sourceRoot('firefox', '/home/a', 'win32', () => false, {} as NodeJS.ProcessEnv)).toMatch(
+    /AppData\/Roaming\/Mozilla\/Firefox$/,
+  )
+})

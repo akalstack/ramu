@@ -1,6 +1,7 @@
 // Direct GitHub API access with a token Ramu saved on this host, for hosts without the `gh` CLI. The token goes only
 // to its own origin: redirects are refused (a job-log redirect is followed by hand, without the token, to its
 // signed URL). Responses are mapped to the same shapes `gh --json` returns so one parser serves both paths.
+import { createHash } from 'node:crypto'
 import { githubApiBase, redactSecrets } from '@ramu/shared/forgeRemote'
 
 export interface ApiAccess {
@@ -53,15 +54,91 @@ export async function apiRequest<T>(
   options: { method?: string; body?: unknown; fetch?: ApiFetch } = {},
 ): Promise<T> {
   const url = path.startsWith('/graphql') ? graphqlUrl(access.origin) : `${githubApiBase(access.origin)}${path}`
+  return (await send(access, url, options)).json() as Promise<T>
+}
+
+async function send(
+  access: ApiAccess,
+  url: string,
+  options: { method?: string; body?: unknown; fetch?: ApiFetch },
+): Promise<Response> {
+  const method = options.method ?? 'GET'
+  // A read GitHub has already answered is asked again conditionally: an unchanged answer is a 304 that costs no rate limit.
+  const cacheKey =
+    method === 'GET' ? `${createHash('sha256').update(access.token).digest('hex').slice(0, 16)}|${url}` : null
+  const cached = cacheKey ? etagCache.get(cacheKey) : undefined
   const response = await (options.fetch ?? fetch)(url, {
-    method: options.method ?? 'GET',
-    headers: { ...headers(access.token), ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
+    method,
+    headers: {
+      ...headers(access.token),
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(cached ? { 'If-None-Match': cached.etag } : {}),
+    },
     ...(options.body ? { body: JSON.stringify(options.body) } : {}),
     redirect: 'error',
     signal: AbortSignal.timeout(30_000),
   })
+  if (response.status === 304 && cached && cacheKey) {
+    // Most recently used last, so the oldest entry is the one evicted.
+    etagCache.delete(cacheKey)
+    etagCache.set(cacheKey, cached)
+    return new Response(cached.body, { status: 200, headers: cached.link ? { link: cached.link } : {} })
+  }
   if (!response.ok) throw failure(response.status, await response.text().catch(() => ''))
-  return (await response.json()) as T
+  const etag = cacheKey ? response.headers.get('etag') : null
+  if (cacheKey && etag) {
+    const body = await response.clone().text()
+    if (body.length <= ETAG_MAX_BODY) {
+      etagCache.delete(cacheKey)
+      etagCache.set(cacheKey, { etag, body, link: response.headers.get('link') })
+      if (etagCache.size > ETAG_MAX_ENTRIES) etagCache.delete(etagCache.keys().next().value!)
+    }
+  }
+  return response
+}
+
+const ETAG_MAX_ENTRIES = 200
+const ETAG_MAX_BODY = 1_000_000
+const etagCache = new Map<string, { etag: string; body: string; link: string | null }>()
+/** Forget every saved answer, for tests and when an account is removed. */
+export function clearEtagCache() {
+  etagCache.clear()
+}
+
+/** The next page's URL from a `Link` header, only when it stays on the API this token belongs to. */
+export function nextPageUrl(link: string | null, access: Pick<ApiAccess, 'origin'>): string | null {
+  const next = /<([^>]+)>\s*;\s*rel="next"/.exec(link ?? '')?.[1]
+  if (!next) return null
+  try {
+    const base = githubApiBase(access.origin)
+    const url = new URL(next)
+    // A foreign host or an unexpected scheme would receive the token; refuse it rather than follow.
+    return url.origin === new URL(base).origin && next.startsWith(base) ? next : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Every page of a list (GitHub returns at most 100 per page), following `rel="next"`. Bounded: a result that needs more than
+ * `maxPages` pages is truncated and says so, so a caller never reads a partial list as a complete one without knowing.
+ */
+export async function apiPages<T, Item>(
+  access: ApiAccess,
+  path: string,
+  items: (page: T) => Item[],
+  options: { fetch?: ApiFetch; maxPages?: number } = {},
+): Promise<{ items: Item[]; truncated: boolean }> {
+  const maxPages = options.maxPages ?? 10
+  const all: Item[] = []
+  let url: string | null = `${githubApiBase(access.origin)}${path}`
+  for (let page = 0; url; page++) {
+    if (page >= maxPages) return { items: all, truncated: true }
+    const response: Response = await send(access, url, { fetch: options.fetch })
+    all.push(...items((await response.json()) as T))
+    url = nextPageUrl(response.headers.get('link'), access)
+  }
+  return { items: all, truncated: false }
 }
 
 const graphqlUrl = (origin: string) =>
@@ -196,12 +273,18 @@ export async function findPullRequest(
     }
   }
   if (!pull) return null
+  const pages = <T, Item>(path: string, pick: (page: T) => Item[]) =>
+    apiPages<T, Item>(access, path, pick, { fetch: fetchImpl }).then((r) => r.items)
   const [reviews, runs, statuses] = await Promise.all([
-    call<RestReview[]>(`${base}/pulls/${pull.number}/reviews?per_page=100`),
-    call<{ check_runs: RestCheckRun[] }>(`${base}/commits/${pull.head.sha}/check-runs?per_page=100`).then(
-      (r) => r.check_runs,
+    pages<RestReview[], RestReview>(`${base}/pulls/${pull.number}/reviews?per_page=100`, (page) => page),
+    pages<{ check_runs: RestCheckRun[] }, RestCheckRun>(
+      `${base}/commits/${pull.head.sha}/check-runs?per_page=100`,
+      (page) => page.check_runs,
     ),
-    call<{ statuses: RestStatus[] }>(`${base}/commits/${pull.head.sha}/status?per_page=100`).then((r) => r.statuses),
+    pages<{ statuses: RestStatus[] }, RestStatus>(
+      `${base}/commits/${pull.head.sha}/status?per_page=100`,
+      (page) => page.statuses,
+    ),
   ])
   return toDirectPullRequest(pull, reviews, runs, statuses)
 }
@@ -351,13 +434,14 @@ export async function repositoriesDirect(
   const full = { ...access, owner: '', repo: '' }
   const items = lookup
     ? [await apiRequest<RestRepository>(full, `/repos/${lookup}`, { fetch: fetchImpl })]
-    : await apiRequest<RestRepository[]>(
-        full,
-        '/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member',
-        {
-          fetch: fetchImpl,
-        },
-      )
+    : (
+        await apiPages<RestRepository[], RestRepository>(
+          full,
+          '/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member',
+          (page) => page,
+          { fetch: fetchImpl, maxPages: 5 },
+        )
+      ).items
   return items.map((item) => ({
     nameWithOwner: item.full_name,
     description: item.description,

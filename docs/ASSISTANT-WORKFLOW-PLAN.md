@@ -58,7 +58,7 @@ Home (desktop and mobile) starts in **Auto** while the Settings → Threads pref
 
 ## 2. Memory correctness and traceability
 
-- Explicit supersession is in place (`memory_save` `supersedes`; see [Memory](MEMORY.md)). Remaining: evaluate retrieval of the replacement from a fresh thread and another provider, and source links for unavailable sources, then add only demonstrated gaps in source links and conflict handling. Preserve confirmed notes, history, project scope and review-first behavior.
+- Explicit supersession is in place (`memory_save` `supersedes`; see [Memory](MEMORY.md)). Remaining: evaluate retrieval of the replacement from a fresh thread and another provider, then add only demonstrated gaps in conflict handling. Settings → Memory now shows **Open source thread** on a note whose thread still exists (opening the saved event) and **Source thread unavailable** once it is gone (`memorySourceThread`); the agent's `memory_read` still returns the raw source. Preserve confirmed notes, history, project scope and review-first behavior.
 - Use existing memory retrieval and learning jobs. A changed decision should retrieve the current decision with its source and identify the earlier one as superseded. Conflicting evidence without an explicit replacement stays visible; do not silently rewrite confirmed notes or choose by timestamp alone.
 - Acceptance: save a polling decision, record a later switch to webhooks, then ask from a fresh thread and another provider. Retrieve the replacement and source; keep unrelated projects isolated. Include unresolved contradictions, unavailable sources, exact identifiers and English/Indonesian phrasing in the held-out recall evaluation in [the roadmap](ROADMAP.md#learning-and-goal-evaluation).
 
@@ -74,7 +74,7 @@ Home (desktop and mobile) starts in **Auto** while the Settings → Threads pref
 ## 4. Actionable existing Inbox
 
 - Preserve the existing Inbox and its automatically clearing Waiting/Running state, recent Completed history and recap actions; see [Agents](AGENTS.md#thread-activity-and-helper-controls).
-- Audit whether current rows clearly identify what is blocked, why it matters and the next action. Add missing source-linked blocker/failed-verification explanations through existing thread state.
+- Audit whether current rows clearly identify what is blocked, why it matters and the next action. Inbox rows on desktop and mobile now say what a waiting thread needs (`inboxBlocker`: approval, connector sign-in, question, failed goal check with the host's reason, blocked goal, turn limit, pause). Remaining: a link from the line to the exact request, and deduplicating identical blockers across threads.
 - Reuse existing in-place questions/approvals and links to verification evidence. Resolved requirements must stop appearing as waiting; do not require users to clear routine thread activity manually.
 - Deduplicate presentations of the same blocker and respect existing notification preferences.
 - Acceptance: several simultaneous threads include a question, failed verification, provider wait and completion. The user can distinguish which needs input, open the correct host/thread, act once and see updated state after reconnect. Coordinate remaining UI/native acceptance with [Thread activity](THREAD-ACTIVITY-PLAN.md).

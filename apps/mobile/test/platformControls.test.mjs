@@ -86,6 +86,7 @@ function load(file, os, overrides = {}, globals = {}) {
     },
     '@ramu/shared/voice/dictation': { dictationBusy: () => false },
     '@ramu/shared/sharedFields': { sharedValue: () => undefined },
+    '@ramu/shared/hostInbox': { inboxBlocker: () => null },
     '../runtime/busyMode': {
       BUSY_MODE_DEVICE_KEY: 'pref-device:queueWhileBusy',
       resolveBusyMode: () => ({ mode: 'steer', source: 'default' }),

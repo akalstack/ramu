@@ -89,6 +89,8 @@ export type TabInfo = BrowserTabInfo
 
 export const MAX_TABS_PER_THREAD = 8
 export const MAX_TABS_TOTAL = 24
+/** An agent-owned tab nobody has used for this long is closed, so forgotten pages do not hold memory for ever. */
+export const IDLE_TAB_MS = 30 * 60_000
 
 /** Websites are http(s) only. App, file and other schemes never load in a guest, and credentials in URLs are refused. */
 export function allowedGuestUrl(raw: string): URL | null {
@@ -137,6 +139,8 @@ interface Tab {
   replacing: boolean
   respondingDialog: boolean
   released?: boolean
+  /** When anyone last used or changed this tab; the idle sweep closes an unused agent-owned tab. */
+  lastActive: number
 }
 
 export class BrowserRuntime {
@@ -155,6 +159,7 @@ export class BrowserRuntime {
     private readonly changed: () => void = () => {},
     private readonly profileAvailable: (id: string) => boolean = () => true,
     private readonly downloads?: BrowserDownloads,
+    private readonly now: () => number = Date.now,
   ) {}
 
   /** Persistent profiles share one partition; Temporary is private to one run (or thread when no run exists). */
@@ -288,6 +293,7 @@ export class BrowserRuntime {
       observing: false,
       replacing: false,
       respondingDialog: false,
+      lastActive: this.now(),
     }
     this.tabs.set(id, tab)
     this.syncInput(tab)
@@ -342,6 +348,7 @@ export class BrowserRuntime {
   private tab(id: string): Tab {
     const tab = this.tabs.get(id)
     if (!tab) throw new BrowserError('unknown-tab', 'That tab is closed.')
+    tab.lastActive = this.now()
     return tab
   }
 
@@ -373,6 +380,7 @@ export class BrowserRuntime {
   }
 
   private invalidate(tab: Tab) {
+    tab.lastActive = this.now()
     tab.snapshot += 1
     tab.lease = { ...tab.lease, observed: false }
   }
@@ -1004,7 +1012,30 @@ export class BrowserRuntime {
     }
   }
 
+  /**
+   * Closes tabs the agent (or nobody) controls that have been idle for `idleMs`. A tab the person controls is never closed
+   * for being idle, and profile data is untouched: only the page goes. Returns how many were closed.
+   */
+  sweepIdle(idleMs = IDLE_TAB_MS): number {
+    const now = this.now()
+    const idle = [...this.tabs.values()].filter(
+      (tab) => tab.lease.controller.kind !== 'human' && !tab.lease.draining && now - tab.lastActive >= idleMs,
+    )
+    for (const tab of idle) this.destroy(tab)
+    if (idle.length) this.changed()
+    return idle.length
+  }
+
+  private idleTimer?: ReturnType<typeof setInterval>
+  /** Runs `sweepIdle` every `everyMs` until `closeAll`. The timer never keeps the process alive. */
+  startIdleSweep(everyMs = 60_000): void {
+    if (this.idleTimer || this.closed) return
+    this.idleTimer = setInterval(() => this.sweepIdle(), everyMs)
+    this.idleTimer.unref?.()
+  }
+
   closeAll(): void {
+    clearInterval(this.idleTimer)
     this.downloads?.close()
     this.uploads.close()
     this.closed = true

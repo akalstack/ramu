@@ -114,3 +114,28 @@ it('ignores the old single-active format, rejects bad addresses and survives a c
   writeFileSync(path, '{nope')
   expect(servers.list()).toEqual([])
 })
+
+it('keeps the saved entry when a known host is paired again at a new address, so its drafts and unread state stay attached', () => {
+  const { servers } = store()
+  const first = servers.add('10.0.0.2:7788', 'Studio', 'one', 1, undefined, { deviceId: 'd1', hostId: 'host-a' })
+  servers.update(first.id, { enabled: false, retryMode: 'periodic' })
+  servers.add('10.0.0.9:7788', 'Other', 'x', 2, undefined, { hostId: 'host-b' })
+  const again = servers.add('192.168.1.5:7788', 'Studio', 'two', 3, undefined, { deviceId: 'd2', hostId: 'host-a' })
+  expect(again.id).toBe(first.id)
+  expect(servers.list().filter((s) => s.hostId === 'host-a')).toHaveLength(1)
+  expect(servers.list()).toHaveLength(2)
+  expect(servers.endpoint(first.id)).toMatchObject({ url: 'http://192.168.1.5:7788', token: 'two' })
+  expect(again).toMatchObject({ enabled: false, retryMode: 'periodic' })
+})
+
+it('does not merge hosts with different ids, and a tunnel is never merged with a direct entry', () => {
+  const { servers } = store()
+  const a = servers.add('10.0.0.2:7788', 'A', 'a', 1, undefined, { hostId: 'host-a' })
+  const b = servers.add('10.0.0.3:7788', 'B', 'b', 2, undefined, { hostId: 'host-b' })
+  expect(a.id).not.toBe(b.id)
+  const tunnel = servers.add('127.0.0.1:9001', 'T', 't', 3, { target: 'me@box', port: 9001 } as never, {
+    hostId: 'host-a',
+  })
+  expect(tunnel.id).not.toBe(a.id)
+  expect(servers.list()).toHaveLength(3)
+})

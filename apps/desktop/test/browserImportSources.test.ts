@@ -20,7 +20,9 @@ it('offers macOS Chrome, Edge and Firefox as supported when installed, and says 
 it('keeps Windows unsupported with a specific reason, supports Linux Chromium/Firefox, and reads no files', () => {
   const exists = vi.fn((_path: unknown) => true)
   const windows = browserImportSources('win32', {}, exists)
-  expect(windows.every((source) => !source.supported)).toBe(true)
+  // Only Firefox reads on Windows: its cookies are plain SQLite, while Chromium's are app-bound encrypted.
+  expect(windows.filter((source) => source.supported).map((source) => source.id)).toEqual(['firefox'])
+  expect(windows.find((source) => source.id === 'firefox')!.reason).toBeUndefined()
   expect(windows.find((source) => source.id === 'chrome')!.reason).toMatch(/protected credentials/)
   const linux = browserImportSources('linux', {}, exists)
   expect(linux.every((source) => source.supported && !source.reason)).toBe(true)

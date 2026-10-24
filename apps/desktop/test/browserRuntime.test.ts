@@ -12,7 +12,7 @@ import {
   type GuestPage,
 } from '../src/main/browserRuntime'
 
-function setup(profiles: string[] = ['work'], available: (id: string) => boolean = () => true) {
+function setup(profiles: string[] = ['work'], available: (id: string) => boolean = () => true, now?: () => number) {
   const created: {
     partition: string
     handlers: GuestHandlers
@@ -54,7 +54,7 @@ function setup(profiles: string[] = ['work'], available: (id: string) => boolean
     clearTemporary: (partition) => void cleared.push(partition),
   }
   const changed = vi.fn()
-  const runtime = new BrowserRuntime(factory, () => profiles, changed, available)
+  const runtime = new BrowserRuntime(factory, () => profiles, changed, available, undefined, now)
   return { runtime, created, cleared, changed }
 }
 const user = { hostId: 'h', threadId: 't' }
@@ -690,4 +690,53 @@ it('retains a human replacement page at run end and reports failed Temporary cle
   }
   runtime.close(replacement.id)
   await vi.waitFor(() => expect(runtime.warning()).toContain('will not be reused'))
+})
+
+describe('idle tabs', () => {
+  it('closes an idle agent-owned tab, keeps a person-controlled one, and counts use as activity', async () => {
+    let clock = 1_000
+    const { runtime, created, changed } = setup(
+      ['work'],
+      () => true,
+      () => clock,
+    )
+    const agent = await runtime.open(run, 'https://a.test')
+    const human = await runtime.open(user, 'https://b.test')
+    const busy = await runtime.open({ ...run, runId: 'r2' }, 'https://c.test')
+    clock += 29 * 60_000
+    // Using a tab (here, showing it) counts as activity and restarts its clock.
+    runtime.show(busy.tab.id, { x: 0, y: 0, width: 10, height: 10 })
+    clock += 2 * 60_000
+    changed.mockClear()
+    expect(runtime.sweepIdle()).toBe(1)
+    expect(created[0]!.page.destroyed).toBe(true)
+    expect(created[1]!.page.destroyed).toBe(false)
+    expect(created[2]!.page.destroyed).toBe(false)
+    expect(
+      runtime
+        .list()
+        .map((tab) => tab.id)
+        .sort(),
+    ).toEqual([human.tab.id, busy.tab.id].sort())
+    expect(changed).toHaveBeenCalled()
+    expect(agent.tab.id).not.toBe(human.tab.id)
+    // Nothing left idle: a second sweep closes nothing and tells nobody.
+    changed.mockClear()
+    expect(runtime.sweepIdle()).toBe(0)
+    expect(changed).not.toHaveBeenCalled()
+    runtime.closeAll()
+  })
+
+  it('a person-controlled tab is never closed for being idle', async () => {
+    let clock = 0
+    const { runtime } = setup(
+      ['work'],
+      () => true,
+      () => clock,
+    )
+    await runtime.open(user, 'https://a.test')
+    clock += 24 * 60 * 60_000
+    expect(runtime.sweepIdle()).toBe(0)
+    runtime.closeAll()
+  })
 })

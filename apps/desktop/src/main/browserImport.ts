@@ -30,13 +30,20 @@ import {
 
 export type ImportSourceId = 'chrome' | 'edge' | 'firefox'
 
-/** Where each supported source keeps its profiles on macOS and Linux. Safari and Windows stay unsupported. */
+/**
+ * Where each supported source keeps its profiles on macOS, Linux and (Firefox only) Windows. Safari and Windows Chromium
+ * stay unsupported: their cookies are protected in ways Ramu does not read.
+ */
 export function sourceRoot(
   source: ImportSourceId,
   home: string,
   platform: NodeJS.Platform = process.platform,
   exists: (path: string) => boolean = existsSync,
+  env: NodeJS.ProcessEnv = process.env,
 ): string {
+  // Firefox keeps plain SQLite cookies under the roaming profile on Windows; Chromium's are app-bound encrypted there.
+  if (platform === 'win32' && source === 'firefox')
+    return join(env.APPDATA ?? join(home, 'AppData', 'Roaming'), 'Mozilla', 'Firefox')
   if (platform === 'linux') {
     const first = (candidates: string[]) => candidates.find((path) => exists(path)) ?? candidates[0]!
     return source === 'chrome'

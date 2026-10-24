@@ -199,8 +199,17 @@ export class RemoteServers {
     const url = parseRemoteUrl(address),
       file = this.read()
     const sealed = this.sealer.available
+    // The host's own id says which computer this is, so pairing it again at a new address keeps the saved entry's id and
+    // everything keyed to it (drafts, unread state, queued messages). Without an id the address or tunnel target decides.
+    const sameHost = identity.hostId
+      ? file.servers.find((s) => s.hostId === identity.hostId && !s.ssh === !ssh)
+      : undefined
+    const sameRoute = file.servers.find((s) => (ssh ? s.ssh?.target === ssh.target : s.url === url))
+    const previous = sameHost ?? sameRoute
     const server: StoredServer = {
-      id: randomUUID().slice(0, 8),
+      id: sameHost?.id ?? randomUUID().slice(0, 8),
+      ...(sameHost?.enabled === false ? { enabled: false } : {}),
+      ...(sameHost?.retryMode ? { retryMode: sameHost.retryMode } : {}),
       name: clean(name, ssh?.target.replace(/^.*@/, '') ?? new URL(url).hostname),
       url,
       pairedAt: now,
@@ -212,15 +221,20 @@ export class RemoteServers {
     }
     // The same tunnel target replaces its entry even when the local tunnel port changed.
     this.write({
-      servers: [...file.servers.filter((s) => (ssh ? s.ssh?.target !== ssh.target : s.url !== url)), server],
+      servers: [
+        ...file.servers.filter(
+          (s) => s !== previous && s.id !== server.id && (ssh ? s.ssh?.target !== ssh.target : s.url !== url),
+        ),
+        server,
+      ],
     })
     return {
       id: server.id,
       name: server.name,
       url,
       pairedAt: now,
-      enabled: true,
-      retryMode: 'events',
+      enabled: server.enabled !== false,
+      retryMode: server.retryMode ?? 'events',
       ...(ssh ? { ssh } : {}),
       ...(identity.hostId ? { hostId: identity.hostId } : {}),
     }

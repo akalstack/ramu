@@ -1,6 +1,6 @@
 import { RowButton } from '@/components/row-button'
 import { useState, useEffect } from 'react'
-import { buildInbox, INBOX_TABS, type InboxChat, type InboxTab } from '@ramu/shared/hostInbox'
+import { buildInbox, inboxBlocker, INBOX_TABS, type InboxChat, type InboxTab } from '@ramu/shared/hostInbox'
 import { hostInboxInput } from '@ramu/shared/hostOverview'
 import type { Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
@@ -85,6 +85,9 @@ export function HostsInbox() {
                 <span className="block truncate text-caption text-muted-foreground">
                   {where(chat.computerId, chat.taskId)}
                 </span>
+                {blockerText(chat) && (
+                  <span className="block truncate text-caption text-foreground/80">{blockerText(chat)}</span>
+                )}
               </span>
               {state(task)}
               <span className="min-w-6 flex-none text-right text-caption text-muted-foreground tabular-nums">
@@ -266,4 +269,27 @@ export function HostsInbox() {
       </div>
     </div>
   )
+}
+
+/** One line saying what a waiting thread needs from the person; empty for a thread that is not waiting. */
+function blockerText(chat: InboxChat): string {
+  const blocker = inboxBlocker(chat)
+  if (!blocker) return ''
+  const count = blocker.count ?? 1
+  switch (blocker.kind) {
+    case 'approval':
+      return t(count === 1 ? '1 approval needed' : '{0} approvals needed', { 0: count })
+    case 'connector':
+      return t(count === 1 ? 'Sign in to 1 connector' : 'Sign in to {0} connectors', { 0: count })
+    case 'question':
+      return t(count === 1 ? '1 question to answer' : '{0} questions to answer', { 0: count })
+    case 'verification-failed':
+      return blocker.reason ? t('Goal check failed: {0}', { 0: blocker.reason }) : t('Goal check failed')
+    case 'goal-blocked':
+      return blocker.reason ? t('Goal blocked: {0}', { 0: blocker.reason }) : t('Goal blocked')
+    case 'turn-limit':
+      return t('Goal reached its turn limit')
+    case 'goal-paused':
+      return t('Goal paused')
+  }
 }

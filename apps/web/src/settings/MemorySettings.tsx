@@ -19,6 +19,7 @@ import { ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
 import { useWorkspace } from '../workspace/workspace'
 import { providerName } from '@ramu/shared/providers/providers'
+import { memorySourceThread } from '@ramu/shared/chat/memorySource'
 import {
   MEMORY_KINDS,
   NO_PROJECT,
@@ -366,6 +367,7 @@ export function MemoryBrowser() {
                 ].join(' · ')}
               </span>
               <span className="grow" />
+              <MemorySource memory={m} />
               <Button
                 variant="ghost"
                 size="sm"
@@ -494,5 +496,32 @@ function MemoryEditor({
         </Button>
       </div>
     </div>
+  )
+}
+
+/** The thread a note was saved in: a link while that thread exists, a plain note once it is gone. */
+function MemorySource({ memory }: { memory: Memory }) {
+  const ws = useWorkspace()
+  const source = memorySourceThread(memory.source, new Set(ws.tasks.map((task) => task.id)))
+  if (source.state === 'none') return null
+  if (source.state === 'unavailable')
+    return <span className="text-muted-foreground small text-caption">{t('Source thread unavailable')}</span>
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground small text-caption"
+      onClick={() => {
+        ws.openTask(source.taskId)
+        if (source.sessionId && source.eventSeq !== undefined) {
+          ws.openView(source.taskId, { kind: 'agent', sessionId: source.sessionId, sourceSeq: source.eventSeq })
+          window.dispatchEvent(
+            new CustomEvent('ramu:source-event', { detail: { sessionId: source.sessionId, seq: source.eventSeq } }),
+          )
+        }
+      }}
+    >
+      {t('Open source thread')}
+    </Button>
   )
 }

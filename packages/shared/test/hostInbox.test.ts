@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { buildInbox, type InboxChat, type InboxSummary } from '../src/hostInbox'
+import { buildInbox, inboxBlocker, type InboxChat, type InboxSummary } from '../src/hostInbox'
 import { hostInboxInput, isHostDestination, type HostOverview } from '../src/hostOverview'
 
 const now = Date.now()
@@ -239,4 +239,34 @@ it('treats a host that sends no goal summary as unknown rather than inventing a 
   const result = buildInbox({ ...input, now })
   expect(result.running).toEqual([])
   expect(result.completed.map((item) => item.taskId)).toEqual(['t'])
+})
+
+it('says what a waiting thread needs: requests first (approval, connector, question), then the goal', () => {
+  const base = { ...chat('host'), status: 'ready-for-review' as const }
+  const summary = (approvals: number, connectors: number, count: number) => ({
+    count,
+    approvals,
+    connectors,
+    requests: [],
+  })
+  expect(inboxBlocker({ ...base, inputSummary: summary(2, 1, 4) })).toEqual({ kind: 'approval', count: 2 })
+  expect(inboxBlocker({ ...base, inputSummary: summary(0, 1, 3) })).toEqual({ kind: 'connector', count: 1 })
+  expect(inboxBlocker({ ...base, inputSummary: summary(0, 0, 3) })).toEqual({ kind: 'question', count: 3 })
+  expect(inboxBlocker({ ...base, goalState: { status: 'blocked', reason: 'Needs a test database' } })).toEqual({
+    kind: 'goal-blocked',
+    reason: 'Needs a test database',
+  })
+  expect(
+    inboxBlocker({ ...base, goalState: { status: 'blocked', verificationFailed: true, reason: 'tests failed' } }),
+  ).toEqual({ kind: 'verification-failed', reason: 'tests failed' })
+  expect(inboxBlocker({ ...base, goalState: { status: 'turn-limit' } })).toEqual({ kind: 'turn-limit' })
+  expect(inboxBlocker({ ...base, goalState: { status: 'paused' } })).toEqual({ kind: 'goal-paused' })
+})
+
+it('gives no blocker for a thread that is not waiting, and a generic question when only the status says so', () => {
+  const base = { ...chat('host'), status: 'ready-for-review' as const }
+  expect(inboxBlocker(base)).toBeNull()
+  expect(inboxBlocker({ ...base, goalState: { status: 'active' } })).toBeNull()
+  expect(inboxBlocker({ ...base, goalState: { status: 'paused', pausedBy: 'provider-limit' } })).toBeNull()
+  expect(inboxBlocker({ ...base, status: 'needs-input' })).toEqual({ kind: 'question', count: 1 })
 })

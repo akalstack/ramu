@@ -46,12 +46,13 @@ export function browserImportSources(
             firefox: { name: 'Firefox', paths: ['/usr/bin/firefox', '/snap/bin/firefox'] },
           }
   const implemented = (id: string) =>
-    (platform === 'darwin' || platform === 'linux') && (id === 'chrome' || id === 'edge' || id === 'firefox')
+    ((platform === 'darwin' || platform === 'linux') && (id === 'chrome' || id === 'edge' || id === 'firefox')) ||
+    (platform === 'win32' && id === 'firefox')
   return Object.entries(paths).map(([id, browser]) => ({
     id,
     name: browser.name,
     installed: browser.paths.some((path) => exists(path)),
-    // Chrome, Edge and Firefox on macOS and Linux are implemented (Linux awaits native acceptance). Everything else says why not and offers manual sign-in.
+    // Chrome, Edge and Firefox on macOS and Linux, and Firefox on Windows, are implemented (Linux and Windows await native acceptance). Everything else says why not and offers manual sign-in.
     supported: implemented(id),
     ...(implemented(id)
       ? {}

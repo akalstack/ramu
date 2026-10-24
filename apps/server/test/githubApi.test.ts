@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   GithubApiError,
+  apiPages,
   apiRequest,
+  clearEtagCache,
+  nextPageUrl,
   findPullRequest,
   jobLog,
   listIssuesDirect,
@@ -144,5 +147,90 @@ describe('direct GitHub API access', () => {
     const insecure: ApiFetch = async () =>
       new Response(null, { status: 302, headers: { location: 'http://blob.example.com/x' } })
     await expect(jobLog(access, '9', insecure)).rejects.toBeInstanceOf(GithubApiError)
+  })
+})
+
+describe('paged GitHub lists', () => {
+  const link = (next: string) => ({ link: `<${next}>; rel="next", <${next}>; rel="last"` })
+
+  it('follows next links so a failing check on a later page is not missed', async () => {
+    const calls: string[] = []
+    const fetchImpl: ApiFetch = async (url) => {
+      calls.push(url)
+      return url.includes('page=2')
+        ? json({ check_runs: [{ name: 'Late', status: 'completed', conclusion: 'failure' }] })
+        : new Response(
+            JSON.stringify({ check_runs: [{ name: 'Early', status: 'completed', conclusion: 'success' }] }),
+            {
+              headers: link('https://api.github.com/repos/o/r/commits/s/check-runs?per_page=100&page=2'),
+            },
+          )
+    }
+    const result = await apiPages<{ check_runs: { name: string }[] }, { name: string }>(
+      access,
+      '/repos/o/r/commits/s/check-runs?per_page=100',
+      (page) => page.check_runs,
+      { fetch: fetchImpl },
+    )
+    expect(result.items.map((i) => i.name)).toEqual(['Early', 'Late'])
+    expect(result.truncated).toBe(false)
+    expect(calls).toHaveLength(2)
+  })
+
+  it('never sends the token to a host the API did not name, and says when it stopped at the page limit', async () => {
+    expect(nextPageUrl(link('https://evil.example.com/x?page=2').link!, access)).toBeNull()
+    expect(nextPageUrl('<https://api.github.com.evil.example/x>; rel="next"', access)).toBeNull()
+    expect(nextPageUrl('<http://api.github.com/x>; rel="next"', access)).toBeNull()
+    expect(nextPageUrl(null, access)).toBeNull()
+    const endless: ApiFetch = async () =>
+      new Response('[1]', { headers: link('https://api.github.com/user/repos?page=9') })
+    const result = await apiPages<number[], number>(access, '/user/repos', (page) => page, {
+      fetch: endless,
+      maxPages: 3,
+    })
+    expect(result).toEqual({ items: [1, 1, 1], truncated: true })
+  })
+})
+
+describe('conditional reads', () => {
+  it('asks again with If-None-Match and serves the saved answer on a 304, keeping its paging', async () => {
+    clearEtagCache()
+    const seen: (string | undefined)[] = []
+    const fetchImpl: ApiFetch = async (_url, init) => {
+      const sent = (init.headers as Record<string, string>)['If-None-Match']
+      seen.push(sent)
+      return sent
+        ? new Response(null, { status: 304 })
+        : new Response(JSON.stringify([{ id: 1 }]), {
+            headers: {
+              etag: 'W/"v1"',
+              link: '<https://api.github.com/user/repos?page=2>; rel="next"',
+            },
+          })
+    }
+    const first = await apiRequest<{ id: number }[]>(access, '/user/repos', { fetch: fetchImpl })
+    const second = await apiRequest<{ id: number }[]>(access, '/user/repos', { fetch: fetchImpl })
+    expect(first).toEqual([{ id: 1 }])
+    expect(second).toEqual([{ id: 1 }])
+    expect(seen).toEqual([undefined, 'W/"v1"'])
+  })
+
+  it('keeps answers apart per account, never caches writes, and replaces a changed answer', async () => {
+    clearEtagCache()
+    let body = 'one'
+    const sent: (string | undefined)[] = []
+    const fetchImpl: ApiFetch = async (_url, init) => {
+      sent.push((init.headers as Record<string, string>)['If-None-Match'])
+      return new Response(JSON.stringify(body), { headers: { etag: `"${body}"` } })
+    }
+    await apiRequest(access, '/x', { fetch: fetchImpl })
+    await apiRequest({ ...access, token: 'ghp_' + 'b'.repeat(30) }, '/x', { fetch: fetchImpl })
+    expect(sent).toEqual([undefined, undefined])
+    body = 'two'
+    expect(await apiRequest(access, '/x', { fetch: fetchImpl })).toBe('two')
+    expect(await apiRequest(access, '/x', { fetch: fetchImpl })).toBe('two')
+    expect(sent.slice(2)).toEqual(['"one"', '"two"'])
+    await apiRequest(access, '/x', { method: 'POST', body: {}, fetch: fetchImpl })
+    expect(sent.at(-1)).toBeUndefined()
   })
 })

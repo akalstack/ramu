@@ -16,13 +16,47 @@ export interface InboxChat {
   inputSummary?: ThreadInputSummary | null
   /** Mobile has the live goal; desktop supplies the compact task summary. */
   goal?: Pick<ChatGoal, 'status' | 'pausedBy'> | null
-  goalState?: Pick<ChatGoal, 'status' | 'pausedBy'> | null
+  goalState?: (Pick<ChatGoal, 'status' | 'pausedBy'> & { reason?: string; verificationFailed?: boolean }) | null
   /** Independently running helpers; the phone has them in its helper groups, the desktop in `tasks.list`. */
   helperSummary?: { active: number } | null
   lastActiveAt: number
   sessionId: string | null
   doneAt?: number | null
   pending?: boolean
+}
+
+/** Why a thread is waiting on the person, in the order a person would act on it. */
+export type InboxBlockerKind =
+  'approval' | 'connector' | 'question' | 'verification-failed' | 'goal-blocked' | 'turn-limit' | 'goal-paused'
+
+export interface InboxBlocker {
+  kind: InboxBlockerKind
+  /** How many requests when it is an input request. */
+  count?: number
+  /** The host's own explanation, for a blocked goal. */
+  reason?: string
+}
+
+/**
+ * What a waiting thread needs from the person: the first of an open request (approval before connector sign-in before a
+ * question), a failed completion check, a blocked goal, the turn limit or a pause. Null when nothing is asked of them.
+ * Derived from the same fields `buildInbox` uses to decide a thread is waiting, so a row never says "waiting" without a reason.
+ */
+export function inboxBlocker(chat: InboxChat): InboxBlocker | null {
+  const input = chat.inputSummary
+  if (input?.count) {
+    if (input.approvals > 0) return { kind: 'approval', count: input.approvals }
+    if (input.connectors) return { kind: 'connector', count: input.connectors }
+    return { kind: 'question', count: input.count }
+  }
+  const goal = chat.goal === undefined ? chat.goalState : chat.goal
+  const detail = chat.goalState?.reason ? { reason: chat.goalState.reason } : {}
+  if (chat.goalState?.verificationFailed && goal && goal.status !== 'completed')
+    return { kind: 'verification-failed', ...detail }
+  if (goal?.status === 'blocked') return { kind: 'goal-blocked', ...detail }
+  if (goal?.status === 'turn-limit') return { kind: 'turn-limit' }
+  if (goal?.status === 'paused' && !goalContinues(goal)) return { kind: 'goal-paused' }
+  return chat.status === 'needs-input' ? { kind: 'question', count: 1 } : null
 }
 
 export interface InboxRecap {

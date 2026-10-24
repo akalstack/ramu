@@ -579,6 +579,7 @@ async function main() {
       if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
     }),
   )
+  browser.startIdleSweep()
   const browserRuntimes = new Set([browser])
   const guestPartition = (id: string) => session.fromPartition(`persist:ramu-browser:${id}`)
   // Copies website sign-ins once, from another browser into a new hidden profile the person then keeps or discards.

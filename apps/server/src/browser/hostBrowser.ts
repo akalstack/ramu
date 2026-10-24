@@ -141,6 +141,7 @@ export class HostBrowser implements HostedBrowserBackend {
         (id) => !this.profiles.isBusy(id),
         new BrowserDownloads(join(this.root, 'downloads'), this.changed),
       )
+      this.runtime.startIdleSweep()
       this.enabled = true
       this.reason = ''
       this.changed()

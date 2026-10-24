@@ -340,10 +340,11 @@ export class ComputerRegistry {
     // Access was granted but never confirmed by a normal request: say so until the host answers, instead of
     // showing a connected host or asking for the spent code again.
     if (!status) this.unverified.add(saved.id)
-    // Pairing an address again replaces its entry under a new id.
+    // Pairing an address again replaces its entry under a new id; pairing a known host again keeps its id, so its old
+    // connection (to the previous address and token) is stopped here and `connect` below starts one with the new ones.
     const ids = new Set(this.deps.servers.list().map((server) => server.id))
     for (const [id, live] of this.live)
-      if (!ids.has(id)) {
+      if (!ids.has(id) || id === saved.id) {
         this.clearCount(id)
         live.stop()
         this.live.delete(id)

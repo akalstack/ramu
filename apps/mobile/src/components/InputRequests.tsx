@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { View } from 'react-native'
 import type { Chat } from '../runtime/types'
+import { inboxBlocker } from '@ramu/shared/hostInbox'
+import { inboxBlockerText } from '../runtime/inboxBlockerText'
 import { pendingRequest } from '../runtime/threadActivity'
 import { useStore } from '../runtime/store'
 import { font, space } from '../theme'
@@ -35,9 +37,15 @@ export function InboxThread({ chat, project, divider }: { chat: Chat; project?: 
   const { language } = useStore()
   const [open, setOpen] = useState(false)
   const requests = chat.items.filter(pendingRequest)
+  const blocker = inboxBlocker(chat)
   return (
     <View>
       <ChatRow chat={chat} project={project} divider={divider} />
+      {blocker ? (
+        <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.m, paddingBottom: space.xs }}>
+          {inboxBlockerText(blocker, language === 'id' ? 'id' : 'en')}
+        </T>
+      ) : null}
       {requests.length ? (
         <View style={{ paddingHorizontal: space.m, paddingBottom: space.s }}>
           <Button
