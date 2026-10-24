@@ -109,6 +109,10 @@ async function executeViewer(
   switch (operation.op) {
     case 'dialog':
       return runtime.dialogForAgent(tabId, owner)
+    case 'nextFrame':
+      if (!Number.isSafeInteger(operation.after) || operation.after < 0)
+        throw new Error('Invalid browser frame cursor.')
+      return runtime.nextFrameForViewer(tabId, owner, operation.after)
     case 'frame':
       return runtime.captureForViewer(tabId, owner)
     case 'read':

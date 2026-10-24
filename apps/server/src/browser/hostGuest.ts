@@ -1,3 +1,4 @@
+import { BrowserFrames } from './browserFrames'
 import { randomUUID } from 'node:crypto'
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -35,7 +36,9 @@ export class HostGuestFactory implements GuestFactory {
         if (/^temporary-[a-f0-9-]{36}$/.test(name)) rmSync(join(root, name), { recursive: true, force: true })
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-        throw new Error('Temporary host browser data could not be cleaned. Check host storage before Setup.')
+        throw new Error('Temporary host browser data could not be cleaned. Check host storage before Setup.', {
+          cause: error,
+        })
     }
   }
   private async temporary(partition: string): Promise<BrowserContext> {
@@ -172,6 +175,7 @@ export class HostGuestFactory implements GuestFactory {
     let frameId: string | undefined
     let downloadFrameId: string | undefined
     let targetId: string | undefined
+    let frames: BrowserFrames | undefined
     let cdp: CDPSession | undefined
     let page: Page | undefined
     const ready = Promise.resolve()
@@ -358,6 +362,17 @@ export class HostGuestFactory implements GuestFactory {
           await page.keyboard.press(input.key)
         }
       },
+      nextFrame: async (after) => {
+        await ready
+        frames ??= new BrowserFrames({
+          send: (method, params) => cdp!.send(method as Parameters<CDPSession['send']>[0], params),
+          listen: (receive) => {
+            cdp!.on('Page.screencastFrame', receive)
+            return () => cdp!.off('Page.screencastFrame', receive)
+          },
+        })
+        return frames.next(after)
+      },
       screenshot: async (): Promise<BrowserScreenshot> => {
         const page = await ready
         for (const quality of [50, 30, 15]) {
@@ -385,6 +400,7 @@ export class HostGuestFactory implements GuestFactory {
       destroy: () => {
         if (destroyed) return
         destroyed = true
+        frames?.close()
         if (downloadFrameId) this.downloadFrames.delete(downloadFrameId)
         if (targetId) this.titles.delete(targetId)
         human = false

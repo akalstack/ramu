@@ -31,6 +31,14 @@ export function updateThreadMetadata(chat: import('./types').Chat, event: AgentE
     return {
       ...chat,
       executionState: event.state,
+      activityLabel:
+        event.state === 'starting'
+          ? 'Starting…'
+          : event.state === 'running'
+            ? chat.activityLabel === 'Starting…'
+              ? 'Working'
+              : (chat.activityLabel ?? 'Working')
+            : null,
       status:
         event.state === 'running' || event.state === 'starting'
           ? 'running'

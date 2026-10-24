@@ -11,7 +11,7 @@ LAN/VPN. The production app has no seeded hosts or simulated conversations.
    device**. Review [remote access and device privileges](../../SECURITY.md#remote-access). Choose the reachable address in the QR selector. For a headless host,
    use `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`.
 3. Install a development build once: from EAS with `pnpm --filter @ramu/mobile eas:ios` (or `eas:android`), or locally with `pnpm --filter @ramu/mobile build:ios` (or `build:android`). Then run `pnpm dev:mobile` and open **Hosts → Pair**.
-   **Pair a host** opens on **Nearby hosts**: the phone lists hosts that have **Discoverable on this network** on (the camera stays off). Pick one and enter the pairing code from that host. Choose **Scan QR code** to use the camera, or **Enter manually** for the address and ten-character pairing code; both stay one tap away while browsing, when nothing is found and after the Local Network permission is refused. Browsing stops when you leave the screen, change method or background the app. It needs the development build (the `RamuDiscovery` native module); Expo Go and web show discovery as unavailable.
+   **Pair a host** opens on **Nearby hosts**: the phone lists hosts that have **Discoverable on this network** on (the camera stays off). Pick one and enter the pairing code from that host. After a successful scan, the camera closes and the filled details appear for review. **Pair** stays in a bottom action bar above the keyboard; **Scan again** lets you replace the offer. Changing the address clears HTTP consent. Choose **Scan QR code** to use the camera, or **Enter manually** for the address and ten-character pairing code; both stay one tap away while browsing, when nothing is found and after the Local Network permission is refused. Browsing stops when you leave the screen, change method or background the app. It needs the development build (the `RamuDiscovery` native module); Expo Go and web show discovery as unavailable.
    Review the address and explicitly allow HTTP only on a trusted network.
 4. Select a project or Standalone, then send an instruction. Provider installation
    and sign-in belong to the host; the model picker reads that host's catalog.
@@ -45,6 +45,8 @@ A registered project's `ramu.json` (or `.ramu/config.json`) can suggest `agent.p
 
 When host defaults have not loaded, reconnect or choose a reviewed model; the app does not label its own fallback as the host's default. Restored manual choices keep their reviewed access/fallback policy offline. Queuing freezes the selected settings, so a later repository edit does not change pending work. Existing threads and restored saved-message content keep their current model choices.
 
+Expo Router's native peers (`react-native-reanimated`, `react-native-worklets` and `react-native-gesture-handler`) are pinned to the versions in the installed Expo SDK. Keep them aligned during SDK upgrades; incompatible hoisted peers can pass JavaScript export and still fail pod installation or native compilation. Regenerate native projects after an SDK upgrade before rebuilding. Android prebuild also applies the narrow R8 exclusion for the orphan `Dav1dDecoderJni` interface reference shipped in WebRTC 155.0.1; other missing-class errors remain enabled. Recheck this exclusion when upgrading WebRTC.
+
 ## Navigation
 
 A native tab bar (Liquid Glass on iOS 26) with four places, each with its own stack:
@@ -62,11 +64,12 @@ A native tab bar (Liquid Glass on iOS 26) with four places, each with its own st
 Every tab carries a primary action (start a thread; new schedule on Schedules) and a Settings button in the
 navigation bar. With no host paired, or a revoked/offline one, the primary action opens a sheet that
 says why and offers Pair or Reconnect. Switch hosts from the host row at the top of Threads and
-Schedules. Pair opens the camera immediately; manual address entry sits behind "Enter details manually".
+Schedules. Pair opens Nearby hosts first; Scan QR code and Enter manually stay available as alternatives. A successful scan closes the camera and opens review, with Pair in the bottom action bar.
+Shared action buttons grow with larger or wrapped labels. Android sheets can reopen during dismissal without an earlier animation hiding the new sheet.
 All pop-ups are our one `Sheet`: on Android it is the official Material 3 modal bottom sheet (Jetpack Compose via
 `@expo/ui`, opaque, with its own handle, scrim and swipe-to-dismiss; `MaterialSheet.android.tsx`), elsewhere a glass sheet.
 Android uses the native stack header (left-aligned titles), the Material 3 bottom bar, opaque Material surfaces
-instead of blur, and one shared `Toggle`. Android builds need JDK 21 (JDK 25 breaks the CMake step). A thread opened from any tab pushes above the tab bar.
+instead of blur, and one shared `Toggle`. JDK 21 is recommended for Android builds. A thread opened from any tab pushes above the tab bar.
 
 ## Connected features
 
@@ -100,6 +103,8 @@ instead of blur, and one shared `Toggle`. Android builds need JDK 21 (JDK 25 bre
 - English/Bahasa Indonesia, persistent System/Light/Dark appearance and native
   safe-area/keyboard handling. Transcript rows are virtualized.
 
+The thread's Browser viewer shows the same host tab the agent controls. Live Chromium frames arrive independently of tab/status refreshes, with a latest-frame buffer and up to 30 displayed frames per second on a fast connection. Touch drags scroll while the finger moves; clicks, keys and text keep their order behind pending input. Backgrounding or closing the viewer stops requests and pauses control. Older hosts retain the screenshot fallback. This uses the existing native Image component and needs no new native module.
+
 The app suspends streams when backgrounded and rehydrates all saved hosts on
 return. Agents continue on their hosts. It never promises background SSE delivery.
 Full-access devices can run shells and agents. The host can instead issue a viewer pairing for reading threads and answering input requests. Device access expires after 90 days of inactivity by default; active use extends it. Network/device administration stays on the host desktop/CLI. See [remote access](../../SECURITY.md#remote-access).
@@ -110,7 +115,7 @@ The implementation is opt-in under Settings. Each paired device registers its Ex
 push token independently with every host. Hosts send generic completion/input/failure
 alerts through Expo's gateway, with opaque host/task/session routing IDs instead
 of prompt or transcript content. Revocation and invalid-token receipts remove registrations.
-Foreground push banners are suppressed so SSE supplies the in-app notification.
+Foreground push banners are suppressed so SSE supplies the in-app notification. Notification taps wait for saved hosts to load before routing, and duplicate startup/live responses open the destination once.
 
 Settings → Notifications has one switch per kind of alert, sent to each host with the registration so the host only pushes what is on: a thread needs you, a thread fails, a thread finishes, a scheduled run finishes, fails or could not start (a thread started by a schedule counts here instead of under failed or finished; needing input is still "needs you"), and the **Daily recap**. A scheduled run that fails before its thread exists pushes "A scheduled run could not start." once and a tap opens the Schedules tab. The daily recap is off by default: when on, the host sends one "Your daily recap is ready." a day (no content) and a tap opens Inbox → Recaps. Recaps and learned summaries are otherwise silent and only show in the Inbox. Hosts that predate the switches ignore them and send every alert except the daily recap.
 

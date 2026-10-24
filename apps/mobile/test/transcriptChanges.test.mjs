@@ -72,3 +72,14 @@ test('streamed content keeps thread metadata stable while control events update 
   assert.equal(queued.queue[0].id, 'next')
   assert.equal(queued.queuePaused, true)
 })
+
+test('startup and work labels follow execution changes immediately without publishing each token', () => {
+  const chat = { status: 'idle', activityLabel: null }
+  const starting = updateThreadMetadata(chat, { kind: 'state', state: 'starting' })
+  assert.equal(starting.activityLabel, 'Starting…')
+  const working = updateThreadMetadata(starting, { kind: 'state', state: 'running' })
+  assert.equal(working.activityLabel, 'Working')
+  const writing = { ...working, activityLabel: 'Writing…' }
+  assert.equal(updateThreadMetadata(writing, text('More words')), writing)
+  assert.equal(updateThreadMetadata(writing, { kind: 'state', state: 'done' }).activityLabel, null)
+})

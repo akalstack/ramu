@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   AppState,
   KeyboardAvoidingView,
+  Keyboard,
   Alert,
   Linking,
   Platform,
@@ -13,6 +14,7 @@ import {
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { needsHttpConsent } from '../runtime/transport'
 import { decodePairQr, parsePairInput } from '@ramu/contracts'
 import { CameraOff, Monitor, QrCode, ShieldAlert } from 'lucide-react-native'
@@ -38,6 +40,9 @@ const LENGTH = 10
 
 export default function Pair() {
   const keyboardOffset = useSheetKeyboardOffset()
+  const insets = useSafeAreaInsets()
+  const scroll = useRef<import('react-native').ScrollViewInstance>(null)
+  const pairing = useRef(false)
   const { c } = useTheme()
   const router = useRouter()
   const { pair, reviewAddress, computers } = useStore()
@@ -47,6 +52,7 @@ export default function Pair() {
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [http, setHttp] = useState(false)
+  const [offerScanned, setOfferScanned] = useState(false)
   const [busy, setBusy] = useState(false)
   const t = useT()
   const live = Platform.OS !== 'web'
@@ -74,8 +80,11 @@ export default function Pair() {
     (hostId) => computers.find((computer) => computer.hostId === hostId)?.id ?? null,
   )
   const choose = (next: PairMethod) => {
+    if (pairing.current) return
+    Keyboard.dismiss()
     tap()
     animateLayout()
+    scroll.current?.scrollTo({ y: 0, animated: false })
     scanned.current = false
     setScanning(true)
     setMethod(next)
@@ -94,7 +103,7 @@ export default function Pair() {
       setHttp(false)
       setMethod('manual')
     } catch (error) {
-      Alert.alert('Cannot use this link', error instanceof Error ? error.message : String(error))
+      Alert.alert(t.pairInvalidLink, error instanceof Error ? error.message : String(error))
     }
   }, [params.url, params.code, params.exp, params.name])
   const insecure = needsHttpConsent(address)
@@ -117,7 +126,7 @@ export default function Pair() {
     !!selected &&
     savedHost.address.replace(/^https?:\/\//, '') !== selected.url.replace(/^https?:\/\//, '')
   useEffect(() => setMoved(null), [selected?.key, selected?.url])
-  const useAddress = async () => {
+  const applyAddress = async () => {
     if (!savedHost || !selected) return
     setMoved('checking')
     try {
@@ -129,7 +138,8 @@ export default function Pair() {
   const field = {
     color: c.text,
     fontSize: font.body,
-    height: 46,
+    minHeight: 46,
+    paddingVertical: space.s,
     paddingHorizontal: space.m,
     borderRadius: radius.m,
     backgroundColor: c.raised2,
@@ -143,9 +153,10 @@ export default function Pair() {
 
   return (
     <Screen bg="canvas">
-      <Header modal title="Pair a host" />
+      <Header modal title={t.pair} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={keyboardOffset}>
         <ScrollView
+          ref={scroll}
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={{ padding: space.l, gap: space.l, alignItems: 'center' }}
           keyboardShouldPersistTaps="handled"
@@ -161,6 +172,7 @@ export default function Pair() {
                   key={item}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: method === item }}
+                  disabled={busy}
                   onPress={() => choose(item)}
                   style={{
                     flex: 1,
@@ -284,7 +296,7 @@ export default function Pair() {
                     <GlassButton
                       title={moved === 'checking' ? t.nearbyChecking : fill(t.nearbyUseAddress, savedHost!.name)}
                       disabled={moved === 'checking'}
-                      onPress={() => void useAddress()}
+                      onPress={() => void applyAddress()}
                     />
                   ) : null}
                   <GlassButton
@@ -297,6 +309,7 @@ export default function Pair() {
                       setAddress(choice.address)
                       setName((existing) => existing || choice.name)
                       setCode('')
+                      setOfferScanned(false)
                       setHttp(false)
                       animateLayout()
                       setMethod('manual')
@@ -343,12 +356,16 @@ export default function Pair() {
                           setAddress(offer.url)
                           setCode(offer.code.replace('-', ''))
                           setHttp(false)
+                          setOfferScanned(true)
+                          Keyboard.dismiss()
+                          animateLayout()
+                          scroll.current?.scrollTo({ y: 0, animated: false })
                           setScanning(false)
                           // The scanned address and code are shown for review in the manual fields.
                           setMethod('manual')
                         } catch (error) {
                           setScanning(false)
-                          Alert.alert('Cannot scan offer', error instanceof Error ? error.message : String(error))
+                          Alert.alert(t.pairScanFailed, error instanceof Error ? error.message : String(error))
                         }
                       }}
                     />
@@ -424,13 +441,30 @@ export default function Pair() {
 
           {showFields ? (
             <View style={{ width: '100%', gap: space.l }}>
+              {offerScanned ? (
+                <View style={{ gap: space.s }}>
+                  <T accessibilityLiveRegion="polite" weight="600">
+                    {t.pairScanned}
+                  </T>
+                  <T size={font.control} tone="muted">
+                    {t.pairReviewHint}
+                  </T>
+                  <GlassButton title={t.pairScanAgain} disabled={busy} onPress={() => choose('qr')} />
+                </View>
+              ) : null}
               <View style={{ gap: space.s }}>
                 <T size={font.control} weight="500" tone="soft">
-                  Server address
+                  {t.pairAddress}
                 </T>
                 <TextInput
                   value={address}
-                  onChangeText={setAddress}
+                  editable={!busy}
+                  accessibilityLabel={t.pairAddress}
+                  onChangeText={(value) => {
+                    setAddress(value)
+                    setHttp(false)
+                    setOfferScanned(false)
+                  }}
                   placeholder="https://my-mac.local:7421"
                   placeholderTextColor={c.placeholder}
                   autoCapitalize="none"
@@ -439,16 +473,18 @@ export default function Pair() {
                   style={field}
                 />
                 <T size={font.caption} tone="muted">
-                  An origin only: scheme, host and port. Path prefixes are not supported.
+                  {t.pairAddressHint}
                 </T>
               </View>
 
               <View style={{ gap: space.s }}>
                 <T size={font.control} weight="500" tone="soft">
-                  Pairing code
+                  {t.pairCode}
                 </T>
                 <TextInput
                   ref={codeField}
+                  editable={!busy}
+                  accessibilityLabel={t.pairCode}
                   value={code}
                   onChangeText={(v) =>
                     setCode(
@@ -468,12 +504,14 @@ export default function Pair() {
 
               <View style={{ gap: space.s }}>
                 <T size={font.control} weight="500" tone="soft">
-                  Name (optional)
+                  {t.pairName}
                 </T>
                 <TextInput
+                  editable={!busy}
+                  accessibilityLabel={t.pairName}
                   value={name}
                   onChangeText={setName}
-                  placeholder="Defaults to the host's own name"
+                  placeholder={t.pairNameHint}
                   placeholderTextColor={c.placeholder}
                   style={field}
                 />
@@ -488,39 +526,62 @@ export default function Pair() {
                   <View style={{ flexDirection: 'row', gap: space.s }}>
                     <ShieldAlert size={16} color={c.warn} />
                     <T size={font.control} tone="soft" style={{ flex: 1, lineHeight: 19 }}>
-                      Plain HTTP sends your device token unencrypted. Only allow it on a network you trust (home LAN or
-                      VPN).
+                      {t.pairHttpNotice}
                     </T>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <T size={font.control} weight="500" style={{ flex: 1 }}>
-                      Allow HTTP for this host
+                      {t.pairHttpAllow}
                     </T>
-                    <Toggle value={http} onValueChange={setHttp} />
+                    <Toggle
+                      accessibilityLabel={t.pairHttpAllow}
+                      disabled={busy}
+                      value={http}
+                      onValueChange={(value) => {
+                        if (!pairing.current) setHttp(value)
+                      }}
+                    />
                   </View>
                 </Card>
               ) : null}
-
-              <GlassButton
-                primary
-                style={{ alignSelf: 'stretch' }}
-                title={busy ? 'Pairing…' : 'Pair'}
-                disabled={!ready || busy}
-                onPress={async () => {
-                  setBusy(true)
-                  try {
-                    await pair(name.trim(), address.trim(), code, http)
-                    router.dismissAll()
-                  } catch (error) {
-                    Alert.alert('Could not pair', error instanceof Error ? error.message : String(error))
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-              />
             </>
           ) : null}
         </ScrollView>
+        {showFields ? (
+          <View
+            style={{
+              paddingHorizontal: space.l,
+              paddingTop: space.m,
+              paddingBottom: Math.max(insets.bottom, space.m),
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: c.lineStrong,
+              backgroundColor: c.canvas,
+            }}
+          >
+            <GlassButton
+              primary
+              style={{ alignSelf: 'stretch' }}
+              title={busy ? t.pairBusy : t.pairAction}
+              disabled={!ready || busy}
+              onPress={async () => {
+                if (!ready || pairing.current) return
+                pairing.current = true
+                Keyboard.dismiss()
+                setBusy(true)
+                try {
+                  await pair(name.trim(), address.trim(), code, http)
+                  if (router.canDismiss()) router.dismissAll()
+                  else router.replace('/')
+                } catch (error) {
+                  Alert.alert(t.pairFailed, error instanceof Error ? error.message : String(error))
+                } finally {
+                  pairing.current = false
+                  setBusy(false)
+                }
+              }}
+            />
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </Screen>
   )

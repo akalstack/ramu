@@ -46,22 +46,23 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Scan a one-time Ramu pairing offer."
+          "cameraPermission": "Scan a Ramu pairing QR code or take a photo to attach to a chat."
         }
       ],
       [
         "expo-image-picker",
         {
           "photosPermission": "Attach photos to a chat on your paired host.",
-          "cameraPermission": "Take a photo to attach to a Ramu chat."
+          "cameraPermission": "Scan a Ramu pairing QR code or take a photo to attach to a chat."
         }
       ],
       "expo-notifications",
       "./plugins/withTrustedHttp.cjs",
+      "./plugins/withWebRtcProguard.cjs",
       [
         "@config-plugins/react-native-webrtc",
         {
-          "cameraPermission": "Ramu does not use the camera for screen video.",
+          "cameraPermission": "Scan a Ramu pairing QR code or take a photo to attach to a chat.",
           "microphonePermission": "Ramu records only while you dictate a message, and recognizes speech on this iPhone. Audio is never uploaded or kept."
         }
       ],

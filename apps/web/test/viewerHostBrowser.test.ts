@@ -76,7 +76,7 @@ const flush = async () => {
 }
 beforeEach(() => {
   vi.useFakeTimers()
-  vi.stubGlobal('document', { hidden: false })
+  vi.stubGlobal('document', { hidden: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })
   state.slots = []
   state.effects = []
   state.host = { id: 'host' }
@@ -199,4 +199,81 @@ it('keeps an address draft when a retained tab selection loses host access', asy
   expect(nodes(RenderBrowser()).find((node) => node.props['aria-label'] === 'Address')!.props.value).toBe(
     'https://kept.example',
   )
+})
+
+it('streams frames separately from metadata and stops both when the window is backgrounded', async () => {
+  const tab = { id: 'tab', generation: 1, controller: 'agent', url: 'https://site.example', inputReady: false }
+  let finish!: (frame: unknown) => void
+  state.invoke.mockImplementation(async (method: string) => {
+    if (method === 'hostBrowser.list') return [tab]
+    if (method === 'hostBrowser.nextFrame')
+      return new Promise((resolve) => {
+        finish = resolve
+      })
+    return null
+  })
+  RenderBrowser()
+  await flush()
+  RenderBrowser()
+  await flush()
+  expect(state.invoke.mock.calls.map(([method]) => method)).toContain('hostBrowser.nextFrame')
+  expect(state.invoke.mock.calls.map(([method]) => method)).not.toContain('hostBrowser.frame')
+  const changed = vi
+    .mocked(document.addEventListener)
+    .mock.calls.find(([name]) => name === 'visibilitychange')![1] as () => void
+  Object.assign(document, { hidden: true })
+  changed()
+  RenderBrowser()
+  await flush()
+  expect(state.invoke).toHaveBeenCalledWith('hostBrowser.disconnect')
+  finish({ mimeType: 'image/jpeg', data: 'late', width: 100, height: 100, sequence: 1 })
+  await flush()
+  expect(nodes(RenderBrowser()).some((node) => node.props.src?.includes('late'))).toBe(false)
+})
+
+it('keeps wheel gestures responsive while earlier input is in flight and preserves their order', async () => {
+  const tab = { id: 'tab', generation: 1, controller: 'human', url: 'https://site.example', inputReady: true }
+  let finish!: () => void
+  state.invoke.mockImplementation(async (method: string) => {
+    if (method === 'hostBrowser.list') return [tab]
+    if (method === 'hostBrowser.take') return tab
+    if (method === 'hostBrowser.nextFrame')
+      return { mimeType: 'image/jpeg', data: 'image', width: 100, height: 100, sequence: 1 }
+    if (method === 'hostBrowser.input')
+      return new Promise<void>((resolve) => {
+        finish = resolve
+      })
+    return null
+  })
+  RenderBrowser()
+  await flush()
+  RenderBrowser()
+  await flush()
+  let tree = nodes(RenderBrowser())
+  tree.find((node) => node.props.children === 'Take control')!.props.onClick()
+  await flush()
+  RenderBrowser()
+  await flush()
+  tree = nodes(RenderBrowser())
+  const page = tree.find((node) => node.props['aria-label'] === 'Page')!
+  const element = { addEventListener: vi.fn(), removeEventListener: vi.fn() }
+  page.props.ref(element)
+  const wheel = element.addEventListener.mock.calls[0]![1] as (event: unknown) => void
+  expect(element.addEventListener).toHaveBeenCalledWith('wheel', expect.any(Function), { passive: false })
+  const preventDefault = vi.fn()
+  wheel({ preventDefault, deltaX: 0, deltaY: 10 })
+  wheel({ preventDefault, deltaX: 0, deltaY: 20 })
+  wheel({ preventDefault, deltaX: 0, deltaY: 30 })
+  expect(preventDefault).toHaveBeenCalledTimes(3)
+  expect(state.invoke.mock.calls.filter(([method]) => method === 'hostBrowser.input')).toHaveLength(1)
+  finish()
+  await flush()
+  expect(
+    state.invoke.mock.calls.filter(([method]) => method === 'hostBrowser.input').map((call) => call.at(-1)),
+  ).toEqual([
+    { kind: 'scroll', x: 0, y: 10 },
+    { kind: 'scroll', x: 0, y: 50 },
+  ])
+  finish()
+  await flush()
 })

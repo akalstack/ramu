@@ -19,7 +19,9 @@ function parse(value: unknown): ExplorerNavigation | null {
         ...new Set<string>(
           data.expanded.filter(
             (path: unknown): path is string =>
-              typeof path === 'string' && path.length <= 1024 && !/[\x00-\x1f]/.test(path),
+              typeof path === 'string' &&
+              path.length <= 1024 &&
+              !Array.from(path).some((character) => character.charCodeAt(0) < 32),
           ),
         ),
       ].slice(0, MAX_FOLDERS),

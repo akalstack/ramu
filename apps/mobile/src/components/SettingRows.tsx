@@ -160,7 +160,6 @@ export function TextRow({
 
 /** One computer-side row, drawn from its definition and the live value. */
 function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disabled?: boolean }) {
-  const { language } = useStore()
   if (row.path === '$models.defaultBarMode' && row.kind === 'choice')
     return (
       <ModelFlowRow

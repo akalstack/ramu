@@ -1,3 +1,4 @@
+import { ChatFade } from '../../../chat/ChatMotion'
 import { useState } from 'react'
 import { t as translate, useLanguage } from '../../../i18n'
 import { isViewImageTool, toolImageName } from '../lib/toolImage'
@@ -83,13 +84,13 @@ export function ToolGroup({
               content={results.get(primaryTool.toolUseId)?.content}
               className={running ? `${TOOL_ICON_CLASS} running` : TOOL_ICON_CLASS}
             />
-            <span className="tool-group-label">
+            <ChatFade className="tool-group-label" identity={`${tools.length}:${running}:${activity ?? ''}`}>
               {activity ? (
                 <WorkingText>{running ? describeTools(tools, results, active) : activity}</WorkingText>
               ) : (
                 describeTools(tools, results, active)
               )}
-            </span>
+            </ChatFade>
             <ChevronRight size={13} className={CARET_CLASS} />
           </CollapsibleTrigger>
         )}
@@ -142,10 +143,10 @@ export function ToolGroup({
                       content={r?.content ?? t.content}
                       className={`tool-icon flex-none ${failed ? 'text-bad' : 'text-muted-foreground'}${toolRunning ? ' running text-brand motion-safe:[animation:pulse_1.6s_ease-in-out_infinite]' : ''}`}
                     />
-                    <span className={TOOL_SUMMARY_CLASS}>
+                    <ChatFade className={TOOL_SUMMARY_CLASS} identity={state}>
                       {humanTitle ??
                         `${translate(toolVerb(TOOL_VERB[t.name] ?? KIND_VERB[category], toolRunning))} ${summary}`}
-                    </span>
+                    </ChatFade>
                     {(state === 'Failed' || state === 'Pending' || state === 'Stopped') && (
                       <span
                         className={`tool-state text-caption flex-none ${state === 'Failed' ? 'text-bad' : 'text-muted-foreground'}`}

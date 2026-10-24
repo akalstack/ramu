@@ -1,3 +1,4 @@
+import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import type { ReactNode } from 'react'
 import { Folder, Quote, SquareTerminal, WandSparkles } from 'lucide-react'
 import type { ReferenceChip } from '@ramu/shared/chat/referenceChip'
@@ -26,7 +27,7 @@ export function ReferenceChipIcon({ chip }: { chip: ReferenceChip }) {
  * Code inside drops its own bubble. Shared by the transcript and the composer's inline references.
  */
 export const REFERENCE_CHIP_CLASS =
-  'inline-flex h-auto min-h-0 max-w-[min(100%,360px)] items-baseline gap-1 rounded-none border-0 bg-transparent p-0 align-baseline text-[length:inherit] leading-[inherit] font-normal whitespace-nowrap text-[color:var(--accent)]! no-underline! [&>svg]:self-center [&>span]:min-w-0 [&>span]:border-0 [&>span]:border-b [&>span]:border-solid [&>span]:border-b-transparent [&>span]:leading-[1.15] [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-[0.95em] [a&]:hover:bg-transparent [a&]:hover:[&>span]:border-b-current [a&]:hover:[&>span]:[border-bottom-style:dotted]'
+  'inline-flex h-auto min-h-0 max-w-[min(100%,var(--reference-chip-width))] items-baseline gap-(--reference-chip-gap) rounded-none border-0 bg-transparent p-0 align-baseline text-[length:inherit] leading-[inherit] font-normal whitespace-nowrap text-[color:var(--accent)]! no-underline! [&>svg]:self-center [&>span]:min-w-0 [&>span]:border-0 [&>span]:border-b [&>span]:border-solid [&>span]:border-b-transparent [&>span]:leading-[1.15] [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-[0.95em] [a&]:hover:bg-transparent [a&]:hover:[&>span]:border-b-current [a&]:hover:[&>span]:[border-bottom-style:dotted]'
 
 /**
  * A reference in chat (file, folder, skill, command, quote) as a small chip that sits in the line of text without making
@@ -52,6 +53,13 @@ export function ReferenceChipView({
       variant="secondary"
       className={REFERENCE_CHIP_CLASS}
       title={title ?? chip.title}
+      style={
+        {
+          '--reference-chip-width': `${REFERENCE_APPEARANCE.maxWidth}px`,
+          '--reference-chip-gap': `${REFERENCE_APPEARANCE.gap}px`,
+          fontWeight: REFERENCE_APPEARANCE.fontWeight,
+        } as React.CSSProperties
+      }
       {...(href !== undefined ? { render: <a href={href} />, onClick: onOpen } : {})}
     >
       <ReferenceChipIcon chip={chip} />

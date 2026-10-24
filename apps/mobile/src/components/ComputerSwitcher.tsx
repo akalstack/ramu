@@ -49,7 +49,7 @@ export function ComputerSwitcher() {
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <T weight="600" numberOfLines={1}>
+          <T weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
             {pc?.name ?? t.pair}
           </T>
           {pc ? <ConnectionDot status={pc.status} /> : null}

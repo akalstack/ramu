@@ -146,7 +146,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [appearance, updateAppearance] = useState<Appearance>(readAppearance)
   // Native search, toolbars, tabs and dialogs must follow the app's override too.
   useEffect(() => {
-    Appearance.setColorScheme(appearance === 'system' ? 'unspecified' : appearance)
+    if (Platform.OS !== 'web') Appearance.setColorScheme(appearance === 'system' ? 'unspecified' : appearance)
   }, [appearance])
   const [textSize, updateTextSize] = useState<TextSize>(readTextSize)
   const setTextSize = (value: TextSize) => {

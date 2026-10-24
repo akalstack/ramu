@@ -144,10 +144,10 @@
 }
 
 .transcript-arrival {
-  animation: arrive 180ms var(--ease);
+  animation: arrive var(--chat-enter-duration, 180ms) var(--chat-enter-ease, var(--ease)) both;
 }
 .stream-word {
-  animation: stream-in 180ms var(--ease) both;
+  animation: stream-in var(--chat-enter-duration, 180ms) var(--chat-enter-ease, var(--ease)) both;
 }
 
 /* Automatic following must not flash the native thumb between streamed updates.

@@ -1,3 +1,4 @@
+import * as chatPresentation from '../../../packages/shared/src/chat/presentation.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -70,7 +71,7 @@ function harness(reduced = false) {
       },
       parallel: () => animation(),
     },
-    Easing: { out: (value) => value, quad: 'quad', cubic: 'cubic' },
+    Easing: { bezier: (...values) => values, out: (value) => value, quad: 'quad', cubic: 'cubic' },
     View: 'View',
   }
   const module = { exports: {} }
@@ -80,7 +81,15 @@ function harness(reduced = false) {
   runInNewContext(code, {
     exports: module.exports,
     require: (id) =>
-      id === 'react' ? react : id === 'react-native' ? native : id === 'react/jsx-runtime' ? require(id) : {},
+      id === '@ramu/shared/chat/presentation'
+        ? chatPresentation
+        : id === 'react'
+          ? react
+          : id === 'react-native'
+            ? native
+            : id === 'react/jsx-runtime'
+              ? require(id)
+              : {},
   })
   return {
     ...module.exports,
@@ -136,6 +145,37 @@ test('streaming rerenders do not restart or cancel a new block’s arrival', () 
 test('recycled history blocks remain fully visible without replaying arrival motion', () => {
   const h = harness()
   const tree = h.render(h.Arrive, { animate: false, children: 'History' })
+  assert.equal(tree.props.style.opacity.value, 1)
+  assert.equal(h.timings.length, 0)
+})
+
+test('Starting, Working and tool status changes fade once each without replaying elapsed updates', () => {
+  const h = harness()
+  h.render(h.Arrive, { animate: true, identity: 'Starting…', children: 'Starting…' })
+  assert.equal(h.timings.length, 1)
+  assert.equal(h.timings[0].duration, chatPresentation.CHAT_MOTION.durationMs)
+  h.render(h.Arrive, { animate: true, identity: 'Working', children: 'Working for 1s' })
+  assert.equal(h.timings.length, 2)
+  h.render(h.Arrive, { animate: true, identity: 'Working', children: 'Working for 2s' })
+  assert.equal(h.timings.length, 2)
+  h.render(h.Arrive, { animate: true, identity: 'Writing…', children: 'Writing…' })
+  assert.equal(h.timings.length, 3)
+})
+
+test('existing tool rows reveal immediately but fade their changed state', () => {
+  const h = harness()
+  h.render(h.Arrive, { animate: false, identity: 'running', children: 'Reading' })
+  assert.equal(h.timings.length, 0)
+  h.render(h.Arrive, { animate: false, identity: 'completed', children: 'Read' })
+  assert.equal(h.timings.length, 1)
+})
+
+test('reduced motion skips both status entrances and state changes', async () => {
+  const h = harness(true)
+  h.render(h.Arrive, { animate: false, identity: 'Starting…', children: 'Starting…' })
+  await Promise.resolve()
+  h.timings.length = 0
+  const tree = h.render(h.Arrive, { animate: true, identity: 'Working', children: 'Working' })
   assert.equal(tree.props.style.opacity.value, 1)
   assert.equal(h.timings.length, 0)
 })

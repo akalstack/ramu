@@ -67,9 +67,7 @@ export function frameGesture(
   frame: { width: number; aspect: number; pageWidth: number },
 ): FrameGesture {
   if (Math.hypot(touch.dx, touch.dy) > 8) {
-    const scale = frame.pageWidth > 0 ? frame.pageWidth / Math.max(1, frame.width) : 1
-    const limit = (value: number) => Math.max(-2000, Math.min(2000, Math.round(value)))
-    return { kind: 'scroll', x: limit(-touch.dx * scale), y: limit(-touch.dy * scale) }
+    return frameScroll(touch.dx, touch.dy, frame)
   }
   const point = framePoint(touch.x, touch.y, frame.width, frame.aspect)
   if (touch.ms >= 500) return { kind: 'click', ...point, button: 'right', clickCount: 1 }
@@ -79,4 +77,15 @@ export function frameGesture(
     button: 'left',
     clickCount: touch.afterTapMs !== null && touch.afterTapMs < 350 ? 2 : 1,
   }
+}
+
+/** A drag sends each new displacement while the finger moves, rather than waiting for release. */
+export function frameScroll(
+  dx: number,
+  dy: number,
+  frame: { width: number; pageWidth: number },
+): Extract<FrameGesture, { kind: 'scroll' }> {
+  const scale = frame.pageWidth > 0 ? frame.pageWidth / Math.max(1, frame.width) : 1
+  const limit = (value: number) => Math.max(-2000, Math.min(2000, Math.round(value)))
+  return { kind: 'scroll', x: limit(-dx * scale), y: limit(-dy * scale) }
 }

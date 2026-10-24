@@ -17,6 +17,7 @@ import {
 import type {
   BrowserPageAction,
   BrowserScreenshot,
+  BrowserLiveFrame,
   BrowserDiagnostics,
   BrowserDialog,
   BrowserPageSnapshot,
@@ -47,6 +48,7 @@ export interface GuestPage {
   /** Native input is blocked until the controlling human can safely drive the page. */
   setHumanInput(enabled: boolean): void
   input?(input: BrowserHumanInput): Promise<void>
+  nextFrame?(after: number): Promise<BrowserLiveFrame | null>
   screenshot?(): Promise<BrowserScreenshot>
   diagnostics?(): BrowserDiagnostics
   dialog?(): BrowserDialog | null
@@ -747,6 +749,23 @@ export class BrowserRuntime {
     if (this.tabs.get(id) !== tab || tab.lease.generation !== generation)
       throw new BrowserError('stale-generation', 'Browser control changed during capture.')
     return image
+  }
+
+  async nextFrameForViewer(
+    id: string,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+    after: number,
+  ): Promise<BrowserLiveFrame | null> {
+    const tab = this.tab(id)
+    this.assertOwner(tab, owner)
+    if (!tab.page.nextFrame)
+      throw new BrowserError('unavailable', 'Live browser frames are unavailable. Update this host.')
+    if (tab.crashed || tab.replacing)
+      throw new BrowserError('busy', 'Wait for the browser page to finish its current operation.')
+    const frame = await tab.page.nextFrame(after)
+    if (this.tabs.get(id) !== tab) throw new BrowserError('closed', 'That browser tab is closed.')
+    this.assertOwner(tab, owner)
+    return frame
   }
 
   dialogForAgent(id: string, owner: Pick<BrowserOwner, 'hostId' | 'threadId'>): BrowserDialog | null {

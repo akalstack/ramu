@@ -300,6 +300,11 @@ export interface RamuMethods {
   'hostBrowser.dialog'(taskId: string, tabId: string): import('./browserBridge').BrowserDialog | null
   'hostBrowser.answerDialog'(taskId: string, tabId: string, dialogId: string, accept: boolean, text?: string): void
   'hostBrowser.frame'(taskId: string, tabId: string): import('./browserBridge').BrowserScreenshot
+  'hostBrowser.nextFrame'(
+    taskId: string,
+    tabId: string,
+    after: number,
+  ): import('./browserBridge').BrowserLiveFrame | null
   'hostBrowser.read'(taskId: string, tabId: string): import('./browserBridge').BrowserPageSnapshot
   'hostBrowser.upload'(
     taskId: string,

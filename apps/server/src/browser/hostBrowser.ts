@@ -35,6 +35,8 @@ export class HostBrowser implements HostedBrowserBackend {
   private readonly grants = new Map<string, { device: string; thread: string; expires: number }>()
   private readonly heartbeats = new Map<string, NodeJS.Timeout>()
   private captures = 0
+  private readonly liveRequests = new Set<string>()
+  private readonly viewerEpoch = new Map<string, number>()
   private readonly frameTimes = new Map<string, number>()
   private readonly pending = new Map<symbol, { thread: string; run: string; cancel(): void }>()
   private readonly profileReviews = new Map<
@@ -313,6 +315,7 @@ export class HostBrowser implements HostedBrowserBackend {
     return [...this.grants.values()].filter((grant) => grant.expires > Date.now()).map((grant) => ({ ...grant }))
   }
   revoke(device: string, thread: string): void {
+    this.viewerEpoch.set(device, (this.viewerEpoch.get(device) ?? 0) + 1)
     this.grants.delete(JSON.stringify([device, thread]))
     this.runtime?.controllerDisconnected(device)
     const timer = this.heartbeats.get(device)
@@ -386,6 +389,22 @@ export class HostBrowser implements HostedBrowserBackend {
       this.captures--
     }
   }
+  async nextFrame(device: string, thread: string, tabId: string, after: number) {
+    const runtime = this.authorized(device, thread)
+    const key = JSON.stringify([device, thread, tabId])
+    if (this.liveRequests.size >= 16 || this.liveRequests.has(key)) throw new Error('The browser viewer is busy.')
+    const epoch = this.viewerEpoch.get(device) ?? 0
+    this.touch(device)
+    this.liveRequests.add(key)
+    try {
+      const frame = await runtime.nextFrameForViewer(tabId, { hostId: HOST, threadId: thread }, after)
+      if (this.authorized(device, thread) !== runtime || (this.viewerEpoch.get(device) ?? 0) !== epoch)
+        throw new Error('The browser viewer disconnected.')
+      return frame
+    } finally {
+      this.liveRequests.delete(key)
+    }
+  }
   take(device: string, thread: string, tabId: string) {
     const runtime = this.authorized(device, thread)
     if (!runtime.list({ hostId: HOST, threadId: thread }).some((tab) => tab.id === tabId))
@@ -409,6 +428,7 @@ export class HostBrowser implements HostedBrowserBackend {
     return this.controlled(device, thread, tabId).navigate(tabId, url)
   }
   disconnect(device: string): void {
+    this.viewerEpoch.set(device, (this.viewerEpoch.get(device) ?? 0) + 1)
     this.runtime?.controllerDisconnected(device)
     const timer = this.heartbeats.get(device)
     if (timer) clearTimeout(timer)
@@ -422,6 +442,7 @@ export class HostBrowser implements HostedBrowserBackend {
     this.heartbeats.clear()
     this.grants.clear()
     this.frameTimes.clear()
+    this.viewerEpoch.clear()
     this.profileReviews.clear()
     this.runtime?.closeAll()
     this.runtime = undefined

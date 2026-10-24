@@ -3,7 +3,7 @@ import { localFileLink } from '../workspace/fileLinks'
 
 /**
  * The chip a reference in chat becomes (an `@file`, a folder, a `$skill`, a `/command`, a quote). Desktop and phone
- * draw it with their own widgets (a shadcn Attachment, a native badge), but what the chip says, which kind it is and
+ * draw it with their own inline widgets, using chat/presentation as the shared visual reference. What the chip says, which kind it is and
  * what it opens come from here, so the two cannot drift apart.
  */
 export type ReferenceChipKind = 'file' | 'folder' | 'skill' | 'command' | 'quote'

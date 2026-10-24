@@ -1,3 +1,4 @@
+import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { Alert, FlatList, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
@@ -1036,7 +1037,7 @@ export function Composer({
               part.kind === 'text' ? (
                 part.source
               ) : (
-                <Text key={index} style={{ color: part.kind === 'quote' ? c.soft : c.accent, backgroundColor: c.fill }}>
+                <Text key={index} style={{ color: c.accent, fontWeight: REFERENCE_APPEARANCE.fontWeight }}>
                   {part.source}
                 </Text>
               ),

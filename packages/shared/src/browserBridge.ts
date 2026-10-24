@@ -35,6 +35,10 @@ export interface BrowserScreenshot {
   width: number
   height: number
 }
+/** Latest compositor frame. Cursors belong to one tab; slow viewers skip superseded frames. */
+export interface BrowserLiveFrame extends BrowserScreenshot {
+  sequence: number
+}
 export interface BrowserDialog {
   id: string
   type: 'alert' | 'confirm' | 'prompt' | 'beforeunload'
@@ -51,6 +55,7 @@ export type BrowserViewerOperation =
   | { op: 'list' }
   | { op: 'dialog'; tabId: string }
   | { op: 'frame'; tabId: string }
+  | { op: 'nextFrame'; tabId: string; after: number }
   | { op: 'read'; tabId: string }
   | { op: 'take'; tabId: string }
   | { op: 'release'; tabId: string; runId?: string }

@@ -178,6 +178,16 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
       args: z.tuple([id, tab]),
       run: (taskId: string, tabId: string) => viewer().frame(device(), thread(taskId), tabId),
     },
+    'hostBrowser.nextFrame': {
+      args: z.tuple([id, tab, z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)]),
+      run: async (taskId, tabId, after) => {
+        const who = device()
+        const frame = await viewer().nextFrame(who, thread(taskId), tabId, after)
+        if (device() !== who) throw new Error('The browser viewer disconnected.')
+        thread(taskId)
+        return frame
+      },
+    },
     'hostBrowser.read': {
       args: z.tuple([id, tab]),
       run: (taskId: string, tabId: string) => viewer().read(device(), thread(taskId), tabId),

@@ -1,5 +1,6 @@
+import { BrowserInputQueue, watchBrowserFrames } from '@ramu/shared/browserLiveViewer'
 import { VIEW_ONLY_BROWSER_NOTICE } from '../runtime/viewerAccess'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Image, Modal, PanResponder, ScrollView, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import type {
@@ -14,7 +15,14 @@ import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
 import { Button, T } from './ui'
-import { CONTROL_TEXT, controlState, frameGesture, profileLabel, viewerMessage } from '../runtime/browserViewerState'
+import {
+  CONTROL_TEXT,
+  controlState,
+  frameGesture,
+  frameScroll,
+  profileLabel,
+  viewerMessage,
+} from '../runtime/browserViewerState'
 
 /** The phone views the owning host's browser; it never substitutes a phone WebView or copies credentials. */
 export function BrowserViewer({
@@ -42,6 +50,9 @@ export function BrowserViewer({
   const [text, setText] = useState('')
   const [privateText, setPrivateText] = useState(true)
   const [error, setError] = useState('')
+  const [frameError, setFrameError] = useState('')
+  const [frameReady, setFrameReady] = useState(false)
+  const inputQueue = useRef<BrowserInputQueue | null>(null)
   const [busy, setBusy] = useState(false)
   const [newTab, setNewTab] = useState(false)
   const [dialog, setDialog] = useState<BrowserDialog | null>(null)
@@ -63,11 +74,17 @@ export function BrowserViewer({
   addressValue.current = address
   const io = useRef(store)
   io.current = store
-  const allowed = () =>
-    currentTarget.current === target &&
-    io.current.computers?.find((host) => host.id === chat.computerId)?.access !== 'viewer' &&
-    io.current.isOnline(chat.computerId)
+  const allowed = useCallback(
+    () =>
+      currentTarget.current === target &&
+      io.current.computers?.find((host) => host.id === chat.computerId)?.access !== 'viewer' &&
+      io.current.isOnline(chat.computerId),
+    [target, chat.computerId],
+  )
   const tab = tabs.find((tab) => tab.id === selected) ?? tabs[0]
+  const tabId = tab?.id
+  const generation = tab?.generation
+  const online = store.isOnline(chat.computerId)
   current.current = tab
   const controlled =
     !viewOnly &&
@@ -77,7 +94,10 @@ export function BrowserViewer({
     !tab.paused &&
     active &&
     store.isOnline(chat.computerId)
-  const own = controlled && !!tab?.inputReady
+  const readyGeneration = useRef('')
+  const controlKey = tab ? `${tab.id}:${tab.generation}` : ''
+  if (tab?.inputReady) readyGeneration.current = controlKey
+  const own = controlled && readyGeneration.current === controlKey && frameReady
   const state = tab
     ? controlState(tab, { online: store.isOnline(chat.computerId), active, ownedGeneration: owned })
     : null
@@ -87,7 +107,7 @@ export function BrowserViewer({
     return () => subscription.remove()
   }, [])
   useEffect(() => {
-    if (viewOnly || !active || !chat.taskId || !store.isOnline(chat.computerId)) return
+    if (viewOnly || !active || !chat.taskId || !online) return
     let mounted = true
     let timer: ReturnType<typeof setTimeout>
     const poll = async () => {
@@ -107,12 +127,6 @@ export function BrowserViewer({
           if (!mounted || !allowed()) return
           setDialog(websiteDialog)
           if (!editing.current && !addressEdited.current) setAddress(tab.url)
-          if (!websiteDialog) {
-            const image = await io.current.invoke(chat.computerId, 'hostBrowser.frame', chat.taskId!, tab.id)
-            if (!mounted || !allowed()) return
-            setFrame(`data:${image.mimeType};base64,${image.data}`)
-            if (image.width > 0 && image.height > 0) setFrameSize({ width: image.width, height: image.height })
-          }
         } else {
           setFrame('')
           setDialog(null)
@@ -130,7 +144,7 @@ export function BrowserViewer({
       clearTimeout(timer)
       if (allowed()) void io.current.invoke(chat.computerId, 'hostBrowser.disconnect').catch(() => {})
     }
-  }, [chat.computerId, chat.taskId, active, viewOnly, store.isOnline(chat.computerId)])
+  }, [chat.computerId, chat.taskId, active, viewOnly, online, allowed])
   const act = async (work: () => Promise<unknown>) => {
     if (!allowed() || busy) return
     setBusy(true)
@@ -143,12 +157,47 @@ export function BrowserViewer({
       setBusy(false)
     }
   }
+  useEffect(() => {
+    setFrameReady(false)
+    setFrame('')
+    setFrameError('')
+    if (viewOnly || !active || !online || !chat.taskId || !tabId || !allowed()) return
+    return watchBrowserFrames({
+      next: (after) => io.current.invoke(chat.computerId, 'hostBrowser.nextFrame', chat.taskId!, tabId, after),
+      fallback: () => io.current.invoke(chat.computerId, 'hostBrowser.frame', chat.taskId!, tabId),
+      show: (image) => {
+        if (!allowed()) return
+        setFrame(`data:${image.mimeType};base64,${image.data}`)
+        setFrameSize({ width: image.width, height: image.height })
+      },
+      ready: (value) => {
+        if (allowed()) setFrameReady(value)
+      },
+      error: (message) => {
+        if (allowed()) setFrameError(message)
+      },
+    })
+  }, [chat.computerId, chat.taskId, tabId, active, online, viewOnly, allowed])
+  useEffect(() => {
+    if (!controlled || !frameReady || !tabId || generation === undefined || !chat.taskId) return
+    const queue = new BrowserInputQueue(async (input) => {
+      if (!allowed()) throw new Error('Browser control changed.')
+      await io.current.invoke(chat.computerId, 'hostBrowser.input', chat.taskId!, tabId, generation, input)
+    })
+    inputQueue.current = queue
+    return () => {
+      queue.close()
+      if (inputQueue.current === queue) inputQueue.current = null
+    }
+  }, [chat.computerId, chat.taskId, tabId, generation, controlled, frameReady, allowed])
   const input = (input: BrowserHumanInput) => {
-    if (!own || !tab || !chat.taskId) return
-    void act(() => invoke(chat.computerId, 'hostBrowser.input', chat.taskId!, tab.id, tab.generation, input))
+    if (!allowed() || !own || busy || (input.kind === 'scroll' && !input.x && !input.y)) return
+    void inputQueue.current?.push(input).catch((error) => {
+      if (allowed()) setError(String(error.message ?? error))
+    })
   }
   const aspect = frameSize.width / frameSize.height
-  const touch = useRef({ at: 0, lastTap: 0 })
+  const touch = useRef({ at: 0, lastTap: 0, dx: 0, dy: 0, scrolling: false })
   const gestureState = useRef({ input, width, aspect, pageWidth: frameSize.width, enabled: false })
   gestureState.current = { input, width, aspect, pageWidth: frameSize.width, enabled: own && !busy }
   const pan = useRef(
@@ -156,11 +205,27 @@ export function BrowserViewer({
       onStartShouldSetPanResponder: () => gestureState.current.enabled,
       onPanResponderGrant: () => {
         touch.current.at = Date.now()
+        touch.current.dx = 0
+        touch.current.dy = 0
+        touch.current.scrolling = false
+      },
+      onPanResponderMove: (_event, gesture) => {
+        const current = gestureState.current
+        if (!current.enabled || (!touch.current.scrolling && Math.hypot(gesture.dx, gesture.dy) <= 8)) return
+        touch.current.scrolling = true
+        current.input(frameScroll(gesture.dx - touch.current.dx, gesture.dy - touch.current.dy, current))
+        touch.current.dx = gesture.dx
+        touch.current.dy = gesture.dy
       },
       onPanResponderTerminationRequest: () => false,
       onPanResponderRelease: (event, gesture) => {
         const now = Date.now()
         const current = gestureState.current
+        if (touch.current.scrolling) {
+          current.input(frameScroll(gesture.dx - touch.current.dx, gesture.dy - touch.current.dy, current))
+          touch.current.lastTap = 0
+          return
+        }
         const result = frameGesture(
           {
             x: event.nativeEvent.locationX,
@@ -233,7 +298,7 @@ export function BrowserViewer({
       </ScrollView>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.m, gap: space.s }}>
         <T tone="muted">{t('Browser runs on the selected execution host. Sign-ins stay there.')}</T>
-        {error ? <T tone="muted">{t(viewerMessage(error))}</T> : null}
+        {error || frameError ? <T tone="muted">{t(viewerMessage(error || frameError))}</T> : null}
         {tab && state && (
           <View accessibilityRole="summary" style={{ gap: 2 }}>
             <T tone="muted" size={font.caption}>
@@ -518,10 +583,8 @@ export function BrowserViewer({
               disabled={busy || !text}
               onPress={() =>
                 void act(async () => {
-                  await invoke(chat.computerId, 'hostBrowser.input', chat.taskId!, tab!.id, tab!.generation, {
-                    kind: 'text',
-                    text,
-                  })
+                  if (!inputQueue.current) throw new Error('Take control again to continue.')
+                  await inputQueue.current.push({ kind: 'text', text })
                   setText((current) => (current === text ? '' : current))
                 })
               }

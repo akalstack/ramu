@@ -24,7 +24,7 @@ export default function SearchScreen() {
   const router = useRouter()
   const actions = useTabActions()
   const [query, setQuery] = useState('')
-  const [hits, setHits] = useState<{ computerId: string; hit: ChatSearchHit }[]>([])
+  const [hits, setHits] = useState<{ query: string; computerId: string; hit: ChatSearchHit }[]>([])
   const search = useRef<SearchBarCommands>(null)
   // Native tabs retain this screen. Focus after the header attaches on every visit.
   useFocusEffect(
@@ -75,7 +75,7 @@ export default function SearchScreen() {
         online.split(',').map((computerId) =>
           store
             .invoke(computerId, 'agent.searchMessages', q)
-            .then((found) => found.map((hit) => ({ computerId, hit })))
+            .then((found) => found.map((hit) => ({ query: q, computerId, hit })))
             .catch(() => []),
         ),
       ).then((all) => alive && setHits(all.flat().slice(0, 30)))
@@ -85,7 +85,8 @@ export default function SearchScreen() {
       clearTimeout(timer)
     }
   }, [q, online])
-  const messageHits = hits.flatMap(({ computerId, hit }) => {
+  const messageHits = hits.flatMap(({ query: searchedQuery, computerId, hit }) => {
+    if (searchedQuery !== q || !q) return []
     const chat = store.chats.find((x) => x.computerId === computerId && x.taskId === hit.taskId)
     return chat ? [{ chat, hit }] : []
   })

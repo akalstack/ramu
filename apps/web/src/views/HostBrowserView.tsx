@@ -1,3 +1,4 @@
+import { BrowserInputQueue, watchBrowserFrames } from '@ramu/shared/browserLiveViewer'
 import { BrowserTabButton } from '@/components/browser-tab-controls'
 import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -23,7 +24,7 @@ import { takeWantedTab, onWantedTab, NEW_TAB } from './browserPane'
 import { HostBrowserDownloads } from './HostBrowserDownloads'
 import { browserFaviconFrom } from '@ramu/shared/browserLinks'
 
-/** Bounded host screenshots over the existing authenticated RPC. Hidden views send no frames or input. */
+/** Live compositor frames over the authenticated host connection. Native desktop tabs use BrowserView directly. */
 export function HostBrowserView({
   taskId,
   view,
@@ -60,16 +61,26 @@ export function HostBrowserView({
     setUploadRef('')
   }, [selected])
   const [error, setError] = useState('')
+  const [frameError, setFrameError] = useState('')
+  const [frameReady, setFrameReady] = useState(false)
+  const [foreground, setForeground] = useState(!document.hidden)
+  const inputQueue = useRef<BrowserInputQueue | null>(null)
   const [busy, setBusy] = useState(false)
   const editing = useRef(false)
   const addressEdited = useRef(false)
+  const invokeHost = host.invoke
   const tab = tabs.find((tab) => tab.id === selected) ?? tabs[0]
+  const tabId = tab?.id
+  const generation = tab?.generation
   const selectedRef = useRef(selected)
   selectedRef.current = selected
   const current = useRef(tab)
   current.current = tab
   const controlled = !viewOnly && !!tab && tab.controller === 'human' && tab.generation === owned && !tab.paused
-  const own = controlled && !!tab?.inputReady
+  const readyGeneration = useRef('')
+  const controlKey = tab ? `${tab.id}:${tab.generation}` : ''
+  if (tab?.inputReady) readyGeneration.current = controlKey
+  const own = controlled && readyGeneration.current === controlKey && visible && foreground && frameReady
   const scope = `${host.id}:${taskId}`
   const latest = useRef(scope)
   latest.current = scope
@@ -115,7 +126,7 @@ export function HostBrowserView({
     }
   }
   useEffect(() => {
-    if (!visible || viewOnly) return
+    if (!visible || !foreground || viewOnly) return
     let active = true
     let timer: ReturnType<typeof setTimeout>
     let requested = false
@@ -160,11 +171,6 @@ export function HostBrowserView({
             if (previous?.id !== dialog?.id) setDialogText('')
             return dialog
           })
-          if (!dialog) {
-            const frame = await host.invoke('hostBrowser.frame', taskId, tab.id)
-            if (!active || !allowed()) return
-            setImage(frame)
-          }
         } else setImage(null)
         setError('')
       } catch (error) {
@@ -195,11 +201,81 @@ export function HostBrowserView({
       offWanted()
       if (allowed()) void host.invoke('hostBrowser.disconnect').catch(() => {})
     }
-  }, [host, taskId, visible, view.id, preferences.agentBrowser?.defaultProfileId, viewOnly, canWrite, allowed])
+  }, [
+    host,
+    taskId,
+    visible,
+    foreground,
+    view.id,
+    preferences.agentBrowser?.defaultProfileId,
+    viewOnly,
+    canWrite,
+    allowed,
+  ])
+  useEffect(() => {
+    const changed = () => setForeground(!document.hidden)
+    document.addEventListener('visibilitychange', changed)
+    return () => document.removeEventListener('visibilitychange', changed)
+  }, [])
+  useEffect(() => {
+    setFrameReady(false)
+    setImage(null)
+    setFrameError('')
+    if (!visible || !foreground || viewOnly || !tabId || !allowed()) return
+    return watchBrowserFrames({
+      next: (after) => invokeHost('hostBrowser.nextFrame', taskId, tabId, after),
+      fallback: () => invokeHost('hostBrowser.frame', taskId, tabId),
+      show: (frame) => {
+        if (allowed()) setImage(frame)
+      },
+      ready: (value) => {
+        if (allowed()) setFrameReady(value)
+      },
+      error: (message) => {
+        if (allowed()) setFrameError(message)
+      },
+    })
+  }, [invokeHost, taskId, tabId, visible, foreground, viewOnly, allowed])
+  useEffect(() => {
+    if (!controlled || !visible || !foreground || !frameReady || !tabId || generation === undefined) return
+    const queue = new BrowserInputQueue(async (input) => {
+      if (!allowed()) throw new Error('Browser control changed.')
+      await invokeHost('hostBrowser.input', taskId, tabId, generation, input)
+    })
+    inputQueue.current = queue
+    return () => {
+      queue.close()
+      if (inputQueue.current === queue) inputQueue.current = null
+    }
+  }, [invokeHost, taskId, tabId, generation, controlled, visible, foreground, frameReady, allowed])
   const input = (input: BrowserHumanInput) => {
-    if (!own || !tab || busy) return
-    void act(() => host.invoke('hostBrowser.input', taskId, tab.id, tab.generation, input))
+    if (!allowed() || !own || busy || (input.kind === 'scroll' && !input.x && !input.y)) return
+    void inputQueue.current?.push(input).catch((error) => {
+      if (allowed()) setError(t(errorText(error)))
+    })
   }
+  const page = useRef<HTMLDivElement | null>(null)
+  const wheelAction = useRef<(event: WheelEvent) => void>(() => {})
+  wheelAction.current = (event) => {
+    if (!own || busy) return
+    event.preventDefault()
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? (image?.height ?? 768) : 1
+    input({
+      kind: 'scroll',
+      x: Math.max(-2000, Math.min(2000, event.deltaX * unit)),
+      y: Math.max(-2000, Math.min(2000, event.deltaY * unit)),
+    })
+  }
+  const wheelListener = useRef((event: WheelEvent) => wheelAction.current(event)).current
+  const attachPage = useCallback(
+    (node: HTMLDivElement | null) => {
+      page.current?.removeEventListener('wheel', wheelListener)
+      page.current = node
+      node?.addEventListener('wheel', wheelListener, { passive: false })
+    },
+    [wheelListener],
+  )
+  useEffect(() => () => attachPage(null), [attachPage])
   return (
     <>
       {viewOnly && (
@@ -336,9 +412,9 @@ export function HostBrowserView({
         <p className="m-0 px-3 py-1 text-caption text-muted-foreground">
           {t('Browser runs on the selected execution host. Sign-ins stay there.')}
         </p>
-        {error && (
+        {(error || frameError) && (
           <p role="status" className="m-0 px-3 py-1 text-caption">
-            {error}
+            {error || t(frameError)}
           </p>
         )}
         {tab && (
@@ -456,16 +532,7 @@ export function HostBrowserView({
             event.preventDefault()
             input({ kind: 'key', key: event.key })
           }}
-          onWheel={(event) => {
-            if (own) {
-              event.preventDefault()
-              input({
-                kind: 'scroll',
-                x: Math.max(-2000, Math.min(2000, event.deltaX)),
-                y: Math.max(-2000, Math.min(2000, event.deltaY)),
-              })
-            }
-          }}
+          ref={attachPage}
         >
           {image ? (
             <img
@@ -497,7 +564,8 @@ export function HostBrowserView({
               event.preventDefault()
               if (text && tab)
                 void act(async () => {
-                  await host.invoke('hostBrowser.input', taskId, tab.id, tab.generation, { kind: 'text', text })
+                  if (!inputQueue.current) throw new Error('Take control again to continue.')
+                  await inputQueue.current.push({ kind: 'text', text })
                   setText((current) => (current === text ? '' : current))
                 })
             }}

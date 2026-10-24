@@ -1,3 +1,4 @@
+import { BrowserFrames, type CompositorFrame } from '@ramu/server/browserFrames'
 import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
 import type { BrowserDialog, BrowserDiagnostics, BrowserKey, BrowserModifier } from '@ramu/shared/browserBridge'
@@ -38,6 +39,7 @@ const originOf = (value: unknown) => {
 
 /** Private fixed CDP operations only: no public debug port, arbitrary evaluation, cookies, request bodies or headers. */
 export class BrowserDebugger {
+  private frames?: BrowserFrames
   private ready: Promise<void> | undefined
   private disposed = false
   private pendingDialog: BrowserDialog | null = null
@@ -50,6 +52,8 @@ export class BrowserDebugger {
   ) {
     contents.debugger.on('message', (_event, method, params) => this.message(method, params as Record<string, unknown>))
     contents.debugger.on('detach', () => {
+      this.frames?.close()
+      this.frames = undefined
       this.ready = undefined
       this.pendingDialog = null
       this.requests.clear()
@@ -77,6 +81,20 @@ export class BrowserDebugger {
       })
     }
     return this.ready
+  }
+  async nextFrame(after: number) {
+    await this.ensure()
+    this.frames ??= new BrowserFrames({
+      send: (method, params) => this.contents.debugger.sendCommand(method, params),
+      listen: (receive) => {
+        const listener = (_event: unknown, method: string, params: CompositorFrame) => {
+          if (method === 'Page.screencastFrame') receive(params)
+        }
+        this.contents.debugger.on('message', listener)
+        return () => this.contents.debugger.removeListener('message', listener)
+      },
+    })
+    return this.frames.next(after)
   }
   private message(method: string, data: Record<string, unknown>) {
     if (this.disposed) return
@@ -230,6 +248,7 @@ export class BrowserDebugger {
   }
   dispose() {
     this.disposed = true
+    this.frames?.close()
     this.pendingDialog = null
     this.requests.clear()
     this.network.length = 0

@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useHost } from '../../../workspace/HostProvider'
 import { errorText } from '../../../workspace/TaskPane'
 import { type AsideTarget } from '../types'
-import { WorkingText } from './WorkingText'
+import { ChatStatus } from '../../../chat/ChatMotion'
 import { AssistantText } from './AssistantText'
 import { CopyButton } from './CopyButton'
 import {
@@ -19,7 +19,6 @@ import {
   PANEL_HEADER_CLASS,
   PANEL_LABEL_CLASS,
   PANEL_TITLE_CLASS,
-  WORKING_CLASS,
 } from '../styles'
 import { Message, MessageContent } from '@/components/ui/message'
 import { UserBubble } from './UserMessage'
@@ -261,11 +260,7 @@ export function AsidePanel({
                 </div>
               ),
             )}
-            {waiting && (
-              <div className={WORKING_CLASS} role="status">
-                <WorkingText>{translate('Thinking aside')}</WorkingText>
-              </div>
-            )}
+            {waiting && <ChatStatus label={translate('Thinking aside')} />}
             {!aside && (
               <p className="muted text-muted-foreground small text-caption">
                 {translate('Ask without interrupting the thread. Replies stay in this aside.')}

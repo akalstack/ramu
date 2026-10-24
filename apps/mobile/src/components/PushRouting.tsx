@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Platform } from 'react-native'
 import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
@@ -8,7 +8,13 @@ import { pushTarget } from '../runtime/pushTarget'
 export function PushRouting() {
   const store = useStore(),
     router = useRouter()
+  const runtime = useRef({ store, router })
+  runtime.current = { store, router }
+  const handled = useRef(new Map<string, number>())
+  const ready = store.ready
+  const knownHosts = store.computers.map((computer) => computer.id).join(',')
   useEffect(() => {
+    if (!ready) return
     if (Platform.OS === 'web' || Constants.appOwnership === 'expo') return
     let alive = true,
       remove: (() => void) | undefined
@@ -23,11 +29,19 @@ export function PushRouting() {
           }),
         })
         const route = async (response: import('expo-notifications').NotificationResponse) => {
+          const { store, router } = runtime.current
+          const key = JSON.stringify([response.notification.request.identifier, response.actionIdentifier])
+          const now = Date.now()
+          const previous = handled.current.get(key)
+          if (!alive || (previous !== undefined && now - previous < 2000)) return
           const target = pushTarget(
             response.notification.request.content.data,
             store.computers.map((c) => c.id),
           )
-          if (!alive || !target) return
+          if (!target) return
+          handled.current.set(key, now)
+          // Bound session memory without losing deduplication of recent taps.
+          if (handled.current.size > 100) handled.current.delete(handled.current.keys().next().value!)
           store.select(target.computerId)
           // Not about one thread: the schedules, or the Inbox on its recaps.
           if (target.kind === 'schedules') return router.navigate('/schedules')
@@ -50,6 +64,6 @@ export function PushRouting() {
       alive = false
       remove?.()
     }
-  }, [store.ready, store.computers.map((c) => c.id).join(',')])
+  }, [ready, knownHosts])
   return null
 }

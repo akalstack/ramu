@@ -1,3 +1,4 @@
+import { CHAT_MOTION } from '@ramu/shared/chat/presentation'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   AccessibilityInfo,
@@ -92,26 +93,41 @@ export function Shimmer({
 }
 
 /** Entries that appear while the agent works rise 4 pt and fade in, like the desktop's `arrive` keyframe. */
-export function Arrive({ animate, children }: { animate: boolean; children: ReactNode }) {
+export function Arrive({ animate, identity, children }: { animate: boolean; identity?: string; children: ReactNode }) {
   const reduced = useReducedMotion()
   const enter = useRef(animate).current
+  const previousIdentity = useRef(identity)
   const progress = useRef(new Animated.Value(enter && !reduced ? 0 : 1)).current
   useEffect(() => {
-    if (!enter || reduced) {
+    const changed = previousIdentity.current !== identity
+    previousIdentity.current = identity
+    if ((!enter && !changed) || reduced) {
       progress.setValue(1)
       return
     }
+    progress.setValue(0)
     const animation = Animated.timing(progress, {
       toValue: 1,
-      duration: 200,
-      easing: Easing.out(Easing.quad),
+      duration: CHAT_MOTION.durationMs,
+      easing: Easing.bezier(...CHAT_MOTION.easing),
       useNativeDriver: true,
     })
     animation.start()
     return () => animation.stop()
-  }, [enter, reduced, progress])
-  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [4, 0] })
+  }, [enter, identity, reduced, progress])
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [CHAT_MOTION.rise, 0] })
   return <Animated.View style={{ opacity: progress, transform: [{ translateY }] }}>{children}</Animated.View>
+}
+
+/** A status fades on semantic changes; elapsed time and streaming tokens do not restart its animation. */
+export function ChatStatus({ label }: { label: string }) {
+  return (
+    <View accessibilityLiveRegion="polite">
+      <Arrive animate identity={label}>
+        <Shimmer>{label}</Shimmer>
+      </Arrive>
+    </View>
+  )
 }
 
 /** Height and opacity disclosure motion, shared by every expandable transcript block. */

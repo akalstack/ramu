@@ -645,11 +645,15 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
         <Breathe active={running > 0}>
           <Wrench size={14} color={failed ? c.bad : running ? c.accent : c.muted} />
         </Breathe>
-        <T size={font.control} tone="muted" style={{ flex: 1 }}>
-          {item.tools.length} {language === 'id' ? 'alat' : 'tools'}
-          {running ? ` · ${running} ${language === 'id' ? 'berjalan' : 'running'}` : ''}
-          {failed ? ` · ${failed} ${language === 'id' ? 'gagal' : 'failed'}` : ''}
-        </T>
+        <View style={{ flex: 1 }}>
+          <Arrive animate={false} identity={`${item.tools.length}:${running}:${failed}`}>
+            <T size={font.control} tone="muted">
+              {item.tools.length} {language === 'id' ? 'alat' : 'tools'}
+              {running ? ` · ${running} ${language === 'id' ? 'berjalan' : 'running'}` : ''}
+              {failed ? ` · ${failed} ${language === 'id' ? 'gagal' : 'failed'}` : ''}
+            </T>
+          </Arrive>
+        </View>
         <Disclosure open={open} color={c.muted} />
       </Pressable>
       <Collapse open={open}>
@@ -756,9 +760,11 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         <Breathe active={running}>
           <I size={14} color={failed ? c.bad : running ? c.accent : c.muted} strokeWidth={1.8} />
         </Breathe>
-        <T size={font.control} tone={running ? 'soft' : 'muted'} weight="500">
-          {item.verb}
-        </T>
+        <Arrive animate={false} identity={`${item.verb}:${item.status}`}>
+          <T size={font.control} tone={running ? 'soft' : 'muted'} weight="500">
+            {item.verb}
+          </T>
+        </Arrive>
         <T
           size={font.control}
           tone={failed ? 'bad' : 'muted'}

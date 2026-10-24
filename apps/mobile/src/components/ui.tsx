@@ -173,7 +173,7 @@ export function Button({
   disabled?: boolean
   style?: StyleProp<ViewStyle>
 }) {
-  const { c } = useTheme()
+  const { c, textSize } = useTheme()
   const bg = { primary: c.primary, secondary: c.fill, danger: c.badWash, ghost: 'transparent' }[kind]
   const fg = { primary: c.primaryInk, secondary: c.text, danger: c.bad, ghost: c.soft }[kind]
   return (
@@ -195,7 +195,17 @@ export function Button({
       ]}
     >
       {I ? <I size={16} color={fg} strokeWidth={2} /> : null}
-      <Text style={{ color: fg, fontSize: font.control + 1, fontWeight: '600' }}>{title}</Text>
+      <Text
+        style={{
+          color: fg,
+          fontSize: (font.control + 1) * TEXT_SCALE[textSize],
+          fontWeight: '600',
+          flexShrink: 1,
+          textAlign: 'center',
+        }}
+      >
+        {title}
+      </Text>
     </Pressable>
   )
 }
@@ -267,7 +277,8 @@ export function Chip({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        height: small ? 28 : 34,
+        minHeight: small ? 28 : 34,
+        paddingVertical: space.xs,
         paddingHorizontal: space.m,
         borderRadius: radius.full,
         backgroundColor: selected ? c.accentSoft : fill ? c.fill : c.raised2,
@@ -303,6 +314,7 @@ export function Row({
   const { c } = useTheme()
   return (
     <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
       {...rest}
       onPress={onPress}
       style={({ pressed }) => [
@@ -652,7 +664,9 @@ export function Segmented<K extends string>({
             }}
             style={{
               flex: 1,
-              height: 34,
+              minHeight: 44,
+              paddingVertical: space.s,
+              paddingHorizontal: space.xs,
               borderRadius: radius.m - 3,
               alignItems: 'center',
               justifyContent: 'center',
@@ -665,7 +679,7 @@ export function Segmented<K extends string>({
               size={font.control}
               weight={selected ? '600' : '500'}
               tone="text"
-              style={{ opacity: selected ? 1 : 0.7 }}
+              style={{ opacity: selected ? 1 : 0.7, flexShrink: 1, textAlign: 'center' }}
             >
               {option.label}
             </T>
@@ -684,7 +698,8 @@ export function Segmented<K extends string>({
 export const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   button: {
-    height: 40,
+    minHeight: 44,
+    paddingVertical: space.s,
     borderRadius: radius.s + 2,
     paddingHorizontal: space.l,
     flexDirection: 'row',

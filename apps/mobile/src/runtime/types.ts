@@ -110,6 +110,7 @@ export type TranscriptItem = (
 export interface Chat extends Task {
   executionState?: import('@ramu/shared/types').AgentSessionState
   compacting?: boolean
+  activityLabel?: string | null
   taskId: string
   sessionId: string | null
   computerId: string

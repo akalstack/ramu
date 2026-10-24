@@ -55,3 +55,12 @@ it('refuses another thread’s tab and pauses the device’s control on disconne
   await run(r, { op: 'disconnect' })
   expect(r.controllerDisconnected).toHaveBeenCalledWith('phone')
 })
+
+it('scopes live compositor reads to the thread and validates their cursor', async () => {
+  const r = runtime()
+  r.nextFrameForViewer = vi.fn(async () => null)
+  await run(r, { op: 'nextFrame', tabId: TAB, after: 3 })
+  expect(r.nextFrameForViewer).toHaveBeenCalledWith(TAB, { hostId: 'desktop', threadId: 'thread' }, 3)
+  await expect(run(r, { op: 'nextFrame', tabId: 'other', after: 0 })).rejects.toThrow('another thread')
+  await expect(run(r, { op: 'nextFrame', tabId: TAB, after: -1 })).rejects.toThrow('cursor')
+})

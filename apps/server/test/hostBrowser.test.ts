@@ -171,3 +171,40 @@ describe('host browser control', () => {
     expect(browser.grantsList()).toHaveLength(1)
   })
 })
+
+it('does not deliver a pending live frame after pairing is revoked or the viewer disconnects', async () => {
+  let finish!: (frame: unknown) => void
+  runtime.nextFrameForViewer = vi.fn(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  browser.grant('phone', 't1')
+  const pending = browser.nextFrame('phone', 't1', 'tab1', 0)
+  const refused = expect(pending).rejects.toThrow('not granted')
+  browser.revoke('phone', 't1')
+  finish({ sequence: 1, data: 'private' })
+  await refused
+  browser.grant('phone', 't1')
+  const disconnected = browser.nextFrame('phone', 't1', 'tab1', 0)
+  const dropped = expect(disconnected).rejects.toThrow('disconnected')
+  browser.disconnect('phone')
+  finish({ sequence: 2, data: 'private' })
+  await dropped
+})
+
+it('bounds outstanding live frame reads independently from screenshot captures', async () => {
+  let finish!: (frame: unknown) => void
+  runtime.nextFrameForViewer = vi.fn(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const read = browser.nextFrame('local', 't1', 'tab1', 0)
+  await expect(browser.nextFrame('local', 't1', 'tab1', 0)).rejects.toThrow('busy')
+  expect(await browser.frame('local', 't1', 'tab1')).toHaveProperty('data', 'AAAA')
+  finish(null)
+  expect(await read).toBeNull()
+})

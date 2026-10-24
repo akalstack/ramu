@@ -1,10 +1,13 @@
+import { CHAT_MOTION } from '@ramu/shared/chat/presentation'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Image, Linking, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native'
+import { ReferenceBadge } from './ReferenceChip'
+export { ReferenceBadge } from './ReferenceChip'
 import { CodeBlock } from './Code'
 import { useReducedMotion } from './Motion'
 import { parseBlocks, type Block } from '../runtime/markdown'
 import { chatReferences } from '@ramu/shared/chat/chatReferences'
-import { draftChip, skillChip, type ReferenceChip } from '@ramu/shared/chat/referenceChip'
+import { draftChip, skillChip } from '@ramu/shared/chat/referenceChip'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { font, radius, space, useTheme } from '../theme'
 
@@ -24,39 +27,8 @@ export const ReferenceContext = createContext<ReferenceActions>({
   openUrl: (url) => void Linking.openURL(url).catch(() => {}),
 })
 
-const CHIP_GLYPH: Record<ReferenceChip['kind'], string> = {
-  file: '',
-  folder: '▸ ',
-  skill: '✦ ',
-  command: '/',
-  quote: '❝ ',
-}
-
-/** A reference chip inside running text: a tinted, tappable span (nested Text is the one inline element both platforms lay out). What it says comes from the chip model shared with the desktop. */
-export function ReferenceBadge({ chip, onPress }: { chip: ReferenceChip; onPress?: () => void }) {
-  const { c } = useTheme()
-  const mono = chip.kind === 'file' || chip.kind === 'folder' || chip.kind === 'command'
-  return (
-    <Text
-      onPress={onPress}
-      accessibilityRole={onPress ? 'link' : undefined}
-      accessibilityLabel={chip.title}
-      suppressHighlighting
-      style={{
-        backgroundColor: c.fill,
-        color: chip.kind === 'command' || chip.kind === 'quote' ? c.soft : c.accent,
-        fontSize: font.control + 0.5,
-        fontWeight: '500',
-        fontFamily: mono ? font.mono : undefined,
-      }}
-    >
-      {`\u00A0${CHIP_GLYPH[chip.kind]}${chip.label.replace(/ /g, '\u00A0')}\u00A0`}
-    </Text>
-  )
-}
-
 // Match desktop: a brief fade on new words, with no stagger or delayed typing queue.
-const FADE_MS = 120
+const FADE_MS = CHAT_MOTION.durationMs
 // A burst (a reopened chat, a big chunk) fades only its last words, so a frame never repaints hundreds of spans.
 const MAX_FADING = 24
 

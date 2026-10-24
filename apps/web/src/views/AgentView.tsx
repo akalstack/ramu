@@ -96,13 +96,12 @@ import { PendingQuestionsBar } from './agent/components/PendingQuestionsBar'
 import { QueuedMessages } from './agent/components/QueuedMessages'
 import { TranscriptTurn } from './agent/components/TranscriptTurn'
 import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
-import { WorkingText } from './agent/components/WorkingText'
+import { ChatStatus } from '../chat/ChatMotion'
 import { AsidePanel } from './agent/components/AsidePanel'
 import { AgentTaskPanel } from './agent/components/AgentTaskPanel'
 import { SelectionActions } from './agent/components/SelectionActions'
 import { EditFromHereDialog } from './agent/components/EditFromHereDialog'
 import { MESSAGE_ACTION_EVENT, type MessageActionDetail } from './agent/components/MessageQuoteActions'
-import { WORKING_CLASS } from './agent/styles'
 import { PendingSettingsChange } from './agent/components/PendingSettingsChange'
 import { PendingSubmission } from './agent/components/PendingSubmission'
 import { pendingSubmissionVisible, type PendingSubmission as Submission } from './agent/lib/pendingSubmission'
@@ -734,14 +733,7 @@ export const AgentView = memo(function AgentView({
                       </MessageScrollerItem>
                     )}
                     {activityLabel && (compacting || !statusGroup) && (
-                      <div
-                        className={WORKING_CLASS}
-                        role="status"
-                        aria-live="polite"
-                        data-compacting={compacting || undefined}
-                      >
-                        <WorkingText>{translate(activityLabel)}</WorkingText>
-                      </div>
+                      <ChatStatus label={translate(activityLabel)} compacting={compacting} />
                     )}
                   </MessageScrollerContent>
                 </MessageScrollerViewport>

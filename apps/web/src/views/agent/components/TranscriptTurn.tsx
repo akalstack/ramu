@@ -31,6 +31,7 @@ function TranscriptBlock({
   assistantActions,
   latest = false,
   toolEntries,
+  children,
 }: {
   block: Block
   ctx: TranscriptContext
@@ -40,6 +41,7 @@ function TranscriptBlock({
   assistantActions: boolean
   latest?: boolean
   toolEntries?: ToolEntry[]
+  children?: React.ReactNode
 }) {
   const index = blockIndex(b, ctx.blocks)
   const row = useRef<HTMLDivElement>(null)
@@ -51,66 +53,67 @@ function TranscriptBlock({
   }, [event, claimArrival])
   return (
     <div ref={row} data-block-index={index}>
-      {b.kind === 'tools' ? (
-        <ToolGroup
-          tools={b.tools}
-          entries={toolEntries}
-          results={ctx.results}
-          cwd={ctx.cwd}
-          active={ctx.busyAgent && !finished}
-          activity={
-            b === ctx.statusGroup ||
-            (ctx.statusGroup?.kind === 'tools' && ctx.statusGroup.tools.some((tool) => b.tools.includes(tool)))
-              ? translate(ctx.activityLabel ?? 'Working')
-              : undefined
-          }
-          taskId={ctx.taskId}
-          onBackground={ctx.onBackground}
-        />
-      ) : b.event.kind === 'goal' ? (
-        ctx.goalNotes.has(b.event) ? (
-          <GoalNote change={ctx.goalNotes.get(b.event)!} />
-        ) : null
-      ) : b.event.kind === 'agent' ? (
-        b.event.taskType === 'advisor' ? (
-          <AdvisorActivity
-            task={b.event}
-            live={ctx.live}
-            sessionId={ctx.sessionId}
-            onOpen={() => ctx.onOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)}
+      {children ??
+        (b.kind === 'tools' ? (
+          <ToolGroup
+            tools={b.tools}
+            entries={toolEntries}
+            results={ctx.results}
+            cwd={ctx.cwd}
+            active={ctx.busyAgent && !finished}
+            activity={
+              b === ctx.statusGroup ||
+              (ctx.statusGroup?.kind === 'tools' && ctx.statusGroup.tools.some((tool) => b.tools.includes(tool)))
+                ? translate(ctx.activityLabel ?? 'Working')
+                : undefined
+            }
+            taskId={ctx.taskId}
+            onBackground={ctx.onBackground}
           />
+        ) : b.event.kind === 'goal' ? (
+          ctx.goalNotes.has(b.event) ? (
+            <GoalNote change={ctx.goalNotes.get(b.event)!} />
+          ) : null
+        ) : b.event.kind === 'agent' ? (
+          b.event.taskType === 'advisor' ? (
+            <AdvisorActivity
+              task={b.event}
+              live={ctx.live}
+              sessionId={ctx.sessionId}
+              onOpen={() => ctx.onOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)}
+            />
+          ) : (
+            <AgentTaskCard
+              task={b.event}
+              live={ctx.live}
+              onOpen={() => ctx.onOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)}
+              onStop={ctx.onStopTask}
+              readOnly={ctx.readOnly}
+            />
+          )
         ) : (
-          <AgentTaskCard
-            task={b.event}
+          <EventRow
+            event={relativize(b.event, ctx.cwd)}
+            taskId={ctx.taskId}
+            sessionId={ctx.sessionId}
             live={ctx.live}
-            onOpen={() => ctx.onOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)}
-            onStop={ctx.onStopTask}
-            readOnly={ctx.readOnly}
+            assistantActions={assistantActions}
+            generating={
+              ctx.working && (b.event === ctx.liveText || (b.event.kind === 'thinking' && b === turn.items.at(-1)))
+            }
+            outcomes={ctx.outcomes}
+            questionStates={ctx.questionStates}
+            latest={latest}
+            onEdit={
+              ctx.onEditMessage && ctx.eventSequences.has(b.event)
+                ? (text, files) => ctx.onEditMessage?.(text, files, ctx.eventSequences.get(b.event))
+                : undefined
+            }
+            onOpenAgent={ctx.onOpenAgent}
+            onOpenQuestion={ctx.onOpenQuestion}
+            onReviewAccess={ctx.onReviewAccess}
           />
-        )
-      ) : (
-        <EventRow
-          event={relativize(b.event, ctx.cwd)}
-          taskId={ctx.taskId}
-          sessionId={ctx.sessionId}
-          live={ctx.live}
-          assistantActions={assistantActions}
-          generating={
-            ctx.working && (b.event === ctx.liveText || (b.event.kind === 'thinking' && b === turn.items.at(-1)))
-          }
-          outcomes={ctx.outcomes}
-          questionStates={ctx.questionStates}
-          latest={latest}
-          onEdit={
-            ctx.onEditMessage && ctx.eventSequences.has(b.event)
-              ? (text, files) => ctx.onEditMessage?.(text, files, ctx.eventSequences.get(b.event))
-              : undefined
-          }
-          onOpenAgent={ctx.onOpenAgent}
-          onOpenQuestion={ctx.onOpenQuestion}
-          onReviewAccess={ctx.onReviewAccess}
-        />
-      )}
+        ))}
     </div>
   )
 }
@@ -158,7 +161,14 @@ export function TranscriptTurn({
   const renderList = (list: Block[]) =>
     groupToolThinking(groupAgentRuns(list)).map((item) =>
       Array.isArray(item) ? (
-        <div key={blockIndex(item[0]!, blocks)} data-block-index={blockIndex(item[0]!, blocks)}>
+        <TranscriptBlock
+          key={blockIndex(item[0]!, blocks)}
+          block={item[0]!}
+          ctx={ctx}
+          turn={turn}
+          finished={finished}
+          assistantActions={false}
+        >
           <AgentGroup
             tasks={item.map(agentOf)}
             live={ctx.live}
@@ -166,7 +176,7 @@ export function TranscriptTurn({
             onStop={ctx.onStopTask}
             readOnly={ctx.readOnly}
           />
-        </div>
+        </TranscriptBlock>
       ) : item.kind === 'work' ? (
         renderBlock(item.block, false, item.entries)
       ) : (
@@ -196,7 +206,10 @@ export function TranscriptTurn({
       {turn.user && renderBlock(turn.user, isLast && !answer.length && !kept.length && !folded.length)}
       {((!finished && isLast && (working || needsInput) && !folded.length) ||
         (finished && (!turn.ended || turn.interrupted) && !folded.length)) && (
-        <div className="turn-working text-muted-foreground tabular-nums" role="status">
+        <div
+          className={`turn-working ${!finished && isLast ? 'transcript-arrival' : ''} text-muted-foreground tabular-nums`}
+          role="status"
+        >
           <span>
             {(elapsed ?? duration) !== null && (elapsed ?? duration) !== undefined
               ? translate('Working for {0}', { '0': formatDuration((elapsed ?? duration)!) })

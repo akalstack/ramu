@@ -1,14 +1,17 @@
+import { EventEmitter } from 'node:events'
 import { expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
 import { BrowserDebugger } from '../src/main/browserDebugger'
 
 function setup() {
-  const listeners = new Map<string, (...args: unknown[]) => void>()
+  const listeners = new EventEmitter()
   let attached = false
   const commands = vi.fn(async (_method: string, _params?: unknown) => ({}))
   const contents = {
     debugger: {
-      on: (name: string, listener: (...args: unknown[]) => void) => listeners.set(name, listener),
+      on: (name: string, listener: (...args: unknown[]) => void) => listeners.on(name, listener),
+      removeListener: (name: string, listener: (...args: unknown[]) => void) =>
+        listeners.removeListener(name, listener),
       isAttached: () => attached,
       attach: () => {
         attached = true
@@ -21,7 +24,7 @@ function setup() {
   } as unknown as WebContents
   const changed = vi.fn()
   const driver = new BrowserDebugger(contents, changed)
-  const event = (method: string, params: unknown) => listeners.get('message')!(null, method, params)
+  const event = (method: string, params: unknown) => listeners.emit('message', null, method, params)
   return { driver, commands, event, changed, listeners }
 }
 
@@ -87,4 +90,25 @@ it('answers the exact live dialog once and treats its site text as data', async 
   await expect(driver.handleDialog(dialog.id, true)).rejects.toThrow('no longer open')
   expect(driver.dialog()).toBeNull()
   driver.dispose()
+})
+
+it('streams fixed compositor frames without replacing the diagnostics listener and disposes pending reads', async () => {
+  const { driver, commands, event } = setup()
+  try {
+    const read = driver.nextFrame(0)
+    for (let i = 0; i < 15; i++) await Promise.resolve()
+    event('Network.requestWillBeSent', { requestId: 'r', request: { method: 'GET', url: 'https://site.example/path' } })
+    event('Network.responseReceived', { requestId: 'r', response: { status: 200 } })
+    event('Page.screencastFrame', { data: 'jpeg', sessionId: 1, metadata: { deviceWidth: 800, deviceHeight: 600 } })
+    expect(await read).toMatchObject({ sequence: 1, data: 'jpeg', width: 800, height: 600 })
+    expect(driver.diagnostics().network).toEqual([{ method: 'GET', origin: 'https://site.example', status: 200 }])
+    expect(commands).toHaveBeenCalledWith('Page.startScreencast', expect.objectContaining({ format: 'jpeg' }))
+    const pending = driver.nextFrame(1)
+    const rejected = expect(pending).rejects.toThrow('closed')
+    for (let i = 0; i < 15; i++) await Promise.resolve()
+    driver.dispose()
+    await rejected
+  } finally {
+    driver.dispose()
+  }
 })

@@ -11,6 +11,7 @@
   "exports": {
     "./build": "./src/build.ts",
     "./attachments": "./src/attachments.ts",
+    "./browserFrames": "./src/browser/browserFrames.ts",
     "./browserRuntime": "./src/browser/browserRuntime.ts",
     "./browserUploads": "./src/browser/browserUploads.ts",
     "./browserDownloads": "./src/browser/browserDownloads.ts",

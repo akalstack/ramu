@@ -31,6 +31,8 @@ Use disposable host profiles and simulated providers where possible. Paid live-p
 ## Hosts and lifecycle
 
 - [ ] Pair by camera/QR and manual entry on real local networks; verify camera and local-network permissions, denied permissions, direct HTTPS and private-network routes.
+- [ ] After scanning, verify the camera closes, the review starts at the top, Scan again works, and Pair stays reachable above the keyboard on small screens and in landscape. Check large text and VoiceOver/TalkBack, rapid taps, expired/invalid offers, failed-pair retry with details retained, HTTP consent reset after address edits, and successful pairing from an external link with no navigation history.
+- [ ] Verify long host names and translated host actions fit on small screens, with accessible touch targets. Change a search query while message results are visible; matches from the previous query must disappear immediately.
 - [ ] Connect two hosts, stream from both, switch views, and open notifications without mixing state or reconnecting the unaffected host.
 - [ ] Exercise sleep, network loss, background/foreground and service restart. Recover transcript, pending input, drafts and terminal output without duplicates.
 - [ ] Revoke one device/host during a stream; show the pairing recovery state, stop retries and leave other hosts working. Forgetting a host clears its local state.
@@ -40,12 +42,12 @@ Use disposable host profiles and simulated providers where possible. Paid live-p
 - [ ] Check software-keyboard animation, avoidance, IME/composition, external keyboards, paste and rotation on both platforms.
 - [ ] Exercise terminal touch feel, scrollback, arrow holds/repeats, modifier keys, reconnect/release cancellation and shell/vim/less/tmux behavior. Check gesture alternatives with accessibility enabled.
 - [ ] Verify long conversations, large diffs and terminal performance on devices.
-- [ ] Check large text, screen readers, focus/labels, safe areas, contrast, reduced motion and English/Indonesian layouts.
+- [ ] Check large text, screen readers, focus/labels, safe areas, contrast, reduced motion and English/Indonesian layouts. Include multiline shared action labels, pairing fields and consent labels, segmented controls, and rapidly closing/reopening an Android sheet before its dismissal animation finishes.
 - [ ] Exercise approvals, questions, elicitation, attachments, host folder/repository actions, Git/undo and timezone-aware schedules against the correct host. Check stale previews and ambiguous mutation recovery in disposable repositories.
 
 ## Push, Live Activity and limits
 
-- [ ] Deliver background push from two hosts to a suspended phone, route taps to the right thread/page, deduplicate foreground alerts and unregister revoked registrations.
+- [ ] Deliver background push from two hosts to a suspended phone, route taps to the right thread/page, deduplicate foreground alerts and unregister revoked registrations. Tap a notification while the app is fully stopped: wait for saved hosts to hydrate, open the intended thread once, and repeat when the same response arrives through both startup and the live listener.
 - [ ] Verify real APNs delivery and Dynamic Island/Lock Screen rendering on a provisioned iPhone. Simulator activity creation is not evidence of final physical rendering.
 - [ ] Check Android notification permission/channel behavior and the native UI visually on a device.
 - [ ] Check the limit tray with large text and the Auto-resume sheet on Android.

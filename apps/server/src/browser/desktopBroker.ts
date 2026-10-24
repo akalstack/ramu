@@ -13,6 +13,7 @@ export class DesktopBrowserBroker {
       threadId: string
       runId: string
       viewer: boolean
+      stream: boolean
       timer: NodeJS.Timeout
       resolve(value: unknown): void
       reject(error: Error): void
@@ -91,8 +92,13 @@ export class DesktopBrowserBroker {
     const attachment = this.attachment
     if (!attachment?.ready)
       return Promise.reject(new Error('Open Ramu on the execution host to use its integrated browser.'))
-    const viewing = [...this.pending.values()].filter((operation) => operation.viewer).length
-    if (viewer ? viewing >= 3 : this.pending.size - viewing >= 8)
+    const stream = viewer && command.kind === 'viewer' && command.operation.op === 'nextFrame'
+    const operations = [...this.pending.values()]
+    const streaming = operations.filter((operation) => operation.stream).length
+    const viewing = operations.filter((operation) => operation.viewer && !operation.stream).length
+    if (
+      stream ? streaming >= 8 : viewer ? viewing >= 3 : operations.filter((operation) => !operation.viewer).length >= 8
+    )
       return Promise.reject(new Error('The browser is busy. Wait for the current operations to finish.'))
     const requestId = randomUUID()
     return new Promise((resolve, reject) => {
@@ -103,7 +109,16 @@ export class DesktopBrowserBroker {
         )
       }, this.timeoutMs)
       timer.unref?.()
-      this.pending.set(requestId, { clientId: attachment.clientId, threadId, runId, viewer, timer, resolve, reject })
+      this.pending.set(requestId, {
+        clientId: attachment.clientId,
+        threadId,
+        runId,
+        viewer,
+        stream,
+        timer,
+        resolve,
+        reject,
+      })
       try {
         if (
           !this.send(attachment.clientId, {

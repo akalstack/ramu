@@ -27,3 +27,13 @@ test('Metro pins React resolution to the mobile dependency graph', () => {
     require('expo/bundledNativeModules.json').react,
   )
 })
+
+// Router resolves these optional native peers even though app code uses RN Animated.
+// Pin them explicitly so pnpm cannot hoist incompatible versions into native builds.
+test('router native peers are explicitly pinned to the installed Expo SDK', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  const bundled = require('expo/bundledNativeModules.json')
+  for (const name of ['react-native-reanimated', 'react-native-worklets', 'react-native-gesture-handler']) {
+    assert.equal(manifest.dependencies[name], bundled[name], `${name} must pin the SDK-compatible native range`)
+  }
+})

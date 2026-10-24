@@ -515,13 +515,15 @@ export function GlassButton({
         kind={primary ? 'primary' : 'secondary'}
         disabled={disabled}
         onPress={onPress}
-        style={[{ height: 48 }, style]}
+        style={[{ minHeight: 48 }, style]}
       />
     )
   const ink = primary ? c.primaryInk : c.text
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
       onPress={() => {
         tap()
@@ -534,7 +536,8 @@ export function GlassButton({
         interactive
         tint={primary ? c.primary : undefined}
         style={{
-          height: 48,
+          minHeight: 48,
+          paddingVertical: space.s,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
@@ -543,7 +546,7 @@ export function GlassButton({
         }}
       >
         {I ? <I size={20} color={ink} strokeWidth={2} /> : null}
-        <T weight="600" size={font.body} style={{ color: ink }}>
+        <T weight="600" size={font.body} style={{ color: ink, flexShrink: 1, textAlign: 'center' }}>
           {title}
         </T>
       </Glass>

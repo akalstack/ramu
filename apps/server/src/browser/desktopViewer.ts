@@ -1,5 +1,6 @@
 import type {
   BrowserDialog,
+  BrowserLiveFrame,
   BrowserHumanInput,
   BrowserPageSnapshot,
   BrowserScreenshot,
@@ -26,6 +27,7 @@ export interface BrowserViewerBackend {
   dialog(device: string, thread: string, tabId: string): BrowserDialog | null | Promise<BrowserDialog | null>
   answerDialog(device: string, thread: string, tabId: string, dialogId: string, accept: boolean, text?: string): unknown
   frame(device: string, thread: string, tabId: string): Promise<BrowserScreenshot>
+  nextFrame(device: string, thread: string, tabId: string, after: number): Promise<BrowserLiveFrame | null>
   read(device: string, thread: string, tabId: string): Promise<BrowserPageSnapshot>
   take(device: string, thread: string, tabId: string): BrowserTabInfo | Promise<BrowserTabInfo>
   release(device: string, thread: string, tabId: string, runId?: string): BrowserTabInfo | Promise<BrowserTabInfo>
@@ -39,6 +41,7 @@ export class DesktopBrowserViewer implements BrowserViewerBackend {
   private readonly heartbeats = new Map<string, { timer: NodeJS.Timeout; threads: Set<string> }>()
   private readonly frameTimes = new Map<string, number>()
   private captures = 0
+  private readonly liveRequests = new Set<string>()
   constructor(private readonly broker: DesktopBrowserBroker) {}
 
   private run<T>(device: string, thread: string, operation: BrowserViewerOperation): Promise<T> {
@@ -94,6 +97,16 @@ export class DesktopBrowserViewer implements BrowserViewerBackend {
       return image
     } finally {
       this.captures--
+    }
+  }
+  async nextFrame(device: string, thread: string, tabId: string, after: number) {
+    const key = JSON.stringify([device, thread, tabId])
+    if (this.liveRequests.size >= 8 || this.liveRequests.has(key)) throw new Error('The browser viewer is busy.')
+    this.liveRequests.add(key)
+    try {
+      return await this.run<BrowserLiveFrame | null>(device, thread, { op: 'nextFrame', tabId, after })
+    } finally {
+      this.liveRequests.delete(key)
     }
   }
   read(device: string, thread: string, tabId: string) {

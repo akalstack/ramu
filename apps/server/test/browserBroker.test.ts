@@ -110,3 +110,27 @@ it('sends a paired device’s view to the desktop as a viewer, never as an agent
   await Promise.all([...views, agent])
   broker.detach('desktop')
 })
+
+it('keeps waiting live frames out of the input and agent operation budgets', async () => {
+  const { broker, messages, token } = setup()
+  const frames = Array.from({ length: 8 }, (_, i) =>
+    broker.view('thread', {
+      kind: 'viewer',
+      device: `phone-${i}`,
+      operation: { op: 'nextFrame', tabId: 'tab', after: 0 },
+    }),
+  )
+  await expect(
+    broker.view('thread', { kind: 'viewer', device: 'extra', operation: { op: 'nextFrame', tabId: 'tab', after: 0 } }),
+  ).rejects.toThrow('busy')
+  const input = broker.view('thread', {
+    kind: 'viewer',
+    device: 'phone-0',
+    operation: { op: 'input', tabId: 'tab', generation: 1, input: { kind: 'scroll', x: 0, y: 100 } },
+  })
+  const agent = broker.request('thread', 'run', { kind: 'snapshot', tabId: 'tab' })
+  expect(messages).toHaveLength(10)
+  for (const message of messages) broker.reply('desktop', token, message.requestId, null)
+  await Promise.all([...frames, input, agent])
+  broker.detach('desktop')
+})

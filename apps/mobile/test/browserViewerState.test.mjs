@@ -41,7 +41,7 @@ test('turns host refusals into a next step', () => {
   assert.equal(viewerMessage('Something else'), 'Something else')
 })
 
-import { frameGesture, framePoint } from '../src/runtime/browserViewerState.ts'
+import { frameGesture, framePoint, frameScroll } from '../src/runtime/browserViewerState.ts'
 
 test('a touch maps through the real frame aspect, not a fixed 4:3', () => {
   assert.deepEqual(framePoint(100, 100, 200, 2), { x: 0.5, y: 1 })
@@ -58,4 +58,16 @@ test('a short touch clicks, a quick second one double-clicks, a held one right-c
 test('dragging scrolls the page with the finger, scaled to the page and bounded', () => {
   assert.deepEqual(frameGesture({ ...at, dy: -50 }, frame), { kind: 'scroll', x: -0, y: 100 })
   assert.equal(frameGesture({ ...at, dy: 9999 }, frame).y, -2000)
+})
+
+test('live drag deltas preserve displacement across moves and release without repeating the whole gesture', () => {
+  const moves = [-20, -55, -80]
+  let previous = 0,
+    total = 0
+  for (const dy of moves) {
+    total += frameScroll(0, dy - previous, frame).y
+    previous = dy
+  }
+  assert.equal(total, 160)
+  assert.equal(Math.abs(frameScroll(0, -80 - previous, frame).y), 0)
 })

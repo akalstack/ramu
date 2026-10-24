@@ -45,7 +45,9 @@ export default function Computers() {
                   </View>
                   <View style={{ flex: 1, gap: 3 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <T weight="600">{pc.name}</T>
+                      <T weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+                        {pc.name}
+                      </T>
                       <ConnectionDot status={pc.status} />
                       <T size={font.caption} tone="muted">
                         {pc.status === 'online'
@@ -79,14 +81,24 @@ export default function Computers() {
                     {pc.error}
                   </T>
                 ) : null}
-                <View style={{ flexDirection: 'row', padding: space.m, gap: space.l }}>
-                  <Pressable onPress={() => retry(pc.id)}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: space.m, gap: space.s }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s }}
+                    onPress={() => retry(pc.id)}
+                  >
                     <T tone="accent">Reconnect</T>
                   </Pressable>
-                  <Pressable onPress={() => router.push('/pair')}>
+                  <Pressable
+                    accessibilityRole="button"
+                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s }}
+                    onPress={() => router.push('/pair')}
+                  >
                     <T tone="accent">Pair again</T>
                   </Pressable>
                   <Pressable
+                    accessibilityRole="button"
+                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s }}
                     onPress={() =>
                       Alert.alert('Forget host?', `${pc.name}: ${t.forgetHostDraftHint}`, [
                         { text: 'Cancel', style: 'cancel' },

@@ -1,3 +1,4 @@
+import { chatMotionVariables } from '@ramu/shared/chat/presentation'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import '@xterm/xterm/css/xterm.css'
@@ -22,6 +23,8 @@ import { App } from './App'
 import { HostProvider } from './workspace/HostProvider'
 import { StartupScreen } from './Brand'
 import { ErrorBoundary } from './ErrorBoundary'
+
+for (const [name, value] of Object.entries(chatMotionVariables)) document.documentElement.style.setProperty(name, value)
 
 function Startup() {
   const [fontsReady, setFontsReady] = useState(false)

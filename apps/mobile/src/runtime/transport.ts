@@ -73,7 +73,7 @@ interface CallSocket {
   invoke(method: string, args: unknown[], options: { operationKey?: string; timeoutMs?: number }): Promise<unknown>
 }
 let socketProvider: ((address: string, token: string) => CallSocket | null) | null = null
-export function useSocketProvider(provider: typeof socketProvider) {
+export function registerSocketProvider(provider: typeof socketProvider) {
   socketProvider = provider
 }
 export type Fetcher = typeof globalThis.fetch

@@ -3,3 +3,5 @@ dist/
 /ios/
 /android/
 web-build/
+
+/modules/*/android/build/

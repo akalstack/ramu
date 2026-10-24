@@ -54,7 +54,7 @@ import { KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { OfflineBanner, PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
-import { Arrive, Presence, Shimmer, useReducedMotion } from '../../../components/Motion'
+import { Arrive, Presence, ChatStatus, useReducedMotion } from '../../../components/Motion'
 import { ChatActionsSheet } from '../../../components/ChatActions'
 import { useAutomation } from '../../../runtime/automation'
 
@@ -288,11 +288,18 @@ export default function ChatScreen() {
     () => foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input'),
     [chat?.items, chat?.status],
   )
+  const arrivalReady = useRef(false)
   const arrivalChat = useRef(id)
   if (arrivalChat.current !== id) {
     arrivalChat.current = id
     seen.current.clear()
+    arrivalReady.current = false
     openedAt.current = Date.now()
+  }
+  const initialItems = chat?.items
+  if (!arrivalReady.current && initialItems?.length) {
+    for (const row of rows) seen.current.add(row.id)
+    arrivalReady.current = true
   }
   // A long chat draws its latest turns; "Earlier turns" brings back the previous page without moving what you are reading.
   const [turnsShown, setTurnsShown] = useState(TURN_PAGE)
@@ -347,7 +354,7 @@ export default function ChatScreen() {
     return map
   }, [pageRows, store.language])
   const renderRow = ({ item, index }: { item: TranscriptItem; index: number }) => {
-    const fresh = !seen.current.has(item.id) && Date.now() - openedAt.current > 800
+    const fresh = !seen.current.has(item.id)
     seen.current.add(item.id)
     return (
       <TranscriptListRow
@@ -356,7 +363,7 @@ export default function ChatScreen() {
         date={itemMeta.get(item.id)?.date}
         footer={itemMeta.get(item.id)?.footer}
         streaming={running && item.kind === 'text' && index === pageRows.length - 1}
-        fresh={fresh && running}
+        fresh={fresh}
         visible={contentScreenFocused && visibleContentRows.has(item.id)}
       />
     )
@@ -884,9 +891,14 @@ export default function ChatScreen() {
                     </Arrive>
                   ))}
                   {running && !offline ? (
-                    <Arrive animate>
-                      <Shimmer>Thinking</Shimmer>
-                    </Arrive>
+                    <ChatStatus
+                      label={translate(
+                        store.language,
+                        chat.compacting
+                          ? 'Compacting context…'
+                          : (chat.activityLabel ?? (chat.executionState === 'starting' ? 'Starting…' : 'Working')),
+                      )}
+                    />
                   ) : null}
                 </View>
               }

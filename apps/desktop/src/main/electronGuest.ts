@@ -167,18 +167,24 @@ export class ElectronGuestFactory implements GuestFactory {
           clearTimeout(timer)
           contents.removeListener('did-stop-loading', loaded)
           contents.removeListener('destroyed', closed)
-          if (error) reject(error); else resolve()
+          if (error) reject(error)
+          else resolve()
         }
         const loaded = () => finish()
         const closed = () => finish(new Error('The browser tab closed during navigation.'))
-        const timer = setTimeout(() => finish(new Error('Browser navigation timed out. Inspect the page before continuing.')), 15_000)
+        const timer = setTimeout(
+          () => finish(new Error('Browser navigation timed out. Inspect the page before continuing.')),
+          15_000,
+        )
         contents.once('did-stop-loading', loaded)
         contents.once('destroyed', closed)
         try {
           if (direction === 'reload') contents.reload()
           else if (direction === 'back') contents.navigationHistory.goBack()
           else contents.navigationHistory.goForward()
-        } catch { finish(new Error('Browser navigation could not start. Inspect the page before continuing.')) }
+        } catch {
+          finish(new Error('Browser navigation could not start. Inspect the page before continuing.'))
+        }
       })
     }
     return {
@@ -214,6 +220,7 @@ export class ElectronGuestFactory implements GuestFactory {
           })
         return { ok: true }
       },
+      nextFrame: (after) => debuggerForPage().nextFrame(after),
       screenshot: async (): Promise<BrowserScreenshot> => {
         const capture = await contents.capturePage(undefined, { stayHidden: true, stayAwake: false })
         if (capture.isEmpty())

@@ -110,13 +110,13 @@ export default function Explorer() {
     }
   }, [acting?.repoId, acting?.entry.path])
   /** Reads a file's text from the host (bounded there) and hands it to the device's clipboard or share sheet. */
-  const withContents = async (use: (text: string) => Promise<unknown> | void) => {
+  const withContents = async (consume: (text: string) => Promise<unknown> | void) => {
     if (!scope || !acting || acted) return
     setActed(true)
     setActionError('')
     try {
       const file = await store.invoke(scope.host, 'files.read', scope.context, acting.repoId, acting.entry.path)
-      await use(file.content)
+      await consume(file.content)
       closeActions()
     } catch (cause) {
       setActionError(`${t.explorerUnreadable} ${String(cause instanceof Error ? cause.message : cause)}`)

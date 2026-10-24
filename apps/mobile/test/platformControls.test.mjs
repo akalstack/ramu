@@ -1,3 +1,4 @@
+import * as chatPresentation from '../../../packages/shared/src/chat/presentation.ts'
 import * as browserViewerState from '../src/runtime/browserViewerState.ts'
 import * as sharedViewerAccess from '../../../packages/shared/src/viewerAccess.ts'
 import * as viewerAccess from '../src/runtime/viewerAccess.ts'
@@ -142,6 +143,9 @@ function load(file, os, overrides = {}, globals = {}) {
             useProjectDefault() {},
           }),
         }
+      if (id === '@ramu/shared/browserLiveViewer')
+        return load('../../../packages/shared/src/browserLiveViewer.ts', os, {}, globals)
+      if (id === '@ramu/shared/chat/presentation') return chatPresentation
       if (id === '@ramu/shared/viewerAccess') return sharedViewerAccess
       if (id.endsWith('/browserViewerState')) return browserViewerState
       if (id.endsWith('/viewerAccess')) return viewerAccess
@@ -765,7 +769,7 @@ for (const os of ['android', 'ios']) {
             projects: [],
             chats: [
               { id: 'a', title: 'Fix search', preview: '', lastActiveAt: 2 },
-              { id: 'b', title: 'Pair a host', preview: '', lastActiveAt: 1 },
+              { id: 'b', computerId: 'host', taskId: 'pair-task', title: 'Pair a host', preview: '', lastActiveAt: 1 },
             ],
           }),
         },
@@ -793,9 +797,18 @@ for (const os of ['android', 'ios']) {
     )
     assert.equal(nodes(initial).filter((node) => node.type === 'ChatRow').length, 2)
     search.props.onChangeText({ nativeEvent: { text: 'pair' } })
+    state[1] = [{ query: 'pair', computerId: 'host', hit: { taskId: 'pair-task', seq: 1, sessionId: 's' } }]
     const results = nodes(render()).filter((node) => node.type === 'ChatRow')
     assert.equal(results.length, 1)
     assert.equal(results[0].props.chat.id, 'b')
+    assert.equal(nodes(render()).filter((node) => node.type === 'Row').length, 1)
+    search.props.onChangeText({ nativeEvent: { text: 'fix' } })
+    assert.equal(
+      nodes(render()).filter((node) => node.type === 'Row').length,
+      0,
+      'old message matches disappear immediately when the query changes',
+    )
+    search.props.onChangeText({ nativeEvent: { text: 'pair' } })
     const onLeave = onEnter()
     assert.equal(focused, 0, 'wait for the native header to attach')
     flushFrames()
@@ -6165,3 +6178,257 @@ for (const os of ['ios', 'android']) {
     card.dispose()
   })
 }
+
+for (const os of ['ios', 'android']) {
+  test(`${os} browser drags scroll during movement and retain deltas behind pending input`, async () => {
+    const hooks = hookHarness(),
+      calls = [],
+      timers = []
+    let pan, finish
+    const tab = {
+      id: 'tab',
+      generation: 1,
+      controller: 'human',
+      profileId: 'default',
+      inputReady: true,
+      url: 'https://site.example',
+    }
+    const store = {
+      language: 'en',
+      computers: [{ id: 'a', name: 'Host', access: 'owner' }],
+      isOnline: () => true,
+      invoke: async (...args) => {
+        calls.push(args)
+        if (args[1] === 'hostBrowser.list') return [tab]
+        if (args[1] === 'hostBrowser.take') return tab
+        if (args[1] === 'hostBrowser.nextFrame')
+          return { mimeType: 'image/jpeg', data: 'frame', width: 400, height: 300, sequence: 1 }
+        if (args[1] === 'hostBrowser.input')
+          return new Promise((resolve) => {
+            finish = resolve
+          })
+        return null
+      },
+    }
+    const { BrowserViewer } = load(
+      'components/BrowserViewer.tsx',
+      os,
+      {
+        react: hooks.react,
+        '../runtime/store': { useStore: () => store },
+        'react-native': {
+          AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
+          PanResponder: {
+            create: (config) => {
+              pan ??= config
+              return { panHandlers: {} }
+            },
+          },
+        },
+      },
+      { setTimeout: (run) => timers.push(run), clearTimeout() {} },
+    )
+    const render = () =>
+      hooks.render(() => BrowserViewer({ chat: { computerId: 'a', taskId: 'task' }, embedded: true, onClose() {} }))
+    render()
+    await settle()
+    render()
+    await settle()
+    let tree = render()
+    nodes(tree)
+      .find((node) => node.props.accessibilityLabel === 'Browser page on the execution host')
+      .props.onLayout({ nativeEvent: { layout: { width: 200 } } })
+    nodes(tree)
+      .find((node) => node.props.title === 'Take control')
+      .props.onPress()
+    await settle()
+    render()
+    await settle()
+    render()
+    assert.equal(pan.onStartShouldSetPanResponder(), true)
+    pan.onPanResponderGrant()
+    pan.onPanResponderMove({}, { dx: 0, dy: -20 })
+    assert.equal(calls.filter((call) => call[1] === 'hostBrowser.input').length, 1, 'scroll is sent before release')
+    pan.onPanResponderMove({}, { dx: 0, dy: -35 })
+    pan.onPanResponderRelease({ nativeEvent: { locationX: 40, locationY: 40 } }, { dx: 0, dy: -50 })
+    finish()
+    await settle()
+    const inputs = calls.filter((call) => call[1] === 'hostBrowser.input').map((call) => call.at(-1))
+    assert.deepEqual(
+      inputs.map((input) => input.kind),
+      ['scroll', 'scroll'],
+    )
+    assert.equal(
+      inputs.reduce((total, input) => total + input.y, 0),
+      100,
+    )
+    finish()
+    await settle()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} reference chips match desktop accent links and inherit surrounding type`, () => {
+    const { ReferenceBadge } = load('components/ReferenceChip.tsx', os)
+    let opened = 0
+    const chip = { kind: 'file', label: 'app.ts:12', title: '/workspace/src/app.ts:12' }
+    const tree = ReferenceBadge({ chip, onPress: () => opened++ })
+    assert.equal(tree.props.accessibilityRole, 'link')
+    assert.equal(tree.props.accessibilityLabel, chip.title)
+    assert.equal(tree.props.style.color, palette.accent)
+    assert.equal(tree.props.style.fontWeight, chatPresentation.REFERENCE_APPEARANCE.fontWeight)
+    assert.equal(tree.props.style.backgroundColor, undefined)
+    assert.equal(tree.props.style.fontSize, undefined)
+    assert.equal(tree.props.style.fontFamily, undefined)
+    tree.props.onPress()
+    assert.equal(opened, 1)
+    assert.ok(tree.props.children.includes('app.ts:12'))
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} notification routing waits for hydration and opens a cold/live tap only once`, async () => {
+    const hooks = hookHarness()
+    let now = 1000
+    const navigations = [],
+      selected = []
+    let reads = 0,
+      cleared = 0,
+      listener
+    const response = {
+      actionIdentifier: 'default',
+      notification: {
+        request: { identifier: 'notification-1', content: { data: { computerId: 'host', taskId: 'task' } } },
+      },
+    }
+    const store = {
+      ready: false,
+      computers: [],
+      select: (id) => selected.push(id),
+      refresh: async () => {},
+      resolveChat: (host, task) => `${host}:${task}`,
+    }
+    const { PushRouting } = load(
+      'components/PushRouting.tsx',
+      os,
+      {
+        react: hooks.react,
+        'expo-constants': { default: { appOwnership: 'standalone' } },
+        'expo-notifications': {
+          setNotificationHandler() {},
+          addNotificationResponseReceivedListener: (callback) => {
+            listener = callback
+            return { remove() {} }
+          },
+          getLastNotificationResponseAsync: async () => {
+            reads++
+            return response
+          },
+          clearLastNotificationResponseAsync: async () => {
+            cleared++
+          },
+        },
+        'expo-router': { useRouter: () => ({ push: (path) => navigations.push(path) }) },
+        '../runtime/store': { useStore: () => store },
+        '../runtime/pushTarget': {
+          pushTarget: (data, known) => (known.includes(data.computerId) ? { kind: 'thread', ...data } : null),
+        },
+      },
+      { Date: { now: () => now } },
+    )
+    hooks.render(PushRouting)
+    await settle()
+    assert.equal(reads, 0, 'do not consume a notification before saved pairings are restored')
+    store.ready = true
+    store.computers = [{ id: 'host' }]
+    hooks.render(PushRouting)
+    await settle()
+    listener(response)
+    await settle()
+    assert.equal(reads, 1)
+    assert.equal(cleared, 1)
+    assert.equal(navigations.length, 1)
+    assert.deepEqual(selected, ['host'])
+    assert.equal(navigations[0].params.id, 'host:task')
+    now += 3000
+    listener(response)
+    await settle()
+    assert.equal(navigations.length, 2, 'a deliberate later tap on the same notification can reopen its thread')
+    hooks.dispose()
+  })
+
+  test(`${os} shared action labels scale and their controls can grow with large text`, () => {
+    const scaledTheme = { ...theme, TEXT_SCALE: { large: 1.3 }, useTheme: () => ({ c: palette, textSize: 'large' }) }
+    const ui = load('components/ui.tsx', os, { '../theme': scaledTheme })
+    const button = ui.Button({ title: 'A long translated action' })
+    const label = find(button, 'Text')
+    assert.equal(label.props.style.fontSize, (theme.font.control + 1) * 1.3)
+    const style = Object.assign({}, ...button.props.style({ pressed: false }).flat(Infinity).filter(Boolean))
+    assert.equal(style.height, undefined, 'fixed heights clip wrapped or enlarged labels')
+    assert.ok(style.minHeight >= 44)
+    assert.equal(label.props.style.flexShrink, 1)
+    const screen = load('components/Screen.tsx', os)
+    const glass = screen.GlassButton({ title: 'Pair', disabled: true })
+    if (os === 'ios') {
+      assert.equal(glass.props.accessibilityState.disabled, true)
+      assert.equal(glass.props.accessibilityLabel, 'Pair')
+      const surface = find(glass, 'Glass')
+      assert.equal(surface.props.style.height, undefined)
+      assert.equal(surface.props.style.minHeight, 48)
+    } else {
+      const style = Object.assign({}, ...glass.props.style.flat())
+      assert.equal(style.height, undefined)
+      assert.equal(style.minHeight, 48)
+    }
+    const segments = ui.Segmented({ value: 'a', onChange() {}, options: [{ key: 'a', label: 'Translated tab' }] })
+    assert.equal(find(segments, 'Pressable').props.style.height, undefined)
+    assert.ok(find(segments, 'Pressable').props.style.minHeight >= 44)
+  })
+}
+
+test('Android reopening a closing sheet keeps the new sheet visible and ignores old dismissal', async () => {
+  const hooks = hookHarness(),
+    hiding = deferred()
+  let closed = 0
+  const { MaterialSheet } = load('components/MaterialSheet.android.tsx', 'android', {
+    react: hooks.react,
+    '@expo/ui/jetpack-compose': { Host: 'Host', ModalBottomSheet: 'MaterialBottomSheet', RNHostView: 'RNHostView' },
+  })
+  let open = true
+  const render = () => hooks.render(() => MaterialSheet({ open, onClose: () => closed++, children: 'form' }))
+  const original = find(render(), 'MaterialBottomSheet')
+  original.props.ref.current = { hide: () => hiding.promise }
+  open = false
+  render()
+  open = true
+  render()
+  const reopened = find(render(), 'MaterialBottomSheet')
+  assert.notEqual(reopened.key, original.key, 'a hiding native sheet must be recreated on reopen')
+  original.props.onDismissRequest()
+  assert.equal(closed, 0)
+  hiding.resolve()
+  await settle()
+  assert.ok(find(render(), 'MaterialBottomSheet'), 'the old hide completion cannot remove a reopened sheet')
+  reopened.props.onDismissRequest()
+  assert.equal(closed, 1)
+  hooks.dispose()
+})
+
+test('mobile web startup applies its theme without calling a native-only Appearance API', () => {
+  const hooks = hookHarness()
+  const { ThemeProvider } = load('theme/index.tsx', 'web', {
+    react: { ...hooks.react, createContext: () => ({ Provider: 'ThemeProvider' }) },
+    'react-native': { Appearance: {}, useColorScheme: () => 'light' },
+    '@ramu/shared/theme': { DEFAULT_THEME: { id: 'default' } },
+    '../storage': {
+      readAppearance: () => 'dark',
+      readTextSize: () => 'normal',
+      readSelectedThemeId: () => '',
+      readThemeLibraryText: () => '[]',
+    },
+  })
+  const tree = hooks.render(() => ThemeProvider({ children: 'app' }))
+  assert.equal(tree.props.value.scheme, 'dark')
+  assert.equal(tree.props.children, 'app')
+  hooks.dispose()
+})

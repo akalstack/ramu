@@ -1,5 +1,5 @@
 import { RuntimeSocket, type SocketFactory } from '@ramu/client-runtime/socket'
-import { useSocketProvider } from './transport'
+import { registerSocketProvider } from './transport'
 
 /**
  * React Native's WebSocket accepts request headers as a third argument (a React Native extension), which the host's
@@ -55,4 +55,4 @@ export function socketFor(address: string, token: string): RuntimeSocket | null 
   return socket.state === 'rejected' || socket.state === 'unsupported' ? null : socket
 }
 
-useSocketProvider(socketFor)
+registerSocketProvider(socketFor)
