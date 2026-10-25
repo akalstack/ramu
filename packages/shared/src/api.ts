@@ -333,6 +333,10 @@ export interface RamuMethods {
     input: import('./browserBridge').BrowserHumanInput,
   ): void
   'hostBrowser.navigate'(taskId: string, tabId: string, url: string): BrowserTabInfo
+  /** The kind of field focused in the page, for the controlling device's keyboard. Never the field's value. */
+  'hostBrowser.focus'(taskId: string, tabId: string): import('./browserBridge').BrowserFieldFocus
+  /** Lays the page out at the controlling device's screen size, or restores the default with `null`. */
+  'hostBrowser.fit'(taskId: string, tabId: string, size: { width: number; height: number } | null): { fitted: boolean }
   'hostBrowser.disconnect'(): void
   /** Host-owned tab metadata only; no frame, profile credentials or control grant. */
   'browser.activity'(taskId: string): { available: boolean; tabs: BrowserTabInfo[]; externalURLs?: string[] }

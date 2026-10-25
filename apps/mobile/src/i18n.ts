@@ -1,6 +1,8 @@
 import { useStore } from './runtime/store'
 
 const en = {
+  fileNothingStaged: 'Nothing is staged for this file.',
+  fileNoChanges: 'No changes in this file.',
   pairNearby: 'Nearby hosts',
   pairScanQr: 'Scan QR code',
   pairManual: 'Enter manually',
@@ -255,6 +257,7 @@ const en = {
   explorerRevealMissing:
     'The selected file is missing or outside the loaded folder entries. Refresh or use file search.',
   browseFiles: 'Browse files',
+  projectActions: 'Project actions',
   search: 'Search threads',
   needsYou: 'Waiting',
   projects: 'Projects',
@@ -512,6 +515,8 @@ const en = {
 }
 
 const id: typeof en = {
+  fileNothingStaged: 'Tidak ada perubahan yang di-stage untuk file ini.',
+  fileNoChanges: 'Tidak ada perubahan pada file ini.',
   pairNearby: 'Host terdekat',
   pairScanQr: 'Pindai kode QR',
   pairManual: 'Isi manual',
@@ -774,6 +779,7 @@ const id: typeof en = {
   explorerRevealMissing:
     'Berkas yang dipilih tidak ada atau berada di luar entri folder yang dimuat. Muat ulang atau gunakan pencarian berkas.',
   browseFiles: 'Jelajahi berkas',
+  projectActions: 'Tindakan proyek',
   search: 'Cari thread',
   needsYou: 'Menunggu',
   projects: 'Proyek',

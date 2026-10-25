@@ -131,14 +131,19 @@ function FileDiff({
 
 export default function Changes() {
   const { c } = useTheme()
-  const { id } = useLocalSearchParams<{ id: string }>()
+  // A transcript Changes card names its review, and a file row in it the file to open first.
+  const {
+    id,
+    review: initialReview,
+    file: initialFile,
+  } = useLocalSearchParams<{ id: string; review?: string; file?: string }>()
   const chat = useChat(id)
   const insets = useSafeAreaInsets()
   const store = useStore()
   const openFile = useOpenFile(chat)
   const [changes, setChanges] = useState<ChangedFile[]>([])
   const [reviews, setReviews] = useState<ChangeReview[]>([])
-  const [reviewId, setReviewId] = useState('')
+  const [reviewId, setReviewId] = useState(initialReview ?? '')
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -307,7 +312,7 @@ export default function Changes() {
               setDraft('')
             }}
             onOpenFile={f.repoId && f.status !== 'deleted' ? () => openFile.open(f.repoId!, f.path) : undefined}
-            open={!!open[f.path]}
+            open={open[f.path] ?? (!!initialFile && f.fileId === initialFile)}
             onToggle={() => setOpen((o) => ({ ...o, [f.path]: !o[f.path] }))}
           />
         ))}

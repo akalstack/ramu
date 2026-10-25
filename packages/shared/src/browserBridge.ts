@@ -51,8 +51,17 @@ export interface BrowserDiagnostics {
 }
 
 /** A paired device's own view of a desktop browser tab, answered by the same runtime that serves the agent. */
+/**
+ * What the page's focused element accepts, so a phone can raise the matching keyboard. Kinds only; never the field's
+ * value, name or contents.
+ */
+export interface BrowserFieldFocus {
+  editable: boolean
+  kind?: 'text' | 'password' | 'email' | 'number' | 'tel' | 'url' | 'search' | 'multiline'
+}
 export type BrowserViewerOperation =
   | { op: 'list' }
+  | { op: 'focus'; tabId: string }
   | { op: 'dialog'; tabId: string }
   | { op: 'frame'; tabId: string }
   | { op: 'nextFrame'; tabId: string; after: number }

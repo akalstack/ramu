@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Pressable, View, useWindowDimensions } from 'react-native'
 import { Gauge } from 'lucide-react-native'
+import Svg, { Circle } from 'react-native-svg'
 import { useRouter } from 'expo-router'
 import { isMethodMissing } from '../runtime/goalVerify'
 import type { AgentProvider, NextMessageRoute, UsageReading } from '@ramu/shared/types'
@@ -18,9 +19,19 @@ import {
 import { useStore } from '../runtime/store'
 import { providerNames } from '../runtime/types'
 import { font, space, useTheme } from '../theme'
-import { Row, SectionLabel, Sheet, T } from './ui'
+import { Card, Divider, Row, SectionLabel, Sheet, T, Toggle } from './ui'
 
-export function PlanUsageReading({ reading: r, offline = false }: { reading: UsageReading; offline?: boolean }) {
+export function PlanUsageReading({
+  reading: r,
+  offline = false,
+  compact = false,
+  details = true,
+}: {
+  reading: UsageReading
+  offline?: boolean
+  compact?: boolean
+  details?: boolean
+}) {
   const { c } = useTheme()
   const { language } = useStore()
   const now = Date.now()
@@ -41,9 +52,11 @@ export function PlanUsageReading({ reading: r, offline = false }: { reading: Usa
   const scopeHint = usageScopeHint(r, language)
   return (
     <View style={{ padding: space.m, gap: space.s }}>
-      <T weight="600">
-        {providerNames[r.provider]} · {r.accountId ?? 'default'}
-      </T>
+      {!compact ? (
+        <T weight="600">
+          {providerNames[r.provider]} · {r.accountId ?? 'default'}
+        </T>
+      ) : null}
       <T size={font.control}>
         {usageWindow(r, false, language)} · {value}
         {r.plan ? ` · ${r.plan}` : ''}
@@ -64,16 +77,18 @@ export function PlanUsageReading({ reading: r, offline = false }: { reading: Usa
           />
         </View>
       ) : null}
-      <T tone="muted" size={font.caption}>
-        {lastKnown
-          ? language === 'id'
-            ? 'Terakhir dilaporkan'
-            : 'Last reported'
-          : language === 'id'
-            ? 'Diperbarui'
-            : 'Updated'}{' '}
-        {new Date(r.updatedAt).toLocaleString(language === 'id' ? 'id-ID' : 'en-US')}
-      </T>
+      {details ? (
+        <T tone="muted" size={font.caption}>
+          {lastKnown
+            ? language === 'id'
+              ? 'Terakhir dilaporkan'
+              : 'Last reported'
+            : language === 'id'
+              ? 'Diperbarui'
+              : 'Updated'}{' '}
+          {new Date(r.updatedAt).toLocaleString(language === 'id' ? 'id-ID' : 'en-US')}
+        </T>
+      ) : null}
       <T tone="muted" size={font.caption}>
         {!r.resetsAt
           ? language === 'id'
@@ -111,6 +126,7 @@ export function PlanUsageSheet({
   const [unsupportedRefresh, setUnsupportedRefresh] = useState<string[]>([])
   const [filter, setFilter] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [details, setDetails] = useState(() => store.drafts?.['usage-show-details'] === 'yes')
   const refreshing = useRef<number | null>(null)
   const generation = useRef(0)
   const sequences = useRef(new Map<string, number>())
@@ -203,11 +219,49 @@ export function PlanUsageSheet({
     }
   }
   return (
-    <Sheet open={open} onClose={onClose} title={store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'}>
+    <Sheet
+      presentation="screen"
+      open={open}
+      onClose={onClose}
+      title={store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'}
+    >
       {context}
+      <Card style={{ marginHorizontal: space.m, marginTop: space.m }}>
+        <Row>
+          <View style={{ flex: 1, gap: space.xs }}>
+            <T>{store.language === 'id' ? 'Detail akun' : 'Account details'}</T>
+            <T size={font.caption} tone="muted">
+              {store.language === 'id'
+                ? 'Tampilkan ID akun dan waktu pembaruan.'
+                : 'Show account IDs and update times.'}
+            </T>
+          </View>
+          <Toggle
+            accessibilityLabel={store.language === 'id' ? 'Detail akun' : 'Account details'}
+            value={details}
+            onValueChange={(value) => {
+              setDetails(value)
+              store.setDraft('usage-show-details', value ? 'yes' : '')
+            }}
+          />
+        </Row>
+      </Card>
       <T tone="muted" style={{ padding: space.m }}>
         {store.language === 'id' ? 'Dibagikan antar thread pada akun ini' : 'Shared across threads on this account'}
       </T>
+      {!provider || provider === 'claude-code' ? (
+        <Row onPress={busy || !refreshHosts.length ? undefined : () => void refresh()}>
+          <T tone="muted">
+            {store.language === 'id'
+              ? busy
+                ? 'Memperbarui…'
+                : 'Perbarui penggunaan Claude'
+              : busy
+                ? 'Refreshing…'
+                : 'Refresh Claude usage'}
+          </T>
+        </Row>
+      ) : null}
       {hosts.length > 1 ? (
         <>
           <Row onPress={() => setFilter(null)}>
@@ -260,32 +314,52 @@ export function PlanUsageSheet({
                           : ''}
                       </T>
                     )}
-                    {group.readings.map((r) => (
-                      <PlanUsageReading
-                        key={`${id}:${r.provider}:${r.accountId ?? 'default'}:${r.window}:${r.scope ?? ''}`}
-                        reading={r}
-                        offline={!store.isOnline(id)}
-                      />
-                    ))}
+                    {Array.from(new Set(group.readings.map((reading) => reading.accountId ?? 'default'))).map(
+                      (account, index) => {
+                        const readings = group.readings.filter(
+                          (reading) => (reading.accountId ?? 'default') === account,
+                        )
+                        const title =
+                          account === 'default'
+                            ? store.language === 'id'
+                              ? 'Akun default'
+                              : 'Default account'
+                            : /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(account)
+                              ? `${store.language === 'id' ? 'Akun' : 'Account'} ${index + 1}`
+                              : account
+                        return (
+                          <Card key={account} style={{ margin: space.m }}>
+                            <View style={{ padding: space.m, gap: space.xs }}>
+                              <T weight="600">
+                                {providerNames[group.provider]} · {title}
+                              </T>
+                              {details && title !== account ? (
+                                <T size={font.caption} tone="muted" copyable={account}>
+                                  {account}
+                                </T>
+                              ) : null}
+                            </View>
+                            {readings.map((reading) => (
+                              <View key={`${reading.window}:${reading.scope ?? ''}`}>
+                                <Divider />
+                                <PlanUsageReading
+                                  reading={reading}
+                                  compact
+                                  details={details}
+                                  offline={!store.isOnline(id)}
+                                />
+                              </View>
+                            ))}
+                          </Card>
+                        )
+                      },
+                    )}
                   </View>
                 ))
               )}
             </View>
           )
         })}
-      {!provider || provider === 'claude-code' ? (
-        <Row onPress={busy || !refreshHosts.length ? undefined : () => void refresh()}>
-          <T tone="muted">
-            {store.language === 'id'
-              ? busy
-                ? 'Memperbarui…'
-                : 'Perbarui penggunaan Claude'
-              : busy
-                ? 'Refreshing…'
-                : 'Refresh Claude usage'}
-          </T>
-        </Row>
-      ) : null}
       <Row
         onPress={() => {
           const target = filter ?? (hosts.length === 1 ? hosts[0] : undefined)
@@ -342,7 +416,7 @@ export function PlanUsageSummary({ hostIds, actionOnly = false }: { hostIds: str
           flexShrink: 1,
         }}
       >
-        <Gauge size={16} color={c.soft} />
+        {actionOnly && percent !== null ? <UsageRing percent={percent} /> : <Gauge size={16} color={c.soft} />}
         {actionOnly ? null : (
           <T size={font.caption} style={{ flexShrink: 1 }}>
             {label} · {value}
@@ -351,6 +425,32 @@ export function PlanUsageSummary({ hostIds, actionOnly = false }: { hostIds: str
       </Pressable>
       <PlanUsageSheet hosts={hostIds} open={open} onClose={() => setOpen(false)} />
     </>
+  )
+}
+/** The header's plan usage at a glance: the ring fills with the busiest limit and turns amber, then red, near it. */
+function UsageRing({ percent }: { percent: number }) {
+  const { c } = useTheme()
+  const size = 20
+  const stroke = 2.4
+  const r = (size - stroke) / 2
+  const around = 2 * Math.PI * r
+  const used = Math.max(0, Math.min(100, percent))
+  const tint = used >= 90 ? c.bad : used >= 70 ? c.warn : c.accent
+  return (
+    <Svg width={size} height={size} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Circle cx={size / 2} cy={size / 2} r={r} stroke={c.lineStrong} strokeWidth={stroke} fill="none" />
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        stroke={tint}
+        strokeWidth={stroke}
+        fill="none"
+        strokeLinecap="round"
+        strokeDasharray={`${(around * used) / 100} ${around}`}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+    </Svg>
   )
 }
 export function ThreadUsageChip({

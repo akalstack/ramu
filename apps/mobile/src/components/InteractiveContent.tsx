@@ -3,9 +3,9 @@ import { shareInteractive } from './interactiveShare'
 import { interactiveVersions, canCopyInteractiveState } from '@ramu/shared/interactiveVersions'
 import { InteractiveVisibility } from './InteractiveVisibility'
 import { translate } from '@ramu/shared/i18n'
-import { useTheme } from '../theme'
+import { space, useTheme } from '../theme'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { AppState, Image, ScrollView, TextInput, View } from 'react-native'
+import { AppState, Image, Platform, ScrollView, TextInput, View } from 'react-native'
 import { Expand, MoreHorizontal } from 'lucide-react-native'
 import type { InteractiveDocument, InteractiveReference, InteractiveState } from '@ramu/shared/interactive'
 import { interactiveFollowup, interactiveHtml, readInteractiveState } from '@ramu/shared/interactive'
@@ -15,8 +15,25 @@ import { claimInteractive } from '@ramu/shared/interactiveLease'
 import { contentStorage } from '../storage'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
-import { Button, IconButton, Sheet, T } from './ui'
+import { Button, Card, IconButton, Row, Sheet, T } from './ui'
 import InteractiveFrame from './InteractiveFrame'
+/** Secondary content actions share the settings row treatment; saving a scenario is the primary action. */
+function ContentAction({ title, disabled, onPress }: Parameters<typeof Button>[0]) {
+  return (
+    <Row
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      disabled={disabled}
+      onPress={onPress}
+    >
+      <T tone={disabled ? 'muted' : 'text'} style={{ flex: 1 }}>
+        {title}
+      </T>
+    </Row>
+  )
+}
+
 export function InteractiveDocumentCard({
   reference,
   chat,
@@ -40,7 +57,7 @@ export function InteractiveDocumentCard({
     () =>
       interactiveThemeVariables({
         scheme,
-        background: c.canvas,
+        background: c.window,
         foreground: c.text,
         muted: c.muted,
         primary: c.accent,
@@ -78,12 +95,12 @@ export function InteractiveDocumentCard({
   const [mode, setMode] = useState<'preview' | 'code'>('preview')
   const [file, setFile] = useState(0)
   const [actionsOpen, setActionsOpen] = useState(false)
-  const live = !!document && visible && foreground && !failed && !evicted && mode === 'preview'
   const [expanded, setExpanded] = useState(false)
+  const live = !!document && (visible || expanded) && foreground && !failed && !evicted && mode === 'preview'
   const [generation, setGeneration] = useState(0)
   const [height, setHeight] = useState(400)
   // A resumed native WebView must receive the latest declared state, not the first mount's HTML.
-  const activeView = visible && foreground
+  const activeView = (visible || expanded) && foreground
   const lifecycle = useRef({ active: activeView, revision: 0 })
   if (activeView !== lifecycle.current.active) {
     lifecycle.current.active = activeView
@@ -92,8 +109,10 @@ export function InteractiveDocumentCard({
   const instance = `${reference.id}:${reference.version}:${generation}:${lifecycle.current.revision}`
   const currentInstance = useRef(instance)
   currentInstance.current = instance
+  const currentTheme = useRef(theme)
+  currentTheme.current = theme
   const html = useMemo(
-    () => (document ? interactiveHtml(document.html, instance, state.current) : ''),
+    () => (document ? interactiveHtml(document.html, instance, state.current, currentTheme.current, document.reference.network) : ''),
     [document, instance],
   )
   useEffect(() => {
@@ -118,7 +137,9 @@ export function InteractiveDocumentCard({
     if (visible) setEvicted(false)
   }, [visible])
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (value) => setForeground(value === 'active'))
+    const sub = AppState.addEventListener('change', (value) => {
+      if (value !== 'inactive') setForeground(value === 'active')
+    })
     return () => sub.remove()
   }, [])
   const stop = useCallback(() => {
@@ -287,138 +308,152 @@ export function InteractiveDocumentCard({
           <Button title={t('Reload')} onPress={open} />
         </View>
       ) : null}
-      {mode === 'preview' && !live && document?.preview ? (
+      {mode === 'preview' && document?.preview && (failed || evicted || (Platform.OS === 'web' && !live)) ? (
         <Image source={{ uri: document.preview }} resizeMode="contain" style={{ height: 260, width: '100%' }} />
       ) : null}
+      {!expanded && mode === 'preview' && !live && !failed && !evicted && document ? (
+        <View style={{ height, backgroundColor: c.window }} />
+      ) : null}
       {!expanded && content}
-      <Sheet open={actionsOpen} onClose={() => setActionsOpen(false)} title={t('Content actions')}>
-        <T tone="muted">{reference.checked ? t('Controls checked') : t('Rendering checked')}</T>
-        <T tone="muted">{reference.summary}</T>
-        {onVersions && (
-          <Button
-            title={t('Versions')}
-            onPress={() => {
-              setActionsOpen(false)
-              onVersions()
-            }}
-          />
-        )}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          <Button
-            title={t('Reset')}
-            onPress={() => {
-              state.current = null
-              cache.saveState(reference.id, reference.version, null)
-              setGeneration((n) => n + 1)
-              setError('')
-              setFailed(false)
-              setEvicted(false)
-            }}
-          />
-          <Button
-            title={t('Ask about this')}
-            onPress={() =>
-              capture(() => {
-                setActionsOpen(false)
-                onAsk(interactiveFollowup(reference, state.current))
-              })
-            }
-          />
-        </View>
-        <Button
-          title={t('Choose values')}
-          disabled={!document}
-          onPress={() =>
-            capture(() => {
-              if (state.current) {
-                setSelection(state.current)
-                setSelectionId((n) => n + 1)
-              } else setError(t('Use the preview before choosing values.'))
-            })
-          }
-        />
-        {selection && (
-          <InteractiveFollowupPicker
-            key={selectionId}
-            reference={reference}
-            state={selection}
-            onStage={(text) => {
-              setActionsOpen(false)
-              onAsk(text)
-            }}
-            onClose={() => setSelection(null)}
-          />
-        )}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          <Button title={t('Share HTML')} disabled={!document || sharing} onPress={() => share()} />
-          <Button title={t('Share source')} disabled={!document || sharing} onPress={() => share(true)} />
-        </View>
-        {copyFrom && canCopyInteractiveState(copyFrom, reference) && (
-          <Button
-            title={translate(store.language, 'Copy saved scenario from v{version}', { version: copyFrom.version })}
-            onPress={() =>
-              capture(() => {
-                const saved = cache.state(copyFrom.id, copyFrom.version)
-                if (!saved) {
-                  setError(t('Use the source version before copying its saved scenario.'))
-                  return
+      <Sheet
+        open={actionsOpen}
+        onClose={() => setActionsOpen(false)}
+        presentation="screen"
+        title={t('Content actions')}
+      >
+        <View style={{ padding: space.l, gap: space.m }}>
+          <T tone="muted">{reference.checked ? t('Controls checked') : t('Rendering checked')}</T>
+          <T tone="muted">{reference.summary}</T>
+          <Card>
+            {onVersions && (
+              <ContentAction
+                title={t('Versions')}
+                onPress={() => {
+                  setActionsOpen(false)
+                  onVersions()
+                }}
+              />
+            )}
+            <View style={{ gap: 0 }}>
+              <ContentAction
+                title={t('Reset')}
+                onPress={() => {
+                  state.current = null
+                  cache.saveState(reference.id, reference.version, null)
+                  setGeneration((n) => n + 1)
+                  setError('')
+                  setFailed(false)
+                  setEvicted(false)
+                }}
+              />
+              <ContentAction
+                title={t('Ask about this')}
+                onPress={() =>
+                  capture(() => {
+                    setActionsOpen(false)
+                    onAsk(interactiveFollowup(reference, state.current))
+                  })
                 }
-                state.current = saved
-                cache.saveState(reference.id, reference.version, saved)
-                setGeneration((n) => n + 1)
-              })
-            }
-          />
-        )}
-        <T weight="600">{t('Saved scenarios')}</T>
-        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          <TextInput
-            accessibilityLabel={t('Scenario name')}
-            placeholder={t('Scenario name')}
-            placeholderTextColor={c.muted}
-            value={scenarioName}
-            maxLength={80}
-            onChangeText={setScenarioName}
-            style={{ flex: 1, padding: 8, borderWidth: 1, borderColor: c.lineStrong, borderRadius: 8, color: c.text }}
-          />
-          <Button
-            title={t('Save scenario')}
-            disabled={!scenarioName.trim() || !document}
-            onPress={() =>
-              capture(() => {
-                if (!cache.saveScenario(reference.id, reference.version, scenarioName, state.current)) {
-                  setError(t('Use the preview first. Save up to six scenarios per version and 20 per host.'))
-                  return
-                }
-                setScenarioName('')
-                setScenarioRevision((n) => n + 1)
-              })
-            }
-          />
-        </View>
-        {scenarios.map((scenario) => (
-          <View key={scenario.name} style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-            <T style={{ flex: 1 }}>{scenario.name}</T>
-            <Button
-              title={t('Restore')}
+              />
+            </View>
+            <ContentAction
+              title={t('Choose values')}
+              disabled={!document}
               onPress={() =>
                 capture(() => {
-                  state.current = scenario.state
-                  cache.saveState(reference.id, reference.version, scenario.state)
-                  setGeneration((n) => n + 1)
+                  if (state.current) {
+                    setSelection(state.current)
+                    setSelectionId((n) => n + 1)
+                  } else setError(t('Use the preview before choosing values.'))
                 })
               }
             />
+            {selection && (
+              <InteractiveFollowupPicker
+                key={selectionId}
+                reference={reference}
+                state={selection}
+                onStage={(text) => {
+                  setActionsOpen(false)
+                  onAsk(text)
+                }}
+                onClose={() => setSelection(null)}
+              />
+            )}
+            <View style={{ gap: 0 }}>
+              <ContentAction title={t('Share HTML')} disabled={!document || sharing} onPress={() => share()} />
+              <ContentAction title={t('Share source')} disabled={!document || sharing} onPress={() => share(true)} />
+            </View>
+            {copyFrom && canCopyInteractiveState(copyFrom, reference) && (
+              <ContentAction
+                title={translate(store.language, 'Copy saved scenario from v{version}', { version: copyFrom.version })}
+                onPress={() =>
+                  capture(() => {
+                    const saved = cache.state(copyFrom.id, copyFrom.version)
+                    if (!saved) {
+                      setError(t('Use the source version before copying its saved scenario.'))
+                      return
+                    }
+                    state.current = saved
+                    cache.saveState(reference.id, reference.version, saved)
+                    setGeneration((n) => n + 1)
+                  })
+                }
+              />
+            )}
+          </Card>
+          <T weight="600">{t('Saved scenarios')}</T>
+          <View style={{ gap: space.s }}>
+            <TextInput
+              accessibilityLabel={t('Scenario name')}
+              placeholder={t('Scenario name')}
+              placeholderTextColor={c.muted}
+              value={scenarioName}
+              maxLength={80}
+              onChangeText={setScenarioName}
+              style={{ minHeight: 44, padding: space.m, backgroundColor: c.fill, borderRadius: 8, color: c.text }}
+            />
             <Button
-              title={t('Delete')}
-              onPress={() => {
-                if (cache.removeScenario(reference.id, reference.version, scenario.name))
+              title={t('Save scenario')}
+              disabled={!scenarioName.trim() || !document}
+              onPress={() =>
+                capture(() => {
+                  if (!cache.saveScenario(reference.id, reference.version, scenarioName, state.current)) {
+                    setError(t('Use the preview first. Save up to six scenarios per version and 20 per host.'))
+                    return
+                  }
+                  setScenarioName('')
                   setScenarioRevision((n) => n + 1)
-                else setError(t('Could not save local changes. Storage may be full.'))
-              }}
+                })
+              }
             />
           </View>
-        ))}
+          {scenarios.map((scenario) => (
+            <Card key={scenario.name} style={{ padding: space.m, gap: space.s }}>
+              <T style={{ flex: 1 }}>{scenario.name}</T>
+              <Button
+                kind="secondary"
+                title={t('Restore')}
+                onPress={() =>
+                  capture(() => {
+                    state.current = scenario.state
+                    cache.saveState(reference.id, reference.version, scenario.state)
+                    setGeneration((n) => n + 1)
+                  })
+                }
+              />
+              <Button
+                kind="danger"
+                title={t('Delete')}
+                onPress={() => {
+                  if (cache.removeScenario(reference.id, reference.version, scenario.name))
+                    setScenarioRevision((n) => n + 1)
+                  else setError(t('Could not save local changes. Storage may be full.'))
+                }}
+              />
+            </Card>
+          ))}
+        </View>
       </Sheet>
       <Sheet
         presentation="screen"

@@ -1,8 +1,24 @@
 import { BrowserInputQueue, watchBrowserFrames } from '@ramu/shared/browserLiveViewer'
 import { VIEW_ONLY_BROWSER_NOTICE } from '../runtime/viewerAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppState, Image, Modal, PanResponder, ScrollView, TextInput, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { AppState, Image, PanResponder, Pressable, TextInput, View } from 'react-native'
+import * as Clipboard from 'expo-clipboard'
+import {
+  ChevronLeft,
+  ChevronRight,
+  ClipboardPaste,
+  Download,
+  Ellipsis,
+  FileText,
+  Plus,
+  RotateCw,
+  Upload,
+  X,
+  Check,
+  Globe,
+  Monitor,
+  Smartphone,
+} from 'lucide-react-native'
 import type {
   BrowserDialog,
   BrowserHumanInput,
@@ -12,27 +28,56 @@ import type {
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { translate } from '@ramu/shared/i18n'
 import type { Chat } from '../runtime/types'
+import type { RemoteKey } from '../runtime/remoteKeyboard'
 import { useStore } from '../runtime/store'
-import { font, space, useTheme } from '../theme'
-import { Button, T } from './ui'
+import { font, radius, space, useTheme } from '../theme'
+import { Button, Sheet, T } from './ui'
+import {
+  ControlPill,
+  ControlStrip,
+  RemoteKeyboard,
+  type RemoteKeyboardHandle,
+  ViewerBanner,
+  ViewerHeader,
+  ViewerMenu,
+  useViewerMenu,
+  type ViewerMenuItem,
+} from './ViewerChrome'
 import {
   CONTROL_TEXT,
+  addressUrl,
+  browserMenu,
+  controlAction,
   controlState,
+  fitSize,
   frameGesture,
   frameScroll,
   profileLabel,
+  tabTitle,
   viewerMessage,
 } from '../runtime/browserViewerState'
 
-/** The phone views the owning host's browser; it never substitutes a phone WebView or copies credentials. */
+/** Phone layout is the default; choosing Desktop layout holds for the rest of this app session. */
+let preferPhoneLayout = true
+
+/**
+ * The phone views the owning host's browser; it never substitutes a phone WebView or copies credentials. Laid out as a
+ * mobile browser: close, page title and tabs; back, forward, address, reload and more; who is in control; the page.
+ */
 export function BrowserViewer({
   chat,
   onClose,
-  embedded = false,
+  hostManaged,
+  initialTab,
 }: {
   chat: Chat
   onClose(): void
-  embedded?: boolean
+  /**
+   * The host-managed browser, rather than the attached desktop's: only it handles file transfers and phone layout,
+   * because a desktop page is also on the person's screen at the computer.
+   */
+  hostManaged: boolean
+  initialTab?: string | null
 }) {
   const store = useStore()
   const viewOnly = store.computers?.find((host) => host.id === chat.computerId)?.access === 'viewer'
@@ -42,13 +87,15 @@ export function BrowserViewer({
   const { c: theme } = useTheme()
   const t = (text: string) => translate(store.language, text)
   const [tabs, setTabs] = useState<BrowserTabInfo[]>([])
-  const [selected, setSelected] = useState('')
+  const [selected, setSelected] = useState(initialTab ?? '')
   const [owned, setOwned] = useState<number | null>(null)
   const [frame, setFrame] = useState('')
   const [frameSize, setFrameSize] = useState({ width: 4, height: 3 })
-  const [address, setAddress] = useState('')
-  const [text, setText] = useState('')
-  const [privateText, setPrivateText] = useState(true)
+  // The address field shows the tab's URL until the person types; an unsent address is kept as a draft.
+  const [draft, setDraft] = useState<string | null>(null)
+  const draftValue = useRef(draft)
+  draftValue.current = draft
+  const keyboard = useRef<RemoteKeyboardHandle>(null)
   const [error, setError] = useState('')
   const [frameError, setFrameError] = useState('')
   const [frameReady, setFrameReady] = useState(false)
@@ -60,7 +107,13 @@ export function BrowserViewer({
   const [pageText, setPageText] = useState('')
   const [observation, setObservation] = useState<BrowserPageSnapshot | null>(null)
   const [uploadPath, setUploadPath] = useState('')
-  const [downloadsOpen, setDownloadsOpen] = useState(false)
+  const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | null>(null)
+  const downloadsOpen = panel === 'downloads'
+  const menu = useViewerMenu()
+  const addressField = useRef<import('react-native').TextInputInstance>(null)
+  const [area, setArea] = useState({ width: 0, height: 0 })
+  const [phoneLayout, setPhoneLayout] = useState(preferPhoneLayout)
+  const fitted = useRef<{ key: string; size: { width: number; height: number } } | null>(null)
   const [downloads, setDownloads] = useState<BrowserDownloadInfo[]>([])
   const [paths, setPaths] = useState<Record<string, string>>({})
   const downloadsVisible = useRef(downloadsOpen)
@@ -68,10 +121,6 @@ export function BrowserViewer({
   const [active, setActive] = useState(AppState.currentState === 'active')
   const [width, setWidth] = useState(1)
   const current = useRef<BrowserTabInfo | undefined>(undefined)
-  const editing = useRef(false)
-  const addressEdited = useRef(false)
-  const addressValue = useRef(address)
-  addressValue.current = address
   const io = useRef(store)
   io.current = store
   const allowed = useCallback(
@@ -126,7 +175,6 @@ export function BrowserViewer({
           const websiteDialog = await io.current.invoke(chat.computerId, 'hostBrowser.dialog', chat.taskId!, tab.id)
           if (!mounted || !allowed()) return
           setDialog(websiteDialog)
-          if (!editing.current && !addressEdited.current) setAddress(tab.url)
         } else {
           setFrame('')
           setDialog(null)
@@ -190,11 +238,70 @@ export function BrowserViewer({
       if (inputQueue.current === queue) inputQueue.current = null
     }
   }, [chat.computerId, chat.taskId, tabId, generation, controlled, frameReady, allowed])
+  // While the phone controls a host-managed page, the host lays it out at the phone's size, as a phone browser would.
+  // The host restores the default layout itself as soon as control changes, so the agent never inherits it.
+  useEffect(() => {
+    if (!hostManaged || !own || !tabId || !chat.taskId) {
+      if (!own) fitted.current = null
+      return
+    }
+    const key = `${tabId}:${generation}`
+    const previous = fitted.current?.key === key ? fitted.current.size : null
+    if (!phoneLayout) {
+      if (!previous) return
+      fitted.current = null
+      void io.current.invoke(chat.computerId, 'hostBrowser.fit', chat.taskId, tabId, null).catch(() => {})
+      return
+    }
+    const size = fitSize(area, previous)
+    if (!size) return
+    const timer = setTimeout(() => {
+      if (!allowed()) return
+      fitted.current = { key, size }
+      // Hosts from before phone layout answer "unknown method"; the page then keeps its desktop size.
+      void io.current
+        .invoke(chat.computerId, 'hostBrowser.fit', chat.taskId!, tabId, size)
+        // The keyboard shrank the page: the host scrolls the focused field back into view when asked about it.
+        .then(() => {
+          if (keyboard.current?.isOpen())
+            return io.current.invoke(chat.computerId, 'hostBrowser.focus', chat.taskId!, tabId)
+        })
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [hostManaged, own, tabId, generation, chat.computerId, chat.taskId, phoneLayout, area, allowed])
+  // After a tap lands, ask which kind of field has focus: a text field raises the matching phone keyboard.
+  const followFocus = async () => {
+    if (!allowed() || !chat.taskId || !tabId) return
+    try {
+      const focus = await io.current.invoke(chat.computerId, 'hostBrowser.focus', chat.taskId, tabId)
+      if (!allowed()) return
+      if (focus.editable) keyboard.current?.open(focus.kind)
+      else keyboard.current?.close()
+    } catch {
+      // Hosts from before keyboard support: Paste in the menu still types into the page.
+    }
+  }
   const input = (input: BrowserHumanInput) => {
     if (!allowed() || !own || busy || (input.kind === 'scroll' && !input.x && !input.y)) return
-    void inputQueue.current?.push(input).catch((error) => {
-      if (allowed()) setError(String(error.message ?? error))
-    })
+    void inputQueue.current
+      ?.push(input)
+      .then(() => {
+        if (input.kind === 'click' && input.button === 'left') void followFocus()
+      })
+      .catch((error) => {
+        if (allowed()) setError(String(error.message ?? error))
+      })
+  }
+  const typeKeys = (keys: RemoteKey[]) => {
+    const queue = inputQueue.current
+    if (!allowed() || !queue) return
+    for (const key of keys)
+      void queue
+        .push(key.kind === 'text' ? { kind: 'text', text: key.text.slice(0, 2000) } : { kind: 'key', key: key.key })
+        .catch((error) => {
+          if (allowed()) setError(String(error.message ?? error))
+        })
   }
   const aspect = frameSize.width / frameSize.height
   const touch = useRef({ at: 0, lastTap: 0, dx: 0, dy: 0, scrolling: false })
@@ -242,250 +349,386 @@ export function BrowserViewer({
       },
     }),
   ).current
+  const host = store.computers.find((computer) => computer.id === chat.computerId)?.name
+  const selectTab = (id: string) => {
+    setSelected(id)
+    setDraft(null)
+    setNewTab(false)
+    setOwned(null)
+    setFrame('')
+    setPageText('')
+    setObservation(null)
+    setPanel(null)
+  }
+  const startNewTab = () => {
+    setPanel(null)
+    setNewTab(true)
+    setDraft('')
+    setTimeout(() => addressField.current?.focus(), 250)
+  }
+  const submitAddress = () => {
+    const url = addressUrl(draft ?? '')
+    if (!url || !chat.taskId) {
+      setDraft(null)
+      setNewTab(false)
+      return
+    }
+    void act(async () => {
+      if (tab && !newTab) await invoke(chat.computerId, 'hostBrowser.navigate', chat.taskId!, tab.id, url)
+      else {
+        const result = await invoke(chat.computerId, 'hostBrowser.open', chat.taskId!, url)
+        setSelected(result.tab.id)
+        setOwned(result.tab.generation)
+        setNewTab(false)
+      }
+      setDraft(null)
+    })
+  }
+  const toggleControl = () =>
+    tab &&
+    void act(async () => {
+      const next = await invoke(
+        chat.computerId,
+        controlled ? 'hostBrowser.release' : 'hostBrowser.take',
+        chat.taskId!,
+        tab.id,
+      )
+      setOwned(controlled ? null : next.generation)
+    })
+  const readText = () =>
+    tab &&
+    void act(async () => {
+      const snapshot = await invoke(chat.computerId, 'hostBrowser.read', chat.taskId!, tab.id)
+      setPageText(snapshot.text)
+      setObservation(snapshot)
+    })
+  const fileInputs = observation?.elements.filter((element) => element.type === 'file') ?? []
+  const MENU_ITEMS: Record<ReturnType<typeof browserMenu>[number], Omit<ViewerMenuItem, 'key'>> = {
+    paste: {
+      title: t('Paste'),
+      icon: ClipboardPaste,
+      onPress: () =>
+        void act(async () => {
+          const value = (await Clipboard.getStringAsync()).slice(0, 2000)
+          if (!value) throw new Error(t('The clipboard is empty.'))
+          if (!inputQueue.current) throw new Error('Take control again to continue.')
+          await inputQueue.current.push({ kind: 'text', text: value })
+        }),
+    },
+    layout: {
+      title: phoneLayout ? t('Desktop layout') : t('Phone layout'),
+      icon: phoneLayout ? Monitor : Smartphone,
+      onPress: () => {
+        preferPhoneLayout = !phoneLayout
+        setPhoneLayout(!phoneLayout)
+      },
+    },
+    newTab: { title: t('New tab'), icon: Plus, onPress: startNewTab },
+    readText: {
+      title: t('Read page text'),
+      icon: FileText,
+      onPress: () => {
+        setPanel('text')
+        readText()
+      },
+    },
+    upload: {
+      title: t('Upload a file'),
+      icon: Upload,
+      onPress: () => setPanel('upload'),
+    },
+    downloads: { title: t('Downloads'), icon: Download, onPress: () => setPanel('downloads') },
+    closeTab: {
+      title: t('Close tab'),
+      icon: X,
+      destructive: true,
+      disabled: busy || !chat.taskId,
+      onPress: () =>
+        tab &&
+        void act(async () => {
+          await invoke(chat.computerId, 'hostBrowser.close', chat.taskId!, tab.id)
+          selectTab('')
+        }),
+    },
+  }
+  const menuItems = browserMenu({ hasTab: !!tab, own, hostManaged, fileInput: fileInputs.length > 0 }).map((key) => ({
+    key,
+    ...MENU_ITEMS[key],
+  }))
   const inputStyle = {
     color: theme.text,
-    borderWidth: 1,
-    borderColor: theme.line,
-    borderRadius: 6,
-    padding: space.s,
+    backgroundColor: theme.fill,
+    borderRadius: radius.m,
+    paddingHorizontal: space.m,
+    paddingVertical: space.s + 2,
     fontSize: font.body,
   }
-  const Container = embedded ? View : SafeAreaView
-  if (viewOnly) {
-    const notice = (
-      <Container style={{ flex: 1, padding: space.m, gap: space.m, backgroundColor: theme.canvas }}>
-        <T tone="muted">{VIEW_ONLY_BROWSER_NOTICE[store.language]}</T>
-        <Button kind="ghost" title={t('Close')} onPress={onClose} />
-      </Container>
-    )
-    return embedded ? (
-      notice
-    ) : (
-      <Modal visible animationType="slide" onRequestClose={onClose}>
-        {notice}
-      </Modal>
-    )
-  }
-  const content = (
-    <Container style={{ flex: 1, backgroundColor: theme.canvas }}>
-      {!embedded && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: space.m }}>
-          <T weight="600">
-            {t('Browser')} · {store.computers.find((computer) => computer.id === chat.computerId)?.name}
-          </T>
-          <Button kind="ghost" title={t('Close')} onPress={onClose} />
+  // The touch surface is exactly the drawn frame: gestures map touches through its width and aspect ratio.
+  const fitWidth = area.width && area.height ? Math.min(area.width, area.height * aspect) : area.width
+  if (viewOnly)
+    return (
+      <View style={{ flex: 1 }}>
+        <ViewerHeader title={t('Browser')} subtitle={host} closeLabel={t('Close browser')} onClose={onClose} />
+        <View style={{ padding: space.l }}>
+          <T tone="muted">{VIEW_ONLY_BROWSER_NOTICE[store.language]}</T>
         </View>
-      )}
-      <ScrollView
-        horizontal
-        style={{ flexGrow: 0 }}
-        contentContainerStyle={{ gap: space.s, paddingHorizontal: space.m }}
-      >
-        {tabs.map((entry) => (
-          <Button
-            key={entry.id}
-            kind={entry.id === tab?.id ? 'secondary' : 'ghost'}
-            title={entry.title || entry.url}
-            onPress={() => {
-              setSelected(entry.id)
-              addressEdited.current = false
-              setAddress(entry.url)
-              setOwned(null)
-              setFrame('')
-            }}
+      </View>
+    )
+  const editable = own || !tab || newTab
+  const nextControl = state ? controlAction(state) : null
+  const message = error || frameError
+  return (
+    <View style={{ flex: 1 }}>
+      <ViewerHeader
+        title={newTab ? t('New tab') : tabTitle(tab, t)}
+        subtitle={tab ? `${host ?? ''}${host ? ' · ' : ''}${t(profileLabel(tab.profileId))}` : host}
+        closeLabel={t('Close browser')}
+        onClose={onClose}
+        right={
+          <ControlPill
+            icon={Globe}
+            badge={String(Math.max(tabs.length, 1))}
+            label={t('Tabs')}
+            size={44}
+            onPress={() => setPanel('tabs')}
           />
-        ))}
-      </ScrollView>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.m, gap: space.s }}>
-        <T tone="muted">{t('Browser runs on the selected execution host. Sign-ins stay there.')}</T>
-        {error || frameError ? <T tone="muted">{t(viewerMessage(error || frameError))}</T> : null}
-        {tab && state && (
-          <View accessibilityRole="summary" style={{ gap: 2 }}>
-            <T tone="muted" size={font.caption}>
-              {t(profileLabel(tab.profileId))} ·{' '}
-              {store.computers.find((computer) => computer.id === chat.computerId)?.name}
-            </T>
-            <T
-              accessibilityLiveRegion="polite"
-              tone={state === 'disconnected' ? undefined : 'muted'}
-              weight={state === 'disconnected' ? '600' : undefined}
-            >
-              {t(CONTROL_TEXT[state])}
-            </T>
-          </View>
-        )}
-        <TextInput
-          accessibilityLabel={t('Address')}
-          value={address}
-          onChangeText={(value) => {
-            addressEdited.current = true
-            setAddress(value)
-          }}
-          autoCapitalize="none"
-          autoCorrect={false}
-          onFocus={() => {
-            editing.current = true
-          }}
-          onBlur={() => {
-            editing.current = false
-          }}
-          editable={own || !tab}
-          style={inputStyle}
-          onSubmitEditing={() =>
-            void act(async () => {
-              if (!chat.taskId) return
-              const url = /^https?:\/\//i.test(address) ? address : `https://${address}`
-              if (tab && !newTab) await invoke(chat.computerId, 'hostBrowser.navigate', chat.taskId, tab.id, url)
-              else {
-                const result = await invoke(chat.computerId, 'hostBrowser.open', chat.taskId, url)
-                setSelected(result.tab.id)
-                setOwned(result.tab.generation)
-                setNewTab(false)
-              }
-              if (addressValue.current === address) addressEdited.current = false
-            })
+        }
+      />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs + 2, paddingHorizontal: space.s }}>
+        <ControlPill
+          icon={ChevronLeft}
+          label={t('Back')}
+          disabled={!own || busy}
+          onPress={() =>
+            tab && void act(() => invoke(chat.computerId, 'hostBrowser.history', chat.taskId!, tab.id, 'back'))
           }
         />
-        {tab && (
-          <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
-            <Button
-              kind="ghost"
-              title={newTab ? t('Cancel') : t('New tab')}
-              disabled={busy}
-              onPress={() => {
-                setNewTab(!newTab)
-                addressEdited.current = !newTab
-                setAddress(newTab ? tab.url : '')
-              }}
-            />
-            <Button
-              kind="ghost"
-              title={t('Close tab')}
-              disabled={busy || !chat.taskId}
-              onPress={() =>
-                void act(async () => {
-                  await invoke(chat.computerId, 'hostBrowser.close', chat.taskId!, tab.id)
-                  setSelected('')
-                  setOwned(null)
-                  setFrame('')
-                })
-              }
-            />
-            <Button
-              title={controlled ? t('Give control to agent') : t('Take control')}
-              disabled={busy || !active}
-              onPress={() =>
-                void act(async () => {
-                  const next = await invoke(
-                    chat.computerId,
-                    controlled ? 'hostBrowser.release' : 'hostBrowser.take',
-                    chat.taskId!,
-                    tab.id,
-                  )
-                  setOwned(controlled ? null : next.generation)
-                })
-              }
-            />
-            {(['back', 'forward', 'reload'] as const).map((direction) => (
-              <Button
-                key={direction}
-                kind="ghost"
-                title={t(direction === 'back' ? 'Back' : direction === 'forward' ? 'Forward' : 'Reload')}
-                disabled={!own || busy}
-                onPress={() =>
-                  void act(() => invoke(chat.computerId, 'hostBrowser.history', chat.taskId!, tab.id, direction))
+        <ControlPill
+          icon={ChevronRight}
+          label={t('Forward')}
+          disabled={!own || busy}
+          onPress={() =>
+            tab && void act(() => invoke(chat.computerId, 'hostBrowser.history', chat.taskId!, tab.id, 'forward'))
+          }
+        />
+        <TextInput
+          ref={addressField}
+          accessibilityLabel={t('Address')}
+          value={draft ?? (newTab ? '' : (tab?.url ?? ''))}
+          onChangeText={setDraft}
+          onBlur={() => {
+            // A typed address is a draft and stays until it is opened or the tab changes; an empty one cancels.
+            if (draftValue.current?.trim()) return
+            setDraft(null)
+            setNewTab(false)
+          }}
+          onSubmitEditing={submitAddress}
+          editable={editable}
+          placeholder={t('Search or enter a web address')}
+          placeholderTextColor={theme.placeholder}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          returnKeyType="go"
+          selectTextOnFocus
+          numberOfLines={1}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: 40,
+            borderRadius: radius.full,
+            borderWidth: 1,
+            borderColor: theme.lineStrong,
+            backgroundColor: theme.fill,
+            paddingHorizontal: space.l,
+            color: editable ? theme.text : theme.soft,
+            fontSize: font.control + 1,
+          }}
+        />
+        <ControlPill
+          icon={RotateCw}
+          label={t('Reload')}
+          disabled={!own || busy}
+          onPress={() =>
+            tab && void act(() => invoke(chat.computerId, 'hostBrowser.history', chat.taskId!, tab.id, 'reload'))
+          }
+        />
+        <ControlPill pillRef={menu.anchor} icon={Ellipsis} label={t('Browser options')} onPress={menu.open} />
+      </View>
+      {tab && state ? (
+        <ControlStrip
+          text={t(CONTROL_TEXT[state])}
+          tone={state === 'disconnected' ? 'warn' : state === 'yours' ? 'accent' : 'muted'}
+          action={
+            nextControl
+              ? {
+                  title: nextControl === 'release' ? t('Give back to agent') : t('Take control'),
+                  disabled: busy || !active,
+                  onPress: toggleControl,
                 }
-              />
-            ))}
-          </View>
-        )}
-        {dialog && (
-          <View accessibilityRole="alert" style={{ gap: space.s }}>
-            <T>{dialog.message}</T>
-            {dialog.type === 'prompt' && (
-              <TextInput
-                accessibilityLabel={t('Website dialog answer')}
-                value={dialogText}
-                onChangeText={setDialogText}
-                style={inputStyle}
-              />
-            )}
-            {[false, true].map((accept) => (
-              <Button
-                key={String(accept)}
-                title={accept ? t('OK') : t('Cancel')}
-                disabled={!controlled || busy}
-                onPress={() =>
-                  void act(() =>
-                    invoke(
-                      chat.computerId,
-                      'hostBrowser.answerDialog',
-                      chat.taskId!,
-                      tab!.id,
-                      dialog.id,
-                      accept,
-                      dialogText,
-                    ),
-                  )
-                }
-              />
-            ))}
-          </View>
-        )}
-        {frame ? (
+              : undefined
+          }
+        />
+      ) : (
+        <View style={{ height: space.s }} />
+      )}
+      {message ? (
+        <ViewerBanner tone="bad">
+          <T size={font.control}>{t(viewerMessage(message))}</T>
+        </ViewerBanner>
+      ) : null}
+      {dialog && tab ? (
+        <ViewerBanner tone="warn">
+          <T>{dialog.message}</T>
+          {dialog.type === 'prompt' && controlled ? (
+            <TextInput
+              accessibilityLabel={t('Website dialog answer')}
+              value={dialogText}
+              onChangeText={setDialogText}
+              style={inputStyle}
+            />
+          ) : null}
+          {controlled ? (
+            <View style={{ flexDirection: 'row', gap: space.s, justifyContent: 'flex-end' }}>
+              {[false, true].map((accept) => (
+                <Button
+                  key={String(accept)}
+                  kind={accept ? 'primary' : 'ghost'}
+                  title={accept ? t('OK') : t('Cancel')}
+                  disabled={busy}
+                  onPress={() =>
+                    void act(() =>
+                      invoke(
+                        chat.computerId,
+                        'hostBrowser.answerDialog',
+                        chat.taskId!,
+                        tab.id,
+                        dialog.id,
+                        accept,
+                        dialogText,
+                      ),
+                    )
+                  }
+                />
+              ))}
+            </View>
+          ) : (
+            <T tone="muted" size={font.caption}>
+              {t('Take control to respond.')}
+            </T>
+          )}
+        </ViewerBanner>
+      ) : null}
+      <View
+        style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-start', backgroundColor: theme.canvas }}
+        onLayout={(event) => setArea(event.nativeEvent.layout)}
+      >
+        {frame && fitWidth > 0 ? (
           <View
             {...pan.panHandlers}
             accessibilityRole="image"
             accessibilityLabel={t('Browser page on the execution host')}
             accessibilityHint={own ? t('Tap to click, hold to right-click, drag to scroll') : undefined}
             onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+            style={{ width: fitWidth, aspectRatio: aspect }}
           >
-            <Image source={{ uri: frame }} resizeMode="contain" style={{ width: '100%', aspectRatio: aspect }} />
+            <Image source={{ uri: frame }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
           </View>
         ) : (
-          <T tone="muted">{t('Choose a tab or enter an address to open a page.')}</T>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl, gap: space.m }}>
+            <Globe size={32} color={theme.muted} strokeWidth={1.5} />
+            <T tone="muted" style={{ textAlign: 'center' }}>
+              {tab ? t('Loading the page…') : t('Enter an address above to open a page.')}
+            </T>
+            <T tone="muted" size={font.caption} style={{ textAlign: 'center' }}>
+              {t('Browser runs on the selected execution host. Sign-ins stay there.')}
+            </T>
+          </View>
         )}
-        {tab && (
+      </View>
+      {own ? <RemoteKeyboard handle={keyboard} label={t('Typing into the website')} onKeys={typeKeys} /> : null}
+      <ViewerMenu at={menu.at} onClose={menu.close} items={menuItems} label={t('Close menu')} />
+      <Sheet open={panel === 'tabs'} onClose={() => setPanel(null)} title={t('Tabs')}>
+        <View style={{ paddingHorizontal: space.m, gap: space.xs }}>
+          {tabs.map((entry) => {
+            const chosen = entry.id === tab?.id
+            return (
+              <Pressable
+                key={entry.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected: chosen }}
+                onPress={() => selectTab(entry.id)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.m,
+                  minHeight: 56,
+                  paddingHorizontal: space.m,
+                  borderRadius: radius.m,
+                  backgroundColor: pressed ? theme.pressed : chosen ? theme.accentWash : 'transparent',
+                })}
+              >
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <T weight="600" numberOfLines={1}>
+                    {tabTitle(entry, t)}
+                  </T>
+                  <T tone="muted" size={font.caption} numberOfLines={1}>
+                    {entry.url}
+                    {entry.controller === 'agent' ? ` · ${t('Agent')}` : ''}
+                  </T>
+                </View>
+                {chosen ? <Check size={18} color={theme.accent} /> : null}
+              </Pressable>
+            )
+          })}
+          {!tabs.length ? <T tone="muted">{t('No browser tabs in this thread.')}</T> : null}
           <Button
-            kind="ghost"
-            title={t('Read page text')}
-            onPress={() =>
-              void act(async () => {
-                const snapshot = await invoke(chat.computerId, 'hostBrowser.read', chat.taskId!, tab.id)
-                setPageText(snapshot.text)
-                setObservation(snapshot)
-              })
-            }
+            kind="secondary"
+            icon={Plus}
+            title={t('New tab')}
+            onPress={startNewTab}
+            style={{ marginTop: space.s }}
           />
-        )}
-        {!!pageText && <T>{pageText}</T>}
-        {own && observation?.elements.some((element) => element.type === 'file') && (
-          <View style={{ gap: space.s }}>
-            <TextInput
-              accessibilityLabel={t('Upload from workspace path')}
-              value={uploadPath}
-              maxLength={4000}
-              autoCapitalize="none"
-              autoCorrect={false}
-              onChangeText={setUploadPath}
-              placeholder={t('Relative workspace file (maximum 8 MiB)')}
-              style={inputStyle}
-            />
-            {observation.elements
-              .filter((element) => element.type === 'file')
-              .map((element) => (
+        </View>
+      </Sheet>
+      <Sheet open={panel === 'text'} onClose={() => setPanel(null)} title={t('Page text')}>
+        <View style={{ paddingHorizontal: space.l, gap: space.s }}>
+          {pageText ? (
+            <T selectable copyable={pageText}>
+              {pageText}
+            </T>
+          ) : (
+            <T tone="muted">{busy ? t('Reading the page…') : t('This page has no readable text.')}</T>
+          )}
+        </View>
+      </Sheet>
+      <Sheet open={panel === 'upload'} onClose={() => setPanel(null)} title={t('Upload a file')}>
+        <View style={{ paddingHorizontal: space.l, gap: space.s }}>
+          <TextInput
+            accessibilityLabel={t('Upload from workspace path')}
+            value={uploadPath}
+            maxLength={4000}
+            autoCapitalize="none"
+            autoCorrect={false}
+            onChangeText={setUploadPath}
+            placeholder={t('Relative workspace file (maximum 8 MiB)')}
+            placeholderTextColor={theme.placeholder}
+            style={inputStyle}
+          />
+          {observation && tab
+            ? fileInputs.map((element) => (
                 <Button
                   key={element.ref}
                   title={`${t('Upload')} · ${element.name || t('Website file input')}`}
-                  disabled={busy || !uploadPath}
+                  disabled={busy || !uploadPath || !own}
                   onPress={() =>
                     void act(async () => {
                       const result = await invoke(
                         chat.computerId,
                         'hostBrowser.upload',
                         chat.taskId!,
-                        tab!.id,
-                        tab!.generation,
+                        tab.id,
+                        tab.generation,
                         observation.snapshot,
                         element.ref,
                         uploadPath,
@@ -493,135 +736,75 @@ export function BrowserViewer({
                       if (!result.ok) throw new Error(result.reason ?? 'Read the page again before uploading.')
                       setObservation(null)
                       setUploadPath('')
+                      setPanel(null)
                     })
                   }
                 />
-              ))}
-          </View>
-        )}
-        <Button kind="ghost" title={t('Downloads')} onPress={() => setDownloadsOpen(!downloadsOpen)} />
-        {downloadsOpen && (
-          <View style={{ gap: space.s }}>
-            <T tone="muted">
-              {t(
-                'Downloads stay on the execution host. Save into a new relative workspace file; existing files are never overwritten.',
+              ))
+            : null}
+        </View>
+      </Sheet>
+      <Sheet open={downloadsOpen} onClose={() => setPanel(null)} title={t('Downloads')}>
+        <View style={{ paddingHorizontal: space.l, gap: space.m }}>
+          <T tone="muted" size={font.caption}>
+            {t(
+              'Downloads stay on the execution host. Save into a new relative workspace file; existing files are never overwritten.',
+            )}
+          </T>
+          <Button
+            kind="secondary"
+            title={t('Allow next download')}
+            disabled={!own || busy || !tab}
+            onPress={() =>
+              tab && void act(() => invoke(chat.computerId, 'hostBrowser.allowDownload', chat.taskId!, tab.id))
+            }
+          />
+          {downloads.map((entry) => (
+            <View key={entry.id} style={{ gap: space.s }}>
+              <T>
+                {entry.name} · {t(entry.state)} · {Math.ceil(entry.received / 1024)} KiB
+              </T>
+              {entry.state === 'completed' && (
+                <>
+                  <TextInput
+                    accessibilityLabel={t('Save to workspace path')}
+                    value={paths[entry.id] ?? entry.name}
+                    maxLength={4000}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    style={inputStyle}
+                    onChangeText={(value) => setPaths((paths) => ({ ...paths, [entry.id]: value }))}
+                  />
+                  <Button
+                    title={t('Save')}
+                    disabled={busy}
+                    onPress={() =>
+                      void act(async () => {
+                        await invoke(
+                          chat.computerId,
+                          'hostBrowser.saveDownload',
+                          chat.taskId!,
+                          entry.id,
+                          paths[entry.id] ?? entry.name,
+                        )
+                        setError(t('Saved to the thread workspace.'))
+                      })
+                    }
+                  />
+                </>
               )}
-            </T>
-            <Button
-              kind="secondary"
-              title={t('Allow next download')}
-              disabled={!own || busy || !tab}
-              onPress={() =>
-                tab && void act(() => invoke(chat.computerId, 'hostBrowser.allowDownload', chat.taskId!, tab.id))
-              }
-            />
-            {downloads.map((entry) => (
-              <View key={entry.id} style={{ gap: space.s }}>
-                <T>
-                  {entry.name} · {t(entry.state)} · {Math.ceil(entry.received / 1024)} KiB
-                </T>
-                {entry.state === 'completed' && (
-                  <>
-                    <TextInput
-                      accessibilityLabel={t('Save to workspace path')}
-                      value={paths[entry.id] ?? entry.name}
-                      maxLength={4000}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      style={inputStyle}
-                      onChangeText={(value) => setPaths((paths) => ({ ...paths, [entry.id]: value }))}
-                    />
-                    <Button
-                      title={t('Save')}
-                      disabled={busy}
-                      onPress={() =>
-                        void act(async () => {
-                          await invoke(
-                            chat.computerId,
-                            'hostBrowser.saveDownload',
-                            chat.taskId!,
-                            entry.id,
-                            paths[entry.id] ?? entry.name,
-                          )
-                          setError(t('Saved to the thread workspace.'))
-                        })
-                      }
-                    />
-                  </>
-                )}
-                <Button
-                  kind="ghost"
-                  title={entry.state === 'progressing' ? t('Cancel') : t('Remove')}
-                  disabled={busy}
-                  onPress={() =>
-                    void act(() => invoke(chat.computerId, 'hostBrowser.cancelDownload', chat.taskId!, entry.id))
-                  }
-                />
-              </View>
-            ))}
-          </View>
-        )}
-        {own && (
-          <>
-            <TextInput
-              accessibilityLabel={t('Text for the focused website field')}
-              secureTextEntry={privateText}
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={text}
-              maxLength={2000}
-              onChangeText={setText}
-              style={inputStyle}
-            />
-            <Button
-              kind="ghost"
-              title={privateText ? t('Show text') : t('Hide text')}
-              onPress={() => setPrivateText(!privateText)}
-            />
-            <Button
-              title={t('Type')}
-              disabled={busy || !text}
-              onPress={() =>
-                void act(async () => {
-                  if (!inputQueue.current) throw new Error('Take control again to continue.')
-                  await inputQueue.current.push({ kind: 'text', text })
-                  setText((current) => (current === text ? '' : current))
-                })
-              }
-            />
-            <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
-              {['Enter', 'Tab', 'Backspace', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].map((key) => (
-                <Button
-                  key={key}
-                  kind="ghost"
-                  title={key}
-                  disabled={busy}
-                  onPress={() => input({ kind: 'key', key })}
-                />
-              ))}
               <Button
                 kind="ghost"
-                title={t('Scroll up')}
+                title={entry.state === 'progressing' ? t('Cancel') : t('Remove')}
                 disabled={busy}
-                onPress={() => input({ kind: 'scroll', x: 0, y: -500 })}
-              />
-              <Button
-                kind="ghost"
-                title={t('Scroll down')}
-                disabled={busy}
-                onPress={() => input({ kind: 'scroll', x: 0, y: 500 })}
+                onPress={() =>
+                  void act(() => invoke(chat.computerId, 'hostBrowser.cancelDownload', chat.taskId!, entry.id))
+                }
               />
             </View>
-          </>
-        )}
-      </ScrollView>
-    </Container>
-  )
-  return embedded ? (
-    content
-  ) : (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
-      {content}
-    </Modal>
+          ))}
+        </View>
+      </Sheet>
+    </View>
   )
 }

@@ -11,7 +11,7 @@ export async function shareDownloadedFile(name: string, content: string): Promis
   const file = new File(Paths.cache, `ramu-share-${safe}`)
   if (file.exists) file.delete()
   file.create()
-  file.write(content)
+  await file.write(content)
   await Sharing.shareAsync(file.uri, { dialogTitle: name })
   return true
 }

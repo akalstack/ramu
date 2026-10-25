@@ -62,3 +62,15 @@ export function updateThreadMetadata(chat: import('./types').Chat, event: AgentE
     }
   return chat
 }
+
+/** Commit a transcript and its cursor together only after its companion reads succeed on the same connection. */
+export async function readTranscriptBundle<T, B, G>(
+  reads: [Promise<T>, Promise<B>, Promise<G>],
+  current: () => boolean,
+  commit: (snapshot: T) => void,
+): Promise<[T, B, G] | null> {
+  const bundle = await Promise.all(reads)
+  if (!current()) return null
+  commit(bundle[0])
+  return bundle
+}

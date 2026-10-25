@@ -1,10 +1,13 @@
-import { ChatFade } from '../../../chat/ChatMotion'
+import { toolActivity } from '@ramu/shared/chat/toolActivity'
+import { ActivityText } from '../../../chat/ActivityText'
 import { useState } from 'react'
 import { t as translate, useLanguage } from '../../../i18n'
 import { isViewImageTool, toolImageName } from '../lib/toolImage'
 import { splitToolContent } from '../lib/toolContent'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { toolKind, KIND_VERB } from '@ramu/shared/chat/agentTools'
+import { fileToolDiffs, fileToolLine } from '@ramu/shared/chat/fileTools'
+import { FileToolCounts } from './FileToolCounts'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/desktop-button'
 import { ChevronRight } from 'lucide-react'
@@ -14,7 +17,6 @@ import { type ToolResult, type ToolUse } from '../types'
 import { describeTools, toolFallbackTitle } from '../lib/toolSummary'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { ShadowPre } from './ShadowPre'
-import { WorkingText } from './WorkingText'
 import { ToolIcon } from './ToolIcon'
 import { ThinkingRow } from './ThinkingRow'
 import type { ToolEntry } from '../lib/toolThinking'
@@ -27,6 +29,8 @@ import {
   TOOL_ICON_CLASS,
   TOOL_SUMMARY_CLASS,
 } from '../styles'
+
+const shownHasDiff = (content: ToolUse['content']) => Boolean(content?.some((item) => item.type === 'diff'))
 
 const TOOL_VERB: Record<string, string> = {
   Bash: 'Ran',
@@ -64,8 +68,19 @@ export function ToolGroup({
   useLanguage()
   const [open, setOpen] = useState(false)
   const bodyRef = useScrollFade<HTMLDivElement>()
-  const running = tools.some((t) => toolIsRunning(results.get(t.toolUseId), active))
-  const primaryTool = tools.find((t) => toolIsRunning(results.get(t.toolUseId), active)) ?? tools[0]!
+  const status = toolActivity(tools, (tool) => {
+    const result = results.get(tool.toolUseId)
+    return result?.isError || result?.status === 'failed' || tool.status === 'failed'
+      ? 'failed'
+      : toolIsRunning(result, active)
+        ? 'running'
+        : 'done'
+  })
+  const running = status.running > 0
+  const primaryTool = status.current ?? tools[0]!
+  const headline = running
+    ? primaryTool.title?.trim() || toolFallbackTitle(primaryTool, true) || describeTools([primaryTool], results, active)
+    : describeTools(tools, results, active)
   return (
     <>
       <Collapsible
@@ -84,13 +99,14 @@ export function ToolGroup({
               content={results.get(primaryTool.toolUseId)?.content}
               className={running ? `${TOOL_ICON_CLASS} running` : TOOL_ICON_CLASS}
             />
-            <ChatFade className="tool-group-label" identity={`${tools.length}:${running}:${activity ?? ''}`}>
-              {activity ? (
-                <WorkingText>{running ? describeTools(tools, results, active) : activity}</WorkingText>
-              ) : (
-                describeTools(tools, results, active)
-              )}
-            </ChatFade>
+            <ActivityText active={running} className="tool-group-label truncate text-left">
+              {activity && !running ? activity : headline}
+            </ActivityText>
+            {status.failed > 0 && (
+              <span className="text-bad text-caption flex-none">
+                {translate('Failed')} · {status.failed}
+              </span>
+            )}
             <ChevronRight size={13} className={CARET_CLASS} />
           </CollapsibleTrigger>
         )}
@@ -110,12 +126,20 @@ export function ToolGroup({
               const row = call ? describeRamuTool(call, r?.summary) : undefined
               const { images, details } = splitToolContent(r?.content ?? t.content)
               const imageTitle = images.length || isViewImageTool(t.name) ? toolImageName(t) : undefined
+              // Reads, edits and writes name just the file (and an edit its +/- lines) until the row is opened.
+              const file = row || imageTitle ? null : fileToolLine(t, r)
+              const fileTitle = file
+                ? `${translate(toolVerb(file.verb, toolRunning))} ${file.name}${file.others ? ` ${translate('+{count} more', { count: file.others })}` : ''}`
+                : undefined
               const humanTitle =
+                fileTitle ??
                 imageTitle ??
                 (row
                   ? `${translate(toolRunning ? row.running : row.done)}${row.subject ? ` ${row.subject}` : ''}`
                   : (t.title?.trim() ?? toolFallbackTitle(t, toolRunning) ?? undefined))
               const inputText = t.input ?? (humanTitle === summary ? undefined : summary)
+              // An opened edit shows its change as a diff, built from the input when the provider sent none.
+              const builtDiffs = file && !shownHasDiff(r?.content ?? t.content) ? fileToolDiffs(t, r) : []
               const failed = r ? r.isError || r.status === 'failed' : t.status === 'failed'
               const state = failed
                 ? 'Failed'
@@ -143,10 +167,11 @@ export function ToolGroup({
                       content={r?.content ?? t.content}
                       className={`tool-icon flex-none ${failed ? 'text-bad' : 'text-muted-foreground'}${toolRunning ? ' running text-brand motion-safe:[animation:pulse_1.6s_ease-in-out_infinite]' : ''}`}
                     />
-                    <ChatFade className={TOOL_SUMMARY_CLASS} identity={state}>
+                    <ActivityText active={toolRunning} className={TOOL_SUMMARY_CLASS}>
                       {humanTitle ??
                         `${translate(toolVerb(TOOL_VERB[t.name] ?? KIND_VERB[category], toolRunning))} ${summary}`}
-                    </ChatFade>
+                    </ActivityText>
+                    {file && <FileToolCounts added={file.added} removed={file.removed} />}
                     {(state === 'Failed' || state === 'Pending' || state === 'Stopped') && (
                       <span
                         className={`tool-state text-caption flex-none ${state === 'Failed' ? 'text-bad' : 'text-muted-foreground'}`}
@@ -175,7 +200,12 @@ export function ToolGroup({
                         <RamuToolBody row={row} tool={t} result={r} />
                       ) : (
                         <>
-                          {inputText && !imageTitle && (
+                          {builtDiffs.length > 0 && (
+                            <div className="tool-rich-content p-[8px_12px]">
+                              <AgentContentView content={builtDiffs} taskId={taskId} />
+                            </div>
+                          )}
+                          {inputText && !imageTitle && !builtDiffs.length && (
                             <div className="tool-input p-[8px_12px] space-y-1">
                               <span className="text-caption font-medium text-muted-foreground">
                                 {translate('Input')}

@@ -1,4 +1,4 @@
-import { CHAT_MOTION } from '@ramu/shared/chat/presentation'
+import { CHAT_MOTION, TOOL_MOTION } from '@ramu/shared/chat/presentation'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   AccessibilityInfo,
@@ -34,16 +34,18 @@ export function useReducedMotion() {
 const WINDOW = 0.28
 
 /**
- * The desktop's "Working…" shimmer: a highlight sweeping across muted text every 1.8 s. React Native cannot
+ * The desktop's "Working…" shimmer: a highlight sweeping across muted text every 2.2 s. React Native cannot
  * clip a gradient to text without a native dependency, so each character brightens as the sweep passes it.
  */
 export function Shimmer({
   children,
   size = font.control,
   style,
+  singleLine = false,
 }: {
   children: string
   size?: number
+  singleLine?: boolean
   style?: StyleProp<TextStyle>
 }) {
   const reduced = useReducedMotion()
@@ -51,7 +53,12 @@ export function Shimmer({
   useEffect(() => {
     if (reduced) return
     const loop = Animated.loop(
-      Animated.timing(sweep, { toValue: 1 + WINDOW, duration: 1800, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(sweep, {
+        toValue: 1 + WINDOW,
+        duration: TOOL_MOTION.sweepMs,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
     )
     loop.start()
     return () => loop.stop()
@@ -69,7 +76,7 @@ export function Shimmer({
       accessible
       accessibilityRole="text"
       accessibilityLabel={children}
-      style={{ flexDirection: 'row', flexWrap: 'wrap' }}
+      style={{ flexDirection: 'row', flexWrap: singleLine ? 'nowrap' : 'wrap' }}
     >
       {characters.map((character, index) => {
         const at = characters.length > 1 ? index / (characters.length - 1) : 0
@@ -92,7 +99,74 @@ export function Shimmer({
   )
 }
 
-/** Entries that appear while the agent works rise 4 pt and fade in, like the desktop's `arrive` keyframe. */
+/** The same delayed completion highlight as desktop; the real text stays visible throughout. */
+export function ActivityText({
+  active,
+  children,
+  size = font.control,
+}: {
+  active: boolean
+  children: string
+  size?: number
+}) {
+  const reduced = useReducedMotion()
+  const previous = useRef(active)
+  const progress = useRef(new Animated.Value(1)).current
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const completed = previous.current && !active
+    previous.current = active
+    progress.setValue(1)
+    if (!completed || reduced) return
+    progress.setValue(0)
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      delay: TOOL_MOTION.settleMs,
+      duration: TOOL_MOTION.finishMs,
+      easing: Easing.linear,
+      useNativeDriver: false,
+      isInteraction: false,
+    })
+    animation.start()
+    return () => animation.stop()
+  }, [active, reduced, progress])
+  const clip = progress.interpolate({ inputRange: [0, TOOL_MOTION.fadeAt, 1], outputRange: ['0%', '100%', '100%'] })
+  const opacity = progress.interpolate({ inputRange: [0, TOOL_MOTION.fadeAt, 1], outputRange: [1, 1, 0] })
+  return (
+    <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ minWidth: 0, overflow: 'hidden' }}>
+      <T size={size} tone="muted" numberOfLines={1}>
+        {children}
+      </T>
+      {active && !reduced ? (
+        <View
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
+        >
+          <Shimmer size={size} singleLine>
+            {children.slice(0, 180)}
+          </Shimmer>
+        </View>
+      ) : null}
+      {!active && !reduced ? (
+        <Animated.View
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{ position: 'absolute', top: 0, left: 0, width: clip, opacity, overflow: 'hidden' }}
+        >
+          <View style={{ width }}>
+            <T size={size} numberOfLines={1}>
+              {children}
+            </T>
+          </View>
+        </Animated.View>
+      ) : null}
+    </View>
+  )
+}
+
 export function Arrive({ animate, identity, children }: { animate: boolean; identity?: string; children: ReactNode }) {
   const reduced = useReducedMotion()
   const enter = useRef(animate).current

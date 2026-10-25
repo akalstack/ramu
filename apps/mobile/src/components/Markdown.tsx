@@ -1,6 +1,6 @@
 import { CHAT_MOTION } from '@ramu/shared/chat/presentation'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Image, Linking, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native'
+import { Image, Linking, Platform, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native'
 import { ReferenceBadge } from './ReferenceChip'
 export { ReferenceBadge } from './ReferenceChip'
 import { CodeBlock } from './Code'
@@ -106,9 +106,34 @@ function prose(text: string, key: string, actions: ReferenceActions, fade: WordF
   )
 }
 
-/** Padding that never wraps alone onto its own line; spaces inside stay breakable once the snippet is long, so it cannot run off screen. */
-const NBSP = '\u00A0'
-const padCode = (code: string) => `${NBSP}${code.length <= 28 ? code.replace(/ /g, NBSP) : code}${NBSP}`
+/** Snippets up to this length are drawn as one unbreakable pill; longer ones must wrap, so they stay text. */
+const PILL_MAX = 32
+
+/**
+ * Inline code as on desktop: 0.88em mono in body color on a small rounded tint. A nested Text cannot round its
+ * background and native platforms paint it across the whole line box, so short snippets are an inline View pill,
+ * nudged down onto the text baseline. Long snippets wrap as plain mono text with no tint (no tall slabs).
+ */
+function InlineCode({ code, c }: { code: string; c: ReturnType<typeof useTheme>['c'] }) {
+  const type = { fontFamily: font.mono, fontSize: font.control, color: c.text }
+  if (Platform.OS === 'web')
+    return (
+      <Text style={{ ...type, backgroundColor: c.fill, borderRadius: radius.xs, paddingHorizontal: 4 }}>{code}</Text>
+    )
+  if (code.length > PILL_MAX || code.includes('\n')) return <Text style={type}>{code}</Text>
+  return (
+    <View
+      style={{
+        backgroundColor: c.fill,
+        borderRadius: radius.xs,
+        paddingHorizontal: 5,
+        transform: [{ translateY: Platform.OS === 'ios' ? 3 : 2 }],
+      }}
+    >
+      <Text style={{ ...type, lineHeight: 18 }}>{code}</Text>
+    </View>
+  )
+}
 
 // Inline marks, earliest first: code, bold, strike, links, bare URLs, then italics (which must not start inside a word).
 const INLINE =
@@ -128,14 +153,7 @@ function inline(
     .map((p, i) => {
       const k = `${key}-${i}`
       if (p.startsWith('`') && p.endsWith('`') && p.length > 1)
-        return (
-          <Text
-            key={k}
-            style={{ fontFamily: font.mono, fontSize: font.control, color: c.soft, backgroundColor: c.fill }}
-          >
-            {padCode(p.slice(1, -1))}
-          </Text>
-        )
+        return <InlineCode key={k} code={p.slice(1, -1)} c={c} />
       if (((p.startsWith('**') && p.endsWith('**')) || (p.startsWith('__') && p.endsWith('__'))) && p.length > 4)
         return (
           <Text key={k} style={{ fontWeight: '600', color: c.text }}>

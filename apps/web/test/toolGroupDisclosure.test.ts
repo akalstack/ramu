@@ -73,3 +73,23 @@ it('labels a viewed image with its filename and view icon while leaving its prev
   expect(html).not.toContain('Read image output')
   expect(html).not.toContain('tool-images')
 })
+
+it('headlines the latest live step and keeps a failure marker visible while details are collapsed', () => {
+  const failed = { ...tool, toolUseId: 'failed', title: 'Check configuration' }
+  const first = { ...tool, toolUseId: 'first', title: 'Read earlier file' }
+  const latest = { ...tool, toolUseId: 'latest', title: 'Run focused checks' }
+  const html = renderToStaticMarkup(
+    createElement(ToolGroup, {
+      tools: [failed, first, latest],
+      cwd: '',
+      active: true,
+      results: new Map<string, ToolResult>([
+        ['failed', { kind: 'tool-result', toolUseId: 'failed', summary: 'failed', isError: true }],
+      ]),
+    }),
+  )
+  expect(html).toContain('Run focused checks')
+  expect(html).toContain('Failed')
+  expect(html).not.toContain('Read earlier file')
+  expect(html).toContain('aria-expanded="false"')
+})

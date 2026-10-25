@@ -1,6 +1,24 @@
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { BottomSearch } from './BottomSearch'
+import type { SheetSearchProps } from './NativeSheet'
+import { NativeSheet } from './NativeSheet'
+import { pastScrollEdge } from '../runtime/scrollSurface'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type Ref,
+  type ComponentType,
+  type ReactNode,
+} from 'react'
 import {
   Animated,
+  FlatList,
+  type FlatListProps,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Dimensions,
   Easing,
   Modal,
@@ -34,7 +52,6 @@ import {
 import type { TaskStatus } from '@ramu/shared/types'
 import { font, radius, space, TEXT_SCALE, useTheme } from '../theme'
 import type { ComputerStatus } from '../runtime/types'
-import { Glass } from './Glass'
 import { MaterialSheet } from './MaterialSheet'
 
 export type Icon = ComponentType<LucideProps>
@@ -392,6 +409,43 @@ export function ConnectionDot({ status, size = 8 }: { status: ComputerStatus; si
   return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />
 }
 
+type SheetScrollEvent = NativeSyntheticEvent<NativeScrollEvent>
+const SheetScroll = createContext<((event: SheetScrollEvent) => void) | null>(null)
+
+/** Self-scrolling sheet content reports its position to the shared header. */
+export function SheetScrollView({
+  ref,
+  onScroll,
+  ...props
+}: ComponentProps<typeof ScrollView> & { ref?: Ref<import('react-native').ScrollViewInstance> }) {
+  const report = useContext(SheetScroll)
+  return (
+    <ScrollView
+      {...props}
+      ref={ref}
+      scrollEventThrottle={16}
+      onScroll={(event) => {
+        report?.(event)
+        onScroll?.(event)
+      }}
+    />
+  )
+}
+export function SheetFlatList<T>({ ref, onScroll, ...props }: FlatListProps<T> & { ref?: Ref<FlatList<T>> }) {
+  const report = useContext(SheetScroll)
+  return (
+    <FlatList
+      {...props}
+      ref={ref}
+      scrollEventThrottle={16}
+      onScroll={(event) => {
+        report?.(event)
+        onScroll?.(event)
+      }}
+    />
+  )
+}
+
 type SheetProps = {
   open: boolean
   onClose: () => void
@@ -401,6 +455,7 @@ type SheetProps = {
   scroll?: boolean
   /** Complex workflows use a full-screen layout with room for keyboard input. */
   presentation?: 'sheet' | 'screen'
+  search?: SheetSearchProps
 }
 
 /** What every sheet shows: an optional drag handle (iOS draws its own; Android's Material sheet has one), the title, the content. */
@@ -410,12 +465,23 @@ function SheetBody({
   scroll = true,
   handle,
   drag,
+  search,
 }: Omit<SheetProps, 'open' | 'onClose'> & { handle: boolean; drag?: object }) {
   const { c } = useTheme()
+  const [scrolled, setScrolled] = useState(false)
+  const onScroll = (event: SheetScrollEvent) =>
+    setScrolled(pastScrollEdge(event.nativeEvent.contentOffset.y, event.nativeEvent.contentInset?.top))
   return (
-    <>
+    <SheetScroll.Provider value={onScroll}>
       {/* The handle and title are the drag area: swiping them down dismisses a floating sheet. */}
-      <View {...drag}>
+      <View
+        {...drag}
+        style={{
+          backgroundColor: scrolled ? c.raised2 : c.window,
+          borderBottomWidth: scrolled ? StyleSheet.hairlineWidth : 0,
+          borderBottomColor: c.lineStrong,
+        }}
+      >
         {handle ? (
           <View style={{ alignItems: 'center', paddingTop: space.s, paddingBottom: space.xs }}>
             <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: c.lineStrong }} />
@@ -433,6 +499,8 @@ function SheetBody({
       </View>
       {scroll ? (
         <ScrollView
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
           bounces={false}
           style={{ flexGrow: 0 }}
@@ -443,15 +511,17 @@ function SheetBody({
       ) : (
         <View style={{ paddingBottom: space.m, flexShrink: 1 }}>{children}</View>
       )}
-    </>
+      {search ? <BottomSearch {...search} inputOnly /> : null}
+    </SheetScroll.Provider>
   )
 }
 
 /**
  * The app's one bottom sheet. Android shows the official Material 3 modal bottom sheet (opaque, with its own handle, scrim
- * and swipe-to-dismiss). Elsewhere it is built on Modal so it runs in Expo Go; on iOS it floats inset from the edges on glass.
+ * and swipe-to-dismiss). Elsewhere it is built on Modal so it runs in Expo Go; on iOS it floats inset from the edges on an opaque surface.
  */
 export function Sheet(props: SheetProps) {
+  if (Platform.OS === 'ios') return <NativeSheet {...props} />
   if (props.presentation === 'screen') return <ScreenSheet {...props} />
   if (Platform.OS === 'android')
     return (
@@ -472,60 +542,84 @@ function ScreenSheet({ open, onClose, ...props }: SheetProps) {
     </Modal>
   )
 }
-function ScreenSheetBody({ title, children, scroll = true, onClose }: Omit<SheetProps, 'open'>) {
+function ScreenSheetBody({ title, children, scroll = true, onClose, search }: Omit<SheetProps, 'open'>) {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
+  const [scrolled, setScrolled] = useState(false)
+  const onScroll = (event: SheetScrollEvent) =>
+    setScrolled(pastScrollEdge(event.nativeEvent.contentOffset.y, event.nativeEvent.contentInset?.top))
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: c.window }}>
-      <View accessibilityViewIsModal style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-        <View
-          style={{
-            minHeight: 56,
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: space.l,
-            gap: space.m,
-          }}
-        >
-          <T
-            accessibilityRole="header"
-            size={font.heading}
-            weight="600"
-            numberOfLines={1}
-            style={{ flex: 1, minWidth: 0 }}
+      <SheetScroll.Provider value={onScroll}>
+        <View accessibilityViewIsModal style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+          <View
+            style={{
+              backgroundColor: scrolled ? c.raised2 : c.window,
+              borderBottomWidth: scrolled ? StyleSheet.hairlineWidth : 0,
+              borderBottomColor: c.lineStrong,
+              minHeight: 56,
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: space.l,
+              gap: space.m,
+            }}
           >
-            {title}
-          </T>
-          <IconButton icon={X} label="Close" onPress={onClose} />
+            <View style={{ width: 36 }} accessibilityElementsHidden importantForAccessibility="no" />
+            <T
+              accessibilityRole="header"
+              size={font.heading}
+              weight="600"
+              numberOfLines={1}
+              style={{ flex: 1, minWidth: 0, textAlign: 'center' }}
+            >
+              {title}
+            </T>
+            <IconButton icon={X} label="Close" onPress={onClose} />
+          </View>
+          {scroll ? (
+            <ScrollView
+              style={{ flex: 1 }}
+              onScroll={onScroll}
+              scrollEventThrottle={16}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              contentContainerStyle={{ paddingBottom: space.l }}
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            <View style={{ flex: 1 }}>{children}</View>
+          )}
+          {search ? <BottomSearch {...search} inputOnly /> : null}
         </View>
-        {scroll ? (
-          <ScrollView
-            style={{ flex: 1 }}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            contentContainerStyle={{ paddingBottom: space.l }}
-          >
-            {children}
-          </ScrollView>
-        ) : (
-          <View style={{ flex: 1 }}>{children}</View>
-        )}
-      </View>
+      </SheetScroll.Provider>
     </KeyboardAvoidingView>
   )
 }
 
-/** The floating glass panel, sitting just above the home indicator. */
+/** Opaque dialog surface, matching Settings rather than tinting the content behind it. */
 function SheetPanel({ children }: { children: ReactNode }) {
+  const { c } = useTheme()
   const insets = useSafeAreaInsets()
   return (
-    <Glass radius={34} style={{ marginHorizontal: 8, marginBottom: Math.max(insets.bottom - 18, 8), maxHeight: '80%' }}>
+    <View
+      style={{
+        backgroundColor: c.window,
+        borderRadius: 34,
+        overflow: 'hidden',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.lineStrong,
+        marginHorizontal: 8,
+        marginBottom: Math.max(insets.bottom - 18, 8),
+        maxHeight: '80%',
+      }}
+    >
       {children}
-    </Glass>
+    </View>
   )
 }
 
-function FloatingSheet({ open, onClose, title, children, scroll }: SheetProps) {
+function FloatingSheet({ open, onClose, title, children, scroll, search }: SheetProps) {
   const [mounted, setMounted] = useState(open)
   const progress = useRef(new Animated.Value(0)).current
   const dragY = useRef(new Animated.Value(0)).current
@@ -545,7 +639,7 @@ function FloatingSheet({ open, onClose, title, children, scroll }: SheetProps) {
     }),
   ).current
   const body = (
-    <SheetBody title={title} scroll={scroll} handle drag={pan.panHandlers}>
+    <SheetBody title={title} scroll={scroll} search={search} handle drag={pan.panHandlers}>
       {children}
     </SheetBody>
   )

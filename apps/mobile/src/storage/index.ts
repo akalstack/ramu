@@ -1,7 +1,7 @@
 import { Platform } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
 import { File, Paths } from 'expo-file-system'
-import { LocalCommitError, readLocalCommit, writeLocalCommit, type LocalCommitStorage } from './localCommit'
+import { LocalCommitError, readLocalCommit, writeLocalCommitAsync, type LocalCommitStorage } from './localCommit'
 
 const key = 'ramu.mobile.v1'
 const preferenceKey = 'ramu.mobile.appearance'
@@ -10,7 +10,7 @@ const commits: LocalCommitStorage = {
     const file = new File(Paths.document, `${key}.${slot}.json`)
     return file.exists ? file.textSync() : null
   },
-  write: (slot, text) => new File(Paths.document, `${key}.${slot}.json`).write(text),
+  write: (slot, text) => new File(Paths.document, `${key}.${slot}.json`).writeSync(text),
 }
 export function readAppearance(): 'system' | 'light' | 'dark' {
   try {
@@ -23,7 +23,7 @@ export function readAppearance(): 'system' | 'light' | 'dark' {
 }
 export function saveAppearance(value: string) {
   if (Platform.OS === 'web') localStorage.setItem(preferenceKey, value)
-  else new File(Paths.document, preferenceKey).write(value)
+  else new File(Paths.document, preferenceKey).writeSync(value)
 }
 const textSizeKey = 'ramu-text-size'
 export type TextSize = 'default' | 'large' | 'larger'
@@ -39,7 +39,7 @@ export function readTextSize(): TextSize {
 }
 export function saveTextSize(value: TextSize) {
   if (Platform.OS === 'web') localStorage.setItem(textSizeKey, value)
-  else new File(Paths.document, textSizeKey).write(value)
+  else new File(Paths.document, textSizeKey).writeSync(value)
 }
 const themeLibraryKey = 'ramu-theme-library'
 const themeSelectedKey = 'ramu-theme-selected'
@@ -52,7 +52,7 @@ const readSmall = (name: string): string | null => {
 }
 const writeSmall = (name: string, value: string) => {
   if (Platform.OS === 'web') localStorage.setItem(name, value)
-  else new File(Paths.document, name).write(value)
+  else new File(Paths.document, name).writeSync(value)
 }
 /** Themes kept on this phone, as stored text; callers validate each document before use. */
 export const readThemeLibraryText = () => readSmall(themeLibraryKey)
@@ -84,18 +84,40 @@ export function readLocal<T>(fallback: T): T {
     return fallback
   }
 }
-export function writeLocal(value: unknown, options?: { replaceBackups?: boolean }) {
-  if (Platform.OS === 'web') localStorage.setItem(key, JSON.stringify(value))
-  else {
-    const legacy = new File(Paths.document, `${key}.json`)
-    // A readable legacy file is the recovery source only until the first new commit succeeds.
-    if (legacy.exists) JSON.parse(legacy.textSync())
-    writeLocalCommit(commits, value as Record<string, unknown>, legacy.exists)
-    if (legacy.exists) legacy.delete()
-    // Forget host must remove its device-local copies from both recovery slots.
-    if (options?.replaceBackups) writeLocalCommit(commits, value as Record<string, unknown>)
+let pendingWrite: Promise<void> = Promise.resolve()
+export function writeLocal(value: unknown, options?: { replaceBackups?: boolean }): Promise<void> {
+  // Freeze the snapshot at enqueue time; the store keeps changing while disk I/O is pending.
+  let snapshot: string
+  try {
+    snapshot = JSON.stringify(value)
+  } catch (error) {
+    return Promise.reject(error)
   }
+  const run = pendingWrite.then(async () => {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, snapshot)
+      return
+    }
+    const asyncCommits = {
+      read: async (slot: 0 | 1) => {
+        const file = new File(Paths.document, `${key}.${slot}.json`)
+        return file.exists ? file.text() : null
+      },
+      write: async (slot: 0 | 1, text: string) => {
+        await new File(Paths.document, `${key}.${slot}.json`).write(text)
+      },
+    }
+    const legacy = new File(Paths.document, `${key}.json`)
+    if (legacy.exists) JSON.parse(await legacy.text())
+    await writeLocalCommitAsync(asyncCommits, JSON.parse(snapshot), legacy.exists)
+    if (legacy.exists) legacy.delete()
+    if (options?.replaceBackups) await writeLocalCommitAsync(asyncCommits, JSON.parse(snapshot))
+  })
+  // A failed save is reported to its caller and must not poison later retries.
+  pendingWrite = run.catch(() => {})
+  return run
 }
+
 const tokenKey = (id: string) => `ramu.token.${id}`
 export async function readToken(id: string): Promise<string | null> {
   return Platform.OS === 'web' ? localStorage.getItem(tokenKey(id)) : SecureStore.getItemAsync(tokenKey(id))
@@ -140,7 +162,7 @@ export function readLastVisit(): number {
 export function saveLastVisit(at: number) {
   try {
     if (Platform.OS === 'web') localStorage.setItem(visitKey, String(at))
-    else new File(Paths.document, visitKey).write(String(at))
+    else new File(Paths.document, visitKey).writeSync(String(at))
   } catch {
     // Losing the marker only means Inbox shows a few more recaps as new.
   }
@@ -160,6 +182,8 @@ export const contentStorage = {
   setItem(key: string, value: string) {
     if (Platform.OS === 'web') localStorage.setItem(key, value)
     else
-      new File(/\.(states|scenarios)$/.test(key) ? Paths.document : Paths.cache, encodeURIComponent(key)).write(value)
+      new File(/\.(states|scenarios)$/.test(key) ? Paths.document : Paths.cache, encodeURIComponent(key)).writeSync(
+        value,
+      )
   },
 }

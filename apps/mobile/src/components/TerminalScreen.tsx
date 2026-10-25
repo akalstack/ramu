@@ -13,7 +13,7 @@ import { DEFAULT_RAIL, parseRail, terminalKeyGroups, toggleRailKey } from '../ru
 import { STANDALONE, type Chat } from '../runtime/types'
 import { TerminalDock } from './TerminalDock'
 import { TerminalTabs } from './TerminalTabs'
-import { Row, SectionLabel, Sheet, T, tap } from './ui'
+import { Button, Row, SectionLabel, Sheet, T, tap } from './ui'
 
 /** Where a shell runs: a chat's checkout, or a whole project's folders (`project:<id>` on the host). */
 export interface TerminalTarget {
@@ -50,6 +50,10 @@ export function TerminalScreen({
   const rail = parseRail(store.drafts?.['terminal-rail'])
   const saveRail = (next: string[]) => store.setDraft('terminal-rail', JSON.stringify(next))
   const [opening, setOpening] = useState(false)
+  const openingRef = useRef(false)
+  const listRevision = useRef(0)
+  const currentContext = useRef(initialCtx)
+  currentContext.current = ctx
   const [keyboardVisible, setKeyboardVisible] = useState(false)
   const [keyAction, setKeyAction] = useState<{ sequence: number; key: string }>()
   const [keyboardAction, setKeyboardAction] = useState({ sequence: 0, visible: false })
@@ -102,19 +106,25 @@ export function TerminalScreen({
     }
   }
   const open = async () => {
-    if (!chat || opening || !connected) return
+    if (!chat || openingRef.current || !connected || computer?.access === 'viewer') return
+    const context = ctx
+    openingRef.current = true
+    listRevision.current += 1
+    setError('')
     keepKeyboard()
     setOpening(true)
     try {
       const term = await store.invoke(chat.computerId, 'term.open', chat.taskId, null, 80, 24)
-      setTabs((old) => [...old, term])
+      if (currentContext.current !== context) return
+      setTabs((old) => (old.some((entry) => entry.id === term.id) ? old : [...old, term]))
       setActive(tabs.length)
       setKeyAction(undefined)
       setLatch(null)
       setSessionsOpen(false)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (currentContext.current === context) setError(e instanceof Error ? e.message : String(e))
     } finally {
+      openingRef.current = false
       setOpening(false)
     }
   }
@@ -138,14 +148,28 @@ export function TerminalScreen({
   useEffect(() => {
     let alive = true
     const load = async (auto: boolean) => {
+      const revision = listRevision.current
       // Managed commands have their own inspect/stop sheet; an ordinary shell tab must not adopt their handles.
       let list = (await store.invoke(computerId, 'term.list', ctx)).filter((terminal) => !terminal.background)
-      if (!alive) return
-      if (!list.length && auto && !autoOpened.current.has(ctx)) {
+      if (!alive || revision !== listRevision.current) return
+      if (
+        !list.length &&
+        auto &&
+        !autoOpened.current.has(ctx) &&
+        !openingRef.current &&
+        computer?.access !== 'viewer'
+      ) {
         autoOpened.current.add(ctx)
-        list = [await store.invoke(computerId, 'term.open', ctx, null, 80, 24)]
+        openingRef.current = true
+        setOpening(true)
+        try {
+          list = [await store.invoke(computerId, 'term.open', ctx, null, 80, 24)]
+        } finally {
+          openingRef.current = false
+          setOpening(false)
+        }
       }
-      if (!alive) return
+      if (!alive || (!list.length && openingRef.current)) return
       setTabs(list)
       setActive((previous) => {
         const index = list.findIndex((t) => t.id === activeId.current)
@@ -292,8 +316,17 @@ export function TerminalScreen({
                 Your host’s shell
               </T>
               <T size={13} style={{ color: '#a1a1a8', textAlign: 'center', lineHeight: 20 }}>
-                Open a session to run commands in this workspace.
+                {computer?.access === 'viewer'
+                  ? 'This phone has view-only access to this host.'
+                  : connected
+                    ? 'Open a session to run commands in this workspace.'
+                    : 'Reconnect to this host to open a terminal.'}
               </T>
+              <Button
+                title={opening ? 'Opening terminal…' : 'New terminal'}
+                disabled={opening || !connected || computer?.access === 'viewer'}
+                onPress={() => void open()}
+              />
             </View>
           ) : (
             <TerminalView
@@ -319,22 +352,20 @@ export function TerminalScreen({
             />
           )}
         </View>
-        {tabs.length ? (
-          <TerminalTabs
-            tabs={tabs}
-            active={active}
-            busy={opening || !connected}
-            onNew={() => void open()}
-            onSelect={(index) => {
-              tap()
-              keepKeyboard()
-              setActive(index)
-              setKeyAction(undefined)
-              setLatch(null)
-            }}
-            onClose={(value) => void close(value)}
-          />
-        ) : null}
+        <TerminalTabs
+          tabs={tabs}
+          active={active}
+          busy={opening || !connected || computer?.access === 'viewer'}
+          onNew={() => void open()}
+          onSelect={(index) => {
+            tap()
+            keepKeyboard()
+            setActive(index)
+            setKeyAction(undefined)
+            setLatch(null)
+          }}
+          onClose={(value) => void close(value)}
+        />
         <View
           style={{
             paddingHorizontal: 10,

@@ -1,7 +1,8 @@
+import { SheetFlatList as FlatList } from './ui'
 import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFocusEffect } from 'expo-router'
-import { Alert, FlatList, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
@@ -27,6 +28,10 @@ import {
   ShieldCheck,
   Square,
   X,
+  Camera,
+  Image as ImageIcon,
+  SlidersHorizontal,
+  Sparkles,
 } from 'lucide-react-native'
 import type { AgentProvider, AgentSettings, ChatGoal, FileContext, QueuedMessage, SkillInfo } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
@@ -36,7 +41,8 @@ import { BUSY_MODE_DEVICE_KEY, otherBusyMode, resolveBusyMode } from '../runtime
 import { sharedValue } from '@ramu/shared/sharedFields'
 import { useModelFlow } from '../runtime/useModelFlow'
 import { fill, useT } from '../i18n'
-import { Chip, IconButton, Row, Segmented, Sheet, T, tap } from './ui'
+import { translate } from '@ramu/shared/i18n'
+import { Chip, IconButton, Row, Segmented, Sheet, T, tap, type Icon } from './ui'
 import { ProviderIcon } from './Logos'
 import { Glass } from './Glass'
 import { AutoResumeRows, LimitTray } from './LimitTray'
@@ -190,7 +196,21 @@ export function ModelChip({
         ) : null}
         <ChevronDown size={13} color={c.muted} />
       </Pressable>
-      <Sheet open={open} onClose={close} title={title} scroll={false}>
+      <Sheet
+        open={open}
+        onClose={close}
+        title={title}
+        scroll={false}
+        search={
+          provider && !picking && models.filter((m) => m.provider === provider).length > 8
+            ? {
+                value: query,
+                onChangeText: setQuery,
+                placeholder: `Search ${models.filter((m) => m.provider === provider).length} models`,
+              }
+            : undefined
+        }
+      >
         {back ? (
           <Row onPress={back}>
             <ChevronLeft size={18} color={c.soft} />
@@ -230,31 +250,10 @@ export function ModelChip({
             })}
           </View>
         ) : provider ? (
-          <View>
-            {models.filter((m) => m.provider === provider).length > 8 ? (
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder={`Search ${models.filter((m) => m.provider === provider).length} models`}
-                placeholderTextColor={c.placeholder}
-                autoCapitalize="none"
-                autoCorrect={false}
-                clearButtonMode="while-editing"
-                style={{
-                  marginHorizontal: space.l,
-                  marginVertical: space.s,
-                  height: 40,
-                  paddingHorizontal: space.m,
-                  borderRadius: radius.m,
-                  backgroundColor: c.raised2,
-                  color: c.text,
-                  fontSize: font.body,
-                }}
-              />
-            ) : null}
+          <View style={{ flexShrink: 1 }}>
             {/* Fixed height with its own virtualized list, so only the rows on screen are drawn. */}
             <FlatList
-              style={{ height: 360, flexGrow: 0 }}
+              style={{ height: 360, flexGrow: 0, flexShrink: 1 }}
               data={shown}
               keyExtractor={(m) => `${m.provider}:${m.model}`}
               initialNumToRender={12}
@@ -461,6 +460,9 @@ export function GoalQueueTray({
   )
 }
 
+/** How long a closing sheet takes to leave the screen before a picker or another sheet can open. */
+const SHEET_SETTLE_MS = 400
+
 export function Composer({
   running,
   model,
@@ -546,6 +548,7 @@ export function Composer({
   const { c } = useTheme()
   const t = useT()
   const store = useStore()
+  const say = (text: string) => translate(store.language, text)
   const [text, setText] = useState(() => (draftKey ? (store.drafts[draftKey] ?? '') : ''))
   const [busy, setBusy] = useState(false)
   const sending = useRef(false)
@@ -565,8 +568,7 @@ export function Composer({
   >(() => decodeDraft('mentions', []))
   const [caret, setCaret] = useState(0)
   const [forced, setForced] = useState<{ start: number; end: number } | undefined>()
-  const [menu, setMenu] = useState<'actions' | 'context' | 'skills' | 'settings' | null>(null)
-  const [files, setFiles] = useState<{ repoId: string; path: string }[]>([])
+  const [menu, setMenu] = useState<'actions' | 'skills' | 'settings' | null>(null)
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [filter, setFilter] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -706,30 +708,31 @@ export function Composer({
   useEffect(() => {
     discovery.current = discoveryOwner
     setMenu(null)
-    setFiles([])
     setSkills([])
     return () => {
       if (discovery.current === discoveryOwner) discovery.current = ''
     }
   }, [discoveryOwner])
-  const discover = async (kind: 'context' | 'skills') => {
+  // iOS cannot present a picker or another sheet while the menu is still sliding away, so the next step waits for it.
+  const menuTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(menuTimer.current), [])
+  const afterMenu = (run: () => void) => {
+    setMenu(null)
+    clearTimeout(menuTimer.current)
+    menuTimer.current = setTimeout(run, SHEET_SETTLE_MS)
+  }
+  const discover = async () => {
     if (!discoverScope || !store.isOnline(pc)) return
     const owner = discoveryOwner
     try {
-      if (kind === 'context') {
-        const files = await store.invoke(pc, 'files.all', discoverScope)
-        if (discovery.current !== owner) return
-        setFiles(files)
-      } else {
-        const skills = await store.invoke(pc, 'skills.list', discoverScope)
-        if (discovery.current !== owner) return
-        setSkills(skills)
-      }
+      const skills = await store.invoke(pc, 'skills.list', discoverScope)
+      if (discovery.current !== owner) return
+      setSkills(skills)
       setFilter('')
-      setMenu(kind)
+      setMenu('skills')
     } catch (e) {
       if (discovery.current !== owner) return
-      Alert.alert('Could not load host choices', e instanceof Error ? e.message : String(e))
+      Alert.alert(say('Could not load host choices'), e instanceof Error ? e.message : String(e))
     }
   }
   const upload = async (kind: 'document' | 'camera' | 'photos') => {
@@ -805,19 +808,8 @@ export function Composer({
       context: JSON.stringify(context),
       mentions: JSON.stringify(mentions),
     }
-    let clearedVisually = false
-    const restoreInput = () => {
-      if (!clearedVisually || origin.current !== submittedOwner) return
-      setText(text)
-      textInput.current?.setNativeProps?.({ text })
-    }
     try {
-      // Keep the saved draft intact while showing immediate feedback. Let the native field paint before synchronous outbox persistence.
-      textInput.current?.clear()
-      setText('')
-      setCaret(0)
-      setForced(undefined)
-      clearedVisually = true
+      // Keep the text visible until the destination accepts it into its local outbox.
       if (origin.current !== submittedOwner) return
       const sent = text.trim()
       // A mention counts only while its badge is still in the message, as on the desktop.
@@ -847,7 +839,6 @@ export function Composer({
           throw new Error(t.savedAttachmentMissing)
         if (origin.current !== submittedOwner) return
       }
-      await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
       if (origin.current !== submittedOwner) return
       const accepted = await onSend(
         expanded,
@@ -857,14 +848,13 @@ export function Composer({
       )
       // Destination clarification is still composing; retain the reviewed draft and its attachments.
       if (accepted === false) {
-        restoreInput()
         return
       }
       if (origin.current !== submittedOwner) return
       if (draftKey && !store.clearComposerDraft(draftKey, submittedDraft)) {
-        restoreInput()
         return
       }
+      textInput.current?.clear()
       setText('')
       setAttachments([])
       setContext([])
@@ -876,7 +866,6 @@ export function Composer({
         store.setDraft(`${draftKey}:restored-attachments`, '')
       }
     } catch (error) {
-      restoreInput()
       Alert.alert('Could not send', error instanceof Error ? error.message : String(error))
     } finally {
       sending.current = false
@@ -1161,88 +1150,51 @@ export function Composer({
           )}
         </View>
       </View>
-      <Sheet open={menu === 'actions'} onClose={() => setMenu(null)} title="Add to message">
-        <Row onPress={() => void upload('document')}>
-          <T>Attach a file</T>
-        </Row>
-        <Row onPress={() => void upload('photos')}>
-          <T>Choose a photo</T>
-        </Row>
-        <Row onPress={() => void upload('camera')}>
-          <T>Take a photo</T>
-        </Row>
-        {discoverScope && !offline ? (
-          <>
-            <Row onPress={() => void discover('context')}>
-              <T>Choose host file context</T>
-            </Row>
-            <Row onPress={() => void discover('skills')}>
-              <T>Use a host skill</T>
-            </Row>
-          </>
-        ) : null}
-        <Row onPress={() => setMenu('settings')}>
-          <T>Agent settings</T>
-        </Row>
-        <Row
-          onPress={() => {
-            append('/')
-            setMenu(null)
-          }}
-        >
-          <T>Enter a command</T>
-        </Row>
+      <Sheet open={menu === 'actions'} onClose={() => setMenu(null)} title={say('Add to message')}>
+        {(
+          [
+            { key: 'file', icon: Paperclip, label: 'Attach a file', run: () => void upload('document') },
+            { key: 'photo', icon: ImageIcon, label: 'Choose a photo', run: () => void upload('photos') },
+            { key: 'camera', icon: Camera, label: 'Take a photo', run: () => void upload('camera') },
+            ...(discoverScope && !offline
+              ? [{ key: 'skills', icon: Sparkles, label: 'Use a skill', run: () => void discover() }]
+              : []),
+            { key: 'settings', icon: SlidersHorizontal, label: 'Agent settings', run: () => setMenu('settings') },
+          ] as { key: string; icon: Icon; label: string; run(): void }[]
+        ).map((item) => (
+          <Row key={item.key} accessibilityLabel={say(item.label)} onPress={() => afterMenu(item.run)}>
+            <item.icon size={18} color={c.soft} />
+            <T>{say(item.label)}</T>
+          </Row>
+        ))}
       </Sheet>
       <Sheet
-        open={menu === 'context' || menu === 'skills'}
+        open={menu === 'skills'}
         onClose={() => setMenu(null)}
-        title={menu === 'skills' ? 'Host skills' : 'Host files'}
+        title={say('Host skills')}
+        search={{ value: filter, onChangeText: setFilter, placeholder: say('Search…') }}
       >
-        <TextInput
-          value={filter}
-          onChangeText={setFilter}
-          placeholder="Search…"
-          placeholderTextColor={c.muted}
-          style={{ padding: space.m, color: c.text }}
-        />
-        {menu === 'skills'
-          ? skills
-              .filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(filter.toLowerCase()))
-              .slice(0, 200)
-              .map((skill) => (
-                <Row
-                  key={skill.path}
-                  onPress={() => {
-                    append(`\nUse the host skill at ${skill.path}.`)
-                    setMenu(null)
-                  }}
-                >
-                  <View>
-                    <T>{skill.name}</T>
-                    <T size={font.caption} tone="muted">
-                      {skill.description}
-                    </T>
-                  </View>
-                </Row>
-              ))
-          : files
-              .filter((file) => file.path.toLowerCase().includes(filter.toLowerCase()))
-              .slice(0, 200)
-              .map((file) => (
-                <Row
-                  key={`${file.repoId}:${file.path}`}
-                  onPress={() => {
-                    if (context.length >= 30) return
-                    if (!context.some((f) => f.path === file.path && f.repoId === file.repoId))
-                      setContext((old) => [...old, { ...file, source: 'mention', referenceOnly: true }])
-                    setMenu(null)
-                  }}
-                >
-                  <T>{file.path}</T>
-                </Row>
-              ))}
+        {skills
+          .filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(filter.toLowerCase()))
+          .slice(0, 200)
+          .map((skill) => (
+            <Row
+              key={skill.path}
+              onPress={() => {
+                append(`\nUse the host skill at ${skill.path}.`)
+                setMenu(null)
+              }}
+            >
+              <View>
+                <T>{skill.name}</T>
+                <T size={font.caption} tone="muted">
+                  {skill.description}
+                </T>
+              </View>
+            </Row>
+          ))}
       </Sheet>
-      <Sheet open={menu === 'settings'} onClose={() => setMenu(null)} title="Agent settings">
+      <Sheet open={menu === 'settings'} onClose={() => setMenu(null)} title={say('Agent settings')}>
         {(['edits', 'auto', 'full'] as const).map((access) => (
           <Row
             key={access}

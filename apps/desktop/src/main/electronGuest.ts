@@ -1,7 +1,7 @@
 import { WebContentsView, session, shell, Menu, type BrowserWindow, type Session, type WebContents } from 'electron'
 import type { GuestFactory, GuestHandlers, GuestPage, PageSnapshot } from './browserRuntime'
 import { BrowserDebugger } from './browserDebugger'
-import type { BrowserDiagnostics, BrowserScreenshot } from '@ramu/shared/browserBridge'
+import type { BrowserDiagnostics, BrowserFieldFocus, BrowserScreenshot } from '@ramu/shared/browserBridge'
 import { browserGuestScript } from './browserGuestScript'
 import { browserFaviconFrom } from '@ramu/shared/browserLinks'
 import { t } from './localization'
@@ -147,8 +147,10 @@ export class ElectronGuestFactory implements GuestFactory {
     contents.on('unresponsive', () => handlers.onCrash())
     contents.on('render-process-gone', () => handlers.onCrash())
     // World 999 has its own JavaScript globals/prototypes. Website scripts never receive the observation map.
-    const isolated = <T>(operation: 'inspect' | 'act' | 'invalidate', action?: Parameters<GuestPage['act']>[0]) =>
-      contents.executeJavaScriptInIsolatedWorld(999, [{ code: browserGuestScript(operation, action) }]) as Promise<T>
+    const isolated = <T>(
+      operation: 'inspect' | 'act' | 'invalidate' | 'focus',
+      action?: Parameters<GuestPage['act']>[0],
+    ) => contents.executeJavaScriptInIsolatedWorld(999, [{ code: browserGuestScript(operation, action) }]) as Promise<T>
     let attached = false
     // A page needs a real viewport and a place in the window to lay out and take pointer input, so every page stays
     // attached to the window and is parked off screen while its pane is hidden.
@@ -203,6 +205,7 @@ export class ElectronGuestFactory implements GuestFactory {
       forward: () => history('forward'),
       reload: () => history('reload'),
       inspect: () => isolated<PageSnapshot>('inspect'),
+      focusedField: () => isolated<BrowserFieldFocus>('focus'),
       act: async (action) => {
         const result = await isolated<{ ok: boolean; reason?: string; points?: { x: number; y: number }[] }>(
           'act',

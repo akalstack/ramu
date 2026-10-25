@@ -18,7 +18,7 @@ import { CodeTokens, grammarFor, highlightLines } from '../components/Code'
 import { Markdown } from '../components/Markdown'
 import { Button, Segmented, T, tap } from '../components/ui'
 
-type Mode = 'file' | 'changes' | 'staged' | 'all'
+type Mode = 'file' | 'changes' | 'staged'
 const IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i
 const OTHER_MEDIA = /\.(pdf|mp3|wav|ogg|m4a|flac|mp4|mov|webm)$/i
 const MARKDOWN = /\.(md|markdown|mdx)$/i
@@ -71,7 +71,7 @@ export function FileViewer({
   repoId: string
   path: string
   line?: string
-  initial?: Mode
+  initial?: Mode | 'all'
   composer?: NewComposerOrigin
 }) {
   const store = useStore()
@@ -87,14 +87,18 @@ export function FileViewer({
   const activeIdentity = useRef(identity)
   activeIdentity.current = identity
   const { c } = useTheme()
-  const [mode, setMode] = useState<Mode>(initial ?? 'file')
+  const [mode, setMode] = useState<Mode>(initial === 'all' ? 'changes' : (initial ?? 'file'))
   const readIdentity = JSON.stringify([identity, mode])
   const activeRead = useRef(readIdentity)
   activeRead.current = readIdentity
   useFocusEffect(
     useCallback(() => {
+      activeRead.current = readIdentity
       addition.current = false
       setAdding(false)
+      return () => {
+        activeRead.current = ''
+      }
     }, [readIdentity]),
   )
   type FileState =
@@ -175,7 +179,7 @@ export function FileViewer({
           taskId,
           repoId,
           path,
-          mode === 'all' ? 'all' : mode === 'staged',
+          mode === 'changes' ? 'all' : mode === 'staged',
         )
         return {
           kind: 'diff' as const,
@@ -253,21 +257,22 @@ export function FileViewer({
     store.projects.some((project) => project.computerId === computerId && project.id === sourceProject)
   const canAdd =
     online && binding?.setupState === 'ready' && knownProject && ['text', 'image', 'diff'].includes(state.kind)
-  const addFile = () => {
+  const addFile = async () => {
     if (!canAdd || addition.current || activeRead.current !== readIdentity) return
     addition.current = true
     setAdding(true)
     try {
-      const destination = store.addExplorerFile({
+      const destination = await store.addExplorerFile({
         computerId,
         contextId: taskId,
         repoId,
         path,
-        ...(mode !== 'file' ? { diff: mode === 'all' ? 'all' : mode === 'staged' } : {}),
+        ...(mode !== 'file' ? { diff: mode === 'changes' ? 'all' : mode === 'staged' } : {}),
         ...(state.kind === 'image' ? { asReference: true } : {}),
         composer,
         catalog: { host: catalog.host, rows: catalog.rows },
       })
+      if (activeRead.current !== readIdentity) return
       if (destination.kind === 'chat') router.dismissTo({ pathname: '/chat/[id]', params: { id: destination.chatId } })
       else
         (composer ? router.dismissTo : router.push)({
@@ -363,7 +368,6 @@ export function FileViewer({
                   { key: 'file', label: t.fileLabel },
                   { key: 'changes', label: t.changes },
                   { key: 'staged', label: t.stagedChanges },
-                  { key: 'all', label: t.allChangesShort },
                 ]
               : [{ key: 'file', label: t.fileLabel }]) as { key: Mode; label: string }[]
           }
@@ -403,10 +407,15 @@ export function FileViewer({
           </T>
         }
         right={
-          <View style={{ flexDirection: 'row' }}>
-            <HeaderButton icon={FolderSearch} label={t.showInExplorer} onPress={reveal} />
-            <HeaderButton icon={Copy} label={t.copyPath} onPress={() => void Clipboard.setStringAsync(path)} />
-          </View>
+          <>
+            <HeaderButton icon={FolderSearch} label={t.showInExplorer} systemIcon="folder" onPress={reveal} />
+            <HeaderButton
+              icon={Copy}
+              label={t.copyPath}
+              systemIcon="doc.on.doc"
+              onPress={() => void Clipboard.setStringAsync(path)}
+            />
+          </>
         }
       />
       {state.kind === 'text' && !(markdown && preview) ? (
@@ -479,13 +488,7 @@ export function FileViewer({
             state.file ? (
               <DiffLines file={state.file} />
             ) : (
-              <T tone="muted">
-                {mode === 'all'
-                  ? 'all'
-                  : mode === 'staged'
-                    ? 'Nothing is staged for this file.'
-                    : 'No unstaged changes in this file.'}
-              </T>
+              <T tone="muted">{mode === 'staged' ? t.fileNothingStaged : t.fileNoChanges}</T>
             )
           ) : null}
         </ScrollView>

@@ -2,12 +2,49 @@ import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { Db } from '../db'
 import type { InteractiveDocument, InteractivePreview, InteractiveReference } from '@ramu/shared/interactive'
-import { INTERACTIVE_MAX_FILES, INTERACTIVE_MAX_HTML } from '@ramu/shared/interactive'
+import { INTERACTIVE_MAX_FILES, INTERACTIVE_MAX_HTML, interactiveOrigin } from '@ramu/shared/interactive'
 import { previewInteractive } from './preview'
 import { bundleInteractive } from './bundle'
 import { resolveInteractiveKit } from './kit'
+import { compileInteractive, INTERACTIVE_MAX_ARTIFACT } from './compile'
 
 export const interactiveInput = z.object({
+  network: z
+    .object({
+      resources: z
+        .array(
+          z
+            .string()
+            .max(250)
+            .transform((value, ctx) => {
+              try {
+                return interactiveOrigin(value)
+              } catch {
+                ctx.addIssue({ code: 'custom', message: 'Use an exact public HTTPS origin.' })
+                return z.NEVER
+              }
+            }),
+        )
+        .max(12)
+        .default([]),
+      connect: z
+        .array(
+          z
+            .string()
+            .max(250)
+            .transform((value, ctx) => {
+              try {
+                return interactiveOrigin(value)
+              } catch {
+                ctx.addIssue({ code: 'custom', message: 'Use an exact public HTTPS origin.' })
+                return z.NEVER
+              }
+            }),
+        )
+        .max(12)
+        .default([]),
+    })
+    .optional(),
   stateSchema: z.string().trim().min(1).max(80).optional(),
   html: z.string().min(1).max(INTERACTIVE_MAX_HTML).optional(),
   files: z
@@ -55,7 +92,7 @@ export function interactiveDocumentHtml(input: InteractiveInput): string {
  * The frame grows to fit the document, so a height that follows the viewport grows it again on every measurement.
  * Only stylesheet text and style attributes are checked; script text and prose are left alone.
  */
-function rejectViewportHeights(html: string) {
+export function rejectViewportHeights(html: string) {
   const css = [
     ...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi),
     ...html.matchAll(/\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi),
@@ -84,9 +121,21 @@ export class InteractiveStore {
   }
   async preview(session: string, value: InteractiveInput, signal?: AbortSignal): Promise<InteractivePreview> {
     this.session(session)
-    const input = interactiveInput.parse(value)
-    const html = interactiveDocumentHtml(input)
-    const output = await this.previewer(html, input.checks, signal)
+    const input = interactiveInput.parse({ ...value, network: value.network ?? { resources: [], connect: [] } })
+    if (signal?.aborted) throw new Error('Preview cancelled')
+    if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
+    if (
+      input.files &&
+      input.files.reduce((total, file) => total + Buffer.byteLength(file.content), 0) > INTERACTIVE_MAX_HTML
+    )
+      throw new Error('Interactive project files exceed 512 KB in total')
+    const html = input.files
+      ? resolveInteractiveKit(await compileInteractive(input.files, input.entry ?? 'index.html'))
+      : interactiveDocumentHtml(input)
+    if (Buffer.byteLength(html) > INTERACTIVE_MAX_ARTIFACT)
+      throw new Error('Compiled interactive content exceeds 1.5 MB.')
+    rejectViewportHeights(html)
+    const output = await this.previewer(html, input.checks, signal, input.network)
     if (signal?.aborted) throw new Error('Preview cancelled')
     const result: InteractivePreview = {
       ...output,
@@ -107,7 +156,13 @@ export class InteractiveStore {
         .run(session)
     this.db
       .prepare('INSERT INTO interactive_previews(id,session_id,input,result,created_at) VALUES(?,?,?,?,?)')
-      .run(result.id, session, JSON.stringify(input), JSON.stringify(result), result.createdAt)
+      .run(
+        result.id,
+        session,
+        JSON.stringify(input),
+        JSON.stringify({ ...result, artifact: html, artifactDigest: createHash('sha256').update(html).digest('hex') }),
+        result.createdAt,
+      )
     return result
   }
   publish(
@@ -133,7 +188,12 @@ export class InteractiveStore {
     if (!row || row.created_at < Date.now() - 30 * 60_000)
       throw new Error('Preview expired or belongs to another session. Preview again.')
     const input = interactiveInput.parse(JSON.parse(row.input))
-    const preview = JSON.parse(row.result) as InteractivePreview
+    const preview = JSON.parse(row.result) as InteractivePreview & { artifact?: string; artifactDigest?: string }
+    if (
+      preview.artifact !== undefined &&
+      createHash('sha256').update(preview.artifact).digest('hex') !== preview.artifactDigest
+    )
+      throw new Error('Preview artifact digest mismatch. Preview again.')
     if (preview.digest !== interactiveDigest(input)) throw new Error('Preview digest mismatch. Preview again.')
     if (preview.errors.length || preview.checks.some((check) => !check.passed))
       throw new Error('Fix preview errors and failed checks before publishing.')
@@ -157,6 +217,10 @@ export class InteractiveStore {
       digest: preview.digest,
       createdAt: Date.now(),
       checked: preview.checks.length > 0,
+      ...(input.network ? { network: input.network } : {}),
+      ...(input.files
+        ? { libraries: { react: '19.3.0', 'react-dom': '19.3.0', 'chart.js': '4.6.1', '@dagrejs/dagre': '2.0.4' } }
+        : {}),
       ...(input.stateSchema ? { stateSchema: input.stateSchema } : {}),
       ...(input.files ? { files: entryFirst(input.files, input.entry).map((file) => file.path) } : {}),
     }
@@ -174,7 +238,7 @@ export class InteractiveStore {
           requestId,
           signature,
           JSON.stringify(reference),
-          interactiveDocumentHtml(input),
+          preview.artifact ?? interactiveDocumentHtml(input),
           preview.screenshot,
           input.files ? JSON.stringify(entryFirst(input.files, input.entry)) : null,
         )

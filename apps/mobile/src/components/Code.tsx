@@ -157,7 +157,7 @@ export function CodeBlock({ source, hint }: { source: string; hint?: string }) {
         </Pressable>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: space.m + 2 }}>
-        <Text style={{ fontFamily: font.mono, fontSize: font.caption + 0.5, lineHeight: 18, color: c.soft }}>
+        <Text style={{ fontFamily: font.mono, fontSize: font.control, lineHeight: 20, color: c.body }}>
           {lines
             ? lines.map((line, index) => (
                 <Text key={index}>

@@ -89,3 +89,82 @@ export function frameScroll(
   const limit = (value: number) => Math.max(-2000, Math.min(2000, Math.round(value)))
   return { kind: 'scroll', x: limit(-dx * scale), y: limit(-dy * scale) }
 }
+
+/**
+ * What the header shows for a tab: its title, else its host, else the plain address. Only the fixed fallbacks pass
+ * through `translate`; a website's own title is never treated as app copy.
+ */
+export function tabTitle(
+  tab: Pick<BrowserTabInfo, 'title' | 'url'> | undefined,
+  translate: (text: string) => string = (text) => text,
+): string {
+  if (!tab) return translate('Browser')
+  if (tab.title?.trim()) return tab.title.trim()
+  try {
+    return new URL(tab.url).host || tab.url || translate('New tab')
+  } catch {
+    return tab.url || translate('New tab')
+  }
+}
+
+/** Typed addresses without a scheme open over https; an empty draft opens nothing. */
+export function addressUrl(draft: string): string | null {
+  const value = draft.trim()
+  if (!value) return null
+  if (/^https?:\/\//i.test(value)) return value
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^[^:/]+:\d+/.test(value)) return null
+  return `https://${value}`
+}
+
+/** The strip's single action for each control state, so the person always sees the next step. */
+export function controlAction(state: ControlState): 'take' | 'release' | null {
+  if (state === 'yours' || state === 'settling') return 'release'
+  if (state === 'offline' || state === 'backgrounded') return null
+  return 'take'
+}
+
+export type BrowserMenuKey = 'paste' | 'layout' | 'newTab' | 'readText' | 'upload' | 'downloads' | 'closeTab'
+
+/**
+ * Overflow actions offered for the current tab. Only working actions appear: file transfers and phone layout need the
+ * host-managed browser, and pasting, layout or uploading needs the phone to hold control.
+ */
+export function browserMenu(context: {
+  hasTab: boolean
+  own: boolean
+  hostManaged: boolean
+  fileInput: boolean
+}): BrowserMenuKey[] {
+  const keys: BrowserMenuKey[] = []
+  if (context.own) keys.push('paste')
+  if (context.own && context.hostManaged) keys.push('layout')
+  keys.push('newTab')
+  if (!context.hasTab) return keys
+  keys.push('readText')
+  if (context.hostManaged && context.own && context.fileInput) keys.push('upload')
+  if (context.hostManaged) keys.push('downloads')
+  keys.push('closeTab')
+  return keys
+}
+
+/**
+ * The layout size to ask the host for: the visible page area in points. Small height jitter never refits; the phone
+ * keyboard opening or closing does, so the page shrinks above the keyboard as a phone browser's does.
+ */
+export function fitSize(
+  area: { width: number; height: number },
+  previous: { width: number; height: number } | null,
+): { width: number; height: number } | null {
+  const width = Math.round(Math.min(1920, area.width))
+  const height = Math.round(Math.min(1920, area.height))
+  // A small phone with its keyboard up leaves about 200 points of page; still refit for it.
+  if (width < 240 || height < 160) return null
+  if (previous && Math.abs(previous.width - width) < 8 && Math.abs(previous.height - height) < 40) return null
+  return { width, height }
+}
+
+/** The tab to preview over the chat: the newest one that appeared since the last read. Tabs already open never pop up. */
+export function revealedTab(previous: ReadonlySet<string> | null, tabs: readonly Pick<BrowserTabInfo, 'id'>[]) {
+  if (!previous) return null
+  return tabs.findLast((tab) => !previous.has(tab.id))?.id ?? null
+}

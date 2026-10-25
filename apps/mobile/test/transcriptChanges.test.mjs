@@ -83,3 +83,63 @@ test('startup and work labels follow execution changes immediately without publi
   assert.equal(updateThreadMetadata(writing, text('More words')), writing)
   assert.equal(updateThreadMetadata(writing, { kind: 'state', state: 'done' }).activityLabel, null)
 })
+
+test('pausing between the transcript read and companion reads cannot advance the resume cursor', async () => {
+  const { readTranscriptBundle } = await import('../src/runtime/transcriptChanges.ts')
+  let connected = true
+  let finish
+  const bindings = new Promise((resolve) => {
+    finish = resolve
+  })
+  const cache = { cursor: 1, rows: new Map([[1, text('Earlier')]]) }
+  const read = readTranscriptBundle(
+    [
+      Promise.resolve({ cursor: 2, events: [{ seq: 1, event: text('Completed while away') }] }),
+      bindings,
+      Promise.resolve(null),
+    ],
+    () => connected,
+    (snapshot) => {
+      cache.rows = new Map(snapshot.events.map(({ seq, event }) => [seq, event]))
+      cache.cursor = snapshot.cursor
+    },
+  )
+  await Promise.resolve()
+  assert.equal(cache.cursor, 1)
+  connected = false
+  finish([])
+  assert.equal(await read, null)
+  assert.equal(cache.cursor, 1)
+  assert.equal(cache.rows.get(1).text, 'Earlier')
+  connected = true
+  await readTranscriptBundle(
+    [
+      Promise.resolve({ cursor: 2, events: [{ seq: 1, event: text('Completed while away') }] }),
+      Promise.resolve([]),
+      Promise.resolve(null),
+    ],
+    () => connected,
+    (snapshot) => {
+      cache.rows = new Map(snapshot.events.map(({ seq, event }) => [seq, event]))
+      cache.cursor = snapshot.cursor
+    },
+  )
+  assert.equal(cache.cursor, 2)
+  assert.equal(cache.rows.get(1).text, 'Completed while away')
+})
+
+test('a failed companion read leaves both the transcript and resume cursor uncommitted', async () => {
+  const { readTranscriptBundle } = await import('../src/runtime/transcriptChanges.ts')
+  let committed = false
+  await assert.rejects(
+    readTranscriptBundle(
+      [Promise.resolve({ cursor: 20, events: [] }), Promise.reject(new Error('Paused')), Promise.resolve(null)],
+      () => true,
+      () => {
+        committed = true
+      },
+    ),
+    /Paused/,
+  )
+  assert.equal(committed, false)
+})

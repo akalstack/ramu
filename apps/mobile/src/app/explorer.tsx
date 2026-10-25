@@ -1,8 +1,19 @@
+import { BottomSearch } from '../components/BottomSearch'
+import { translate } from '@ramu/shared/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronDown, ChevronRight, File, Folder, RefreshCw, GitBranch, ListCollapse } from 'lucide-react-native'
+import {
+  ChevronDown,
+  ChevronRight,
+  File,
+  Folder,
+  FolderGit2,
+  RefreshCw,
+  GitBranch,
+  ListCollapse,
+} from 'lucide-react-native'
 import type { DirEntry, RepositoryBinding } from '@ramu/shared/types'
 import {
   explorerKey,
@@ -25,6 +36,9 @@ import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen
 import { Row, Sheet, T } from '../components/ui'
 
 type ExplorerScope = { host: string; context: string; label?: string }
+/** A tree row. With several repositories each one gets a `root` row (path '') and its files sit one level below. */
+type ExplorerRow = { repoId: string; entry: DirEntry; depth: number; root?: boolean }
+const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 
 export default function Explorer() {
   const params = useLocalSearchParams<{
@@ -49,7 +63,7 @@ export default function Explorer() {
   }))
   const scope = scopeSelection.routeKey === routeKey ? scopeSelection.value : routeScope
   const setScope = (value: ExplorerScope | null) => setScopeSelection({ routeKey, value })
-  const list = useRef<import('react-native').FlatList<{ repoId: string; entry: DirEntry; depth: number }>>(null)
+  const list = useRef<import('react-native').FlatList<ExplorerRow>>(null)
   const selected =
     scope && params.computer === scope.host && params.ctx === scope.context && params.repoId && params.path
       ? { repoId: params.repoId, path: params.path }
@@ -59,7 +73,15 @@ export default function Explorer() {
     ? JSON.stringify([scope?.host, scope?.context, selected.repoId, selected.path, params.revealId])
     : ''
   useEffect(() => {
-    if (selected) setQuery('')
+    if (!selected) return
+    setQuery('')
+    // A reveal opens the repository it points into, even if that root was folded.
+    setClosedRoots((current) => {
+      if (!current.has(selected.repoId)) return current
+      const next = new Set(current)
+      next.delete(selected.repoId)
+      return next
+    })
   }, [revealKey])
   const [project, setProject] = useState<(typeof store.projects)[number] | null>(null)
   const catalog = useWorkspaces(project?.computerId ?? '', !!project && !scope)
@@ -70,6 +92,8 @@ export default function Explorer() {
     Record<string, { repoId: string; path: string; cursor: string; loading?: boolean }>
   >({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  // Repository roots start open; this holds the folded ones, apart from `expanded` so saved folder keys keep their shape.
+  const [closedRoots, setClosedRoots] = useState<ReadonlySet<string>>(new Set())
   const [query, setQuery] = useState('')
   const [matches, setMatches] = useState<{ repoId: string; path: string }[]>([])
   const [error, setError] = useState('')
@@ -234,6 +258,7 @@ export default function Explorer() {
       }
       setBindings([])
       setDirectories({})
+      setClosedRoots(new Set())
       setExpanded(new Set(navigation.current.expanded))
       setMatches([])
       setQuery('')
@@ -338,16 +363,31 @@ export default function Explorer() {
       clearTimeout(timer)
     }
   }, [scope?.host, scope?.context, online, query, revision])
-  const rows = useMemo(
+  const multiRoot = bindings.length > 1
+  const rows = useMemo<ExplorerRow[]>(
     () =>
       query.trim()
         ? matches.slice(0, EXPLORER_SEARCH_LIMIT).map((entry) => ({
             repoId: entry.repoId,
-            entry: { name: entry.path, path: entry.path, kind: 'file' as const },
+            entry: { name: baseName(entry.path), path: entry.path, kind: 'file' as const },
             depth: 0,
           }))
-        : bindings.flatMap((binding) => flattenExplorer(binding.repoId, directories[binding.repoId] ?? {}, expanded)),
-    [bindings, directories, expanded, query, matches],
+        : bindings.flatMap((binding) =>
+            multiRoot
+              ? [
+                  {
+                    repoId: binding.repoId,
+                    entry: { name: binding.repoName, path: '', kind: 'dir' as const },
+                    depth: 0,
+                    root: true,
+                  },
+                  ...(closedRoots.has(binding.repoId)
+                    ? []
+                    : flattenExplorer(binding.repoId, directories[binding.repoId] ?? {}, expanded, '', 1)),
+                ]
+              : flattenExplorer(binding.repoId, directories[binding.repoId] ?? {}, expanded),
+          ),
+    [bindings, directories, expanded, closedRoots, multiRoot, query, matches],
   )
   useEffect(() => {
     if (!selected || query || loading) return
@@ -402,10 +442,12 @@ export default function Explorer() {
         }
         right={
           scope ? (
-            <View style={{ flexDirection: 'row' }}>
+            // Siblings in a fragment (not a View) so iOS renders each as a native toolbar button.
+            <>
               <HeaderButton
                 icon={Folder}
                 label={t.changeCheckout}
+                systemIcon="folder"
                 onPress={() => {
                   setScope(null)
                   setProject(null)
@@ -414,15 +456,23 @@ export default function Explorer() {
               <HeaderButton
                 icon={ListCollapse}
                 label={t.collapseFolders}
+                systemIcon="rectangle.compress.vertical"
                 onPress={() => {
                   revealed.current = revealKey
                   setExpanded(new Set())
+                  // With several repositories, collapsing all leaves just the repository list.
+                  if (multiRoot) setClosedRoots(new Set(bindings.map((binding) => binding.repoId)))
                 }}
               />
-              <HeaderButton icon={RefreshCw} label={t.refreshFiles} onPress={() => reload((value) => value + 1)} />
-            </View>
+              <HeaderButton
+                icon={RefreshCw}
+                label={t.refreshFiles}
+                systemIcon="arrow.clockwise"
+                onPress={() => reload((value) => value + 1)}
+              />
+            </>
           ) : project ? (
-            <HeaderButton icon={Folder} label={t.changeCheckout} onPress={() => setProject(null)} />
+            <HeaderButton icon={Folder} label={t.changeCheckout} systemIcon="folder" onPress={() => setProject(null)} />
           ) : undefined
         }
       />
@@ -433,13 +483,27 @@ export default function Explorer() {
           keyExtractor={(project) => project.id}
           renderItem={({ item }) => (
             <Row onPress={() => setProject(item)}>
-              <Folder size={18} color={c.soft} />
-              <View>
-                <T>{item.name}</T>
-                <T tone="muted" size={font.caption}>
-                  {store.computers.find((h) => h.id === item.computerId)?.name}
+              {item.kind === 'workspace' ? (
+                <Folder size={18} color={c.soft} />
+              ) : (
+                <FolderGit2 size={18} color={c.soft} />
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <T numberOfLines={1}>{item.name}</T>
+                <T tone="muted" size={font.caption} numberOfLines={1}>
+                  {[
+                    store.computers.length > 1
+                      ? store.computers.find((h) => h.id === item.computerId)?.name
+                      : undefined,
+                    item.kind === 'workspace'
+                      ? translate(store.language, '{count} repos', { count: item.repos.length })
+                      : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || store.computers.find((h) => h.id === item.computerId)?.name}
                 </T>
               </View>
+              <ChevronRight size={16} color={c.muted} />
             </Row>
           )}
           ListEmptyComponent={
@@ -513,14 +577,6 @@ export default function Explorer() {
             contentInsetAdjustmentBehavior="automatic"
             ListHeaderComponent={
               <View style={{ paddingHorizontal: space.m, gap: space.s }}>
-                <TextInput
-                  accessibilityLabel={t.searchCheckout}
-                  placeholder={t.searchFilePaths}
-                  placeholderTextColor={c.muted}
-                  value={query}
-                  onChangeText={setQuery}
-                  style={{ margin: space.m, padding: space.m, color: c.text, backgroundColor: c.fill, borderRadius: 8 }}
-                />
                 {!online ? (
                   <T tone="muted" style={{ padding: space.m }}>
                     {t.explorerOffline}
@@ -538,13 +594,24 @@ export default function Explorer() {
                 ) : null}
                 {loading ? <ActivityIndicator color={c.accent} /> : null}
 
-                {bindings.map((binding) => (
-                  <View key={binding.repoId}>
-                    <T weight="500">
-                      {binding.repoName}
-                      {binding.taskBranch ? ` · ${binding.taskBranch}` : ''}
-                    </T>
-                    <T tone="muted" size={font.caption}>
+                {/* One repository is named once up here; several get their own root rows in the tree instead. */}
+                {(multiRoot ? [] : bindings).map((binding) => (
+                  <View key={binding.repoId} style={{ paddingHorizontal: space.xs, paddingTop: space.xs }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                      <FolderGit2 size={14} color={c.soft} />
+                      <T weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+                        {binding.repoName}
+                      </T>
+                      {binding.taskBranch ? (
+                        <>
+                          <GitBranch size={12} color={c.muted} />
+                          <T mono size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                            {binding.taskBranch}
+                          </T>
+                        </>
+                      ) : null}
+                    </View>
+                    <T tone="muted" size={font.caption} numberOfLines={1} ellipsizeMode="head">
                       {binding.cwd}
                     </T>
                     {binding.setupState !== 'ready' ? (
@@ -584,7 +651,58 @@ export default function Explorer() {
             renderItem={({ item: row }) => {
               const binding = bindings.find((b) => b.repoId === row.repoId)!
               const key = `${row.repoId}:${row.entry.path}`
+              if (row.root) {
+                const rootOpen = !closedRoots.has(row.repoId)
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={row.entry.name}
+                    accessibilityState={{ expanded: rootOpen }}
+                    onPress={() =>
+                      setClosedRoots((current) => {
+                        const next = new Set(current)
+                        if (!next.delete(row.repoId)) next.add(row.repoId)
+                        return next
+                      })
+                    }
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: space.s,
+                      minHeight: 48,
+                      marginTop: rows[0] === row ? 0 : space.s,
+                      paddingVertical: space.s,
+                      paddingHorizontal: space.m,
+                      backgroundColor: pressed ? c.pressed : undefined,
+                    })}
+                  >
+                    {rootOpen ? <ChevronDown size={15} color={c.soft} /> : <ChevronRight size={15} color={c.soft} />}
+                    <FolderGit2 size={16} color={c.soft} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <T weight="600" numberOfLines={1}>
+                        {row.entry.name}
+                      </T>
+                      {binding?.setupState !== 'ready' ? (
+                        <T tone="bad" size={font.caption} numberOfLines={2}>
+                          {binding?.setupError ?? t.workspaceUnavailable}
+                        </T>
+                      ) : binding.taskBranch ? (
+                        <T mono size={font.caption} tone="muted" numberOfLines={1}>
+                          {binding.taskBranch}
+                        </T>
+                      ) : null}
+                    </View>
+                    {loadingDirs.has(key) ? <ActivityIndicator color={c.accent} /> : null}
+                  </Pressable>
+                )
+              }
               const isOpen = expanded.has(key)
+              // Search results name the file, then where it lives (and in which repository when there are several).
+              const where = query.trim()
+                ? [multiRoot ? binding?.repoName : undefined, parentFolder(row.entry.path) || undefined]
+                    .filter(Boolean)
+                    .join(' / ')
+                : ''
               return (
                 <Pressable
                   accessibilityRole="button"
@@ -622,20 +740,22 @@ export default function Explorer() {
                     paddingLeft: space.m + Math.min(row.depth, 8) * 14,
                   }}
                 >
+                  {/* Folder and file names line up: folders lead with a chevron, files with the same width of space. */}
                   {row.entry.kind === 'dir' ? (
                     isOpen ? (
                       <ChevronDown size={15} color={c.soft} />
                     ) : (
                       <ChevronRight size={15} color={c.soft} />
                     )
-                  ) : (
-                    <File size={15} color={c.soft} />
+                  ) : query.trim() ? null : (
+                    <View style={{ width: 15 }} />
                   )}
+                  {row.entry.kind === 'dir' ? <Folder size={15} color={c.soft} /> : <File size={15} color={c.muted} />}
                   <View style={{ flex: 1 }}>
                     <T numberOfLines={2}>{row.entry.name}</T>
-                    {bindings.length > 1 || query ? (
-                      <T size={font.caption} tone="muted">
-                        {binding?.repoName}
+                    {where ? (
+                      <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head">
+                        {where}
                       </T>
                     ) : null}
                     {row.entry.kind === 'dir' && isOpen && directories[row.repoId]?.[row.entry.path]?.length === 0 ? (
@@ -851,6 +971,9 @@ export default function Explorer() {
           </>
         )}
       </Sheet>
+      {scope ? (
+        <BottomSearch value={query} onChangeText={setQuery} placeholder={t.searchFilePaths} label={t.searchCheckout} />
+      ) : null}
     </Screen>
   )
 }

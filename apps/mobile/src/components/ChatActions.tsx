@@ -1,6 +1,6 @@
 import { translate } from '@ramu/shared/i18n'
 import { readRemovalCommands, removalReview, removalError } from '@ramu/shared/chat/taskRemoval'
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Alert, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import {
@@ -8,6 +8,7 @@ import {
   ArchiveRestore,
   Copy,
   FolderSearch,
+  ListChecks,
   Pencil,
   Pin,
   PinOff,
@@ -15,7 +16,6 @@ import {
   SquareTerminal,
   Sparkles,
   Trash2,
-  X,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import type { MobileProject } from '../runtime/types'
@@ -193,8 +193,8 @@ export function ChatActionsSheet({
   open: boolean
   onClose: () => void
   rename?: boolean
-  /** Screen-specific actions listed above the shared ones; each runs once the sheet has closed. */
-  extras?: { icon: Icon; label: string; onPress?: () => void }[]
+  /** Screen-specific actions listed above the shared ones; each runs once the sheet has closed. Each `group` is set apart by a divider. */
+  extras?: { icon: Icon; label: string; onPress?: () => void; group?: string }[]
   /** Runs once the thread is deleted or archived, so a thread screen can leave itself. */
   onGone?: () => void
 }) {
@@ -218,6 +218,7 @@ export function ChatActionsSheet({
     latestStore.current.isOnline(chat.computerId) &&
     latestStore.current.computers?.find((host) => host.id === chat.computerId)?.access !== 'viewer'
   const commands = useChatCommands(chat)
+  const say = (text: string) => translate(store.language, text)
   const archived = chat.status === 'archived'
   const pinned = chat.pinnedAt !== null
   const run = async (fn: () => Promise<unknown>) => {
@@ -231,8 +232,9 @@ export function ChatActionsSheet({
     }
   }
   const confirmDelete = () => commands.confirmDelete(onGone, onClose)
-  const items: { icon: Icon; label: string; danger?: boolean; onPress?: () => void }[] = [
+  const items: { icon: Icon; label: string; danger?: boolean; onPress?: () => void; group?: string }[] = [
     ...extras.map((extra) => ({
+      group: 'screen',
       ...extra,
       onPress: extra.onPress
         ? () => {
@@ -243,12 +245,12 @@ export function ChatActionsSheet({
     })),
     {
       icon: pinned ? PinOff : Pin,
-      label: pinned ? 'Unpin' : 'Pin to top',
+      label: say(pinned ? 'Unpin' : 'Pin to top'),
       onPress: () => void run(() => store.invoke(chat.computerId, 'tasks.pin', chat.taskId, !pinned)),
     },
     {
       icon: Copy,
-      label: 'Copy thread ID',
+      label: say('Copy thread ID'),
       onPress: () => {
         onClose()
         void Clipboard.setStringAsync(chat.taskId)
@@ -256,7 +258,7 @@ export function ChatActionsSheet({
     },
     {
       icon: Pencil,
-      label: 'Rename',
+      label: say('Rename'),
       onPress: () => {
         if (writable()) setRenaming(true)
       },
@@ -290,17 +292,20 @@ export function ChatActionsSheet({
       : []),
     {
       icon: archived ? ArchiveRestore : Archive,
-      label: archived ? 'Unarchive' : 'Archive',
+      label: say(archived ? 'Unarchive' : 'Archive'),
       onPress: () =>
         void run(async () => {
           await store.invoke(chat.computerId, 'tasks.archive', chat.taskId, !archived)
           if (!archived) onGone?.()
         }),
     },
-    { icon: Trash2, label: 'Delete…', danger: true, onPress: confirmDelete },
+    { icon: Trash2, label: say('Delete…'), danger: true, onPress: confirmDelete, group: 'danger' },
   ]
+  const visible = items.filter(
+    (item) => !viewOnly || item.icon === Copy || extras.some((extra) => extra.label === item.label),
+  )
   return (
-    <Sheet open={open} onClose={onClose} title={renaming ? 'Rename thread' : chat.title}>
+    <Sheet open={open} onClose={onClose} title={renaming ? say('Rename thread') : chat.title}>
       {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[store.language]}</T> : null}
       {renaming ? (
         <View style={{ padding: space.l, gap: space.m }}>
@@ -309,7 +314,7 @@ export function ChatActionsSheet({
             editable={!viewOnly}
             value={title}
             onChangeText={setTitle}
-            placeholder="Thread title"
+            placeholder={say('Thread title')}
             placeholderTextColor={c.placeholder}
             returnKeyType="done"
             onSubmitEditing={() =>
@@ -324,20 +329,29 @@ export function ChatActionsSheet({
             }}
           />
           <View style={{ flexDirection: 'row', gap: space.s, justifyContent: 'flex-end' }}>
-            <Button kind="ghost" title="Cancel" onPress={() => setRenaming(false)} />
+            <Button kind="ghost" title={say('Cancel')} onPress={() => setRenaming(false)} />
             <Button
-              title="Save"
+              title={say('Save')}
               disabled={viewOnly || !title.trim() || title.trim() === chat.title}
               onPress={() => void run(() => store.invoke(chat.computerId, 'tasks.rename', chat.taskId, title.trim()))}
             />
           </View>
         </View>
       ) : (
-        items
-          .filter((item) => !viewOnly || item.icon === Copy || extras.some((extra) => extra.label === item.label))
-          .map((item) => (
+        visible.map((item, index) => (
+          <Fragment key={item.label}>
+            {/* Tools, info and thread actions read as separate groups, like the native menu's sections. */}
+            {index && (item.group ?? 'thread') !== (visible[index - 1]!.group ?? 'thread') ? (
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: c.line,
+                  marginVertical: space.xs,
+                  marginHorizontal: space.l,
+                }}
+              />
+            ) : null}
             <Row
-              key={item.label}
               onPress={item.onPress}
               accessibilityRole="button"
               accessibilityState={{
@@ -345,10 +359,11 @@ export function ChatActionsSheet({
                 busy: item.icon === Sparkles && (naming || chat.titleGenerationState === 'pending'),
               }}
             >
-              <item.icon size={18} color={item.danger ? c.bad : c.soft} />
-              <T tone={item.danger ? 'bad' : 'text'}>{item.label}</T>
+              <item.icon size={18} color={item.danger ? c.bad : item.onPress ? c.soft : c.muted} />
+              <T tone={item.danger ? 'bad' : item.onPress ? 'text' : 'muted'}>{item.label}</T>
             </Row>
-          ))
+          </Fragment>
+        ))
       )}
     </Sheet>
   )
@@ -396,7 +411,10 @@ export function ProjectActionsSheet({
       await fn()
       await store.refresh(project.computerId)
     } catch (error) {
-      Alert.alert('Could not update project', error instanceof Error ? error.message : String(error))
+      Alert.alert(
+        translate(store.language, 'Could not update project'),
+        error instanceof Error ? error.message : String(error),
+      )
     }
   }
   const later = (fn: () => void, hostAction = true) => {
@@ -406,72 +424,105 @@ export function ProjectActionsSheet({
       if (!hostAction || writable()) fn()
     }, 300)
   }
-  const items = [
+  const say = (text: string) => translate(store.language, text)
+  // Everyday actions first; setup and removal last.
+  const items: {
+    key: string
+    icon: Icon
+    label: string
+    danger?: boolean
+    viewer?: boolean
+    /** Work in the project, edit it, set it up, remove it: each group is set apart by a divider. */
+    group: 'work' | 'edit' | 'setup' | 'danger'
+    onPress(): void
+  }[] = [
     {
-      icon: Sparkles,
-      label: translate(store.language, 'Names for Auto…'),
-      onPress: () => {
-        if (writable()) setRouting(true)
-      },
+      key: 'new',
+      group: 'work',
+      icon: SquarePen,
+      label: say('New thread'),
+      viewer: true,
+      onPress: () => later(() => router.push({ pathname: '/new', params: { project: project.id } }), false),
     },
     {
-      icon: SquareTerminal,
-      label: t.manageProjectActions,
-      onPress: () => {
-        if (writable()) setManagingActions(true)
-      },
-    },
-    {
+      key: 'files',
+      group: 'work',
       icon: FolderSearch,
-      label: 'Browse files',
+      label: say('Browse files'),
       onPress: () =>
         later(() =>
           router.push({ pathname: '/explorer', params: { computer: project.computerId, ctx: `project:${raw}` } }),
         ),
     },
     {
-      icon: SquarePen,
-      label: 'New thread',
-      onPress: () => later(() => router.push({ pathname: '/new', params: { project: project.id } }), false),
-    },
-    {
-      icon: Pencil,
-      label: 'Rename',
-      onPress: () => {
-        if (writable()) setRenaming(true)
-      },
-    },
-    {
+      key: 'terminal',
+      group: 'work',
       icon: SquareTerminal,
-      label: 'Open terminal',
+      label: say('Open terminal'),
       onPress: () =>
         later(() =>
           router.push({ pathname: '/terminal', params: { computer: project.computerId, ctx: `project:${raw}` } }),
         ),
     },
     {
-      icon: FolderSearch,
-      label: 'Copy folder path',
+      key: 'rename',
+      group: 'edit',
+      icon: Pencil,
+      label: say('Rename'),
+      onPress: () => {
+        if (writable()) setRenaming(true)
+      },
+    },
+    {
+      key: 'copy',
+      group: 'edit',
+      icon: Copy,
+      label: say('Copy folder path'),
+      viewer: true,
       onPress: () => {
         onClose()
         if (project.root) void Clipboard.setStringAsync(project.root)
       },
     },
     {
-      icon: X,
-      label: 'Remove project…',
+      key: 'routing',
+      group: 'setup',
+      icon: Sparkles,
+      label: say('Names for Auto…'),
+      onPress: () => {
+        if (writable()) setRouting(true)
+      },
+    },
+    {
+      key: 'actions',
+      group: 'setup',
+      icon: ListChecks,
+      label: t.manageProjectActions,
+      onPress: () => {
+        if (writable()) setManagingActions(true)
+      },
+    },
+    {
+      key: 'remove',
+      group: 'danger',
+      icon: Trash2,
+      label: say('Remove project…'),
       danger: true,
       onPress: () => {
         if (!writable()) return
         onClose()
-        Alert.alert('Remove project?', `${project.name}\n\nIts threads and folders on the host are not deleted.`, [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: () => void run(() => store.invoke(project.computerId, 'projects.remove', raw)),
-          },
-        ])
+        Alert.alert(
+          say('Remove project?'),
+          `${project.name}\n\n${say('Its threads and folders on the host are not deleted.')}`,
+          [
+            { text: say('Cancel'), style: 'cancel' },
+            {
+              text: say('Remove'),
+              style: 'destructive',
+              onPress: () => void run(() => store.invoke(project.computerId, 'projects.remove', raw)),
+            },
+          ],
+        )
       },
     },
   ]
@@ -489,7 +540,7 @@ export function ProjectActionsSheet({
       />
     )
   return (
-    <Sheet open={open} onClose={onClose} title={renaming ? 'Rename project' : project.name}>
+    <Sheet open={open} onClose={onClose} title={renaming ? say('Rename project') : project.name}>
       {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[store.language]}</T> : null}
       {renaming ? (
         <View style={{ padding: space.l, gap: space.m }}>
@@ -498,7 +549,7 @@ export function ProjectActionsSheet({
             editable={!viewOnly}
             value={name}
             onChangeText={setName}
-            placeholder="Project name"
+            placeholder={say('Project name')}
             placeholderTextColor={c.placeholder}
             returnKeyType="done"
             onSubmitEditing={() =>
@@ -513,9 +564,9 @@ export function ProjectActionsSheet({
             }}
           />
           <View style={{ flexDirection: 'row', gap: space.s, justifyContent: 'flex-end' }}>
-            <Button kind="ghost" title="Cancel" onPress={() => setRenaming(false)} />
+            <Button kind="ghost" title={say('Cancel')} onPress={() => setRenaming(false)} />
             <Button
-              title="Save"
+              title={say('Save')}
               disabled={viewOnly || !name.trim() || name.trim() === project.name}
               onPress={() => void run(() => store.invoke(project.computerId, 'projects.rename', raw, name.trim()))}
             />
@@ -523,19 +574,25 @@ export function ProjectActionsSheet({
         </View>
       ) : (
         items
-          .filter((item) => !viewOnly || item.label === 'Copy folder path' || item.label === 'New thread')
-          .map((item) => (
-            <Row
-              key={item.label}
-              onPress={item.onPress}
-              accessibilityRole="button"
-              accessibilityState={{
-                disabled: !item.onPress,
-              }}
-            >
-              <item.icon size={18} color={'danger' in item && item.danger ? c.bad : c.soft} />
-              <T tone={'danger' in item && item.danger ? 'bad' : 'text'}>{item.label}</T>
-            </Row>
+          .filter((item) => !viewOnly || item.viewer)
+          .map((item, index, shown) => (
+            <Fragment key={item.key}>
+              {index && item.group !== shown[index - 1]!.group ? (
+                <View
+                  style={{ height: 1, backgroundColor: c.line, marginVertical: space.xs, marginHorizontal: space.l }}
+                />
+              ) : null}
+              <Row
+                onPress={item.onPress}
+                accessibilityRole="button"
+                accessibilityState={{
+                  disabled: !item.onPress,
+                }}
+              >
+                <item.icon size={18} color={item.danger ? c.bad : c.soft} />
+                <T tone={item.danger ? 'bad' : 'text'}>{item.label}</T>
+              </Row>
+            </Fragment>
           ))
       )}
     </Sheet>

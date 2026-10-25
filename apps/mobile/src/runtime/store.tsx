@@ -1,3 +1,4 @@
+import { appForeground } from './chatViewport'
 import { agentActivityLabel } from '@ramu/shared/chat/agentActivity'
 import './socketTransport'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
@@ -42,11 +43,11 @@ import { renewalDue, renewCredential } from './tokenRenewal'
 import { HostClient, HostError, normalizeAddress, operationKey } from './transport'
 import { verifyHost } from '@ramu/shared/hostProof'
 import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
-import { transcript, visibleText } from './transcript'
+import { transcript, visibleText, deliveryBaseline, reconcileDelivered } from './transcript'
 import { isOutdated, type Language } from './settingsModel'
 import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } from './pushCategories'
 import { GOAL_VERIFY_METHOD, isMethodMissing } from './goalVerify'
-import { mergeTranscript, transcriptRows, updateThreadMetadata } from './transcriptChanges'
+import { mergeTranscript, transcriptRows, updateThreadMetadata, readTranscriptBundle } from './transcriptChanges'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
 
 export type { Language }
@@ -59,7 +60,8 @@ export interface OutboxItem {
   text: string
   mode: 'send' | 'queue' | 'steer'
   createdAt: number
-  state?: 'waiting' | 'sending' | 'uncertain' | 'review'
+  state?: 'waiting' | 'sending' | 'accepted' | 'uncertain' | 'review'
+  deliveryBaseline?: { userCount: number; queueIds: string[] }
   error?: string
   settings?: AgentSettings
   projectId?: string
@@ -160,7 +162,7 @@ interface Store extends State {
   isOnline(id: string): boolean
   setDraft(key: string, text: string): void
   rememberExplorer(host: string, context: string, navigation: Omit<ExplorerNavigation, 'at'>): void
-  addExplorerFile(input: ExplorerFileInput): ExplorerDestination
+  addExplorerFile(input: ExplorerFileInput): Promise<ExplorerDestination>
   clearComposerDraft(key: string, expected: ComposerSnapshot): boolean
 
   dismissError(): void
@@ -308,12 +310,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const inboxRef = useRef(inbox)
   inboxRef.current = inbox
   const change = (fn: (s: State) => State) => {
-    const next = fn(ref.current)
+    const changed = fn(ref.current)
+    const next = { ...changed, outbox: reconcileDelivered(changed.outbox, changed.chats) }
     ref.current = next
     setState(next)
   }
   const report = (error: unknown) =>
     change((s) => ({ ...s, error: error instanceof Error ? error.message : String(error) }))
+  const clearSaveError = () => {
+    if (ref.current.error?.startsWith('Could not save phone data.')) change((state) => ({ ...state, error: null }))
+  }
   const status = (id: string, value: Computer['status'], error?: string) =>
     change((s) => ({
       ...s,
@@ -334,7 +340,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       return await connection.client.invoke(method, ...args)
     } catch (error) {
-      if (error instanceof HostError && error.status === 401) {
+      if (
+        error instanceof HostError &&
+        error.status === 401 &&
+        connections.current.get(id) === connection &&
+        !connection.controller.signal.aborted
+      ) {
         connection.controller.abort()
         connection.client.close()
         status(id, 'revoked', error.message)
@@ -352,7 +363,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...registerCategories(ref.current.drafts[PUSH_MUTED_KEY]),
     )
   const rebuilds = useRef(new Map<string, ReturnType<typeof setTimeout>>())
-  // Coalesce streaming tokens before publishing to React; leave time for typing and native input between updates.
+  // Publish completed text blocks and coalesce other activity updates, leaving time for native input.
   const rebuild = (computerId: string, sessionId: string) => {
     const key = scoped(computerId, sessionId)
     if (rebuilds.current.has(key)) return
@@ -367,6 +378,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const items = transcript(
           events,
           ordered.map((x) => x[0]),
+          ref.current.chats.some(
+            (chat) =>
+              chat.computerId === computerId &&
+              chat.sessionId === sessionId &&
+              (chat.executionState === 'running' || chat.executionState === 'starting'),
+          ),
         )
         const preview = events.findLast((event) => event.kind === 'text' && !event.agentId)
         change((s) => ({
@@ -394,6 +411,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const key = scoped(computerId, payload.sessionId)
     const rows = eventRows.current.get(key)
     if (!rows) return
+    const previous = payload.seq != null ? rows.get(payload.seq) : undefined
     if (payload.seq != null) rows.set(payload.seq, payload.event)
     const chat = ref.current.chats.find(
       (chat) => chat.computerId === computerId && chat.sessionId === payload.sessionId,
@@ -402,7 +420,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const updated = updateThreadMetadata(chat, payload.event)
       if (updated !== chat) change((s) => ({ ...s, chats: s.chats.map((entry) => (entry === chat ? updated : entry)) }))
     }
-    rebuild(computerId, payload.sessionId)
+    if (!previous || !['text', 'thinking'].includes(payload.event.kind)) rebuild(computerId, payload.sessionId)
   }
   const receive = (id: string, channel: keyof PushEvents, payload: any) => {
     if (channel === 'agent:event') {
@@ -469,17 +487,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const connection = connections.current.get(id)
     if (!connection) return Promise.resolve()
     const current = () => connections.current.get(id) === connection && !connection.controller.signal.aborted
+    const read = <M extends keyof RamuMethods>(method: M, ...args: Parameters<RamuMethods[M]>) => {
+      if (!current()) throw new HostError('Connection suspended during refresh')
+      return invoke(id, method, ...args)
+    }
     buffers.current.set(id, [])
     const promise = (async () => {
       const [projects, tasks, catalogs, usage] = await Promise.all([
-        invoke(id, 'projects.list'),
-        invoke(id, 'tasks.list'),
-        invoke(id, 'agent.catalog'),
-        invoke(id, 'usage.get'),
+        read('projects.list'),
+        read('tasks.list'),
+        read('agent.catalog'),
+        read('usage.get'),
       ])
       const projectViews = await Promise.all(
         projects.map(async (p) => {
-          const repos = await invoke(id, 'repos.list', p.id)
+          const repos = await read('repos.list', p.id)
           return {
             ...p,
             id: scoped(id, p.id),
@@ -498,7 +520,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             .slice(index, index + 6)
             .filter((t) => t.status !== 'archived')
             .map(async (task) => {
-              const sessions = await invoke(id, 'agent.list', task.id)
+              const sessions = await read('agent.list', task.id)
               const session = sessions.filter((s) => !s.parentId).sort((a, b) => b.createdAt - a.createdAt)[0]
               const known = ref.current.chats.find((c) => c.computerId === id && c.taskId === task.id)
               if (
@@ -532,13 +554,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 return
               }
               const readTranscript = async () => {
-                if (!session) return { revision: 0, events: [] as { seq: number; event: AgentEvent }[] }
+                if (!session)
+                  return {
+                    revision: 0,
+                    cursor: undefined as number | undefined,
+                    events: [] as { seq: number; event: AgentEvent }[],
+                  }
                 const key = scoped(id, session.id)
                 if (changesSupported.current.get(id) !== false) {
                   try {
                     const held = eventRows.current.get(key)
-                    const result = await invoke(
-                      id,
+                    const result = await read(
                       'agent.changes',
                       session.id,
                       held ? (changeCursors.current.get(key) ?? 0) : 0,
@@ -546,27 +572,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                     )
                     // Rows that arrived live while this read was in flight are in the map now; apply over those.
                     const rows = mergeTranscript(eventRows.current.get(key), result)
-                    changeCursors.current.set(key, result.cursor)
-                    return { revision: result.revision, events: transcriptRows(rows) }
+                    return { revision: result.revision, cursor: result.cursor, events: transcriptRows(rows) }
                   } catch (error) {
                     // A host from before agent.changes sends the whole transcript every time.
                     if (!isMethodMissing(error)) throw error
                     changesSupported.current.set(id, false)
                   }
                 }
-                return invoke(id, 'agent.snapshot', session.id)
+                return { ...(await read('agent.snapshot', session.id)), cursor: undefined }
               }
-              const [snapshot, bindings, goal] = await Promise.all([
-                readTranscript(),
-                invoke(id, 'tasks.bindings', task.id),
-                session ? invoke(id, 'agent.goal', session.id) : Promise.resolve(null),
-              ])
-              if (!current()) return
+              const bundle = await readTranscriptBundle(
+                [
+                  readTranscript(),
+                  read('tasks.bindings', task.id),
+                  session ? read('agent.goal', session.id) : Promise.resolve(null),
+                ],
+                current,
+                (snapshot) => {
+                  if (!session) return
+                  const key = scoped(id, session.id)
+                  eventRows.current.set(key, new Map(snapshot.events.map((x) => [x.seq, x.event])))
+                  if (snapshot.cursor !== undefined) changeCursors.current.set(key, snapshot.cursor)
+                  revisions.set(session.id, snapshot.revision)
+                },
+              )
+              if (!bundle) return
+              const [snapshot, bindings, goal] = bundle
               const events = snapshot.events.map((x) => x.event)
-              if (session) {
-                eventRows.current.set(scoped(id, session.id), new Map(snapshot.events.map((x) => [x.seq, x.event])))
-                revisions.set(session.id, snapshot.revision)
-              }
               const queue = [...events].reverse().find((e) => e.kind === 'queue')
               const text = [...events].reverse().find((e) => e.kind === 'text' || e.kind === 'user')
               const latestState = [...events].reverse().find((e) => e.kind === 'state')
@@ -605,6 +637,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 items: transcript(
                   events,
                   snapshot.events.map((x) => x.seq),
+                  sessionState === 'running' || sessionState === 'starting',
                 ),
                 queue: queue?.kind === 'queue' ? queue.messages : [],
                 queuePaused: queue?.kind === 'queue' ? !!queue.paused : false,
@@ -614,12 +647,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }),
         )
       if (!current()) return
-      void invoke(id, 'activity.status').then(
+      void read('activity.status').then(
         (list) => setActivity((a) => ({ ...a, [id]: list })),
         () => {},
       )
       loadDefaults(id)
-      void invoke(id, 'notices.list').then(
+      void read('notices.list').then(
         (list) => setInbox((i) => ({ ...i, [id]: list })),
         () => {},
       )
@@ -645,6 +678,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       for (const payload of buffers.current.get(id) ?? [])
         if (payload.revision == null || payload.revision > (revisions.get(payload.sessionId) ?? 0))
           applyEvent(id, payload)
+      void flush(id)
     })().finally(() => {
       if (refreshing.current.get(id) === promise) {
         refreshing.current.delete(id)
@@ -737,24 +771,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     change((s) => ({
       ...s,
-      outbox: s.outbox.filter((o) => o.id !== item.id),
+      outbox: s.outbox.map((o) => (o.id === item.id ? { ...o, state: 'accepted', error: undefined } : o)),
       chats: s.chats.map((c) => (c.id === chat.id ? { ...c, sessionId, pending: false } : c)),
     }))
-    // The event stream keeps transcripts current; do not hold the next queued message behind a full host refresh.
-    void refresh(item.computerId).catch(report)
+    // Keep the acknowledged bubble until the authoritative message or queue entry is mounted.
+    // Finish reconciliation before another identical message takes its history baseline.
+    await refresh(item.computerId, true).catch(report)
   }
   const flush = async (id: string) => {
-    if (flushing.current.has(id)) return
+    if (flushing.current.has(id) || ref.current.outbox.some((o) => o.computerId === id && o.state === 'accepted'))
+      return
     flushing.current.add(id)
     try {
       while (
+        active.current &&
+        !connections.current.get(id)?.controller.signal.aborted &&
         ref.current.computers.find((c) => c.id === id)?.status === 'online' &&
         ref.current.computers.find((c) => c.id === id)?.access !== 'viewer'
       ) {
-        const item = ref.current.outbox.find((o) => o.computerId === id)
+        const item = ref.current.outbox.find((o) => o.computerId === id && o.state !== 'accepted')
         if (!item || item.state === 'uncertain' || item.state === 'sending' || item.state === 'review') break
-        change((s) => ({ ...s, outbox: s.outbox.map((o) => (o.id === item.id ? { ...o, state: 'sending' } : o)) }))
-        // Let the tap, composer clear and sending state paint before the synchronous full-state persist below.
+        change((s) => ({
+          ...s,
+          outbox: s.outbox.map((o) =>
+            o.id === item.id
+              ? {
+                  ...o,
+                  state: 'sending',
+                  deliveryBaseline: deliveryBaseline(
+                    s.chats.find((chat) => chat.id === o.chatId)!,
+                    o.text,
+                  ),
+                }
+              : o,
+          ),
+        }))
+        // Let the tap, composer clear and sending state paint before the durable profile save below.
         await new Promise((resolve) => setTimeout(resolve, 0))
         if (ref.current.computers.find((computer) => computer.id === id)?.access === 'viewer') {
           change((s) => ({
@@ -768,8 +820,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           break
         }
         try {
-          writeLocal({ ...ref.current, ready: undefined, error: undefined, usage: undefined, catalogs: undefined })
+          await writeLocal({
+            ...ref.current,
+            ready: undefined,
+            error: undefined,
+            usage: undefined,
+            catalogs: undefined,
+          })
+          if (!active.current || connections.current.get(id)?.controller.signal.aborted) {
+            change((s) => ({ ...s, outbox: s.outbox.map((o) => (o.id === item.id ? { ...o, state: 'waiting' } : o)) }))
+            break
+          }
           await deliver(item)
+          if (ref.current.outbox.some((o) => o.computerId === id && o.state === 'accepted')) break
         } catch (error) {
           // Only a confirmed pre-allocation rejection can approve new bases. An unknown outcome
           // keeps its original request and plan until delivery is reconciled.
@@ -861,7 +924,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return 'moved'
   }
 
-  const connect = async (computer: Computer) => {
+  const connect = async (computer: Computer, resuming = false) => {
     const old = connections.current.get(computer.id)
     old?.controller.abort()
     old?.client.close()
@@ -869,7 +932,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const generation = (generations.current.get(computer.id) ?? 0) + 1
     generations.current.set(computer.id, generation)
     if (!active.current) return
-    status(computer.id, 'connecting')
+    if (!resuming || computer.status !== 'online') status(computer.id, 'connecting')
     const token = await readToken(computer.id)
     if (generations.current.get(computer.id) !== generation || !active.current) return
     if (!token) {
@@ -922,10 +985,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             .catch(() => {})
         await connection.client.stream(
           (channel, payload) => {
-            if (connections.current.get(computer.id) === connection) receive(computer.id, channel, payload)
+            if (connections.current.get(computer.id) === connection && !connection.controller.signal.aborted)
+              receive(computer.id, channel, payload)
           },
           async () => {
+            if (connection.controller.signal.aborted || connections.current.get(computer.id) !== connection) return
             await refreshing.current.get(computer.id)?.catch(() => {})
+            if (connection.controller.signal.aborted || connections.current.get(computer.id) !== connection) return
             await refresh(computer.id, true)
             if (!connection.controller.signal.aborted) {
               attempt = 0
@@ -958,6 +1024,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }
   useEffect(() => {
+    active.current = AppState.currentState !== 'background'
     for (const computer of ref.current.computers)
       if (computer.status !== 'revoked') void connect(computer).catch(report)
     change((s) => ({ ...s, ready: true }))
@@ -970,36 +1037,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .catch(report)
     const app = AppState.addEventListener('change', (next) => {
-      const foreground = next === 'active'
+      // Native sheets and permission prompts briefly report inactive; only background suspends transport.
+      const foreground = appForeground(active.current, next)
       if (foreground === active.current) return
       active.current = foreground
       if (!foreground) {
-        try {
-          writeLocal({ ...ref.current, usage: undefined, catalogs: undefined, ready: undefined, error: undefined })
-        } catch {
-          report(new Error('Could not save phone data.'))
-        }
+        void writeLocal({
+          ...ref.current,
+          usage: undefined,
+          catalogs: undefined,
+          ready: undefined,
+          error: undefined,
+        })
+          .then(clearSaveError)
+          .catch((error) =>
+            report(new Error(`Could not save phone data. ${error instanceof Error ? error.message : String(error)}`)),
+          )
       }
       if (!foreground)
         for (const [id, connection] of connections.current) {
           generations.current.set(id, connection.generation + 1)
           connection.controller.abort()
           connection.client.close()
-          status(id, 'offline')
+          // Suspending this phone says nothing about the host's availability.
         }
       else
         for (const computer of ref.current.computers)
-          if (computer.status !== 'revoked') void connect(computer).catch(report)
+          if (computer.status !== 'revoked') void connect(computer, true).catch(report)
     })
     const poll = setInterval(() => {
       if (active.current)
         for (const computer of ref.current.computers)
-          if (computer.status === 'online') void refresh(computer.id).catch(report)
+          if (computer.status === 'online') void refresh(computer.id, true).catch(report)
     }, 20_000)
     return () => {
       app.remove()
       clearInterval(poll)
       for (const timer of [...changeTimers.current.values(), ...rebuilds.current.values()]) clearTimeout(timer)
+      changeTimers.current.clear()
+      rebuilds.current.clear()
       active.current = false
       for (const connection of connections.current.values()) {
         connection.controller.abort()
@@ -1009,19 +1085,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
   useEffect(() => {
     const timer = setTimeout(() => {
-      try {
-        writeLocal({
-          computers: ref.current.computers,
-          projects: ref.current.projects,
-          chats: ref.current.chats,
-          selected: ref.current.selected,
-          language: ref.current.language,
-          outbox: ref.current.outbox,
-          drafts: ref.current.drafts,
-        })
-      } catch {
-        report(new Error('Could not save phone data. Check available storage.'))
-      }
+      void writeLocal({
+        computers: ref.current.computers,
+        projects: ref.current.projects,
+        chats: ref.current.chats,
+        selected: ref.current.selected,
+        language: ref.current.language,
+        outbox: ref.current.outbox,
+        drafts: ref.current.drafts,
+      })
+        .then(clearSaveError)
+        .catch((error) =>
+          report(new Error(`Could not save phone data. ${error instanceof Error ? error.message : String(error)}`)),
+        )
     }, 250)
     return () => clearTimeout(timer)
   }, [state.computers, state.projects, state.chats, state.selected, state.language, state.outbox, state.drafts])
@@ -1141,7 +1217,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         usage: Object.fromEntries(Object.entries(current.usage).filter(([key]) => key !== id)),
         catalogs: Object.fromEntries(Object.entries(current.catalogs).filter(([key]) => key !== id)),
       }
-      writeLocal(
+      await writeLocal(
         {
           computers: next.computers,
           projects: next.projects,
@@ -1165,7 +1241,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       buffers.current.delete(id)
       setNotifications((n) => n.filter((x) => x.computerId !== id))
       setActivity((a) => Object.fromEntries(Object.entries(a).filter(([key]) => key !== id)))
-      change(() => next)
+      change((latest) => ({
+        ...latest,
+        computers: latest.computers.filter((c) => c.id !== id),
+        selected: latest.selected === id ? next.selected : latest.selected,
+        projects: latest.projects.filter((p) => p.computerId !== id),
+        chats: latest.chats.filter((c) => c.computerId !== id),
+        outbox: latest.outbox.filter((o) => o.computerId !== id),
+        drafts: Object.fromEntries(Object.entries(latest.drafts).filter(([key]) => !key.startsWith(`${id}:`))),
+        usage: Object.fromEntries(Object.entries(latest.usage).filter(([key]) => key !== id)),
+        catalogs: Object.fromEntries(Object.entries(latest.catalogs).filter(([key]) => key !== id)),
+      }))
+      // Drain snapshots queued during removal and purge both recovery slots before removing credentials.
+      await writeLocal(
+        { ...ref.current, usage: undefined, catalogs: undefined, ready: undefined, error: undefined },
+        { replaceBackups: true },
+      )
       await deleteToken(id)
     },
     retry: (id) => {
@@ -1199,6 +1290,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         attachments,
         context,
         state: 'waiting',
+        deliveryBaseline: deliveryBaseline(chat, text),
       }
       change((s) => ({ ...s, outbox: [...s.outbox, item] }))
       void flush(chat.computerId)
@@ -1322,13 +1414,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ),
       }
       // Commit approval before changing visible state or retrying. Storage failure leaves review intact.
-      writeLocal({ ...next, ready: undefined, error: undefined, usage: undefined, catalogs: undefined })
-      change(() => next)
+      await writeLocal({ ...next, ready: undefined, error: undefined, usage: undefined, catalogs: undefined })
+      change((latest) => ({
+        ...latest,
+        outbox: latest.outbox.map((entry) =>
+          entry.id === id ? next.outbox.find((updated) => updated.id === id)! : entry,
+        ),
+      }))
       void flush(item.computerId)
     },
     cancelOutbox: (id) => {
       const item = ref.current.outbox.find((o) => o.id === id)
-      if (!item || item.state === 'sending') return
+      if (!item || item.state === 'sending' || item.state === 'accepted') return
       change((s) => ({
         ...s,
         outbox: s.outbox.filter((o) => o.id !== id),
@@ -1467,10 +1564,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       change((s) => ({ ...s, drafts }))
       return true
     },
-    addExplorerFile: (input) => {
+    addExplorerFile: async (input) => {
+      const originalDrafts = ref.current.drafts
       const next = addExplorerFile(ref.current, input)
       // Persist before navigating. Storage failure leaves the original composer and navigation intact.
-      writeLocal({
+      await writeLocal({
         computers: ref.current.computers,
         projects: ref.current.projects,
         chats: ref.current.chats,
@@ -1479,7 +1577,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         outbox: ref.current.outbox,
         drafts: next.drafts,
       })
-      change((s) => ({ ...s, drafts: next.drafts }))
+      if (!ref.current.computers.some((host) => host.id === input.computerId))
+        throw new Error('This host was forgotten while saving. Pair it again to add the file.')
+      const changedKeys = Object.keys(next.drafts).filter((key) => next.drafts[key] !== originalDrafts[key])
+      if (changedKeys.some((key) => ref.current.drafts[key] !== originalDrafts[key]))
+        throw new Error('The draft changed while saving. Try adding the file again.')
+      change((s) => ({
+        ...s,
+        drafts: { ...s.drafts, ...Object.fromEntries(changedKeys.map((key) => [key, next.drafts[key]!])) },
+      }))
       return next.destination
     },
     setDraft: (key, text) => change((s) => ({ ...s, drafts: { ...s.drafts, [key]: text } })),

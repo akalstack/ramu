@@ -1,3 +1,4 @@
+import { pastScrollEdge } from '../runtime/scrollSurface'
 import { goBackOrHome } from '../runtime/navigation'
 import {
   Children,
@@ -46,7 +47,7 @@ function hasNativeMarker() {
 const scrollViewMarker = hasNativeMarker()
 /** True when UIKit draws the scroll-edge effect and large title itself; otherwise screens use `TopFade` and `LargeTitle`. */
 export const nativeScrollEdge = scrollViewMarker
-const scrollEdges = { top: 'hard', bottom: 'hidden', left: 'hidden', right: 'hidden' } as const
+const scrollEdges = { top: 'soft', bottom: 'hidden', left: 'hidden', right: 'hidden' } as const
 function PrimaryScroll({ children }: { children: NonNullable<ReactNode> }) {
   if (Platform.OS === 'ios')
     return scrollViewMarker ? (
@@ -63,7 +64,17 @@ export function PageScrollView({
   horizontal,
   ...props
 }: ComponentProps<typeof ScrollView> & { ref?: Ref<import('react-native').ScrollViewInstance> }) {
-  const view = <ScrollView {...props} ref={ref} horizontal={horizontal} />
+  // A field inside a page scrolls above the keyboard on iOS (Android resizes the window). Screens that pad their own
+  // bottom composer for the keyboard pass `automaticallyAdjustKeyboardInsets={false}`.
+  const view = (
+    <ScrollView
+      automaticallyAdjustKeyboardInsets={!horizontal}
+      keyboardShouldPersistTaps="handled"
+      {...props}
+      ref={ref}
+      horizontal={horizontal}
+    />
+  )
   return horizontal ? view : <PrimaryScroll>{view}</PrimaryScroll>
 }
 export function PageFlatList<T>({ ref, ...props }: FlatListProps<T> & { ref?: Ref<FlatList<T>> }) {
@@ -80,6 +91,8 @@ type HeaderButtonProps = {
   label: string
   onPress?: () => void
   systemIcon?: ComponentProps<typeof Stack.Toolbar.Button>['icon']
+  /** Stable native item identity, retained when an action changes between destinations. */
+  actionId?: string
 }
 
 /** A navigation-bar action. On iOS it is a glass circle (iOS 26 bar buttons); on Android a plain icon button. */
@@ -106,7 +119,10 @@ export type HeaderMenuAction = {
   label: string
   onPress(): void
   destructive?: boolean
+  disabled?: boolean
   icon?: ComponentProps<typeof Stack.Toolbar.MenuAction>['icon']
+  /** Consecutive actions sharing a section render as one inline group, divided from the next like an iOS menu section. */
+  section?: string
 }
 /** A native menu anchored to the toolbar button; other platforms retain their existing action surface. */
 export function HeaderMenu({ label, onPress }: { label: string; actions: HeaderMenuAction[]; onPress(): void }) {
@@ -143,6 +159,7 @@ export function Header({
   collapsed = true,
   align = 'left',
   scrollEdge = false,
+  scrolled,
 }: {
   title?: ReactNode
   subtitle?: ReactNode
@@ -156,10 +173,13 @@ export function Header({
   align?: 'left' | 'center'
   /** Enables native underlap on large-title screens; compact bars always reserve their height. */
   scrollEdge?: boolean
+  /** Raised header surface once content moves beneath a dialog or native navigation bar. */
+  scrolled?: boolean
 }) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { c } = useTheme()
+  const headerSurface = (scrolled ?? (large ? collapsed : false)) ? c.raised2 : c.window
   const { width } = useWindowDimensions()
   // Centered between the back button and up to two trailing items (one glass capsule).
   const titleWidth = Math.max(120, Math.min(220, width - 220))
@@ -170,18 +190,34 @@ export function Header({
       if (child.type === Fragment) return nativeItems((child.props as { children?: ReactNode }).children)
       if (child.type === HeaderMenu) {
         const props = child.props as { label: string; actions: HeaderMenuAction[] }
+        const item = (action: HeaderMenuAction) => (
+          <Stack.Toolbar.MenuAction
+            key={action.label}
+            icon={action.icon}
+            destructive={action.destructive}
+            disabled={action.disabled}
+            onPress={action.onPress}
+          >
+            {action.label}
+          </Stack.Toolbar.MenuAction>
+        )
+        const runs: { section?: string; actions: HeaderMenuAction[] }[] = []
+        for (const action of props.actions) {
+          const last = runs.at(-1)
+          if (last && action.section !== undefined && last.section === action.section) last.actions.push(action)
+          else runs.push({ section: action.section, actions: [action] })
+        }
         return [
           <Stack.Toolbar.Menu key={props.label} icon="ellipsis" accessibilityLabel={props.label} tintColor={c.text}>
-            {props.actions.map((action) => (
-              <Stack.Toolbar.MenuAction
-                key={action.label}
-                icon={action.icon}
-                destructive={action.destructive}
-                onPress={action.onPress}
-              >
-                {action.label}
-              </Stack.Toolbar.MenuAction>
-            ))}
+            {runs.map((run, index) =>
+              run.section === undefined ? (
+                run.actions.map(item)
+              ) : (
+                <Stack.Toolbar.Menu key={`${run.section}:${index}`} inline>
+                  {run.actions.map(item)}
+                </Stack.Toolbar.Menu>
+              ),
+            )}
           </Stack.Toolbar.Menu>,
         ]
       }
@@ -203,7 +239,10 @@ export function Header({
       const icon = props.systemIcon ?? symbols[props.label as keyof typeof symbols] ?? 'ellipsis'
       return [
         <Stack.Toolbar.Button
-          key={props.label}
+          key={props.actionId ?? props.label}
+          {...{ identifier: props.actionId ?? props.systemIcon ?? props.label }}
+          separateBackground={false}
+          hidesSharedBackground={false}
           icon={icon}
           accessibilityLabel={props.label}
           tintColor={c.text}
@@ -234,7 +273,7 @@ export function Header({
             headerTransparent: false,
             headerTitle: '',
             headerBackVisible: false,
-            headerStyle: { backgroundColor: c.window },
+            headerStyle: { backgroundColor: headerSurface },
             scrollEdgeEffects: scrollEdges,
             headerTintColor: c.text,
             headerShadowVisible: false,
@@ -242,8 +281,8 @@ export function Header({
         />
         <Stack.Header
           transparent={false}
-          style={{ backgroundColor: c.window, color: c.text, shadowColor: 'transparent' }}
-          largeStyle={{ backgroundColor: c.window, shadowColor: 'transparent' }}
+          style={{ backgroundColor: headerSurface, color: c.text, shadowColor: 'transparent' }}
+          largeStyle={{ backgroundColor: headerSurface, shadowColor: 'transparent' }}
         />
         <Stack.Title>{''}</Stack.Title>
         <Stack.Toolbar placement="left">
@@ -299,7 +338,7 @@ export function Header({
         options={{
           headerShown: true,
           headerTransparent: false,
-          headerStyle: { backgroundColor: c.window },
+          headerStyle: { backgroundColor: headerSurface },
           headerTintColor: c.text,
           headerShadowVisible: false,
           headerTitle: subtitle
@@ -343,7 +382,12 @@ export function Header({
   if (Platform.OS === 'ios') {
     // iOS 26 large titles require a transparent native bar; their scroll view supplies the native edge treatment.
     const underlap = !!large || scrollEdge
-    const background = large && Number(Platform.Version) >= 26 ? 'transparent' : c.window
+    const background =
+      underlap && Number(Platform.Version) >= 26
+        ? !nativeScrollEdge && scrolled
+          ? headerSurface
+          : 'transparent'
+        : headerSurface
     return (
       <>
         <Stack.Screen
@@ -353,9 +397,10 @@ export function Header({
             headerStyle: { backgroundColor: background },
             headerTransparent: underlap,
             headerShadowVisible: false,
-            scrollEdgeEffects: { top: 'hard', bottom: 'hidden', left: 'hidden', right: 'hidden' },
+            scrollEdgeEffects: scrollEdges,
             headerBackVisible: back && !modal,
             headerBackButtonDisplayMode: 'minimal',
+            headerTitleAlign: align,
           }}
         />
         <Stack.Header
@@ -396,9 +441,11 @@ export function Header({
               <Stack.Toolbar.Button icon="xmark" tintColor={c.text} accessibilityLabel="Close" onPress={close}>
                 Close
               </Stack.Toolbar.Button>
+            ) : left ? (
+              nativeItems(left)
             ) : (
               <Stack.Toolbar.View hidesSharedBackground>
-                <View>{left ?? title}</View>
+                <View>{title}</View>
               </Stack.Toolbar.View>
             )}
           </Stack.Toolbar>
@@ -469,7 +516,13 @@ export function useScrolledUnderBar(past = 8) {
   const [scrolled, setScrolled] = useState(false)
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) =>
-      setScrolled(event.nativeEvent.contentOffset.y > past - (insets.top + BAR)),
+      setScrolled(
+        pastScrollEdge(
+          event.nativeEvent.contentOffset.y,
+          event.nativeEvent.contentInset?.top ?? insets.top + BAR,
+          past,
+        ),
+      ),
     [past, insets.top],
   )
   return { scrolled, onScroll }

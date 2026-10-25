@@ -1,3 +1,6 @@
+import { translate } from '@ramu/shared/i18n'
+import { recentThreads } from '../../../runtime/recentThreads'
+import { groupThreads, type ThreadGroup } from '../../../runtime/threadGroups'
 import { useMemo, useState } from 'react'
 import { Platform, Pressable, ScrollView as HScroll, View } from 'react-native'
 import { useRouter } from 'expo-router'
@@ -8,8 +11,9 @@ import {
   Network,
   MessagesSquare,
   Search,
+  Gauge,
   SquarePen,
-  SquareTerminal,
+  Ellipsis,
   WifiOff,
   Clock,
   X,
@@ -18,8 +22,8 @@ import { font, radius, space, useTheme } from '../../../theme'
 import { useStore, type OutboxItem } from '../../../runtime/store'
 import { STANDALONE, type Chat, type MobileProject } from '../../../runtime/types'
 import { useT } from '../../../i18n'
-import { Header, LargeTitle, Screen, useScrolledUnderBar, PageFlatList } from '../../../components/Screen'
-import { PlanUsageSummary } from '../../../components/PlanUsage'
+import { Header, HeaderButton, LargeTitle, Screen, useScrolledUnderBar, PageFlatList } from '../../../components/Screen'
+import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ChatRow } from '../../../components/ChatRow'
 import { ProjectActionsSheet } from '../../../components/ChatActions'
 import { Disclosure, animateLayout } from '../../../components/Motion'
@@ -35,16 +39,21 @@ type HomeRow = { key: string } & Position &
     | { kind: 'label'; text: string; right?: string }
     | { kind: 'outbox'; o: OutboxItem }
     | { kind: 'chat'; chat: Chat; project?: string; divider?: boolean }
-    | { kind: 'project'; p: MobileProject; count: number; closed: boolean }
-    | { kind: 'empty' }
+    | { kind: 'project'; group: ThreadGroup<Chat, MobileProject>; closed: boolean }
+    // `group` set: show the rest of one project (or fewer again); unset: more of the flat filtered list.
+    | { kind: 'more'; group?: string; hidden?: number }
   )
+
+/** Newest threads each project shows before "Show more"; running, waiting and failed ones always show. */
+const PER_PROJECT = 3
 
 export default function Threads() {
   const { c } = useTheme()
   const t = useT()
   const router = useRouter()
   const edge = useScrolledUnderBar(40)
-  const { chats, projects, selected, computers, outbox: allOutbox, cancelOutbox, select } = useStore()
+  const store = useStore()
+  const { chats, projects, selected, computers, outbox: allOutbox, cancelOutbox, select } = store
   // With several hosts the list merges all of them by default; picking one host shows just that host.
   const multi = computers.length > 1
   const [allHosts, setAllHosts] = useState(true)
@@ -53,21 +62,31 @@ export default function Threads() {
   // A message being delivered to a connected computer is in the outbox for a moment; only stuck ones (offline or uncertain) belong here.
   const outbox = allOutbox.filter(
     (o) =>
+      o.state !== 'accepted' &&
       (merged || o.computerId === selected) &&
       (o.state === 'uncertain' || computers.find((x) => x.id === o.computerId)?.status !== 'online'),
   )
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [historyLimit, setHistoryLimit] = useState(20)
   const pc = computers.find((x) => x.id === selected)
   const actions = useTabActions()
+  const [usageOpen, setUsageOpen] = useState(false)
 
   type StatusFilter = 'all' | 'running' | 'needs-input' | 'failed' | 'archived'
   const [filter, setFilter] = useState<StatusFilter>('all')
-  const [scopeState, setScope] = useState<string | null>(null)
-  // A workspace belongs to one host, so the filter only applies when a single host is shown.
-  const scope = merged ? null : scopeState
-  const [scopeSheet, setScopeSheet] = useState(false)
   const [projectMenu, setProjectMenu] = useState<MobileProject | null>(null)
-  const projectList = projects.filter((p) => p.computerId === selected)
+  // Folded projects and projects showing all their threads, by group key (host + project).
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+  const toggle = (set: typeof setCollapsed, key: string) => {
+    tap()
+    animateLayout()
+    set((current) => {
+      const next = new Set(current)
+      if (!next.delete(key)) next.add(key)
+      return next
+    })
+  }
+  const projectList = projects.filter((p) => merged || p.computerId === selected)
   const nameOf = (id: string) => projectList.find((p) => p.id === id)?.name
   // `project · host`, the same label every list uses; the host only appears once there is more than one.
   const labelOf = (chat: Chat) =>
@@ -79,10 +98,7 @@ export default function Threads() {
     ]
       .filter(Boolean)
       .join(' · ') || undefined
-  const scoped = useMemo(
-    () => chats.filter((x) => (merged || x.computerId === selected) && (!scope || x.projectId === scope)),
-    [chats, selected, scope, merged],
-  )
+  const scoped = useMemo(() => chats.filter((x) => merged || x.computerId === selected), [chats, selected, merged])
   const mine = useMemo(() => {
     return scoped
       .filter((x) =>
@@ -92,13 +108,11 @@ export default function Threads() {
       )
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }, [scoped, filter])
-  const filtering = filter !== 'all' || scope !== null
+  const filtering = filter !== 'all'
   const pinned = mine
     .filter((x) => x.pinnedAt !== null && filter !== 'archived')
     .sort((a, b) => b.pinnedAt! - a.pinnedAt!)
   const unpinned = mine.filter((x) => !pinned.includes(x))
-  const standalone = unpinned.filter((x) => x.projectId === STANDALONE)
-  const scopeName = scope ? (nameOf(scope) ?? t.homeWorkspace) : t.homeAllWorkspaces
   const live = scoped.filter((x) => x.status !== 'archived')
   const chips: { key: StatusFilter; label: string; count: number }[] = [
     { key: 'all', label: t.homeAll, count: live.length },
@@ -144,67 +158,59 @@ export default function Threads() {
         ),
       )
     }
-    if (merged) {
-      const recent = unpinned
-      if (recent.length) {
-        out.push({ key: 'label:recent', kind: 'label', text: filter === 'archived' ? 'Archived' : 'Recent' })
+    if (filtering) {
+      // A status filter answers "which threads are …?", so its results are one flat list labelled by project.
+      const recent = recentThreads(unpinned, historyLimit)
+      if (recent.threads.length) {
+        out.push({
+          key: 'label:recent',
+          kind: 'label',
+          text: chips.find((chip) => chip.key === filter)?.label ?? t.homeAll,
+        })
         group(
           'recent',
-          recent.map((x, i) => ({ key: x.id, kind: 'chat', chat: x, project: labelOf(x), divider: i > 0 }) as HomeRow),
+          recent.threads.map(
+            (chat, i) => ({ key: chat.id, kind: 'chat', chat, project: labelOf(chat), divider: i > 0 }) as HomeRow,
+          ),
         )
+        if (recent.more) group('more', [{ key: 'more', kind: 'more' }])
       }
       return out
     }
-    // The Projects heading only appears above at least one project (none yet: no empty section).
-    const projectsLabel = out.length
-    out.push({ key: 'label:projects', kind: 'label', text: filter === 'archived' ? 'Archived' : t.projects })
-    for (const p of projectList.filter((p) => !scope || p.id === scope)) {
-      const list = unpinned.filter((x) => x.projectId === p.id)
-      if (filtering && !list.length) continue
-      const closed = Boolean(collapsed[p.id])
+    // Otherwise each project is its own card, the most recently active first, so its menu and new-thread action are always one tap away.
+    const groups = groupThreads(unpinned, projectList, { limit: PER_PROJECT, expanded, collapsed })
+    if (groups.length) out.push({ key: 'label:projects', kind: 'label', text: t.projects })
+    groups.forEach((g, index) => {
+      const closed = collapsed.has(g.key)
       group(
-        `project:${p.id}`,
+        `group:${g.key}`,
         [
-          { key: 'head', kind: 'project', p, count: list.length, closed } as HomeRow,
-          ...(closed
-            ? []
-            : list.length
-              ? list.map((x) => ({ key: x.id, kind: 'chat', chat: x, divider: true }) as HomeRow)
-              : [{ key: 'empty', kind: 'empty' } as HomeRow]),
+          { key: 'head', kind: 'project', group: g, closed } as HomeRow,
+          ...g.threads.map((chat) => ({ key: chat.id, kind: 'chat', chat, divider: true }) as HomeRow),
+          ...(!closed && (g.hidden || (expanded.has(g.key) && g.total > PER_PROJECT))
+            ? [{ key: 'more', kind: 'more', group: g.key, hidden: g.hidden } as HomeRow]
+            : []),
         ],
-        space.m,
+        index ? space.m : 0,
       )
-    }
-    if (out.length === projectsLabel + 1) out.splice(projectsLabel, 1)
-    if (standalone.length) {
-      out.push({ key: 'label:standalone', kind: 'label', text: t.standalone })
-      group(
-        'standalone',
-        standalone.map((x, i) => ({ key: x.id, kind: 'chat', chat: x, divider: i > 0 }) as HomeRow),
-      )
-    }
+    })
     return out
   }, [
     outbox,
     pinned,
     unpinned,
-    standalone,
     projectList,
-    collapsed,
+    historyLimit,
     filtering,
     filter,
-    scope,
     merged,
     projects,
     computers,
+    collapsed,
+    expanded,
     t,
   ])
   const newChat = (projectId: string) => router.push({ pathname: '/new', params: { project: projectId } })
-  const openTerminal = (projectId: string) =>
-    router.push({
-      pathname: '/terminal',
-      params: { computer: selected, ctx: `project:${projectId.slice(projectId.indexOf(':') + 1)}` },
-    })
   const renderRow = (row: HomeRow) => {
     if (row.kind === 'label')
       return (
@@ -217,7 +223,7 @@ export default function Threads() {
             ) : undefined
           }
         >
-          {row.text}
+          {translate(store.language, row.text)}
         </SectionLabel>
       )
     const body =
@@ -252,63 +258,110 @@ export default function Threads() {
         })()
       ) : row.kind === 'chat' ? (
         <ChatRow chat={row.chat} project={row.project} divider={row.divider} />
-      ) : row.kind === 'project' ? (
-        <Pressable
-          onLongPress={() => {
-            tap()
-            setProjectMenu(row.p)
-          }}
-          onPress={() => {
-            tap()
-            animateLayout()
-            setCollapsed((state) => ({ ...state, [row.p.id]: !row.closed }))
-          }}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: space.s,
-            paddingHorizontal: space.l,
-            paddingVertical: 13,
-            backgroundColor: pressed ? c.pressed : 'transparent',
-          })}
+      ) : row.kind === 'more' ? (
+        <Row
+          onPress={() => (row.group ? toggle(setExpanded, row.group) : setHistoryLimit((limit) => limit + 20))}
+          style={{ paddingVertical: 11 }}
         >
-          {row.p.kind === 'workspace' ? (
-            <Folder size={16} color={c.soft} strokeWidth={1.8} />
-          ) : (
-            <FolderGit2 size={16} color={c.soft} strokeWidth={1.8} />
-          )}
-          <T weight="600" style={{ flexShrink: 1 }} numberOfLines={1}>
-            {row.p.name}
+          <T size={font.control} tone="muted">
+            {row.group
+              ? row.hidden
+                ? translate(store.language, 'Show {count} more', { count: row.hidden })
+                : translate(store.language, 'Show fewer')
+              : translate(store.language, 'Show more threads')}
           </T>
-          {row.p.kind === 'workspace' ? (
-            <T size={font.caption} tone="muted">
-              {row.p.repos.length} repos
-            </T>
-          ) : null}
-          <View style={{ flex: 1 }} />
-          <T size={font.caption} tone="muted">
-            {row.count}
-          </T>
-          <IconButton
-            icon={SquareTerminal}
-            label={`Open terminal in ${row.p.name}`}
-            size={30}
-            tone="muted"
-            onPress={() => openTerminal(row.p.id)}
-          />
-          <IconButton
-            icon={SquarePen}
-            label={`New thread in ${row.p.name}`}
-            size={30}
-            tone="muted"
-            onPress={() => newChat(row.p.id)}
-          />
-          <Disclosure open={!row.closed} size={15} color={c.muted} />
-        </Pressable>
+        </Row>
       ) : (
-        <T size={font.control} tone="muted" style={{ paddingHorizontal: space.l, paddingBottom: space.m }}>
-          {t.empty}
-        </T>
+        (() => {
+          const { group: g, closed } = row
+          const p = g.project
+          const name =
+            p?.name ?? (g.projectId === STANDALONE ? t.standalone : translate(store.language, 'Unknown project'))
+          const host = merged ? computers.find((x) => x.id === g.computerId)?.name : undefined
+          const detail = [
+            host,
+            p?.kind === 'workspace' ? translate(store.language, '{count} repos', { count: p.repos.length }) : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={name}
+              accessibilityState={{ expanded: !closed }}
+              accessibilityHint={p ? translate(store.language, 'Long press for project actions') : undefined}
+              onPress={() => toggle(setCollapsed, g.key)}
+              onLongPress={
+                p
+                  ? () => {
+                      tap()
+                      setProjectMenu(p)
+                    }
+                  : undefined
+              }
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.s,
+                paddingLeft: space.l,
+                paddingRight: space.s,
+                minHeight: 50,
+                backgroundColor: pressed ? c.pressed : 'transparent',
+              })}
+            >
+              {p?.kind === 'workspace' ? (
+                <Folder size={16} color={c.soft} strokeWidth={1.8} />
+              ) : p ? (
+                <FolderGit2 size={16} color={c.soft} strokeWidth={1.8} />
+              ) : (
+                <MessagesSquare size={16} color={c.soft} strokeWidth={1.8} />
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                {/* The chevron follows the name, as a section disclosure, so the trailing edge keeps only actions. */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                  <T weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+                    {name}
+                  </T>
+                  <Disclosure open={!closed} size={13} color={c.muted} />
+                </View>
+                {detail || closed ? (
+                  <T size={font.caption} tone="muted" numberOfLines={1}>
+                    {/* Folded, the subtitle says what is hidden and whether something inside needs you or is working. */}
+                    {[
+                      detail,
+                      closed && g.attention ? `${g.attention} ${t.homeWaiting}` : undefined,
+                      closed && g.running ? `${g.running} ${t.homeRunning}` : undefined,
+                      closed && !g.attention && !g.running && g.total
+                        ? translate(store.language, '{count} threads', { count: g.total })
+                        : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || translate(store.language, 'No threads yet')}
+                  </T>
+                ) : null}
+              </View>
+              {p ? (
+                <>
+                  {/* Files, terminal, rename and the rest live in the project menu, which long-press also opens. */}
+                  <IconButton
+                    icon={Ellipsis}
+                    label={`${t.projectActions} · ${p.name}`}
+                    size={32}
+                    tone="muted"
+                    onPress={() => setProjectMenu(p)}
+                  />
+                  <IconButton
+                    icon={SquarePen}
+                    label={translate(store.language, 'New thread in {project}', { project: p.name })}
+                    size={32}
+                    tone="muted"
+                    onPress={() => newChat(p.id)}
+                  />
+                </>
+              ) : null}
+            </Pressable>
+          )
+        })()
       )
     const round = radius.l
     return (
@@ -334,13 +387,24 @@ export default function Threads() {
       <Header
         back={false}
         large
+        scrollEdge
         collapsed={edge.scrolled}
         title={t.chats}
         right={
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <PlanUsageSummary actionOnly hostIds={merged ? computers.map((h) => h.id) : [selected]} />
+          <>
+            {computers.some(
+              (host) => (merged || host.id === selected) && store.appPreferences?.[host.id]?.showUsageLimits !== false,
+            ) ? (
+              <HeaderButton
+                actionId="tab-usage"
+                icon={Gauge}
+                label={store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'}
+                systemIcon="gauge.with.dots.needle.50percent"
+                onPress={() => setUsageOpen(true)}
+              />
+            ) : null}
             {actions}
-          </View>
+          </>
         }
       />
       <PageFlatList
@@ -358,11 +422,6 @@ export default function Threads() {
         ListHeaderComponent={
           <>
             <LargeTitle>{t.chats}</LargeTitle>
-            <Row onPress={() => router.push('/explorer')}>
-              <Folder size={17} color={c.soft} />
-              <T size={font.control}>{t.browseFiles}</T>
-            </Row>
-            <PlanUsageSummary hostIds={merged ? computers.map((h) => h.id) : [selected]} />
             {merged ? null : <ComputerSwitcher />}
             {!merged && pc?.status === 'offline' ? (
               <View
@@ -383,47 +442,39 @@ export default function Threads() {
               </View>
             ) : null}
 
-            <HScroll
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              style={{ flexGrow: 0 }}
-              contentContainerStyle={{ paddingHorizontal: space.l, paddingTop: space.m, gap: space.s }}
-            >
-              {multi ? (
-                <Chip
-                  label={merged ? t.allHosts : (pc?.name ?? t.allHosts)}
-                  accessibilityLabel={t.homeFilterHost}
-                  icon={Network}
-                  chevron
-                  selected={!merged}
-                  maxLabelWidth={150}
-                  onPress={() => setHostSheet(true)}
-                />
-              ) : null}
-              {merged ? null : (
-                <Chip
-                  label={scopeName}
-                  accessibilityLabel={t.homeFilterWorkspace}
-                  icon={Folder}
-                  chevron
-                  selected={scope !== null}
-                  maxLabelWidth={150}
-                  onPress={() => setScopeSheet(true)}
-                />
-              )}
-              {chips
-                .filter((chip) => chip.key === 'all' || chip.key === filter || chip.count > 0)
-                .map((chip) => (
+            {/* Filters appear once there is something to filter: another host, or threads in a second state. */}
+            {multi || filtering || chips.some((chip) => chip.key !== 'all' && chip.count > 0) ? (
+              <HScroll
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                style={{ flexGrow: 0 }}
+                contentContainerStyle={{ paddingHorizontal: space.l, paddingTop: space.m, gap: space.s }}
+              >
+                {multi ? (
                   <Chip
-                    key={chip.key}
-                    label={chip.label}
-                    count={chip.count}
-                    selected={filter === chip.key}
-                    onPress={() => setFilter(chip.key)}
+                    label={merged ? t.allHosts : (pc?.name ?? t.allHosts)}
+                    accessibilityLabel={t.homeFilterHost}
+                    icon={Network}
+                    chevron
+                    selected={!merged}
+                    maxLabelWidth={150}
+                    onPress={() => setHostSheet(true)}
                   />
-                ))}
-            </HScroll>
+                ) : null}
+                {chips
+                  .filter((chip) => chip.key === 'all' || chip.key === filter || chip.count > 0)
+                  .map((chip) => (
+                    <Chip
+                      key={chip.key}
+                      label={chip.label}
+                      count={chip.count}
+                      selected={filter === chip.key}
+                      onPress={() => setFilter(chip.key)}
+                    />
+                  ))}
+              </HScroll>
+            ) : null}
           </>
         }
         ListFooterComponent={
@@ -436,7 +487,6 @@ export default function Threads() {
                   onPress={() => {
                     tap()
                     setFilter('all')
-                    setScope(null)
                   }}
                 >
                   <T tone="accent" weight="500">
@@ -445,7 +495,7 @@ export default function Threads() {
                 </Pressable>
               </View>
             ) : null}
-            {!filtering && !mine.length && (merged || !projectList.length) ? (
+            {!filtering && !mine.length && !projectList.length ? (
               <View style={{ alignItems: 'center', padding: space.xl * 2, gap: space.m }}>
                 <MessagesSquare size={28} color={c.placeholder} />
                 <T tone="muted">{t.empty}</T>
@@ -466,10 +516,7 @@ export default function Threads() {
             key={o.id ?? 'all'}
             onPress={() => {
               tap()
-              if (o.id) {
-                select(o.id)
-                setScope(null)
-              }
+              if (o.id) select(o.id)
               setAllHosts(o.id === null)
               setHostSheet(false)
             }}
@@ -499,37 +546,11 @@ export default function Threads() {
           <T style={{ flex: 1 }}>{t.pair}</T>
         </Row>
       </Sheet>
-      <Sheet open={scopeSheet} onClose={() => setScopeSheet(false)} title={t.homeWorkspace}>
-        {[
-          {
-            id: null as string | null,
-            name: t.homeAllWorkspaces,
-            n: chats.filter((x) => x.computerId === selected && x.status !== 'archived').length,
-          },
-          ...projectList.map((p) => ({
-            id: p.id as string | null,
-            name: p.name,
-            n: chats.filter((x) => x.projectId === p.id && x.status !== 'archived').length,
-          })),
-        ].map((o) => (
-          <Row
-            key={o.id ?? 'all'}
-            onPress={() => {
-              setScope(o.id)
-              setScopeSheet(false)
-            }}
-          >
-            <Folder size={17} color={c.soft} />
-            <T style={{ flex: 1 }} weight={o.id === scope ? '600' : '400'} numberOfLines={1}>
-              {o.name}
-            </T>
-            <T size={font.caption} tone="muted">
-              {o.n}
-            </T>
-            {o.id === scope ? <Check size={16} color={c.accent} /> : <View style={{ width: 16 }} />}
-          </Row>
-        ))}
-      </Sheet>
+      <PlanUsageSheet
+        hosts={merged ? computers.map((host) => host.id) : [selected]}
+        open={usageOpen}
+        onClose={() => setUsageOpen(false)}
+      />
     </Screen>
   )
 }

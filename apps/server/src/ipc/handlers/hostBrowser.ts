@@ -271,6 +271,20 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
       args: z.tuple([id, tab, z.string().url().max(4000)]),
       run: (taskId: string, tabId: string, url: string) => viewer().navigate(device(), thread(taskId), tabId, url),
     },
+    'hostBrowser.focus': {
+      args: z.tuple([id, tab]),
+      run: (taskId, tabId) => viewer().focus(device(), thread(taskId), tabId),
+    },
+    'hostBrowser.fit': {
+      args: z.tuple([
+        id,
+        tab,
+        z
+          .object({ width: z.number().int().min(240).max(1920), height: z.number().int().min(160).max(1920) })
+          .nullable(),
+      ]),
+      run: (taskId, tabId, size) => viewer().fit(device(), thread(taskId), tabId, size),
+    },
     'hostBrowser.disconnect': { args: z.tuple([]), run: () => viewer().disconnect(device()) },
   }
 }

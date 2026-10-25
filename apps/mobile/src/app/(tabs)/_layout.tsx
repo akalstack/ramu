@@ -4,7 +4,7 @@ import { useTheme } from '../../theme'
 import { useAutomation } from '../../runtime/automation'
 import { useT } from '../../i18n'
 
-// The app's four places, as a native tab bar (Liquid Glass on iOS 26): Threads, Inbox, Schedules and Search.
+// The app's four places, as a native tab bar (Liquid Glass on iOS 26): Threads, Inbox, Schedules and New thread.
 // Each tab holds its own stack, so a thread opened from any of them pushes on the root stack above the bar.
 export default function TabsLayout() {
   const { c, scheme } = useTheme()
@@ -44,9 +44,9 @@ export default function TabsLayout() {
         />
         <NativeTabs.Trigger.Label>{t.schedules}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="search" role="search">
-        <NativeTabs.Trigger.Icon md="search" />
-        <NativeTabs.Trigger.Label>{t.searchTab}</NativeTabs.Trigger.Label>
+      <NativeTabs.Trigger name="compose" prominent>
+        <NativeTabs.Trigger.Icon sf="square.and.pencil" md="edit_square" />
+        <NativeTabs.Trigger.Label>{t.newChat}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   )

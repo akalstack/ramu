@@ -75,3 +75,39 @@ test('an interrupted first migration can retry while the original legacy profile
   storage.slots[1] = JSON.stringify({ version: 2, revision: 5, data: {} })
   assert.throws(() => writeLocalCommit(storage, legacy, true), /newer Ramu/)
 })
+
+test('async commits wait for the native write before verification and preserve the recovery slot on failure', async () => {
+  const { writeLocalCommitAsync } = await import('../src/storage/localCommit.ts')
+  const storage = memory()
+  writeLocalCommit(storage, { drafts: { active: 'original' } })
+  let complete
+  const asyncStorage = {
+    read: async (slot) => storage.read(slot),
+    write: (slot, value) =>
+      new Promise((resolve) => {
+        complete = () => {
+          storage.write(slot, value)
+          resolve()
+        }
+      }),
+  }
+  const pending = writeLocalCommitAsync(asyncStorage, { drafts: { active: 'new' } })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.equal(readLocalCommit(storage).drafts.active, 'original')
+  complete()
+  await pending
+  assert.equal(readLocalCommit(storage).drafts.active, 'new')
+  await assert.rejects(
+    writeLocalCommitAsync(
+      {
+        ...asyncStorage,
+        write: async () => {
+          throw Error('disk full')
+        },
+      },
+      { drafts: {} },
+    ),
+    /disk full/,
+  )
+  assert.equal(readLocalCommit(storage).drafts.active, 'new')
+})

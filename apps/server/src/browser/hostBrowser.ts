@@ -298,6 +298,15 @@ export class HostBrowser implements HostedBrowserBackend {
   history(device: string, thread: string, tabId: string, direction: 'back' | 'forward' | 'reload') {
     return this.controlled(device, thread, tabId)[direction](tabId)
   }
+  focus(device: string, thread: string, tabId: string) {
+    return this.controlled(device, thread, tabId).focusedFieldForHuman(tabId, device, {
+      hostId: HOST,
+      threadId: thread,
+    })
+  }
+  fit(device: string, thread: string, tabId: string, size: { width: number; height: number } | null) {
+    return this.controlled(device, thread, tabId).fitToViewer(tabId, device, size, { hostId: HOST, threadId: thread })
+  }
   dialog(device: string, thread: string, tabId: string) {
     return this.authorized(device, thread).dialogForAgent(tabId, { hostId: HOST, threadId: thread })
   }

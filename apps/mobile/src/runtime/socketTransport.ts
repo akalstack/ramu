@@ -55,4 +55,8 @@ export function socketFor(address: string, token: string): RuntimeSocket | null 
   return socket.state === 'rejected' || socket.state === 'unsupported' ? null : socket
 }
 
-registerSocketProvider(socketFor)
+registerSocketProvider(socketFor, (address, token) => {
+  const key = `${address}#${token.length}:${token.slice(-8)}`
+  sockets.get(key)?.close()
+  sockets.delete(key)
+})

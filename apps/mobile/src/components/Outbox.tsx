@@ -65,14 +65,18 @@ export function PendingBubble({
   const store = useStore()
   const { cancelOutbox } = store
   const viewOnly = store.computers?.find((host) => host.id === item.computerId)?.access === 'viewer'
+  const delivering =
+    item.state === 'accepted' ||
+    (!viewOnly && store.isOnline(item.computerId) && (item.state === 'sending' || item.state === 'waiting'))
   const t = useT()
   const [reviewing, setReviewing] = useState(false)
   const ModeIcon = item.mode === 'steer' ? CornerDownRight : item.mode === 'queue' ? ListPlus : Clock
   return (
     <>
       <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Waiting to send: ${item.text}. Tap to cancel`}
+        disabled={delivering}
+        accessibilityRole={delivering ? 'text' : 'button'}
+        accessibilityLabel={delivering ? `Sending: ${item.text}` : `Waiting to send: ${item.text}. Tap to cancel`}
         onPress={() => {
           tap()
           confirmCancel(item, onEdit, cancelOutbox)
@@ -82,13 +86,13 @@ export function PendingBubble({
         <View
           style={{
             backgroundColor: c.bubble,
-            opacity: 0.6,
+            opacity: delivering ? 1 : 0.6,
             borderRadius: radius.l - 2,
             borderBottomRightRadius: radius.xs,
             paddingHorizontal: space.m + 2,
             paddingVertical: space.s + 2,
             borderWidth: 1,
-            borderStyle: 'dashed',
+            borderStyle: delivering ? 'solid' : 'dashed',
             borderColor: c.lineStrong,
           }}
         >
@@ -97,27 +101,43 @@ export function PendingBubble({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingRight: 4 }}>
           <ModeIcon size={12} color={c.muted} />
           <T size={font.caption} tone="muted">
-            {item.state === 'review'
-              ? t.branchReviewBases
-              : item.state === 'uncertain'
-                ? 'Check delivery on host'
-                : item.state === 'sending'
-                  ? 'Sending'
-                  : item.mode === 'steer'
-                    ? 'Steer'
-                    : item.mode === 'queue'
-                      ? 'Queued'
-                      : 'Waiting'}{' '}
-            ·{' '}
-            {viewOnly
-              ? VIEW_ONLY_WRITE_NOTICE[store.language]
-              : item.state === 'uncertain' || item.state === 'review'
-                ? item.error
-                : `sends when ${computer} is back`}{' '}
-            ·{' '}
-            <T size={font.caption} tone="accent" weight="600">
-              Cancel
-            </T>
+            {delivering ? (
+              store.language === 'id' ? (
+                item.state === 'accepted' ? (
+                  'Terkirim'
+                ) : (
+                  'Mengirim…'
+                )
+              ) : item.state === 'accepted' ? (
+                'Sent'
+              ) : (
+                'Sending…'
+              )
+            ) : (
+              <>
+                {item.state === 'review'
+                  ? t.branchReviewBases
+                  : item.state === 'uncertain'
+                    ? 'Check delivery on host'
+                    : item.state === 'sending'
+                      ? 'Sending'
+                      : item.mode === 'steer'
+                        ? 'Steer'
+                        : item.mode === 'queue'
+                          ? 'Queued'
+                          : 'Waiting'}{' '}
+                ·{' '}
+                {viewOnly
+                  ? VIEW_ONLY_WRITE_NOTICE[store.language]
+                  : item.state === 'uncertain' || item.state === 'review'
+                    ? item.error
+                    : `sends when ${computer} is back`}{' '}
+                ·{' '}
+                <T size={font.caption} tone="accent" weight="600">
+                  Cancel
+                </T>
+              </>
+            )}
           </T>
         </View>
       </Pressable>

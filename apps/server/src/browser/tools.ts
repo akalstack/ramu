@@ -444,8 +444,8 @@ export function registerBrowserTools(
             .min(4)
             .max(180000)
             .regex(/^[A-Za-z0-9+/]*={0,2}$/),
-          width: z.number().int().min(1).max(1024),
-          height: z.number().int().min(1).max(768),
+          width: z.number().int().min(1).max(1920),
+          height: z.number().int().min(1).max(1920),
         })
         .parse(await broker.request(session.taskId, session.id, { kind: 'screenshot', tabId }))
       return { content: [{ type: 'image' as const, mimeType: image.mimeType, data: image.data }] }

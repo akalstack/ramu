@@ -1,3 +1,4 @@
+import { BottomSearch } from '../components/BottomSearch'
 import { goBackOrHome } from '../runtime/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { TextInput } from 'react-native'
@@ -101,16 +102,6 @@ export default function HostFolders() {
                 })
               }
             />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder={t.githubSearch}
-              accessibilityLabel={t.githubSearch}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholderTextColor={c.muted}
-              style={{ padding: space.m, backgroundColor: c.fill, color: c.text, fontSize: font.body }}
-            />
             <GlassButton
               title={busy ? t.githubSearching : t.githubSearchButton}
               disabled={busy}
@@ -200,6 +191,17 @@ export default function HostFolders() {
           </>
         ) : null}
       </ScrollView>
+      {listing ? (
+        <BottomSearch
+          value={search}
+          onChangeText={setSearch}
+          placeholder={t.githubSearch}
+          onSubmit={() => {
+            if (!busy)
+              void run(async () => setFound(await store.invoke(computerId, 'forge.searchRepositories', search.trim())))
+          }}
+        />
+      ) : null}
     </Screen>
   )
 }

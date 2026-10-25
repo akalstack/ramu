@@ -16,6 +16,8 @@ export interface BrowserTabInfo {
   paused: boolean
   /** The person handed this tab back while no agent run was active; the thread's next run takes it over. */
   released?: boolean
+  /** The page is laid out at the controlling phone's screen size; it returns to the default when control changes. */
+  fitted?: boolean
   crashed: boolean
 }
 

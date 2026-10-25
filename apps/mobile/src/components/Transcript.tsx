@@ -1,4 +1,8 @@
+import { toolActivity } from '@ramu/shared/chat/toolActivity'
 import { translate } from '@ramu/shared/i18n'
+import { toolVerb } from '@ramu/shared/chat/toolStatus'
+import { DiffLines } from './DiffLines'
+import { changedFile } from '../runtime/diff'
 import { Helpers } from './Helpers'
 import { InteractiveContent } from './InteractiveContent'
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -12,6 +16,7 @@ import {
   ChevronRight,
   FileCode2,
   FilePen,
+  FileDiff,
   Flag,
   Globe,
   Lightbulb,
@@ -31,7 +36,7 @@ import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Sheet, T, tap, type Icon } from './ui'
 import { formatDuration } from '../runtime/turns'
-import { Arrive, Breathe, Collapse, Disclosure } from './Motion'
+import { ActivityText, Arrive, Breathe, Collapse, Disclosure } from './Motion'
 import { InteractiveVisibility } from './InteractiveVisibility'
 import { ProviderIcon } from './Logos'
 import { ThemeProposal } from './ThemeProposal'
@@ -628,8 +633,16 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
   const { language } = useStore()
   const [open, setOpen] = useState(false)
   const toggled = useContext(RowToggle)
-  const running = item.tools.filter((tool) => tool.status === 'in_progress').length
-  const failed = item.tools.filter((tool) => tool.status === 'failed').length
+  const { current, running, failed } = toolActivity(item.tools, (tool) =>
+    tool.status === 'in_progress' ? 'running' : tool.status === 'failed' ? 'failed' : 'done',
+  )
+  const counts = new Map<string, number>()
+  for (const tool of item.tools) counts.set(tool.verb, (counts.get(tool.verb) ?? 0) + 1)
+  const headline =
+    running || failed
+      ? `${current?.verb ?? ''} ${current?.subject ?? ''}`.trim()
+      : [...counts].map(([verb, count]) => `${verb}${count > 1 ? ` ×${count}` : ''}`).join(' · ')
+  const Icon = current ? toolIcons[current.tool] : Wrench
   return (
     <View style={{ gap: space.xs }}>
       <Pressable
@@ -643,17 +656,16 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
         <Breathe active={running > 0}>
-          <Wrench size={14} color={failed ? c.bad : running ? c.accent : c.muted} />
+          <Icon size={14} color={failed ? c.bad : running ? c.accent : c.muted} />
         </Breathe>
-        <View style={{ flex: 1 }}>
-          <Arrive animate={false} identity={`${item.tools.length}:${running}:${failed}`}>
-            <T size={font.control} tone="muted">
-              {item.tools.length} {language === 'id' ? 'alat' : 'tools'}
-              {running ? ` · ${running} ${language === 'id' ? 'berjalan' : 'running'}` : ''}
-              {failed ? ` · ${failed} ${language === 'id' ? 'gagal' : 'failed'}` : ''}
-            </T>
-          </Arrive>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <ActivityText active={running > 0}>{headline}</ActivityText>
         </View>
+        {failed > 0 ? (
+          <T size={font.caption} tone="bad">
+            {language === 'id' ? 'Gagal' : 'Failed'} · {failed}
+          </T>
+        ) : null}
         <Disclosure open={open} color={c.muted} />
       </Pressable>
       <Collapse open={open}>
@@ -734,9 +746,12 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
   const references = useContext(ReferenceContext)
   // Reads and edits name a file; tapping it opens that file like the desktop's tool rows do.
   const filePath =
-    item.tool === 'read' || item.tool === 'edit'
+    item.file?.path ??
+    (item.tool === 'read' || item.tool === 'edit'
       ? item.subject.match(/[\w@~./-]+\.[A-Za-z0-9]+(?::\d+(?::\d+)?)?/)?.[0]
-      : undefined
+      : undefined)
+  const diffs = item.diffs ?? []
+  const openable = Boolean(item.detail || item.input || diffs.length || item.file)
   const I = toolIcons[item.tool]
   // A log is cropped to a few lines inline; the whole thing opens in a sheet (a bottom sheet on iOS and Android alike).
   const PREVIEW_LINES = 6
@@ -748,8 +763,8 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
     <View>
       <Pressable
         accessibilityRole="button"
-        accessibilityState={{ expanded: open, disabled: !item.detail && !item.input }}
-        disabled={!item.detail && !item.input}
+        accessibilityState={{ expanded: open, disabled: !openable }}
+        disabled={!openable}
         onPress={() => {
           tap()
           toggled()
@@ -760,93 +775,108 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         <Breathe active={running}>
           <I size={14} color={failed ? c.bad : running ? c.accent : c.muted} strokeWidth={1.8} />
         </Breathe>
-        <Arrive animate={false} identity={`${item.verb}:${item.status}`}>
-          <T size={font.control} tone={running ? 'soft' : 'muted'} weight="500">
-            {item.verb}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <ActivityText
+            active={running}
+          >{`${item.file ? translate(storeLanguage, toolVerb(item.verb, running)) : item.verb} ${item.subject}`}</ActivityText>
+        </View>
+        {item.file?.added || item.file?.removed ? (
+          <T size={font.caption} mono>
+            {item.file.added ? <T size={font.caption} mono tone="ok">{`+${item.file.added}`}</T> : null}
+            {item.file.added && item.file.removed ? ' ' : null}
+            {item.file.removed ? <T size={font.caption} mono tone="bad">{`−${item.file.removed}`}</T> : null}
           </T>
-        </Arrive>
-        <T
-          size={font.control}
-          tone={failed ? 'bad' : 'muted'}
-          mono={item.tool !== 'search' && item.tool !== 'fetch'}
-          numberOfLines={1}
-          style={{ flexShrink: 1 }}
-        >
-          {item.subject}
-        </T>
+        ) : null}
         {failed ? (
           <T size={font.caption} tone="bad">
             {storeLanguage === 'id' ? 'Gagal' : 'Failed'}
           </T>
         ) : null}
-        {item.detail || item.input ? <Disclosure open={open} size={13} color={c.placeholder} /> : null}
+        {openable ? <Disclosure open={open} size={13} color={c.placeholder} /> : null}
       </Pressable>
-      {filePath ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${filePath}`}
-          onPress={() => {
-            tap()
-            references.openFile(filePath)
-          }}
-          hitSlop={6}
-          style={{ marginLeft: 22, alignSelf: 'flex-start', paddingVertical: 2 }}
-        >
-          <T size={font.caption} weight="600" tone="accent">
-            Open file
-          </T>
-        </Pressable>
-      ) : null}
       <Collapse open={open}>
-        <View
-          style={{
-            marginLeft: 22,
-            marginTop: 4,
-            padding: space.s + 2,
-            backgroundColor: c.code,
-            borderRadius: radius.s,
-          }}
-        >
-          {item.input ? (
-            <View style={{ gap: space.xs, marginBottom: item.detail ? space.s : 0 }}>
-              <T size={font.caption} weight="600" tone="muted">
-                {storeLanguage === 'id' ? 'Masukan' : 'Input'}
-              </T>
-              <T size={font.caption} mono copyable={item.input}>
-                {item.input}
-              </T>
-            </View>
-          ) : null}
-          <T size={font.caption} weight="600" tone="muted">
-            {storeLanguage === 'id' ? 'Keluaran' : 'Output'}
-          </T>
-          <T size={font.caption} mono tone={failed ? 'bad' : 'soft'} numberOfLines={PREVIEW_LINES} ellipsizeMode="tail">
-            {item.detail ||
-              (running
-                ? storeLanguage === 'id'
-                  ? 'Berjalan…'
-                  : 'Running…'
-                : storeLanguage === 'id'
-                  ? 'Tidak ada keluaran'
-                  : 'No output')}
-          </T>
-          {long ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Show full log"
-              onPress={() => {
-                tap()
-                setFull(true)
-              }}
-              hitSlop={8}
-              style={{ alignSelf: 'flex-start', paddingTop: space.s }}
+        {/* Opened, a file tool shows where the file lives and opens it; an edit shows its diff instead of raw input. */}
+        {filePath ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${translate(storeLanguage, 'Open file')} ${filePath}`}
+            onPress={() => {
+              tap()
+              references.openFile(filePath)
+            }}
+            hitSlop={6}
+            style={{ marginLeft: 22, marginTop: 2, flexDirection: 'row', gap: space.s, alignItems: 'center' }}
+          >
+            <T size={font.caption} mono tone="muted" numberOfLines={1} ellipsizeMode="head" style={{ flexShrink: 1 }}>
+              {filePath}
+            </T>
+            <T size={font.caption} weight="600" tone="accent">
+              {translate(storeLanguage, 'Open file')}
+            </T>
+          </Pressable>
+        ) : null}
+        {diffs.map((diff, index) => (
+          <View key={index} style={{ marginLeft: 22, marginTop: 4 }}>
+            <DiffLines file={changedFile(diff.path, '', diff.oldText ?? '', diff.newText)} />
+          </View>
+        ))}
+        {!diffs.length || failed ? (
+          <View
+            style={{
+              marginLeft: 22,
+              marginTop: 4,
+              padding: space.s + 2,
+              backgroundColor: c.code,
+              borderRadius: radius.s,
+            }}
+          >
+            {item.input ? (
+              <View style={{ gap: space.xs, marginBottom: item.detail ? space.s : 0 }}>
+                <T size={font.caption} weight="600" tone="muted">
+                  {storeLanguage === 'id' ? 'Masukan' : 'Input'}
+                </T>
+                <T size={font.caption} mono copyable={item.input}>
+                  {item.input}
+                </T>
+              </View>
+            ) : null}
+            <T size={font.caption} weight="600" tone="muted">
+              {storeLanguage === 'id' ? 'Keluaran' : 'Output'}
+            </T>
+            <T
+              size={font.caption}
+              mono
+              tone={failed ? 'bad' : 'soft'}
+              numberOfLines={PREVIEW_LINES}
+              ellipsizeMode="tail"
             >
-              <T size={font.caption} weight="600" tone="accent">
-                Show full log
-              </T>
-            </Pressable>
-          ) : null}
-        </View>
+              {item.detail ||
+                (running
+                  ? storeLanguage === 'id'
+                    ? 'Berjalan…'
+                    : 'Running…'
+                  : storeLanguage === 'id'
+                    ? 'Tidak ada keluaran'
+                    : 'No output')}
+            </T>
+            {long ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Show full log"
+                onPress={() => {
+                  tap()
+                  setFull(true)
+                }}
+                hitSlop={8}
+                style={{ alignSelf: 'flex-start', paddingTop: space.s }}
+              >
+                <T size={font.caption} weight="600" tone="accent">
+                  Show full log
+                </T>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </Collapse>
       {item.detail ? (
         <Sheet open={full} onClose={() => setFull(false)} title={`${item.verb} ${item.subject}`.trim()}>
@@ -1164,37 +1194,104 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
 function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 'changes' }>; chatId: string }) {
   const { c } = useTheme()
   const router = useRouter()
+  const { language } = useStore()
+  const [expanded, setExpanded] = useState(false)
+  const toggled = useContext(RowToggle)
+  const say = (text: string, values?: Record<string, string | number>) => translate(language, text, values)
+  const open = (fileId?: string) => {
+    tap()
+    router.push({
+      pathname: '/chat/[id]/changes',
+      params: { id: chatId, review: item.reviewId, ...(fileId ? { file: fileId } : {}) },
+    })
+  }
+  const single = item.files.length === 1
+  const name = (path: string) => path.split('/').pop() ?? path
+  const visible = expanded ? item.files : item.files.slice(0, 3)
+  const stats = (added: number, removed: number) => (
+    <T size={font.caption} mono>
+      <T size={font.caption} mono tone="ok">{`+${added}`}</T> <T size={font.caption} mono tone="bad">{`−${removed}`}</T>
+    </T>
+  )
+  // The desktop's end-of-turn card: what changed, its line totals and View changes; several files are listed below.
   return (
-    <Pressable
-      onPress={() => {
-        tap()
-        router.push({ pathname: '/chat/[id]/changes', params: { id: chatId } })
-      }}
-    >
-      {({ pressed }) => (
-        <Card
+    <Card style={{ marginVertical: space.xs }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.m }}>
+        <View
           style={{
-            flexDirection: 'row',
+            width: 36,
+            height: 36,
+            borderRadius: radius.s,
+            backgroundColor: c.fill,
             alignItems: 'center',
-            gap: space.m,
-            padding: space.m,
-            opacity: pressed ? 0.8 : 1,
+            justifyContent: 'center',
           }}
         >
-          <FilePen size={16} color={c.soft} strokeWidth={1.8} />
-          <T size={font.body - 1} weight="500" style={{ flex: 1 }}>
-            {item.files} files changed
+          <FileDiff size={18} color={c.muted} strokeWidth={1.6} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <T weight="500" numberOfLines={1}>
+            {single
+              ? say('Edited {0}', { '0': name(item.files[0]!.path) })
+              : say('Edited {0} files', { '0': item.files.length })}
           </T>
-          <T size={font.control} mono tone="ok">
-            +{item.additions}
+          {item.undone ? (
+            <T size={font.caption} tone="muted">
+              {say('Changes undone')}
+            </T>
+          ) : (
+            stats(item.additions, item.deletions)
+          )}
+        </View>
+        <Button kind="secondary" title={say('View changes')} onPress={() => open()} />
+      </View>
+      {single
+        ? null
+        : visible.map((file) => (
+            <Pressable
+              key={file.id}
+              accessibilityRole="button"
+              accessibilityLabel={file.path}
+              onPress={() => open(file.id)}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.m,
+                minHeight: 36,
+                paddingHorizontal: space.m + 2,
+                borderTopWidth: StyleSheet.hairlineWidth,
+                borderTopColor: c.line,
+                backgroundColor: pressed ? c.pressed : undefined,
+              })}
+            >
+              <T size={font.control} numberOfLines={1} ellipsizeMode="head" style={{ flex: 1 }}>
+                {file.path}
+              </T>
+              {stats(file.additions, file.deletions)}
+            </Pressable>
+          ))}
+      {!single && item.files.length > 3 ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            tap()
+            toggled()
+            setExpanded((value) => !value)
+          }}
+          style={{
+            minHeight: 36,
+            justifyContent: 'center',
+            paddingHorizontal: space.m + 2,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: c.line,
+          }}
+        >
+          <T size={font.control} tone="muted">
+            {expanded ? say('Show fewer files') : say('Show {0} more files', { '0': item.files.length - 3 })}
           </T>
-          <T size={font.control} mono tone="bad">
-            −{item.deletions}
-          </T>
-          <ChevronRight size={16} color={c.muted} />
-        </Card>
-      )}
-    </Pressable>
+        </Pressable>
+      ) : null}
+    </Card>
   )
 }
 

@@ -1,0 +1,75 @@
+/** Threads that need someone, or are still working, are never hidden by a group's cap. */
+const active = (status: string) => status === 'running' || status === 'needs-input' || status === 'failed'
+
+/** Projects are qualified by host: two hosts can both have a standalone bucket or a colliding project ID. */
+export const groupKey = (computerId: string, projectId: string) => `${computerId}\u0000${projectId}`
+
+export type ThreadGroup<T, P> = {
+  key: string
+  computerId: string
+  projectId: string
+  /** Undefined for threads outside any project (standalone) or a project the device no longer lists. */
+  project?: P
+  /** Rows to draw, newest first. Empty while the group is collapsed. */
+  threads: T[]
+  total: number
+  /** Threads still out of view; 0 when everything shows. */
+  hidden: number
+  /** Running, waiting and failed threads, so a collapsed header can still say work needs attention. */
+  running: number
+  attention: number
+}
+
+/**
+ * Home's project view: every project gets a group (empty ones too, so its menu stays reachable),
+ * ordered by its newest thread, with threads outside any project last. Each group shows its newest `limit` threads plus any active one,
+ * all of them once expanded, and none while collapsed.
+ */
+export function groupThreads<
+  T extends { computerId: string; projectId: string; status: string; lastActiveAt: number },
+  P extends { id: string; computerId: string },
+>(
+  threads: readonly T[],
+  projects: readonly P[],
+  options: { limit: number; expanded: ReadonlySet<string>; collapsed: ReadonlySet<string> },
+): ThreadGroup<T, P>[] {
+  const buckets = new Map<string, { computerId: string; projectId: string; project?: P; threads: T[] }>()
+  for (const project of projects)
+    buckets.set(groupKey(project.computerId, project.id), {
+      computerId: project.computerId,
+      projectId: project.id,
+      project,
+      threads: [],
+    })
+  for (const thread of threads) {
+    const key = groupKey(thread.computerId, thread.projectId)
+    const bucket = buckets.get(key) ?? { computerId: thread.computerId, projectId: thread.projectId, threads: [] }
+    bucket.threads.push(thread)
+    buckets.set(key, bucket)
+  }
+  const latest = (list: T[]) => list.reduce((max, thread) => Math.max(max, thread.lastActiveAt), -Infinity)
+  return [...buckets.entries()]
+    .map(([key, bucket]) => {
+      const sorted = [...bucket.threads].sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+      const visible = options.collapsed.has(key)
+        ? []
+        : options.expanded.has(key)
+          ? sorted
+          : sorted.filter((thread, index) => index < options.limit || active(thread.status))
+      return {
+        key,
+        computerId: bucket.computerId,
+        projectId: bucket.projectId,
+        project: bucket.project,
+        threads: visible,
+        total: sorted.length,
+        hidden: sorted.length - visible.length,
+        running: sorted.filter((thread) => thread.status === 'running').length,
+        attention: sorted.filter((thread) => thread.status === 'needs-input' || thread.status === 'failed').length,
+        latest: latest(sorted),
+      }
+    })
+    // Projects first, newest activity on top; standalone threads (no project) always sit at the bottom.
+    .sort((a, b) => Number(!a.project) - Number(!b.project) || b.latest - a.latest)
+    .map(({ latest: _, ...group }) => group)
+}

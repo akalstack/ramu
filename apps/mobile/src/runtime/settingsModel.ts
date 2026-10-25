@@ -231,29 +231,11 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
       title: 'Sending messages',
       rows: [
         {
-          kind: 'choice',
-          path: 'busyMessageAction',
-          title: 'Messages while working',
-          help: 'Steer adds your message after the current tools finish. Queue waits for the whole turn.',
-          words: 'queue steer steering enter busy',
-          options: [
-            { value: 'steer', label: 'Steer' },
-            { value: 'queue', label: 'Queue' },
-          ],
-        },
-        {
           kind: 'toggle',
           path: 'autoProjectSelection',
           title: 'Choose the project automatically',
           help: 'Home picks the project from your first message and asks when more than one fits. Turn off to always choose the project yourself.',
           words: 'project auto routing home',
-        },
-        {
-          kind: 'toggle',
-          path: 'warnModelChange',
-          title: 'Warn before changing model',
-          help: "A new model can't reuse the cache of a conversation in progress, so the first message after switching uses more of your usage.",
-          words: 'model switch cache usage',
         },
       ],
     },
@@ -489,8 +471,8 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         {
           kind: 'toggle',
           path: 'notifyAgentDone',
-          title: 'Agent notifications',
-          help: 'Have this host notify you when an agent finishes, needs input, or fails.',
+          title: 'Notifications on the host',
+          help: 'Show desktop notifications on this host when an agent finishes, needs input, or fails. Phone alerts are controlled above.',
           words: 'notify notification alert done finished system toast',
         },
       ],
@@ -566,6 +548,8 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
 
 /** Settings that live on this phone, for search. Their pages draw them directly. */
 const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[] = [
+  { section: 'chats', title: 'Messages while working, on this phone', words: 'queue steer steering enter busy' },
+  { section: 'chats', title: 'Warn before changing model, on this phone', words: 'model switch cache usage warning' },
   { section: 'appearance', title: 'Theme', words: 'light dark system appearance mode' },
   { section: 'appearance', title: 'Language', words: 'bahasa indonesia english' },
   { section: 'appearance', title: 'Haptic feedback', words: 'vibration taps feel' },

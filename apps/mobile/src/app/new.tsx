@@ -1,3 +1,5 @@
+import { goBackOrHome } from '../runtime/navigation'
+import { translate } from '@ramu/shared/i18n'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type WorktreePlanEntry } from '@ramu/shared/types'
 import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
 import type { RamuMethods } from '@ramu/shared/api'
@@ -23,19 +25,21 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Check,
   ChevronDown,
+  ChevronLeft,
+  X,
   Folder,
   FolderGit2,
   GitBranch,
   MessageCircle,
   Monitor,
-  Files,
   Pencil,
+  Sparkles,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { STANDALONE } from '../runtime/types'
 import { useT } from '../i18n'
-import { Header, PageScrollView, Screen } from '../components/Screen'
+import { Header, HeaderButton, PageScrollView, Screen } from '../components/Screen'
 import { useKeyboardInset } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
@@ -80,7 +84,7 @@ function TrayButton({
   )
 }
 
-export default function NewChat() {
+export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const keyboardInset = useKeyboardInset()
   const { c } = useTheme()
   const t = useT()
@@ -388,7 +392,8 @@ export default function NewChat() {
       pending.current = null
       storeRef.current.setDraft(routeChoiceKey, '')
       if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
-      router.replace({ pathname: '/chat/[id]', params: { id } })
+      if (asTab) router.push({ pathname: '/chat/[id]', params: { id } })
+      else router.replace({ pathname: '/chat/[id]', params: { id } })
     } finally {
       routingStart.current = false
     }
@@ -416,11 +421,12 @@ export default function NewChat() {
             setPicker(null)
           }}
         >
-          <Folder size={17} color={c.soft} />
+          {/* Auto is a choice, not a folder: the same sparkle as the project menu's "Names for Auto…". */}
+          <Sparkles size={17} color={c.soft} />
           <View style={{ flex: 1 }}>
-            <T weight="500">Auto</T>
+            <T weight="500">{translate(store.language, 'Auto')}</T>
             <T size={font.caption} tone="muted">
-              Pick the project from your first message
+              {translate(store.language, 'Pick the project from your first message')}
             </T>
           </View>
           {auto && projectId === null ? <Check size={16} color={c.accent} /> : null}
@@ -480,15 +486,41 @@ export default function NewChat() {
   )
 
   return (
-    <Screen bg="canvas" scrollable={false}>
+    <Screen bg="window" scrollable={false}>
       <Header
+        back={!asTab && picker === 'project'}
+        left={
+          picker !== 'project' ? (
+            <HeaderButton
+              icon={ChevronLeft}
+              systemIcon="chevron.left"
+              actionId="new-thread-back"
+              label={store.language === 'id' ? 'Kembali ke proyek' : 'Back to projects'}
+              onPress={() => setPicker('project')}
+            />
+          ) : undefined
+        }
+        right={
+          <HeaderButton
+            icon={X}
+            systemIcon="xmark"
+            actionId="new-thread-close"
+            label={store.language === 'id' ? 'Tutup' : 'Close'}
+            onPress={() => {
+              Keyboard.dismiss()
+              if (asTab) router.navigate('/')
+              else goBackOrHome(router)
+            }}
+          />
+        }
+        scrollEdge={picker === 'project'}
         align="center"
         title={picker === 'project' ? (store.language === 'id' ? 'Pilih proyek' : 'Choose a project') : t.newChat}
       />
       {picker === 'project' ? (
         <PageScrollView
           style={{ flex: 1 }}
-          contentInsetAdjustmentBehavior="never"
+          contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, space.l) }}
         >
@@ -499,28 +531,31 @@ export default function NewChat() {
         {/* Nothing here scrolls: the hero simply centers in the space above the composer. */}
         {keyboardInset === 0 ? (
           <View style={{ flex: 1, justifyContent: 'center', padding: space.l }}>
-            <View style={{ alignItems: 'flex-start', gap: space.s }}>
-              {/* The desktop's start screen: the animated mark (tap it) over the same question. */}
+            <View style={{ alignItems: 'center', gap: space.s }}>
+              {/* The desktop's start screen: the animated mark (tap it) over the same question, centred. */}
               <View style={{ marginBottom: space.s }}>
                 <AnimatedMark size={56} />
               </View>
-              <T size={font.hero} weight="600" style={{ letterSpacing: -0.5, textAlign: 'left' }}>
+              <T size={font.hero} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
                 {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
               </T>
               {offline ? (
-                <T tone="muted">{`${pc?.name} is offline. The thread waits in the outbox and starts when it reconnects.`}</T>
+                <T
+                  tone="muted"
+                  style={{ textAlign: 'center' }}
+                >{`${pc?.name} is offline. The thread waits in the outbox and starts when it reconnects.`}</T>
               ) : null}
             </View>
           </View>
         ) : (
-          <View style={{ flex: 1, justifyContent: 'center', padding: space.l, gap: space.s }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: space.l, gap: space.s }}>
             <AnimatedMark size={32} />
-            <T size={24} weight="600">
+            <T size={24} weight="600" style={{ textAlign: 'center' }}>
               {store.language === 'id' ? 'Apa yang ingin kita kerjakan?' : 'What should we work on?'}
             </T>
           </View>
         )}
-        <View style={{ paddingBottom: Math.max(insets.bottom, space.s) }}>
+        <View style={{ paddingBottom: Math.max(insets.bottom, space.s) + (asTab && !keyboardInset ? space.m : 0) }}>
           {agentDraft.defaults?.requested ||
           agentDraft.blocked ||
           agentDraft.choice.selection ||
@@ -594,25 +629,6 @@ export default function NewChat() {
                     onPress={() => setPicker('mode')}
                   />
                 ) : null}
-                {project ? (
-                  <TrayButton
-                    icon={Files}
-                    label={t.browseFiles}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/explorer',
-                        params: {
-                          computer: selected,
-                          composerProject: project.id,
-                          ...(draftContext ? { draftContext } : {}),
-                          ctx: workspaceId
-                            ? `worktree:${workspaceId}`
-                            : `project:${project.id.slice(project.id.indexOf(':') + 1)}`,
-                        },
-                      })
-                    }
-                  />
-                ) : null}
               </>
             }
             draftKey={composerKey}
@@ -683,7 +699,8 @@ export default function NewChat() {
                 ...sendModel,
               })
               if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
-              router.replace({ pathname: '/chat/[id]', params: { id } })
+              if (asTab) router.push({ pathname: '/chat/[id]', params: { id } })
+              else router.replace({ pathname: '/chat/[id]', params: { id } })
             }}
           />
         </View>

@@ -57,7 +57,7 @@ export function MaterialSheet({
         onDismissRequest={() => {
           if (visible.current && generation === revision.current) onClose()
         }}
-        containerColor={c.raised2}
+        containerColor={c.window}
         contentColor={c.text}
         scrimColor="rgba(0,0,0,0.32)"
         skipPartiallyExpanded

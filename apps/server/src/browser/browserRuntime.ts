@@ -20,6 +20,7 @@ import type {
   BrowserLiveFrame,
   BrowserDiagnostics,
   BrowserDialog,
+  BrowserFieldFocus,
   BrowserPageSnapshot,
   BrowserHumanInput,
 } from '@ramu/shared/browserBridge'
@@ -43,6 +44,13 @@ export interface GuestPage {
   reload(): void | Promise<void>
   /** Reads the page for the agent: visible text and numbered interactive elements. Internal scripts only. */
   inspect(): Promise<PageSnapshot>
+  /**
+   * Lays the page out at a viewer's screen size while that viewer controls it; `null` restores the default viewport.
+   * Absent where the page is also shown on a desktop, whose layout must not change under the person at the computer.
+   */
+  fit?(size: { width: number; height: number } | null): Promise<void>
+  /** The kind of field that has focus, so the controlling phone can raise its keyboard. */
+  focusedField?(): Promise<BrowserFieldFocus>
   /** Clicks or types into an element of the last inspection. `ok: false` says why the page refused. */
   act(action: PageAction): Promise<{ ok: boolean; reason?: string; points?: { x: number; y: number }[] }>
   /** Native input is blocked until the controlling human can safely drive the page. */
@@ -141,6 +149,8 @@ interface Tab {
   replacing: boolean
   respondingDialog: boolean
   released?: boolean
+  /** The controlling device asked for its screen size; dropped as soon as that device stops controlling the tab. */
+  fit?: { deviceId: string; width: number; height: number }
   /** When anyone last used or changed this tab; the idle sweep closes an unused agent-owned tab. */
   lastActive: number
 }
@@ -194,6 +204,7 @@ export class BrowserRuntime {
       inputReady: humanInputReady(tab.lease) && !tab.replacing && !tab.respondingDialog,
       paused: tab.lease.paused,
       ...(tab.released ? { released: true } : {}),
+      ...(tab.fit ? { fitted: true } : {}),
     }
   }
 
@@ -389,6 +400,51 @@ export class BrowserRuntime {
 
   private syncInput(tab: Tab) {
     tab.page.setHumanInput(!tab.crashed && !tab.replacing && !tab.respondingDialog && humanInputReady(tab.lease))
+    const controller = tab.lease.controller
+    // The agent and other devices always get the default layout back once the fitted device stops controlling.
+    if (
+      tab.fit &&
+      (controller.kind !== 'human' || controller.deviceId !== tab.fit.deviceId || tab.lease.paused || tab.crashed)
+    ) {
+      tab.fit = undefined
+      void tab.page.fit?.(null).catch(() => {})
+    }
+  }
+
+  /** Only the controlling device learns whether a field has focus; the answer never includes the field's value. */
+  async focusedFieldForHuman(
+    id: string,
+    deviceId: string,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+  ): Promise<BrowserFieldFocus> {
+    this.requireHumanDevice(id, deviceId, owner)
+    const tab = this.tab(id)
+    if (!tab.page.focusedField || tab.crashed) return { editable: false }
+    return tab.page.focusedField().catch(() => ({ editable: false }))
+  }
+
+  /** The controlling device lays the page out for its screen, as a phone browser would; `null` restores it. */
+  async fitToViewer(
+    id: string,
+    deviceId: string,
+    size: { width: number; height: number } | null,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+  ): Promise<{ fitted: boolean }> {
+    this.requireHumanDevice(id, deviceId, owner)
+    const tab = this.tab(id)
+    if (!tab.page.fit) return { fitted: false }
+    if (size && tab.fit?.width === size.width && tab.fit.height === size.height) return { fitted: true }
+    await tab.page.fit(size)
+    // Control may have changed while the page resized; never leave a stale layout behind.
+    const controller = tab.lease.controller
+    if (controller.kind !== 'human' || controller.deviceId !== deviceId || tab.lease.paused) {
+      tab.fit = undefined
+      await tab.page.fit(null).catch(() => {})
+      return { fitted: false }
+    }
+    tab.fit = size ? { deviceId, ...size } : undefined
+    this.changed()
+    return { fitted: !!size }
   }
 
   async changeProfile(id: string, profileId: string): Promise<TabInfo> {

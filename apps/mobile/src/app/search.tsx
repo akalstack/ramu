@@ -4,15 +4,15 @@ import { Stack, useFocusEffect, useRouter } from 'expo-router'
 import type { SearchBarCommands } from 'react-native-screens'
 import type { ChatSearchHit } from '@ramu/shared/types'
 import { Search } from 'lucide-react-native'
-import { font, radius, space, useTheme } from '../../../theme'
-import { useStore } from '../../../runtime/store'
-import { STANDALONE } from '../../../runtime/types'
-import { useT } from '../../../i18n'
-import { Header, PageScrollView, Screen } from '../../../components/Screen'
-import { ChatRow } from '../../../components/ChatRow'
-import { useTabActions } from '../../../components/Overlays'
-import { Group, Nothing, Section } from '../../../components/InboxParts'
-import { Row, T } from '../../../components/ui'
+import { font, radius, space, useTheme } from '../theme'
+import { useStore } from '../runtime/store'
+import { STANDALONE } from '../runtime/types'
+import { useT } from '../i18n'
+import { Header, PageScrollView, Screen } from '../components/Screen'
+import { ChatRow } from '../components/ChatRow'
+import { useTabActions } from '../components/Overlays'
+import { Group, Nothing, Section } from '../components/InboxParts'
+import { Row, T } from '../components/ui'
 
 const RECENT = 10
 
@@ -22,11 +22,11 @@ export default function SearchScreen() {
   const t = useT()
   const store = useStore()
   const router = useRouter()
-  const actions = useTabActions()
+  const actions = useTabActions(null)
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<{ query: string; computerId: string; hit: ChatSearchHit }[]>([])
   const search = useRef<SearchBarCommands>(null)
-  // Native tabs retain this screen. Focus after the header attaches on every visit.
+  // Focus after the search header attaches on every visit.
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS === 'web') return
@@ -92,8 +92,8 @@ export default function SearchScreen() {
   })
   return (
     <Screen>
-      <Header back={false} large title={t.search} right={actions} />
-      {/* The native search field lives in the navigation bar (and on iOS 26 is the Search tab itself). */}
+      <Header large title={t.search} right={actions} />
+      {/* Keep search in the native navigation bar. */}
       {Platform.OS === 'web' ? null : (
         <Stack.SearchBar
           ref={search}
@@ -108,6 +108,11 @@ export default function SearchScreen() {
           onCancelButtonPress={() => setQuery('')}
         />
       )}
+      {Platform.OS === 'ios' ? (
+        <Stack.Toolbar placement="bottom">
+          <Stack.Toolbar.SearchBarSlot />
+        </Stack.Toolbar>
+      ) : null}
       <PageScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"

@@ -1,36 +1,41 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pressable } from 'react-native'
-import { ChevronRight, Globe } from 'lucide-react-native'
+import { AppState, Image, Pressable, View } from 'react-native'
+import { ChevronRight, Globe, X } from 'lucide-react-native'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
+import { translate } from '@ramu/shared/i18n'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
+import { revealedTab, tabTitle } from '../runtime/browserViewerState'
 import { font, radius, space, useTheme } from '../theme'
-import { T } from './ui'
+import { Glass } from './Glass'
+import { T, tap } from './ui'
 
-/** Sits with the computer-use bar: shows when this thread has browser tabs and opens the live view in one tap. */
-export function BrowserNotice({ chat, onOpen }: { chat: Chat; onOpen(): void }) {
+/** This thread's browser tabs, metadata only. One reader feeds both the activity pill and the floating preview. */
+export function useThreadBrowserTabs(chat: Chat | undefined) {
   const store = useStore()
-  const { c } = useTheme()
   const io = useRef(store)
   io.current = store
-  const host = chat.computerId
-  const task = chat.taskId
-  const online = store.isOnline(host)
+  const host = chat?.computerId ?? ''
+  const task = chat?.taskId
+  const online = !!host && store.isOnline(host)
   const viewOnly = store.computers?.find((computer) => computer.id === host)?.access === 'viewer'
   const [tabs, setTabs] = useState<BrowserTabInfo[]>([])
+  const [viewable, setViewable] = useState(false)
   useEffect(() => {
     if (viewOnly || !task || !online) return
     let active = true
     const load = async () => {
       try {
         const status = await io.current.invoke(host, 'hostBrowser.status').catch(() => null)
-        const listed =
-          (status?.viewable ?? status?.enabled)
-            ? await io.current.invoke(host, 'hostBrowser.list', task)
-            : (await io.current.invoke(host, 'browser.activity', task)).tabs
-        if (active) setTabs(listed)
+        const live = !!(status?.viewable ?? status?.enabled)
+        const listed = live
+          ? await io.current.invoke(host, 'hostBrowser.list', task)
+          : (await io.current.invoke(host, 'browser.activity', task)).tabs
+        if (!active) return
+        setViewable(live)
+        setTabs(listed)
       } catch {
-        // Metadata only: keep the last known bar rather than flashing it away on a missed read.
+        // Metadata only: keep the last known tabs rather than flashing them away on a missed read.
       }
     }
     void load()
@@ -45,11 +50,19 @@ export function BrowserNotice({ chat, onOpen }: { chat: Chat; onOpen(): void }) 
       clearInterval(timer)
     }
   }, [host, task, online, viewOnly])
+  return { tabs: viewOnly || !task ? [] : tabs, viewable: viewable && !viewOnly }
+}
+
+/** Sits with the computer-use bar: shows when this thread has browser tabs and opens the live view in one tap. */
+export function BrowserNotice({ chat, tabs, onOpen }: { chat: Chat; tabs: BrowserTabInfo[]; onOpen(): void }) {
+  const store = useStore()
+  const { c } = useTheme()
+  const online = store.isOnline(chat.computerId)
   const tab = tabs[0]
-  if (viewOnly || !task || !tab) return null
+  if (!chat.taskId || !tab) return null
   const id = store.language === 'id'
   const agent = tabs.some((entry) => entry.controller === 'agent' && !entry.paused)
-  const label = agent ? (id ? 'Menggunakan browser' : 'Using browser') : id ? 'Browser' : 'Browser'
+  const label = agent ? (id ? 'Menggunakan browser' : 'Using browser') : 'Browser'
   return (
     <Pressable
       accessibilityRole="button"
@@ -75,5 +88,127 @@ export function BrowserNotice({ chat, onOpen }: { chat: Chat; onOpen(): void }) 
       </T>
       <ChevronRight size={12} color={c.muted} />
     </Pressable>
+  )
+}
+
+const PREVIEW_WIDTH = 152
+
+/**
+ * When the agent opens a page, a small live preview floats over the chat so the person sees it without leaving the
+ * conversation. Tapping it opens that tab full screen; it hides when dismissed, closed, or the app is in the background.
+ */
+export function BrowserFloat({
+  chat,
+  tabs,
+  viewable,
+  hidden,
+  top,
+  onOpen,
+}: {
+  chat: Chat
+  tabs: BrowserTabInfo[]
+  viewable: boolean
+  /** The browser or another full-screen surface is open over the chat. */
+  hidden: boolean
+  top: number
+  onOpen(tabId: string): void
+}) {
+  const store = useStore()
+  const { c } = useTheme()
+  const io = useRef(store)
+  io.current = store
+  const t = (text: string) => translate(store.language, text)
+  const known = useRef<Set<string> | null>(null)
+  const [shown, setShown] = useState<string | null>(null)
+  const [frame, setFrame] = useState<{ uri: string; aspect: number } | null>(null)
+  const [foreground, setForeground] = useState(AppState.currentState === 'active')
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => setForeground(state === 'active'))
+    return () => subscription.remove()
+  }, [])
+  useEffect(() => {
+    const reveal = revealedTab(known.current, tabs)
+    known.current = new Set(tabs.map((tab) => tab.id))
+    // Tabs opened while the browser is on screen are the person's own; they never pop up afterwards.
+    if (reveal && !hidden) setShown(reveal)
+  }, [tabs, hidden])
+  const tab = tabs.find((entry) => entry.id === shown)
+  const visible = !!tab && !hidden && foreground && viewable && store.isOnline(chat.computerId)
+  const tabId = tab?.id
+  useEffect(() => {
+    setFrame(null)
+    if (!visible || !tabId || !chat.taskId) return
+    let active = true
+    let timer: ReturnType<typeof setTimeout>
+    // A still frame every couple of seconds is enough for a glance and keeps the phone's data use low.
+    const read = async () => {
+      try {
+        const image = await io.current.invoke(chat.computerId, 'hostBrowser.frame', chat.taskId!, tabId)
+        if (active) setFrame({ uri: `data:${image.mimeType};base64,${image.data}`, aspect: image.width / image.height })
+      } catch {
+        // Not allowed to view frames, or a busy host: the card still shows the page title.
+      } finally {
+        if (active) timer = setTimeout(() => void read(), 2000)
+      }
+    }
+    void read()
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [visible, tabId, chat.computerId, chat.taskId])
+  if (!visible || !tab) return null
+  const aspect = Math.min(Math.max(frame?.aspect ?? 4 / 3, 0.5), 2)
+  const agent = tab.controller === 'agent' && !tab.paused
+  return (
+    <Glass radius={radius.l} style={{ position: 'absolute', right: space.m, top, width: PREVIEW_WIDTH, zIndex: 30 }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${t('Open browser')}, ${tabTitle(tab, t)}`}
+        onPress={() => {
+          tap()
+          setShown(null)
+          onOpen(tab.id)
+        }}
+      >
+        <View style={{ width: PREVIEW_WIDTH, aspectRatio: aspect, backgroundColor: c.canvas }}>
+          {frame ? (
+            <Image source={{ uri: frame.uri }} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
+          ) : (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <Globe size={22} color={c.muted} strokeWidth={1.5} />
+            </View>
+          )}
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: space.s }}>
+          <View
+            style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: agent ? c.warn : c.accent }}
+            accessibilityElementsHidden
+          />
+          <T size={font.caption} numberOfLines={1} style={{ flex: 1 }}>
+            {tabTitle(tab, t)}
+          </T>
+        </View>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('Hide preview')}
+        hitSlop={10}
+        onPress={() => setShown(null)}
+        style={{
+          position: 'absolute',
+          top: 6,
+          right: 6,
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.55)',
+        }}
+      >
+        <X size={12} color="#ffffff" strokeWidth={2.4} />
+      </Pressable>
+    </Glass>
   )
 }

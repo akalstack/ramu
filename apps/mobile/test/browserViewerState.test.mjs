@@ -71,3 +71,70 @@ test('live drag deltas preserve displacement across moves and release without re
   assert.equal(total, 160)
   assert.equal(Math.abs(frameScroll(0, -80 - previous, frame).y), 0)
 })
+
+test('the header names a tab by title, then host, then address', async () => {
+  const { tabTitle } = await import('../src/runtime/browserViewerState.ts')
+  assert.equal(tabTitle(undefined), 'Browser')
+  assert.equal(tabTitle({ title: ' Home Assistant ', url: 'http://192.168.1.36:8123/auth' }), 'Home Assistant')
+  assert.equal(tabTitle({ title: '', url: 'http://192.168.1.36:8123/auth' }), '192.168.1.36:8123')
+  assert.equal(tabTitle({ title: '', url: '' }), 'New tab')
+  const say = (text) => `id:${text}`
+  assert.equal(tabTitle({ title: 'Downloads', url: 'https://a.test' }, say), 'Downloads')
+  assert.equal(tabTitle({ title: '', url: '' }, say), 'id:New tab')
+})
+
+test('typed addresses open over https unless a web scheme is given', async () => {
+  const { addressUrl } = await import('../src/runtime/browserViewerState.ts')
+  assert.equal(addressUrl('  '), null)
+  assert.equal(addressUrl('example.com'), 'https://example.com')
+  assert.equal(addressUrl('localhost:3000/x'), 'https://localhost:3000/x')
+  assert.equal(addressUrl('HTTP://192.168.1.36:8123'), 'HTTP://192.168.1.36:8123')
+  assert.equal(addressUrl('javascript:alert(1)'), null)
+})
+
+test('the control strip always offers the next step it can take', async () => {
+  const { controlAction } = await import('../src/runtime/browserViewerState.ts')
+  assert.equal(controlAction('agent'), 'take')
+  assert.equal(controlAction('viewing'), 'take')
+  assert.equal(controlAction('disconnected'), 'take')
+  assert.equal(controlAction('yours'), 'release')
+  assert.equal(controlAction('settling'), 'release')
+  assert.equal(controlAction('offline'), null)
+  assert.equal(controlAction('backgrounded'), null)
+})
+
+test('the overflow menu lists only actions that work for this tab and browser', async () => {
+  const { browserMenu } = await import('../src/runtime/browserViewerState.ts')
+  assert.deepEqual(browserMenu({ hasTab: false, own: false, hostManaged: true, fileInput: false }), ['newTab'])
+  assert.deepEqual(browserMenu({ hasTab: true, own: false, hostManaged: false, fileInput: true }), [
+    'newTab',
+    'readText',
+    'closeTab',
+  ])
+  assert.deepEqual(browserMenu({ hasTab: true, own: true, hostManaged: true, fileInput: true }), [
+    'paste',
+    'layout',
+    'newTab',
+    'readText',
+    'upload',
+    'downloads',
+    'closeTab',
+  ])
+})
+
+test('the page refits for a new width or the keyboard, never for small jitter', async () => {
+  const { fitSize } = await import('../src/runtime/browserViewerState.ts')
+  assert.deepEqual(fitSize({ width: 390.4, height: 640.2 }, null), { width: 390, height: 640 })
+  assert.equal(fitSize({ width: 392, height: 620 }, { width: 390, height: 640 }), null)
+  assert.deepEqual(fitSize({ width: 390, height: 330 }, { width: 390, height: 640 }), { width: 390, height: 330 })
+  assert.deepEqual(fitSize({ width: 844, height: 300 }, { width: 390, height: 640 }), { width: 844, height: 300 })
+  assert.equal(fitSize({ width: 100, height: 640 }, null), null)
+  assert.deepEqual(fitSize({ width: 320, height: 210 }, { width: 320, height: 500 }), { width: 320, height: 210 })
+})
+
+test('only a newly opened tab floats over the chat', async () => {
+  const { revealedTab } = await import('../src/runtime/browserViewerState.ts')
+  assert.equal(revealedTab(null, [{ id: 'a' }]), null)
+  assert.equal(revealedTab(new Set(['a']), [{ id: 'a' }]), null)
+  assert.equal(revealedTab(new Set(['a']), [{ id: 'a' }, { id: 'b' }, { id: 'c' }]), 'c')
+})

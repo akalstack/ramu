@@ -1,6 +1,6 @@
 # Remaining Explorer work
 
-Mobile now has a Home/project Browse files action, a visible thread Explorer action, lazy scoped tree, bounded directory API and shared file viewer. Home browsing creates no conversation/worktree, and standalone browsing creates no working folder. Current behavior is in [UI](UI.md#mobile-explorer).
+Mobile now has a project-menu Browse files action, a visible thread Explorer action, lazy scoped tree, bounded directory API and shared file viewer. Home browsing creates no conversation/worktree, and standalone browsing creates no working folder. Current behavior is in [UI](UI.md#mobile-explorer).
 
 ## Delivery
 
@@ -15,7 +15,7 @@ Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the existing Expl
 ## Remaining implementation
 
 - Finish desktop Home/project coherence through the existing Explorer rail. Verify mobile Home current/existing-workspace selection, project/workspace labels and per-repository branch/path details on physical devices, including partial and deleted workspaces.
-- Verify bounded persisted folder expansion and scroll restoration across native screen recreation and restart, including changed/deleted directory contents. Verify selected-file/ancestor reveal, new-thread Browse files and Collapse folders on physical devices, including virtualized large folders and missing paths.
+- Verify bounded persisted folder expansion and scroll restoration across native screen recreation and restart, including changed/deleted directory contents. Verify selected-file/ancestor reveal and Collapse folders on physical devices, including virtualized large folders and missing paths.
 - Extend cancellation and request-generation component coverage to directory/search races, reconnect and live file deletion/rename. Preview tests cover late host responses and missing standalone bindings; device-level stale/deleted file handling still needs acceptance. Validate continuation, changed-directory refresh and selected-path reveal beyond the first page on physical devices; search still uses the existing bounded quick-open index.
 - Mobile long-press now opens file actions: Copy path, Share a copy (downloaded to the device), and Duplicate, Move to folder, Rename and a confirmed Delete when the host is reachable and the device is not view-only (`runtime/explorerActions.ts`; the host refuses name clashes). While an agent is writing in that checkout the sheet says so before a change (`files.writer`), and the host still refuses a name clash. A phone has no Reveal-in-Finder equivalent; **Share a copy** hands the downloaded file to the system share sheet, which offers Save to Files and the installed apps. Remaining: device acceptance of these actions, and the rest of this item. Original item: capability-aware native copy/reveal and confirmed file management through the existing surfaces. Verify the preview Add to message/New thread with file actions against native persistence, server permissions and actual outbox delivery. Keep previews read-only until each mutation boundary has coverage.
 - Measure directory/search/preview payloads on devices. Server checkout watchers are now leased per task (see [UI](UI.md#mobile-explorer)); verify on devices that archiving or deleting a task stops its live updates.

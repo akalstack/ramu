@@ -1,6 +1,9 @@
 import type { AgentEvent } from '@ramu/shared/types'
 import { helperGroups } from '@ramu/shared/chat/helperPresentation'
-import type { TranscriptItem } from './types'
+import { toolKind } from '@ramu/shared/chat/agentTools'
+import { fileToolDiffs, fileToolLine } from '@ramu/shared/chat/fileTools'
+import type { Chat, TranscriptItem } from './types'
+import type { OutboxItem } from './store'
 import {
   advisorTranscript,
   parseAdvice,
@@ -25,7 +28,28 @@ export function limitNoteTitle(wait: Pick<ProviderWaitState, 'retryAt' | 'guesse
 /** What the person typed: the file context Ramu appends for the agent (`<ramu-context>…`) is hidden, as on the desktop. */
 export const visibleText = (text: string) => text.split(/\n*<ramu-context>/)[0]!.trimEnd()
 
-export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptItem[] {
+/** Mutable text stays off screen until the next block, tool, request or end of the turn. */
+function pendingTextBlocks(events: AgentEvent[]): Set<number> {
+  const pending = new Map<string, number>()
+  events.forEach((event, index) => {
+    const lane = event.agentId ?? ''
+    if (event.kind === 'text') pending.set(lane, index)
+    else if (
+      ['user', 'tool-use', 'tool-result', 'content', 'question', 'permission-request', 'result', 'error'].includes(
+        event.kind,
+      )
+    )
+      pending.delete(lane)
+    else if (event.kind === 'state' && !['running', 'starting'].includes(event.state)) {
+      if (!event.agentId) pending.clear()
+      else pending.delete(lane)
+    }
+  })
+  return new Set(pending.values())
+}
+
+export function transcript(events: AgentEvent[], seqs?: number[], completeBlocksOnly = false): TranscriptItem[] {
+  const pending = completeBlocksOnly ? pendingTextBlocks(events) : new Set<number>()
   const items: TranscriptItem[] = []
   const positions = new Map<TranscriptItem, number>()
   const latestPermissions = new Map<string, number>()
@@ -48,6 +72,7 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
     }
   }
   events.forEach((e, index) => {
+    if (pending.has(index)) return
     if (e.agentId && e.kind !== 'agent') return
     const id = `event-${index}`
     const before = items.length
@@ -164,14 +189,16 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
       })
     else if (e.kind === 'tool-use') {
       const result = results.get(`:${e.toolUseId}`)
+      // As on desktop, file tools say only the file's name (and an edit its +/- lines) until opened.
+      const file = fileToolLine(e, result)
+      const kind = toolKind(e)
       items.push({
         kind: 'tool',
         id: e.toolUseId,
-        tool: ['read', 'edit', 'search', 'execute', 'think', 'fetch'].includes(e.toolKind ?? '')
-          ? (e.toolKind as any)
-          : 'other',
-        verb: e.name,
-        subject: e.title || e.summary,
+        tool: ['read', 'edit', 'search', 'execute', 'think', 'fetch'].includes(kind) ? (kind as any) : 'other',
+        verb: file?.verb ?? e.name,
+        subject: file ? `${file.name}${file.others ? ` +${file.others}` : ''}` : e.title || e.summary,
+        ...(file ? { file, diffs: fileToolDiffs(e, result) } : {}),
         status: result
           ? result.isError
             ? 'failed'
@@ -303,4 +330,33 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
     items.splice(group.anchor === null || next < 0 ? items.length : next, 0, row)
   }
   return items
+}
+
+/** Snapshot the existing occurrences so repeated messages cannot match old history. */
+export function deliveryBaseline(chat: Chat, text: string) {
+  const shown = visibleText(text)
+  return {
+    userCount: (chat.items ?? []).filter((row) => row.kind === 'user' && row.text === shown).length,
+    queueIds: (chat.queue ?? []).filter((row) => visibleText(row.text) === shown).map((row) => row.id),
+  }
+}
+
+export function deliveryVisible(item: OutboxItem, chat: Chat): boolean {
+  if (!item.deliveryBaseline) return false
+  const shown = visibleText(item.text)
+  return (
+    (chat.items ?? []).filter((row) => row.kind === 'user' && row.text === shown).length >
+      item.deliveryBaseline.userCount ||
+    (chat.queue ?? []).some(
+      (row) => visibleText(row.text) === shown && !item.deliveryBaseline!.queueIds.includes(row.id),
+    )
+  )
+}
+
+/** An acknowledgement alone cannot remove the only visible copy of a message. */
+export function reconcileDelivered(outbox: OutboxItem[], chats: Chat[]): OutboxItem[] {
+  return outbox.filter((item) => {
+    const chat = chats.find((chat) => chat.id === item.chatId)
+    return item.state !== 'accepted' || !chat || !deliveryVisible(item, chat)
+  })
 }

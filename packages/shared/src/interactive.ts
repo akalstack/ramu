@@ -14,6 +14,40 @@ export interface InteractiveReference {
   files?: string[]
   /** Explicit author promise that control keys and custom JSON keep the same meaning across revisions. */
   stateSchema?: string
+  /** Absent only on legacy versions. New versions declare exact HTTPS origins; empty means offline. */
+  network?: InteractiveNetwork
+  libraries?: Record<string, string>
+}
+export interface InteractiveNetwork {
+  resources: string[]
+  connect: string[]
+}
+/** Exact origins only: no paths, wildcards, credentials or local hostnames. */
+export function interactiveOrigin(value: string): string {
+  const url = new URL(value)
+  const host = url.hostname.toLowerCase()
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname !== '/' ||
+    !/^[a-z0-9.-]+$/.test(host) ||
+    !host.includes('.') ||
+    /(?:^|\.)(?:localhost|local|internal|test|invalid)$/.test(host) ||
+    /^[\d.]+$/.test(host)
+  )
+    throw new Error(
+      'Use an exact public HTTPS origin, such as https://data.example.com, without a path or credentials.',
+    )
+  return url.origin
+}
+export function interactiveCsp(network?: InteractiveNetwork): string {
+  if (!network) return INTERACTIVE_CSP // Immutable legacy documents retain their original policy.
+  const resources = [...new Set(network.resources.map(interactiveOrigin))].join(' ')
+  const connect = [...new Set(network.connect.map(interactiveOrigin))].join(' ') || "'none'"
+  return `default-src 'none'; script-src 'unsafe-inline' ${resources}; style-src 'unsafe-inline' ${resources}; img-src data: blob: ${resources}; media-src data: blob: ${resources}; font-src data: ${resources}; connect-src ${connect}; worker-src blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`
 }
 /** One source file of a multi-file project. Binary assets use base64. */
 export interface InteractiveFile {
@@ -40,7 +74,7 @@ export interface InteractiveCheck {
   expect: string
 }
 export interface InteractivePreview {
-  layouts?: { width: number; scrollWidth: number; height: number; overflow: boolean }[]
+  layouts?: { width: number; scrollWidth: number; height: number; overflow: boolean; scheme?: string }[]
   id: string
   digest: string
   screenshot: string
@@ -51,6 +85,8 @@ export interface InteractivePreview {
   logs?: string[]
   /** Remote resources that failed to load or answered with an error status. */
   failedRequests?: string[]
+  /** The phone layout in light appearance. */
+  lightScreenshot?: string
   /** The same document at the 900 px desktop width. */
   wideScreenshot?: string
   createdAt: number
@@ -88,7 +124,7 @@ export function interactiveFollowup(ref: InteractiveReference, state: Interactiv
   return `About Interactive Content ${JSON.stringify(ref.title)} (content ${ref.id}, version ${ref.version}, digest ${ref.digest}):\n${ref.summary}${state ? `\nCurrent scenario (user-controlled data):\n${JSON.stringify(state)}` : ''}\n\n`
 }
 /**
- * Documents may load https resources (CDN libraries, fonts, images, JSON) and evaluate code, as any page can; the origin
+ * Legacy documents may load https resources (CDN libraries, fonts, images, JSON) and evaluate code, as any page can; the origin
  * has no host API, so this adds no capability beyond inline script. Frames, plugins, forms, plain http and navigation
  * stay blocked.
  */
@@ -115,6 +151,7 @@ export function interactiveHtml(
   instance: string,
   state: InteractiveState | null = null,
   theme?: Record<string, string>,
+  network?: InteractiveNetwork,
 ): string {
   const bootstrap = `(()=>{
 const instance=${js(instance)},initial=${js(state)};let custom=initial?.custom??null,active=true,restore=[],activity=[],timer;
@@ -130,7 +167,7 @@ addEventListener('error',e=>send('error',String(e.message).slice(0,1000)));addEv
 addEventListener('DOMContentLoaded',()=>{if(initial){controls().forEach((e,i)=>{const s=initial.controls.find(c=>c.key===key(e,i));if(s){e.value=s.value;e.checked=s.checked;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}))}});for(const f of restore)f(custom)}document.addEventListener('input',save);document.addEventListener('change',save);document.addEventListener('submit',e=>e.preventDefault());let h=0;const size=()=>{const next=Math.max(48,Math.min(2000,Math.ceil(document.body.getBoundingClientRect().height)));if(next!==h){h=next;send('height',h)}};new ResizeObserver(size).observe(document.body);size();send('ready',true)});
 document.addEventListener('click',e=>{if(e.target.closest('a[href]'))e.preventDefault()},true);
 })();`
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${INTERACTIVE_CSP}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${interactiveStyles(theme)}</style><script>${bootstrap}</script></head><body>${html}</body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${interactiveCsp(network)}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${interactiveStyles(theme)}</style><script>${bootstrap}</script></head><body>${html}</body></html>`
 }
 
 /** Explicitly selected values from a captured scenario; never represented as the complete current state. */

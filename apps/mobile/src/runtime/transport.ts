@@ -73,12 +73,18 @@ interface CallSocket {
   invoke(method: string, args: unknown[], options: { operationKey?: string; timeoutMs?: number }): Promise<unknown>
 }
 let socketProvider: ((address: string, token: string) => CallSocket | null) | null = null
-export function registerSocketProvider(provider: typeof socketProvider) {
+let closeSocket: ((address: string, token: string) => void) | undefined
+export function registerSocketProvider(
+  provider: typeof socketProvider,
+  close?: (address: string, token: string) => void,
+) {
   socketProvider = provider
+  closeSocket = close
 }
 export type Fetcher = typeof globalThis.fetch
 export class HostClient {
   private controllers = new Set<AbortController>()
+  private lifetime = new AbortController()
   readonly address: string
   private token: string
   private fetcher: Fetcher
@@ -88,6 +94,9 @@ export class HostClient {
     this.fetcher = (...args) => fetcher(...args)
   }
   close() {
+    if (this.lifetime.signal.aborted) return
+    this.lifetime.abort()
+    closeSocket?.(this.address, this.token)
     for (const controller of this.controllers) controller.abort()
     this.controllers.clear()
   }
@@ -123,19 +132,34 @@ export class HostClient {
       try {
         return await this.call(method, args, key)
       } catch (error) {
-        if (!(error instanceof HostError) || !error.ambiguous || attempt >= 2) throw error
+        if (this.lifetime.signal.aborted || !(error instanceof HostError) || !error.ambiguous || attempt >= 2)
+          throw error
         await new Promise((resolve) => setTimeout(resolve, 500 * 3 ** attempt))
       }
     }
   }
+  /** Native socket/fetch promises may outlive suspension; do not hold resume behind their timeout. */
+  private untilClosed<T>(request: Promise<T>): Promise<T> {
+    const signal = this.lifetime.signal
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(new HostError('Connection suspended. Check delivery before retrying.', 0, true))
+      if (signal.aborted) abort()
+      else signal.addEventListener('abort', abort, { once: true })
+      request.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
+    })
+  }
   private async call(method: string, args: unknown[], operationKey?: string): Promise<any> {
+    if (this.lifetime.signal.aborted) throw new HostError('Connection suspended before sending.')
     // Opt-in socket, used only while ready. A call that was never sent falls back to HTTP; one that was sent and lost
     // has an unknown outcome and is reported as such, exactly as a lost HTTP reply is.
     const socket = socketProvider?.(this.address, this.token)
     if (socket?.state === 'ready') {
       try {
-        return await socket.invoke(method, args, { ...(operationKey ? { operationKey } : {}), timeoutMs: 45_000 })
+        return await this.untilClosed(
+          socket.invoke(method, args, { ...(operationKey ? { operationKey } : {}), timeoutMs: 45_000 }),
+        )
       } catch (error) {
+        if (error instanceof HostError) throw error
         const failure = error as { notSent?: boolean; status?: number; code?: string }
         if (!failure.notSent) {
           if (failure.code === 'ECONNRESET' || !(error instanceof Error))
@@ -152,13 +176,15 @@ export class HostClient {
     this.controllers.add(controller)
     const timer = setTimeout(() => controller.abort(), 45_000)
     try {
-      const response = await this.fetcher(`${this.address}/invoke`, {
-        method: 'POST',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
-        body: encodeInvoke(method, args, operationKey),
-        signal: controller.signal,
-      })
-      const text = await response.text()
+      const response = await this.untilClosed(
+        this.fetcher(`${this.address}/invoke`, {
+          method: 'POST',
+          headers: { ...this.headers(), 'Content-Type': 'application/json' },
+          body: encodeInvoke(method, args, operationKey),
+          signal: controller.signal,
+        }),
+      )
+      const text = await this.untilClosed(response.text())
       let result: any
       try {
         result = text ? JSON.parse(text) : {}

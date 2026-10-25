@@ -1,3 +1,5 @@
+import { deliveryVisible } from '../../../runtime/transcript'
+import { transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome } from '../../../runtime/navigation'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -5,8 +7,8 @@ import { ActivityIndicator, Alert, FlatList, Platform, Pressable, View } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
+  Activity,
   ArrowDown,
-  Inbox,
   Check,
   CircleArrowUp,
   CircleCheck,
@@ -14,8 +16,10 @@ import {
   GitBranch,
   GitCompareArrows,
   MessageCircleQuestion,
+  Gauge,
   Globe,
   Monitor,
+  Server,
   SquareTerminal,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
@@ -23,9 +27,10 @@ import { useChat, useStore } from '../../../runtime/store'
 import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../runtime/busyMode'
 import { sharedValue } from '@ramu/shared/sharedFields'
 import { foldTurns } from '../../../runtime/turns'
+import { withChangeCards } from '../../../runtime/changeCards'
+import { sideChat } from '../../../runtime/sideChat'
 import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
 import { fill, useT } from '../../../i18n'
-import { looseInvoke, setHostSetting } from '../../../runtime/settingsModel'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
@@ -34,7 +39,7 @@ import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
 import { BrowserActivity } from '../../../components/BrowserActivity'
-import { BrowserNotice } from '../../../components/BrowserNotice'
+import { BrowserFloat, BrowserNotice, useThreadBrowserTabs } from '../../../components/BrowserNotice'
 import { useThreadToolActivity } from '../../../runtime/useThreadToolActivity'
 import { ComputerActivity } from '../../../components/ComputerActivity'
 import { translate } from '@ramu/shared/i18n'
@@ -55,8 +60,8 @@ import { OfflineBanner, PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
 import { Arrive, Presence, ChatStatus, useReducedMotion } from '../../../components/Motion'
-import { ChatActionsSheet } from '../../../components/ChatActions'
-import { useAutomation } from '../../../runtime/automation'
+import { ChatActionsSheet, confirmChatDeletion } from '../../../components/ChatActions'
+import * as Clipboard from 'expo-clipboard'
 
 /** Turns drawn at a time; a chat can have hundreds. */
 const TURN_PAGE = 15
@@ -187,6 +192,8 @@ export default function ChatScreen() {
   const [sheet, setSheet] = useState(false)
   const [usageOpen, setUsageOpen] = useState(false)
   const [tool, setTool] = useState<'browser' | 'computer' | null>(null)
+  const [browserTab, setBrowserTab] = useState<string | null>(null)
+  const browserTabs = useThreadBrowserTabs(chat)
   const [backgroundFor, setBackgroundFor] = useState<string | null>(null)
   const [actions, setActions] = useState<'closed' | 'menu' | 'rename'>('closed')
   const [busy, setBusy] = useState(false)
@@ -228,7 +235,6 @@ export default function ChatScreen() {
       }
     }, [chat?.id, chat?.taskId, chat?.computerId, chat?.projectId, chat?.status, computer?.status, refresh]),
   )
-  const { inbox } = useAutomation()
   // Looking at a chat clears its notice on every device.
   const [focused, setFocused] = useState(true)
   useFocusEffect(
@@ -284,9 +290,27 @@ export default function ChatScreen() {
   const openedAt = useRef(Date.now())
   const seen = useRef(new Set<string>())
   // Finished turns fold into "Worked for…"; the running turn renders block by block, and only its newest reply animates.
+  // Recorded change reviews end their turns as Changes cards, as on desktop; re-read whenever the thread settles.
+  const [reviews, setReviews] = useState<import('@ramu/shared/types').ChangeReview[]>([])
+  useEffect(() => {
+    if (!chat?.sessionId || chat.status === 'running' || !store.isOnline(chat.computerId)) return
+    let alive = true
+    store
+      .invoke(chat.computerId, 'reviews.list', chat.sessionId)
+      .then((list) => alive && setReviews(list))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [chat?.computerId, chat?.sessionId, chat?.status])
   const rows = useMemo(
-    () => foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input'),
-    [chat?.items, chat?.status],
+    () =>
+      withChangeCards(
+        foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input'),
+        reviews,
+        chat?.sessionId,
+      ),
+    [chat?.items, chat?.status, chat?.sessionId, reviews],
   )
   const arrivalReady = useRef(false)
   const arrivalChat = useRef(id)
@@ -353,7 +377,7 @@ export default function ChatScreen() {
     })
     return map
   }, [pageRows, store.language])
-  const renderRow = ({ item, index }: { item: TranscriptItem; index: number }) => {
+  const renderRow = ({ item }: { item: TranscriptItem; index: number }) => {
     const fresh = !seen.current.has(item.id)
     seen.current.add(item.id)
     return (
@@ -362,8 +386,8 @@ export default function ChatScreen() {
         chat={chat!}
         date={itemMeta.get(item.id)?.date}
         footer={itemMeta.get(item.id)?.footer}
-        streaming={running && item.kind === 'text' && index === pageRows.length - 1}
-        fresh={fresh}
+        streaming={false}
+        fresh={fresh && item.kind !== 'user'}
         visible={contentScreenFocused && visibleContentRows.has(item.id)}
       />
     )
@@ -431,7 +455,7 @@ export default function ChatScreen() {
         {
           text: "Change, don't warn again",
           onPress: () => {
-            void setHostSetting(looseInvoke(store.invoke), chat.computerId, 'warnModelChange', false).catch(() => {})
+            store.setDraft(MODEL_WARNING_DEVICE_KEY, 'off')
             applyModel(m)
           },
         },
@@ -493,10 +517,8 @@ export default function ChatScreen() {
     await store.send(chat.id, outgoing, mode === 'send' ? 'queue' : mode, [...keep, ...(attachments ?? [])], context)
   }
   const offline = !store.isOnline(chat.computerId)
-  // Only stuck messages (view-only, offline or uncertain) show as pending; one being delivered to a connected computer would just flash.
-  const pending = store.outbox.filter(
-    (o) => o.chatId === chat.id && (viewOnly || o.state === 'uncertain' || !store.isOnline(chat.computerId)),
-  )
+  // Keep the submitted text visible while the host accepts it.
+  const pending = store.outbox.filter((o) => o.chatId === chat.id && !deliveryVisible(o, chat))
   const editPending = (text: string) => setRestore((r) => ({ text, n: (r?.n ?? 0) + 1 }))
   const openScm = () => router.push({ pathname: '/chat/[id]/scm', params: { id: chat.id } })
   const openChanges = () => router.push({ pathname: '/chat/[id]/changes', params: { id: chat.id } })
@@ -550,41 +572,72 @@ export default function ChatScreen() {
       return `Pushed ${live.branch}`
     })
   const openTerminal = () => router.push({ pathname: '/chat/[id]/terminal', params: { id: chat.id } })
-  // Thread actions that belong to this screen sit above the shared ones (pin, rename, archive…) in the same sheet.
-  const chatExtras = [
-    { icon: GitCompareArrows, label: 'Usage', onPress: () => setUsageOpen(true) },
-    // Which computer runs the thread: information only, so it has no action.
-    { icon: Monitor, label: `${computer?.name ?? 'Host unavailable'} · ${computer?.status ?? 'offline'}` },
+  // Thread actions that belong to this screen sit above the shared ones (pin, rename, archive…) in the same sheet:
+  // first the tools that look into the thread's workspace, then usage and where it runs.
+  const say_ = (text: string) => translate(store.language, text)
+  const chatExtras: {
+    icon: typeof Folder
+    label: string
+    onPress?: () => void
+    group: 'tools' | 'info'
+    symbol?: import('../../../components/Screen').HeaderMenuAction['icon']
+  }[] = [
     {
       icon: Folder,
-      label: 'Browse files',
+      label: say_('Browse files'),
+      symbol: 'folder',
+      group: 'tools',
       onPress: () => router.push({ pathname: '/explorer', params: { computer: chat.computerId, ctx: chat.taskId } }),
     },
-    { icon: SquareTerminal, label: 'Terminal', onPress: openTerminal },
-    ...(chat.taskId
-      ? [
-          { icon: Globe, label: translate(store.language, 'Browser'), onPress: () => setTool('browser') },
-          { icon: Monitor, label: translate(store.language, 'Computer'), onPress: () => setTool('computer') },
-        ]
-      : []),
+    { icon: SquareTerminal, label: say_('Terminal'), symbol: 'terminal', group: 'tools', onPress: openTerminal },
     {
-      icon: SquareTerminal,
-      label: translate(store.language, 'Background terminals'),
+      icon: Activity,
+      label: say_('Background terminals'),
+      symbol: 'list.bullet.rectangle',
+      group: 'tools',
       onPress: () => setBackgroundFor(chat.id),
     },
+    ...(chat.taskId
+      ? [
+          {
+            icon: Globe,
+            label: say_('Browser'),
+            symbol: 'globe' as const,
+            group: 'tools' as const,
+            onPress: () => setTool('browser'),
+          },
+          {
+            icon: Monitor,
+            label: say_('Computer'),
+            symbol: 'desktopcomputer' as const,
+            group: 'tools' as const,
+            onPress: () => setTool('computer'),
+          },
+        ]
+      : []),
     ...(chat.sessionId
       ? [
           {
             icon: MessageCircleQuestion,
-            label: 'Side questions',
+            label: say_('Side questions'),
+            symbol: 'questionmark.bubble' as const,
+            group: 'tools' as const,
             onPress: () => router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } }),
           },
         ]
       : []),
     {
-      icon: Inbox,
-      label: inbox.needsYou ? `Inbox · ${inbox.needsYou} waiting` : 'Inbox',
-      onPress: () => router.navigate('/inbox'),
+      icon: Gauge,
+      label: say_('Plan usage'),
+      symbol: 'gauge.with.dots.needle.50percent',
+      group: 'info',
+      onPress: () => setUsageOpen(true),
+    },
+    // Which computer runs the thread: information only, so it has no action (and no native menu entry).
+    {
+      icon: Server,
+      label: `${computer?.name ?? say_('Host unavailable')} · ${say_(computer?.status === 'online' ? 'Online' : computer?.status === 'connecting' ? 'Connecting…' : 'Offline')}`,
+      group: 'info',
     },
   ]
 
@@ -651,29 +704,21 @@ export default function ChatScreen() {
                 label="Thread actions"
                 onPress={() => setActions('menu')}
                 actions={[
+                  // The same groups as the sheet: workspace tools, usage, then the thread itself, with Delete last.
                   ...chatExtras
                     .filter((extra) => extra.onPress)
                     .map((extra) => ({
                       label: extra.label,
                       onPress: extra.onPress!,
-                      icon:
-                        extra.icon === Globe
-                          ? ('globe' as const)
-                          : extra.icon === Monitor
-                            ? ('desktopcomputer' as const)
-                            : extra.icon === Folder
-                              ? ('folder' as const)
-                              : extra.icon === SquareTerminal
-                                ? ('terminal' as const)
-                                : extra.label === 'Usage'
-                                  ? ('chart.bar' as const)
-                                  : ('tray' as const),
+                      icon: extra.symbol,
+                      section: extra.group,
                     })),
                   ...(!viewOnly
                     ? [
                         {
-                          label: chat.pinnedAt !== null ? 'Unpin' : 'Pin to top',
-                          icon: 'pin' as const,
+                          label: say_(chat.pinnedAt !== null ? 'Unpin' : 'Pin to top'),
+                          icon: (chat.pinnedAt !== null ? 'pin.slash' : 'pin') as 'pin',
+                          section: 'thread',
                           onPress: () => {
                             if (viewerNow()) return
                             void latestStore.current
@@ -683,26 +728,66 @@ export default function ChatScreen() {
                           },
                         },
                         {
-                          label: 'Rename',
+                          label: say_('Rename'),
                           icon: 'pencil' as const,
+                          section: 'thread',
                           onPress: () => {
                             if (!viewerNow()) setActions('rename')
                           },
                         },
+                        ...(chat.settings && chat.titleGenerationState !== 'pending' && !offline
+                          ? [
+                              {
+                                label: chat.titleGenerationState === 'failed' ? t.retryTitleGeneration : t.renameWithAI,
+                                icon: 'sparkles' as const,
+                                section: 'thread',
+                                onPress: () => {
+                                  if (viewerNow()) return
+                                  void latestStore.current
+                                    .invoke(chat.computerId, 'tasks.generateTitle', chat.taskId, chat.settings!, true)
+                                    .then(() => store.refresh(chat.computerId))
+                                    .catch((error) => say(String(error)))
+                                },
+                              },
+                            ]
+                          : []),
                         {
-                          label: chat.status === 'archived' ? 'Unarchive' : 'Archive',
+                          label: say_(chat.status === 'archived' ? 'Unarchive' : 'Archive'),
                           icon: 'archivebox' as const,
+                          section: 'thread',
                           onPress: () => {
                             if (viewerNow()) return
+                            const archiving = chat.status !== 'archived'
                             void latestStore.current
-                              .invoke(chat.computerId, 'tasks.archive', chat.taskId, chat.status !== 'archived')
+                              .invoke(chat.computerId, 'tasks.archive', chat.taskId, archiving)
                               .then(() => store.refresh(chat.computerId))
+                              // Archiving leaves the thread, as the sheet's Archive does.
+                              .then(() => archiving && goBackOrHome(router))
                               .catch((error) => say(String(error)))
                           },
                         },
                       ]
                     : []),
-                  { label: 'More thread actions…', icon: 'ellipsis', onPress: () => setActions('menu') },
+                  {
+                    label: say_('Copy thread ID'),
+                    icon: 'doc.on.doc' as const,
+                    section: 'thread',
+                    onPress: () => void Clipboard.setStringAsync(chat.taskId),
+                  },
+                  ...(!viewOnly
+                    ? [
+                        {
+                          label: say_('Delete…'),
+                          icon: 'trash' as const,
+                          destructive: true,
+                          section: 'danger',
+                          onPress: () => {
+                            if (!viewerNow())
+                              void confirmChatDeletion(latestStore.current, chat, () => goBackOrHome(router))
+                          },
+                        },
+                      ]
+                    : []),
                 ]}
               />
             </>
@@ -796,7 +881,7 @@ export default function ChatScreen() {
         <CancelPendingSettings.Provider value={() => setStaged(null)}>
           <RowToggle.Provider value={holdScroll}>
             <PageFlatList
-              key={pageRows.length ? 'filled' : 'empty'}
+              key={chat.id}
               ref={scroll}
               contentInsetAdjustmentBehavior="automatic"
               automaticallyAdjustsScrollIndicatorInsets
@@ -825,7 +910,9 @@ export default function ChatScreen() {
                         backgroundColor: c.fill,
                       }}
                     >
-                      <T size={font.control} weight="500" tone="soft">{`Earlier turns · ${hiddenTurns} more`}</T>
+                      <T size={font.control} weight="500" tone="soft">
+                        {store.language === 'id' ? 'Tampilkan giliran sebelumnya' : 'Show earlier turns'}
+                      </T>
                     </Pressable>
                   ) : null}
                   {offline ? (
@@ -860,8 +947,14 @@ export default function ChatScreen() {
                 const gap = contentSize.height - contentOffset.y - layoutMeasurement.height + metrics.current.cover
                 // Only the reader's own scrolling decides whether to follow the end. The list's first, programmatic offset
                 // (resting at the top before it is measured) used to switch following off, so a chat opened at its top.
-                if (!settling.current && userScrolling.current) following.current = gap < 40
-                setAway(gap > 80)
+                const position = transcriptScrollState(
+                  following.current,
+                  gap,
+                  userScrolling.current,
+                  !!settling.current,
+                )
+                following.current = position.following
+                setAway(position.away)
                 setScrolled(contentOffset.y > 8 - topInset)
               }}
               scrollEventThrottle={16}
@@ -909,7 +1002,7 @@ export default function ChatScreen() {
                 visible={computer?.status !== 'online'}
                 style={{
                   position: 'absolute',
-                  top: topInset + 22,
+                  top: topInset + space.s,
                   left: space.l,
                   right: space.l,
                   alignItems: 'center',
@@ -966,7 +1059,7 @@ export default function ChatScreen() {
                         leading={
                           <>
                             <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
-                            <BrowserNotice chat={chat} onOpen={() => setTool('browser')} />
+                            <BrowserNotice chat={chat} tabs={browserTabs.tabs} onOpen={() => setTool('browser')} />
                           </>
                         }
                         actions={[
@@ -998,10 +1091,23 @@ export default function ChatScreen() {
                     // "/aside question" (or "/btw") asks beside the chat: the agent keeps working and never sees it.
                     const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(text.trim())
                     if (side && !attachments?.length && chat.sessionId)
+                      // One side chat per thread: /btw continues it rather than starting another.
                       return store
-                        .invoke(chat.computerId, 'aside.ask', chat.sessionId, null, '', 'assistant', side[1]!.trim())
-                        .then((made) => {
-                          router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id, aside: made.id } })
+                        .invoke(chat.computerId, 'aside.list', chat.sessionId)
+                        .then((asides) => {
+                          const latest = asides.find((aside) => aside.id === sideChat(asides).continueId)
+                          return store.invoke(
+                            chat.computerId,
+                            'aside.ask',
+                            chat.sessionId!,
+                            latest?.id ?? null,
+                            latest?.quote ?? '',
+                            latest?.quoteFrom ?? 'assistant',
+                            side[1]!.trim(),
+                          )
+                        })
+                        .then(() => {
+                          router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
                         })
                     following.current = true
                     smoothSendScroll.current = true
@@ -1083,6 +1189,7 @@ export default function ChatScreen() {
                   onPress={() => {
                     tap()
                     following.current = true
+                    userScrolling.current = false
                     setAway(false)
                     toEnd(true)
                   }}
@@ -1143,11 +1250,26 @@ export default function ChatScreen() {
           onClose={() => setActions('closed')}
         />
       ) : null}
+      <BrowserFloat
+        chat={chat}
+        tabs={browserTabs.tabs}
+        viewable={browserTabs.viewable}
+        hidden={tool !== null}
+        top={(ios ? topInset : insets.top + 56) + space.s}
+        onOpen={(tabId) => {
+          setBrowserTab(tabId)
+          setTool('browser')
+        }}
+      />
       <BrowserActivity
         key={`browser:${chat.computerId}:${chat.taskId}`}
         chat={chat}
+        initialTab={browserTab}
         open={tool === 'browser'}
-        onClose={() => setTool(null)}
+        onClose={() => {
+          setTool(null)
+          setBrowserTab(null)
+        }}
       />
       <ComputerActivity
         key={`computer:${chat.computerId}:${chat.taskId}`}

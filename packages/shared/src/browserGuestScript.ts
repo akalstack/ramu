@@ -1,12 +1,65 @@
 /// <reference lib="dom" />
-import type { BrowserPageAction as PageAction, BrowserPageSnapshot } from './browserBridge'
+import type { BrowserFieldFocus, BrowserPageAction as PageAction, BrowserPageSnapshot } from './browserBridge'
 type PageSnapshot = Omit<BrowserPageSnapshot, 'tab' | 'snapshot'>
 
 /** Runs only in the guest's isolated world. Never interpolates page text or caller-supplied JavaScript. */
 function guestOperation(
-  operation: 'inspect' | 'act' | 'invalidate',
+  operation: 'inspect' | 'act' | 'invalidate' | 'focus',
   action?: PageAction,
-): PageSnapshot | { ok: boolean; reason?: string; points?: { x: number; y: number }[] } {
+): PageSnapshot | BrowserFieldFocus | { ok: boolean; reason?: string; points?: { x: number; y: number }[] } {
+  if (operation === 'focus') {
+    // Follow focus into open shadow roots and same-origin frames; report only the kind of field, never its value.
+    let element: Element | null = document.activeElement
+    for (let depth = 0; element && depth < 20; depth++) {
+      const inner: Element | null | undefined =
+        element.shadowRoot?.activeElement ??
+        (element.tagName === 'IFRAME' || element.tagName === 'FRAME'
+          ? (() => {
+              try {
+                return (element as HTMLIFrameElement).contentDocument?.activeElement
+              } catch {
+                return null
+              }
+            })()
+          : null)
+      if (!inner || inner === element) break
+      element = inner
+    }
+    if (!element) return { editable: false }
+    const html = element as HTMLElement
+    // Keep the focused field in view, as a phone browser does when its keyboard opens.
+    html.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+    const mode = (html.getAttribute('inputmode') ?? '').toLowerCase()
+    const byMode: { [key: string]: BrowserFieldFocus['kind'] } = {
+      email: 'email',
+      numeric: 'number',
+      decimal: 'number',
+      tel: 'tel',
+      url: 'url',
+      search: 'search',
+    }
+    if (element.tagName === 'TEXTAREA') {
+      const area = element as HTMLTextAreaElement
+      return { editable: !area.readOnly && !area.disabled, kind: byMode[mode] ?? 'multiline' }
+    }
+    if (element.tagName === 'INPUT') {
+      const input = element as HTMLInputElement
+      const types: { [key: string]: BrowserFieldFocus['kind'] } = {
+        text: 'text',
+        password: 'password',
+        email: 'email',
+        number: 'number',
+        tel: 'tel',
+        url: 'url',
+        search: 'search',
+      }
+      const kind = types[input.type]
+      if (!kind || input.readOnly || input.disabled) return { editable: false }
+      return { editable: true, kind: kind === 'text' ? (byMode[mode] ?? 'text') : kind }
+    }
+    if (html.isContentEditable) return { editable: true, kind: byMode[mode] ?? 'multiline' }
+    return { editable: false }
+  }
   type Record = { element: HTMLElement; signature: string }
   type State = { records: Record[]; observer: MutationObserver; dirty: boolean }
   const world = globalThis as typeof globalThis & { __ramuBrowserObservation?: State }
@@ -275,6 +328,6 @@ function guestOperation(
 }
 
 /** Isolated-world code is fixed application code plus JSON data; no general-purpose evaluate endpoint exists. */
-export function browserGuestScript(operation: 'inspect' | 'act' | 'invalidate', action?: PageAction): string {
+export function browserGuestScript(operation: 'inspect' | 'act' | 'invalidate' | 'focus', action?: PageAction): string {
   return `(${guestOperation.toString()})(${JSON.stringify(operation)}, ${JSON.stringify(action)})`
 }

@@ -6,7 +6,7 @@ import { font, space, useTheme, type Appearance, type TextSize } from '../../the
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
-import { useSharedField, type SharedFieldControl } from '../../runtime/useSharedField'
+import { sharedValue } from '@ramu/shared/sharedFields'
 import {
   BUSY_MODE_DEVICE_KEY,
   MODEL_WARNING_DEVICE_KEY,
@@ -22,9 +22,9 @@ import {
   type PushCategory,
 } from '../../runtime/pushCategories'
 import { useT } from '../../i18n'
-import { Header, Screen, PageScrollView as ScrollView } from '../../components/Screen'
+import { Header, Screen, useScrolledUnderBar, PageScrollView as ScrollView } from '../../components/Screen'
 import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
-import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
+import { Button, Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
 import { ComputerScope } from '../../components/SettingsChrome'
 import { RulesSettings } from '../../components/RulesSettings'
 import { VoiceSettings } from '../../components/VoiceSettings'
@@ -107,56 +107,21 @@ function AppearancePage() {
   )
 }
 
-/** One shared-mobile row: "All your phones" with the computer's setting as the way back, or the reason it is unavailable. */
-function SharedRow<T extends string>({
-  title,
-  control,
-  options,
-  inheritLabel,
-}: {
-  title: string
-  control: SharedFieldControl
-  options: { key: T; label: string }[]
-  inheritLabel: string
-}) {
-  const t = useT()
-  const current = (typeof control.value === 'string' ? control.value : undefined) as T | undefined
-  return (
-    <>
-      <SectionLabel>{title}</SectionLabel>
-      {control.available ? (
-        <Card style={{ marginHorizontal: space.l }}>
-          <Segmented<T | 'inherit'>
-            style={{ margin: space.m }}
-            value={current ?? 'inherit'}
-            onChange={(key) => void control.setMobile(key === 'inherit' ? null : key)}
-            options={[{ key: 'inherit', label: inheritLabel }, ...options]}
-          />
-        </Card>
-      ) : (
-        <Hint>{t.sharedNeedsHost}</Hint>
-      )}
-      {control.pending ? <Hint>{t.sharedSaving}</Hint> : null}
-      {control.error ? <Hint>{control.error}</Hint> : null}
-    </>
-  )
-}
-
 /**
  * How a message sent while the agent works, and the warning before a model change, behave here: this phone's own choice
  * first, then the setting shared by all your phones on this computer, then the computer's own setting.
  */
 function BusyBehavior({ computerId }: { computerId: string }) {
-  const { drafts, setDraft, appPreferences } = useStore()
+  const { drafts, setDraft, appPreferences, mobileLayers } = useStore()
   const t = useT()
-  const sharedBusy = useSharedField(computerId, 'queueWhileBusy')
-  const sharedWarning = useSharedField(computerId, 'modelChangeWarning')
+  const sharedBusy = sharedValue(mobileLayers[computerId], 'queueWhileBusy')
+  const sharedWarning = sharedValue(mobileLayers[computerId], 'modelChangeWarning')
   const hostBusy = appPreferences[computerId]?.busyMessageAction
   const hostWarn = appPreferences[computerId]?.warnModelChange
-  const resolved = resolveBusyMode(drafts[BUSY_MODE_DEVICE_KEY], sharedBusy.value, hostBusy)
-  const inheritedBusy = resolveBusyMode(undefined, sharedBusy.value, hostBusy)
-  const warning = resolveModelChangeWarning(drafts[MODEL_WARNING_DEVICE_KEY], sharedWarning.value, hostWarn)
-  const inheritedWarning = resolveModelChangeWarning(undefined, sharedWarning.value, hostWarn)
+  const resolved = resolveBusyMode(drafts[BUSY_MODE_DEVICE_KEY], sharedBusy, hostBusy)
+  const inheritedBusy = resolveBusyMode(undefined, sharedBusy, hostBusy)
+  const warning = resolveModelChangeWarning(drafts[MODEL_WARNING_DEVICE_KEY], sharedWarning, hostWarn)
+  const inheritedWarning = resolveModelChangeWarning(undefined, sharedWarning, hostWarn)
   return (
     <>
       <SectionLabel>{t.busyOnPhone}</SectionLabel>
@@ -172,22 +137,13 @@ function BusyBehavior({ computerId }: { computerId: string }) {
         />
       </Card>
       <Hint>{t.busyHint}</Hint>
-      <ScopeControl
-        field="queueWhileBusy"
-        overridden={resolved.source === 'device'}
-        inheritedLabel={inheritedBusy.mode === 'queue' ? t.queue : t.steer}
-        onUseInherited={() => setDraft(BUSY_MODE_DEVICE_KEY, '')}
-        sharedMobile={sharedBusy.available}
-      />
-      <SharedRow<BusyMode>
-        title={t.sharedForPhones}
-        control={sharedBusy}
-        inheritLabel={t.sharedInherit}
-        options={[
-          { key: 'steer', label: t.steer },
-          { key: 'queue', label: t.queue },
-        ]}
-      />
+      {resolved.source === 'device' ? (
+        <Button
+          kind="ghost"
+          title={`${t.scopeUseInherited} · ${inheritedBusy.mode === 'queue' ? t.queue : t.steer}`}
+          onPress={() => setDraft(BUSY_MODE_DEVICE_KEY, '')}
+        />
+      ) : null}
       <SectionLabel>{t.modelWarnOnPhone}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <Segmented<'on' | 'off'>
@@ -201,32 +157,13 @@ function BusyBehavior({ computerId }: { computerId: string }) {
         />
       </Card>
       <Hint>{t.modelWarnHint}</Hint>
-      <ScopeControl
-        field="modelChangeWarning"
-        overridden={warning.source === 'device'}
-        inheritedLabel={inheritedWarning.warn ? t.modelWarnOn : t.modelWarnOff}
-        onUseInherited={() => setDraft(MODEL_WARNING_DEVICE_KEY, '')}
-        sharedMobile={sharedWarning.available}
-      />
-      <SectionLabel>{t.sharedForPhonesWarn}</SectionLabel>
-      {sharedWarning.available ? (
-        <Card style={{ marginHorizontal: space.l }}>
-          <Segmented<'on' | 'off' | 'inherit'>
-            style={{ margin: space.m }}
-            value={typeof sharedWarning.value === 'boolean' ? (sharedWarning.value ? 'on' : 'off') : 'inherit'}
-            onChange={(key) => void sharedWarning.setMobile(key === 'inherit' ? null : key === 'on')}
-            options={[
-              { key: 'inherit', label: t.sharedInherit },
-              { key: 'on', label: t.modelWarnOn },
-              { key: 'off', label: t.modelWarnOff },
-            ]}
-          />
-        </Card>
-      ) : (
-        <Hint>{t.sharedNeedsHost}</Hint>
-      )}
-      {sharedWarning.pending ? <Hint>{t.sharedSaving}</Hint> : null}
-      {sharedWarning.error ? <Hint>{sharedWarning.error}</Hint> : null}
+      {warning.source === 'device' ? (
+        <Button
+          kind="ghost"
+          title={`${t.scopeUseInherited} · ${inheritedWarning.warn ? t.modelWarnOn : t.modelWarnOff}`}
+          onPress={() => setDraft(MODEL_WARNING_DEVICE_KEY, '')}
+        />
+      ) : null}
     </>
   )
 }
@@ -405,6 +342,7 @@ const desktopOnly: Partial<Record<SettingsSection, string>> = {
 }
 
 export default function SettingsSectionPage() {
+  const edge = useScrolledUnderBar()
   const { section: param } = useLocalSearchParams<{ section: string }>()
   const section = sectionById(String(param))
   const { computers, selected, language } = useStore()
@@ -415,8 +353,13 @@ export default function SettingsSectionPage() {
   const note = desktopOnly[id]
   return (
     <Screen bg="window">
-      <Header title={section.label[language]} />
-      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: space.xl * 2 }}>
+      <Header align="center" title={section.label[language]} scrollEdge scrolled={edge.scrolled} />
+      <ScrollView
+        onScroll={edge.onScroll}
+        scrollEventThrottle={16}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: space.xl * 2 }}
+      >
         {section.scope === 'host' ? <ComputerScope host={host} /> : null}
         {id === 'appearance' ? <AppearancePage /> : null}
         {id === 'notifications' ? <Notifications host={host} name={name} /> : null}

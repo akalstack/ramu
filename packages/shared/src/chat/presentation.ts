@@ -19,3 +19,11 @@ export const REFERENCE_APPEARANCE = {
   fontWeight: '400' as const,
   glyph: { file: '▤ ', folder: '▸ ', skill: '✦ ', command: '› ', quote: '❝ ' },
 }
+
+/** Tool labels share a left-to-right sweep; only the decorative completion highlight waits. */
+export const TOOL_MOTION = {
+  sweepMs: 2200,
+  settleMs: 120,
+  finishMs: 360,
+  fadeAt: 0.8,
+} as const

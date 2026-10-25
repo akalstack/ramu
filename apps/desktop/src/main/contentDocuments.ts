@@ -4,7 +4,7 @@ import { INTERACTIVE_CSP } from '@ramu/shared/interactive'
 export class ContentDocuments {
   private entries = new Map<string, string>()
   mount(html: unknown): string {
-    if (typeof html !== 'string' || Buffer.byteLength(html) > 800_000) throw new Error('Invalid interactive document')
+    if (typeof html !== 'string' || Buffer.byteLength(html) > 2_000_000) throw new Error('Invalid interactive document')
     if (this.entries.size >= 4) throw new Error('Too many open interactive documents')
     const url = `ramu-content://${randomUUID()}/document`
     this.entries.set(url, html)

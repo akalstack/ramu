@@ -94,10 +94,15 @@ it.skipIf(!interactiveBrowserPath())(
     const result = await previewInteractive(input.html!, input.checks)
     expect(result.errors).toEqual([])
     expect(result.checks[0]?.passed).toBe(true)
-    expect(result.layouts).toEqual([
-      expect.objectContaining({ width: 390, overflow: false }),
-      expect.objectContaining({ width: 900, overflow: false }),
-    ])
+    expect(result.layouts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ width: 390, overflow: false }),
+        expect.objectContaining({ width: 900, overflow: false }),
+        expect.objectContaining({ width: 320, overflow: false }),
+        expect.objectContaining({ width: 768, overflow: false }),
+        expect.objectContaining({ width: 390, scheme: 'light', overflow: false }),
+      ]),
+    )
     expect(result.screenshot).toMatch(/^data:image\/png;base64,/)
     const blocked = await previewInteractive(
       '<script>fetch("http://example.com/private").catch(()=>{});console.log("checked");throw new Error("broken fixture")</script><p style="width:1200px">Fallback</p>',
@@ -178,4 +183,58 @@ it('binds the optional compatibility declaration to the preview and saved immuta
   expect(ref.stateSchema).toBe('capacity-v1')
   expect(store.get('s', ref.id, 1).reference.stateSchema).toBe('capacity-v1')
   await expect(store.preview('s', { ...input, stateSchema: ' ' })).rejects.toThrow()
+})
+
+it('publishes the exact compiled TSX artifact and immutable offline policy, and rejects artifact tampering', async () => {
+  const d = db()
+  let tested = ''
+  const store = new InteractiveStore(
+    d,
+    () => {},
+    async (html, _checks, _signal, network) => {
+      tested = html
+      expect(network).toEqual({ resources: [], connect: [] })
+      return previewer()
+    },
+  )
+  const files = [
+    { path: 'index.html', content: '<div id="root"></div><script type="module" src="./main.tsx"></script>' },
+    {
+      path: 'main.tsx',
+      content:
+        "import {createRoot} from 'react-dom/client'; createRoot(document.getElementById('root')!).render(<button>Ready</button>)",
+    },
+  ]
+  const preview = await store.preview('s', { title: 'Chart', summary: 'A local chart.', files, checks: [] })
+  expect(preview).not.toHaveProperty('artifact')
+  const ref = store.publish('s', preview.id, 'compiled')
+  expect(ref.network).toEqual({ resources: [], connect: [] })
+  expect(ref.libraries).toHaveProperty('react', '19.3.0')
+  expect(store.get('s', ref.id, 1)).toMatchObject({ html: tested, files })
+  const row = d.prepare('SELECT result FROM interactive_previews WHERE id=?').get(preview.id) as { result: string }
+  d.prepare('UPDATE interactive_previews SET result=? WHERE id=?').run(
+    JSON.stringify({ ...JSON.parse(row.result), artifact: '<p>Changed</p>' }),
+    preview.id,
+  )
+  expect(() => store.publish('s', preview.id, 'tampered')).toThrow('artifact digest')
+})
+it('normalizes explicit origin permissions and rejects broad or local resource permissions', async () => {
+  const store = new InteractiveStore(db(), () => {}, previewer)
+  const preview = await store.preview('s', {
+    ...input,
+    network: { resources: ['https://images.example.com/'], connect: [] },
+  })
+  expect(store.publish('s', preview.id, 'origins').network).toEqual({
+    resources: ['https://images.example.com'],
+    connect: [],
+  })
+  for (const origin of [
+    'https://*.example.com',
+    'https://127.0.0.1',
+    'http://example.com',
+    'https://foo.local',
+    'https://user:pass@example.com',
+    'https://example.com/path',
+  ])
+    await expect(store.preview('s', { ...input, network: { resources: [origin], connect: [] } })).rejects.toThrow()
 })

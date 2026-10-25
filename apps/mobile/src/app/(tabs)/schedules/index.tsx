@@ -52,7 +52,7 @@ export default function SchedulesScreen() {
   )
   return (
     <Screen>
-      <Header back={false} large collapsed={edge.scrolled} title={t.schedules} right={actions} />
+      <Header back={false} large scrollEdge collapsed={edge.scrolled} title={t.schedules} right={actions} />
       <PageScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}

@@ -35,6 +35,10 @@ export interface TranscriptTool {
   status: ToolStatus
   detail?: string
   input?: string
+  /** Reads, edits and writes: the full path, file name and line counts behind the compact row. */
+  file?: import('@ramu/shared/chat/fileTools').FileToolLine
+  /** An edit's changes, shown when its row is opened. */
+  diffs?: { path: string; oldText: string | null; newText: string }[]
 }
 
 export type TranscriptItem = (
@@ -80,7 +84,16 @@ export type TranscriptItem = (
     }
   | { kind: 'permission'; id: string; title: string; command: string; decision?: 'allow' | 'deny' }
   | { kind: 'elicitation'; id: string; request: import('@ramu/shared/types').AgentElicitation; outcome?: string }
-  | { kind: 'changes'; id: string; files: number; additions: number; deletions: number }
+  | {
+      kind: 'changes'
+      id: string
+      /** The change review this card opens, as on the desktop's end-of-turn Changes card. */
+      reviewId: string
+      files: { id: string; path: string; additions: number; deletions: number }[]
+      additions: number
+      deletions: number
+      undone: boolean
+    }
   | { kind: 'goal'; id: string; objective: string; turns: number; detail?: string }
   /** Turn boundary from a provider result or a terminal state; drives the Worked-for fold and is never drawn. */
   | { kind: 'end'; id: string; ended: boolean; interrupted: boolean }

@@ -1,5 +1,16 @@
+import * as toolActivity from '../../../packages/shared/src/chat/toolActivity.ts'
+import * as recentThreads from '../src/runtime/recentThreads.ts'
+import * as threadGroups from '../src/runtime/threadGroups.ts'
+import * as sideChat from '../src/runtime/sideChat.ts'
+import * as scrollSurface from '../src/runtime/scrollSurface.ts'
+import * as mobileTranscript from '../src/runtime/transcript.ts'
+import * as chatViewport from '../src/runtime/chatViewport.ts'
+import * as transcriptChanges from '../src/runtime/transcriptChanges.ts'
+import * as phoneBehavior from '../src/runtime/busyMode.ts'
 import * as chatPresentation from '../../../packages/shared/src/chat/presentation.ts'
 import * as browserViewerState from '../src/runtime/browserViewerState.ts'
+import * as remoteKeyboard from '../src/runtime/remoteKeyboard.ts'
+import * as computerGestures from '../src/runtime/computerGestures.ts'
 import * as sharedViewerAccess from '../../../packages/shared/src/viewerAccess.ts'
 import * as viewerAccess from '../src/runtime/viewerAccess.ts'
 import * as scheduleModel from '../src/runtime/scheduleModel.ts'
@@ -70,6 +81,10 @@ function load(file, os, overrides = {}, globals = {}) {
     },
   }
   const mocks = {
+    '../runtime/scrollSurface': scrollSurface,
+    './transcript': mobileTranscript,
+    './chatViewport': chatViewport,
+    './transcriptChanges': transcriptChanges,
     'react-native': native,
     '@ramu/shared/i18n': {
       translate: (_language, text, params = {}) =>
@@ -145,9 +160,20 @@ function load(file, os, overrides = {}, globals = {}) {
         }
       if (id === '@ramu/shared/browserLiveViewer')
         return load('../../../packages/shared/src/browserLiveViewer.ts', os, {}, globals)
+      if (id === '@ramu/shared/chat/toolActivity') return toolActivity
+      if (id === '../../../runtime/recentThreads') return recentThreads
+      if (id === '../../../runtime/threadGroups') return threadGroups
+      if (id === '../../../runtime/sideChat') return sideChat
       if (id === '@ramu/shared/chat/presentation') return chatPresentation
       if (id === '@ramu/shared/viewerAccess') return sharedViewerAccess
       if (id.endsWith('/browserViewerState')) return browserViewerState
+      if (id.endsWith('/remoteKeyboard')) return remoteKeyboard
+      if (id.endsWith('/computerGestures')) return computerGestures
+      if (id.endsWith('/ViewerChrome'))
+        return new Proxy(
+          { useViewerMenu: () => ({ anchor: { current: null }, at: null, open() {}, close() {} }) },
+          { get: (target, key) => (key in target ? target[key] : String(key)) },
+        )
       if (id.endsWith('/viewerAccess')) return viewerAccess
       if (id.endsWith('/navigation')) return { goBackOrHome }
       if (id.endsWith('/composerDrafts')) return explorerDrafts
@@ -156,6 +182,11 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id.endsWith('/routingDraft')) return routingDraft
       if (id === '@ramu/shared/chat/fileContext') return fileContextKeys
       if (id === '@ramu/shared/chat/composerTrigger') return composerTriggers
+      if (id.endsWith('/Screen'))
+        return new Proxy(
+          { useScrolledUnderBar: () => ({ scrolled: false, onScroll() {} }) },
+          { get: (target, key) => (key in target ? target[key] : String(key)) },
+        )
       if (id.endsWith('/theme')) return theme
       if (id === 'react' || id === 'react/jsx-runtime') return require(id)
       return components
@@ -216,7 +247,10 @@ for (const os of ['ios', 'android']) {
           },
         }),
       )
-    const button = (title) => nodes(render()).find((node) => node.type === 'Button' && node.props.title === title)
+    const button = (title) =>
+      nodes(render()).find(
+        (node) => (node.type === 'Button' || node.type?.name === 'ContentAction') && node.props.title === title,
+      )
     render()
     assert.equal(calls.length, 0)
     assert.equal(button('Browser'), undefined)
@@ -263,9 +297,10 @@ test('the phone opens its host browser directly inside the menu screen', async (
   render()
   await settle()
   const tree = render()
-  assert.equal(find(tree, 'Sheet').props.presentation, 'screen')
-  assert.equal(find(tree, 'Sheet').props.scroll, false)
-  assert.equal(find(tree, 'BrowserViewer').props.embedded, true)
+  // The browser owns one full-screen surface, without a sheet header above its own chrome.
+  assert.equal(find(tree, 'ViewerScreen').props.open, true)
+  assert.ok(!nodes(tree).some((node) => node.type === 'Sheet'))
+  assert.equal(find(tree, 'BrowserViewer').props.hostManaged, true)
   assert.ok(!nodes(tree).some((node) => node.type === 'Button' && node.props.title === 'View host browser'))
   hooks.dispose()
 })
@@ -362,7 +397,10 @@ for (const os of ['ios', 'android']) {
           onSaved() {},
         }),
       )
-    const button = (title) => nodes(render()).find((node) => node.type === 'Button' && node.props.title === title)
+    const button = (title) =>
+      nodes(render()).find(
+        (node) => (node.type === 'Button' || node.type?.name === 'ContentAction') && node.props.title === title,
+      )
     const input = (label) =>
       nodes(render()).find((node) => node.type === 'TextInput' && node.props.accessibilityLabel === label)
     input('Rule name').props.onChangeText('Careful changes')
@@ -495,6 +533,7 @@ for (const os of ['android', 'ios']) {
       '../../i18n': { useT: () => ({ settings: 'Settings' }) },
     })
     const initial = Menu()
+    assert.equal(find(Menu(), 'Header').props.align, 'center')
     const search = find(initial, 'NativeSearch')
     assert.ok(search, 'the OS owns search, instead of an elevated custom field')
     assert.equal(Boolean(find(initial, 'NativeSearchSlot')), os === 'ios')
@@ -589,7 +628,7 @@ test('native chat toolbar actions receive taps and keep their supplied symbols',
     ),
   )
   assert.equal(options.headerStyle.backgroundColor, 'window')
-  assert.equal(options.scrollEdgeEffects.top, 'hard')
+  assert.equal(options.scrollEdgeEffects.top, 'soft')
   assert.ok(nodes(tree).some((node) => node.props?.style?.width >= 140 && node.props.style.width <= 220))
 })
 
@@ -637,9 +676,12 @@ test('a linked development build can use WebRTC and initialization failure falls
   hooks.dispose()
 })
 
-test('complex panels use a full-screen keyboard-aware layout on both platforms', () => {
-  for (const os of ['ios', 'android']) {
-    const ui = load('components/ui.tsx', os)
+test('Android complex panels use a full-screen keyboard-aware layout', () => {
+  for (const os of ['android']) {
+    const hooks = hookHarness()
+    const ui = load('components/ui.tsx', os, {
+      react: { ...hooks.react, createContext: require('react').createContext },
+    })
     const sheet = ui.Sheet({
       open: true,
       title: 'Questions',
@@ -651,7 +693,7 @@ test('complex panels use a full-screen keyboard-aware layout on both platforms',
     assert.equal(modal.props.presentationStyle, 'fullScreen')
     assert.equal(modal.props.visible, true)
     const body = nodes(modal).find((node) => typeof node.type === 'function')
-    const keyboard = body.type(body.props)
+    const keyboard = hooks.render(() => body.type(body.props))
     assert.equal(keyboard.type, 'KeyboardAvoidingView')
     assert.equal(keyboard.props.behavior, 'padding')
     const scroll = find(keyboard, 'ScrollView')
@@ -737,7 +779,7 @@ for (const os of ['android', 'ios']) {
     }
     const ref = { current: { focus: () => focused++, blur: () => blurred++ } }
     const { default: SearchScreen } = load(
-      'app/(tabs)/search/index.tsx',
+      'app/search.tsx',
       os,
       {
         'expo-router': {
@@ -763,7 +805,7 @@ for (const os of ['android', 'ios']) {
           useMemo: (compute) => compute(),
           useEffect: () => {},
         },
-        '../../../runtime/store': {
+        '../runtime/store': {
           useStore: () => ({
             computers: [],
             projects: [],
@@ -773,8 +815,8 @@ for (const os of ['android', 'ios']) {
             ],
           }),
         },
-        '../../../i18n': { useT: () => ({ search: 'Search threads', recent: 'Recent', chats: 'Threads' }) },
-        '../../../components/Overlays': { useTabActions: () => null },
+        '../i18n': { useT: () => ({ search: 'Search threads', recent: 'Recent', chats: 'Threads' }) },
+        '../components/Overlays': { useTabActions: () => null },
       },
       {
         requestAnimationFrame: (callback) => {
@@ -865,6 +907,8 @@ test('scroll-edge support uses the public native registry and safely falls back 
 test('new thread switches projects and composer in one flow without losing the draft identity', () => {
   const hooks = hookHarness()
   let keyboard = 0
+  let asTab = false
+  const destinations = []
   const store = {
     selected: 'a',
     language: 'en',
@@ -882,7 +926,10 @@ test('new thread switches projects and composer in one flow without losing the d
   }
   const { default: NewChat } = load('app/new.tsx', 'ios', {
     react: hooks.react,
-    'expo-router': { useRouter: () => ({ replace() {} }), useLocalSearchParams: () => ({}) },
+    'expo-router': {
+      useRouter: () => ({ replace() {}, navigate: (path) => destinations.push(path) }),
+      useLocalSearchParams: () => ({}),
+    },
     '@ramu/shared/workspaceDefaults': workspaceDefaults,
     '@ramu/shared/workspace/explorer': explorerScopes,
     '../runtime/workspaces': workspaceChoices,
@@ -892,7 +939,7 @@ test('new thread switches projects and composer in one flow without losing the d
     '../i18n': { useT: () => ({ newChat: 'New thread' }) },
     '../components/Keyboard': { useKeyboardInset: () => keyboard },
   })
-  const render = () => hooks.render(() => NewChat())
+  const render = () => hooks.render(() => NewChat({ asTab }))
   let tree = render()
   assert.equal(find(tree, 'Header').props.title, 'Choose a project')
   const project = nodes(find(tree, 'PageScrollView')).find(
@@ -905,9 +952,11 @@ test('new thread switches projects and composer in one flow without losing the d
   const draftKey = composer.props.draftKey
   store.drafts[draftKey] = 'Keep this task'
   assert.equal(composer.props.autoFocus, true)
-  nodes(composer.props.header)
-    .find((node) => node.props?.label === 'ramu')
-    .props.onPress()
+  const back = find(tree, 'Header').props.left
+  assert.equal(back.props.label, 'Back to projects')
+  assert.equal(back.props.systemIcon, 'chevron.left')
+  assert.equal(find(tree, 'Header').props.right.props.label, 'Close')
+  back.props.onPress()
   tree = render()
   assert.equal(find(tree, 'Header').props.title, 'Choose a project')
   assert.equal(nodes(tree).filter((node) => node.type === 'Sheet' && node.props.open).length, 0)
@@ -924,6 +973,28 @@ test('new thread switches projects and composer in one flow without losing the d
   assert.ok(
     !nodes(tree).some((node) => typeof node.props?.children === 'string' && node.props.children.startsWith('Runs on ')),
   )
+  asTab = true
+  keyboard = 0
+  const spacing = () =>
+    nodes(render()).find(
+      (node) =>
+        node.type === 'View' &&
+        typeof node.props?.style?.paddingBottom === 'number' &&
+        node.props.style.flex === undefined &&
+        nodes(node).some((child) => child.type === 'Composer'),
+    ).props.style.paddingBottom
+  const tabSpacing = spacing()
+  keyboard = 300
+  const keyboardSpacing = spacing()
+  assert.equal(
+    tabSpacing,
+    keyboardSpacing + theme.space.m,
+    'the composer has an extra gap above the tab bar, without lifting farther from the keyboard',
+  )
+  const close = find(render(), 'Header').props.right
+  close.props.onPress()
+  assert.deepEqual(destinations, ['/'])
+  assert.equal(store.drafts[draftKey], 'Keep this task', 'closing the tab keeps its draft')
   hooks.dispose()
 })
 
@@ -1144,13 +1215,11 @@ for (const os of ['ios', 'android']) {
       nodes(tree).some((node) => node.key === 'wrong'),
       false,
     )
-    nodes(composer.props.header)
-      .find((node) => node.props?.label === 'Browse files')
-      .props.onPress()
-    assert.deepEqual(JSON.parse(JSON.stringify(destinations[0])), {
-      pathname: '/explorer',
-      params: { computer: 'a', ctx: 'worktree:w', composerProject: 'a:p' },
-    })
+    // Files for the message come from + → Add a host file in this scope; the tray has no separate Browse files.
+    assert.equal(
+      nodes(composer.props.header).some((node) => node.props?.label === 'Browse files'),
+      false,
+    )
     await composer.props.onSend('Fix login', 'send', [], [])
     assert.equal(submitted.workspaceId, 'w')
     assert.equal(submitted.mode, 'worktree')
@@ -1503,7 +1572,7 @@ test('file suggestions qualify cached catalogs by host even when scope and repos
 })
 
 for (const os of ['ios', 'android']) {
-  test(`${os} new-thread file context uses the selected checkout and late results cannot open another scope's picker`, async () => {
+  test(`${os} new-thread skill discovery uses the selected checkout and late results cannot open another scope's picker`, async () => {
     const hooks = hookHarness()
     const requests = []
     let sent
@@ -1524,17 +1593,29 @@ for (const os of ['ios', 'android']) {
         return request.promise
       },
     }
-    const { Composer } = load('components/Composer.tsx', os, {
-      react: hooks.react,
-      './ui': new Proxy({}, { get: (_, key) => (key === 'tap' ? () => {} : String(key)) }),
-      '@ramu/shared/chat/composerDraft': {
-        composerDraft: (text) => ({ chips: [], segments: [{ kind: 'text', source: text }] }),
+    const { Composer } = load(
+      'components/Composer.tsx',
+      os,
+      {
+        react: hooks.react,
+        './ui': new Proxy({}, { get: (_, key) => (key === 'tap' ? () => {} : String(key)) }),
+        '@ramu/shared/chat/composerDraft': {
+          composerDraft: (text) => ({ chips: [], segments: [{ kind: 'text', source: text }] }),
+        },
+        '../runtime/store': { useStore: () => store },
+        '../i18n': { useT: () => ({}) },
+        '../runtime/goalVerify': { offersVerify: () => false },
+        './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
       },
-      '../runtime/store': { useStore: () => store },
-      '../i18n': { useT: () => ({}) },
-      '../runtime/goalVerify': { offersVerify: () => false },
-      './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
-    })
+      // The menu's next step waits for the sheet to close; run it at once here.
+      {
+        setTimeout: (run) => {
+          run()
+          return 0
+        },
+        clearTimeout() {},
+      },
+    )
     let props = {
       computerId: 'host',
       scope: 'worktree:w',
@@ -1550,30 +1631,31 @@ for (const os of ['ios', 'android']) {
     const action = (tree, text) =>
       nodes(tree).find((node) => node.type === 'Row' && nodes(node).some((child) => child.props?.children === text))
     render()
-    action(render(), 'Choose host file context').props.onPress()
+    assert.equal(action(render(), 'Add a host file'), undefined)
+    assert.equal(action(render(), 'Enter a command'), undefined)
+    action(render(), 'Use a skill').props.onPress()
     assert.equal(requests[0].scope, 'worktree:w')
-    assert.equal(requests[0].method, 'files.all')
+    assert.equal(requests[0].method, 'skills.list')
     props = { ...props, scope: 'worktree:other' }
     render()
-    requests[0].resolve([{ repoId: 'r', path: 'old.ts' }])
+    requests[0].resolve([{ name: 'Old skill', description: 'Old', path: 'old.md' }])
     await settle()
     assert.equal(
-      nodes(render()).some((node) => node.type === 'Sheet' && node.props.open && node.props.title === 'File context'),
+      nodes(render()).some((node) => node.type === 'Sheet' && node.props.open && node.props.title === 'Host skills'),
       false,
     )
-    action(render(), 'Choose host file context').props.onPress()
-    requests[1].resolve([{ repoId: 'r', path: 'new.ts' }])
+    action(render(), 'Use a skill').props.onPress()
+    requests[1].resolve([{ name: 'New skill', description: 'New', path: 'new.md' }])
     await settle()
-    action(render(), 'new.ts').props.onPress()
+    action(render(), 'New skill').props.onPress()
     render()
-    assert.equal(JSON.parse(store.drafts['host:new:p:context'])[0].path, 'new.ts')
+    assert.match(store.drafts['host:new:p'], /Use the host skill at new.md/)
     assert.equal(sent, undefined, 'adding context never submits the message')
     nodes(render())
       .find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Send')
       .props.onPress()
     await settle()
-    assert.equal(sent[0], 'Review this file')
-    assert.equal(sent[3][0].path, 'new.ts')
+    assert.match(sent[0], /Review this file[\s\S]*Use the host skill at new.md/)
     assert.equal(requests[1].scope, 'worktree:other')
     hooks.dispose()
   })
@@ -1735,8 +1817,9 @@ for (const os of ['ios', 'android']) {
     await settle()
     const button = nodes(render()).find((node) => node.type === 'Button' && node.props.title === labels.addToMessage)
     assert.equal(button.props.disabled, false)
+    const adding = button.props.onPress()
     button.props.onPress()
-    button.props.onPress()
+    await adding
     assert.equal(store.drafts['remote:chat:task'], '> Keep quote\n\nReview this')
     assert.equal(store.drafts['remote:chat:task:attachments'], '[{"id":"image"}]')
     assert.deepEqual(JSON.parse(store.drafts['remote:chat:task:context']), [
@@ -1801,12 +1884,12 @@ for (const os of ['ios', 'android']) {
     await settle()
     const action = () =>
       nodes(render()).find((node) => node.type === 'Button' && node.props.title === labels.newThreadWithFile)
-    action().props.onPress()
+    await action().props.onPress()
     assert.equal(destinations.length, 0)
     assert.equal(store.drafts['host:new:host:p'], 'Urgent unrelated draft')
     assert.ok(nodes(render()).some((node) => node.props?.children === labels.fileDraftFailed))
     fail = false
-    action().props.onPress()
+    await action().props.onPress()
     assert.equal(destinations[0].kind, 'push', 'a Home start never reuses a differently scoped mounted New screen')
     assert.deepEqual(JSON.parse(JSON.stringify(destinations[0].to)), {
       pathname: '/new',
@@ -1943,22 +2026,45 @@ for (const os of ['ios', 'android']) {
     const list = find(tree, 'PageFlatList')
     assert.deepEqual(
       list.props.data.map((row) => [row.repoId, row.entry.path]),
+      // Each repository is a root row (path '') with its tree one level below.
       [
+        ['r1', ''],
         ['r1', 'README.md'],
+        ['r2', ''],
         ['r2', 'src'],
         ['r2', 'src/deep'],
         ['r2', 'src/deep/README.md'],
       ],
     )
-    const targetRow = list.props.renderItem({ item: list.props.data[3] })
+    assert.deepEqual(
+      list.props.data.map((row) => row.depth),
+      [0, 1, 0, 1, 2, 3],
+    )
+    const targetRow = list.props.renderItem({ item: list.props.data[5] })
     assert.equal(targetRow.props.accessibilityState.selected, true)
-    assert.equal(list.props.renderItem({ item: list.props.data[0] }).props.accessibilityState.selected, false)
+    assert.equal(list.props.renderItem({ item: list.props.data[1] }).props.accessibilityState.selected, false)
     for (const callback of frames.values()) callback()
     frames.clear()
-    assert.equal(scrolls.at(-1).index, 3)
+    assert.equal(scrolls.at(-1).index, 5)
     nodes(find(tree, 'Header').props.right)
       .find((node) => node.type === 'HeaderButton' && node.props.label === 'Collapse')
       .props.onPress()
+    // Collapse leaves only the repository roots; opening one shows its top level again.
+    let collapsed = find(render(), 'PageFlatList')
+    assert.deepEqual(
+      collapsed.props.data.map((row) => [row.repoId, row.entry.path]),
+      [
+        ['r1', ''],
+        ['r2', ''],
+      ],
+    )
+    collapsed.props.renderItem({ item: collapsed.props.data[0] }).props.onPress()
+    collapsed = find(render(), 'PageFlatList')
+    assert.deepEqual(
+      collapsed.props.data.map((row) => row.entry.path),
+      ['', 'README.md', ''],
+    )
+    collapsed.props.renderItem({ item: collapsed.props.data[0] }).props.onPress()
     assert.equal(find(render(), 'PageFlatList').props.data.length, 2)
     nodes(find(render(), 'Header').props.right)
       .find((node) => node.type === 'HeaderButton' && node.props.label === 'Refresh')
@@ -2173,7 +2279,7 @@ test('a file browsed from New returns to its original composer and keeps its wor
   await settle()
   render()
   await settle()
-  nodes(render())
+  await nodes(render())
     .find((node) => node.type === 'Button')
     .props.onPress()
   assert.deepEqual(JSON.parse(JSON.stringify(destinations)), [
@@ -2439,7 +2545,7 @@ for (const scenario of ['offline', 'missing', 'old-host', 'available', 'changed-
     nodes(tree)
       .find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Send')
       .props.onPress()
-    assert.equal(nativeClears, 1, 'native input clears before attachment validation finishes')
+    assert.equal(nativeClears, 0, 'native input stays visible during attachment validation')
     assert.equal(store.drafts[key], 'Review the image', 'the recovery draft remains until acceptance')
     if (scenario === 'changed-owner') {
       store.drafts['b:chat:task'] = 'New host request'
@@ -2463,7 +2569,7 @@ for (const scenario of ['offline', 'missing', 'old-host', 'available', 'changed-
 }
 
 for (const os of ['ios', 'android']) {
-  test(`${os} native profile migration and Forget remove legacy and recovery copies only after committing`, () => {
+  test(`${os} native profile migration and Forget remove legacy and recovery copies only after committing`, async () => {
     const files = new Map()
     class File {
       constructor(...parts) {
@@ -2476,7 +2582,14 @@ for (const os of ['ios', 'android']) {
         if (!this.exists) throw new Error('missing')
         return files.get(this.path)
       }
-      write(text) {
+      async text() {
+        return this.textSync()
+      }
+      async write(text) {
+        await Promise.resolve()
+        this.writeSync(text)
+      }
+      writeSync(text) {
         files.set(this.path, text)
       }
       delete() {
@@ -2492,12 +2605,20 @@ for (const os of ['ios', 'android']) {
       './localCommit': localCommitStorage,
     })
     assert.deepEqual(JSON.parse(JSON.stringify(storage.readLocal({}))), previous)
-    storage.writeLocal(previous)
+    storage.saveAppearance('dark')
+    assert.equal(storage.readAppearance(), 'dark')
+    storage.saveTextSize('larger')
+    assert.equal(storage.readTextSize(), 'larger')
+    storage.saveThemeLibraryText('[]')
+    storage.saveSelectedThemeId('theme')
+    storage.contentStorage.setItem('test.states', 'state')
+    assert.equal(storage.contentStorage.getItem('test.states'), 'state')
+    await storage.writeLocal(previous)
     assert.equal(files.has('document/ramu.mobile.v1.json'), false)
     const saved = { ...previous, drafts: { ...previous.drafts, 'a:saved-messages': 'Saved library' } }
-    storage.writeLocal(saved)
+    await storage.writeLocal(saved)
     assert.deepEqual(JSON.parse(JSON.stringify(storage.readLocal({}))), saved)
-    storage.writeLocal({ computers: [], drafts: {} }, { replaceBackups: true })
+    await storage.writeLocal({ computers: [], drafts: {} }, { replaceBackups: true })
     assert.deepEqual(JSON.parse(JSON.stringify(storage.readLocal({}))), { computers: [], drafts: {} })
     for (const raw of files.values()) assert.ok(!raw.includes('Original draft') && !raw.includes('Saved library'))
   })
@@ -2793,7 +2914,10 @@ for (const os of ['ios', 'android']) {
       },
     }
     const render = () => hooks.render(() => BranchNameControls(props))
-    const button = (tree, title) => nodes(tree).find((node) => node.type === 'Button' && node.props.title === title)
+    const button = (tree, title) =>
+      nodes(tree).find(
+        (node) => (node.type === 'Button' || node.type?.name === 'ContentAction') && node.props.title === title,
+      )
     let tree = render()
     button(tree, 'branchNameGenerate').props.onPress()
     button(tree, 'branchNameGenerate').props.onPress()
@@ -2857,7 +2981,10 @@ for (const os of ['ios', 'android']) {
       },
     }
     const render = () => hooks.render(() => BranchNameControls(props))
-    const button = (tree, title) => nodes(tree).find((node) => node.type === 'Button' && node.props.title === title)
+    const button = (tree, title) =>
+      nodes(tree).find(
+        (node) => (node.type === 'Button' || node.type?.name === 'ContentAction') && node.props.title === title,
+      )
     let tree = render()
     assert.equal(button(tree, 'branchNameGenerate'), undefined)
     find(tree, 'TextInput').props.onChangeText('bad..name')
@@ -4671,7 +4798,7 @@ test('Threads, Inbox and Schedules use native scroll edges without stacking a bl
         (node) => node.props?.blurEffect === undefined && node.props?.largeStyle?.backgroundColor === 'transparent',
       ),
     )
-    assert.equal(find(tree, 'StackScreen').props.options.scrollEdgeEffects.top, 'hard')
+    assert.equal(find(tree, 'StackScreen').props.options.scrollEdgeEffects.top, 'soft')
   }
 })
 
@@ -4699,7 +4826,7 @@ test('the project picker uses the centered native title and menu actions preserv
 })
 
 for (const accepted of [true, false]) {
-  test(`composer clears visually before delivery, but consumes the saved draft only on acceptance (accepted: ${accepted})`, async () => {
+  test(`composer retains visible text and the recovery draft until local acceptance (accepted: ${accepted})`, async () => {
     const hooks = hookHarness()
     let acknowledge,
       nativeClears = 0,
@@ -4758,12 +4885,12 @@ for (const accepted of [true, false]) {
     assert.ok(!nodes(tree).some((node) => node.type === 'ThreadUsageChip'))
     steer.props.onPress()
     await settle()
-    assert.equal(nativeClears, 1)
+    assert.equal(nativeClears, 0)
     assert.equal(store.drafts['a:chat:one'], 'Do the work')
     assert.equal(find(render(), 'TextInput').props.editable, false)
     acknowledge(accepted)
     await settle()
-    assert.equal(nativeClears, 1)
+    assert.equal(nativeClears, accepted ? 1 : 0)
     if (!accepted)
       assert.ok(JSON.stringify(nodes(render()).map((node) => node.props?.children)).includes('Do the work'))
     assert.equal(cleared, accepted ? 1 : 0)
@@ -5012,7 +5139,7 @@ test('computer-use stop revokes only the displayed thread and refreshes the shar
 })
 
 test('tab and Settings stacks have blank initial titles and no generated back labels', () => {
-  for (const layout of ['(tabs)/(threads)', '(tabs)/inbox', '(tabs)/schedules', '(tabs)/search', 'settings']) {
+  for (const layout of ['(tabs)/(threads)', '(tabs)/inbox', '(tabs)/schedules', '(tabs)/compose', 'settings']) {
     const { default: Layout } = load('app/' + layout + '/_layout.tsx', 'ios')
     const options = Layout().props.screenOptions
     assert.equal(options.title, '')
@@ -5123,10 +5250,10 @@ test('schedule callbacks recheck the current host role before every RPC, includi
   hooks.dispose()
 })
 
-test('a view-only tab can suppress its primary write action while keeping Settings', () => {
+test('tabs can suppress their default Search action while keeping Settings', () => {
   const { useTabActions } = load('components/Overlays.tsx', 'ios', {
     '../runtime/store': { useStore: () => ({ computers: [], selected: 'a' }) },
-    '../i18n': { useT: () => ({ settings: 'Settings', newChat: 'New thread' }) },
+    '../i18n': { useT: () => ({ settings: 'Settings', searchTab: 'Search' }) },
   })
   assert.deepEqual(
     nodes(useTabActions(null))
@@ -5138,7 +5265,7 @@ test('a view-only tab can suppress its primary write action while keeping Settin
     nodes(useTabActions())
       .filter((node) => node.type === 'HeaderButton')
       .map((node) => node.props.label),
-    ['New thread', 'Settings'],
+    ['Search', 'Settings'],
   )
 })
 
@@ -5235,14 +5362,22 @@ for (const os of ['ios', 'android']) {
       subscribe: () => () => {},
       invoke: async (...args) => {
         calls.push(args)
-        return [{ id: 'aside', quote: 'quote', messages: [{ id: 'm', role: 'user', text: 'existing question' }] }]
+        return [
+          {
+            id: 'aside',
+            quote: 'quote',
+            createdAt: 1,
+            messages: [{ id: 'm', role: 'user', text: 'existing question' }],
+          },
+        ]
       },
     }
     const { default: AsideScreen } = load('app/chat/[id]/aside.tsx', os, {
       react: hooks.react,
-      'expo-router': { useLocalSearchParams: () => ({ id: 'chat', aside: 'aside' }) },
+      'expo-router': { useLocalSearchParams: () => ({ id: 'chat' }) },
       '../../../runtime/store': { useStore: () => store, useChat: () => chat },
-      '../../../components/ui': { T: 'T', Chip: 'Chip', tap() {} },
+      '../../../components/ui': { T: 'T', tap() {} },
+      '../../../components/Keyboard': { useKeyboardInset: () => 0 },
       '../../../components/Screen': {
         Screen: 'Screen',
         Header: 'Header',
@@ -5258,12 +5393,14 @@ for (const os of ['ios', 'android']) {
     find(tree, 'TextInput').props.onChangeText('unsent follow-up')
     tree = render()
     const ask = nodes(tree).find((node) => node.props.accessibilityLabel === 'Ask')
+    // One side chat per thread: Clear (trash) is the only header action; keep it across the access change.
     find(tree, 'Header').props.right.props.onPress()
     calls.length = 0
     store = { ...store, computers: [{ id: 'host', status: 'online', access: 'viewer' }] }
     tree = render()
     assert.equal(find(tree, 'TextInput').props.value, 'unsent follow-up')
     assert.equal(find(tree, 'TextInput').props.editable, false)
+    // A viewer cannot clear; the conversation stays readable.
     assert.equal(find(tree, 'Header').props.right, null)
     assert.ok(nodes(tree).some((node) => node.props.children === 'existing question'))
     ask.props.onPress()
@@ -5883,7 +6020,10 @@ for (const os of ['ios', 'android']) {
         '@ramu/shared/computerControl': control,
         '@ramu/shared/computerBridge': { COMPUTER_FRAME_STALE_MS: 5000 },
         './useComputerVideo': { useComputerVideo: () => ({ status: 'idle' }), webrtc: () => null },
-        'react-native': { AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) } },
+        'react-native': {
+          AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
+          PanResponder: { create: () => ({ panHandlers: {} }) },
+        },
       },
       { setTimeout: (run) => timers.push(run), clearTimeout() {}, setInterval: () => 1, clearInterval() {} },
     )
@@ -5899,32 +6039,26 @@ for (const os of ['ios', 'android']) {
     const render = () => child.render(() => viewer.type(viewer.props))
     render()
     await settle()
-    nodes(render())
-      .find((node) => node.props.accessibilityLabel === 'Type on the computer')
-      .props.onChangeText('Kept text')
-    const sendText = nodes(render()).find((node) => node.props.title === 'Send text')
-    const give = nodes(render()).find((node) => node.props.title === 'Give control to agent')
-    assert.ok(give)
+    let tree = render()
+    for (const node of nodes(tree).filter((node) => node.props.onLayout))
+      node.props.onLayout({ nativeEvent: { layout: { width: 200, height: 400 } } })
+    tree = render()
+    const give = find(tree, 'ControlStrip').props.action
+    assert.equal(give.title, 'Give back to agent')
+    const type = find(tree, 'RemoteKeyboard').props.onKeys
     store = { ...store, computers: [{ id: 'a', name: 'Host', access: 'viewer' }] }
-    const tree = render()
+    tree = render()
     calls.length = 0
-    give.props.onPress()
-    sendText.props.onPress()
+    give.onPress()
+    type([{ kind: 'text', text: 'Kept text' }])
     await settle()
     assert.deepEqual(calls, [])
     assert.ok(find(tree, 'Image'))
-    for (const title of ['Take control', 'Give control to agent', 'Stop computer use', 'Allow control'])
-      assert.equal(
-        nodes(tree).some((node) => node.props.title === title),
-        false,
-      )
+    // A viewer has no control action, no keyboard and no Stop in the menu.
+    assert.equal(find(tree, 'ControlStrip').props.action, undefined)
+    assert.equal(find(tree, 'RemoteKeyboard'), undefined)
+    assert.ok(!find(tree, 'ViewerMenu').props.items.some((item) => item.key === 'stop'))
     assert.deepEqual(calls, [])
-    store = { ...store, computers: [{ id: 'a', name: 'Host', access: 'owner' }] }
-    assert.equal(
-      nodes(render()).find((node) => node.props.accessibilityLabel === 'Type on the computer').props.value,
-      'Kept text',
-    )
-    store = { ...store, computers: [{ id: 'a', name: 'Host', access: 'viewer' }] }
     render()
     child.dispose()
     assert.deepEqual(calls, [])
@@ -5933,6 +6067,7 @@ for (const os of ['ios', 'android']) {
 
 function interactiveCardHarness(os, cached = true) {
   const hooks = hookHarness()
+  let appearance = theme.useTheme()
   let visible = true,
     appListener,
     evict,
@@ -5984,10 +6119,11 @@ function interactiveCardHarness(os, cached = true) {
         },
       },
     },
+    '../theme': { ...theme, useTheme: () => appearance },
     '../runtime/store': { useStore: () => store },
     '../storage': { contentStorage: {} },
     '@ramu/shared/interactiveStorage': { interactiveStorage: () => cache },
-    '@ramu/shared/interactiveTheme': { interactiveThemeVariables: () => ({ '--background': 'canvas' }) },
+    '@ramu/shared/interactiveTheme': { interactiveThemeVariables: (colors) => ({ '--background': colors.background }) },
     '@ramu/shared/interactiveLease': {
       claimInteractive: (stop, limit) => {
         evict = stop
@@ -5996,7 +6132,7 @@ function interactiveCardHarness(os, cached = true) {
       },
     },
     '@ramu/shared/interactive': {
-      interactiveHtml: (html, instance, state) => JSON.stringify({ html, instance, state }),
+      interactiveHtml: (html, instance, state, theme) => JSON.stringify({ html, instance, state, theme }),
       readInteractiveState: (state) => (state?.controls ? state : null),
       interactiveFollowup: (_reference, state) => JSON.stringify(state),
     },
@@ -6018,6 +6154,13 @@ function interactiveCardHarness(os, cached = true) {
     app: (value) => appListener(value),
     evict: () => evict(),
     state: () => savedState,
+    document,
+    theme: (scheme, window, canvas) => {
+      appearance = {
+        scheme,
+        c: new Proxy({ window, canvas }, { get: (colors, key) => (key in colors ? colors[key] : palette[key]) }),
+      }
+    },
     calls,
     shares,
     asks,
@@ -6077,7 +6220,9 @@ for (const os of ['ios', 'android']) {
     })
     tree = card.render()
     assert.equal(nodes(tree).filter((node) => node.type === 'InteractiveFrame').length, 1)
-    const expanded = nodes(tree).find((node) => node.type === 'Sheet' && node.props.presentation === 'screen')
+    const expanded = nodes(tree).find(
+      (node) => node.type === 'Sheet' && node.props.presentation === 'screen' && node.props.title !== 'Content actions',
+    )
     assert.equal(expanded.props.open, true)
     assert.deepEqual(JSON.parse(find(tree, 'InteractiveFrame').props.html).state, state)
     expanded.props.onClose()
@@ -6093,7 +6238,10 @@ for (const os of ['ios', 'android']) {
     tree = card.render()
     assert.equal(nodes(tree).filter((node) => node.type === 'InteractiveFrame').length, 1)
     assert.equal(
-      nodes(tree).find((node) => node.type === 'Sheet' && node.props.presentation === 'screen').props.open,
+      nodes(tree).find(
+        (node) =>
+          node.type === 'Sheet' && node.props.presentation === 'screen' && node.props.title !== 'Content actions',
+      ).props.open,
       false,
     )
     card.dispose()
@@ -6105,7 +6253,7 @@ for (const os of ['ios', 'android']) {
     tree = card.render()
     const press = (title) =>
       nodes(tree)
-        .find((node) => node.type === 'Button' && node.props.title === title)
+        .find((node) => (node.type === 'Button' || node.type?.name === 'ContentAction') && node.props.title === title)
         .props.onPress()
     press('Code')
     tree = card.render()
@@ -6235,12 +6383,15 @@ for (const os of ['ios', 'android']) {
     render()
     await settle()
     let tree = render()
+    // The page area is measured first; the touch surface is then sized to the drawn frame.
+    for (const node of nodes(tree).filter((node) => node.props.onLayout))
+      node.props.onLayout({ nativeEvent: { layout: { width: 200, height: 400 } } })
+    tree = render()
     nodes(tree)
       .find((node) => node.props.accessibilityLabel === 'Browser page on the execution host')
       .props.onLayout({ nativeEvent: { layout: { width: 200 } } })
-    nodes(tree)
-      .find((node) => node.props.title === 'Take control')
-      .props.onPress()
+    assert.equal(find(tree, 'ControlStrip').props.action.title, 'Take control')
+    find(tree, 'ControlStrip').props.action.onPress()
     await settle()
     render()
     await settle()
@@ -6430,5 +6581,1007 @@ test('mobile web startup applies its theme without calling a native-only Appeara
   const tree = hooks.render(() => ThemeProvider({ children: 'app' }))
   assert.equal(tree.props.value.scheme, 'dark')
   assert.equal(tree.props.children, 'app')
+  hooks.dispose()
+})
+
+for (const os of ['ios', 'android']) {
+  test(`${os} Settings sections opt into the centered native title`, () => {
+    const { default: Section } = load('app/settings/[section].tsx', os, {
+      'expo-router': { useLocalSearchParams: () => ({ section: 'about' }) },
+      '../../runtime/settingsModel': settingsModel,
+      '../../runtime/store': { useStore: () => ({ language: 'en', selected: null, computers: [] }) },
+      '../../runtime/useHostSettings': { useHostSettings: () => ({ state: { status: 'offline' } }) },
+    })
+    const header = find(Section(), 'Header')
+    assert.equal(header.props.align, 'center')
+    const screen = load('components/Screen.tsx', os, {
+      'expo-router': { Stack: { ...Stack, Title: 'NativeTitle', Header: 'NativeHeader' } },
+    })
+    const native = screen.Header({ ...header.props, modal: true })
+    assert.equal(find(native, 'StackScreen').props.options.headerTitleAlign, 'center')
+    if (os === 'ios') {
+      assert.equal(find(native, 'NativeTitle').props.children, header.props.title)
+      assert.ok(find(native, 'ToolbarButton'), 'the native Close action remains available')
+    }
+  })
+}
+
+test('native profile saves serialize async writes, freeze snapshots, and recover after a failed save', async () => {
+  const files = new Map(),
+    pending = deferred()
+  let writes = 0,
+    fail = false
+  class File {
+    constructor(...parts) {
+      this.path = parts.join('/')
+    }
+    get exists() {
+      return files.has(this.path)
+    }
+    textSync() {
+      return files.get(this.path)
+    }
+    async text() {
+      return this.textSync()
+    }
+    async write(text) {
+      if (++writes === 1) await pending.promise
+      if (fail) throw Error('disk unavailable')
+      files.set(this.path, text)
+    }
+    delete() {
+      files.delete(this.path)
+    }
+  }
+  const storage = load('storage/index.ts', 'ios', {
+    'expo-file-system': { File, Paths: { document: 'document' } },
+    './localCommit': localCommitStorage,
+  })
+  const first = { drafts: { text: 'first' } }
+  const saving = storage.writeLocal(first)
+  const newer = storage.writeLocal({ drafts: { text: 'newer' } })
+  first.drafts.text = 'mutated after save request'
+  await settle()
+  assert.equal(writes, 1, 'the second commit cannot run while the first native write is pending')
+  pending.resolve()
+  await Promise.all([saving, newer])
+  assert.equal(storage.readLocal({}).drafts.text, 'newer')
+  assert.ok([...files.values()].some((text) => text.includes('first')))
+  fail = true
+  await assert.rejects(storage.writeLocal({ drafts: {} }), /disk unavailable/)
+  assert.equal(storage.readLocal({}).drafts.text, 'newer')
+  fail = false
+  await storage.writeLocal({ drafts: { text: 'retry' } })
+  assert.equal(storage.readLocal({}).drafts.text, 'retry')
+})
+
+for (const os of ['ios', 'android']) {
+  test(`${os} thread settings show one phone control for busy messages and one model warning`, () => {
+    const drafts = {},
+      writes = []
+    const store = {
+      selected: 'host',
+      language: 'en',
+      computers: [],
+      drafts,
+      mobileLayers: {},
+      appPreferences: { host: { busyMessageAction: 'queue', warnModelChange: false } },
+      setDraft: (key, value) => {
+        drafts[key] = value
+        writes.push([key, value])
+      },
+    }
+    const { default: Section } = load('app/settings/[section].tsx', os, {
+      'expo-router': { useLocalSearchParams: () => ({ section: 'chats' }) },
+      '../../runtime/settingsModel': settingsModel,
+      '../../runtime/store': { useStore: () => store },
+      '../../runtime/useHostSettings': { useHostSettings: () => ({ state: { status: 'offline' } }) },
+      '../../runtime/busyMode': phoneBehavior,
+      '../../i18n': { useT: () => new Proxy({}, { get: (_, key) => key }) },
+    })
+    const component = nodes(Section()).find(
+      (node) => typeof node.type === 'function' && node.type.name === 'BusyBehavior',
+    )
+    const render = () => component.type(component.props)
+    const controls = nodes(render()).filter((node) => node.type === 'Segmented')
+    assert.equal(controls.length, 2)
+    assert.equal(controls[0].props.value, 'queue')
+    assert.equal(controls[1].props.value, 'off')
+    controls[0].props.onChange('steer')
+    controls[1].props.onChange('on')
+    assert.equal(drafts[phoneBehavior.BUSY_MODE_DEVICE_KEY], 'steer')
+    assert.equal(drafts[phoneBehavior.MODEL_WARNING_DEVICE_KEY], 'on')
+    assert.equal(store.appPreferences.host.busyMessageAction, 'queue', 'phone choices never change the host default')
+    assert.equal(writes.length, 2)
+    const paths = settingsModel.SETTINGS_ROWS.chats.flatMap((group) => group.rows.map((row) => row.path))
+    assert.ok(!paths.includes('busyMessageAction') && !paths.includes('warnModelChange'))
+    assert.equal(settingsModel.searchSettings('steer', []).length, 1)
+  })
+}
+
+test('plan usage uses a full-screen settings surface and groups windows under readable account names', async () => {
+  const presentation = await import('../../../packages/shared/src/usage/presentation.ts')
+  const providers = await import('../../../packages/shared/src/providers/providers.ts')
+  const hooks = hookHarness()
+  const account = 'ce55402d-b25f-41ee-98f0-6eb5c5b7462f'
+  const readings = ['default', account].flatMap((accountId) =>
+    ['five_hour', 'weekly'].map((window) => ({
+      provider: 'claude-code',
+      accountId,
+      window,
+      usedPercent: 12,
+      status: 'ok',
+      updatedAt: Date.now(),
+    })),
+  )
+  const store = {
+    language: 'en',
+    computers: [{ id: 'host', name: 'Laptop' }],
+    appPreferences: {},
+    usage: { host: readings },
+    drafts: {},
+    setDraft: (key, value) => {
+      store.drafts[key] = value
+    },
+    isOnline: () => false,
+  }
+  const { PlanUsageSheet, PlanUsageReading } = load('components/PlanUsage.tsx', 'ios', {
+    react: hooks.react,
+    '@ramu/shared/usage/presentation': presentation,
+    '@ramu/shared/providers/providers': providers,
+    '../runtime/store': { useStore: () => store },
+    '../runtime/types': { providerNames: { 'claude-code': 'Claude Code' } },
+  })
+  const render = () => hooks.render(() => PlanUsageSheet({ hosts: ['host'], open: true, onClose() {} }))
+  let tree = render()
+  assert.equal(find(tree, 'Sheet').props.presentation, 'screen')
+  assert.equal(
+    nodes(tree).filter((node) => node.type === PlanUsageReading).length,
+    4,
+    'every quota window remains visible',
+  )
+  assert.equal(
+    nodes(tree).filter((node) => node.type === 'T' && node.props.weight === '600').length,
+    2,
+    'one heading per account',
+  )
+  assert.ok(
+    !nodes(tree).some((node) => node.props?.children === account),
+    'opaque IDs stay out of the normal reading flow',
+  )
+  find(tree, 'Toggle').props.onValueChange(true)
+  tree = render()
+  assert.ok(nodes(tree).some((node) => node.props?.children === account))
+  assert.equal(store.drafts['usage-show-details'], 'yes')
+  hooks.dispose()
+})
+
+test('combined file changes have no All tab and an empty diff explains that there are no changes', async () => {
+  const hooks = hookHarness(),
+    calls = []
+  const store = {
+    computers: [{ id: 'host', access: 'full' }],
+    chats: [],
+    projects: [],
+    drafts: {},
+    isOnline: () => true,
+    invoke: async (...args) => {
+      calls.push(args)
+      if (args[1] === 'files.explorerBindings') return [{ repoId: 'repo', setupState: 'ready', repoName: 'Repo' }]
+      if (args[1] === 'git.diff') return { original: 'same', modified: 'same' }
+      throw Error(`Unexpected ${args[1]}`)
+    },
+  }
+  const { FileViewer } = load('components/FileViewer.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': { useStore: () => store },
+    '../runtime/useWorkspaces': { useWorkspaces: () => ({ host: 'host', rows: [] }) },
+    '../i18n': { useT: () => ({ fileNoChanges: 'No changes in this file.' }) },
+  })
+  const render = () =>
+    hooks.render(() =>
+      FileViewer({ computerId: 'host', contextId: 'project:p', repoId: 'repo', path: 'readme.md', initial: 'all' }),
+    )
+  render()
+  await settle()
+  render()
+  await settle()
+  const tree = render()
+  assert.deepEqual(
+    Array.from(find(tree, 'Segmented').props.options, (option) => option.key),
+    ['file', 'changes', 'staged'],
+  )
+  assert.equal(find(tree, 'Segmented').props.value, 'changes')
+  assert.equal(calls.find((call) => call[1] === 'git.diff').at(-1), 'all')
+  assert.ok(nodes(tree).some((node) => node.props?.children === 'No changes in this file.'))
+  assert.ok(!nodes(tree).some((node) => node.props?.children === 'all'))
+  hooks.dispose()
+})
+
+test('native sharing waits for the asynchronous file write before opening the system share sheet', async () => {
+  const writing = deferred(),
+    shared = []
+  class File {
+    exists = false
+    uri = 'file:///cache/shared.txt'
+    create() {}
+    write() {
+      return writing.promise
+    }
+  }
+  const { shareDownloadedFile } = load('runtime/explorerShare.ts', 'ios', {
+    'expo-file-system': { File, Paths: { cache: 'cache' } },
+    'expo-sharing': { isAvailableAsync: async () => true, shareAsync: async (uri) => shared.push(uri) },
+  })
+  const pending = shareDownloadedFile('file.txt', 'content')
+  await settle()
+  assert.deepEqual(shared, [])
+  writing.resolve()
+  assert.equal(await pending, true)
+  assert.deepEqual(shared, ['file:///cache/shared.txt'])
+})
+
+for (const os of ['ios', 'android']) {
+  test(`${os} content actions use grouped full-screen rows with one primary save action`, async () => {
+    const card = interactiveCardHarness(os)
+    card.render()
+    await settle()
+    const sheet = nodes(card.render()).find((node) => node.type === 'Sheet' && node.props.title === 'Content actions')
+    assert.equal(sheet.props.presentation, 'screen')
+    const actions = nodes(sheet).filter((node) => node.type?.name === 'ContentAction')
+    assert.ok(actions.length >= 5)
+    for (const action of actions) {
+      const row = action.type(action.props)
+      assert.equal(row.props.accessibilityRole, 'button')
+      assert.equal(row.props.accessibilityLabel, action.props.title)
+    }
+    const primary = nodes(sheet).filter(
+      (node) => node.type === 'Button' && (!node.props.kind || node.props.kind === 'primary'),
+    )
+    assert.equal(primary.length, 1)
+    assert.equal(primary[0].props.title, 'Save scenario')
+    card.dispose()
+  })
+}
+
+function deliveryStoreHarness() {
+  const hooks = hookHarness()
+  const refs = []
+  const calls = []
+  const bindingRead = deferred()
+  let holdBindings = true
+  const initial = {
+    computers: [{ id: 'a', name: 'Host', status: 'online' }],
+    chats: [
+      { id: 'a:chat', computerId: 'a', taskId: 'task', sessionId: 'session', items: [], queue: [], status: 'running' },
+    ],
+    projects: [],
+    drafts: {},
+    outbox: [],
+  }
+  const snapshot = {
+    reset: true,
+    cursor: 5,
+    revision: 5,
+    events: [
+      { seq: 1, event: { kind: 'user', text: 'Go', at: 1 } },
+      { seq: 2, event: { kind: 'text', text: 'Finished while the phone was away.' } },
+      { seq: 3, event: { kind: 'state', state: 'idle' } },
+    ],
+  }
+  const invoke = async (method, ...args) => {
+    calls.push([method, ...args])
+    if (method === 'tasks.list') return [{ id: 'task', projectId: 'no-project', status: 'ready-for-review' }]
+    if (method === 'agent.list') return [{ id: 'session', createdAt: 1, state: 'idle', settings: {} }]
+    if (method === 'agent.changes') return snapshot
+    if (method === 'tasks.bindings') return holdBindings ? bindingRead.promise : []
+    if (method === 'agent.goal' || method === 'settings.models.get') return null
+    if (method === 'preferences.layers.get') return { mobile: null }
+    if (method === 'settings.app.get') return {}
+    return []
+  }
+  const { StoreProvider } = load('runtime/store.tsx', 'ios', {
+    react: {
+      ...hooks.react,
+      createContext: () => ({ Provider: 'Store' }),
+      useEffect() {},
+      useRef(value) {
+        const ref = hooks.react.useRef(value)
+        refs.push(ref)
+        return ref
+      },
+    },
+    'react-native': { AppState: { currentState: 'active' } },
+    '../storage': { readLocal: (defaults) => ({ ...defaults, ...initial }), writeLocal: async () => {} },
+    './threadActivity': { normalizeHelperGroups: (rows) => rows },
+    './transport': { HostError: class HostError extends Error {} },
+    './transcript': mobileTranscript,
+    '@ramu/shared/chat/agentActivity': { agentActivityLabel: () => null },
+    '@ramu/shared/chat/inputSummary': { inputSummary: () => null },
+    '@ramu/shared/chat/compaction': { isCompacting: () => false },
+    '@ramu/shared/chat/threadStatus': { newerTaskSnapshot: (_, next) => next },
+  })
+  const render = () => hooks.render(() => StoreProvider({ children: null })).props.value
+  render()
+  const state = refs[0]
+  const connections = refs[1]
+  const attach = () => {
+    const connection = { controller: new AbortController(), client: { invoke } }
+    connections.current.set('a', connection)
+    state.current.computers[0].status = 'online'
+    return connection
+  }
+  return {
+    render,
+    state,
+    calls,
+    attach,
+    release() {
+      holdBindings = false
+      bindingRead.resolve([])
+    },
+    dispose: () => hooks.dispose(),
+  }
+}
+
+test('an acknowledged send never leaves an empty transcript during the host snapshot handoff', async () => {
+  const h = deliveryStoreHarness()
+  h.attach()
+  await h.render().send('a:chat', 'Go', 'send')
+  await settle()
+  assert.equal(h.state.current.outbox[0].state, 'accepted')
+  assert.equal(h.state.current.outbox[0].text, 'Go')
+  assert.equal(h.state.current.chats[0].items.length, 0)
+  h.release()
+  await settle()
+  assert.equal(h.state.current.outbox.length, 0)
+  assert.equal(h.state.current.chats[0].items[0].text, 'Go')
+  assert.equal(h.calls.filter(([method]) => method === 'agent.submit').length, 1)
+  h.dispose()
+})
+
+test('a refresh interrupted mid-stream recovers all missed text on the next connection', async () => {
+  const h = deliveryStoreHarness()
+  const old = h.attach()
+  const first = h.render().refresh('a', true)
+  await settle()
+  old.controller.abort()
+  h.attach()
+  h.release()
+  await first
+  assert.equal(h.state.current.chats[0].items.length, 0, 'an old connection cannot replace the visible transcript')
+  await h.render().refresh('a', true)
+  assert.equal(
+    h.state.current.chats[0].items.find((row) => row.kind === 'text').text,
+    'Finished while the phone was away.',
+  )
+  assert.equal(h.state.current.chats[0].executionState, 'idle')
+  assert.deepEqual(
+    h.calls.filter(([method]) => method === 'agent.changes').map((call) => call[2]),
+    [0, 0],
+    'the interrupted read must not consume the catch-up cursor',
+  )
+  h.dispose()
+})
+
+test('the top toolbar Search action opens the root search screen', () => {
+  const pushed = []
+  const { useTabActions } = load('components/Overlays.tsx', 'ios', {
+    'expo-router': { useRouter: () => ({ push: (path) => pushed.push(path) }) },
+    '../i18n': { useT: () => ({ settings: 'Settings', searchTab: 'Search' }) },
+  })
+  const action = nodes(useTabActions()).find((node) => node.type === 'HeaderButton' && node.props.label === 'Search')
+  assert.equal(action.props.systemIcon, 'magnifyingglass')
+  action.props.onPress()
+  assert.deepEqual(pushed, ['/search'])
+})
+
+for (const status of ['online', 'offline', 'revoked', null]) {
+  test(`New thread tab ${status ?? 'unpaired'} reuses the composer or provides pairing`, () => {
+    const pushed = []
+    const ComposerScreen = () => null
+    const { default: NewThreadTab } = load('app/(tabs)/compose/index.tsx', 'ios', {
+      '../../new': { default: ComposerScreen },
+      '../../../runtime/store': { useStore: () => ({ selected: 'a', computers: status ? [{ id: 'a', status }] : [] }) },
+      '../../../i18n': { useT: () => ({ newChat: 'New thread', pair: 'Pair host' }) },
+      'expo-router': { useRouter: () => ({ push: (path) => pushed.push(path) }) },
+    })
+    const tree = NewThreadTab()
+    if (status === 'online' || status === 'offline') {
+      assert.equal(tree.type, ComposerScreen)
+      assert.equal(tree.props.asTab, true)
+      assert.equal(tree.key, 'a')
+    } else {
+      const pair = nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'Pair host')
+      pair.props.onPress()
+      assert.deepEqual(pushed, ['/pair'])
+      assert.equal(find(tree, 'Header').props.back, false)
+    }
+  })
+}
+
+test('iOS dialogs use a native sheet, navigation stack, close action and scroll-edge surface', () => {
+  const native = {
+    Host: 'SwiftHost',
+    BottomSheet: 'SwiftSheet',
+    NavigationStack: 'SwiftStack',
+    RNHostView: 'RNHost',
+    ScrollView: 'SwiftScroll',
+    Button: 'SwiftButton',
+    ToolbarItem: 'SwiftToolbarItem',
+    Toolbar: Object.assign(() => null, { Content: 'SwiftToolbarContent' }),
+  }
+  const modifiers = new Proxy(
+    {},
+    {
+      get:
+        (_, name) =>
+        (...args) => ({ name, args }),
+    },
+  )
+  const { NativeSheet } = load('components/NativeSheet.ios.tsx', 'ios', {
+    '@expo/ui/swift-ui': native,
+    '@expo/ui/swift-ui/modifiers': modifiers,
+  })
+  let closed = 0
+  const tree = NativeSheet({ open: true, title: 'Plan usage', onClose: () => closed++, children: 'Readings' })
+  assert.equal(find(tree, 'SwiftSheet').props.isPresented, true)
+  assert.equal(find(tree, 'SwiftScroll').props.modifiers[0].name, 'scrollEdgeEffectStyle')
+  const stack = find(tree, 'SwiftStack')
+  assert.equal(stack.props.modifiers.find((m) => m.name === 'presentationBackground').args[0], 'window')
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(stack.props.modifiers.find((m) => m.name === 'presentationDetents').args[0])),
+    ['medium', 'large'],
+  )
+  const toolbar = nodes(tree).find((node) => node.type === native.Toolbar)
+  assert.equal(toolbar.props.modifiers.find((m) => m.name === 'navigationTitle').args[0], 'Plan usage')
+  assert.equal(find(tree, 'SwiftButton').props.role, 'close')
+  find(tree, 'SwiftButton').props.onPress()
+  assert.equal(closed, 1)
+  find(tree, 'SwiftSheet').props.onIsPresentedChange(false)
+  assert.equal(closed, 2)
+  const large = NativeSheet({
+    open: true,
+    title: 'Questions',
+    presentation: 'screen',
+    scroll: false,
+    onClose() {},
+    children: 'Form',
+  })
+  assert.equal(find(large, 'SwiftScroll'), undefined, 'self-scrolling content has no nested scroll view')
+  assert.equal(find(large, 'RNHost').props.matchContents, false)
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(find(large, 'SwiftStack').props.modifiers.find((m) => m.name === 'presentationDetents').args[0]),
+    ),
+    ['large'],
+  )
+})
+
+test('the shared Sheet routes every iOS dialog, including full workflows, through native navigation', () => {
+  const ui = load('components/ui.tsx', 'ios', { './NativeSheet': { NativeSheet: 'NativeSheet' } })
+  for (const presentation of [undefined, 'screen']) {
+    const tree = ui.Sheet({ open: true, title: 'Choose a project', children: 'Projects', onClose() {}, presentation })
+    assert.equal(tree.type, 'NativeSheet')
+    assert.equal(tree.props.title, 'Choose a project')
+    assert.equal(tree.props.presentation, presentation)
+  }
+})
+
+test('Settings uses a native scroll edge and gains a raised background after content scrolls underneath', () => {
+  const screen = load('components/Screen.tsx', 'ios', { 'react-native': { Platform: { OS: 'ios', Version: 26 } } })
+  const atTop = screen.Header({ title: 'Settings', align: 'center', scrollEdge: true, scrolled: false })
+  const scrolled = screen.Header({ title: 'Settings', align: 'center', scrollEdge: true, scrolled: true })
+  assert.equal(find(atTop, 'StackScreen').props.options.headerTransparent, true)
+  assert.equal(find(atTop, 'StackScreen').props.options.headerStyle.backgroundColor, 'transparent')
+  assert.equal(find(scrolled, 'StackScreen').props.options.headerStyle.backgroundColor, 'raised2')
+  assert.equal(find(scrolled, 'StackScreen').props.options.scrollEdgeEffects.top, 'soft')
+})
+
+test('Threads uses native toolbar buttons and its usage action opens the shared dialog', () => {
+  const hooks = hookHarness()
+  const react = { ...require('react'), ...hooks.react }
+  const screen = load('components/Screen.tsx', 'ios', {
+    react,
+    './ui': new Proxy({ tap() {} }, { get: (target, key) => (key in target ? target[key] : String(key)) }),
+    'react-native': { Platform: { OS: 'ios', Version: 26 }, UIManager: { hasViewManagerConfig: () => true } },
+  })
+  const { jsx, jsxs } = require('react/jsx-runtime')
+  const actions = jsxs(require('react').Fragment, {
+    children: [
+      jsx(screen.HeaderButton, { icon: 'Search', label: 'Search', systemIcon: 'magnifyingglass', onPress() {} }),
+      jsx(screen.HeaderButton, { icon: 'Settings', label: 'Settings', systemIcon: 'gearshape', onPress() {} }),
+    ],
+  })
+  const { default: Threads } = load('app/(tabs)/(threads)/index.tsx', 'ios', {
+    react,
+    '../../../runtime/store': {
+      useStore: () => ({
+        chats: [],
+        projects: [],
+        selected: 'a',
+        computers: [{ id: 'a', name: 'Host', status: 'online' }],
+        outbox: [],
+        appPreferences: {},
+        language: 'en',
+      }),
+    },
+    '../../../i18n': { useT: () => ({ chats: 'Threads' }) },
+    '../../../components/Screen': screen,
+    '../../../components/Overlays': { useTabActions: () => actions },
+    '../../../components/PlanUsage': { PlanUsageSheet: 'PlanUsageSheet' },
+  })
+  const render = () => hooks.render(() => Threads())
+  const tree = render()
+  const header = nodes(tree).find((node) => node.type === screen.Header)
+  assert.equal(header.props.scrollEdge, true)
+  const native = screen.Header(header.props)
+  assert.deepEqual(
+    nodes(native)
+      .filter((node) => node.type === 'ToolbarButton')
+      .map((node) => node.props.accessibilityLabel),
+    ['Plan usage', 'Search', 'Settings'],
+  )
+  assert.ok(!nodes(native).some((node) => node.type === 'ToolbarView'))
+  const usage = nodes(native).find(
+    (node) => node.type === 'ToolbarButton' && node.props.accessibilityLabel === 'Plan usage',
+  )
+  usage.props.onPress()
+  assert.equal(find(render(), 'PlanUsageSheet').props.open, true)
+  assert.equal(find(native, 'StackScreen').props.options.headerTransparent, true)
+  assert.equal(find(native, 'StackScreen').props.options.scrollEdgeEffects.top, 'soft')
+  hooks.dispose()
+})
+
+test('main destination toolbar actions share native glass and retain their identity when primary actions change', () => {
+  const screen = load('components/Screen.tsx', 'ios')
+  const overlays = load('components/Overlays.tsx', 'ios', {
+    './Screen': { HeaderButton: screen.HeaderButton },
+    '../i18n': { useT: () => ({ searchTab: 'Search', settings: 'Settings' }) },
+  })
+  const buttons = (primary) =>
+    nodes(
+      screen.Header({
+        title: 'Threads',
+        back: false,
+        large: true,
+        right: overlays.useTabActions(primary),
+      }),
+    ).filter((node) => node.type === 'ToolbarButton')
+  const search = buttons(undefined)
+  const create = buttons({ icon: 'Plus', label: 'New schedule', systemIcon: 'plus', onPress() {} })
+  assert.deepEqual(
+    search.map((node) => node.props.identifier),
+    ['tab-primary', 'tab-settings'],
+  )
+  assert.deepEqual(
+    create.map((node) => node.props.identifier),
+    ['tab-primary', 'tab-settings'],
+  )
+  assert.equal(search[0].props.icon, 'magnifyingglass')
+  assert.equal(create[0].props.icon, 'plus')
+  for (const button of [...search, ...create]) {
+    assert.equal(button.props.separateBackground, false)
+    assert.equal(button.props.hidesSharedBackground, false)
+  }
+})
+
+test('composer back and close actions are native toolbar buttons rather than embedded custom views', () => {
+  const screen = load('components/Screen.tsx', 'ios')
+  const { jsx } = require('react/jsx-runtime')
+  const tree = screen.Header({
+    title: 'New thread',
+    align: 'center',
+    back: false,
+    left: jsx(screen.HeaderButton, {
+      icon: 'Back',
+      systemIcon: 'chevron.left',
+      label: 'Back to projects',
+      actionId: 'new-thread-back',
+    }),
+    right: jsx(screen.HeaderButton, {
+      icon: 'Close',
+      systemIcon: 'xmark',
+      label: 'Close',
+      actionId: 'new-thread-close',
+    }),
+  })
+  assert.deepEqual(
+    nodes(tree)
+      .filter((node) => node.type === 'ToolbarButton')
+      .map((node) => node.props.identifier),
+    ['new-thread-back', 'new-thread-close'],
+  )
+  assert.ok(!nodes(tree).some((node) => node.type === 'ToolbarView'))
+})
+
+for (const os of ['ios', 'android']) {
+  test(`${os} an empty terminal can retry opening a session without duplicate taps creating shells`, async () => {
+    const hooks = hookHarness()
+    let opening = 0
+    const pending = deferred()
+    const store = {
+      computers: [{ id: 'a', status: 'online', name: 'Host' }],
+      chats: [],
+      projects: [],
+      subscribe: () => () => {},
+      invoke: async (_host, method) => {
+        if (method === 'term.list') return []
+        if (method === 'term.open') {
+          if (++opening === 1) throw new Error('Temporary host error')
+          return pending.promise
+        }
+        if (method === 'term.snapshot') return { output: '', cursor: 0, exited: false }
+        throw new Error(method)
+      },
+    }
+    const { TerminalScreen } = load('components/TerminalScreen.tsx', os, {
+      react: hooks.react,
+      'react-native': { Keyboard: { addListener: () => ({ remove() {} }) } },
+      '../runtime/store': { useStore: () => store },
+      '../runtime/terminalKeys': terminalKeys,
+      './TerminalView': { default: 'TerminalView' },
+    })
+    const render = () => hooks.render(() => TerminalScreen({ computerId: 'a', ctx: 'task', onBack() {} }))
+    render()
+    await settle()
+    const empty = render()
+    assert.equal(find(empty, 'TerminalTabs').props.tabs.length, 0)
+    const action = nodes(empty).find((node) => node.type === 'Button' && node.props.title === 'New terminal')
+    assert.equal(action.props.disabled, false)
+    action.props.onPress()
+    action.props.onPress()
+    assert.equal(opening, 2, 'one automatic attempt and one explicit retry')
+    pending.resolve({ id: 'shell', taskId: 'task', cwd: '/work', exited: false })
+    await settle()
+    assert.equal(find(render(), 'TerminalView').props.session, 'shell')
+    hooks.dispose()
+  })
+}
+
+test('page searches use the native bottom search slot and preserve query, clear and submit actions', () => {
+  const hooks = hookHarness()
+  const changes = []
+  let submitted = 0
+  const { BottomSearch } = load('components/BottomSearch.tsx', 'ios', { react: hooks.react })
+  const tree = hooks.render(() =>
+    BottomSearch({
+      value: 'file',
+      placeholder: 'Search files',
+      onChangeText: (value) => changes.push(value),
+      onSubmit: () => submitted++,
+    }),
+  )
+  assert.equal(find(tree, 'NativeSearchSlot') !== undefined, true)
+  const field = find(tree, 'NativeSearch')
+  field.props.onChangeText({ nativeEvent: { text: 'src' } })
+  field.props.onSearchButtonPress()
+  field.props.onCancelButtonPress()
+  assert.deepEqual(changes, ['src', ''])
+  assert.equal(submitted, 1)
+  hooks.dispose()
+})
+
+test('native dialog search stays in its own bottom toolbar and does not configure the page behind it', () => {
+  const hooks = hookHarness()
+  const shared = {
+    value: '',
+    set(value) {
+      this.value = value
+    },
+  }
+  const native = {
+    Host: 'SwiftHost',
+    BottomSheet: 'SwiftSheet',
+    NavigationStack: 'SwiftStack',
+    RNHostView: 'RNHost',
+    ScrollView: 'SwiftScroll',
+    Button: 'SwiftButton',
+    ToolbarItem: 'SwiftToolbarItem',
+    HStack: 'SwiftRow',
+    TextField: 'SwiftInput',
+    Image: 'SwiftImage',
+    useNativeState: () => shared,
+    Toolbar: Object.assign(() => null, { Content: 'SwiftToolbarContent' }),
+  }
+  const search = {
+    value: '',
+    placeholder: 'Search models',
+    onChangeText(value) {
+      this.value = value
+    },
+  }
+  // Use a closure: native callbacks are passed directly, without a receiver.
+  search.onChangeText = (value) => {
+    search.value = value
+  }
+  const { NativeSheet } = load('components/NativeSheet.ios.tsx', 'ios', {
+    react: hooks.react,
+    '@expo/ui/swift-ui': native,
+    '@expo/ui/swift-ui/modifiers': new Proxy(
+      {},
+      {
+        get:
+          (_, name) =>
+          (...args) => ({ name, args }),
+      },
+    ),
+  })
+  const root = NativeSheet({ open: true, title: 'Models', onClose() {}, search, children: 'Results' })
+  const body = nodes(root).find((node) => typeof node.type === 'function' && node.type.name === 'NativeSheetSearch')
+  const render = () => hooks.render(() => body.type(body.props))
+  let tree = render()
+  assert.equal(find(tree, 'SwiftToolbarItem').props.placement, 'bottomBar')
+  find(tree, 'SwiftInput').props.onTextChange('codex')
+  tree = render()
+  assert.equal(shared.value, 'codex')
+  find(tree, 'SwiftButton').props.onPress()
+  render()
+  assert.equal(search.value, '')
+  assert.equal(shared.value, '')
+  assert.equal(find(tree, 'NativeSearch'), undefined)
+  hooks.dispose()
+})
+
+for (const os of ['ios', 'android']) {
+  test(`${os} interactive content starts themed without a thumbnail and keeps an expanded preview alive`, () => {
+    const card = interactiveCardHarness(os)
+    card.document.preview = 'data:image/png;base64,cached'
+    card.visible(false)
+    assert.equal(find(card.render(), 'Image'), undefined)
+    card.visible(true)
+    let tree = card.render()
+    let frame = find(tree, 'InteractiveFrame')
+    assert.equal(JSON.parse(frame.props.html).theme['--background'], 'window')
+    assert.equal(find(tree, 'Image'), undefined)
+    card.app('inactive')
+    assert.ok(find(card.render(), 'InteractiveFrame'), 'native transitions do not stop the document')
+    nodes(card.render())
+      .find((node) => node.type === 'IconButton' && node.props.label === 'Expand')
+      .props.onPress()
+    frame = find(card.render(), 'InteractiveFrame')
+    frame.props.onMessage({
+      ramuInteractive: 1,
+      instance: frame.props.instance,
+      type: 'state',
+      requestId: frame.props.snapshot,
+      value: { controls: [], custom: null },
+    })
+    tree = card.render()
+    const expandedInstance = find(tree, 'InteractiveFrame').props.instance
+    card.visible(false)
+    tree = card.render()
+    assert.equal(
+      find(tree, 'InteractiveFrame').props.instance,
+      expandedInstance,
+      'covering the transcript cannot unload the expanded viewer',
+    )
+    card.app('background')
+    assert.equal(find(card.render(), 'InteractiveFrame'), undefined)
+    card.app('active')
+    assert.ok(find(card.render(), 'InteractiveFrame'))
+    card.dispose()
+  })
+
+  test(`${os} saved thumbnails are fallback content, not a first-load dependency`, () => {
+    const card = interactiveCardHarness(os)
+    card.document.preview = 'data:image/png;base64,cached'
+    assert.equal(find(card.render(), 'Image'), undefined)
+    card.evict()
+    assert.equal(find(card.render(), 'Image').props.source.uri, card.document.preview)
+    card.dispose()
+  })
+}
+
+test('native interactive views reveal only their painted document and keep theme changes from reloading it', () => {
+  const hooks = hookHarness()
+  const { default: Frame } = load('components/InteractiveFrame.native.tsx', 'ios', {
+    react: hooks.react,
+    'react-native-webview': { WebView: 'NativeWebView' },
+  })
+  let props = {
+    html: '<main>Content</main>',
+    instance: 'one',
+    height: 400,
+    theme: { '--background': '#131315' },
+    onMessage() {},
+    onStop() {},
+  }
+  const render = () => hooks.render(() => Frame(props))
+  let tree = render()
+  let webview = find(tree, 'NativeWebView')
+  const source = webview.props.source
+  assert.equal(tree.props.style.backgroundColor, '#131315')
+  assert.equal(webview.props.style.opacity, 0)
+  const frames = [],
+    messages = []
+  runInNewContext(webview.props.injectedJavaScript, {
+    requestAnimationFrame: (callback) => frames.push(callback),
+    window: { ReactNativeWebView: { postMessage: (data) => messages.push(data) } },
+  })
+  assert.equal(messages.length, 0)
+  frames.shift()()
+  assert.equal(messages.length, 0)
+  frames.shift()()
+  assert.equal(JSON.parse(messages[0]).type, 'painted')
+  webview.props.onMessage({
+    nativeEvent: { data: JSON.stringify({ ramuInteractive: 1, instance: 'old', type: 'painted' }) },
+  })
+  assert.equal(find(render(), 'NativeWebView').props.style.opacity, 0)
+  webview.props.onMessage({ nativeEvent: { data: messages[0] } })
+  assert.equal(find(render(), 'NativeWebView').props.style.opacity, 1)
+  props = { ...props, theme: { '--background': '#f2f2f7' } }
+  webview = find(render(), 'NativeWebView')
+  assert.equal(webview.props.source, source)
+  assert.equal(webview.props.style.backgroundColor, '#f2f2f7')
+  assert.equal(webview.props.style.opacity, 1)
+  props = { ...props, instance: 'two', html: '<main>Replacement</main>' }
+  webview = find(render(), 'NativeWebView')
+  assert.equal(webview.props.style.opacity, 0)
+  webview.props.onMessage({ nativeEvent: { data: messages[0] } })
+  assert.equal(find(render(), 'NativeWebView').props.style.opacity, 0)
+  hooks.dispose()
+})
+
+test('interactive navigation cannot escape through the WebView library’s system-browser fallback', async () => {
+  const hooks = hookHarness()
+  const { default: Frame } = load('components/InteractiveFrame.native.tsx', 'ios', {
+    react: hooks.react,
+    'react-native-webview': { WebView: 'NativeWebView' },
+  })
+  const props = find(
+    hooks.render(() =>
+      Frame({ html: 'Content', instance: 'one', height: 400, theme: {}, onMessage() {}, onStop() {} }),
+    ),
+    'NativeWebView',
+  ).props
+  const { default: escapeStringRegexp } = await import('escape-string-regexp')
+  const opened = [],
+    decisions = []
+  const { createOnShouldStartLoadWithRequest } = load(
+    '../../../node_modules/react-native-webview/src/WebViewShared.tsx',
+    'ios',
+    {
+      'escape-string-regexp': { default: escapeStringRegexp },
+      './WebView.styles': { default: {} },
+      'react-native': {
+        Linking: {
+          canOpenURL: async (url) => {
+            opened.push(url)
+            return true
+          },
+          openURL: async (url) => opened.push(url),
+        },
+      },
+    },
+  )
+  const navigate = createOnShouldStartLoadWithRequest(
+    (allow, url) => decisions.push({ allow, url }),
+    props.originWhitelist,
+    props.onShouldStartLoadWithRequest,
+  )
+  for (const url of [
+    'https://example.com/',
+    'https://localhost/private',
+    'http://localhost/',
+    'file:///private/file',
+    'mailto:test@example.com',
+    'ramu://pair',
+  ]) {
+    navigate({ nativeEvent: { url, lockIdentifier: 1, isTopFrame: true } })
+  }
+  await settle()
+  assert.equal(decisions.length, 6)
+  assert.ok(decisions.every(({ allow }) => allow === false))
+  assert.deepEqual(opened, [])
+  navigate({ nativeEvent: { url: 'https://ramu-content.invalid/', lockIdentifier: 2, isTopFrame: true } })
+  assert.equal(decisions.at(-1).allow, true)
+  navigate({ nativeEvent: { url: 'https://ramu-content.invalid/', lockIdentifier: 3, isTopFrame: false } })
+  assert.equal(decisions.at(-1).allow, false)
+  assert.equal(typeof props.onOpenWindow, 'function')
+  hooks.dispose()
+})
+
+for (const os of ['ios', 'android']) {
+  test(`${os} interactive content and loading surfaces match the chat in both themes`, () => {
+    const card = interactiveCardHarness(os)
+    card.theme('dark', '#131315', '#1c1c1f')
+    let frame = find(card.render(), 'InteractiveFrame')
+    assert.equal(frame.props.theme['--background'], '#131315')
+    assert.equal(JSON.parse(frame.props.html).theme['--background'], '#131315')
+    const html = frame.props.html
+    card.theme('light', '#f2f2f7', '#ffffff')
+    frame = find(card.render(), 'InteractiveFrame')
+    assert.equal(frame.props.theme['--background'], '#f2f2f7')
+    assert.equal(frame.props.html, html, 'live palette updates do not reload the document or its controls')
+    card.visible(false)
+    assert.ok(
+      nodes(card.render()).some(
+        (node) =>
+          node.type === 'View' && node.props.style?.height === 400 && node.props.style.backgroundColor === '#f2f2f7',
+      ),
+    )
+    card.visible(true)
+    frame = find(card.render(), 'InteractiveFrame')
+    assert.equal(
+      JSON.parse(frame.props.html).theme['--background'],
+      '#f2f2f7',
+      'a resumed document starts with the current chat palette',
+    )
+    card.dispose()
+  })
+}
+
+test('native tool completion uses the shared delayed left-to-right sweep without replaying history', async () => {
+  const hooks = hookHarness()
+  const calls = []
+  const listeners = []
+  let stopped = 0
+  class Value {
+    constructor(value) {
+      this.value = value
+    }
+    setValue(value) {
+      this.value = value
+    }
+    interpolate(config) {
+      return { value: this, ...config }
+    }
+  }
+  const { ActivityText } = load('components/Motion.tsx', 'ios', {
+    react: hooks.react,
+    '@ramu/shared/chat/presentation': chatPresentation,
+    'react-native': {
+      AccessibilityInfo: {
+        isReduceMotionEnabled: async () => false,
+        addEventListener: (_event, listener) => {
+          listeners.push(listener)
+          return { remove() {} }
+        },
+      },
+      Easing: { linear: 'linear' },
+      Animated: {
+        Value,
+        View: 'AnimatedView',
+        timing: (_value, options) => {
+          calls.push(options)
+          return {
+            start() {},
+            stop() {
+              stopped++
+            },
+          }
+        },
+      },
+    },
+    './ui': { T: 'T' },
+  })
+  let active = false
+  let text = 'Read files'
+  const render = () => hooks.render(() => ActivityText({ active, children: text }))
+  render()
+  assert.equal(calls.length, 0)
+  active = true
+  render()
+  active = false
+  const tree = render()
+  assert.equal(find(tree, 'T').props.children, text)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].delay, chatPresentation.TOOL_MOTION.settleMs)
+  assert.equal(calls[0].duration, chatPresentation.TOOL_MOTION.finishMs)
+  assert.equal(calls[0].isInteraction, false)
+  text = 'Read more files'
+  render()
+  assert.equal(calls.length, 1)
+  active = true
+  render()
+  assert.equal(stopped, 1)
+  await settle()
+  for (const listener of listeners) listener(true)
+  render()
+  active = false
+  const reduced = render()
+  assert.equal(find(reduced, 'T').props.children, text)
+  assert.equal(calls.length, 1, 'reduced motion never adds a delayed highlight')
   hooks.dispose()
 })

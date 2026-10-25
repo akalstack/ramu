@@ -114,7 +114,7 @@ function InteractiveDocumentCard({
   const live = !!document && visible && !evicted && !failed && view === 'preview'
   const instance = `${key}:${generation}`
   const html = document?.html
-  const { url, error: mountError } = useContentDocument(html, instance, live, state)
+  const { url, error: mountError } = useContentDocument(html, instance, live, state, document?.reference.network)
   useEffect(() => {
     setReady(false)
   }, [live, html, instance])
@@ -354,13 +354,13 @@ function InteractiveDocumentCard({
         // Expanding restyles this same element, so the live frame and its state stay as they are.
         className={
           expanded
-            ? 'fixed inset-4 z-50 flex flex-col overflow-hidden rounded-xl border border-border bg-(--canvas) shadow-2xl'
-            : 'my-3 overflow-hidden rounded-xl border border-border bg-(--canvas)'
+            ? 'fixed inset-4 z-50 flex flex-col overflow-hidden rounded-xl bg-(--canvas) shadow-2xl'
+            : 'my-3 overflow-hidden rounded-xl bg-(--canvas)'
         }
         aria-label={reference.title}
         aria-describedby={`interactive-summary-${key}`}
       >
-        <header className="flex min-h-9 items-center gap-1.5 border-b border-border py-1 pr-1.5 pl-3">
+        <header className="flex min-h-9 items-center gap-1.5 py-1 pr-1.5 pl-3">
           <AppWindow size={14} className="flex-none text-muted-foreground" aria-hidden />
           <h3 className="m-0 min-w-0 truncate text-body font-medium">{reference.title}</h3>
           <span className="flex-none text-caption text-muted-foreground" title={checked}>
@@ -562,7 +562,7 @@ function InteractiveDocumentCard({
             className={`${expanded ? 'min-h-0 flex-1 overflow-auto' : ''} ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}
           >
             <div
-              className={`relative ${width ? 'max-w-full overflow-hidden rounded-lg bg-(--canvas) ring-1 ring-border' : ''}`}
+              className={`relative ${width ? 'max-w-full overflow-hidden rounded-lg bg-(--canvas)' : ''}`}
               style={{ height: live && url ? height : undefined, width }}
             >
               {live && url && (

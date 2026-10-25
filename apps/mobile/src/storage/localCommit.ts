@@ -76,3 +76,33 @@ export function writeLocalCommit(
   storage.write(slot, text)
   if (storage.read(slot) !== text) throw new Error('Could not finish saving phone data. Try again.')
 }
+
+export interface AsyncLocalCommitStorage {
+  read(slot: 0 | 1): Promise<string | null>
+  write(slot: 0 | 1, value: string): Promise<void>
+}
+
+/** The same recovery protocol with file I/O off the JS thread. Callers serialize commits. */
+export async function writeLocalCommitAsync(
+  storage: AsyncLocalCommitStorage,
+  data: Record<string, unknown>,
+  legacyRecovery = false,
+): Promise<void> {
+  const slots = await Promise.all([storage.read(0), storage.read(1)])
+  let target: 0 | 1 = 0
+  let text = ''
+  writeLocalCommit(
+    {
+      read: (slot) => slots[slot]!,
+      write: (slot, value) => {
+        target = slot
+        text = value
+        slots[slot] = value
+      },
+    },
+    data,
+    legacyRecovery,
+  )
+  await storage.write(target, text)
+  if ((await storage.read(target)) !== text) throw new Error('Could not finish saving phone data. Try again.')
+}

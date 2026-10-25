@@ -110,6 +110,9 @@ importers:
       '@cursor/sdk':
         specifier: 1.0.37
         version: 1.0.37
+      '@dagrejs/dagre':
+        specifier: 2.0.4
+        version: 2.0.4
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
         version: 1.32.1(supports-color@8.1.1)(zod@4.6.5)
@@ -119,9 +122,15 @@ importers:
       '@opencode/client':
         specifier: 2.0.30
         version: 2.0.30(effect@4.0.1)(solid-js@1.9.17)
+      chart.js:
+        specifier: 4.6.1
+        version: 4.6.1
       editorconfig:
         specifier: ^3.0.2
         version: 3.0.2
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       luxon:
         specifier: 'catalog:'
         version: 3.7.2
@@ -131,6 +140,12 @@ importers:
       playwright-core:
         specifier: ^1.64.0
         version: 1.64.0
+      react:
+        specifier: 'catalog:'
+        version: 19.3.0
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.0(react@19.3.0)
       undici:
         specifier: ^7.30.0
         version: 7.30.0
@@ -352,6 +367,9 @@ importers:
       '@cursor/sdk':
         specifier: 1.0.37
         version: 1.0.37
+      '@dagrejs/dagre':
+        specifier: 2.0.4
+        version: 2.0.4
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
         version: 1.32.1(supports-color@8.1.1)(zod@4.6.5)
@@ -361,9 +379,15 @@ importers:
       '@opencode/client':
         specifier: 2.0.30
         version: 2.0.30(effect@4.0.1)(solid-js@1.9.17)
+      chart.js:
+        specifier: 4.6.1
+        version: 4.6.1
       editorconfig:
         specifier: ^3.0.2
         version: 3.0.2
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       lucide:
         specifier: 1.54.0
         version: 1.54.0
@@ -376,6 +400,12 @@ importers:
       playwright-core:
         specifier: ^1.64.0
         version: 1.64.0
+      react:
+        specifier: 'catalog:'
+        version: 19.3.0
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.0(react@19.3.0)
       undici:
         specifier: ^7.30.0
         version: 7.30.0
@@ -1221,6 +1251,12 @@ packages:
     resolution: {integrity: sha512-MWKMeqtkCOHOOi8uZqI7CYeUtOwwdWke1B4GEllERIGMsoKuxbk++tP/KzOXXxtOD9EUD1z3AQL6os6m3M1gIw==}
     engines: {node: '>=22.13'}
 
+  '@dagrejs/dagre@2.0.4':
+    resolution: {integrity: sha512-J6vCWTNpicHF4zFlZG1cS5DkGzMr9941gddYkakjrg3ZNev4bbqEgLHFTWiFrcJm7UCRu7olO3K6IRDd9gSGhA==}
+
+  '@dagrejs/graphlib@3.0.4':
+    resolution: {integrity: sha512-HxZ7fCvAwTLCWCO0WjDkzAFQze8LdC6iOpKbetDKHIuDfIgMlIzYzqZ4nxwLlclQX+3ZVeZ1K2OuaOE2WWcyOg==}
+
   '@dnd-kit/accessibility@3.1.1':
     resolution: {integrity: sha512-2P+YgaXF+gRsIihwwY1gCsQSYnu9Zyj2py8kY5fFvUM1qm2WA2u639R6YNVfU4GWr+ZM5mqEsfHZZLoRONbemw==}
     peerDependencies:
@@ -2038,6 +2074,9 @@ packages:
 
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
+
+  '@kurkle/color@0.3.4':
+    resolution: {integrity: sha512-M5UknZPHRu3DEDWoipU6sE8PdkZ6Z/S+v4dD+Ke8IaNlpdSQah50lz1KtcFBa2vsdOnwbbnxJwVM4wty6udA5w==}
 
   '@leichtgewicht/ip-codec@2.0.5':
     resolution: {integrity: sha512-Vo+PSpZG2/fmgmiNzYK9qWRh8h/CHrwD0mo1h1DzL4yzHNSfWYujGTYsWGreD000gcgmZ7K4Ys6Tx9TxtsKdDw==}
@@ -3935,6 +3974,10 @@ packages:
 
   character-reference-invalid@2.0.1:
     resolution: {integrity: sha512-iBZ4F4wRbyORVsu0jPV7gXkOsGYjGHPmAyv+HiHG8gi5PtC9KI2j1+v8/tlibRvjoWX027ypmG/n0HtO5t7unw==}
+
+  chart.js@4.6.1:
+    resolution: {integrity: sha512-hJyniucsFmq//EvXYvJ6c6mahPoI3kaxdjVH8awTaJ/fDNWeSqqqArixMJWkWNN6fcYvPU3HneSANFNYtRi61g==}
+    engines: {pnpm: '>=8'}
 
   chownr@3.0.0:
     resolution: {integrity: sha512-+IxzY9BZOQd/XuYPRmrvEVjF/nqj5kgT4kEq7VofrDoM1MxoRjEWkrCC3EtLi59TVawxTAn+orJwFQcrqEN1+g==}
@@ -6905,10 +6948,6 @@ packages:
       '@types/react':
         optional: true
 
-  react@19.2.3:
-    resolution: {integrity: sha512-Ku/hhYbVjOQnXDZFv2+RibmLFGwFdeeKHFcOTlrt7xplBnya5OGn/hIRDsqDiSUcfORsDC7MPxwork8jBwsIWA==}
-    engines: {node: '>=0.10.0'}
-
   react@19.3.0:
     resolution: {integrity: sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==}
     engines: {node: '>=0.10.0'}
@@ -8633,6 +8672,12 @@ snapshots:
       '@cursor/sdk-linux-x64': 1.0.37
       '@cursor/sdk-win32-x64': 1.0.37
 
+  '@dagrejs/dagre@2.0.4':
+    dependencies:
+      '@dagrejs/graphlib': 3.0.4
+
+  '@dagrejs/graphlib@3.0.4': {}
+
   '@dnd-kit/accessibility@3.1.1(react@19.3.0)':
     dependencies:
       react: 19.3.0
@@ -8777,8 +8822,8 @@ snapshots:
   '@electron-forge/multi-logger@8.0.1(@types/react@19.3.0)(react-devtools-core@6.1.5)(supports-color@8.1.1)':
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
-      ink: 7.1.1(@types/react@19.3.0)(react-devtools-core@6.1.5)(react@19.2.3)
-      react: 19.2.3
+      ink: 7.1.1(@types/react@19.3.0)(react-devtools-core@6.1.5)(react@19.3.0)
+      react: 19.3.0
       string-width: 8.3.0
       wrap-ansi: 10.0.2
     transitivePeerDependencies:
@@ -9634,6 +9679,8 @@ snapshots:
       keyv: 5.6.0
 
   '@keyv/serialize@1.1.1': {}
+
+  '@kurkle/color@0.3.4': {}
 
   '@leichtgewicht/ip-codec@2.0.5': {}
 
@@ -11531,6 +11578,10 @@ snapshots:
 
   character-reference-invalid@2.0.1: {}
 
+  chart.js@4.6.1:
+    dependencies:
+      '@kurkle/color': 0.3.4
+
   chownr@3.0.0: {}
 
   chrome-trace-event@1.0.4: {}
@@ -13311,7 +13362,7 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  ink@7.1.1(@types/react@19.3.0)(react-devtools-core@6.1.5)(react@19.2.3):
+  ink@7.1.1(@types/react@19.3.0)(react-devtools-core@6.1.5)(react@19.3.0):
     dependencies:
       '@alcalzone/ansi-tokenize': 0.3.1
       ansi-escapes: 7.3.0
@@ -13326,8 +13377,8 @@ snapshots:
       indent-string: 5.0.0
       is-in-ci: 2.0.0
       patch-console: 2.0.0
-      react: 19.2.3
-      react-reconciler: 0.33.0(react@19.2.3)
+      react: 19.3.0
+      react-reconciler: 0.33.0(react@19.3.0)
       scheduler: 0.27.0
       signal-exit: 3.0.7
       slice-ansi: 9.0.1
@@ -15124,9 +15175,9 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  react-reconciler@0.33.0(react@19.2.3):
+  react-reconciler@0.33.0(react@19.3.0):
     dependencies:
-      react: 19.2.3
+      react: 19.3.0
       scheduler: 0.27.0
 
   react-refresh@0.14.2: {}
@@ -15164,8 +15215,6 @@ snapshots:
       tslib: 2.8.1
     optionalDependencies:
       '@types/react': 19.3.0
-
-  react@19.2.3: {}
 
   react@19.3.0: {}
 

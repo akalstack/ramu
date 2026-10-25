@@ -185,3 +185,27 @@ it('round-trips attached Interactive Content so a sent message can show what it 
   ])
   expect(sentInteractiveAttachments('<interactive-content id="x" version="1" title=not-json>')).toEqual([])
 })
+
+it('uses exact versioned network origins without weakening the legacy policy', async () => {
+  const { interactiveCsp, interactiveOrigin, INTERACTIVE_CSP } = await import('../src/interactive')
+  expect(interactiveCsp()).toBe(INTERACTIVE_CSP)
+  const offline = interactiveCsp({ resources: [], connect: [] })
+  expect(offline).toContain("connect-src 'none'")
+  expect(offline).not.toContain('https:')
+  expect(offline).not.toContain('unsafe-eval')
+  const policy = { resources: ['https://images.example.com'], connect: ['https://data.example.com'] }
+  const csp = interactiveCsp(policy)
+  expect(csp).toContain('connect-src https://data.example.com;')
+  expect(csp).toContain('img-src data: blob: https://images.example.com;')
+  expect(interactiveHtml('<p>Hi</p>', 'one', null, undefined, policy)).toContain(`content="${csp}"`)
+  expect(interactiveOrigin('https://data.example.com/')).toBe('https://data.example.com')
+  for (const origin of [
+    'https://example.com/"; script-src *',
+    'https://*.example.com',
+    'https://localhost',
+    'https://127.1',
+    'https://[::1]',
+    'https://foo.local',
+  ])
+    expect(() => interactiveOrigin(origin)).toThrow()
+})

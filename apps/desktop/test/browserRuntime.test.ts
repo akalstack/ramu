@@ -245,6 +245,52 @@ describe('ownership and agent actions', () => {
   })
 })
 
+describe('phone layout', () => {
+  it('lays a page out for the controlling phone and restores it when control changes', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open({ ...user }, 'https://a.test')
+    const fit = vi.fn(async () => {})
+    Object.assign(created[0]!.page, { fit })
+    await expect(runtime.fitToViewer(tab.id, 'phone', { width: 390, height: 700 }, user)).rejects.toBeInstanceOf(
+      BrowserError,
+    )
+    runtime.takeControl(tab.id, 'phone', { local: true })
+    expect(await runtime.fitToViewer(tab.id, 'phone', { width: 390, height: 700 }, user)).toEqual({ fitted: true })
+    expect(fit).toHaveBeenLastCalledWith({ width: 390, height: 700 })
+    expect(runtime.list()[0]!.fitted).toBe(true)
+    runtime.giveToAgent(tab.id, 'phone', 'r1')
+    expect(fit).toHaveBeenLastCalledWith(null)
+    expect(runtime.list()[0]!.fitted).toBeUndefined()
+  })
+
+  it('restores the layout when the fitted phone disconnects', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open({ ...user }, 'https://a.test')
+    const fit = vi.fn(async () => {})
+    Object.assign(created[0]!.page, { fit })
+    runtime.takeControl(tab.id, 'phone', { local: true })
+    await runtime.fitToViewer(tab.id, 'phone', { width: 390, height: 700 }, user)
+    runtime.controllerDisconnected('phone')
+    expect(fit).toHaveBeenLastCalledWith(null)
+  })
+
+  it('tells only the controlling phone which kind of field has focus', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open({ ...user }, 'https://a.test')
+    Object.assign(created[0]!.page, { focusedField: vi.fn(async () => ({ editable: true, kind: 'email' })) })
+    await expect(runtime.focusedFieldForHuman(tab.id, 'phone', user)).rejects.toBeInstanceOf(BrowserError)
+    runtime.takeControl(tab.id, 'phone', { local: true })
+    expect(await runtime.focusedFieldForHuman(tab.id, 'phone', user)).toEqual({ editable: true, kind: 'email' })
+  })
+
+  it('leaves a page shown on a desktop untouched', async () => {
+    const { runtime } = setup()
+    const { tab } = await runtime.open({ ...user }, 'https://a.test')
+    runtime.takeControl(tab.id, 'phone', { local: true })
+    expect(await runtime.fitToViewer(tab.id, 'phone', { width: 390, height: 700 }, user)).toEqual({ fitted: false })
+  })
+})
+
 describe('run end and shutdown', () => {
   it('ending a run closes its temporary tabs, clears their data, and leaves user tabs open', async () => {
     const { runtime, created, cleared } = setup()

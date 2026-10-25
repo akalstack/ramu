@@ -393,7 +393,7 @@ export default function InboxScreen() {
 
   return (
     <Screen>
-      <Header back={false} large collapsed={edge.scrolled} title={t.inbox} right={actions} />
+      <Header back={false} large scrollEdge collapsed={edge.scrolled} title={t.inbox} right={actions} />
       <PageScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
@@ -412,7 +412,10 @@ export default function InboxScreen() {
             ]}
           />
         ) : null}
-        <Chips value={tab} onChange={choose} options={chips} />
+        {/* With nothing anywhere, the tabs would only lead to more empty states; "all caught up" says it once. */}
+        {tab === 'all' && inbox.empty && !missed.length ? null : (
+          <Chips value={tab} onChange={choose} options={chips} />
+        )}
         {body}
       </PageScrollView>
       {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}

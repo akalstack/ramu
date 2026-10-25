@@ -1,6 +1,8 @@
+import { BottomSearch } from '../../../components/BottomSearch'
 import { readSyncConfirmation } from '@ramu/shared/protectedBranch'
 import { useEffect, useRef, useState } from 'react'
-import { Alert, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native'
+import { Alert, Platform, Pressable, TextInput, View } from 'react-native'
+import { useKeyboardInset } from '../../../components/Keyboard'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
 import {
@@ -20,7 +22,6 @@ import {
   Minus,
   Plus,
   RefreshCcw,
-  Search,
   Sparkles,
   Trash2,
   Undo2,
@@ -190,6 +191,7 @@ function Group({
 export default function SourceControl() {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
+  const keyboard = useKeyboardInset()
   const { id } = useLocalSearchParams<{ id: string }>()
   const chat = useChat(id)
   const store = useStore()
@@ -523,11 +525,13 @@ export default function SourceControl() {
         }
         right={<HeaderButton icon={Ellipsis} label="Source control actions" onPress={() => setSheet('menu')} />}
       />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      {/* The commit box rides the keyboard like the thread composer: padding measured from the screen's bottom edge. */}
+      <View style={{ flex: 1 }}>
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l, paddingBottom: space.xl }}
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={false}
           keyboardDismissMode="on-drag"
         >
           {!binding ? (
@@ -634,31 +638,6 @@ export default function SourceControl() {
           />
           {tab === 'changes' ? (
             <>
-              {changeCount > 8 ? (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: space.s,
-                    height: 40,
-                    paddingHorizontal: space.m,
-                    borderRadius: radius.m,
-                    backgroundColor: c.raised2,
-                  }}
-                >
-                  <Search size={15} color={c.muted} />
-                  <TextInput
-                    value={filter}
-                    onChangeText={setFilter}
-                    placeholder={`Filter ${changeCount} files`}
-                    placeholderTextColor={c.placeholder}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    clearButtonMode="while-editing"
-                    style={{ flex: 1, color: c.text, fontSize: font.body }}
-                  />
-                </View>
-              ) : null}
               {
                 <Group
                   title="Staged Changes"
@@ -845,7 +824,7 @@ export default function SourceControl() {
               borderTopColor: c.lineStrong,
               paddingHorizontal: space.l,
               paddingTop: space.s,
-              paddingBottom: Math.max(insets.bottom, space.s),
+              paddingBottom: keyboard ? keyboard + space.s : Math.max(insets.bottom, space.s),
             }}
           >
             <View style={{ gap: space.s }}>
@@ -933,7 +912,7 @@ export default function SourceControl() {
             </View>
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </View>
 
       {toast ? (
         <View
@@ -1059,6 +1038,9 @@ export default function SourceControl() {
           ),
         )}
       </Sheet>
+      {tab === 'changes' && changeCount > 8 ? (
+        <BottomSearch value={filter} onChangeText={setFilter} placeholder={`Filter ${changeCount} files`} />
+      ) : null}
     </Screen>
   )
 }

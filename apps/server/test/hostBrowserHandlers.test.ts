@@ -110,6 +110,13 @@ describe('host browser handlers', () => {
       methods['hostBrowser.input']!.args.safeParse([THREAD, 'not-a-uuid', 3, { kind: 'key', key: 'Tab' }]).success,
     ).toBe(false)
     expect(methods['hostBrowser.navigate']!.args.safeParse([THREAD, TAB, 'not a url']).success).toBe(false)
+    const fit = (size: unknown) => methods['hostBrowser.fit']!.args.safeParse([THREAD, TAB, size]).success
+    expect(fit({ width: 390, height: 700 })).toBe(true)
+    expect(fit(null)).toBe(true)
+    expect(fit({ width: 100, height: 700 })).toBe(false)
+    expect(fit({ width: 320, height: 200 })).toBe(true)
+    expect(fit({ width: 320, height: 100 })).toBe(false)
+    expect(fit({ width: 390.5, height: 700 })).toBe(false)
   })
 
   it('shows a paired device the desktop browser when the host browser is off', async () => {

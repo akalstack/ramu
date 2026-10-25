@@ -21,7 +21,7 @@ it('serves only bounded mounted documents with their own restrictive response po
   expect(documents.response(url + '?path=/etc/passwd').status).toBe(404)
   documents.release(url)
   expect(documents.response(url).status).toBe(404)
-  expect(() => documents.mount('a'.repeat(800_001))).toThrow('Invalid')
+  expect(() => documents.mount('a'.repeat(2_000_001))).toThrow('Invalid')
   for (let n = 0; n < 4; n++) documents.mount('document')
   expect(() => documents.mount('fifth')).toThrow('Too many')
   documents.clear()

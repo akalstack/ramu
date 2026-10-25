@@ -3,10 +3,10 @@ import * as Sharing from 'expo-sharing'
 import { createInteractiveSharer } from '@ramu/shared/interactiveShare'
 export const shareInteractive = createInteractiveSharer({
   available: () => Sharing.isAvailableAsync(),
-  write: (html) => {
+  write: async (html) => {
     // A single replaceable export prevents accumulating one file for every shared revision.
     const file = new File(Paths.cache, 'ramu-interactive-export.html')
-    file.write(html)
+    await file.write(html)
     return file.uri
   },
   share: (uri, metadata) =>

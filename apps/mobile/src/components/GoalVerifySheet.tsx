@@ -4,7 +4,7 @@ import type { ChatGoal } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import { fill, useT } from '../i18n'
 import { isMethodMissing, outcomeKey, verifyDraft, verifyView, VERIFY_LIMIT } from '../runtime/goalVerify'
-import { Button, Sheet, T } from './ui'
+import { Button, Sheet, SheetScrollView, T } from './ui'
 
 /**
  * Edits the command Ramu runs itself when the agent says the goal is done, mirroring the desktop's goal bar: the current
@@ -56,7 +56,7 @@ export function GoalVerifySheet({
   const mono = { fontFamily: font.mono, fontSize: font.caption + 0.5 }
   return (
     <Sheet open={open} onClose={onClose} title={t.verifyCommand} scroll={false}>
-      <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
+      <SheetScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
         <View style={{ paddingHorizontal: space.l, gap: space.m }}>
           <View style={{ gap: 4 }}>
             <T size={font.caption} weight="600" tone="muted">
@@ -129,7 +129,7 @@ export function GoalVerifySheet({
             />
           </View>
         </View>
-      </ScrollView>
+      </SheetScrollView>
     </Sheet>
   )
 }

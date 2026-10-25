@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore, type ComponentProps } from 'react'
 import { View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Check, Monitor, Plus, RefreshCw, Settings, SquarePen, SquareTerminal } from 'lucide-react-native'
+import { Check, Monitor, Plus, RefreshCw, Settings, Search, SquareTerminal } from 'lucide-react-native'
 import { font, space, useTheme } from '../theme'
 import { counts, useStore } from '../runtime/store'
 import { useT } from '../i18n'
@@ -174,20 +174,8 @@ export function Overlays() {
   )
 }
 
-/** Starts a thread: the project picker, or the reason there is no computer to start one on. */
-export function useStartThread() {
-  const { computers, selected } = useStore()
-  const router = useRouter()
-  return () => {
-    const pc = computers.find((x) => x.id === selected)
-    if (!pc) openNeedComputer('none')
-    else if (pc.status === 'revoked') openNeedComputer('revoked')
-    else router.push('/new')
-  }
-}
-
 /**
- * The actions every tab carries in its navigation bar: a primary one (start a thread unless the screen says otherwise)
+ * The actions every tab carries in its navigation bar: Search (unless the screen supplies its own primary action)
  * and Settings, always last on the right.
  */
 export function useTabActions(
@@ -200,15 +188,21 @@ export function useTabActions(
 ) {
   const t = useT()
   const router = useRouter()
-  const start = useStartThread()
   return (
     <>
       {primary === null ? null : primary ? (
-        <HeaderButton {...primary} />
+        <HeaderButton {...primary} actionId="tab-primary" />
       ) : (
-        <HeaderButton icon={SquarePen} label={t.newChat} systemIcon="square.and.pencil" onPress={start} />
+        <HeaderButton
+          actionId="tab-primary"
+          icon={Search}
+          label={t.searchTab}
+          systemIcon="magnifyingglass"
+          onPress={() => router.push('/search')}
+        />
       )}
       <HeaderButton
+        actionId="tab-settings"
         icon={Settings}
         label={t.settings}
         systemIcon="gearshape"

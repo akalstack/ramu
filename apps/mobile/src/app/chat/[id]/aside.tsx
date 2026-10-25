@@ -1,26 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
-import { ArrowUp, Plus, Trash2 } from 'lucide-react-native'
+import { ArrowUp, Trash2, X } from 'lucide-react-native'
+import { translate } from '@ramu/shared/i18n'
 import type { Aside } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { canWriteHost, VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
+import { quotedQuestion, sideChat } from '../../../runtime/sideChat'
 import { Header, HeaderButton, PageScrollView as ScrollView, Screen } from '../../../components/Screen'
+import { useKeyboardInset } from '../../../components/Keyboard'
 import { Markdown } from '../../../components/Markdown'
 import { Glass } from '../../../components/Glass'
-import { Chip, T, tap } from '../../../components/ui'
+import { T, tap } from '../../../components/ui'
 
-/** Side questions about a chat, as on the desktop: the agent keeps working and never sees them. */
+/**
+ * One side chat per thread, like Claude's /btw: ask about the work without interrupting it (the agent never sees these),
+ * keep asking in the same conversation, and clear it with the trash button when done.
+ */
 export default function AsideScreen() {
   const {
     id,
-    aside: initial,
     quote: quoteParam,
     from,
-  } = useLocalSearchParams<{ id: string; aside?: string; quote?: string; from?: 'user' | 'assistant' }>()
-  // Opened from a long-pressed message: a new aside about that passage.
+  } = useLocalSearchParams<{
+    id: string
+    quote?: string
+    from?: 'user' | 'assistant'
+  }>()
+  // Opened from a long-pressed message: the next question is about that passage.
   const [pendingQuote, setPendingQuote] = useState(quoteParam ?? '')
   const chat = useChat(id)
   const store = useStore()
@@ -28,29 +37,19 @@ export default function AsideScreen() {
   latestStore.current = store
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
+  // Same keyboard handling as the thread composer: padding measured from the screen's bottom edge.
+  const keyboard = useKeyboardInset()
   const [asides, setAsides] = useState<Aside[]>([])
-  const [selected, setSelected] = useState<string | null>(quoteParam ? null : (initial ?? null))
   const [question, setQuestion] = useState('')
   const [busy, setBusy] = useState(false)
   const scroll = useRef<import('react-native').ScrollViewInstance>(null)
   const computerId = chat?.computerId,
     sessionId = chat?.sessionId
+  const say = (text: string) => translate(store.language, text)
 
   const load = useCallback(async () => {
     if (!computerId || !sessionId) return
-    const list = await store.invoke(computerId, 'aside.list', sessionId)
-    setAsides(list)
-    setSelected((current) =>
-      current && list.some((a) => a.id === current)
-        ? current
-        : initial && list.some((a) => a.id === initial)
-          ? initial
-          : list.length === 1
-            ? list[0]!.id
-            : current && !list.some((a) => a.id === current)
-              ? null
-              : current,
-    )
+    setAsides(await store.invoke(computerId, 'aside.list', sessionId))
   }, [computerId, sessionId])
   useEffect(() => {
     void load().catch(() => {})
@@ -63,129 +62,107 @@ export default function AsideScreen() {
   if (!chat || !sessionId)
     return (
       <Screen>
-        <Header title="Side questions" />
+        <Header title={say('Side questions')} />
       </Screen>
     )
   const viewOnly = store.computers.find((host) => host.id === chat.computerId)?.access === 'viewer'
   const writable = () => canWriteHost(latestStore.current.computers.find((host) => host.id === chat.computerId))
-  const current = asides.find((a) => a.id === selected)
-  const waiting = current ? current.messages.at(-1)?.role === 'user' : false
+  const { messages, continueId, waiting } = sideChat(asides)
+  const latest = asides.find((aside) => aside.id === continueId)
   const ask = async () => {
     const text = question.trim()
     if (!writable() || !text || busy) return
     setBusy(true)
     try {
-      const made = await store.invoke(
+      // The first question carries its quote natively; later ones continue the same aside with the quote inline.
+      await store.invoke(
         chat.computerId,
         'aside.ask',
         sessionId,
-        current?.id ?? null,
-        current ? current.quote : pendingQuote,
-        current ? current.quoteFrom : (from ?? 'assistant'),
-        text,
+        latest?.id ?? null,
+        latest ? latest.quote : pendingQuote,
+        latest ? latest.quoteFrom : (from ?? 'assistant'),
+        latest ? quotedQuestion(text, pendingQuote) : text,
       )
       setQuestion('')
       setPendingQuote('')
-      setSelected(made.id)
       await load()
-      setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 120)
     } catch (error) {
-      Alert.alert('Could not ask', error instanceof Error ? error.message : String(error))
+      Alert.alert(say('Could not ask'), error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
     }
   }
-  const remove = () => {
-    if (!writable() || !current) return
-    Alert.alert('Delete this side question?', 'The thread itself is not affected.', [
-      { text: 'Cancel', style: 'cancel' },
+  const clear = () => {
+    if (!writable() || !asides.length) return
+    Alert.alert(say('Clear side chat?'), say('The thread itself is not affected.'), [
+      { text: say('Cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: say('Clear'),
         style: 'destructive',
-        onPress: () =>
-          writable() &&
-          void latestStore.current
-            .invoke(chat.computerId, 'aside.delete', sessionId, current.id)
-            .then(() => {
-              setSelected(null)
-              return load()
-            })
-            .catch(() => {}),
+        onPress: () => {
+          if (!writable()) return
+          const ids = asides.map((aside) => aside.id)
+          void Promise.all(
+            ids.map((asideId) => latestStore.current.invoke(chat.computerId, 'aside.delete', sessionId, asideId)),
+          )
+            .then(load)
+            .catch(() => {})
+        },
       },
     ])
   }
+  const quoteBlock = (text: string, lines = 6) => (
+    <View style={{ borderLeftWidth: 2, borderLeftColor: c.lineStrong, paddingLeft: space.m }}>
+      <T size={font.control} tone="muted" numberOfLines={lines}>
+        {text}
+      </T>
+    </View>
+  )
   return (
-    <Screen bg="canvas">
+    <Screen>
       <Header
-        title="Side questions"
+        title={say('Side questions')}
         subtitle={chat.title}
         right={
-          current && !viewOnly ? (
-            <HeaderButton icon={Trash2} label="Delete side question" systemIcon="trash" onPress={remove} />
+          messages.length && !viewOnly ? (
+            <HeaderButton icon={Trash2} label={say('Clear side chat')} systemIcon="trash" onPress={clear} />
           ) : null
         }
       />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <View style={{ flex: 1 }}>
         <ScrollView
           ref={scroll}
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets={false}
+          onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
           contentContainerStyle={{ padding: space.l, gap: space.m, paddingBottom: space.xl }}
         >
-          <T size={font.control} tone="muted">
-            Ask about this thread without interrupting it. The agent never sees these.
-          </T>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-            {asides.map((a) => (
-              <Chip
-                key={a.id}
-                label={(a.quote || a.messages[0]?.text || 'Side question').replace(/\s+/g, ' ').slice(0, 28)}
-                selected={a.id === selected}
-                onPress={() => setSelected(a.id)}
-              />
-            ))}
-            {!viewOnly ? (
-              <Chip
-                label="New"
-                accessibilityLabel="New side question"
-                icon={Plus}
-                selected={selected === null}
-                onPress={() => setSelected(null)}
-              />
-            ) : null}
-          </View>
-          {!current && pendingQuote ? (
-            <View style={{ borderLeftWidth: 2, borderLeftColor: c.lineStrong, paddingLeft: space.m }}>
-              <T size={font.control} tone="muted" numberOfLines={6}>
-                {pendingQuote}
-              </T>
-            </View>
+          {!messages.length ? (
+            <T size={font.control} tone="muted">
+              {say('Ask about this thread without interrupting it. The agent never sees these.')}
+            </T>
           ) : null}
-          {current?.quote ? (
-            <View style={{ borderLeftWidth: 2, borderLeftColor: c.lineStrong, paddingLeft: space.m }}>
-              <T size={font.control} tone="muted" numberOfLines={6}>
-                {current.quote}
-              </T>
-            </View>
-          ) : null}
-          {current?.messages.map((m) =>
+          {messages.map((m) =>
             m.role === 'user' ? (
-              <View
-                key={m.id}
-                style={{
-                  alignSelf: 'flex-end',
-                  maxWidth: '86%',
-                  backgroundColor: c.bubble,
-                  borderRadius: radius.l - 2,
-                  borderBottomRightRadius: radius.xs,
-                  paddingHorizontal: space.m + 2,
-                  paddingVertical: space.s + 2,
-                }}
-              >
-                <T copyable={m.text} style={{ lineHeight: 21 }}>
-                  {m.text}
-                </T>
+              <View key={m.id} style={{ gap: space.s, alignItems: 'flex-end' }}>
+                {m.quote ? <View style={{ alignSelf: 'stretch' }}>{quoteBlock(m.quote, 4)}</View> : null}
+                <View
+                  style={{
+                    maxWidth: '86%',
+                    backgroundColor: c.bubble,
+                    borderRadius: radius.l - 2,
+                    borderBottomRightRadius: radius.xs,
+                    paddingHorizontal: space.m + 2,
+                    paddingVertical: space.s + 2,
+                  }}
+                >
+                  <T copyable={m.text} style={{ lineHeight: 21 }}>
+                    {m.text}
+                  </T>
+                </View>
               </View>
             ) : (
               <View key={m.id}>{m.error ? <T tone="bad">{m.text}</T> : <Markdown text={m.text} />}</View>
@@ -193,9 +170,28 @@ export default function AsideScreen() {
           )}
           {waiting ? <ActivityIndicator style={{ alignSelf: 'flex-start' }} color={c.accent} /> : null}
           {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[store.language]}</T> : null}
-          {!viewOnly && !current && !asides.length ? <T tone="muted">No side questions yet. Ask one below.</T> : null}
         </ScrollView>
-        <View style={{ paddingBottom: Math.max(insets.bottom, space.s), paddingHorizontal: space.s + 2 }}>
+        <View
+          style={{
+            paddingBottom: keyboard ? keyboard + space.s : Math.max(insets.bottom, space.s),
+            paddingHorizontal: space.s + 2,
+            gap: space.s,
+          }}
+        >
+          {pendingQuote ? (
+            // The passage the next question is about, removable before sending.
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s, paddingHorizontal: space.s }}>
+              <View style={{ flex: 1 }}>{quoteBlock(pendingQuote, 3)}</View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={say('Remove quote')}
+                hitSlop={8}
+                onPress={() => setPendingQuote('')}
+              >
+                <X size={16} color={c.muted} />
+              </Pressable>
+            </View>
+          ) : null}
           <Glass radius={radius.xl}>
             <View
               style={{
@@ -211,7 +207,7 @@ export default function AsideScreen() {
                 value={question}
                 onChangeText={setQuestion}
                 multiline
-                placeholder={current ? 'Ask a follow-up' : 'Ask a side question'}
+                placeholder={say(messages.length ? 'Ask a follow-up' : 'Ask a side question')}
                 placeholderTextColor={c.placeholder}
                 style={{
                   flex: 1,
@@ -246,7 +242,7 @@ export default function AsideScreen() {
             </View>
           </Glass>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   )
 }

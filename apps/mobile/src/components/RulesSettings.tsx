@@ -1,3 +1,4 @@
+import { BottomSearch } from './BottomSearch'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, TextInput, View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
@@ -72,16 +73,14 @@ export function RulesSettings({ hostId }: { hostId: string }) {
         />
         <Button title={t('Refresh')} kind="ghost" disabled={!online || loading} onPress={() => void read()} />
       </View>
-      <TextInput
+      <BottomSearch
         value={query}
         onChangeText={(value) => {
           setQuery(value)
           setLimit(30)
         }}
-        accessibilityLabel={t('Search rules')}
+        label={t('Search rules')}
         placeholder={t('Search rules')}
-        placeholderTextColor={c.placeholder}
-        style={{ color: c.text, padding: space.m, backgroundColor: c.raised2, borderRadius: radius.m }}
       />
       {matches.slice(0, limit).map((rule) => (
         <Row key={rule.id} accessibilityRole="button" onPress={() => setEditor({ rule })}>

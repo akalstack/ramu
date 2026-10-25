@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { translate } from '@ramu/shared/i18n'
 import { Platform, TextInput, View } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import { ChevronRight, Search } from 'lucide-react-native'
@@ -13,11 +14,12 @@ import {
 } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
 import { useT } from '../../i18n'
-import { Header, Screen, PageScrollView as ScrollView } from '../../components/Screen'
+import { Header, Screen, useScrolledUnderBar, PageScrollView as ScrollView } from '../../components/Screen'
 import { Card, Divider, Row, SectionLabel, T } from '../../components/ui'
 import { ComputerScope, SectionIcon } from '../../components/SettingsChrome'
 
 export default function SettingsMenu() {
+  const edge = useScrolledUnderBar()
   const { c } = useTheme()
   const t = useT()
   const router = useRouter()
@@ -29,11 +31,11 @@ export default function SettingsMenu() {
   const open = (section: SettingsSection) => router.push({ pathname: '/settings/[section]', params: { section } })
   return (
     <Screen bg="window">
-      <Header modal title={t.settings} />
+      <Header modal align="center" title={t.settings} scrollEdge scrolled={edge.scrolled} />
       {Platform.OS !== 'web' ? (
         <Stack.SearchBar
           headerIconColor={c.text}
-          placeholder="Search settings"
+          placeholder={translate(language, 'Search settings')}
           autoCapitalize="none"
           hideWhenScrolling={false}
           textColor={c.text}
@@ -66,9 +68,9 @@ export default function SettingsMenu() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search settings"
+            placeholder={translate(language, 'Search settings')}
             placeholderTextColor={c.placeholder}
-            accessibilityLabel="Search settings"
+            accessibilityLabel={translate(language, 'Search settings')}
             autoCapitalize="none"
             autoCorrect={false}
             style={{ flex: 1, color: c.text, fontSize: font.body }}
@@ -76,6 +78,8 @@ export default function SettingsMenu() {
         </View>
       ) : null}
       <ScrollView
+        onScroll={edge.onScroll}
+        scrollEventThrottle={16}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -106,7 +110,7 @@ export default function SettingsMenu() {
               ))
             ) : (
               <T tone="muted" style={{ padding: space.l }}>
-                No settings match “{q}”.
+                {translate(language, 'No settings match “{query}”.', { query: q })}
               </T>
             )}
           </Card>

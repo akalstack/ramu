@@ -4,7 +4,12 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { chromium, type Browser, type BrowserContext, type Page, type CDPSession, type Dialog } from 'playwright-core'
 import { readdirSync, rmSync } from 'node:fs'
-import type { BrowserDiagnostics, BrowserDialog, BrowserScreenshot } from '@ramu/shared/browserBridge'
+import type {
+  BrowserDiagnostics,
+  BrowserDialog,
+  BrowserFieldFocus,
+  BrowserScreenshot,
+} from '@ramu/shared/browserBridge'
 import { browserGuestScript } from '@ramu/shared/browserGuestScript'
 import { HostDownloads } from './hostDownloads'
 import { browserFaviconFrom } from '@ramu/shared/browserLinks'
@@ -178,6 +183,9 @@ export class HostGuestFactory implements GuestFactory {
     let frames: BrowserFrames | undefined
     let cdp: CDPSession | undefined
     let page: Page | undefined
+    // The layout size the page currently has: the default, or the controlling phone's screen.
+    const DEFAULT_VIEWPORT = { width: 1024, height: 768 }
+    let viewport = DEFAULT_VIEWPORT
     const ready = Promise.resolve()
       .then(() => this.context(partition))
       .then(async (context) => {
@@ -266,7 +274,10 @@ export class HostGuestFactory implements GuestFactory {
         return page
       })
     ready.catch(() => {})
-    const isolated = async <T>(operation: 'inspect' | 'act', action?: Parameters<GuestPage['act']>[0]): Promise<T> => {
+    const isolated = async <T>(
+      operation: 'inspect' | 'act' | 'focus',
+      action?: Parameters<GuestPage['act']>[0],
+    ): Promise<T> => {
       await ready
       if (!frameId) {
         const { frameTree } = await cdp!.send('Page.getFrameTree')
@@ -306,6 +317,15 @@ export class HostGuestFactory implements GuestFactory {
       forward: () => history('forward'),
       reload: () => history('reload'),
       inspect: () => isolated<PageSnapshot>('inspect'),
+      focusedField: () => isolated<BrowserFieldFocus>('focus'),
+      fit: async (size) => {
+        const page = await ready
+        const next = size ?? DEFAULT_VIEWPORT
+        if (next.width === viewport.width && next.height === viewport.height) return
+        await page.setViewportSize(next)
+        viewport = next
+        handlers.onChanged?.()
+      },
       act: async (action) => {
         const result = await isolated<{ ok: boolean; reason?: string; points?: { x: number; y: number }[] }>(
           'act',
@@ -351,7 +371,10 @@ export class HostGuestFactory implements GuestFactory {
         const page = await ready
         if (!human || destroyed) throw new Error('This device no longer controls the browser.')
         if (input.kind === 'click')
-          await page.mouse.click(input.x * 1024, input.y * 768, { button: input.button, clickCount: input.clickCount })
+          await page.mouse.click(input.x * viewport.width, input.y * viewport.height, {
+            button: input.button,
+            clickCount: input.clickCount,
+          })
         else if (input.kind === 'scroll') await page.mouse.wheel(input.x, input.y)
         else if (input.kind === 'text') await page.keyboard.insertText(input.text)
         else {
@@ -377,8 +400,7 @@ export class HostGuestFactory implements GuestFactory {
         const page = await ready
         for (const quality of [50, 30, 15]) {
           const bytes = await page.screenshot({ type: 'jpeg', quality, timeout: 5000 })
-          if (bytes.length <= 128000)
-            return { mimeType: 'image/jpeg', data: bytes.toString('base64'), width: 1024, height: 768 }
+          if (bytes.length <= 128000) return { mimeType: 'image/jpeg', data: bytes.toString('base64'), ...viewport }
         }
         throw new Error('This page image is too large. Use its text snapshot.')
       },
