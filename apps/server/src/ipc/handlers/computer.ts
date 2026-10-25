@@ -112,6 +112,10 @@ export const registerComputerHandlers: RegisterHandlers = ({
       generation,
       paused,
       runtime: session.runtime,
+      // Only the host knows its own system; a remote runtime's is not reported.
+      ...(session.runtime.id === 'local'
+        ? { os: process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux' }
+        : {}),
       interruption: session.interruption,
       handoffRequest: session.handoffRequest,
       detectsLocalInput: session.detectsLocalInput,

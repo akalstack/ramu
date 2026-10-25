@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router'
 import { Archive, ArchiveRestore, Clock, GitBranch, Pin, PinOff } from 'lucide-react-native'
 import { TEXT_SCALE, font, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
-import { ago, useT, type Strings } from '../i18n'
+import { ago, useT, type Strings, useSay } from '../i18n'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { Row, StatusIcon, T, tap } from './ui'
 import { ChatActionsSheet, useChatCommands } from './ChatActions'
@@ -39,6 +39,7 @@ export const ChatRow = memo(function ChatRow({
   project?: string
   divider?: boolean
 }) {
+  const say = useSay()
   const { c, textSize } = useTheme()
   // At large text, a title squeezed beside the status and age is unreadable: metadata drops to its own wrapping line.
   const stacked = useWindowDimensions().fontScale * TEXT_SCALE[textSize] >= 1.3
@@ -135,7 +136,7 @@ export const ChatRow = memo(function ChatRow({
               <Clock size={16} color={c.muted} />
             ) : status?.kind === 'finished' ? (
               <View
-                accessibilityLabel="Unread"
+                accessibilityLabel={say('Unread')}
                 style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}
               >
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.accent }} />
@@ -162,7 +163,9 @@ export const ChatRow = memo(function ChatRow({
               <T size={font.body} weight="500" numberOfLines={stacked ? 2 : 1} style={{ flex: 1 }}>
                 {chat.title}
               </T>
-              {computerUse ? <Monitor size={13} color={c.warn} accessibilityLabel="Computer access active" /> : null}
+              {computerUse ? (
+                <Monitor size={13} color={c.warn} accessibilityLabel={say('Computer access active')} />
+              ) : null}
               {chat.pinnedAt !== null ? <Pin size={11} color={c.muted} /> : null}
               {stacked ? null : meta}
             </View>

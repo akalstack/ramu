@@ -75,7 +75,7 @@ function harness(os) {
     },
     '../components/ui': { T: 'T', Card: 'Card', Toggle: 'Toggle', tap() {} },
     '../components/Motion': { animateLayout() {} },
-    '../i18n': { useT: () => new Proxy({}, { get: (_, key) => key }) },
+    '../i18n': { useT: () => new Proxy({}, { get: (_, key) => key }), useSay: () => (text) => text },
     '@ramu/shared/discovery/tracker': { reviewSelection: () => null },
     '../runtime/nearby': { useNearbyHosts: () => ({ state: { hosts: [] } }) },
     '../runtime/nearbyModel': nearby,

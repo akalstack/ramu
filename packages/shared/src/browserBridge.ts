@@ -59,7 +59,20 @@ export interface BrowserFieldFocus {
   editable: boolean
   kind?: 'text' | 'password' | 'email' | 'number' | 'tel' | 'url' | 'search' | 'multiline'
 }
+/** Page zoom steps a viewer offers, as in a desktop browser. */
+export const BROWSER_ZOOM_LEVELS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3] as const
+/**
+ * One display change the controlling person makes to a tab. Zoom and appearance stay with the tab; a hard reload and
+ * clearing the cache happen once. Cookies and sign-ins are never cleared here.
+ */
+export interface BrowserTabAdjust {
+  hardReload?: true
+  zoom?: number
+  colorScheme?: 'system' | 'light' | 'dark'
+  clearCache?: true
+}
 export type BrowserViewerOperation =
+  | { op: 'adjust'; tabId: string; change: BrowserTabAdjust }
   | { op: 'list' }
   | { op: 'focus'; tabId: string }
   | { op: 'dialog'; tabId: string }

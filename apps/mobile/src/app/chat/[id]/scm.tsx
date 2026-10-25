@@ -40,7 +40,7 @@ interface GitCommitInfo {
 }
 type GitStashInfo = GitStash
 import { draftCommit } from '../../../runtime/gitQuick'
-import { ago } from '../../../i18n'
+import { ago, useSay } from '../../../i18n'
 import * as Clipboard from 'expo-clipboard'
 import { useOpenFile } from '../../../runtime/openFile'
 import { Disclosure } from '../../../components/Motion'
@@ -190,6 +190,7 @@ function Group({
 }
 
 export default function SourceControl() {
+  const tr = useSay()
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const keyboard = useKeyboardInset()
@@ -520,11 +521,11 @@ export default function SourceControl() {
   return (
     <Screen bg="canvas">
       <Header
-        title="Source Control"
+        title={tr('Source Control')}
         subtitle={
           project ? `${project.name} · ${chat?.mode === 'worktree' ? 'worktree' : 'current checkout'}` : undefined
         }
-        right={<HeaderButton icon={Ellipsis} label="Source control actions" onPress={() => setSheet('menu')} />}
+        right={<HeaderButton icon={Ellipsis} label={tr('Source control actions')} onPress={() => setSheet('menu')} />}
       />
       {/* The commit box rides the keyboard like the thread composer: padding measured from the screen's bottom edge. */}
       <View style={{ flex: 1 }}>
@@ -641,7 +642,7 @@ export default function SourceControl() {
             <>
               {
                 <Group
-                  title="Staged Changes"
+                  title={tr('Staged Changes')}
                   count={shownStaged.length}
                   open={!folded.staged}
                   onToggle={() => setFolded((f) => ({ ...f, staged: !f.staged }))}
@@ -673,7 +674,7 @@ export default function SourceControl() {
               }
 
               <Group
-                title="Changes"
+                title={tr('Changes')}
                 count={shownUnstaged.length}
                 open={!folded.changes}
                 onToggle={() => setFolded((f) => ({ ...f, changes: !f.changes }))}
@@ -740,7 +741,7 @@ export default function SourceControl() {
                         </T>
                         <IconButton
                           icon={Copy}
-                          label="Copy commit message"
+                          label={tr('Copy commit message')}
                           size={32}
                           tone="muted"
                           onPress={() => {
@@ -791,7 +792,7 @@ export default function SourceControl() {
                         />
                         <IconButton
                           icon={Trash2}
-                          label="Delete stash"
+                          label={tr('Delete stash')}
                           size={34}
                           tone="muted"
                           onPress={() =>
@@ -834,7 +835,7 @@ export default function SourceControl() {
                   value={message}
                   onChangeText={setMessage}
                   multiline
-                  placeholder="Message (empty drafts one with AI)"
+                  placeholder={tr('Message (empty drafts one with AI)')}
                   placeholderTextColor={c.placeholder}
                   style={{
                     color: c.text,
@@ -848,7 +849,7 @@ export default function SourceControl() {
                 <View style={{ position: 'absolute', right: 4, top: 4 }}>
                   <IconButton
                     icon={Sparkles}
-                    label="Draft a commit message from staged changes"
+                    label={tr('Draft a commit message from staged changes')}
                     size={34}
                     tone="accent"
                     onPress={() => void run(generate, 'Drafted commit message')}
@@ -887,7 +888,7 @@ export default function SourceControl() {
                 </Pressable>
                 <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.18)' }} />
                 <Pressable
-                  accessibilityLabel="Commit options"
+                  accessibilityLabel={tr('Commit options')}
                   onPress={() => {
                     tap()
                     setSheet('action')
@@ -939,7 +940,7 @@ export default function SourceControl() {
         </View>
       ) : null}
 
-      <Sheet open={sheet === 'repo'} onClose={() => setSheet(null)} title="Repository">
+      <Sheet open={sheet === 'repo'} onClose={() => setSheet(null)} title={tr('Repository')}>
         {[...repos]
           .sort((a, b) => files.filter((f) => f.repo === b).length - files.filter((f) => f.repo === a).length)
           .map((r) => {
@@ -972,7 +973,7 @@ export default function SourceControl() {
           })}
       </Sheet>
 
-      <Sheet open={sheet === 'branch'} onClose={() => setSheet(null)} title="Switch branch">
+      <Sheet open={sheet === 'branch'} onClose={() => setSheet(null)} title={tr('Switch branch')}>
         {branches.map((b) => (
           <Row
             key={b}
@@ -1004,7 +1005,7 @@ export default function SourceControl() {
         </Row>
       </Sheet>
 
-      <Sheet open={sheet === 'action'} onClose={() => setSheet(null)} title="Commit">
+      <Sheet open={sheet === 'action'} onClose={() => setSheet(null)} title={tr('Commit')}>
         {ACTIONS.map((a) => (
           <Row
             key={a.key}
@@ -1021,7 +1022,7 @@ export default function SourceControl() {
         ))}
       </Sheet>
 
-      <Sheet open={sheet === 'menu'} onClose={() => setSheet(null)} title="Source control">
+      <Sheet open={sheet === 'menu'} onClose={() => setSheet(null)} title={tr('Source control')}>
         {menu.map((m, i) =>
           m === 'sep' ? (
             <Divider key={i} inset={space.l} />

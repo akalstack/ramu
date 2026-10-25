@@ -1,3 +1,4 @@
+import { translate } from '@ramu/shared/i18n'
 import { useEffect, useState } from 'react'
 import { Alert, Pressable, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -13,6 +14,7 @@ import { BottomFade, floatingChrome } from '../../../components/Glass'
 import { Button, Card, Divider, Pill, Sheet, T, tap } from '../../../components/ui'
 import { useOpenFile } from '../../../runtime/openFile'
 import { DiffLines } from '../../../components/DiffLines'
+import { useSay } from '../../../i18n'
 
 function FileDiff({
   file,
@@ -31,6 +33,7 @@ function FileDiff({
   onLine?: (line: import('../../../runtime/types').DiffLine) => void
   onRemove?: (id: string) => void
 }) {
+  const say = useSay()
   const { c } = useTheme()
   const dir = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/') + 1) : ''
   const name = file.path.slice(dir.length)
@@ -117,7 +120,7 @@ function FileDiff({
                 <T size={font.control}>{x.text}</T>
               </View>
               {x.state === 'draft' && onRemove ? (
-                <Pressable accessibilityLabel="Remove comment" hitSlop={8} onPress={() => onRemove(x.id)}>
+                <Pressable accessibilityLabel={say('Remove comment')} hitSlop={8} onPress={() => onRemove(x.id)}>
                   <X size={15} color={c.muted} />
                 </Pressable>
               ) : null}
@@ -130,6 +133,7 @@ function FileDiff({
 }
 
 export default function Changes() {
+  const say = useSay()
   const { c } = useTheme()
   // A transcript Changes card names its review, and a file row in it the file to open first.
   const {
@@ -164,17 +168,31 @@ export default function Changes() {
   useEffect(() => {
     void load().catch((e) => setError(e.message))
   }, [chat?.computerId, chat?.sessionId])
+  // `reviews.list` leaves file contents out to stay light (as desktop does); the opened review's diffs come from
+  // `reviews.get`, re-read whenever the list changes after an action.
+  const [detail, setDetail] = useState<ChangeReview | null>(null)
   useEffect(() => {
-    if (review)
+    if (!reviewId || !chat) return
+    let alive = true
+    store
+      .invoke(chat.computerId, 'reviews.get', reviewId)
+      .then((full) => alive && setDetail(full))
+      .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)))
+    return () => {
+      alive = false
+    }
+  }, [reviewId, chat?.computerId, reviews])
+  useEffect(() => {
+    if (detail?.id === reviewId)
       setChanges(
-        review.files.map((f) => ({
+        detail.files.map((f) => ({
           ...changedFile(f.path, f.repoName, f.oldContent, f.newContent),
           repoId: f.repoId,
           fileId: f.id,
           status: f.status,
         })),
       )
-  }, [review])
+  }, [detail, reviewId])
   const action = async (fn: () => Promise<unknown>) => {
     setBusy(true)
     try {
@@ -266,7 +284,16 @@ export default function Changes() {
   const del = changes.reduce((n, f) => n + f.deletions, 0)
   return (
     <Screen bg="canvas">
-      <Header title="Changes" subtitle={chat ? `${chat.branch} · ${changes.length} files` : undefined} />
+      <Header
+        title={translate(store.language, 'Changes')}
+        subtitle={
+          chat
+            ? [chat.branch, translate(store.language, '{count} files', { count: changes.length })]
+                .filter(Boolean)
+                .join(' · ')
+            : undefined
+        }
+      />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: space.l, gap: space.s, paddingBottom: insets.bottom + 90 }}
@@ -284,7 +311,7 @@ export default function Changes() {
           value={note}
           onChangeText={setNote}
           multiline
-          placeholder="Review comment for the agent…"
+          placeholder={say('Review comment for the agent…')}
           placeholderTextColor={c.muted}
           style={{ padding: space.m, color: c.text, backgroundColor: c.fill, borderRadius: radius.m }}
         />
@@ -333,7 +360,13 @@ export default function Changes() {
           !floatingChrome && { backgroundColor: c.canvas, paddingTop: space.m },
         ]}
       >
-        <GlassButton icon={Undo2} title="Undo run" disabled={busy || !review} onPress={undo} style={{ flex: 1 }} />
+        <GlassButton
+          icon={Undo2}
+          title={say('Undo run')}
+          disabled={busy || !review}
+          onPress={undo}
+          style={{ flex: 1 }}
+        />
         <GlassButton
           icon={MessageSquarePlus}
           title={drafts.length ? `Send ${drafts.length} comment${drafts.length === 1 ? '' : 's'}` : 'Send review'}
@@ -363,11 +396,11 @@ export default function Changes() {
             value={draft}
             onChangeText={setDraft}
             multiline
-            placeholder="Comment for the agent…"
+            placeholder={say('Comment for the agent…')}
             placeholderTextColor={c.muted}
             style={{ minHeight: 80, padding: space.m, color: c.text, backgroundColor: c.fill, borderRadius: radius.m }}
           />
-          <Button title="Add comment" disabled={!draft.trim() || busy} onPress={saveComment} />
+          <Button title={say('Add comment')} disabled={!draft.trim() || busy} onPress={saveComment} />
         </View>
       </Sheet>
     </Screen>

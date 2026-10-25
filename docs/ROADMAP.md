@@ -1,12 +1,10 @@
 # Remaining work
 
-Remaining implementation, acceptance and release prerequisites, reconciled with the linked plans on 2026-10-23. This lists unfinished work only. Completed implementation plans are deleted; current behavior belongs in the feature guides. Remove an item when it is finished, and delete a plan when nothing remains in it.
-
-Each plan follows the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) and must deliver a complete workflow before it is closed. Build complete human workflows through existing Ramu surfaces and services, so each one makes the person's work easier. Keep mandatory security, accessibility and correctness checks for each delivered flow.
+Track unfinished implementation, acceptance and release prerequisites here. Follow the [planning guidance](../AGENTS.md#planning-docs): keep current behavior in feature guides, remove finished items and delete plans with no remaining delivery.
 
 ## Feature work
 
-The linked plans distinguish **implementation remaining** (missing or partial behavior), **acceptance pending** (written behavior that still needs the specified evidence), and **deferred scope** (later options, not current completion requirements). A plan stays open while either implementation or required acceptance remains. This index is reconciled with the plan documents on 2026-10-23; it is not a fresh source-code audit or a claim that acceptance passed.
+Plans separate missing implementation, required acceptance and optional later scope. Written code and automated checks do not establish live-provider or native-device acceptance.
 
 ### Implementation remaining and related acceptance
 
@@ -28,15 +26,32 @@ The linked plans distinguish **implementation remaining** (missing or partial be
 These plans contain written implementation or audit foundations; fixes remain possible when acceptance exposes a gap.
 
 - [Assistant workflow](ASSISTANT-WORKFLOW-PLAN.md): native acceptance and held-out evaluation of Auto/manual project routing, changed-decision memory retrieval/source links, targeted verification/recovery and Inbox audits, and live PR-watch acceptance.
-- [Plan usage visibility](PLAN-USAGE-UX-PLAN.md): live evidence for additional provider model identities, account refresh, old-host/network-loss recovery, next-message routing labels and native layout/accessibility.
+- [Plan usage visibility](#plan-usage-acceptance): provider/account identity, refresh, routing and native accessibility.
 - [Browser](BROWSER-PLAN.md): packaged session import with real macOS keychain/Linux keyring, native transfers and profile lifecycle, provider capability/suppression negotiation, and remote/mobile collaborative control. Written browser behavior and automated checks do not establish native or live-provider acceptance.
 - [Computer use](COMPUTER-USE-PLAN.md): signed packaged permission identity, live image delivery per provider, a real two-computer broker run, phone WebRTC, takeover/local-input pause, IME/scaling and the representative cross-device task.
 - [Workspace defaults and naming](WORKSPACE-DEFAULTS-PLAN.md): all-entry-point and concurrent-client acceptance of branch-name drafts, frozen outbox bases, lost acknowledgements, shared labels, offline recovery and abrupt process termination.
 - [Microphone and composer suggestions](VOICE-INPUT-PLAN.md): written desktop/mobile speech adapters need real-device/package verification of local recognition, permissions, language readiness and protected draft insertion; finish the native keyboard/contextual-picker parity audit and any demonstrated gaps.
 - [Git hosting integrations](GIT-INTEGRATIONS-PLAN.md): GitHub adapter/account/watch/clone/publish behavior needs live token, Enterprise, locked headless store, recovery and native interaction acceptance. GitLab, Bitbucket Cloud and Azure DevOps remain informational Coming soon rows.
-- [Configuration files](CONFIG-FILES-PLAN.md): packaged/platform configuration and model-default recovery, external settings edits, upgraded profiles, corruption/abrupt-termination recovery and physical-device source/error indicators. Current behavior is in [Configuration files](CONFIGURATION.md).
+- [Configuration files](#configuration-acceptance): packaged configuration, external edits, migration and native recovery.
 - [Automatic host discovery and pairing](HOST-DISCOVERY-PLAN.md): device/package acceptance of Nearby hosts, verified identity and routes, address review, re-pairing, offer lifecycle and exact completion/storage recovery, including blocked multicast.
 - [Provider compatibility](PROVIDER-COMPATIBILITY-PLAN.md): extend evidence beyond the recorded exact Codex, Claude and OpenCode runtime probes; reproduce an older-version mismatch, probe OpenCode ACP and resolve Cursor/Antigravity prerequisites. Validate launch coverage, mobile presentation and native recovery; the tested rules are listed in the plan.
+
+## Configuration acceptance
+
+Current behavior is in [Configuration files](CONFIGURATION.md). A person must be able to identify the repository supplying a default, fix invalid configuration and start a thread without losing a reviewed draft or granting repository content extra authority.
+
+- Verify repository model-default startup, file watching and recovery in packaged builds on supported platforms. Earlier development-build, smoke and watcher checks do not establish packaged acceptance.
+- Verify Settings, source/error indicators, shortcuts, screen readers and large text on desktop and physical iOS/Android. Include same-named projects on different hosts, unavailable providers and offline recovery. External global settings edits must update connected clients and background services.
+- Upgrade real profiles and exercise corruption and abrupt termination. Preserve SQLite migration/archive retention, atomic-renaming and failed/abandoned-write regression coverage; validate filesystem recovery separately.
+
+## Plan usage acceptance
+
+Current behavior is in [UI](UI.md#plan-usage-detail). Before sending, a person must see whether the next message can run and reach the correct account or existing limit action.
+
+- Verify additional provider model identities, model-specific allowance windows, account matching and event-driven refresh with live providers. Preserve unknown/stale/reset-past readings, notice-only holds and all allowance windows; never sum across hosts or replace missing data with zero.
+- On real paired hosts, verify account refresh failure/retry, host changes, old-host fallback, network loss and upgrades. Check authoritative next-message labels for switch, held, stays and unknown routes; an older host's local estimate must remain distinguishable.
+- On physical iOS/Android, verify Threads summary discovery, sheet dismissal, selected-host preservation in Access & Fallback, localized offline/reset copy, icon-only header action and per-provider counts. Include keyboard/composer fit, large text, touch targets, VoiceOver/TalkBack and visible limit notices when passive usage is hidden.
+- Retain shared account/window and mobile sheet/routing regression coverage, including disabled providers, invalid percentages, ties and visibility preferences. Extend tests only for gaps found during acceptance.
 
 ## Interactive Content acceptance
 
@@ -74,9 +89,8 @@ Automated checks establish only the behavior and environments they exercised. Th
 
 ## Deferred implementation and acceptance blockers
 
-Run focused checks as implementation changes land, following [repository testing guidance](../AGENTS.md#testing). Documentation reconciliation does not establish new runtime evidence. Keep missing implementation, required acceptance and optional later scope separate; source inspection and written tests alone are not passing-check evidence.
+Follow [repository testing guidance](../AGENTS.md#testing) for implementation changes. These prerequisites still block the specified acceptance:
 
-- **Browser automated checks:** on 2026-10-22 typechecks and unit/integration tests passed for shared, server, web, desktop, mobile, contracts and client-runtime, and `pnpm build` plus `pnpm test:desktop-smoke` passed. Native/provider acceptance and remaining browser delivery stay in the [browser plan](BROWSER-PLAN.md).
 - **Native and provider acceptance:** physical iOS/Android devices, signed/packaged desktop builds and opt-in authenticated provider sessions are still required for the device, permission, lifecycle and provider-boundary acceptance specified in the plans. Automated fake-provider checks do not satisfy those gates.
 - **Shared device preferences:** the all-device/mobile baseline requires an established profile/account or pairing synchronization mechanism before shared scope controls can promise cross-host propagation; the paired-host model/composer layer is not person-wide sync. Preserve local settings while resolving the transport prerequisite in [mobile settings](MOBILE-SETTINGS-PLAN.md).
 - **Native transport, capture and external accounts:** certificate enforcement across native fetch/SSE, real-device local speech availability and packaged helper/permission verification, distribution ownership/signing and Git-host credentials retain the prerequisites in their respective plans. They are deferred dependencies, not completed features.

@@ -7,6 +7,7 @@ import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { Glass, floatingChrome } from './Glass'
 import { T, tap } from './ui'
+import { useSay } from '../i18n'
 
 // How long a notice stays: long enough to read, longer when the agent is waiting on the user.
 const SHOW_MS = 5000
@@ -17,6 +18,7 @@ const SHOW_MS_INPUT = 9000
  * leaves by itself after a few seconds, and is skipped when you are already looking at that chat.
  */
 export function NoticeBanner() {
+  const say = useSay()
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const router = useRouter()
@@ -106,7 +108,7 @@ export function NoticeBanner() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Move to activity"
+            accessibilityLabel={say('Move to activity')}
             hitSlop={8}
             onPress={park}
             style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}

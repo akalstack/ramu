@@ -20,7 +20,7 @@ function bubble(online, state = 'sending') {
         if (id === 'react') return { useState: () => [false, () => {}] }
         if (id === '../runtime/store') return { useStore: () => ({ language: 'en', isOnline: () => online }) }
         if (id === '../theme') return { useTheme: () => ({ c: {} }), radius: {}, space: {}, font: {} }
-        if (id === '../i18n') return { useT: () => ({}) }
+        if (id === '../i18n') return { useT: () => ({}), useSay: () => (text) => text }
         return new Proxy({}, { get: (_, key) => key })
       },
     },

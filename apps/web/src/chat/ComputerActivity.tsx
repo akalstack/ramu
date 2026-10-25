@@ -1,15 +1,23 @@
 import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Monitor } from 'lucide-react'
+import { Ellipsis, Keyboard, Monitor } from 'lucide-react'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
 import { COMPUTER_FRAME_STALE_MS, type ComputerAction } from '@ramu/shared/computerBridge'
-import { LOCAL_INPUT_LIMIT, needsHandoff, showsLocalInputLimit } from '@ramu/shared/computerControl'
+import {
+  LOCAL_INPUT_LIMIT,
+  computerKeyAction,
+  computerShortcuts,
+  frameOffset,
+  needsHandoff,
+  showsLocalInputLimit,
+  type ComputerOs,
+} from '@ramu/shared/computerControl'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { useHost } from '../workspace/HostProvider'
 import { Button } from '@/components/desktop-button'
-import { Input } from '@/components/desktop-input'
-import { Dropdown } from '../Menu'
+import { Dropdown, Menu } from '../Menu'
+import { cn } from 'cn'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { controllerLabel } from './computerLabels'
 import { useComputerVideo } from './useComputerVideo'
@@ -60,7 +68,22 @@ function HandoffNotice({
 
 type Frame = { data: string; mimeType: string; width: number; height: number; capturedAt: number; generation: number }
 
-/** Polling stops with the dialog: an observation-only viewer costs nothing when it is closed. */
+/** The viewer's own system, so Command and Control shortcuts translate for the computer being controlled. */
+const VIEWER_OS: ComputerOs = /Mac|iPhone|iPad/.test(navigator.platform)
+  ? 'macos'
+  : /Win/.test(navigator.platform)
+    ? 'windows'
+    : 'linux'
+/** A press that moves farther than this many pixels before release drags instead of clicking. */
+const DRAG_SLOP = 6
+/** Wheel scrolling is sent at most this often, with the movement in between added up. */
+const SCROLL_EVERY_MS = 80
+
+/**
+ * The computer's screen, sized to the window. While you control it, click the screen to use your own mouse and keyboard
+ * on it, as in a remote desktop: clicks, double-clicks, right-clicks, drags, the scroll wheel, typing and shortcuts.
+ * Polling stops with the dialog, so an observation-only viewer costs nothing when it is closed.
+ */
 function Viewer({
   taskId,
   session,
@@ -78,12 +101,15 @@ function Viewer({
   const { viewOnly, canWrite } = useHostWriteAccess()
   const [frame, setFrame] = useState<Frame | null>(null)
   const [now, setNow] = useState(Date.now())
-  const [text, setText] = useState('')
   const [error, setError] = useState('')
+  const [capturing, setCapturing] = useState(false)
+  const capturingNow = useRef(capturing)
+  capturingNow.current = capturing
   const video = useComputerVideo(taskId, session.target.kind === 'display' && session.runtime.id === 'local')
   const live = video.status === 'live'
   const [liveSession, setLiveSession] = useState(session)
-  const human = !viewOnly && (live ? liveSession : session).controller.kind === 'human'
+  const current = live ? liveSession : session
+  const human = !viewOnly && current.controller.kind === 'human'
   // With video there is no image to carry the control generation, so read it from the session once a second.
   useEffect(() => {
     if (!live) return
@@ -141,148 +167,275 @@ function Viewer({
     }
   }, [invoke, taskId, live, canWrite])
   const stale = !live && !!frame && now - frame.capturedAt > COMPUTER_FRAME_STALE_MS
+  const surface = live && video.width ? { width: video.width, height: video.height } : frame
+  // Input goes out one action at a time, so a typed word or a shortcut never arrives out of order.
+  const queue = useRef<Promise<void>>(Promise.resolve())
   const send = (action: ComputerAction) => {
-    if (!canWrite()) return
-    if (live) {
-      void run(() => invoke('computer.input', taskId, liveSession.generation, Date.now(), action))
-      return
-    }
-    if (!frame || stale) return
-    void run(() => invoke('computer.input', taskId, frame.generation, frame.capturedAt, action))
+    if (!canWrite() || !human) return
+    if (!live && (!frame || stale)) return
+    const generation = live ? liveSession.generation : frame!.generation
+    const capturedAt = live ? Date.now() : frame!.capturedAt
+    queue.current = queue.current.then(() =>
+      run(() => invoke('computer.input', taskId, generation, capturedAt, action)),
+    )
   }
   const videoElement = useRef<HTMLVideoElement>(null)
   useEffect(() => {
     if (videoElement.current) videoElement.current.srcObject = live ? video.stream : null
   }, [live, video.stream])
-  const image = useRef<HTMLImageElement>(null)
+  const screen = useRef<HTMLDivElement>(null)
+  /** The computer pixel under the pointer; the picture is letterboxed inside the screen area. */
+  const point = (event: { clientX: number; clientY: number }) => {
+    const box = screen.current?.getBoundingClientRect()
+    if (!box || !surface) return null
+    return frameOffset({ x: event.clientX - box.left, y: event.clientY - box.top }, box, surface)
+  }
+  const press = useRef<{ x: number; y: number; clientX: number; clientY: number; button: number } | null>(null)
+  const wheel = useRef({ dx: 0, dy: 0, at: { x: 0, y: 0 }, timer: 0 as ReturnType<typeof setTimeout> | 0 })
+  const flushWheel = () => {
+    const pending = wheel.current
+    pending.timer = 0
+    if (!surface || !screen.current) return
+    const box = screen.current.getBoundingClientRect()
+    const scale = surface.width / Math.max(1, Math.min(box.width, (box.height * surface.width) / surface.height))
+    const dx = Math.round(pending.dx * scale)
+    const dy = Math.round(pending.dy * scale)
+    pending.dx = 0
+    pending.dy = 0
+    if (dx || dy) send({ kind: 'scroll', ...pending.at, dx, dy })
+  }
+  const status = live
+    ? t('Live video')
+    : error
+      ? error
+      : !frame
+        ? t('Connecting…')
+        : stale
+          ? t('Last frame · {0}', { 0: new Date(frame.capturedAt).toLocaleTimeString() })
+          : t('Live')
+  const shortcuts = computerShortcuts(current.os)
+  const takeControl = () =>
+    void run(async () => {
+      if ((await takeOrRequest(invoke, taskId)) === 'asked') onAsked()
+      else screen.current?.focus()
+    })
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
+    <Dialog
+      open
+      onOpenChange={(open, details) => {
+        // Escape belongs to the computer while you are using it; click outside the screen to get it back.
+        if (!open && capturingNow.current && (details as { reason?: string } | undefined)?.reason === 'escape-key')
+          return
+        if (!open) onClose()
+      }}
+    >
+      <DialogContent className="flex h-[min(92vh,980px)] w-[min(96vw,1500px)] max-w-none flex-col gap-3 sm:max-w-none">
+        <DialogHeader className="pr-8">
           <DialogTitle>{session.target.name}</DialogTitle>
           <DialogDescription>
-            {viewOnly ? t('View only') : t(controllerLabel(session))} ·{' '}
-            {live
-              ? t('Live video')
-              : error
-                ? error
-                : !frame
-                  ? t('Connecting…')
-                  : stale
-                    ? t('Last frame · {0}', { 0: new Date(frame.capturedAt).toLocaleTimeString() })
-                    : t('Live')}
+            {session.runtime.name} · {status}
           </DialogDescription>
         </DialogHeader>
-        {live && (
-          <video
-            ref={videoElement}
-            autoPlay
-            muted
-            playsInline
-            aria-label={t('Computer screen')}
-            className={human ? 'w-full cursor-crosshair rounded border' : 'w-full rounded border'}
-            onClick={(event) => {
-              if (!human || !videoElement.current || !video.width) return
-              const box = videoElement.current.getBoundingClientRect()
-              send({
-                kind: 'click',
-                x: Math.min(
-                  video.width - 1,
-                  Math.max(0, Math.round(((event.clientX - box.left) / box.width) * video.width)),
-                ),
-                y: Math.min(
-                  video.height - 1,
-                  Math.max(0, Math.round(((event.clientY - box.top) / box.height) * video.height)),
-                ),
-              })
-            }}
-          />
-        )}
-        {!live && frame && (
-          <img
-            ref={image}
-            alt={t('Computer screen')}
-            className={human && !stale ? 'w-full cursor-crosshair rounded border' : 'w-full rounded border'}
-            src={`data:${frame.mimeType};base64,${frame.data}`}
-            onClick={(event) => {
-              if (!human || !image.current) return
-              const box = image.current.getBoundingClientRect()
-              send({
-                kind: 'click',
-                x: Math.min(
-                  frame.width - 1,
-                  Math.max(0, Math.round(((event.clientX - box.left) / box.width) * frame.width)),
-                ),
-                y: Math.min(
-                  frame.height - 1,
-                  Math.max(0, Math.round(((event.clientY - box.top) / box.height) * frame.height)),
-                ),
-              })
-            }}
-          />
-        )}
         <div className="flex flex-wrap items-center gap-2">
+          <span role="status" className={human ? 'text-control text-foreground' : 'text-control text-muted-foreground'}>
+            {viewOnly ? t('View only') : t(controllerLabel(current))}
+          </span>
+          <div className="flex-1" />
+          {human && (
+            <Menu
+              standard
+              label={t('Keys')}
+              icon={<Keyboard />}
+              align="end"
+              items={[
+                { key: 'keys-heading', heading: t('Keys') },
+                ...shortcuts.keys.map((entry) => ({
+                  key: entry.id,
+                  label: t(entry.label),
+                  onSelect: () => send(entry.action),
+                })),
+                { key: 'shortcuts-heading', heading: t('Shortcuts') },
+                ...shortcuts.shortcuts.map((entry) => ({
+                  key: entry.id,
+                  label: t(entry.label),
+                  onSelect: () => send(entry.action),
+                })),
+              ]}
+            />
+          )}
           {!viewOnly &&
             (human ? (
-              <>
-                <form
-                  className="flex min-w-0 flex-1 gap-2"
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    if (!canWrite() || !text) return
-                    send({ kind: 'type', text })
-                    setText('')
-                  }}
-                >
-                  <Input
-                    aria-label={t('Type on the computer')}
-                    value={text}
-                    maxLength={2000}
-                    onChange={(event) => setText(event.target.value)}
-                  />
-                  <Button size="sm" disabled={!text || stale}>
-                    {t('Send')}
-                  </Button>
-                </form>
-                {(['Enter', 'Tab', 'Escape', 'Backspace'] as const).map((key) => (
-                  <Button
-                    key={key}
-                    size="sm"
-                    variant="secondary"
-                    disabled={stale}
-                    onClick={() => send({ kind: 'key', key })}
-                  >
-                    {key}
-                  </Button>
-                ))}
-                <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
-                  {t('Give control to agent')}
-                </Button>
-              </>
+              <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
+                {t('Give back to agent')}
+              </Button>
             ) : (
-              <Button
-                size="sm"
-                onClick={() =>
-                  void run(async () => {
-                    if ((await takeOrRequest(invoke, taskId)) === 'asked') onAsked()
-                  })
-                }
-              >
+              <Button size="sm" onClick={takeControl}>
                 {t('Take control')}
               </Button>
             ))}
+        </div>
+        {!viewOnly && <HandoffNotice taskId={taskId} session={current} run={run} />}
+        <div
+          ref={screen}
+          tabIndex={human ? 0 : -1}
+          role="application"
+          aria-label={t('Computer screen')}
+          aria-description={
+            human ? t('Click to use your mouse and keyboard on this computer. Click outside to stop.') : undefined
+          }
+          className={cn(
+            'relative min-h-0 flex-1 overflow-hidden rounded-lg bg-black/80 outline-none select-none',
+            human && 'cursor-crosshair',
+            capturing && 'ring-2 ring-primary',
+          )}
+          onFocus={() => setCapturing(human)}
+          onBlur={() => setCapturing(false)}
+          onContextMenu={(event) => event.preventDefault()}
+          onPointerDown={(event) => {
+            if (!human) return
+            screen.current?.focus()
+            const at = point(event)
+            if (!at) return
+            event.preventDefault()
+            press.current = { ...at, clientX: event.clientX, clientY: event.clientY, button: event.button }
+          }}
+          onPointerUp={(event) => {
+            const start = press.current
+            press.current = null
+            if (!human || !start) return
+            const end = point(event)
+            const moved = Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) > DRAG_SLOP
+            if (moved && start.button === 0 && end) {
+              send({ kind: 'drag', fromX: start.x, fromY: start.y, toX: end.x, toY: end.y })
+              return
+            }
+            const button = start.button === 2 ? 'right' : start.button === 1 ? 'middle' : 'left'
+            // The second press of a double-click completes it; the first was already sent as a click.
+            const clickCount = button === 'left' && event.detail >= 2 ? 2 : 1
+            send({
+              kind: 'click',
+              x: start.x,
+              y: start.y,
+              ...(button === 'left' ? {} : { button }),
+              ...(clickCount > 1 ? { clickCount } : {}),
+            })
+          }}
+          onWheel={(event) => {
+            if (!human) return
+            const at = point(event)
+            if (!at) return
+            const pending = wheel.current
+            pending.dx += event.deltaX
+            pending.dy += event.deltaY
+            pending.at = at
+            if (!pending.timer) pending.timer = setTimeout(flushWheel, SCROLL_EVERY_MS)
+          }}
+          onKeyDown={(event) => {
+            if (!human || !capturing) return
+            // Paste types this computer's clipboard there instead of pasting the other computer's.
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') return
+            const action = computerKeyAction(event, { viewer: VIEWER_OS, target: current.os })
+            if (!action) return
+            event.preventDefault()
+            event.stopPropagation()
+            send(action)
+          }}
+          onPaste={(event) => {
+            if (!human || !capturing) return
+            const text = event.clipboardData.getData('text/plain').slice(0, 2000)
+            event.preventDefault()
+            if (text) send({ kind: 'type', text })
+          }}
+        >
+          {live ? (
+            <video
+              ref={videoElement}
+              autoPlay
+              muted
+              playsInline
+              aria-hidden
+              className="pointer-events-none h-full w-full object-contain"
+            />
+          ) : frame ? (
+            <img
+              alt=""
+              draggable={false}
+              className={cn('pointer-events-none h-full w-full object-contain', stale && 'opacity-50')}
+              src={`data:${frame.mimeType};base64,${frame.data}`}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-control text-muted-foreground">{status}</div>
+          )}
+          {human && !capturing && (frame || live) && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+              <span className="rounded-full bg-popover/90 px-3 py-1 text-caption text-popover-foreground ring-1 ring-border">
+                {t('Click the screen to use your mouse and keyboard')}
+              </span>
+            </div>
+          )}
         </div>
         {viewOnly && (
           <p role="status" className="text-caption text-muted-foreground">
             {t(VIEW_ONLY_COMPUTER_NOTICE)}
           </p>
         )}
-        {!viewOnly && <HandoffNotice taskId={taskId} session={session} run={run} />}
-        {!viewOnly && showsLocalInputLimit(session) && (
+        {!viewOnly && showsLocalInputLimit(current) && (
           <span className="text-caption text-muted-foreground">{t(LOCAL_INPUT_LIMIT)}</span>
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** A small, slowly refreshing picture of the shared screen; it stops while the full viewer is open. */
+function ScreenThumbnail({
+  taskId,
+  label,
+  live,
+  onOpen,
+}: {
+  taskId: string
+  label: string
+  live: boolean
+  onOpen(): void
+}) {
+  const { invoke } = useHost()
+  const [image, setImage] = useState<string | null>(null)
+  useEffect(() => {
+    if (!live) return
+    let active = true
+    let hash: string | undefined
+    let timer: ReturnType<typeof setTimeout>
+    const read = async () => {
+      try {
+        const next = await invoke('computer.frame', taskId, ...(hash ? [hash] : []))
+        hash = next.hash
+        if (active && !next.unchanged) setImage(`data:${next.mimeType};base64,${next.data}`)
+      } catch {
+        // A glance only: the viewer explains errors when opened.
+      } finally {
+        if (active) timer = setTimeout(() => void read(), 2500)
+      }
+    }
+    void read()
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [invoke, taskId, live])
+  return (
+    <Button
+      variant="ghost"
+      aria-label={label}
+      onClick={onOpen}
+      className="h-16 w-28 flex-none overflow-hidden rounded-md bg-muted p-0 ring-1 ring-border transition hover:ring-primary"
+    >
+      {image ? (
+        <img alt="" src={image} className="h-full w-full object-cover" />
+      ) : (
+        <Monitor className="size-5 text-muted-foreground" />
+      )}
+    </Button>
   )
 }
 
@@ -365,40 +518,65 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
         )}
         {session ? (
           <>
-            <span className="text-caption text-muted-foreground">
-              {session.target.name} · {viewOnly ? t('View only') : t(controllerLabel(session))}
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" onClick={() => setViewing(true)}>
-                {t('View computer')}
-              </Button>
-              {!viewOnly && (
-                <>
-                  {session.controller.kind === 'human' ? (
-                    <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
-                      {t('Give control to agent')}
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() =>
-                        void run(async () => {
-                          if ((await takeOrRequest(invoke, taskId)) === 'asked') setAsked(true)
-                        })
-                      }
-                    >
-                      {t('Take control')}
-                    </Button>
+            <div className="flex items-center gap-3">
+              <ScreenThumbnail
+                taskId={taskId}
+                label={t('Open {0}', { 0: session.target.name })}
+                live={!viewing}
+                onOpen={() => setViewing(true)}
+              />
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <span className="truncate text-control">{session.target.name}</span>
+                <span className="text-caption text-muted-foreground">
+                  {viewOnly ? t('View only') : t(controllerLabel(session))}
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => setViewing(true)}>
+                    {t('View computer')}
+                  </Button>
+                  {!viewOnly &&
+                    (session.controller.kind === 'human' ? (
+                      <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
+                        {t('Give back to agent')}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() =>
+                          void run(async () => {
+                            if ((await takeOrRequest(invoke, taskId)) === 'asked') setAsked(true)
+                            else setViewing(true)
+                          })
+                        }
+                      >
+                        {t('Take control')}
+                      </Button>
+                    ))}
+                  {!viewOnly && (
+                    <Menu
+                      label={t('Computer options')}
+                      icon={<Ellipsis />}
+                      align="end"
+                      items={[
+                        {
+                          key: 'stop-agent',
+                          label: t('Stop the agent'),
+                          title: t('Stops the agent’s work in this thread; access to the computer stays.'),
+                          onSelect: () => void run(() => invoke('computer.stop', taskId)),
+                        },
+                        {
+                          key: 'revoke',
+                          label: t('Stop computer use'),
+                          title: t('Ends this thread’s access to the computer.'),
+                          danger: true,
+                          onSelect: () => void run(() => invoke('computer.revoke', taskId)),
+                        },
+                      ]}
+                    />
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => void run(() => invoke('computer.stop', taskId))}>
-                    {t('Stop computer use')}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => void run(() => invoke('computer.revoke', taskId))}>
-                    {t('Revoke access')}
-                  </Button>
-                </>
-              )}
+                </div>
+              </div>
             </div>
             {!viewOnly && <HandoffNotice taskId={taskId} session={session} run={run} />}
             {asked && (

@@ -7,6 +7,8 @@ import {
   LayoutAnimation,
   Platform,
   StyleSheet,
+  View,
+  type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
@@ -117,5 +119,31 @@ export function KeyboardLift({
     <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style, { transform: [{ translateY }] }]}>
       {children}
     </Animated.View>
+  )
+}
+
+/** Shared floating input surface for threads and side questions. Keep keyboard lift and safe-area padding in one place. */
+export function ComposerDock({
+  children,
+  onLayout,
+}: {
+  children: ReactNode
+  onLayout?: (event: LayoutChangeEvent) => void
+}) {
+  const insets = useSafeAreaInsets()
+  return (
+    <View
+      onLayout={onLayout}
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        paddingBottom: Math.max(insets.bottom, space.s),
+        paddingTop: space.xs,
+      }}
+    >
+      {children}
+    </View>
   )
 }

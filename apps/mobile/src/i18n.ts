@@ -1,4 +1,5 @@
-import { useStore } from './runtime/store'
+import { translate, type TranslationValues } from '@ramu/shared/i18n'
+import { useOptionalStore, useStore } from './runtime/store'
 
 const en = {
   fileNothingStaged: 'Nothing is staged for this file.',
@@ -1047,6 +1048,12 @@ export function fill(text: string, ...values: (string | number)[]): string {
 
 export function useT(): Strings {
   return useStore().language === 'id' ? id : en
+}
+
+/** Translates app copy written in English at its call site, using the shared dictionary; English before startup. */
+export function useSay(): (text: string, values?: TranslationValues) => string {
+  const language = useOptionalStore()?.language ?? 'en'
+  return (text, values) => translate(language, text, values)
 }
 
 export function ago(at: number): string {

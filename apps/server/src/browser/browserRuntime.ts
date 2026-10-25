@@ -21,6 +21,7 @@ import type {
   BrowserDiagnostics,
   BrowserDialog,
   BrowserFieldFocus,
+  BrowserTabAdjust,
   BrowserPageSnapshot,
   BrowserHumanInput,
 } from '@ramu/shared/browserBridge'
@@ -51,6 +52,8 @@ export interface GuestPage {
   fit?(size: { width: number; height: number } | null): Promise<void>
   /** The kind of field that has focus, so the controlling phone can raise its keyboard. */
   focusedField?(): Promise<BrowserFieldFocus>
+  /** Zoom, appearance, a hard reload or clearing the cache, as the controlling person asks. */
+  adjust?(change: BrowserTabAdjust): Promise<void>
   /** Clicks or types into an element of the last inspection. `ok: false` says why the page refused. */
   act(action: PageAction): Promise<{ ok: boolean; reason?: string; points?: { x: number; y: number }[] }>
   /** Native input is blocked until the controlling human can safely drive the page. */
@@ -151,6 +154,8 @@ interface Tab {
   released?: boolean
   /** The controlling device asked for its screen size; dropped as soon as that device stops controlling the tab. */
   fit?: { deviceId: string; width: number; height: number }
+  zoom?: number
+  colorScheme?: 'light' | 'dark'
   /** When anyone last used or changed this tab; the idle sweep closes an unused agent-owned tab. */
   lastActive: number
 }
@@ -205,6 +210,8 @@ export class BrowserRuntime {
       paused: tab.lease.paused,
       ...(tab.released ? { released: true } : {}),
       ...(tab.fit ? { fitted: true } : {}),
+      ...(tab.zoom && tab.zoom !== 1 ? { zoom: tab.zoom } : {}),
+      ...(tab.colorScheme ? { colorScheme: tab.colorScheme } : {}),
     }
   }
 
@@ -409,6 +416,24 @@ export class BrowserRuntime {
       tab.fit = undefined
       void tab.page.fit?.(null).catch(() => {})
     }
+  }
+
+  /** The controlling device changes how the page is shown; zoom and appearance stay with the tab for everyone. */
+  async adjustAsHuman(
+    id: string,
+    deviceId: string,
+    change: BrowserTabAdjust,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+  ): Promise<TabInfo> {
+    this.requireHumanDevice(id, deviceId, owner)
+    const tab = this.tab(id)
+    if (!tab.page.adjust)
+      throw new BrowserError('unavailable', 'Update Ramu on this computer to change the page display.')
+    await tab.page.adjust(change)
+    if (change.zoom !== undefined) tab.zoom = change.zoom
+    if (change.colorScheme) tab.colorScheme = change.colorScheme === 'system' ? undefined : change.colorScheme
+    this.changed()
+    return this.info(tab)
   }
 
   /** Only the controlling device learns whether a field has focus; the answer never includes the field's value. */

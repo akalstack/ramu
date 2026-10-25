@@ -112,3 +112,27 @@ it('streams fixed compositor frames without replacing the diagnostics listener a
     driver.dispose()
   }
 })
+
+it('places a phone tap against the page layout and types and scrolls through Chromium input', async () => {
+  const { driver, commands } = setup()
+  commands.mockImplementation(async (method) =>
+    method === 'Page.getLayoutMetrics' ? { cssLayoutViewport: { clientWidth: 400, clientHeight: 800 } } : {},
+  )
+  await driver.remoteInput({ kind: 'click', x: 0.5, y: 0.25, button: 'left', clickCount: 1 })
+  expect(commands).toHaveBeenCalledWith(
+    'Input.dispatchMouseEvent',
+    expect.objectContaining({ type: 'mousePressed', x: 200, y: 200, button: 'left', clickCount: 1 }),
+  )
+  await driver.remoteInput({ kind: 'scroll', x: 0, y: 120 })
+  expect(commands).toHaveBeenLastCalledWith(
+    'Input.dispatchMouseEvent',
+    expect.objectContaining({ type: 'mouseWheel', x: 200, y: 400, deltaY: 120 }),
+  )
+  await driver.remoteInput({ kind: 'text', text: 'héllo 👍' })
+  expect(commands).toHaveBeenLastCalledWith('Input.insertText', { text: 'héllo 👍' })
+  await driver.colorScheme('dark')
+  expect(commands).toHaveBeenLastCalledWith('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-color-scheme', value: 'dark' }],
+  })
+  driver.dispose()
+})

@@ -40,7 +40,7 @@ import { useStore } from '../runtime/store'
 import { BUSY_MODE_DEVICE_KEY, otherBusyMode, resolveBusyMode } from '../runtime/busyMode'
 import { sharedValue } from '@ramu/shared/sharedFields'
 import { useModelFlow } from '../runtime/useModelFlow'
-import { fill, useT } from '../i18n'
+import { fill, useT, useSay } from '../i18n'
 import { translate } from '@ramu/shared/i18n'
 import { Chip, IconButton, Row, Segmented, Sheet, T, tap, type Icon } from './ui'
 import { ProviderIcon } from './Logos'
@@ -361,6 +361,7 @@ export function GoalQueueTray({
   verifyOffered?: boolean
   onRemove?: (id: string) => void
 }) {
+  const say = useSay()
   const { c } = useTheme()
   const t = useT()
   const [verifying, setVerifying] = useState(false)
@@ -402,7 +403,7 @@ export function GoalQueueTray({
             tone="muted"
             onPress={onToggleGoal}
           />
-          <IconButton icon={X} label="Clear goal" size={28} tone="muted" onPress={onClearGoal} />
+          <IconButton icon={X} label={say('Clear goal')} size={28} tone="muted" onPress={onClearGoal} />
         </View>
       ) : null}
       {goal && onVerifyGoal ? (
@@ -453,7 +454,7 @@ export function GoalQueueTray({
           <T size={font.caption} tone="muted">
             {q.mode === 'steer' ? t.steer : t.queued}
           </T>
-          <IconButton icon={X} label="Remove" size={28} tone="muted" onPress={() => onRemove?.(q.id)} />
+          <IconButton icon={X} label={say('Remove')} size={28} tone="muted" onPress={() => onRemove?.(q.id)} />
         </View>
       ))}
     </View>
@@ -962,7 +963,7 @@ export function Composer({
           <T size={font.control} tone="soft" numberOfLines={1} style={{ flex: 1 }}>
             {editing.label}
           </T>
-          <IconButton icon={X} label="Cancel editing" size={30} tone="muted" onPress={() => onCancelEdit?.()} />
+          <IconButton icon={X} label={say('Cancel editing')} size={30} tone="muted" onPress={() => onCancelEdit?.()} />
         </View>
       ) : null}
       {suggest.visible ? (
@@ -1044,7 +1045,7 @@ export function Composer({
         >
           <IconButton
             icon={Plus}
-            label="Attach"
+            label={say('Attach')}
             size={34}
             tone="muted"
             style={{ borderRadius: radius.full }}

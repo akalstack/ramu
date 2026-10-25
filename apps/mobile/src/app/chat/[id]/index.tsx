@@ -30,18 +30,18 @@ import { foldTurns } from '../../../runtime/turns'
 import { withChangeCards } from '../../../runtime/changeCards'
 import { sideChat } from '../../../runtime/sideChat'
 import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
-import { fill, useT } from '../../../i18n'
+import { fill, useT, useSay } from '../../../i18n'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
 import { Header, HeaderButton, HeaderMenu, Screen, PageFlatList } from '../../../components/Screen'
-import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
 import { BrowserActivity } from '../../../components/BrowserActivity'
 import { BrowserFloat, BrowserNotice, useThreadBrowserTabs } from '../../../components/BrowserNotice'
 import { useThreadToolActivity } from '../../../runtime/useThreadToolActivity'
 import { ComputerActivity } from '../../../components/ComputerActivity'
+import { ComputerFloat, ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { translate } from '@ramu/shared/i18n'
 import { Composer } from '../../../components/Composer'
 import type { TranscriptItem } from '../../../runtime/types'
@@ -55,7 +55,7 @@ import {
 } from '../../../components/Transcript'
 import { ConnectionDot, Row, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
-import { KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
+import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { OfflineBanner, PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
@@ -69,6 +69,7 @@ const TURN_PAGE = 15
 const RowSeparator = () => <View style={{ height: space.m + 2 }} />
 
 export default function ChatScreen() {
+  const tr = useSay()
   const { id } = useLocalSearchParams<{ id: string }>()
   const chat = useChat(id)
   const { c } = useTheme()
@@ -193,6 +194,8 @@ export default function ChatScreen() {
   const [usageOpen, setUsageOpen] = useState(false)
   const [tool, setTool] = useState<'browser' | 'computer' | null>(null)
   const [browserTab, setBrowserTab] = useState<string | null>(null)
+  const [floating, setFloating] = useState<'browser' | 'computer' | null>(null)
+  const [floatShown, setFloatShown] = useState({ browser: false, computer: false })
   const browserTabs = useThreadBrowserTabs(chat)
   const [backgroundFor, setBackgroundFor] = useState<string | null>(null)
   const [actions, setActions] = useState<'closed' | 'menu' | 'rename'>('closed')
@@ -395,7 +398,7 @@ export default function ChatScreen() {
   if (!chat)
     return (
       <Screen>
-        <Header title="Thread not found" />
+        <Header title={tr('Thread not found')} />
       </Screen>
     )
   const live = git?.chatId === chat.id ? git : undefined
@@ -686,14 +689,14 @@ export default function ChatScreen() {
               {chat.projectId !== STANDALONE ? (
                 <HeaderButton
                   icon={GitBranch}
-                  label="Source Control"
+                  label={tr('Source Control')}
                   systemIcon="arrow.triangle.branch"
                   onPress={() => setSheet(true)}
                 />
               ) : (
                 <HeaderButton
                   icon={Folder}
-                  label="Explorer"
+                  label={tr('Explorer')}
                   systemIcon="folder"
                   onPress={() =>
                     router.push({ pathname: '/explorer', params: { computer: chat.computerId, ctx: chat.taskId } })
@@ -701,7 +704,7 @@ export default function ChatScreen() {
                 />
               )}
               <HeaderMenu
-                label="Thread actions"
+                label={tr('Thread actions')}
                 onPress={() => setActions('menu')}
                 actions={[
                   // The same groups as the sheet: workspace tools, usage, then the thread itself, with Delete last.
@@ -1044,13 +1047,7 @@ export default function ChatScreen() {
             <KeyboardLift keyboard={keyboard}>
               <BottomFade height={composerHeight * 0.75} color={c.window} />
               {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
-              <View
-                onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}
-                style={[
-                  { paddingBottom: Math.max(insets.bottom, space.s), paddingTop: space.xs },
-                  floatingChrome && { position: 'absolute', left: 0, right: 0, bottom: 0 },
-                ]}
-              >
+              <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
                 <Composer
                   activity={
                     <>
@@ -1177,7 +1174,7 @@ export default function ChatScreen() {
                         : undefined
                   }
                 />
-              </View>
+              </ComposerDock>
               <Presence
                 visible={away}
                 fade={false}
@@ -1185,7 +1182,7 @@ export default function ChatScreen() {
               >
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Scroll to latest"
+                  accessibilityLabel={tr('Scroll to latest')}
                   onPress={() => {
                     tap()
                     following.current = true
@@ -1250,16 +1247,29 @@ export default function ChatScreen() {
           onClose={() => setActions('closed')}
         />
       ) : null}
+      {/* One preview at a time: whichever the agent started most recently. */}
       <BrowserFloat
         chat={chat}
         tabs={browserTabs.tabs}
         viewable={browserTabs.viewable}
         hidden={tool !== null}
+        covered={floating === 'computer' && floatShown.computer}
+        onVisibleChange={(browser) => setFloatShown((shown) => ({ ...shown, browser }))}
         top={(ios ? topInset : insets.top + 56) + space.s}
+        onReveal={() => setFloating('browser')}
         onOpen={(tabId) => {
           setBrowserTab(tabId)
           setTool('browser')
         }}
+      />
+      <ComputerFloat
+        chat={chat}
+        hidden={tool !== null}
+        covered={floating === 'browser' && floatShown.browser}
+        onVisibleChange={(computer) => setFloatShown((shown) => ({ ...shown, computer }))}
+        top={(ios ? topInset : insets.top + 56) + space.s}
+        onReveal={() => setFloating('computer')}
+        onOpen={() => setTool('computer')}
       />
       <BrowserActivity
         key={`browser:${chat.computerId}:${chat.taskId}`}

@@ -1,7 +1,13 @@
 import { BrowserFrames, type CompositorFrame } from '@ramu/server/browserFrames'
 import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
-import type { BrowserDialog, BrowserDiagnostics, BrowserKey, BrowserModifier } from '@ramu/shared/browserBridge'
+import type {
+  BrowserDialog,
+  BrowserDiagnostics,
+  BrowserHumanInput,
+  BrowserKey,
+  BrowserModifier,
+} from '@ramu/shared/browserBridge'
 
 const keys: Record<BrowserKey, { key: string; code: string; virtual: number; text?: string }> = {
   Enter: { key: 'Enter', code: 'Enter', virtual: 13, text: '\r' },
@@ -234,6 +240,44 @@ export class BrowserDebugger {
       await send({ type: 'mousePressed', x: from.x, y: from.y, button, buttons, clickCount: click })
       await send({ type: 'mouseReleased', x: from.x, y: from.y, button, buttons: 0, clickCount: click })
     }
+  }
+  /**
+   * A paired device's input on this page. Taps arrive as fractions of the frame it showed, which is the page's CSS
+   * viewport, so they are placed against the current layout size (zoom included).
+   */
+  async remoteInput(input: BrowserHumanInput): Promise<void> {
+    await this.ensure()
+    if (input.kind === 'key') return this.key(input.key, false)
+    if (input.kind === 'text') {
+      await this.contents.debugger.sendCommand('Input.insertText', { text: input.text })
+      return
+    }
+    const metrics = (await this.contents.debugger.sendCommand('Page.getLayoutMetrics')) as {
+      cssLayoutViewport: { clientWidth: number; clientHeight: number }
+    }
+    const { clientWidth: width, clientHeight: height } = metrics.cssLayoutViewport
+    if (input.kind === 'scroll') {
+      await this.contents.debugger.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mouseWheel',
+        x: width / 2,
+        y: height / 2,
+        deltaX: input.x,
+        deltaY: input.y,
+      })
+      return
+    }
+    await this.mouse([{ x: input.x * width, y: input.y * height }], {
+      kind: 'click',
+      button: input.button,
+      clickCount: input.clickCount,
+    })
+  }
+  /** Follows the page's light or dark preference, or forces one, for this tab only. */
+  async colorScheme(value: 'system' | 'light' | 'dark'): Promise<void> {
+    await this.ensure()
+    await this.contents.debugger.sendCommand('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-color-scheme', value: value === 'system' ? '' : value }],
+    })
   }
   async handleDialog(id: string, accept: boolean, text?: string): Promise<void> {
     if (this.pendingDialog?.id !== id) throw new Error('That website dialog is no longer open.')

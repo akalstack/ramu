@@ -1,4 +1,5 @@
 import { ContentFrame } from './ContentFrame'
+import { observeContentVisibility } from './contentVisibility'
 import { useContentDocument } from './useContentDocument'
 import { InteractiveFollowupPicker } from './InteractiveFollowupPicker'
 import { interactiveExport } from '@ramu/shared/interactiveExport'
@@ -110,7 +111,7 @@ function InteractiveDocumentCard({
   const frame = useRef<HTMLIFrameElement>(null)
   const root = useRef<HTMLElement>(null)
   const state = useRef(cache.state(reference.id, reference.version))
-  // Content opens by itself whenever it is on screen; scrolling away or hiding the app unloads it.
+  // Scrolling away releases the document; hiding the app pauses it without losing its in-memory playback state.
   const live = !!document && visible && !evicted && !failed && view === 'preview'
   const instance = `${key}:${generation}`
   const html = document?.html
@@ -162,6 +163,10 @@ function InteractiveDocumentCard({
       const m = event.data
       if (!m || m.ramuInteractive !== 1 || m.instance !== instance) return
       if (m.type === 'ready') {
+        frame.current?.contentWindow?.postMessage(
+          { ramuInteractive: 1, instance, type: 'active', value: !window.document.hidden },
+          '*',
+        )
         sendTheme()
         setReady(true)
       }
@@ -194,33 +199,15 @@ function InteractiveDocumentCard({
   }, [instance, cache, reference, key])
   useEffect(() => {
     if (!root.current) return
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let onScreen = false
-    const update = () => {
-      const next = onScreen && !window.document.hidden
-      clearTimeout(timer)
-      if (next) {
+    return observeContentVisibility(root.current, window.document, {
+      visible: () => {
         setEvicted(false)
         setVisible(true)
-        return
-      }
-      frame.current?.contentWindow?.postMessage({ ramuInteractive: 1, instance, type: 'active', value: false }, '*')
-      timer = setTimeout(() => setVisible(false), 150)
-    }
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        onScreen = !!entry?.isIntersecting
-        update()
       },
-      { rootMargin: '500px' },
-    )
-    observer.observe(root.current)
-    window.document.addEventListener('visibilitychange', update)
-    return () => {
-      observer.disconnect()
-      clearTimeout(timer)
-      window.document.removeEventListener('visibilitychange', update)
-    }
+      hidden: () => setVisible(false),
+      active: (value) =>
+        frame.current?.contentWindow?.postMessage({ ramuInteractive: 1, instance, type: 'active', value }, '*'),
+    })
   }, [instance])
   useEffect(() => (live ? claimInteractive(() => setEvicted(true), LIVE_LIMIT) : undefined), [live])
   useEffect(() => {

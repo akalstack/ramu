@@ -40,6 +40,8 @@ Use disposable host profiles and simulated providers where possible. Paid live-p
 ## Input, terminal and accessibility
 
 - [ ] Check software-keyboard animation, avoidance, IME/composition, external keyboards, paste and rotation on both platforms.
+- [ ] On iOS, open Side questions before history loads, ask, clear and ask again; the trash action must appear when usable and remain tappable after navigation/reopening. Repeat changing-action checks in thread, schedule and Explorer headers, including long titles and large text.
+- [ ] Compare thread and side-question inputs with the keyboard open: multiline drafts and quotes, predictive text, interactive dismissal, rotation and returning from another screen. Keep Send reachable above the keys, retain the draft and latest answer, and do not pull a reader away from older messages when a reply arrives.
 - [ ] Exercise terminal touch feel, scrollback, arrow holds/repeats, modifier keys, reconnect/release cancellation and shell/vim/less/tmux behavior. Check gesture alternatives with accessibility enabled.
 - [ ] Verify long conversations, large diffs and terminal performance on devices.
 - [ ] Check large text, screen readers, focus/labels, safe areas, contrast, reduced motion and English/Indonesian layouts. Include multiline shared action labels, pairing fields and consent labels, segmented controls, and rapidly closing/reopening an Android sheet before its dismissal animation finishes.

@@ -32,6 +32,7 @@ import { ChevronLeft, MoreHorizontal, X } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { Glass, floatingChrome } from './Glass'
 import { Button, IconButton, T, tap, type Icon } from './ui'
+import { useSay } from '../i18n'
 
 const BAR = 44
 // ScrollViewMarker is a react-native-screens "gamma" view: its native side is only compiled when pods are
@@ -176,6 +177,7 @@ export function Header({
   /** Raised header surface once content moves beneath a dialog or native navigation bar. */
   scrolled?: boolean
 }) {
+  const say = useSay()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { c } = useTheme()
@@ -285,7 +287,7 @@ export function Header({
           largeStyle={{ backgroundColor: headerSurface, shadowColor: 'transparent' }}
         />
         <Stack.Title>{''}</Stack.Title>
-        <Stack.Toolbar placement="left">
+        <Stack.Toolbar key="header-left" placement="left">
           {back || modal ? (
             <Stack.Toolbar.Button
               icon={modal ? 'xmark' : 'chevron.left'}
@@ -328,7 +330,10 @@ export function Header({
             </Pressable>
           </Stack.Toolbar.View>
         </Stack.Toolbar>
-        {right ? <Stack.Toolbar placement="right">{nativeItems(right)}</Stack.Toolbar> : null}
+        {/* Keep the native options owner mounted as actions load, disappear or change permissions. */}
+        <Stack.Toolbar key="header-right" placement="right">
+          {nativeItems(right)}
+        </Stack.Toolbar>
       </>
     )
   }
@@ -368,7 +373,7 @@ export function Header({
           headerTitleAlign: align,
           headerBackVisible: back && !modal,
           headerLeft: modal
-            ? () => <HeaderButton icon={X} label="Close" onPress={close} />
+            ? () => <HeaderButton icon={X} label={say('Close')} onPress={close} />
             : left
               ? () => <View>{left}</View>
               : undefined,
@@ -436,9 +441,9 @@ export function Header({
         )}
 
         {modal || left || (!back && typeof title !== 'string') ? (
-          <Stack.Toolbar placement="left">
+          <Stack.Toolbar key="header-left" placement="left">
             {modal ? (
-              <Stack.Toolbar.Button icon="xmark" tintColor={c.text} accessibilityLabel="Close" onPress={close}>
+              <Stack.Toolbar.Button icon="xmark" tintColor={c.text} accessibilityLabel={say('Close')} onPress={close}>
                 Close
               </Stack.Toolbar.Button>
             ) : left ? (
@@ -450,7 +455,10 @@ export function Header({
             )}
           </Stack.Toolbar>
         ) : null}
-        {right ? <Stack.Toolbar placement="right">{nativeItems(right)}</Stack.Toolbar> : null}
+        {/* Keep the native options owner mounted as actions load, disappear or change permissions. */}
+        <Stack.Toolbar key="header-right" placement="right">
+          {nativeItems(right)}
+        </Stack.Toolbar>
         {/* UIKit finds the primary scroll view through the first descendant chain.
           Put spacing in the content, so a sibling spacer cannot break that link. */}
       </>

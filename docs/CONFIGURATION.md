@@ -63,4 +63,4 @@ Mobile qualifies the same choice by host and composer context. If a host's defau
 
 Credentials, binary paths, account configuration and agent permissions from repository files are ignored. Invalid repository configuration leaves global defaults active and appears in workspace selection; it never authorizes an automatic command or permission change.
 
-See the [remaining configuration work](CONFIG-FILES-PLAN.md) and [workspace defaults](UI.md#workspace-defaults-and-branch-names).
+See the [remaining configuration work](ROADMAP.md#configuration-acceptance) and [workspace defaults](UI.md#workspace-defaults-and-branch-names).

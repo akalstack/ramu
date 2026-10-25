@@ -283,6 +283,21 @@ describe('phone layout', () => {
     expect(await runtime.focusedFieldForHuman(tab.id, 'phone', user)).toEqual({ editable: true, kind: 'email' })
   })
 
+  it('changes zoom and appearance only for the controlling device and reports them on the tab', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open({ ...user }, 'https://a.test')
+    const adjust = vi.fn(async () => {})
+    Object.assign(created[0]!.page, { adjust })
+    await expect(runtime.adjustAsHuman(tab.id, 'phone', { zoom: 1.5 }, user)).rejects.toBeInstanceOf(BrowserError)
+    runtime.takeControl(tab.id, 'phone', { local: true })
+    expect((await runtime.adjustAsHuman(tab.id, 'phone', { zoom: 1.5 }, user)).zoom).toBe(1.5)
+    expect((await runtime.adjustAsHuman(tab.id, 'phone', { colorScheme: 'dark' }, user)).colorScheme).toBe('dark')
+    const reset = await runtime.adjustAsHuman(tab.id, 'phone', { colorScheme: 'system' }, user)
+    expect(reset.colorScheme).toBeUndefined()
+    expect((await runtime.adjustAsHuman(tab.id, 'phone', { zoom: 1 }, user)).zoom).toBeUndefined()
+    expect(adjust).toHaveBeenCalledWith({ zoom: 1.5 })
+  })
+
   it('leaves a page shown on a desktop untouched', async () => {
     const { runtime } = setup()
     const { tab } = await runtime.open({ ...user }, 'https://a.test')

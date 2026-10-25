@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { InteractiveState } from '@ramu/shared/interactive'
+import type { InteractiveNetwork, InteractiveState } from '@ramu/shared/interactive'
 const harness = vi.hoisted(() => ({
   slots: [] as unknown[],
   cursor: 0,
@@ -36,9 +36,9 @@ vi.mock('../src/ipc', () => ({ ramu: { invoke: harness.invoke } }))
 import { useContentDocument } from '../src/interactive/useContentDocument'
 import { ContentFrame } from '../src/interactive/ContentFrame'
 const state = { current: null as InteractiveState | null }
-function RenderDocument(html = '<p>sample</p>', active = true, instance = 'one') {
+function RenderDocument(html = '<p>sample</p>', active = true, instance = 'one', network?: InteractiveNetwork) {
   harness.cursor = 0
-  const result = useContentDocument(html, instance, active, state)
+  const result = useContentDocument(html, instance, active, state, network)
   while (harness.pending.length) harness.pending.shift()!()
   return result
 }
@@ -107,4 +107,29 @@ it('keeps both transcript and theme document frames sandboxed without a shared o
   expect(html).toContain('sandbox="allow-scripts"')
   expect(html).not.toContain('allow-same-origin')
   expect(html).not.toContain('srcDoc')
+})
+
+it('preserves the running document when a refetch reconstructs the same network policy', async () => {
+  harness.invoke.mockResolvedValueOnce('ramu-content://playing/document')
+  const policy = () => ({ resources: ['https://example.com'], connect: [] })
+  RenderDocument(undefined, true, 'one', policy())
+  await flush()
+  expect(RenderDocument(undefined, true, 'one', policy()).url).toContain('playing')
+  expect(RenderDocument(undefined, true, 'one', policy()).url).toContain('playing')
+  expect(harness.invoke.mock.calls.filter(([method]) => method === 'app.content.mount')).toHaveLength(1)
+  expect(harness.invoke.mock.calls.filter(([method]) => method === 'app.content.release')).toHaveLength(0)
+})
+it('replaces the document immediately when its actual network permissions change', async () => {
+  harness.invoke.mockResolvedValueOnce('ramu-content://old-policy/document')
+  RenderDocument(undefined, true, 'one', { resources: [], connect: [] })
+  await flush()
+  harness.invoke.mockImplementation((method) =>
+    Promise.resolve(method === 'app.content.mount' ? 'ramu-content://new-policy/document' : undefined),
+  )
+  expect(RenderDocument(undefined, true, 'one', { resources: [], connect: ['https://example.com'] }).url).toBe('')
+  await flush()
+  expect(RenderDocument(undefined, true, 'one', { resources: [], connect: ['https://example.com'] }).url).toContain(
+    'new-policy',
+  )
+  expect(harness.invoke).toHaveBeenCalledWith('app.content.release', 'ramu-content://old-policy/document')
 })

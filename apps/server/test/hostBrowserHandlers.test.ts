@@ -110,6 +110,12 @@ describe('host browser handlers', () => {
       methods['hostBrowser.input']!.args.safeParse([THREAD, 'not-a-uuid', 3, { kind: 'key', key: 'Tab' }]).success,
     ).toBe(false)
     expect(methods['hostBrowser.navigate']!.args.safeParse([THREAD, TAB, 'not a url']).success).toBe(false)
+    const adjust = (change: unknown) => methods['hostBrowser.adjust']!.args.safeParse([THREAD, TAB, change]).success
+    expect(adjust({ zoom: 1.25 })).toBe(true)
+    expect(adjust({ zoom: 1.3 })).toBe(false)
+    expect(adjust({ colorScheme: 'dark' })).toBe(true)
+    expect(adjust({ hardReload: true, zoom: 2 })).toBe(false)
+    expect(adjust({ clearCookies: true })).toBe(false)
     const fit = (size: unknown) => methods['hostBrowser.fit']!.args.safeParse([THREAD, TAB, size]).success
     expect(fit({ width: 390, height: 700 })).toBe(true)
     expect(fit(null)).toBe(true)

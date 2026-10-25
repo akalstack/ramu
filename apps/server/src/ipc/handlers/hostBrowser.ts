@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { BROWSER_ZOOM_LEVELS } from '@ramu/shared/browserBridge'
 import type { RegisterHandlers } from '../types'
 import { id } from '../schemas'
 import { saveBrowserDownload } from '../../browser/download'
@@ -270,6 +271,25 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
     'hostBrowser.navigate': {
       args: z.tuple([id, tab, z.string().url().max(4000)]),
       run: (taskId: string, tabId: string, url: string) => viewer().navigate(device(), thread(taskId), tabId, url),
+    },
+    'hostBrowser.adjust': {
+      args: z.tuple([
+        id,
+        tab,
+        z
+          .object({
+            hardReload: z.literal(true).optional(),
+            zoom: z
+              .number()
+              .refine((value) => (BROWSER_ZOOM_LEVELS as readonly number[]).includes(value))
+              .optional(),
+            colorScheme: z.enum(['system', 'light', 'dark']).optional(),
+            clearCache: z.literal(true).optional(),
+          })
+          .strict()
+          .refine((change) => Object.keys(change).length === 1, 'Change one display setting at a time.'),
+      ]),
+      run: (taskId, tabId, change) => viewer().adjust(device(), thread(taskId), tabId, change),
     },
     'hostBrowser.focus': {
       args: z.tuple([id, tab]),

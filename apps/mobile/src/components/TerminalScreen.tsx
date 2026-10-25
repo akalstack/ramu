@@ -14,6 +14,7 @@ import { STANDALONE, type Chat } from '../runtime/types'
 import { TerminalDock } from './TerminalDock'
 import { TerminalTabs } from './TerminalTabs'
 import { Button, Row, SectionLabel, Sheet, T, tap } from './ui'
+import { useSay } from '../i18n'
 
 /** Where a shell runs: a chat's checkout, or a whole project's folders (`project:<id>` on the host). */
 export interface TerminalTarget {
@@ -38,6 +39,7 @@ export function TerminalScreen({
   ctx: string
   onBack(): void
 }) {
+  const say = useSay()
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const store = useStore()
@@ -413,7 +415,7 @@ export function TerminalScreen({
       </KeyboardAvoidingView>
       <Sheet
         open={sessionsOpen}
-        title="Workspace"
+        title={say('Workspace')}
         onClose={() => {
           setSessionsOpen(false)
           keepKeyboard(keyboardBeforeSheet.current)
@@ -465,14 +467,14 @@ export function TerminalScreen({
           )
         })}
       </Sheet>
-      <Sheet open={keysOpen} title="Terminal keys" onClose={() => setKeysOpen(false)}>
+      <Sheet open={keysOpen} title={say('Terminal keys')} onClose={() => setKeysOpen(false)}>
         <T size={12} tone="muted" style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
           Press a key to send it. Long press to add or remove it on the key rail; highlighted keys are on the rail.
         </T>
         {rail.join() !== DEFAULT_RAIL.join() ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Reset key rail"
+            accessibilityLabel={say('Reset key rail')}
             onPress={() => store.setDraft('terminal-rail', '')}
             style={{ paddingHorizontal: 20, paddingBottom: 8 }}
           >

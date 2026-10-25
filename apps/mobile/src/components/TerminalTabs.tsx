@@ -4,6 +4,7 @@ import { Plus, X } from 'lucide-react-native'
 import type { TerminalInfo } from '@ramu/shared/api'
 import { font, radius, useTheme } from '../theme'
 import { T } from './ui'
+import { useSay } from '../i18n'
 
 /** One tab per shell in this workspace, scrolling sideways like the desktop's terminal tabs and Termius. */
 export function TerminalTabs({
@@ -21,6 +22,7 @@ export function TerminalTabs({
   onClose(tab: TerminalInfo): void
   onNew(): void
 }) {
+  const say = useSay()
   const { c } = useTheme()
   const scroll = useRef<import('react-native').ScrollViewInstance>(null)
   const frames = useRef(new Map<string, { x: number; width: number }>())
@@ -99,7 +101,7 @@ export function TerminalTabs({
       })}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="New terminal"
+        accessibilityLabel={say('New terminal')}
         disabled={busy}
         onPress={onNew}
         style={{

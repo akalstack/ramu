@@ -16,12 +16,14 @@ import {
   X,
   Check,
   Globe,
-  Monitor,
-  Smartphone,
+  Minus,
+  RefreshCcwDot,
+  SunMoon,
 } from 'lucide-react-native'
 import type {
   BrowserDialog,
   BrowserHumanInput,
+  BrowserTabAdjust,
   BrowserDownloadInfo,
   BrowserPageSnapshot,
 } from '@ramu/shared/browserBridge'
@@ -31,7 +33,7 @@ import type { Chat } from '../runtime/types'
 import type { RemoteKey } from '../runtime/remoteKeyboard'
 import { useStore } from '../runtime/store'
 import { font, radius, space, useTheme } from '../theme'
-import { Button, Sheet, T } from './ui'
+import { Button, Segmented, SectionLabel, Sheet, T } from './ui'
 import {
   ControlPill,
   ControlStrip,
@@ -50,6 +52,7 @@ import {
   controlAction,
   controlState,
   fitSize,
+  zoomStep,
   frameGesture,
   frameScroll,
   profileLabel,
@@ -57,8 +60,8 @@ import {
   viewerMessage,
 } from '../runtime/browserViewerState'
 
-/** Phone layout is the default; choosing Desktop layout holds for the rest of this app session. */
-let preferPhoneLayout = true
+/** This device's choice of page layout. Phone layout is the default; Desktop layout is remembered once chosen. */
+const LAYOUT_KEY = 'pref-device:browserLayout'
 
 /**
  * The phone views the owning host's browser; it never substitutes a phone WebView or copies credentials. Laid out as a
@@ -107,12 +110,12 @@ export function BrowserViewer({
   const [pageText, setPageText] = useState('')
   const [observation, setObservation] = useState<BrowserPageSnapshot | null>(null)
   const [uploadPath, setUploadPath] = useState('')
-  const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | null>(null)
+  const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | 'display' | null>(null)
   const downloadsOpen = panel === 'downloads'
   const menu = useViewerMenu()
   const addressField = useRef<import('react-native').TextInputInstance>(null)
   const [area, setArea] = useState({ width: 0, height: 0 })
-  const [phoneLayout, setPhoneLayout] = useState(preferPhoneLayout)
+  const phoneLayout = store.drafts?.[LAYOUT_KEY] !== 'desktop'
   const fitted = useRef<{ key: string; size: { width: number; height: number } } | null>(null)
   const [downloads, setDownloads] = useState<BrowserDownloadInfo[]>([])
   const [paths, setPaths] = useState<Record<string, string>>({})
@@ -395,6 +398,13 @@ export function BrowserViewer({
       )
       setOwned(controlled ? null : next.generation)
     })
+  // Zoom and appearance stay with the tab for everyone who views it; the host answers with the updated tab.
+  const adjust = (change: BrowserTabAdjust) =>
+    tab &&
+    void act(async () => {
+      const next = await invoke(chat.computerId, 'hostBrowser.adjust', chat.taskId!, tab.id, change)
+      setTabs((list) => list.map((entry) => (entry.id === next.id ? next : entry)))
+    })
   const readText = () =>
     tab &&
     void act(async () => {
@@ -415,13 +425,15 @@ export function BrowserViewer({
           await inputQueue.current.push({ kind: 'text', text: value })
         }),
     },
-    layout: {
-      title: phoneLayout ? t('Desktop layout') : t('Phone layout'),
-      icon: phoneLayout ? Monitor : Smartphone,
-      onPress: () => {
-        preferPhoneLayout = !phoneLayout
-        setPhoneLayout(!phoneLayout)
-      },
+    hardReload: {
+      title: t('Hard reload'),
+      icon: RefreshCcwDot,
+      onPress: () => adjust({ hardReload: true }),
+    },
+    display: {
+      title: tab?.zoom ? `${t('Display')} (${Math.round(tab.zoom * 100)}%)` : t('Display'),
+      icon: SunMoon,
+      onPress: () => setPanel('display'),
     },
     newTab: { title: t('New tab'), icon: Plus, onPress: startNewTab },
     readText: {
@@ -689,6 +701,66 @@ export function BrowserViewer({
             onPress={startNewTab}
             style={{ marginTop: space.s }}
           />
+        </View>
+      </Sheet>
+      <Sheet open={panel === 'display'} onClose={() => setPanel(null)} title={t('Display')}>
+        <View style={{ paddingHorizontal: space.l, gap: space.s, paddingBottom: space.m }}>
+          {hostManaged ? (
+            <>
+              <SectionLabel>{t('Layout')}</SectionLabel>
+              <Segmented
+                value={phoneLayout ? 'phone' : 'desktop'}
+                onChange={(next) => store.setDraft(LAYOUT_KEY, next === 'desktop' ? 'desktop' : '')}
+                options={[
+                  { key: 'phone', label: t('Phone') },
+                  { key: 'desktop', label: t('Desktop') },
+                ]}
+              />
+            </>
+          ) : null}
+          <SectionLabel>{t('Appearance')}</SectionLabel>
+          <Segmented
+            value={tab?.colorScheme ?? 'system'}
+            onChange={(colorScheme) => adjust({ colorScheme })}
+            options={[
+              { key: 'system', label: t('System') },
+              { key: 'light', label: t('Light') },
+              { key: 'dark', label: t('Dark') },
+            ]}
+          />
+          <SectionLabel>{t('Zoom')}</SectionLabel>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+            <ControlPill
+              icon={Minus}
+              label={t('Zoom out')}
+              disabled={busy || (tab?.zoom ?? 1) <= 0.5}
+              onPress={() => adjust({ zoom: zoomStep(tab?.zoom ?? 1, -1) })}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('Actual size')}
+              onPress={() => adjust({ zoom: 1 })}
+              style={{ flex: 1, alignItems: 'center', paddingVertical: space.s }}
+            >
+              <T weight="600">{Math.round((tab?.zoom ?? 1) * 100)}%</T>
+            </Pressable>
+            <ControlPill
+              icon={Plus}
+              label={t('Zoom in')}
+              disabled={busy || (tab?.zoom ?? 1) >= 3}
+              onPress={() => adjust({ zoom: zoomStep(tab?.zoom ?? 1, 1) })}
+            />
+          </View>
+          <Button
+            kind="secondary"
+            title={t('Clear cache')}
+            disabled={busy}
+            onPress={() => adjust({ clearCache: true })}
+            style={{ marginTop: space.s }}
+          />
+          <T tone="muted" size={font.caption}>
+            {t('Clears saved page files only. Sign-ins and cookies stay.')}
+          </T>
         </View>
       </Sheet>
       <Sheet open={panel === 'text'} onClose={() => setPanel(null)} title={t('Page text')}>

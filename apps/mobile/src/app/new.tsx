@@ -38,7 +38,7 @@ import {
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { STANDALONE } from '../runtime/types'
-import { useT } from '../i18n'
+import { useT, useSay } from '../i18n'
 import { Header, HeaderButton, PageScrollView, Screen } from '../components/Screen'
 import { useKeyboardInset } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
@@ -85,6 +85,7 @@ function TrayButton({
 }
 
 export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
+  const say = useSay()
   const keyboardInset = useKeyboardInset()
   const { c } = useTheme()
   const t = useT()
@@ -737,8 +738,8 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           </Row>
         ))}
       </Sheet>
-      <Sheet open={picker === 'choice'} onClose={() => setPicker(null)} title="Choose a project">
-        <Button kind="ghost" title="Choose another project" onPress={() => setPicker('project')} />
+      <Sheet open={picker === 'choice'} onClose={() => setPicker(null)} title={say('Choose a project')}>
+        <Button kind="ghost" title={say('Choose another project')} onPress={() => setPicker('project')} />
         <T tone="muted">
           {choices?.some((choice) => choice.reason)
             ? 'More than one project could fit. Choose where to start.'
@@ -777,7 +778,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         })}
       </Sheet>
 
-      <Sheet open={picker === 'mode'} onClose={() => setPicker(null)} title="Workspace">
+      <Sheet open={picker === 'mode'} onClose={() => setPicker(null)} title={say('Workspace')}>
         {workspaceOptions?.configSource ? <T tone="muted">{workspaceOptions.configSource}</T> : null}
         {workspaceOptions?.configError ? <T tone="bad">{workspaceOptions.configError}</T> : null}
         <Row

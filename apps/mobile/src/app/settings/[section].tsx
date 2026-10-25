@@ -21,7 +21,7 @@ import {
   parseSwitched,
   type PushCategory,
 } from '../../runtime/pushCategories'
-import { useT } from '../../i18n'
+import { useT, useSay } from '../../i18n'
 import { Header, Screen, useScrolledUnderBar, PageScrollView as ScrollView } from '../../components/Screen'
 import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
 import { Button, Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
@@ -35,6 +35,7 @@ import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingR
 import { ScopeControl } from '../../components/ScopeControl'
 
 function AppearancePage() {
+  const say = useSay()
   const { appearance, setAppearance, textSize, setTextSize } = useTheme()
   const { language, setLanguage, drafts, setDraft } = useStore()
   const t = useT()
@@ -96,7 +97,7 @@ function AppearancePage() {
       <SectionLabel>Feedback</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <ToggleRow
-          title="Haptic feedback"
+          title={say('Haptic feedback')}
           help="A light tap when you switch tabs, pick an option or copy text."
           value={drafts.haptics !== 'off'}
           onChange={(on) => setDraft('haptics', on ? '' : 'off')}
@@ -169,6 +170,7 @@ function BusyBehavior({ computerId }: { computerId: string }) {
 }
 
 function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings>; name?: string }) {
+  const say = useSay()
   const { drafts, setDraft, enablePush, disablePush, setPushCategory } = useStore()
   const t = useT()
   const pushOn = drafts['push-enabled'] === 'yes'
@@ -184,7 +186,7 @@ function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings
       <SectionLabel>This phone</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <ToggleRow
-          title="Background alerts"
+          title={say('Background alerts')}
           help="Get alerts from your paired hosts when a task needs your attention."
           value={pushOn}
           onChange={(on) => {
@@ -195,7 +197,7 @@ function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings
           <>
             <Divider inset={space.l} />
             <ToggleRow
-              title="Live Activities"
+              title={say('Live Activities')}
               help="Track ongoing work on your Lock Screen and Dynamic Island."
               value={drafts['live-activities-enabled'] !== 'no'}
               onChange={(on) => setDraft('live-activities-enabled', on ? 'yes' : 'no')}
@@ -240,6 +242,7 @@ function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings
 }
 
 function Computers() {
+  const say = useSay()
   const router = useRouter()
   const { c } = useTheme()
   const { computers, selected, select, retry } = useStore()
@@ -274,7 +277,7 @@ function Computers() {
           <SectionLabel>Connection</SectionLabel>
           <Card style={{ marginHorizontal: space.l }}>
             <Row style={{ paddingVertical: space.m }} onPress={() => retry(pc.id)}>
-              <RowLabel title="Reconnect" help={pc.error ?? 'Refresh the connection to this host.'} />
+              <RowLabel title={say('Reconnect')} help={pc.error ?? 'Refresh the connection to this host.'} />
               <RefreshCw size={16} color={c.muted} />
             </Row>
             <Divider inset={space.l} />

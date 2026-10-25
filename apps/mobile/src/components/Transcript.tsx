@@ -13,7 +13,6 @@ import { useRouter } from 'expo-router'
 import {
   Check,
   Copy,
-  ChevronRight,
   FileCode2,
   FilePen,
   FileDiff,
@@ -27,7 +26,7 @@ import {
   X,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
-import { fill, useT } from '../i18n'
+import { fill, useT, useSay } from '../i18n'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { Markdown, ReferenceBadge, ReferenceContext } from './Markdown'
@@ -387,6 +386,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
 const ACCESS = { edits: 'Allow edits', auto: 'Auto', full: 'Full access' } as const
 /** A status line with a rule on both sides, like the desktop's separators: "Opus Medium" over "Changed conversation settings". */
 function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' }>; chat: Chat }) {
+  const say = useSay()
   const { c } = useTheme()
   const store = useStore()
   const strings = useT()
@@ -479,7 +479,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
         {item.pending ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Cancel the model change"
+            accessibilityLabel={say('Cancel the model change')}
             onPress={() => {
               tap()
               cancelPending()
@@ -495,7 +495,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
         {undo ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Switch back to the previous model and settings"
+            accessibilityLabel={say('Switch back to the previous model and settings')}
             disabled={undoing}
             onPress={undo}
             hitSlop={8}
@@ -738,6 +738,7 @@ function PlanCard({ item }: { item: Extract<TranscriptItem, { kind: 'plan' }> })
 }
 
 function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) {
+  const say = useSay()
   const { c } = useTheme()
   const { language: storeLanguage } = useStore()
   const [open, setOpen] = useState(false)
@@ -862,7 +863,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
             {long ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Show full log"
+                accessibilityLabel={say('Show full log')}
                 onPress={() => {
                   tap()
                   setFull(true)
@@ -1053,6 +1054,7 @@ function QuestionHistoryEntry({
 }
 
 function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 'question' }>; chatId: string }) {
+  const say = useSay()
   const { c } = useTheme()
   const store = useStore()
   const { answer } = store
@@ -1113,7 +1115,7 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
             )
           })}
           <TextInput
-            placeholder="Other answer…"
+            placeholder={say('Other answer…')}
             placeholderTextColor={c.placeholder}
             value={other[q.id ?? q.question] ?? ''}
             accessibilityLabel={q.question}
@@ -1133,10 +1135,10 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
       ))}
       <View style={{ flexDirection: 'row', gap: space.s, justifyContent: 'flex-end' }}>
         {item.responseMode === 'message' ? (
-          <Button kind="ghost" title="Dismiss" onPress={() => answer(chatId, item.id, { _: 'Dismissed' })} />
+          <Button kind="ghost" title={say('Dismiss')} onPress={() => answer(chatId, item.id, { _: 'Dismissed' })} />
         ) : null}
         <Button
-          title="Submit"
+          title={say('Submit')}
           disabled={!ready}
           onPress={() =>
             answer(
@@ -1157,6 +1159,7 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
 }
 
 function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 'permission' }>; chatId: string }) {
+  const say = useSay()
   const { c } = useTheme()
   const { decide } = useStore()
   if (item.decision) {
@@ -1184,8 +1187,13 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
         </T>
       </View>
       <View style={{ flexDirection: 'row', gap: space.s }}>
-        <Button kind="secondary" title="Deny" style={{ flex: 1 }} onPress={() => decide(chatId, item.id, 'deny')} />
-        <Button title="Allow once" style={{ flex: 1 }} onPress={() => decide(chatId, item.id, 'allow')} />
+        <Button
+          kind="secondary"
+          title={say('Deny')}
+          style={{ flex: 1 }}
+          onPress={() => decide(chatId, item.id, 'deny')}
+        />
+        <Button title={say('Allow once')} style={{ flex: 1 }} onPress={() => decide(chatId, item.id, 'allow')} />
       </View>
     </Card>
   )
@@ -1333,6 +1341,7 @@ function GoalDone({ item }: { item: Extract<TranscriptItem, { kind: 'goal' }> })
 }
 
 function ElicitationCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 'elicitation' }>; chatId: string }) {
+  const say = useSay()
   const { c } = useTheme()
   const { elicitation } = useStore()
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
@@ -1350,7 +1359,7 @@ function ElicitationCard({ item, chatId }: { item: Extract<TranscriptItem, { kin
       <T>{item.request.message}</T>
       {item.request.mode === 'url' && item.request.url ? (
         <Button
-          title="Open request"
+          title={say('Open request')}
           onPress={() => {
             const url = item.request.url!
             if (/^https?:\/\//i.test(url)) void Linking.openURL(url)
@@ -1374,9 +1383,9 @@ function ElicitationCard({ item, chatId }: { item: Extract<TranscriptItem, { kin
         </View>
       ))}
       <View style={{ flexDirection: 'row', gap: space.s }}>
-        <Button kind="secondary" title="Decline" onPress={() => elicitation(chatId, item.id, 'decline', {})} />
+        <Button kind="secondary" title={say('Decline')} onPress={() => elicitation(chatId, item.id, 'decline', {})} />
         <Button
-          title="Submit"
+          title={say('Submit')}
           disabled={item.request.fields.some((f) => f.required && !answers[f.id]?.trim())}
           onPress={() => elicitation(chatId, item.id, 'accept', answers)}
         />

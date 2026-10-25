@@ -18,6 +18,10 @@ export interface BrowserTabInfo {
   released?: boolean
   /** The page is laid out at the controlling phone's screen size; it returns to the default when control changes. */
   fitted?: boolean
+  /** Page zoom when not 100%. */
+  zoom?: number
+  /** A forced light or dark appearance; absent follows the system. */
+  colorScheme?: 'light' | 'dark'
   crashed: boolean
 }
 

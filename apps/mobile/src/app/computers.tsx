@@ -4,18 +4,19 @@ import { useRouter } from 'expo-router'
 import { Check, Laptop, Plus, Server } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { counts, useStore } from '../runtime/store'
-import { useT, ago } from '../i18n'
+import { useT, ago, useSay } from '../i18n'
 import { GlassButton, Header, Screen, PageScrollView as ScrollView } from '../components/Screen'
 import { Card, ConnectionDot, Divider, Pill, Row, T } from '../components/ui'
 
 export default function Computers() {
+  const say = useSay()
   const { c } = useTheme()
   const t = useT()
   const router = useRouter()
   const { computers, chats, selected, select, forget, retry } = useStore()
   return (
     <Screen bg="canvas">
-      <Header modal title={t.computers} subtitle="Every paired host stays connected" />
+      <Header modal title={t.computers} subtitle={say('Every paired host stays connected')} />
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: space.l, gap: space.l }}>
         <Card>
           {computers.map((pc, i) => {

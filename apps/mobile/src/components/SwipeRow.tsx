@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Animated, PanResponder, Pressable, View } from 'react-native'
 import { tap } from './ui'
+import { useSay } from '../i18n'
 
 export type SwipeAction = {
   icon: ComponentType<{ size?: number; color?: string }>
@@ -24,6 +25,7 @@ export function SwipeRow({
   actions?: SwipeAction[]
   background: string
 }) {
+  const say = useSay()
   const x = useRef(new Animated.Value(0)).current
   const width = actions.length * BUTTON
   const [open, setOpen] = useState(false)
@@ -125,7 +127,7 @@ export function SwipeRow({
         {children}
         {open ? (
           <Pressable
-            accessibilityLabel="Close actions"
+            accessibilityLabel={say('Close actions')}
             onPress={() => settle('closed')}
             style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
           />

@@ -6,7 +6,7 @@ Follow system uses the first supported OS language, falling back to English. `id
 
 ## Adding copy
 
-English strings are translation keys and fallbacks. Indonesian translations live in `packages/shared/src/locales/id.ts`. Use `t()` and `useLanguage()` in renderer components; native menus and notifications use `src/main/localization.ts`.
+English strings are translation keys and fallbacks. Indonesian translations live in `packages/shared/src/locales/id.ts`. Use `t()` and `useLanguage()` in renderer components; native menus and notifications use `src/main/localization.ts`. The mobile app uses `useT()` for its named strings and `useSay()` for copy written in English at the call site; both read the same shared dictionary.
 
 - Use short, direct labels and actionable errors. Explain consequences in confirmations.
 - Translate complete sentences. Preserve placeholders for names and counts.

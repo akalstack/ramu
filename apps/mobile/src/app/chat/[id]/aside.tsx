@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Platform, Pressable, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
 import { ArrowUp, Trash2, X } from 'lucide-react-native'
@@ -10,7 +10,7 @@ import { useChat, useStore } from '../../../runtime/store'
 import { canWriteHost, VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { quotedQuestion, sideChat } from '../../../runtime/sideChat'
 import { Header, HeaderButton, PageScrollView as ScrollView, Screen } from '../../../components/Screen'
-import { useKeyboardInset } from '../../../components/Keyboard'
+import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { Markdown } from '../../../components/Markdown'
 import { Glass } from '../../../components/Glass'
 import { T, tap } from '../../../components/ui'
@@ -37,8 +37,27 @@ export default function AsideScreen() {
   latestStore.current = store
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
-  // Same keyboard handling as the thread composer: padding measured from the screen's bottom edge.
-  const keyboard = useKeyboardInset()
+  const keyboard = useKeyboardHeight()
+  const [composerHeight, setComposerHeight] = useState(96)
+  const ios = Platform.OS === 'ios'
+  const cover =
+    composerHeight + (keyboard.height ? Math.max(0, keyboard.height - Math.max(0, insets.bottom - space.s)) : 0)
+  const viewport = useRef({ content: 0, height: 0 })
+  const following = useRef(true)
+  const toEnd = useCallback(
+    (animated = true) => {
+      const { content, height } = viewport.current
+      if (!height) return
+      if (ios) scroll.current?.scrollTo({ y: Math.max(0, content - height + cover), animated })
+      else scroll.current?.scrollToEnd({ animated })
+    },
+    [ios, cover],
+  )
+  useEffect(() => {
+    if (!following.current) return
+    const frame = requestAnimationFrame(() => toEnd())
+    return () => cancelAnimationFrame(frame)
+  }, [toEnd])
   const [asides, setAsides] = useState<Aside[]>([])
   const [question, setQuestion] = useState('')
   const [busy, setBusy] = useState(false)
@@ -125,8 +144,14 @@ export default function AsideScreen() {
         title={say('Side questions')}
         subtitle={chat.title}
         right={
-          messages.length && !viewOnly ? (
-            <HeaderButton icon={Trash2} label={say('Clear side chat')} systemIcon="trash" onPress={clear} />
+          messages.length > 0 && !viewOnly ? (
+            <HeaderButton
+              icon={Trash2}
+              label={say('Clear side chat')}
+              systemIcon="trash"
+              actionId="clear-side-chat"
+              onPress={clear}
+            />
           ) : null
         }
       />
@@ -137,8 +162,27 @@ export default function AsideScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           automaticallyAdjustKeyboardInsets={false}
-          onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
-          contentContainerStyle={{ padding: space.l, gap: space.m, paddingBottom: space.xl }}
+          style={{ flex: 1 }}
+          contentInset={ios ? { bottom: cover } : undefined}
+          scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
+          onLayout={(event) => {
+            viewport.current.height = event.nativeEvent.layout.height
+            if (following.current) toEnd(false)
+          }}
+          onContentSizeChange={(_width, height) => {
+            viewport.current.content = height
+            if (following.current) toEnd()
+          }}
+          onScrollBeginDrag={() => {
+            following.current = false
+          }}
+          onScroll={(event) => {
+            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+            const gap = contentSize.height - layoutMeasurement.height + (ios ? cover : 0) - contentOffset.y
+            if (gap < 40) following.current = true
+          }}
+          scrollEventThrottle={16}
+          contentContainerStyle={{ padding: space.l, gap: space.m, paddingBottom: ios ? space.xl : cover + space.xl }}
         >
           {!messages.length ? (
             <T size={font.control} tone="muted">
@@ -171,77 +215,77 @@ export default function AsideScreen() {
           {waiting ? <ActivityIndicator style={{ alignSelf: 'flex-start' }} color={c.accent} /> : null}
           {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[store.language]}</T> : null}
         </ScrollView>
-        <View
-          style={{
-            paddingBottom: keyboard ? keyboard + space.s : Math.max(insets.bottom, space.s),
-            paddingHorizontal: space.s + 2,
-            gap: space.s,
-          }}
-        >
-          {pendingQuote ? (
-            // The passage the next question is about, removable before sending.
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s, paddingHorizontal: space.s }}>
-              <View style={{ flex: 1 }}>{quoteBlock(pendingQuote, 3)}</View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={say('Remove quote')}
-                hitSlop={8}
-                onPress={() => setPendingQuote('')}
-              >
-                <X size={16} color={c.muted} />
-              </Pressable>
+        <KeyboardLift keyboard={keyboard}>
+          <ComposerDock onLayout={(event) => setComposerHeight(event.nativeEvent.layout.height)}>
+            <View style={{ paddingHorizontal: space.s + 2, gap: space.s }}>
+              {pendingQuote ? (
+                // The passage the next question is about, removable before sending.
+                <View
+                  style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s, paddingHorizontal: space.s }}
+                >
+                  <View style={{ flex: 1 }}>{quoteBlock(pendingQuote, 3)}</View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={say('Remove quote')}
+                    hitSlop={8}
+                    onPress={() => setPendingQuote('')}
+                  >
+                    <X size={16} color={c.muted} />
+                  </Pressable>
+                </View>
+              ) : null}
+              <Glass radius={radius.xl}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'flex-end',
+                    paddingLeft: space.m,
+                    paddingRight: space.s,
+                    paddingVertical: space.s,
+                  }}
+                >
+                  <TextInput
+                    editable={!viewOnly}
+                    value={question}
+                    onChangeText={setQuestion}
+                    multiline
+                    placeholder={say(messages.length ? 'Ask a follow-up' : 'Ask a side question')}
+                    placeholderTextColor={c.placeholder}
+                    style={{
+                      flex: 1,
+                      color: c.text,
+                      fontSize: font.body,
+                      lineHeight: 21,
+                      maxHeight: 120,
+                      minHeight: 36,
+                      paddingTop: 6,
+                      paddingBottom: 6,
+                    }}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={say('Ask')}
+                    disabled={viewOnly || !question.trim() || busy}
+                    onPress={() => {
+                      tap()
+                      void ask()
+                    }}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: radius.full,
+                      backgroundColor: question.trim() ? c.primary : c.fill,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <ArrowUp size={18} color={question.trim() ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
+                  </Pressable>
+                </View>
+              </Glass>
             </View>
-          ) : null}
-          <Glass radius={radius.xl}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'flex-end',
-                paddingLeft: space.m,
-                paddingRight: space.s,
-                paddingVertical: space.s,
-              }}
-            >
-              <TextInput
-                editable={!viewOnly}
-                value={question}
-                onChangeText={setQuestion}
-                multiline
-                placeholder={say(messages.length ? 'Ask a follow-up' : 'Ask a side question')}
-                placeholderTextColor={c.placeholder}
-                style={{
-                  flex: 1,
-                  color: c.text,
-                  fontSize: font.body,
-                  lineHeight: 21,
-                  maxHeight: 120,
-                  minHeight: 36,
-                  paddingTop: 6,
-                  paddingBottom: 6,
-                }}
-              />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Ask"
-                disabled={viewOnly || !question.trim() || busy}
-                onPress={() => {
-                  tap()
-                  void ask()
-                }}
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: radius.full,
-                  backgroundColor: question.trim() ? c.primary : c.fill,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <ArrowUp size={18} color={question.trim() ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
-              </Pressable>
-            </View>
-          </Glass>
-        </View>
+          </ComposerDock>
+        </KeyboardLift>
       </View>
     </Screen>
   )

@@ -8,7 +8,7 @@ import type { Chat } from '../runtime/types'
 import { revealedTab, tabTitle } from '../runtime/browserViewerState'
 import { font, radius, space, useTheme } from '../theme'
 import { Glass } from './Glass'
-import { T, tap } from './ui'
+import { T, tap, type Icon } from './ui'
 
 /** This thread's browser tabs, metadata only. One reader feeds both the activity pill and the floating preview. */
 export function useThreadBrowserTabs(chat: Chat | undefined) {
@@ -102,19 +102,27 @@ export function BrowserFloat({
   tabs,
   viewable,
   hidden,
+  covered = false,
+  onVisibleChange,
   top,
   onOpen,
+  onReveal,
 }: {
   chat: Chat
   tabs: BrowserTabInfo[]
   viewable: boolean
   /** The browser or another full-screen surface is open over the chat. */
   hidden: boolean
+  /** Another preview holds the corner; this one still notices new activity and returns when it is free. */
+  covered?: boolean
+  /** Whether this preview is on screen, so the other one knows when the corner is free. */
+  onVisibleChange?(visible: boolean): void
   top: number
   onOpen(tabId: string): void
+  /** A new page appeared, so the chat can show this preview rather than another one. */
+  onReveal?(): void
 }) {
   const store = useStore()
-  const { c } = useTheme()
   const io = useRef(store)
   io.current = store
   const t = (text: string) => translate(store.language, text)
@@ -130,10 +138,17 @@ export function BrowserFloat({
     const reveal = revealedTab(known.current, tabs)
     known.current = new Set(tabs.map((tab) => tab.id))
     // Tabs opened while the browser is on screen are the person's own; they never pop up afterwards.
-    if (reveal && !hidden) setShown(reveal)
+    if (reveal && !hidden) {
+      setShown(reveal)
+      onReveal?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new reveal is what matters, not a new callback
   }, [tabs, hidden])
   const tab = tabs.find((entry) => entry.id === shown)
-  const visible = !!tab && !hidden && foreground && viewable && store.isOnline(chat.computerId)
+  const visible = !!tab && !hidden && !covered && foreground && viewable && store.isOnline(chat.computerId)
+  const reportVisible = useRef(onVisibleChange)
+  reportVisible.current = onVisibleChange
+  useEffect(() => reportVisible.current?.(visible), [visible])
   const tabId = tab?.id
   useEffect(() => {
     setFrame(null)
@@ -158,25 +173,65 @@ export function BrowserFloat({
     }
   }, [visible, tabId, chat.computerId, chat.taskId])
   if (!visible || !tab) return null
-  const aspect = Math.min(Math.max(frame?.aspect ?? 4 / 3, 0.5), 2)
-  const agent = tab.controller === 'agent' && !tab.paused
+  return (
+    <FloatPreview
+      top={top}
+      image={frame}
+      fallback={Globe}
+      title={tabTitle(tab, t)}
+      agent={tab.controller === 'agent' && !tab.paused}
+      openLabel={`${t('Open browser')}, ${tabTitle(tab, t)}`}
+      hideLabel={t('Hide preview')}
+      onOpen={() => {
+        setShown(null)
+        onOpen(tab.id)
+      }}
+      onHide={() => setShown(null)}
+    />
+  )
+}
+
+/** The small live card that floats over a chat: a picture, who is driving it, and a hide button. */
+export function FloatPreview({
+  top,
+  image,
+  fallback: Fallback,
+  title,
+  agent,
+  openLabel,
+  hideLabel,
+  onOpen,
+  onHide,
+}: {
+  top: number
+  image: { uri: string; aspect: number } | null
+  fallback: Icon
+  title: string
+  /** The agent is driving it right now, rather than the person. */
+  agent: boolean
+  openLabel: string
+  hideLabel: string
+  onOpen(): void
+  onHide(): void
+}) {
+  const { c } = useTheme()
+  const aspect = Math.min(Math.max(image?.aspect ?? 4 / 3, 0.5), 2)
   return (
     <Glass radius={radius.l} style={{ position: 'absolute', right: space.m, top, width: PREVIEW_WIDTH, zIndex: 30 }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${t('Open browser')}, ${tabTitle(tab, t)}`}
+        accessibilityLabel={openLabel}
         onPress={() => {
           tap()
-          setShown(null)
-          onOpen(tab.id)
+          onOpen()
         }}
       >
         <View style={{ width: PREVIEW_WIDTH, aspectRatio: aspect, backgroundColor: c.canvas }}>
-          {frame ? (
-            <Image source={{ uri: frame.uri }} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
+          {image ? (
+            <Image source={{ uri: image.uri }} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Globe size={22} color={c.muted} strokeWidth={1.5} />
+              <Fallback size={22} color={c.muted} strokeWidth={1.5} />
             </View>
           )}
         </View>
@@ -186,15 +241,15 @@ export function BrowserFloat({
             accessibilityElementsHidden
           />
           <T size={font.caption} numberOfLines={1} style={{ flex: 1 }}>
-            {tabTitle(tab, t)}
+            {title}
           </T>
         </View>
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={t('Hide preview')}
+        accessibilityLabel={hideLabel}
         hitSlop={10}
-        onPress={() => setShown(null)}
+        onPress={onHide}
         style={{
           position: 'absolute',
           top: 6,

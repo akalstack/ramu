@@ -9,6 +9,7 @@ import type {
   BrowserDialog,
   BrowserFieldFocus,
   BrowserScreenshot,
+  BrowserTabAdjust,
 } from '@ramu/shared/browserBridge'
 import { browserGuestScript } from '@ramu/shared/browserGuestScript'
 import { HostDownloads } from './hostDownloads'
@@ -186,6 +187,13 @@ export class HostGuestFactory implements GuestFactory {
     // The layout size the page currently has: the default, or the controlling phone's screen.
     const DEFAULT_VIEWPORT = { width: 1024, height: 768 }
     let viewport = DEFAULT_VIEWPORT
+    // Page zoom, as in a desktop browser: the page lays out in fewer CSS pixels, each drawn larger.
+    let zoom = 1
+    const css = () => ({ width: Math.round(viewport.width / zoom), height: Math.round(viewport.height / zoom) })
+    const applyZoom = async () => {
+      if (zoom === 1) return
+      await cdp!.send('Emulation.setDeviceMetricsOverride', { ...css(), deviceScaleFactor: zoom, mobile: false })
+    }
     const ready = Promise.resolve()
       .then(() => this.context(partition))
       .then(async (context) => {
@@ -318,12 +326,33 @@ export class HostGuestFactory implements GuestFactory {
       reload: () => history('reload'),
       inspect: () => isolated<PageSnapshot>('inspect'),
       focusedField: () => isolated<BrowserFieldFocus>('focus'),
+      adjust: async (change: BrowserTabAdjust) => {
+        const page = await ready
+        if (change.hardReload) {
+          // Wait for the next load, not the current one, so the reload has really reached the website.
+          const loaded = page.waitForEvent('domcontentloaded', { timeout: 15_000 }).catch(() => {})
+          await cdp!.send('Page.reload', { ignoreCache: true })
+          await loaded
+        }
+        if (change.colorScheme)
+          await page.emulateMedia({ colorScheme: change.colorScheme === 'system' ? null : change.colorScheme })
+        // Only the HTTP cache: cookies, storage and sign-ins in the profile are kept.
+        if (change.clearCache) await cdp!.send('Network.clearBrowserCache')
+        if (change.zoom !== undefined && change.zoom !== zoom) {
+          zoom = change.zoom
+          if (zoom === 1)
+            await cdp!.send('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false })
+          else await applyZoom()
+          handlers.onChanged?.()
+        }
+      },
       fit: async (size) => {
         const page = await ready
         const next = size ?? DEFAULT_VIEWPORT
         if (next.width === viewport.width && next.height === viewport.height) return
         await page.setViewportSize(next)
         viewport = next
+        await applyZoom()
         handlers.onChanged?.()
       },
       act: async (action) => {
@@ -371,7 +400,7 @@ export class HostGuestFactory implements GuestFactory {
         const page = await ready
         if (!human || destroyed) throw new Error('This device no longer controls the browser.')
         if (input.kind === 'click')
-          await page.mouse.click(input.x * viewport.width, input.y * viewport.height, {
+          await page.mouse.click(input.x * css().width, input.y * css().height, {
             button: input.button,
             clickCount: input.clickCount,
           })
@@ -399,8 +428,9 @@ export class HostGuestFactory implements GuestFactory {
       screenshot: async (): Promise<BrowserScreenshot> => {
         const page = await ready
         for (const quality of [50, 30, 15]) {
-          const bytes = await page.screenshot({ type: 'jpeg', quality, timeout: 5000 })
-          if (bytes.length <= 128000) return { mimeType: 'image/jpeg', data: bytes.toString('base64'), ...viewport }
+          // CSS pixels, so a zoomed page still matches the size reported to the agent.
+          const bytes = await page.screenshot({ type: 'jpeg', quality, timeout: 5000, scale: 'css' })
+          if (bytes.length <= 128000) return { mimeType: 'image/jpeg', data: bytes.toString('base64'), ...css() }
         }
         throw new Error('This page image is too large. Use its text snapshot.')
       },

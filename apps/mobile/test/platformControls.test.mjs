@@ -135,6 +135,11 @@ function load(file, os, overrides = {}, globals = {}) {
     ...globals,
     exports: module.exports,
     require: (id) => {
+      // Copy translated at its call site reads English in tests unless a test supplies its own.
+      if (id.endsWith('/i18n') && id in mocks && !mocks[id].useSay)
+        return { ...mocks[id], useSay: () => (text) => text }
+      if (id.endsWith('/i18n') && !(id in mocks))
+        return { useT: () => ({}), useSay: () => (text) => text, ago: () => '' }
       if (id in mocks) return mocks[id]
       if (id === '@ramu/shared/types')
         return {
@@ -5377,7 +5382,12 @@ for (const os of ['ios', 'android']) {
       'expo-router': { useLocalSearchParams: () => ({ id: 'chat' }) },
       '../../../runtime/store': { useStore: () => store, useChat: () => chat },
       '../../../components/ui': { T: 'T', tap() {} },
-      '../../../components/Keyboard': { useKeyboardInset: () => 0 },
+      '../../../components/Keyboard': {
+        useKeyboardInset: () => 0,
+        useKeyboardHeight: () => ({ height: 0 }),
+        KeyboardLift: 'KeyboardLift',
+        ComposerDock: 'ComposerDock',
+      },
       '../../../components/Screen': {
         Screen: 'Screen',
         Header: 'Header',
@@ -7599,5 +7609,107 @@ test('a screen with its own bottom actions keeps search in the navigation bar, n
   assert.ok(!nodes(header).some((node) => node.type === 'NativeSearchSlot'))
   assert.equal(find(header, 'NativeSearch').props.placement, 'integratedButton')
   assert.equal(find(header, 'NativeSearch').props.allowToolbarIntegration, false)
+  hooks.dispose()
+})
+
+test('iOS header keeps both toolbar owners stable while actions load, clear and return', () => {
+  const screen = load('components/Screen.tsx', 'ios')
+  const { jsx, jsxs } = require('react/jsx-runtime')
+  const right = jsxs(require('react').Fragment, {
+    children: [
+      jsx(screen.HeaderButton, {
+        icon: 'Trash2',
+        label: 'Clear side chat',
+        systemIcon: 'trash',
+        actionId: 'clear-side-chat',
+      }),
+      jsx(screen.HeaderButton, { icon: 'RefreshCw', label: 'Refresh', systemIcon: 'arrow.clockwise' }),
+    ],
+  })
+  for (const props of [
+    { title: 'Side questions', subtitle: 'A long task name' },
+    { title: 'Schedule' },
+    { title: 'Explorer' },
+    { title: 'Threads', large: true, back: false },
+  ]) {
+    const renders = [undefined, right, null, right].map((actions) => screen.Header({ ...props, right: actions }))
+    const toolbar = (tree) => nodes(tree).find((node) => node.type === Toolbar && node.props.placement === 'right')
+    const owners = renders.map(toolbar)
+    assert.ok(owners.every(Boolean), 'empty toolbars must clear native actions without unmounting their options owner')
+    assert.ok(owners.every((owner) => owner.key === owners[0].key))
+    assert.equal(nodes(owners[0]).filter((node) => node.type === 'ToolbarButton').length, 0)
+    assert.equal(nodes(owners[2]).filter((node) => node.type === 'ToolbarButton').length, 0)
+    for (const owner of [owners[1], owners[3]]) {
+      assert.deepEqual(
+        nodes(owner)
+          .filter((node) => node.type === 'ToolbarButton')
+          .map((node) => node.props.icon),
+        ['trash', 'arrow.clockwise'],
+      )
+    }
+  }
+})
+
+test('side-question input uses the thread dock and lifts the transcript inset without resizing it', async () => {
+  const hooks = hookHarness()
+  const scrolls = []
+  let keyboardHeight = 0
+  const keyboard = {
+    useKeyboardHeight: () => ({ height: keyboardHeight }),
+    KeyboardLift: 'KeyboardLift',
+    ComposerDock: 'ComposerDock',
+  }
+  const { default: AsideScreen } = load('app/chat/[id]/aside.tsx', 'ios', {
+    react: hooks.react,
+    'expo-router': { useLocalSearchParams: () => ({ id: 'chat', quote: 'quoted passage' }) },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 59, bottom: 34 }) },
+    '../../../runtime/store': {
+      useChat: () => ({ computerId: 'host', sessionId: 'session', title: 'Task' }),
+      useStore: () => ({
+        language: 'en',
+        computers: [{ id: 'host', status: 'online', access: 'owner' }],
+        subscribe: () => () => {},
+        invoke: async () => [],
+      }),
+    },
+    '../../../components/Keyboard': keyboard,
+    '../../../components/ui': { T: 'T', tap() {} },
+    '../../../components/Screen': {
+      Screen: 'Screen',
+      Header: 'Header',
+      HeaderButton: 'HeaderButton',
+      PageScrollView: 'ScrollView',
+    },
+  })
+  const render = () => hooks.render(() => AsideScreen())
+  let tree = render()
+  const list = find(tree, 'ScrollView')
+  list.props.ref.current = { scrollTo: (options) => scrolls.push(options) }
+  list.props.onLayout({ nativeEvent: { layout: { height: 500 } } })
+  list.props.onContentSizeChange(400, 1000)
+  find(tree, 'ComposerDock').props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+  find(tree, 'TextInput').props.onChangeText('draft stays here')
+  tree = render()
+  assert.equal(find(tree, 'ScrollView').props.contentInset.bottom, 100)
+  keyboardHeight = 300
+  tree = render()
+  assert.equal(find(tree, 'KeyboardLift').props.keyboard.height, 300)
+  assert.equal(find(tree, 'ScrollView').props.automaticallyAdjustKeyboardInsets, false)
+  assert.equal(find(tree, 'ScrollView').props.contentInset.bottom, 374)
+  assert.equal(find(tree, 'ScrollView').props.contentContainerStyle.paddingBottom, 24)
+  assert.equal(find(tree, 'TextInput').props.value, 'draft stays here')
+  await settle()
+  assert.ok(
+    scrolls.some(({ y }) => y === 874),
+    'latest answer remains above the raised input',
+  )
+  find(tree, 'ScrollView').props.onScrollBeginDrag()
+  const before = scrolls.length
+  find(tree, 'ScrollView').props.onContentSizeChange(400, 1200)
+  assert.equal(scrolls.length, before, 'new answers do not pull a reader away from older messages')
+  keyboardHeight = 0
+  tree = render()
+  assert.equal(find(tree, 'ScrollView').props.contentInset.bottom, 100)
+  assert.equal(find(tree, 'TextInput').props.value, 'draft stays here')
   hooks.dispose()
 })

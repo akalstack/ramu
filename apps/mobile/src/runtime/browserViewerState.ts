@@ -1,3 +1,4 @@
+import { BROWSER_ZOOM_LEVELS } from '@ramu/shared/browserBridge'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 
 /**
@@ -123,11 +124,12 @@ export function controlAction(state: ControlState): 'take' | 'release' | null {
   return 'take'
 }
 
-export type BrowserMenuKey = 'paste' | 'layout' | 'newTab' | 'readText' | 'upload' | 'downloads' | 'closeTab'
+export type BrowserMenuKey =
+  'paste' | 'hardReload' | 'display' | 'newTab' | 'readText' | 'upload' | 'downloads' | 'closeTab'
 
 /**
- * Overflow actions offered for the current tab. Only working actions appear: file transfers and phone layout need the
- * host-managed browser, and pasting, layout or uploading needs the phone to hold control.
+ * Overflow actions offered for the current tab. Only working actions appear: file transfers need the host-managed
+ * browser, and pasting, reloading, display changes or uploading need the phone to hold control.
  */
 export function browserMenu(context: {
   hasTab: boolean
@@ -136,8 +138,7 @@ export function browserMenu(context: {
   fileInput: boolean
 }): BrowserMenuKey[] {
   const keys: BrowserMenuKey[] = []
-  if (context.own) keys.push('paste')
-  if (context.own && context.hostManaged) keys.push('layout')
+  if (context.own) keys.push('paste', 'hardReload', 'display')
   keys.push('newTab')
   if (!context.hasTab) return keys
   keys.push('readText')
@@ -167,4 +168,11 @@ export function fitSize(
 export function revealedTab(previous: ReadonlySet<string> | null, tabs: readonly Pick<BrowserTabInfo, 'id'>[]) {
   if (!previous) return null
   return tabs.findLast((tab) => !previous.has(tab.id))?.id ?? null
+}
+
+/** The next page zoom step up or down, as a desktop browser's zoom buttons move; an odd value snaps onto the ladder. */
+export function zoomStep(current: number, direction: 1 | -1): number {
+  const levels: readonly number[] = BROWSER_ZOOM_LEVELS
+  if (direction > 0) return levels.find((level) => level > current + 0.001) ?? levels.at(-1)!
+  return [...levels].reverse().find((level) => level < current - 0.001) ?? levels[0]!
 }

@@ -4,6 +4,7 @@ import { Minus, Plus } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { WEEKDAYS, parseTime, shiftTime, type Lang } from '../runtime/scheduleModel'
 import { T, tap } from './ui'
+import { useSay } from '../i18n'
 
 /** A small caption above a form control. */
 export function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -85,20 +86,22 @@ export function Stepper({
   step?: number
   format?: (value: number) => string
 }) {
+  const say = useSay()
   const move = (by: number) => onChange(Math.min(max, Math.max(min, value + by)))
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
-      <StepButton icon={Minus} label="Decrease" onPress={() => move(-step)} />
+      <StepButton icon={Minus} label={say('Decrease')} onPress={() => move(-step)} />
       <T weight="600" style={{ minWidth: 40, textAlign: 'center' }}>
         {format ? format(value) : String(value)}
       </T>
-      <StepButton icon={Plus} label="Increase" onPress={() => move(step)} />
+      <StepButton icon={Plus} label={say('Increase')} onPress={() => move(step)} />
     </View>
   )
 }
 
 /** "09:00" typed or nudged by 15 minutes. Only a valid time is passed on. */
 export function TimeField({ value, onChange }: { value: string; onChange: (time: string) => void }) {
+  const say = useSay()
   const { c } = useTheme()
   const [text, setText] = useState(value)
   useEffect(() => setText(value), [value])
@@ -109,7 +112,7 @@ export function TimeField({ value, onChange }: { value: string; onChange: (time:
   }
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
-      <StepButton icon={Minus} label="Earlier" onPress={() => onChange(shiftTime(value, -15))} />
+      <StepButton icon={Minus} label={say('Earlier')} onPress={() => onChange(shiftTime(value, -15))} />
       <TextInput
         value={text}
         onChangeText={setText}
@@ -129,7 +132,7 @@ export function TimeField({ value, onChange }: { value: string; onChange: (time:
           borderRadius: radius.m,
         }}
       />
-      <StepButton icon={Plus} label="Later" onPress={() => onChange(shiftTime(value, 15))} />
+      <StepButton icon={Plus} label={say('Later')} onPress={() => onChange(shiftTime(value, 15))} />
     </View>
   )
 }

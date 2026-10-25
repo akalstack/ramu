@@ -44,7 +44,7 @@ vi.mock('../src/chat/useComputerVideo', () => ({ useComputerVideo: () => ({ stat
 vi.mock('../src/chat/ComputerSharing', () => ({ ComputerSharing: 'ComputerSharing' }))
 vi.mock('../src/composer/ComposerTraySection', () => ({ ComposerTraySection: 'section' }))
 vi.mock('../src/i18n', () => ({ t: (text: string) => text, useLanguage() {} }))
-vi.mock('../src/Menu', () => ({ Dropdown: 'Dropdown' }))
+vi.mock('../src/Menu', () => ({ Dropdown: 'Dropdown', Menu: 'Menu' }))
 vi.mock('@/components/desktop-button', () => ({ Button: 'Button' }))
 vi.mock('@/components/desktop-input', () => ({ Input: 'Input' }))
 vi.mock('@/components/ui/dialog', () => ({
@@ -132,11 +132,13 @@ it('refuses a retained stop action after viewer access is confirmed', async () =
   state.viewer = false
   RenderActivity()
   await flush()
-  const stop = nodes(RenderActivity()).find((node) => node.props.children === 'Stop computer use')!
+  // Stopping the agent lives in the computer's ⋯ menu.
+  const menu = nodes(RenderActivity()).find((node) => node.type === 'Menu')!
+  const stop = menu.props.items.find((item: { key: string }) => item.key === 'stop-agent')
   state.viewer = true
   RenderActivity()
   state.invoke.mockClear()
-  stop.props.onClick()
+  stop.onSelect()
   await flush()
   expect(state.invoke.mock.calls.some(([method]) => method === 'computer.stop')).toBe(false)
 })

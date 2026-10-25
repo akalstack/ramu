@@ -4,7 +4,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useStore } from '../runtime/store'
 import { Header, Screen } from '../components/Screen'
 import { T } from '../components/ui'
+import { useSay } from '../i18n'
 export default function ActivityRoute() {
+  const say = useSay()
   const { computerId } = useLocalSearchParams<{ computerId?: string }>()
   const store = useStore(),
     router = useRouter()
@@ -29,7 +31,7 @@ export default function ActivityRoute() {
   }, [store.ready, computerId, store.computers, store.chats])
   return (
     <Screen scrollable={false}>
-      <Header title="Ongoing work" />
+      <Header title={say('Ongoing work')} />
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
         <ActivityIndicator />
         <T tone="muted">Opening your workspace…</T>

@@ -53,6 +53,7 @@ import type { TaskStatus } from '@ramu/shared/types'
 import { font, radius, space, TEXT_SCALE, useTheme } from '../theme'
 import type { ComputerStatus } from '../runtime/types'
 import { MaterialSheet } from './MaterialSheet'
+import { useSay } from '../i18n'
 
 export type Icon = ComponentType<LucideProps>
 
@@ -543,6 +544,7 @@ function ScreenSheet({ open, onClose, ...props }: SheetProps) {
   )
 }
 function ScreenSheetBody({ title, children, scroll = true, onClose, search }: Omit<SheetProps, 'open'>) {
+  const say = useSay()
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const [scrolled, setScrolled] = useState(false)
@@ -574,7 +576,7 @@ function ScreenSheetBody({ title, children, scroll = true, onClose, search }: Om
             >
               {title}
             </T>
-            <IconButton icon={X} label="Close" onPress={onClose} />
+            <IconButton icon={X} label={say('Close')} onPress={onClose} />
           </View>
           {scroll ? (
             <ScrollView
@@ -620,6 +622,7 @@ function SheetPanel({ children }: { children: ReactNode }) {
 }
 
 function FloatingSheet({ open, onClose, title, children, scroll, search }: SheetProps) {
+  const say = useSay()
   const [mounted, setMounted] = useState(open)
   const progress = useRef(new Animated.Value(0)).current
   const dragY = useRef(new Animated.Value(0)).current
@@ -675,6 +678,8 @@ function FloatingSheet({ open, onClose, title, children, scroll, search }: Sheet
       visible={mounted}
       transparent
       animationType="none"
+      // A sheet can open over a landscape screen (the computer viewer); it must not rotate the app back.
+      supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
       statusBarTranslucent
       navigationBarTranslucent
       onShow={rise}
@@ -694,7 +699,12 @@ function FloatingSheet({ open, onClose, title, children, scroll, search }: Sheet
             opacity: progress,
           }}
         >
-          <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={say('Close')}
+          />
         </Animated.View>
         <Animated.View
           pointerEvents="box-none"

@@ -1,7 +1,12 @@
 import { WebContentsView, session, shell, Menu, type BrowserWindow, type Session, type WebContents } from 'electron'
 import type { GuestFactory, GuestHandlers, GuestPage, PageSnapshot } from './browserRuntime'
 import { BrowserDebugger } from './browserDebugger'
-import type { BrowserDiagnostics, BrowserFieldFocus, BrowserScreenshot } from '@ramu/shared/browserBridge'
+import type {
+  BrowserDiagnostics,
+  BrowserFieldFocus,
+  BrowserScreenshot,
+  BrowserTabAdjust,
+} from '@ramu/shared/browserBridge'
 import { browserGuestScript } from './browserGuestScript'
 import { browserFaviconFrom } from '@ramu/shared/browserLinks'
 import { t } from './localization'
@@ -206,6 +211,26 @@ export class ElectronGuestFactory implements GuestFactory {
       reload: () => history('reload'),
       inspect: () => isolated<PageSnapshot>('inspect'),
       focusedField: () => isolated<BrowserFieldFocus>('focus'),
+      input: async (input) => {
+        if (!humanInput) throw new Error('This device no longer controls the browser.')
+        await debuggerForPage().remoteInput(input)
+      },
+      adjust: async (change: BrowserTabAdjust) => {
+        if (change.hardReload)
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, 15_000)
+            contents.once('did-stop-loading', () => {
+              clearTimeout(timer)
+              resolve()
+            })
+            contents.reloadIgnoringCache()
+          })
+        if (change.zoom !== undefined) contents.setZoomFactor(change.zoom)
+        if (change.colorScheme) await debuggerForPage().colorScheme(change.colorScheme)
+        // Only the HTTP cache: cookies, storage and sign-ins in the profile are kept.
+        if (change.clearCache) await contents.session.clearCache()
+        handlers.onChanged?.()
+      },
       act: async (action) => {
         const result = await isolated<{ ok: boolean; reason?: string; points?: { x: number; y: number }[] }>(
           'act',

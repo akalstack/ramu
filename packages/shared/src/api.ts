@@ -165,6 +165,8 @@ export interface ComputerSessionSummary {
   paused: boolean
   /** The computer whose screen this is; `local` is the host itself. */
   runtime: { id: string; name: string }
+  /** That computer's system, when known, so shortcuts use its own command key. */
+  os?: 'macos' | 'linux' | 'windows'
   /** Control passed to the person at the computer because they used its mouse or keyboard. Cleared at the next change of owner. */
   interruption?: 'local-input' | null
   /** The device asking the human controller for control, if any. */
@@ -333,6 +335,12 @@ export interface RamuMethods {
     input: import('./browserBridge').BrowserHumanInput,
   ): void
   'hostBrowser.navigate'(taskId: string, tabId: string, url: string): BrowserTabInfo
+  /** Zoom, appearance, a hard reload or clearing the cache for the tab this device controls. Never cookies. */
+  'hostBrowser.adjust'(
+    taskId: string,
+    tabId: string,
+    change: import('./browserBridge').BrowserTabAdjust,
+  ): BrowserTabInfo
   /** The kind of field focused in the page, for the controlling device's keyboard. Never the field's value. */
   'hostBrowser.focus'(taskId: string, tabId: string): import('./browserBridge').BrowserFieldFocus
   /** Lays the page out at the controlling device's screen size, or restores the default with `null`. */

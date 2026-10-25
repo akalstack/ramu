@@ -3,7 +3,12 @@ import { join, dirname } from 'node:path'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import { chromium } from 'playwright-core'
-import type { BrowserBridgeCommand, BrowserBridgeRequest, BrowserHumanInput } from '@ramu/shared/browserBridge'
+import type {
+  BrowserBridgeCommand,
+  BrowserBridgeRequest,
+  BrowserHumanInput,
+  BrowserTabAdjust,
+} from '@ramu/shared/browserBridge'
 import { BrowserProfiles } from './browserProfiles'
 import { BrowserRuntime } from './browserRuntime'
 import { executeBrowserBridge } from './browserBridge'
@@ -297,6 +302,12 @@ export class HostBrowser implements HostedBrowserBackend {
   }
   history(device: string, thread: string, tabId: string, direction: 'back' | 'forward' | 'reload') {
     return this.controlled(device, thread, tabId)[direction](tabId)
+  }
+  adjust(device: string, thread: string, tabId: string, change: BrowserTabAdjust) {
+    return this.controlled(device, thread, tabId).adjustAsHuman(tabId, device, change, {
+      hostId: HOST,
+      threadId: thread,
+    })
   }
   focus(device: string, thread: string, tabId: string) {
     return this.controlled(device, thread, tabId).focusedFieldForHuman(tabId, device, {

@@ -4,6 +4,7 @@ import Svg, { Circle, Path } from 'react-native-svg'
 import { useTheme } from '../theme'
 import { useReducedMotion } from './Motion'
 import { tap as haptic } from './ui'
+import { useSay } from '../i18n'
 
 // The desktop's AnimatedMark (apps/web/src/Brand.tsx): the r stem draws in and the dot drops onto it once per launch;
 // tapping the mark makes the dot hop again. Same geometry, same keyframes (styles.css ramu-stem/dot/tap-*).
@@ -15,6 +16,7 @@ const AnimatedPath = Animated.createAnimatedComponent(Path)
 let revealed = false
 
 export function AnimatedMark({ size = 56 }: { size?: number }) {
+  const say = useSay()
   const { c } = useTheme()
   const reduced = useReducedMotion()
   const k = size / VIEW
@@ -80,7 +82,7 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
   })
   const viewBox = `${ORIGIN} ${ORIGIN} ${VIEW} ${VIEW}`
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Animate Ramu logo" onPress={replay} hitSlop={8}>
+    <Pressable accessibilityRole="button" accessibilityLabel={say('Animate Ramu logo')} onPress={replay} hitSlop={8}>
       <View style={{ width: size, height: size, overflow: 'visible' }}>
         <Animated.View pointerEvents="none" style={[at(356, 694), { transform: [{ rotate: tilt }] }]}>
           <Svg width={size} height={size} viewBox={viewBox}>

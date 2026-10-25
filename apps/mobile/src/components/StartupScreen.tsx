@@ -4,11 +4,13 @@ import Svg, { Circle, Path, SvgXml } from 'react-native-svg'
 import * as SplashScreen from 'expo-splash-screen'
 import { useTheme } from '../theme'
 import { svgs } from '../assets/svgs'
+import { useSay } from '../i18n'
 
 if (Platform.OS !== 'web') void SplashScreen.preventAutoHideAsync().catch(() => {})
 
 /** The desktop's r-and-dot-to-wordmark reveal, using native-driven transforms and opacity. */
 export function StartupScreen({ ready, children }: { ready: boolean; children: ReactNode }) {
+  const say = useSay()
   const { c } = useTheme()
   const { width } = useWindowDimensions()
   const scale = Math.min(280, width - 48) / 431.579
@@ -90,7 +92,7 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
       {!closed ? (
         <Animated.View
           accessibilityRole="progressbar"
-          accessibilityLabel="Starting Ramu"
+          accessibilityLabel={say('Starting Ramu')}
           style={[
             StyleSheet.absoluteFill,
             { backgroundColor: c.canvas, opacity, alignItems: 'center', justifyContent: 'center' },

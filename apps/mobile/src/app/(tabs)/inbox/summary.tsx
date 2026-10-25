@@ -7,7 +7,7 @@ import type { LibrarySummary, LibrarySummaryItem } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { useAutomation } from '../../../runtime/automation'
-import { useT } from '../../../i18n'
+import { useT, useSay } from '../../../i18n'
 import { Header, PageScrollView, Screen } from '../../../components/Screen'
 import { Markdown } from '../../../components/Markdown'
 import { Group } from '../../../components/InboxParts'
@@ -29,6 +29,7 @@ function period(summary: LibrarySummary) {
 
 /** One summary of what Ramu learned: the text, the memories and skills it touched, and a box that starts a thread about it. */
 export default function SummaryScreen() {
+  const say = useSay()
   const { c } = useTheme()
   const t = useT()
   const router = useRouter()
@@ -186,7 +187,7 @@ export default function SummaryScreen() {
               />
               <IconButton
                 icon={Send}
-                label="Send"
+                label={say('Send')}
                 size={40}
                 filled
                 tone={text.trim() ? 'accent' : 'muted'}

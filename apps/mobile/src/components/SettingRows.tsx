@@ -19,6 +19,7 @@ import {
 } from '../runtime/settingsModel'
 import type { useHostSettings } from '../runtime/useHostSettings'
 import { Button, Card, Divider, Row, SectionLabel, Sheet, T, Toggle, tap } from './ui'
+import { useSay } from '../i18n'
 
 type Host = ReturnType<typeof useHostSettings>
 
@@ -224,6 +225,7 @@ function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disable
 
 /** Explains why a computer's settings aren't on screen, with the one action that can help. */
 export function HostNotice({ host, name, children }: { host: Host; name?: string; children?: ReactNode }) {
+  const say = useSay()
   const { state } = host
   if (state.status === 'ready') return <>{children}</>
   return (
@@ -238,7 +240,7 @@ export function HostNotice({ host, name, children }: { host: Host; name?: string
               ? `Update Ramu on ${name ?? 'this computer'} to change its settings from your phone.`
               : state.message}
       </T>
-      {state.status === 'error' ? <Button title="Try again" onPress={host.reload} /> : null}
+      {state.status === 'error' ? <Button title={say('Try again')} onPress={host.reload} /> : null}
     </View>
   )
 }

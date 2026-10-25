@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-nat
 import * as Clipboard from 'expo-clipboard'
 import { Copy, FileQuestion, FolderSearch } from 'lucide-react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useT } from '../i18n'
+import { useT, useSay } from '../i18n'
 import { useWorkspaces } from '../runtime/useWorkspaces'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { ExplorerDraftError, type NewComposerOrigin } from '../runtime/composerDrafts'
@@ -74,6 +74,7 @@ export function FileViewer({
   initial?: Mode | 'all'
   composer?: NewComposerOrigin
 }) {
+  const say = useSay()
   const store = useStore()
   const router = useRouter()
   const t = useT()
@@ -237,7 +238,7 @@ export function FileViewer({
   if (!computerId || !taskId || !store.computers.some((host) => host.id === computerId) || !repoId || !path)
     return (
       <Screen>
-        <Header title="File not found" />
+        <Header title={say('File not found')} />
       </Screen>
     )
   const thread = store.chats.find((chat) => chat.computerId === computerId && chat.taskId === taskId)

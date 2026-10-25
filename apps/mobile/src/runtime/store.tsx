@@ -1601,6 +1601,10 @@ export function useStore() {
   if (!store) throw new Error('StoreProvider missing')
   return store
 }
+/** The store when one is mounted; app chrome shown before startup finishes gets `null`. */
+export function useOptionalStore() {
+  return useContext(Context)
+}
 export function useChat(id?: string) {
   return useStore().chats.find((c) => c.id === id)
 }

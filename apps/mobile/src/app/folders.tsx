@@ -8,9 +8,10 @@ import { Header, Screen, GlassButton, PageScrollView as ScrollView } from '../co
 import { Row, T } from '../components/ui'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
-import { useT } from '../i18n'
+import { useT, useSay } from '../i18n'
 import type { ForgeRepositorySummary } from '@ramu/shared/types'
 export default function HostFolders() {
+  const say = useSay()
   const store = useStore(),
     router = useRouter(),
     { c } = useTheme(),
@@ -48,7 +49,7 @@ export default function HostFolders() {
   }, [computerId])
   return (
     <Screen bg="canvas">
-      <Header modal title="Host folders" subtitle={store.computers.find((c) => c.id === computerId)?.name} />
+      <Header modal title={say('Host folders')} subtitle={store.computers.find((c) => c.id === computerId)?.name} />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
@@ -73,7 +74,7 @@ export default function HostFolders() {
         {listing ? (
           <>
             <GlassButton
-              title="Add this folder as a project"
+              title={say('Add this folder as a project')}
               primary
               disabled={busy}
               onPress={() =>
@@ -87,12 +88,12 @@ export default function HostFolders() {
             <TextInput
               value={name}
               onChangeText={setName}
-              placeholder="New folder / clone destination name"
+              placeholder={say('New folder / clone destination name')}
               placeholderTextColor={c.muted}
               style={{ padding: space.m, backgroundColor: c.fill, color: c.text, fontSize: font.body }}
             />
             <GlassButton
-              title="Create folder"
+              title={say('Create folder')}
               disabled={busy || !name.trim()}
               onPress={() =>
                 void run(async () => {
@@ -130,7 +131,7 @@ export default function HostFolders() {
             <TextInput
               value={url}
               onChangeText={setUrl}
-              placeholder="Git HTTPS or SSH URL"
+              placeholder={say('Git HTTPS or SSH URL')}
               autoCapitalize="none"
               autoCorrect={false}
               placeholderTextColor={c.muted}
@@ -181,7 +182,7 @@ export default function HostFolders() {
             />
             {busy && cancellable ? (
               <GlassButton
-                title="Cancel clone"
+                title={say('Cancel clone')}
                 onPress={() => {
                   const id = activeClone.current
                   if (id) void store.invoke(computerId, 'folders.cancelClone', id).catch(() => {})

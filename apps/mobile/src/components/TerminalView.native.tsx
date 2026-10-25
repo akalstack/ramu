@@ -6,6 +6,7 @@ import { TerminalGestureOverlay, readGesture, type GestureDisplay } from './Term
 import { WebView } from 'react-native-webview'
 import { terminalHtml } from '../assets/terminal'
 import type { TerminalViewProps } from './TerminalView'
+import { useSay } from '../i18n'
 
 export default function TerminalView({
   session,
@@ -17,6 +18,7 @@ export default function TerminalView({
   keyboardAction,
   keyAction,
 }: TerminalViewProps) {
+  const say = useSay()
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => setAppActive(state === 'active'))
@@ -69,7 +71,7 @@ export default function TerminalView({
   return (
     <View style={{ flex: 1 }} onLayout={(event) => setSize(event.nativeEvent.layout)}>
       <WebView<object>
-        accessibilityLabel="Host terminal"
+        accessibilityLabel={say('Host terminal')}
         accessibilityHint="Hold, then drag to move the cursor. Drag farther to repeat faster."
         ref={view}
         source={{ html: terminalHtml }}

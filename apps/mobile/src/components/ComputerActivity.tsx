@@ -9,6 +9,7 @@ import {
   Minimize2,
   Monitor as MonitorIcon,
   Power,
+  Command,
 } from 'lucide-react-native'
 import { clampPan, pinchZoom, screenPoint, screenRect } from '../runtime/computerGestures'
 import { translate } from '@ramu/shared/i18n'
@@ -17,13 +18,14 @@ import type { ComputerSessionSummary } from '@ramu/shared/api'
 import {
   LOCAL_INPUT_LIMIT,
   computerControllerLabel,
+  computerShortcuts,
   needsHandoff,
   showsLocalInputLimit,
 } from '@ramu/shared/computerControl'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
-import { Button, T, tap } from './ui'
+import { Button, Sheet, T, tap } from './ui'
 import {
   ControlPill,
   ControlStrip,
@@ -90,6 +92,7 @@ function ComputerViewer({
   const { zoom, pan } = view
   const keyboard = useRef<RemoteKeyboardHandle>(null)
   const [typing, setTyping] = useState(false)
+  const [keysOpen, setKeysOpen] = useState(false)
   const menu = useViewerMenu()
   const [area, setArea] = useState({ width: 0, height: 0 })
   const [current, setCurrent] = useState(session)
@@ -347,7 +350,16 @@ function ComputerViewer({
         setAsked(true)
       }
     })
+  // The computer's own command key: Command on a Mac, Control elsewhere. A remote runtime falls back to its host's.
+  const shortcuts = computerShortcuts(current.os ?? store.computers.find((pc) => pc.id === chat.computerId)?.os)
   const menuItems: ViewerMenuItem[] = [
+    {
+      key: 'keys',
+      title: t('Keys and shortcuts'),
+      icon: Command,
+      disabled: !human || stale,
+      onPress: () => setKeysOpen(true),
+    },
     {
       key: 'paste',
       title: t('Paste'),
@@ -520,6 +532,32 @@ function ComputerViewer({
         />
       ) : null}
       <ViewerMenu at={menu.at} onClose={menu.close} items={menuItems} label={t('Close menu')} />
+      {/* Keys a phone keyboard lacks, and everyday shortcuts; the sheet stays open for several presses in a row. */}
+      <Sheet open={keysOpen && human} onClose={() => setKeysOpen(false)} title={t('Keys and shortcuts')}>
+        {(
+          [
+            ['Keys', shortcuts.keys],
+            ['Shortcuts', shortcuts.shortcuts],
+          ] as const
+        ).map(([heading, entries]) => (
+          <View key={heading} style={{ paddingHorizontal: space.l, paddingBottom: space.m, gap: space.s }}>
+            <T tone="muted" size={font.caption} weight="600">
+              {t(heading)}
+            </T>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+              {entries.map((entry) => (
+                <Button
+                  key={entry.id}
+                  kind="secondary"
+                  title={t(entry.label)}
+                  disabled={stale}
+                  onPress={() => void (typed.current = typed.current.then(() => send(entry.action)))}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+      </Sheet>
     </View>
   )
 }

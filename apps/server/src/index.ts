@@ -1,3 +1,4 @@
+import { watchEventStream, writeEvent } from './remote/eventStream'
 import { DEFAULT_AGENT_BROWSER_PREFERENCES } from '@ramu/shared/browser'
 import { providerAdapter } from './providers/adapters'
 import { LocalDiagnostics } from './background/diagnostics'
@@ -211,12 +212,12 @@ const hostBrowser = new HostBrowser(
   () => {
     for (const client of clients)
       if (!client.destroyed && client.writableLength < 1024 * 1024)
-        client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:changed', payload: {} })}\n\n`)
+        writeEvent(client, `data: ${JSON.stringify({ channel: 'hostBrowser:changed', payload: {} })}\n\n`)
   },
   (tab) => {
     for (const client of clients)
       if (!client.destroyed && client.writableLength < 1024 * 1024)
-        client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:present', payload: tab })}\n\n`)
+        writeEvent(client, `data: ${JSON.stringify({ channel: 'hostBrowser:present', payload: tab })}\n\n`)
   },
   (id) => devices.list().some((device) => device.id === id && device.role !== 'viewer'),
 )
@@ -224,10 +225,7 @@ const browserBroker = new DesktopBrowserBroker(
   (clientId, request) => {
     const client = desktopClients.get(clientId)
     if (!client || client.destroyed || client.writableLength > 1024 * 1024) return false
-    return (
-      client.write(`data: ${JSON.stringify({ channel: 'browser:operation', payload: request })}\n\n`) ||
-      !client.destroyed
-    )
+    return writeEvent(client, `data: ${JSON.stringify({ channel: 'browser:operation', payload: request })}\n\n`)
   },
   30000,
   hostBrowser,
@@ -243,7 +241,7 @@ const send = (channel: string, payload: unknown) => {
       client.destroy()
       clients.delete(client)
       hostClients.delete(client as ServerResponse)
-    } else client.write(message)
+    } else writeEvent(client, message)
   }
 }
 const changed = () => send('automation:changed', {})
@@ -515,12 +513,18 @@ const dispatcher = createDispatcher(
         }, 120000)
         nativeRequests.set(requestId, { resolve, reject, timer })
         // Exactly one UI owns a desktop dialog/action.
-        hostClients
-          .values()
-          .next()
-          .value?.write(
+        const client = hostClients.values().next().value
+        if (
+          !client ||
+          !writeEvent(
+            client,
             `data: ${JSON.stringify({ channel: 'host:request', payload: { requestId, method, path } })}\n\n`,
           )
+        ) {
+          clearTimeout(timer)
+          nativeRequests.delete(requestId)
+          reject(new Error('Open Ramu on this host to use this desktop action'))
+        }
       })
     },
   },
@@ -743,8 +747,6 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
       if (remote && deviceId && req.socket.remoteAddress)
         presence.register(deviceId, req.socket.remoteAddress, Number(req.headers['x-ramu-presence-port']))
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
-      res.write(': connected\n\n')
-      res.write(`data: ${JSON.stringify({ channel: 'background:epoch', payload: { epoch: runEpoch } })}\n\n`)
       clients.add(res)
       const clientId =
         !remote &&
@@ -759,7 +761,7 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
           desktopClients.set(clientId, res)
         }
       } else remoteStreams.set(res, req.headers.authorization)
-      res.on('close', () => {
+      watchEventStream(res, () => {
         clients.delete(res)
         hostClients.delete(res)
         if (clientId && desktopClients.get(clientId) === res) {
@@ -768,6 +770,8 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
         }
         remoteStreams.delete(res)
       })
+      writeEvent(res, ': connected\n\n')
+      writeEvent(res, `data: ${JSON.stringify({ channel: 'background:epoch', payload: { epoch: runEpoch } })}\n\n`)
       return
     }
     if (req.method !== 'POST' || path !== '/invoke') {
@@ -1349,7 +1353,7 @@ const heartbeat = setInterval(() => {
   } catch {
     /* Push cleanup must not interrupt host agents. */
   }
-  for (const client of clients) client.write(': ping\n\n')
+  for (const client of clients) writeEvent(client, ': ping\n\n')
 }, 20000)
 const tick = setInterval(() => {
   void agents.resumeInterruptedChats().catch(console.error)

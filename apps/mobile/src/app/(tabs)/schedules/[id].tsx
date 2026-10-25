@@ -16,7 +16,7 @@ import {
   runTone,
   runsOf,
 } from '../../../runtime/scheduleModel'
-import { ago, useT } from '../../../i18n'
+import { ago, useT, useSay } from '../../../i18n'
 import { Header, HeaderButton, PageScrollView, Screen } from '../../../components/Screen'
 import { Group, Nothing } from '../../../components/InboxParts'
 import { useScheduleCommands } from '../../../components/ScheduleRow'
@@ -61,6 +61,7 @@ function Detail({
   schedule: Schedule
   runs: ReturnType<typeof runsOf>
 }) {
+  const say = useSay()
   const { c } = useTheme()
   const t = useT()
   const router = useRouter()
@@ -83,7 +84,7 @@ function Detail({
           commands.viewOnly ? null : (
             <HeaderButton
               icon={Pencil}
-              label="Edit"
+              label={say('Edit')}
               systemIcon="pencil"
               onPress={() => router.push({ pathname: '/schedule-edit', params: { computer, id: schedule.id } })}
             />

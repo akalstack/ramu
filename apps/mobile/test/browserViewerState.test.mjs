@@ -113,7 +113,8 @@ test('the overflow menu lists only actions that work for this tab and browser', 
   ])
   assert.deepEqual(browserMenu({ hasTab: true, own: true, hostManaged: true, fileInput: true }), [
     'paste',
-    'layout',
+    'hardReload',
+    'display',
     'newTab',
     'readText',
     'upload',
@@ -137,4 +138,13 @@ test('only a newly opened tab floats over the chat', async () => {
   assert.equal(revealedTab(null, [{ id: 'a' }]), null)
   assert.equal(revealedTab(new Set(['a']), [{ id: 'a' }]), null)
   assert.equal(revealedTab(new Set(['a']), [{ id: 'a' }, { id: 'b' }, { id: 'c' }]), 'c')
+})
+
+test('zoom steps through the browser ladder and stops at its ends', async () => {
+  const { zoomStep } = await import('../src/runtime/browserViewerState.ts')
+  assert.equal(zoomStep(1, 1), 1.1)
+  assert.equal(zoomStep(1, -1), 0.9)
+  assert.equal(zoomStep(3, 1), 3)
+  assert.equal(zoomStep(0.5, -1), 0.5)
+  assert.equal(zoomStep(1.3, 1), 1.5)
 })

@@ -32,6 +32,7 @@ import {
 } from '@expo/ui/swift-ui/modifiers'
 import { space, useTheme } from '../theme'
 import type { NativeSheetProps, SheetSearchProps } from './NativeSheet'
+import { useSay } from '../i18n'
 
 /** Native presentation, navigation chrome, dismissal and scroll-edge material for every iOS dialog. */
 export function NativeSheet({ open, onClose, title, children, scroll = true, presentation, search }: NativeSheetProps) {
@@ -76,6 +77,7 @@ export function NativeSheet({ open, onClose, title, children, scroll = true, pre
 }
 
 function NativeSheetSearch({ search }: { search: SheetSearchProps }) {
+  const say = useSay()
   const text = useNativeState(search.value)
   const { width } = useWindowDimensions()
   const { c } = useTheme()
@@ -101,7 +103,7 @@ function NativeSheetSearch({ search }: { search: SheetSearchProps }) {
         />
         {search.value ? (
           <Button
-            label="Clear search"
+            label={say('Clear search')}
             systemImage="xmark.circle.fill"
             modifiers={[labelStyle('iconOnly')]}
             onPress={() => search.onChangeText('')}

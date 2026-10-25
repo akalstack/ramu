@@ -1,6 +1,7 @@
 import type {
   BrowserDialog,
   BrowserFieldFocus,
+  BrowserTabAdjust,
   BrowserLiveFrame,
   BrowserHumanInput,
   BrowserPageSnapshot,
@@ -35,6 +36,12 @@ export interface BrowserViewerBackend {
   input(device: string, thread: string, tabId: string, generation: number, input: BrowserHumanInput): Promise<void>
   navigate(device: string, thread: string, tabId: string, url: string): Promise<BrowserTabInfo>
   focus(device: string, thread: string, tabId: string): Promise<BrowserFieldFocus>
+  adjust(
+    device: string,
+    thread: string,
+    tabId: string,
+    change: BrowserTabAdjust,
+  ): BrowserTabInfo | Promise<BrowserTabInfo>
   fit(
     device: string,
     thread: string,
@@ -134,6 +141,9 @@ export class DesktopBrowserViewer implements BrowserViewerBackend {
   }
   focus(device: string, thread: string, tabId: string) {
     return this.run<BrowserFieldFocus>(device, thread, { op: 'focus', tabId })
+  }
+  adjust(device: string, thread: string, tabId: string, change: BrowserTabAdjust) {
+    return this.run<BrowserTabInfo>(device, thread, { op: 'adjust', tabId, change })
   }
   /** The desktop shows this page to the person at the computer, so a phone never changes its layout. */
   fit() {

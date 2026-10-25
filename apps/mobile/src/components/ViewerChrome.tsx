@@ -190,6 +190,9 @@ export function ViewerBanner({ children, tone = 'muted' }: { children: ReactNode
   )
 }
 
+/** How long the menu takes to fade out before its action may open a sheet. */
+const MENU_SETTLE_MS = 350
+
 export type ViewerMenuItem = {
   key: string
   title: string
@@ -250,7 +253,8 @@ export function ViewerMenu({
                     onPress={() => {
                       tap()
                       onClose()
-                      item.onPress()
+                      // iOS cannot present a sheet or picker while this menu is still fading out.
+                      setTimeout(item.onPress, MENU_SETTLE_MS)
                     }}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
