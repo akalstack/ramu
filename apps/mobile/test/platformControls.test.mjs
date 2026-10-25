@@ -7585,3 +7585,19 @@ test('native tool completion uses the shared delayed left-to-right sweep without
   assert.equal(calls.length, 1, 'reduced motion never adds a delayed highlight')
   hooks.dispose()
 })
+
+test('a screen with its own bottom actions keeps search in the navigation bar, never the bottom toolbar', () => {
+  const hooks = hookHarness()
+  const { BottomSearch } = load('components/BottomSearch.tsx', 'ios', { react: hooks.react })
+  const props = { value: '', onChangeText() {}, placeholder: 'Filter 128 files' }
+  const render = (extra) => hooks.render(() => BottomSearch({ ...props, ...extra }))
+  const bottom = render({})
+  assert.ok(nodes(bottom).some((node) => node.type === 'NativeSearchSlot'))
+  assert.equal(find(bottom, 'NativeSearch').props.placement, undefined)
+  // Source Control's commit box owns the bottom edge, so its filter must not take the toolbar slot.
+  const header = render({ placement: 'header' })
+  assert.ok(!nodes(header).some((node) => node.type === 'NativeSearchSlot'))
+  assert.equal(find(header, 'NativeSearch').props.placement, 'integratedButton')
+  assert.equal(find(header, 'NativeSearch').props.allowToolbarIntegration, false)
+  hooks.dispose()
+})

@@ -6,7 +6,12 @@ import { Search } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import type { SheetSearchProps } from './NativeSheet'
 
-/** One bottom search location; sheets supply their own native toolbar. */
+/**
+ * The app's one search control; sheets supply their own native toolbar.
+ * `bottom` (default) is the iOS 26 bottom search bar, for screens whose content is a plain list.
+ * `header` is a search button in the navigation bar that expands in place, for screens with their own bottom actions
+ * (a commit box, a composer), so the two never stack over each other. Android shows its header search either way.
+ */
 export function BottomSearch({
   value,
   onChangeText,
@@ -14,7 +19,8 @@ export function BottomSearch({
   label = placeholder,
   onSubmit,
   inputOnly = false,
-}: SheetSearchProps & { inputOnly?: boolean }) {
+  placement = 'bottom',
+}: SheetSearchProps & { inputOnly?: boolean; placement?: 'bottom' | 'header' }) {
   const { c } = useTheme()
   const search = useRef<SearchBarCommands>(null)
   useEffect(() => {
@@ -32,12 +38,15 @@ export function BottomSearch({
           tintColor={c.accent}
           autoCapitalize="none"
           hideWhenScrolling={false}
+          {...(placement === 'header'
+            ? { placement: 'integratedButton' as const, allowToolbarIntegration: false }
+            : {})}
           onChangeText={(event) => onChangeText(event.nativeEvent.text)}
           onCancelButtonPress={() => onChangeText('')}
           onClose={() => onChangeText('')}
           onSearchButtonPress={onSubmit}
         />
-        {Platform.OS === 'ios' ? (
+        {Platform.OS === 'ios' && placement === 'bottom' ? (
           <Stack.Toolbar placement="bottom">
             <Stack.Toolbar.SearchBarSlot />
           </Stack.Toolbar>

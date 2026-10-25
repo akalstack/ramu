@@ -1,3 +1,4 @@
+import { translate } from '@ramu/shared/i18n'
 import { BottomSearch } from '../../../components/BottomSearch'
 import { readSyncConfirmation } from '@ramu/shared/protectedBranch'
 import { useEffect, useRef, useState } from 'react'
@@ -1039,7 +1040,13 @@ export default function SourceControl() {
         )}
       </Sheet>
       {tab === 'changes' && changeCount > 8 ? (
-        <BottomSearch value={filter} onChangeText={setFilter} placeholder={`Filter ${changeCount} files`} />
+        // The commit box owns the bottom edge, so the filter is a search button in the navigation bar.
+        <BottomSearch
+          placement="header"
+          value={filter}
+          onChangeText={setFilter}
+          placeholder={translate(store.language, 'Filter {count} files', { count: changeCount })}
+        />
       ) : null}
     </Screen>
   )

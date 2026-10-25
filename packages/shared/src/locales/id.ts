@@ -3749,4 +3749,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Ask a follow-up": "Ajukan pertanyaan lanjutan",
   "Ask a side question": "Ajukan pertanyaan sampingan",
   "Ask about this thread without interrupting it. The agent never sees these.": "Tanyakan tentang thread ini tanpa menyela. Agen tidak pernah melihatnya.",
+  "Filter {count} files": "Saring {count} file",
 }
