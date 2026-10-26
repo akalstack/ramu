@@ -1,4 +1,4 @@
-// A mesh VPN address works both on Wi-Fi and away from it. Preserve explicit Expo overrides.
+// List mesh VPNs first, then LAN interfaces. Preserve explicit Expo overrides.
 const mesh = (address) => /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(address)
 const privateLan = (address) => /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(address)
 const virtual = /^(bridge|vmnet|vnic|docker|veth|br-|awdl|llw|ap)/
@@ -12,15 +12,19 @@ export function devAddresses(interfaces) {
   return [...new Set(entries.sort((a, b) => rank(a) - rank(b)).map((entry) => entry.address))]
 }
 
-export function devEnvironment(env, args, addresses) {
-  if (
+export function publishesLocalAddresses(env, args) {
+  return !(
     args.includes('--tunnel') ||
     args.includes('--localhost') ||
     args.some((arg) => arg === '--host' || arg.startsWith('--host=')) ||
     env.REACT_NATIVE_PACKAGER_HOSTNAME ||
-    env.EXPO_PACKAGER_PROXY_URL ||
-    !addresses.length
+    env.EXPO_PACKAGER_PROXY_URL
   )
-    return { ...env }
-  return { ...env, REACT_NATIVE_PACKAGER_HOSTNAME: addresses[0] }
+}
+
+export function devEnvironment(env, args, addresses) {
+  if (!publishesLocalAddresses(env, args) || !addresses.length) return { ...env }
+  // A global hostname override rewrites manifests opened through every other interface too.
+  // Keep request Host handling intact, and opt into Expo's own Bonjour publisher for nearby clients.
+  return { ...env, EXPO_UNSTABLE_BONJOUR: env.EXPO_UNSTABLE_BONJOUR ?? '1' }
 }

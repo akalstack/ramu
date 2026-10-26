@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { devAddresses, devEnvironment } from '../scripts/dev-addresses.mjs'
+import { devAddresses, devEnvironment, publishesLocalAddresses } from '../scripts/dev-addresses.mjs'
 const entry = (address, internal = false) => ({ address, family: 'IPv4', internal })
 
 test('Metro prefers NetBird/Tailscale over Wi-Fi and container networks', () => {
@@ -19,12 +19,16 @@ test('Metro prefers NetBird/Tailscale over Wi-Fi and container networks', () => 
 
 test('explicit host, proxy, localhost and tunnel choices survive automatic selection', () => {
   const addresses = ['100.99.224.30']
-  assert.equal(devEnvironment({}, [], addresses).REACT_NATIVE_PACKAGER_HOSTNAME, addresses[0])
+  assert.deepEqual(devEnvironment({}, [], addresses), { EXPO_UNSTABLE_BONJOUR: '1' })
+  assert.equal(publishesLocalAddresses({}, []), true)
+  assert.deepEqual(devEnvironment({ EXPO_UNSTABLE_BONJOUR: '0' }, [], addresses), { EXPO_UNSTABLE_BONJOUR: '0' })
   for (const env of [
     { REACT_NATIVE_PACKAGER_HOSTNAME: '192.168.1.3' },
     { EXPO_PACKAGER_PROXY_URL: 'https://metro.example' },
-  ])
+  ]) {
     assert.deepEqual(devEnvironment(env, [], addresses), env)
+    assert.equal(publishesLocalAddresses(env, []), false)
+  }
   for (const args of [['--tunnel'], ['--localhost'], ['--host', 'localhost'], ['--host=localhost']])
     assert.deepEqual(devEnvironment({}, args, addresses), {})
   assert.deepEqual(devEnvironment({}, [], []), {})
