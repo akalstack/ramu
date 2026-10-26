@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, expect, it } from 'vitest'
 import WebSocket from 'ws'
-import { nodeSocketFactory, RuntimeSocket, runtimeInvoke, setSocketTransport } from '@ramu/client-runtime'
+import { closeHostSockets, listenToHost, nodeSocketFactory, RuntimeSocket, runtimeInvoke } from '@ramu/client-runtime'
 import { decodeSocketFrame, encodeSocketFrame, SOCKET_PATH, type SocketServerFrame } from '@ramu/contracts'
 import { serveSockets, type EventSink, type SocketHost } from '../src/remote/socket'
 
@@ -168,22 +168,22 @@ it('works end to end with the client runtime over a real socket, and learns a re
   expect(bad.state).toBe('rejected')
 })
 
-it('sends runtime calls over the socket only when opted in and ready, and asks for calls only', async () => {
+it('sends runtime calls over the one host socket, waiting for it, and shares it with event listeners', async () => {
   const { port, sinks, invoked } = await start()
   const endpoint = { kind: 'http' as const, url: `http://127.0.0.1:${port}`, token: 'good' }
-  cleanup.push(() => setSocketTransport(false))
-  // Off by default: the call goes to HTTP, which this server does not serve, and no socket is opened.
-  await expect(runtimeInvoke(endpoint, 'echo', [1])).rejects.toBeTruthy()
-  expect(invoked).toHaveLength(0)
-  setSocketTransport(true)
-  // The first call finds the socket still connecting and falls back to HTTP without sending anything on it.
-  await runtimeInvoke(endpoint, 'echo', [1]).catch(() => {})
-  for (let i = 0; i < 200 && invoked.length === 0; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    await runtimeInvoke(endpoint, 'echo', [2], { operationKey: 'operation-key-9' }).catch(() => {})
-  }
+  cleanup.push(() => closeHostSockets())
+  // The first call waits for the socket to be ready rather than using another transport.
+  expect(await runtimeInvoke(endpoint, 'echo', [1])).toEqual([1])
+  expect(await runtimeInvoke(endpoint, 'echo', [2], { operationKey: 'operation-key-9' })).toEqual([2])
   expect(invoked.at(-1)).toMatchObject({ method: 'echo', args: [2], operationKey: 'operation-key-9' })
-  expect(sinks.size).toBe(0)
+  // A listener on the same host reuses that socket: still one connection, and it hears the host's events.
+  const heard: string[] = []
+  const listening = listenToHost(endpoint, { event: (channel) => heard.push(channel) })
+  expect(sinks.size).toBe(1)
+  for (const sink of sinks) sink.write(`data: ${JSON.stringify({ channel: 'workspace:changed', payload: {} })}\n\n`)
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  expect(heard).toEqual(['workspace:changed'])
+  listening.stop()
 })
 
 const push = (sinks: Set<EventSink>, channel: string, payload: unknown) => {
@@ -191,6 +191,41 @@ const push = (sinks: Set<EventSink>, channel: string, payload: unknown) => {
 }
 const events = (frames: SocketServerFrame[]) =>
   frames.filter((f) => f.t === 'event').map((f) => `${(f as any).channel}:${JSON.stringify((f as any).payload)}`)
+
+it('streams the skipped kinds only for the threads the client named, and everything else it follows in brief', async () => {
+  const { connect, sinks } = await start()
+  const { ws, frames, until } = connect()
+  await until(() => sinks.size === 1)
+  ws.send(
+    encodeSocketFrame({
+      t: 'subscribe',
+      id: 1,
+      channels: ['agent:event'],
+      keys: { 'agent:event': ['open'] },
+      skip: { 'agent:event': ['text', 'tool-use'] },
+    }),
+  )
+  await until(() => frames.some((f) => f.t === 'result' && f.id === 1))
+  const agent = (sessionId: string, kind: string) => push(sinks, 'agent:event', { sessionId, event: { kind }, seq: 1 })
+  agent('open', 'text')
+  agent('other', 'text')
+  agent('other', 'tool-use')
+  agent('other', 'state')
+  agent('open', 'tool-use')
+  await until(() => events(frames).length === 3)
+  expect(events(frames).map((e) => JSON.parse(e.slice(e.indexOf('{'))).event.kind)).toEqual([
+    'text',
+    'state',
+    'tool-use',
+  ])
+  // With no thread named, the skipped kinds are dropped for every thread.
+  ws.send(encodeSocketFrame({ t: 'subscribe', id: 2, channels: ['agent:event'], skip: { 'agent:event': ['text'] } }))
+  await until(() => frames.some((f) => f.t === 'result' && f.id === 2))
+  agent('any', 'text')
+  agent('any', 'question')
+  await until(() => events(frames).length === 4)
+  expect(events(frames).at(-1)).toContain('"question"')
+})
 
 it('delivers every event until the client subscribes, then only what it asked for', async () => {
   const { connect, sinks } = await start()

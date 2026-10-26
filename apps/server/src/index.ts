@@ -1,4 +1,4 @@
-import { watchEventStream, writeEvent } from './remote/eventStream'
+import { writeEvent } from './remote/eventStream'
 import { DEFAULT_AGENT_BROWSER_PREFERENCES } from '@ramu/shared/browser'
 import { providerAdapter } from './providers/adapters'
 import { LocalDiagnostics } from './background/diagnostics'
@@ -205,8 +205,8 @@ try {
 } catch {}
 const clients = new Set<EventSink>()
 // Only clients on the local socket can answer native dialogs; a remote client's folder picker would open on the wrong machine.
-const hostClients = new Set<ServerResponse>()
-const desktopClients = new Map<string, ServerResponse>()
+const hostClients = new Set<EventSink>()
+const desktopClients = new Map<string, EventSink>()
 const hostBrowser = new HostBrowser(
   join(userData, 'host-browser'),
   () => {
@@ -240,7 +240,7 @@ const send = (channel: string, payload: unknown) => {
     if (client.writableLength > 8 * 1024 * 1024) {
       client.destroy()
       clients.delete(client)
-      hostClients.delete(client as ServerResponse)
+      hostClients.delete(client)
     } else writeEvent(client, message)
   }
 }
@@ -591,6 +591,7 @@ async function stop(intentional = false) {
   presence.close()
   clearTimeout(remoteRetry)
   mcpHttp.close()
+  localSockets.close()
   runtime.close()
   sockets?.close()
   try {
@@ -724,77 +725,37 @@ async function performInvoke(
   }
   return { value }
 }
-// One handler serves both transports. Requests over TCP (`remote`) must present the bearer token.
-const handle = (remote: boolean) => async (req: import('node:http').IncomingMessage, res: ServerResponse) => {
+// Requests over TCP must present the bearer token.
+const handle = () => async (req: import('node:http').IncomingMessage, res: ServerResponse) => {
   try {
-    let device: DeviceInfo | undefined
     // A service's redirect after sign-in arrives from a browser with no device token; the transaction's state is the proof.
-    if (remote && req.method === 'GET' && (req.url ?? '').split('?')[0] === HOSTED_CALLBACK_PATH) {
+    if (req.method === 'GET' && (req.url ?? '').split('?')[0] === HOSTED_CALLBACK_PATH) {
       const outcome = await completeOAuthCallback(new URL(req.url ?? '/', 'http://host'))
       res
         .writeHead(outcome.ok ? 200 : 400, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' })
         .end(oauthPage(outcome.message))
       return
     }
-    if (remote) {
-      const authenticated = await remoteAccess.accept(req, res)
-      if (authenticated === undefined) return
-      device = authenticated ?? undefined
-    }
-    const deviceId = device?.id
+    const authenticated = await remoteAccess.accept(req, res)
+    if (authenticated === undefined) return
+    const device = authenticated ?? undefined
     const path = (req.url ?? '/').split('?')[0]
-    if (path === '/events' && req.method === 'GET') {
-      if (remote && deviceId && req.socket.remoteAddress)
-        presence.register(deviceId, req.socket.remoteAddress, Number(req.headers['x-ramu-presence-port']))
-      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
-      clients.add(res)
-      const clientId =
-        !remote &&
-        typeof req.headers['x-ramu-desktop-client'] === 'string' &&
-        /^[a-zA-Z0-9-]{1,100}$/.test(req.headers['x-ramu-desktop-client'])
-          ? req.headers['x-ramu-desktop-client']
-          : null
-      if (!remote) {
-        hostClients.add(res)
-        if (clientId) {
-          if (desktopClients.has(clientId)) browserBroker.detach(clientId)
-          desktopClients.set(clientId, res)
-        }
-      } else remoteStreams.set(res, req.headers.authorization)
-      watchEventStream(res, () => {
-        clients.delete(res)
-        hostClients.delete(res)
-        if (clientId && desktopClients.get(clientId) === res) {
-          desktopClients.delete(clientId)
-          browserBroker.detach(clientId)
-        }
-        remoteStreams.delete(res)
-      })
-      writeEvent(res, ': connected\n\n')
-      writeEvent(res, `data: ${JSON.stringify({ channel: 'background:epoch', payload: { epoch: runEpoch } })}\n\n`)
+    // Calls and events travel only on the WebSocket (`/socket`); HTTP here is for pairing, renewal and health, which
+    // happen before a socket can be authenticated, and for this one check that a token is still accepted.
+    if (path === '/session' && req.method === 'GET') {
+      res
+        .writeHead(200, { ...json, 'Cache-Control': 'no-store' })
+        .end(JSON.stringify({ access: accessOf(device), protocol: PROTOCOL_VERSION }))
       return
     }
-    if (req.method !== 'POST' || path !== '/invoke') {
-      res.writeHead(404).end()
-      return
-    }
-    const request = await body(req)
-    let result
-    try {
-      result = await performInvoke(remote, device, request)
-    } catch (error) {
-      if (!(error instanceof InvokeRefused)) throw error
-      res.writeHead(403, json).end(JSON.stringify({ error: error.message }))
-      return
-    }
-    res.writeHead(200, json).end(JSON.stringify({ value: result.value }))
-    result.after?.()
+    res.writeHead(404).end()
   } catch (error) {
     if (!res.headersSent) res.writeHead(400, json)
     res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }))
   }
 }
-const runtime = createServer(handle(false))
+// The local service speaks only the WebSocket, over its unix socket: every other request is refused.
+const runtime = createServer((_req, res) => res.writeHead(404).end())
 let remote: ReturnType<typeof createServer> | null = null
 let remoteError: string | null = null
 let remoteRetry: NodeJS.Timeout | undefined
@@ -1237,12 +1198,54 @@ const socketHost: SocketHost = {
     remoteStreams.delete(sink)
   },
 }
+// The desktop and the command line reach this service over its unix socket with the same frames a phone uses over the
+// network: no token (the socket file is owner-only), and the private desktop identity travels in a header.
+const localClientId = (req: import('node:http').IncomingMessage) => {
+  const header = req.headers['x-ramu-desktop-client']
+  return typeof header === 'string' && /^[a-zA-Z0-9-]{1,100}$/.test(header) ? header : null
+}
+const localSocketHost: SocketHost = {
+  accept: async () => null,
+  invoke: async (_device, request) => {
+    try {
+      const result = await performInvoke(false, undefined, request)
+      return { ok: true, value: result.value, ...(result.after ? { after: result.after } : {}) }
+    } catch (error) {
+      return {
+        ok: false,
+        status: error instanceof InvokeRefused ? 403 : 400,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  },
+  epoch: runEpoch,
+  attach: (sink, req) => {
+    clients.add(sink)
+    // Only a desktop (which names itself) can answer a native dialog; a command-line call must never be chosen for one.
+    const clientId = localClientId(req)
+    if (clientId) {
+      hostClients.add(sink)
+      if (desktopClients.has(clientId)) browserBroker.detach(clientId)
+      desktopClients.set(clientId, sink)
+    }
+  },
+  detach: (sink) => {
+    clients.delete(sink)
+    hostClients.delete(sink)
+    for (const [clientId, client] of desktopClients)
+      if (client === sink) {
+        desktopClients.delete(clientId)
+        browserBroker.detach(clientId)
+      }
+  },
+}
+const localSockets = serveSockets(runtime, localSocketHost)
 function startRemote() {
   if (!network.enabled || stopping) return
   remoteError = null
   const server = (remote = config.tls
-    ? createHttpsServer({ cert: readFileSync(config.tls.cert), key: readFileSync(config.tls.key) }, handle(true))
-    : createServer(handle(true)))
+    ? createHttpsServer({ cert: readFileSync(config.tls.cert), key: readFileSync(config.tls.key) }, handle())
+    : createServer(handle()))
   sockets = serveSockets(server, socketHost)
   listenRemote(server)
 }

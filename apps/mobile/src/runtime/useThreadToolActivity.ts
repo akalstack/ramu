@@ -51,6 +51,7 @@ export function useThreadToolActivity(chat: Chat | undefined, visible: boolean) 
       })
     }
     void load()
+    const unwatch = session ? io.current.watch(host, ['context:changed'], { 'context:changed': [session] }) : () => {}
     const off = io.current.subscribe(host, (channel) => {
       if (
         [
@@ -68,6 +69,7 @@ export function useThreadToolActivity(chat: Chat | undefined, visible: boolean) 
     return () => {
       active = false
       off()
+      unwatch()
       clearInterval(timer)
     }
   }, [host, task, session, scope, online, visible])

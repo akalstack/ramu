@@ -237,6 +237,11 @@ export function TerminalScreen({
       if (channel === 'term:behind' && !hydrating) hydrate(cursor.current)
       if (channel === 'term:exit') setTabs((old) => old.map((t) => (t.id === value.id ? { ...t, exited: true } : t)))
     })
+    // Terminal output reaches the phone only while a terminal is on screen.
+    const unwatch = store.watch(chat.computerId, ['term:data', 'term:behind'], {
+      'term:data': [terminal.id],
+      'term:behind': [terminal.id],
+    })
     setOutput('')
     setOutputOwner(terminal.id)
     cursor.current = 0
@@ -244,49 +249,7 @@ export function TerminalScreen({
     return () => {
       alive = false
       off()
-    }
-  }, [computerId, ctx, connected])
-  useEffect(() => {
-    if (!terminal) return
-    let alive = true,
-      hydrating = true
-    const buffer: { data: string; cursor?: number }[] = []
-    const append = (value: { data: string; cursor?: number }) => {
-      if (value.cursor != null && value.cursor <= cursor.current) return
-      const data =
-        value.cursor != null
-          ? value.data.slice(Math.max(0, cursor.current - (value.cursor - value.data.length)))
-          : value.data
-      cursor.current = value.cursor ?? cursor.current + data.length
-      setOutput((old) => (old + data).slice(-256_000))
-    }
-    const off = store.subscribe(chat.computerId, (channel, value) => {
-      if (value.id !== terminal.id) return
-      if (channel === 'term:data') {
-        if (hydrating) buffer.push(value)
-        else append(value)
-      }
-      if (channel === 'term:exit') setTabs((old) => old.map((t) => (t.id === value.id ? { ...t, exited: true } : t)))
-    })
-    setOutput('')
-    setOutputOwner(terminal.id)
-    cursor.current = 0
-    store
-      .invoke(chat.computerId, 'term.snapshot', terminal.id)
-      .then((snapshot) => {
-        if (!alive) return
-        cursor.current = snapshot.cursor
-        setOutput(snapshot.output)
-        hydrating = false
-        buffer.forEach(append)
-        setError('')
-      })
-      .catch((e) => {
-        if (alive) setError(e.message)
-      })
-    return () => {
-      alive = false
-      off()
+      unwatch()
     }
   }, [chat?.computerId, terminal?.id, store.computers.find((c) => c.id === chat?.computerId)?.status])
   // The view stays mounted across tabs, so it will not report its size again; hand the new shell the one on screen.

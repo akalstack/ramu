@@ -1,17 +1,18 @@
 // Node-side connection to a Ramu workspace server: request/response calls and a reconnecting event stream.
 // Used by the Electron main process, the server CLI and, later, remote clients.
-import { request as httpRequest, type RequestOptions } from 'node:http'
+import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { tmpdir } from 'node:os'
-import { connectionAttempts, remoteRequests, type WorkLimiter } from './limits'
+import { remoteRequests } from './limits'
 import { runtimeNetwork, type NetworkMonitor } from './network'
-import { socketFor } from './socketPool'
+import { forgetHostSocket, hostSocket, listenToHost, type HostListener } from './hostSocket'
 export { refreshRuntimeNetwork } from './network'
 export { runtimeNetwork } from './network'
 export { PresenceListener, presenceKey, presenceMessage } from './presence'
 export { RuntimeSocket, type SocketFactory, type SocketState } from './socket'
 export { nodeSocketFactory } from './nodeSocket'
-export { setSocketTransport } from './socketPool'
+export { closeHostSockets, forgetHostSocket, hostSocket, listenToHost } from './hostSocket'
+export type { HostListener } from './hostSocket'
 import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import {
@@ -21,7 +22,6 @@ import {
   PROTOCOL_HEADER,
   PROTOCOL_VERSION,
   RECOVERABLE_MUTATIONS,
-  encodeInvoke,
   parseRemoteUrl,
   type PairResponse,
   type RenewResponse,
@@ -43,30 +43,6 @@ export function toEndpoint(target: string | RuntimeEndpoint): RuntimeEndpoint {
   return typeof target === 'string' ? { kind: 'socket', path: target } : target
 }
 
-function prepare(
-  target: string | RuntimeEndpoint,
-  path: string,
-  method: 'GET' | 'POST',
-  extra: Record<string, string> = {},
-): { options: RequestOptions; send: typeof httpRequest } {
-  const endpoint = toEndpoint(target)
-  const headers: Record<string, string> = { [PROTOCOL_HEADER]: String(PROTOCOL_VERSION), ...extra }
-  if (endpoint.kind === 'socket')
-    return { options: { socketPath: endpoint.path, path, method, headers }, send: httpRequest }
-  const url = new URL(endpoint.url)
-  headers.Authorization = `${AUTH_SCHEME} ${endpoint.token}`
-  return {
-    options: {
-      hostname: url.hostname.replace(/^\[|\]$/g, ''),
-      port: url.port || (url.protocol === 'https:' ? 443 : 80),
-      path: `${url.pathname.replace(/\/$/, '')}${path}`,
-      method,
-      headers,
-    },
-    send: url.protocol === 'https:' ? httpsRequest : httpRequest,
-  }
-}
-
 export interface InvokeOptions {
   signal?: AbortSignal
   timeoutMs?: number
@@ -83,46 +59,30 @@ export async function runtimeInvoke(
   const release =
     endpoint.kind === 'http' ? await remoteRequests.acquire(new URL(endpoint.url).origin, policy.signal) : () => {}
   try {
-    // Opt-in socket: used only while it is ready. A call that was never sent falls back to HTTP; one that was sent and
-    // lost is an unknown outcome and is reported as such, exactly as a lost HTTP reply is.
-    const socket = endpoint.kind === 'http' ? socketFor(endpoint) : null
-    if (socket?.state === 'ready') {
+    // A host is called over its one socket, waiting briefly for it to connect. There is no second transport: a refused
+    // token or a host without a socket is reported as such. A call lost after it was sent has an unknown outcome; one
+    // never sent is retried once on the reconnected socket. The service on this machine fails at once when nothing
+    // listens, with the connection error code (ENOENT, ECONNREFUSED) the app uses to decide whether to start it.
+    const options = {
+      ...(policy.operationKey ? { operationKey: policy.operationKey } : {}),
+      ...(policy.timeoutMs ? { timeoutMs: policy.timeoutMs } : {}),
+      ...(policy.signal ? { signal: policy.signal } : {}),
+    }
+    const local = endpoint.kind === 'socket'
+    const socket = hostSocket(endpoint)
+    for (let attempt = 0; ; attempt++) {
       try {
-        return await socket.invoke(method, args, {
-          ...(policy.operationKey ? { operationKey: policy.operationKey } : {}),
-          ...(policy.timeoutMs ? { timeoutMs: policy.timeoutMs } : {}),
-          ...(policy.signal ? { signal: policy.signal } : {}),
-        })
+        await socket.whenReady(Math.min(policy.timeoutMs ?? 10_000, 10_000), policy.signal, { failFast: local })
       } catch (error) {
-        if (!(error as { notSent?: boolean }).notSent) throw error
+        if (local && (error as { code?: string }).code) forgetHostSocket(endpoint)
+        throw error
+      }
+      try {
+        return await socket.invoke(method, args, options)
+      } catch (error) {
+        if (!(error as { notSent?: boolean }).notSent || attempt >= 1) throw error
       }
     }
-    return await new Promise((resolve, reject) => {
-      const { options, send } = prepare(target, '/invoke', 'POST', { 'Content-Type': 'application/json' })
-      options.signal = policy.signal
-      const req = send(options, (res) => {
-        const chunks: Buffer[] = []
-        res.on('data', (c) => chunks.push(c))
-        res.on('error', reject)
-        res.on('end', () => {
-          if (res.statusCode === 401) return reject(new Error('The server rejected the access token'))
-          if (res.statusCode === 429) return reject(new Error('Too many failed attempts; try again shortly'))
-          try {
-            const body = JSON.parse(Buffer.concat(chunks).toString())
-            body.error ? reject(new Error(body.error)) : resolve(body.value)
-          } catch (e) {
-            reject(e)
-          }
-        })
-      })
-      const deadline = setTimeout(
-        () => req.destroy(new Error('Background service request timed out')),
-        policy.timeoutMs ?? 180000,
-      )
-      req.once('close', () => clearTimeout(deadline))
-      req.on('error', reject)
-      req.end(encodeInvoke(method, args, policy.operationKey))
-    })
   } finally {
     release()
   }
@@ -274,9 +234,10 @@ export interface SubscribeOptions {
   /** Local desktop identity used to bind private broker messages to this event stream. Never sent to a remote host. */
   localClientId?: string
   retryMode?: 'events' | 'periodic'
+  /** Treat the host as needing the network even if its address is loopback (tests, tunnels). Derived from the address when absent. */
+  networkBound?: boolean
   presencePort?: number
   watchWake?: (wake: () => void) => () => void
-  attempts?: WorkLimiter
 }
 export function subscribeRuntime(
   target: string | RuntimeEndpoint,
@@ -284,200 +245,107 @@ export function subscribeRuntime(
   monitor: NetworkMonitor = runtimeNetwork,
   policy: SubscribeOptions = {},
 ): () => void {
+  return subscribeSocket(toEndpoint(target), receive, monitor, policy)
+}
+
+/**
+ * Events from a host arrive on its one socket, shared with that host's calls: a remote host's WebSocket, or the local
+ * service's unix socket. The socket keeps its own bounded, jittered reconnects; this adds what the desktop needs on
+ * top: nothing is sent to a remote host without a usable network, a network change or wake reconnects at once, a
+ * refused token ends the subscription without retrying, and the local service is retried quickly and without limit.
+ */
+function subscribeSocket(
+  endpoint: RuntimeEndpoint,
+  receive: (channel: string, payload: any) => void,
+  monitor: NetworkMonitor,
+  policy: SubscribeOptions,
+): () => void {
+  const remote = endpoint.kind === 'http'
+  const hostname = remote ? new URL(endpoint.url).hostname.replace(/^\[|\]$/g, '') : ''
+  const needsNetwork =
+    remote && (policy.networkBound ?? (hostname !== 'localhost' && hostname !== '::1' && !/^127\./.test(hostname)))
+  const unavailable = () => needsNetwork && !monitor.current().available
   let closed = false,
-    retry: NodeJS.Timeout | undefined,
-    active: ReturnType<typeof httpRequest> | undefined,
-    failures = 0
-  // The host's run identity from its last connection; a different one means it restarted and held cursors are void.
-  let epoch: string | null = null
-  let generation = 0,
     connected = false,
-    connecting = false,
+    restarted = false,
+    failures = 0,
+    quiet: NodeJS.Timeout | undefined,
     offNetwork = () => {},
     offWake = () => {}
-  const endpoint = toEndpoint(target),
-    remote = endpoint.kind === 'http'
-  const attempts = policy.attempts ?? connectionAttempts
-  let cancelQueued = () => {},
-    releaseAttempt = () => {}
-  const hostname = remote ? new URL(endpoint.url).hostname.replace(/^\[|\]$/g, '') : ''
-  const needsNetwork = remote && hostname !== 'localhost' && hostname !== '::1' && !/^127\./.test(hostname)
-  const unavailable = () => needsNetwork && !monitor.current().available
-  const report = (waiting: 'network' | 'computer', retryAt?: number) =>
-    receive('background:connection', { connected: false, waiting, retryAt })
-  const startAttempt = () => {
-    if (closed) return
-    clearTimeout(retry)
-    retry = undefined
-    if (unavailable()) {
-      connecting = false
-      releaseAttempt()
-      releaseAttempt = () => {}
-      report('network')
-      return
-    }
-    const attempt = ++generation
-    active?.destroy()
-    connected = false
-    connecting = true
-    const extra: Record<string, string> =
-      remote && policy.presencePort ? { 'X-Ramu-Presence-Port': String(policy.presencePort) } : {}
-    if (!remote && policy.localClientId && /^[a-zA-Z0-9-]{1,100}$/.test(policy.localClientId))
-      extra['X-Ramu-Desktop-Client'] = policy.localClientId
-    const { options, send } = prepare(target, '/events', 'GET', extra)
-    let finished = false,
-      deadline: NodeJS.Timeout | undefined
-    const disconnected = () => {
-      if (closed || finished || attempt !== generation) return
-      finished = true
-      connected = false
-      connecting = false
-      clearTimeout(deadline)
-      releaseAttempt()
-      releaseAttempt = () => {}
-      active?.destroy()
-      if (unavailable()) {
-        report('network')
-        return
-      }
-      const delay = remote
-        ? ++failures <= 3
-          ? 1000 * 2 ** (failures - 1)
-          : policy.retryMode === 'events'
-            ? null
-            : 300000
-        : 1000
-      if (delay === null) {
-        report('computer')
-        return
-      }
-      report('computer', Date.now() + delay)
-      retry = setTimeout(connect, delay)
-    }
-    deadline = setTimeout(disconnected, 10000)
-    active = send(options, (res) => {
-      if (closed || attempt !== generation) {
-        res.destroy()
-        return
-      }
-      clearTimeout(deadline)
-      releaseAttempt()
-      releaseAttempt = () => {}
-      if (res.statusCode === 401) {
-        res.resume()
-        closed = true
-        connecting = false
-        offNetwork()
-        offWake()
+  const report = (waiting: 'network' | 'computer') => receive('background:connection', { connected: false, waiting })
+  const shutdown = () => {
+    closed = true
+    clearTimeout(quiet)
+    offNetwork()
+    offWake()
+    listening.stop()
+  }
+  const listener: HostListener = {
+    event: (channel, payload) => {
+      if (!closed) receive(channel, payload)
+    },
+    restart: () => {
+      restarted = true
+    },
+    state: (state) => {
+      if (closed) return
+      if (state === 'ready') {
+        connected = true
+        receive('background:connection', { connected: true })
+        if (restarted) receive('background:connection', { connected: true, restarted: true })
+        restarted = false
+      } else if (state === 'rejected') {
+        shutdown()
         receive('background:connection', { connected: false, rejected: true })
-        return
+      } else if (connected || state === 'unsupported') {
+        connected = false
+        if (!unavailable()) report('computer')
       }
-      if (res.statusCode !== 200) {
-        res.resume()
-        disconnected()
-        return
-      }
-      connected = true
-      connecting = false
-      // A brief successful connection must not reset the backoff of a flapping host.
-      const started = Date.now()
-      receive('background:connection', { connected: true })
-      let buffer = ''
-      res.setEncoding('utf8')
-      const heartbeat = () => {
-        if (Date.now() - started >= 30000) failures = 0
-        clearTimeout(deadline)
-        deadline = setTimeout(disconnected, 60000)
-      }
-      heartbeat()
-      res.on('data', (chunk) => {
-        if (closed || attempt !== generation) return
-        heartbeat()
-        buffer += chunk
-        for (;;) {
-          const i = buffer.indexOf('\n\n')
-          if (i < 0) break
-          const line = buffer.slice(0, i)
-          buffer = buffer.slice(i + 2)
-          if (!line.startsWith('data: ')) continue
-          try {
-            const event = JSON.parse(line.slice(6))
-            if (event.channel === 'background:epoch') {
-              const next = typeof event.payload?.epoch === 'string' ? event.payload.epoch : null
-              const restarted = epoch !== null && next !== null && next !== epoch
-              if (next) epoch = next
-              if (restarted) receive('background:connection', { connected: true, restarted: true })
-              continue
-            }
-            receive(event.channel, event.payload)
-          } catch {}
+      if (state === 'closed' && !connected) {
+        // Try briefly, then stop probing: an announcement or wake reconnects at once, and 'periodic' hosts also get one
+        // quiet check every five minutes.
+        if (remote && ++failures > 3 && !unavailable()) {
+          socket.suspend()
+          report('computer')
+          if (policy.retryMode !== 'events') {
+            clearTimeout(quiet)
+            quiet = setTimeout(() => !closed && socket.resume(), 300_000)
+            quiet.unref?.()
+          }
         }
-      })
-      res.on('end', disconnected)
-      res.on('error', disconnected)
-      res.on('close', disconnected)
-      active!.once('close', () => clearTimeout(deadline))
-    })
-    active.on('error', disconnected)
-    active.once('close', () => clearTimeout(deadline))
-    active.end()
+      }
+      if (state === 'ready') failures = 0
+    },
   }
-  const connect = () => {
-    if (closed) return
-    cancelQueued()
-    releaseAttempt()
-    releaseAttempt = () => {}
-    clearTimeout(retry)
-    retry = undefined
-    generation++
-    active?.destroy()
-    connected = false
-    connecting = true
-    if (!remote) {
-      startAttempt()
-      return
-    }
-    cancelQueued = attempts.schedule(new URL(endpoint.url).origin, (release) => {
-      releaseAttempt = release
-      startAttempt()
-    })
-  }
+  const listening = listenToHost(endpoint, listener, {
+    ...(remote && policy.presencePort ? { presencePort: policy.presencePort } : {}),
+    ...(!remote && policy.localClientId && /^[a-zA-Z0-9-]{1,100}$/.test(policy.localClientId)
+      ? { clientId: policy.localClientId }
+      : {}),
+  })
+  const socket = listening.socket
   if (needsNetwork)
     offNetwork = monitor.subscribe((force) => {
       if (closed) return
       if (unavailable()) {
-        generation++
-        cancelQueued()
-        releaseAttempt()
-        releaseAttempt = () => {}
         connected = false
-        connecting = false
-        clearTimeout(retry)
-        retry = undefined
-        active?.destroy()
+        socket.suspend()
         report('network')
       } else if (!connected || force) {
         failures = 0
-        connect()
+        socket.resume(force)
       }
     })
   if (remote && policy.watchWake)
     offWake = policy.watchWake(() => {
-      if (!closed && !connected && !connecting) {
+      if (!closed && !connected) {
         failures = 0
-        connect()
+        socket.resume()
       }
     })
-  connect()
-  return () => {
-    closed = true
-    generation++
-    cancelQueued()
-    releaseAttempt()
-    releaseAttempt = () => {}
-    offNetwork()
-    offWake()
-    clearTimeout(retry)
-    active?.destroy()
-  }
+  if (unavailable()) {
+    socket.suspend()
+    report('network')
+  } else if (socket.state === 'ready') listener.state?.('ready')
+  return shutdown
 }

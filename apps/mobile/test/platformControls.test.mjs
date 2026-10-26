@@ -1,6 +1,7 @@
 import * as toolActivity from '../../../packages/shared/src/chat/toolActivity.ts'
 import * as recentThreads from '../src/runtime/recentThreads.ts'
 import * as sendJournal from '../src/runtime/sendJournal.ts'
+import * as goalVerify from '../src/runtime/goalVerify.ts'
 import * as threadGroups from '../src/runtime/threadGroups.ts'
 import * as sideChat from '../src/runtime/sideChat.ts'
 import * as scrollSurface from '../src/runtime/scrollSurface.ts'
@@ -174,6 +175,9 @@ function load(file, os, overrides = {}, globals = {}) {
         return load('../../../packages/shared/src/browserLiveViewer.ts', os, {}, globals)
       if (id === '@ramu/shared/chat/toolActivity') return toolActivity
       if (id === './sendJournal') return sendJournal
+      if (id === './goalVerify') return goalVerify
+      if (id === '@ramu/shared/sync/streamSync')
+        return load('../../../packages/shared/src/sync/streamSync.ts', os, {}, globals)
       if (id === '../../../runtime/recentThreads') return recentThreads
       if (id === '../../../runtime/threadGroups') return threadGroups
       if (id === '../../../runtime/sideChat') return sideChat
@@ -3123,7 +3127,7 @@ for (const ambiguous of [false, true]) {
                 path: '/work/login',
               },
             ]
-          if (method === 'tasks.create')
+          if (method === 'thread.start')
             throw new HostError(
               'Repository HEAD changed since preview. Review the worktree plan and try again.',
               400,
@@ -3164,7 +3168,7 @@ for (const ambiguous of [false, true]) {
     store = render()
     const item = store.outbox[0]
     assert.equal(item.state, ambiguous ? 'uncertain' : 'review')
-    const first = calls.find((call) => call.method === 'tasks.create')
+    const first = calls.find((call) => call.method === 'thread.start')
     assert.equal(first.args[1][0].baseOid, 'old-base')
     assert.equal(first.args[0].branchChoice.name, 'mine/login')
     assert.ok(!calls.some((call) => call.method === 'tasks.plan'))
@@ -3176,14 +3180,14 @@ for (const ambiguous of [false, true]) {
       failWrite = true
       await assert.rejects(store.resumeOutbox(item.id, updated), /Storage full/)
       assert.equal(render().outbox[0].state, 'review')
-      assert.equal(calls.filter((call) => call.method === 'tasks.create').length, 1)
+      assert.equal(calls.filter((call) => call.method === 'thread.start').length, 1)
       failWrite = false
       await store.resumeOutbox(item.id, updated)
       updated[0].baseOid = 'caller-mutated'
       await settle()
       store = render()
       assert.equal(store.outbox[0].state, 'review', 'a second base movement pauses again')
-      const second = calls.filter((call) => call.method === 'tasks.create')[1]
+      const second = calls.filter((call) => call.method === 'thread.start')[1]
       assert.equal(second.args[0].requestId, first.args[0].requestId)
       assert.equal(second.args[1][0].baseOid, 'new-base')
       assert.ok(
@@ -4660,6 +4664,7 @@ for (const os of ['ios', 'android']) {
         throw new Error(`Unexpected ${args[1]}`)
       },
       subscribe: () => () => {},
+      watch: () => () => {},
     }
     const { TerminalScreen } = load('components/TerminalScreen.tsx', os, {
       react: hooks.react,
@@ -5017,6 +5022,7 @@ test('tool activity shortcuts follow actual tabs and sessions and ignore late re
       update = listener
       return () => {}
     },
+    watch: () => () => {},
   }
   const { useThreadToolActivity } = load(
     'runtime/useThreadToolActivity.ts',
@@ -5383,6 +5389,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'host', status: 'online', access: 'owner' }],
       subscribe: () => () => {},
+      watch: () => () => {},
       invoke: async (...args) => {
         calls.push(args)
         return [
@@ -5852,6 +5859,7 @@ for (const os of ['ios', 'android']) {
       computers: [{ id: 'a', access: 'owner' }],
       isOnline: () => true,
       subscribe: () => () => {},
+      watch: () => () => {},
       invoke: async (...args) => {
         calls.push(args)
         return settings
@@ -6887,6 +6895,7 @@ function deliveryStoreHarness() {
   const refs = []
   const calls = []
   const bindingRead = deferred()
+  const threadStart = { current: null }
   let holdBindings = true
   const initial = {
     computers: [{ id: 'a', name: 'Host', status: 'online' }],
@@ -6916,6 +6925,12 @@ function deliveryStoreHarness() {
     if (method === 'agent.goal' || method === 'settings.models.get') return null
     if (method === 'preferences.layers.get') return { mobile: null }
     if (method === 'settings.app.get') return {}
+    if (method === 'thread.start')
+      return threadStart.current
+        ? threadStart.current()
+        : { task: { id: 'new-task', workspaceId: 'w', projectId: 'no-project' }, session: { id: 'new-session' } }
+    if (method === 'tasks.create') return { id: 'new-task', workspaceId: 'w', projectId: 'no-project' }
+    if (method === 'agent.start') return { id: 'new-session' }
     return []
   }
   const { StoreProvider } = load('runtime/store.tsx', 'ios', {
@@ -6937,6 +6952,8 @@ function deliveryStoreHarness() {
       writeSendJournal() {},
     },
     './threadActivity': { normalizeHelperGroups: (rows) => rows },
+    './newChatHost': { newChatHost: () => 'a' },
+    './workspaces': workspaceChoices,
     './transport': { HostError: class HostError extends Error {} },
     './transcript': mobileTranscript,
     '@ramu/shared/chat/agentActivity': { agentActivityLabel: () => null },
@@ -6958,6 +6975,7 @@ function deliveryStoreHarness() {
     render,
     state,
     calls,
+    threadStart,
     attach,
     release() {
       holdBindings = false
@@ -6980,6 +6998,72 @@ test('an acknowledged send never leaves an empty transcript during the host snap
   assert.equal(h.state.current.outbox.length, 0)
   assert.equal(h.state.current.chats[0].items[0].text, 'Go')
   assert.equal(h.calls.filter(([method]) => method === 'agent.submit').length, 1)
+  h.dispose()
+})
+
+test('a new thread is created and started with one host call, without a plan or setup on the current checkout', async () => {
+  const h = deliveryStoreHarness()
+  h.attach()
+  await h.render().createChat({
+    computerId: 'a',
+    projectId: 'no-project',
+    text: 'Hi',
+    mode: 'current',
+    provider: 'claude-code',
+    model: '',
+    effort: '',
+  })
+  await settle()
+  const order = h.calls
+    .map(([method]) => method)
+    .filter((method) => /^(repos|tasks)\.(plan|create|setup)$|^agent\.start$|^thread\.start$/.test(method))
+  assert.deepEqual(order, ['thread.start'], 'one host call creates the thread and starts the agent')
+  assert.equal(h.state.current.chats.find((chat) => chat.taskId === 'new-task').sessionId, 'new-session')
+  h.dispose()
+})
+
+const newThread = {
+  computerId: 'a',
+  projectId: 'no-project',
+  text: 'Hi',
+  mode: 'current',
+  provider: 'claude-code',
+  model: '',
+  effort: '',
+}
+
+test('a thread whose start failed on the host is kept, so the retry starts it instead of creating another', async () => {
+  const h = deliveryStoreHarness()
+  h.attach()
+  h.threadStart.current = () => ({
+    task: { id: 'new-task', workspaceId: 'w' },
+    session: null,
+    error: 'Provider unavailable',
+  })
+  await h.render().createChat(newThread)
+  await settle()
+  const [item] = h.state.current.outbox
+  assert.equal(item.state, 'uncertain')
+  assert.equal(item.error, 'Provider unavailable')
+  const chat = h.state.current.chats.find((c) => c.taskId === 'new-task')
+  assert.ok(chat, 'the host thread is adopted')
+  assert.equal(chat.sessionId, null)
+  h.dispose()
+})
+
+test('a host that predates thread.start gets the same steps one call at a time', async () => {
+  const h = deliveryStoreHarness()
+  h.attach()
+  h.threadStart.current = () => {
+    throw new Error('Unknown method thread.start')
+  }
+  await h.render().createChat(newThread)
+  await settle()
+  const steps = h.calls
+    .map(([method]) => method)
+    .filter((m) => /^(thread\.start|tasks\.(create|setup)|agent\.start)$/.test(m))
+  assert.deepEqual(steps, ['thread.start', 'tasks.create', 'agent.start'])
+  assert.equal(h.state.current.chats.find((c) => c.taskId === 'new-task').sessionId, 'new-session')
   h.dispose()
 })
 
@@ -7248,6 +7332,7 @@ for (const os of ['ios', 'android']) {
       chats: [],
       projects: [],
       subscribe: () => () => {},
+      watch: () => () => {},
       invoke: async (_host, method) => {
         if (method === 'term.list') return []
         if (method === 'term.open') {
@@ -7702,6 +7787,7 @@ test('side-question input uses the thread dock and lifts the transcript inset wi
         language: 'en',
         computers: [{ id: 'host', status: 'online', access: 'owner' }],
         subscribe: () => () => {},
+        watch: () => () => {},
         invoke: async () => [],
       }),
     },

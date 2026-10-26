@@ -17,13 +17,14 @@ LAN/VPN. The production app has no seeded hosts or simulated conversations.
    and sign-in belong to the host; the model picker reads that host's catalog.
 
 Use the host's reachable LAN/VPN address on a physical phone, not `localhost`.
+Once paired, the phone learns the host's LAN/VPN addresses on connection and every minute while online. When the current route fails, it checks the alternatives concurrently and switches only after the candidate proves the paired host's identity and answers over the app's WebSocket. An identity endpoint alone does not make a route usable. The saved address is also verified before opening a new authenticated connection, so a reassigned LAN address does not receive the device credential. The previous working address stays saved for the next network change; drafts and queued messages stay with the same host. HTTPS pairings never automatically downgrade to HTTP. The VPN interface must be active on the host during a successful route refresh so its address can be learned; subnet routing does not provide nearby multicast discovery. New, previously unseen addresses still need a QR scan or manual address review if every saved route is unreachable.
 The Expo development tunnel exposes the app bundle, **not** your workspace server.
 The host must remain awake and reachable. Old hosts without the `mobile-companion`
 capability show an update error; rebuild/restart the host rather than reusing mocks.
 
 The React Native/React pins are isolated from desktop React through Metro. Install
 SDK-compatible native modules with `pnpm --filter @ramu/mobile exec expo install …`.
-`pnpm dev:mobile` starts Metro for the development build on the Mac's LAN address (`scripts/start.mjs`; an iPhone often cannot resolve the `.local` name). The development build is the default because pairing now uses WebRTC, and the native adaptive header, background push and scroll-view bridge need native code that Expo Go does not include. `pnpm --filter @ramu/mobile dev:go` still starts Metro for Expo Go as an opt-in layout preview, without pairing or native features.
+`pnpm dev:mobile` starts Metro for the development build, preferring a NetBird/Tailscale IPv4 address when present, then another VPN interface, then Wi-Fi/Ethernet (`scripts/start.mjs`). This avoids `.local` names an iPhone may not resolve. Keep the phone connected to the same mesh VPN when using that address. Explicit `REACT_NATIVE_PACKAGER_HOSTNAME` or `EXPO_PACKAGER_PROXY_URL` values are preserved; `--tunnel` and `--localhost` bypass automatic selection. Restart Metro after the computer's interfaces change; Metro prints other available addresses for troubleshooting. The development build is the default because pairing now uses WebRTC, and the native adaptive header, background push and scroll-view bridge need native code that Expo Go does not include. `pnpm --filter @ramu/mobile dev:go` still starts Metro for Expo Go as an opt-in layout preview, without pairing or native features.
 
 ## Project actions
 
@@ -106,7 +107,7 @@ instead of blur, and one shared `Toggle`. JDK 21 is recommended for Android buil
 The thread's Browser viewer shows the same host tab the agent controls. Live Chromium frames arrive independently of tab/status refreshes, with a latest-frame buffer and up to 30 displayed frames per second on a fast connection. Touch drags scroll while the finger moves; tapping a page field raises the matching phone keyboard, and clicks, keys and text keep their order behind pending input. While the phone controls a host-managed page, the page is laid out at the phone's size and restored when control changes. Backgrounding or closing the viewer stops requests and pauses control. Older hosts retain the screenshot fallback. This uses the existing native Image component and needs no new native module.
 
 The app suspends streams when backgrounded and rehydrates all saved hosts on
-return. Agents continue on their hosts. It never promises background SSE delivery.
+return. Agents continue on their hosts. It never promises background event delivery.
 Full-access devices can run shells and agents. The host can instead issue a viewer pairing for reading threads and answering input requests. Device access expires after 90 days of inactivity by default; active use extends it. Network/device administration stays on the host desktop/CLI. See [remote access](../../SECURITY.md#remote-access).
 
 ## Background notifications
@@ -115,7 +116,7 @@ The implementation is opt-in under Settings. Each paired device registers its Ex
 push token independently with every host. Hosts send generic completion/input/failure
 alerts through Expo's gateway, with opaque host/task/session routing IDs instead
 of prompt or transcript content. Revocation and invalid-token receipts remove registrations.
-Foreground push banners are suppressed so SSE supplies the in-app notification. Notification taps wait for saved hosts to load before routing, and duplicate startup/live responses open the destination once.
+Foreground push banners are suppressed so the host's event stream supplies the in-app notification. Notification taps wait for saved hosts to load before routing, and duplicate startup/live responses open the destination once.
 
 Settings → Notifications has one switch per kind of alert, sent to each host with the registration so the host only pushes what is on: a thread needs you, a thread fails, a thread finishes, a scheduled run finishes, fails or could not start (a thread started by a schedule counts here instead of under failed or finished; needing input is still "needs you"), and the **Daily recap**. A scheduled run that fails before its thread exists pushes "A scheduled run could not start." once and a tap opens the Schedules tab. The daily recap is off by default: when on, the host sends one "Your daily recap is ready." a day (no content) and a tap opens Inbox → Recaps. Recaps and learned summaries are otherwise silent and only show in the Inbox. Hosts that predate the switches ignore them and send every alert except the daily recap.
 

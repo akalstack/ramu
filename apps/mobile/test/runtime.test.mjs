@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { EventParser, HostClient, HostError, normalizeAddress, needsHttpConsent } from '../src/runtime/transport.ts'
+import { normalizeAddress, needsHttpConsent } from '../src/runtime/transport.ts'
 import { transcript } from '../src/runtime/transcript.ts'
 import { decodePairQr, encodePairQr } from '@ramu/contracts'
 
@@ -10,76 +10,6 @@ test('addresses default to HTTPS and require explicit trusted HTTP, rejecting dr
   assert.equal(normalizeAddress('http://host:7421', true), 'http://host:7421')
   for (const url of ['https://user:secret@host', 'https://host/proxy', 'https://host/?token=x', 'ftp://host'])
     assert.throws(() => normalizeAddress(url, true))
-})
-test('SSE decodes comments, CRLF and every possible chunk boundary without duplicate events', () => {
-  const wire =
-    ': connected\r\n\r\ndata: {"channel":"agent:event",\r\ndata: "payload":{"sessionId":"one","event":{"kind":"text","text":"你好 🌙"}}}\r\n\r\n'
-  for (let split = 1; split < wire.length; split++) {
-    const values = []
-    const parser = new EventParser((channel, payload) => values.push({ channel, payload }))
-    parser.push(wire.slice(0, split))
-    parser.push(wire.slice(split))
-    assert.equal(values.length, 1)
-    assert.equal(values[0].payload.event.text, '你好 🌙')
-  }
-})
-test('invoke preserves optional argument positions, bearer token stays in headers', async () => {
-  let request
-  const client = new HostClient('https://host', 'device-secret', async (url, options) => {
-    request = { url, options }
-    return new Response('{"value":true}')
-  })
-  assert.equal(await client.invoke('git.commit', 'task', 'repo', 'message', undefined, 'head'), true)
-  assert.equal(request.url, 'https://host/invoke')
-  assert.equal(request.options.headers.Authorization, 'Bearer device-secret')
-  assert.match(request.options.body, /\$ramuUndefined/)
-  assert.ok(!request.options.body.includes('device-secret'))
-})
-test('authentication errors and ambiguous submissions are distinct; neither retries a mutation', async () => {
-  let calls = 0
-  const client = new HostClient('https://host', 'token', async (_url, options) => {
-    if (String(options.body).includes('agent.send')) calls++
-    throw new Error('offline')
-  })
-  await assert.rejects(
-    client.invoke('agent.send', 'session', 'hello'),
-    (error) => error instanceof HostError && error.ambiguous,
-  )
-  assert.equal(calls, 1)
-  const revoked = new HostClient('https://host', 'token', async () => new Response('', { status: 401 }))
-  await assert.rejects(revoked.invoke('tasks.list'), (error) => error.status === 401 && !error.ambiguous)
-})
-test('stream reads while hydration is pending and aborts cleanly', async () => {
-  let finish
-  let read = false
-  const hydration = new Promise((resolve) => {
-    finish = resolve
-  })
-  const controller = new AbortController()
-  const client = new HostClient(
-    'https://host',
-    'token',
-    async () =>
-      new Response(
-        new ReadableStream({
-          start(stream) {
-            stream.enqueue(new TextEncoder().encode('data: {"channel":"usage:changed","payload":[]}\n\n'))
-            stream.close()
-          },
-        }),
-      ),
-  )
-  const running = client.stream(
-    () => {
-      read = true
-      controller.abort()
-      finish()
-    },
-    () => hydration,
-    controller.signal,
-  )
-  await running
-  assert.equal(read, true)
 })
 test('QR offers contain expiring one-time codes, reject tokens, unknown schemes and expired offers', () => {
   const offer = { url: 'https://host:7421', code: 'ABCDE-FGHJK', expiresAt: 2000 }
@@ -185,36 +115,4 @@ test('a human background stop remains visible without becoming a message or comp
   assert.equal(items[0].kind, 'note')
   assert.equal(items[0].title, 'Background command stop requested')
   assert.equal(items[0].detail, 'pnpm dev')
-})
-
-test('a host with operation keys gets the same key on a retried send after a lost connection', async () => {
-  const keys = []
-  let drops = 1
-  const client = new HostClient('https://host', 'token', async (_url, options) => {
-    const body = JSON.parse(options.body)
-    if (body.method === 'background.status') return new Response('{"value":{"capabilities":["operation-keys"]}}')
-    keys.push(body.operationKey)
-    if (drops-- > 0) throw new Error('connection lost')
-    return new Response('{"value":"sent"}')
-  })
-  assert.equal(await client.invoke('agent.send', 'session', 'hello'), 'sent')
-  assert.equal(keys.length, 2)
-  assert.match(keys[0], /^[A-Za-z0-9_-]{8,128}$/)
-  assert.equal(keys[0], keys[1])
-})
-test('answers from the host are final and unlisted methods carry no key', async () => {
-  let sends = 0
-  const client = new HostClient('https://host', 'token', async (_url, options) => {
-    const body = JSON.parse(options.body)
-    if (body.method === 'background.status') return new Response('{"value":{"capabilities":["operation-keys"]}}')
-    if (body.method === 'agent.send') {
-      sends++
-      return new Response('{"error":"Session not found"}')
-    }
-    assert.equal(body.operationKey, undefined)
-    return new Response('{"value":[]}')
-  })
-  await assert.rejects(client.invoke('agent.send', 'session', 'hello'), /Session not found/)
-  assert.equal(sends, 1)
-  assert.deepEqual(await client.invoke('tasks.list'), [])
 })

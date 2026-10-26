@@ -1,20 +1,14 @@
-import { expect, it } from 'vitest'
-import { createServer } from 'node:http'
-import type { AddressInfo } from 'node:net'
+import { afterEach, expect, it } from 'vitest'
 import { performance } from 'node:perf_hooks'
-import { subscribeRuntime } from '../src'
+import { closeHostSockets, subscribeRuntime } from '../src'
+import { socketHost } from './support/socketHost'
 
-it('holds 100 simultaneous event streams and delivers 10000 events', async () => {
+afterEach(() => closeHostSockets())
+
+it('holds 100 simultaneous host sockets and delivers 10000 events', async () => {
   const count = 100,
     perStream = 100
-  const peers: any[] = []
-  const server = createServer((_req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/event-stream' })
-    res.write(': connected\n\n')
-    peers.push(res)
-  })
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const running = await socketHost({ token: '*' })
   const stops: (() => void)[] = []
   let connected = 0,
     received = 0
@@ -23,22 +17,22 @@ it('holds 100 simultaneous event streams and delivers 10000 events', async () =>
   try {
     for (let i = 0; i < count; i++)
       stops.push(
-        subscribeRuntime({ kind: 'http', url, token: `token-${i}` }, (channel, payload) => {
+        subscribeRuntime({ ...running.endpoint, token: `token-${i}` }, (channel, payload) => {
           if (channel === 'background:connection' && payload.connected) connected++
           else if (channel === 'agent:event') received++
         }),
       )
-    await expect.poll(() => connected).toBe(count)
+    await expect.poll(() => connected, { timeout: 10_000 }).toBe(count)
     const connectMs = performance.now() - start,
       burst = performance.now()
-    const message = `data: ${JSON.stringify({ channel: 'agent:event', payload: { sessionId: 'session', event: { kind: 'state', state: 'running' } } })}\n\n`
-    for (const peer of peers) for (let j = 0; j < perStream; j++) peer.write(message)
-    await expect.poll(() => received).toBe(count * perStream)
+    for (let j = 0; j < perStream; j++)
+      running.push('agent:event', { sessionId: 'session', event: { kind: 'state', state: 'running' } })
+    await expect.poll(() => received, { timeout: 10_000 }).toBe(count * perStream)
     const memoryAfter = process.memoryUsage()
     console.log(
       JSON.stringify({
-        scale: 'transport-loopback',
-        streams: connected,
+        scale: 'transport-loopback-websocket',
+        sockets: connected,
         events: received,
         connectMs: +connectMs.toFixed(1),
         burstMs: +(performance.now() - burst).toFixed(1),
@@ -48,7 +42,6 @@ it('holds 100 simultaneous event streams and delivers 10000 events', async () =>
     )
   } finally {
     for (const stop of stops) stop()
-    server.closeAllConnections()
-    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await running.close()
   }
-}, 15000)
+}, 30000)

@@ -293,6 +293,11 @@ export default function ChatScreen() {
   const openedAt = useRef(Date.now())
   const seen = useRef(new Set<string>())
   // Finished turns fold into "Worked for…"; the running turn renders block by block, and only its newest reply animates.
+  // The host streams the open thread's transcript in full and every other thread in brief, so a thread on screen asks for it.
+  useEffect(() => {
+    if (!chat?.sessionId) return
+    return store.watch(chat.computerId, ['agent:event'], { 'agent:event': [chat.sessionId] })
+  }, [chat?.computerId, chat?.sessionId])
   // Recorded change reviews end their turns as Changes cards, as on desktop; re-read whenever the thread settles.
   const [reviews, setReviews] = useState<import('@ramu/shared/types').ChangeReview[]>([])
   useEffect(() => {
@@ -668,6 +673,12 @@ export default function ChatScreen() {
                   </T>
                 </>
               ) : null}
+              <View
+                accessible
+                accessibilityLabel={`${computer?.name ?? say_('Host unavailable')} · ${say_(computer?.status === 'online' ? 'Online' : computer?.status === 'connecting' ? 'Connecting…' : 'Offline')}`}
+              >
+                <ConnectionDot status={computer?.status ?? 'offline'} size={5} />
+              </View>
             </View>
           ) : (
             <View
@@ -906,7 +917,7 @@ export default function ChatScreen() {
                       }}
                       style={{
                         alignSelf: 'center',
-                        height: 32,
+                        minHeight: 44,
                         paddingHorizontal: space.l,
                         borderRadius: radius.full,
                         justifyContent: 'center',
@@ -999,50 +1010,6 @@ export default function ChatScreen() {
                 </View>
               }
             />
-            {/* iOS: shown only when the host isn't reachable; project and branch are the header subtitle; the host is in the ⋯ menu. */}
-            {ios ? (
-              <Presence
-                visible={computer?.status !== 'online'}
-                style={{
-                  position: 'absolute',
-                  top: topInset + space.s,
-                  left: space.l,
-                  right: space.l,
-                  alignItems: 'center',
-                }}
-              >
-                <Glass
-                  radius={radius.full}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    height: 28,
-                    paddingHorizontal: space.m,
-                    maxWidth: '100%',
-                  }}
-                >
-                  <View
-                    accessible
-                    accessibilityLabel={`Host: ${computer?.name ?? 'Unavailable'}, ${computer?.status ?? 'offline'}`}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}
-                  >
-                    <Monitor size={11} color={c.muted} />
-                    <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                      {computer?.name ?? 'Host unavailable'}
-                    </T>
-                    <ConnectionDot status={computer?.status ?? 'offline'} size={5} />
-                    <T size={12} tone="muted">
-                      {computer?.status === 'connecting'
-                        ? 'Connecting…'
-                        : computer?.status === 'revoked'
-                          ? 'Pair again'
-                          : 'Offline'}
-                    </T>
-                  </View>
-                </Glass>
-              </Presence>
-            ) : null}
             {ios ? null : <TopFade visible={scrolled} color={c.window} />}
             <KeyboardLift keyboard={keyboard}>
               <BottomFade height={composerHeight * 0.75} color={c.window} />
@@ -1195,8 +1162,8 @@ export default function ChatScreen() {
                     radius={radius.full}
                     interactive
                     style={{
-                      width: 40,
-                      height: 40,
+                      width: 44,
+                      height: 44,
                       alignItems: 'center',
                       justifyContent: 'center',
                       backgroundColor: floatingChrome ? undefined : c.raised,

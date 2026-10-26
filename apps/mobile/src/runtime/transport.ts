@@ -1,4 +1,4 @@
-import { encodeInvoke, PROTOCOL_HEADER, PROTOCOL_VERSION, RECOVERABLE_MUTATIONS, isLoopbackHost } from '@ramu/contracts'
+import { PROTOCOL_HEADER, PROTOCOL_VERSION, RECOVERABLE_MUTATIONS, isLoopbackHost } from '@ramu/contracts'
 import type { PushEvents, RamuMethods } from '@ramu/shared/api'
 
 export class HostError extends Error {
@@ -33,7 +33,6 @@ export function normalizeAddress(input: string, allowHttp = false): string {
     throw new Error('Allow HTTP only for a trusted private network.')
   return url.origin
 }
-/** Handles arbitrary chunk boundaries, CRLF, comments and multi-line SSE data. */
 export function needsHttpConsent(input: string): boolean {
   try {
     const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`)
@@ -42,37 +41,17 @@ export function needsHttpConsent(input: string): boolean {
     return false
   }
 }
-export class EventParser {
-  private buffer = ''
-  private receive: (channel: keyof PushEvents, payload: any) => void
-  constructor(receive: (channel: keyof PushEvents, payload: any) => void) {
-    this.receive = receive
-  }
-  push(text: string) {
-    this.buffer += text
-    if (this.buffer.length > 20_000_000) throw new Error('Event stream frame is too large')
-    let match: RegExpExecArray | null
-    while ((match = /\r?\n\r?\n/.exec(this.buffer))) {
-      const block = this.buffer.slice(0, match.index)
-      this.buffer = this.buffer.slice(match.index + match[0].length)
-      const data = block
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).replace(/^ /, ''))
-        .join('\n')
-      if (!data) continue
-      const event = JSON.parse(data)
-      if (typeof event.channel !== 'string' || !('payload' in event)) throw new Error('Invalid host event')
-      this.receive(event.channel, event.payload)
-    }
-  }
-}
-/** The opt-in call socket for a host, registered by `socketTransport.ts`; absent in tests and when sockets are off. */
-interface CallSocket {
+/** The host's one socket, registered by `socketTransport.ts`: it carries every call and every event for the phone. */
+export interface HostSocket {
   state: string
+  whenReady(timeoutMs?: number, signal?: AbortSignal): Promise<void>
   invoke(method: string, args: unknown[], options: { operationKey?: string; timeoutMs?: number }): Promise<unknown>
+  /** Asks the host for on-demand channels (see `hostSubscription.ts`) until the returned function is called. */
+  watch(channels: readonly string[], keys?: Record<string, readonly string[]>): () => void
+  /** Hears the host's events and the socket's state changes until the returned function is called. */
+  listen(listener: { event(channel: string, payload: unknown): void; state?(state: string): void }): () => void
 }
-let socketProvider: ((address: string, token: string) => CallSocket | null) | null = null
+let socketProvider: ((address: string, token: string) => HostSocket) | null = null
 let closeSocket: ((address: string, token: string) => void) | undefined
 export function registerSocketProvider(
   provider: typeof socketProvider,
@@ -81,9 +60,29 @@ export function registerSocketProvider(
   socketProvider = provider
   closeSocket = close
 }
+const socketOf = (address: string, token: string): HostSocket => {
+  if (!socketProvider) throw new HostError('Connecting to a host needs a WebSocket, which this build does not have.')
+  return socketProvider(address, token)
+}
+/** Waiting for the socket fails the way an HTTP answer would have: a refused token or a host that predates sockets. */
+function connectionError(error: unknown): HostError {
+  const failure = error as { status?: number; message?: string }
+  if (failure?.status === 401 || failure?.status === 426)
+    return new HostError(
+      failure.status === 401
+        ? 'Pairing was revoked. Pair this host again.'
+        : 'Update Ramu on this host: it has no WebSocket.',
+      failure.status,
+    )
+  return new HostError(
+    error instanceof Error && (error as { notSent?: boolean }).notSent
+      ? 'Host unreachable'
+      : (failure?.message ?? 'Host unreachable'),
+  )
+}
 export type Fetcher = typeof globalThis.fetch
 export class HostClient {
-  private controllers = new Set<AbortController>()
+  private streams = new Set<() => void>()
   private lifetime = new AbortController()
   readonly address: string
   private token: string
@@ -97,8 +96,8 @@ export class HostClient {
     if (this.lifetime.signal.aborted) return
     this.lifetime.abort()
     closeSocket?.(this.address, this.token)
-    for (const controller of this.controllers) controller.abort()
-    this.controllers.clear()
+    for (const end of this.streams) end()
+    this.streams.clear()
   }
   /** The token requests use; renewal swaps it after the new one is saved. */
   currentToken() {
@@ -109,9 +108,6 @@ export class HostClient {
   }
   get fetch(): Fetcher {
     return this.fetcher
-  }
-  private headers() {
-    return { Authorization: `Bearer ${this.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) }
   }
   private operationKeys: Promise<boolean> | undefined
   /** Whether the host advertises `operation-keys`, read once from its status. A host that does not say never gets retries. */
@@ -148,12 +144,42 @@ export class HostClient {
       request.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
     })
   }
+  /**
+   * The platform socket cannot say why an upgrade failed, so a socket that never became ready is checked once over
+   * HTTP, which can: a revoked token is reported as such, and a reachable host with a blocked socket says so.
+   */
+  private async diagnose(error: unknown): Promise<HostError> {
+    const known = connectionError(error)
+    if (known.status === 401 || known.status === 426 || this.lifetime.signal.aborted) return known
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8_000)
+    try {
+      const response = await this.fetcher(`${this.address}/session`, {
+        headers: { Authorization: `Bearer ${this.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) },
+        signal: controller.signal,
+      })
+      if (response.status === 401) return new HostError('Pairing was revoked. Pair this host again.', 401)
+      if (response.ok)
+        return new HostError('The host is reachable but this network blocks WebSockets. Try another network or route.')
+    } catch {
+      // Unreachable over HTTP as well: the plain message below stands.
+    } finally {
+      clearTimeout(timer)
+    }
+    return known
+  }
   private async call(method: string, args: unknown[], operationKey?: string): Promise<any> {
     if (this.lifetime.signal.aborted) throw new HostError('Connection suspended before sending.')
-    // Opt-in socket, used only while ready. A call that was never sent falls back to HTTP; one that was sent and lost
-    // has an unknown outcome and is reported as such, exactly as a lost HTTP reply is.
-    const socket = socketProvider?.(this.address, this.token)
-    if (socket?.state === 'ready') {
+    // One socket carries every call. There is no second transport: a call waits briefly for the socket, and a refused
+    // token or a host without a socket is reported as that. A call lost after it was sent has an unknown outcome.
+    const socket = socketOf(this.address, this.token)
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.untilClosed(socket.whenReady(15_000))
+      } catch (error) {
+        if (error instanceof HostError) throw error
+        throw await this.diagnose(error)
+      }
       try {
         return await this.untilClosed(
           socket.invoke(method, args, { ...(operationKey ? { operationKey } : {}), timeoutMs: 45_000 }),
@@ -161,112 +187,69 @@ export class HostClient {
       } catch (error) {
         if (error instanceof HostError) throw error
         const failure = error as { notSent?: boolean; status?: number; code?: string }
-        if (!failure.notSent) {
-          if (failure.code === 'ECONNRESET' || !(error instanceof Error))
-            throw new HostError(
-              'Connection interrupted. The host may have received this action. Refresh and check before retrying.',
-              0,
-              true,
-            )
-          throw new HostError(error.message, failure.status ?? 0)
-        }
+        // Never sent: the socket dropped between ready and send, so one more wait cannot duplicate the action.
+        if (failure.notSent && attempt < 1) continue
+        if (failure.notSent) throw new HostError('Host unreachable')
+        if (failure.code === 'ECONNRESET' || !(error instanceof Error))
+          throw new HostError(
+            'Connection interrupted. The host may have received this action. Refresh and check before retrying.',
+            0,
+            true,
+          )
+        throw new HostError(error.message, failure.status ?? 0)
       }
-    }
-    const controller = new AbortController()
-    this.controllers.add(controller)
-    const timer = setTimeout(() => controller.abort(), 45_000)
-    try {
-      const response = await this.untilClosed(
-        this.fetcher(`${this.address}/invoke`, {
-          method: 'POST',
-          headers: { ...this.headers(), 'Content-Type': 'application/json' },
-          body: encodeInvoke(method, args, operationKey),
-          signal: controller.signal,
-        }),
-      )
-      const text = await this.untilClosed(response.text())
-      let result: any
-      try {
-        result = text ? JSON.parse(text) : {}
-      } catch {
-        throw new HostError('The host returned an invalid response. Refresh before retrying.', response.status, true)
-      }
-      if (!response.ok || result.error)
-        throw new HostError(
-          result.error ||
-            (response.status === 401
-              ? 'Pairing was revoked. Pair this host again.'
-              : `Host request failed (${response.status})`),
-          response.status,
-        )
-      return result.value
-    } catch (error) {
-      if (error instanceof HostError) throw error
-      throw new HostError(
-        'Connection interrupted. The host may have received this action. Refresh and check before retrying.',
-        0,
-        true,
-      )
-    } finally {
-      clearTimeout(timer)
-      this.controllers.delete(controller)
     }
   }
+  /** Frequent channels only one screen reads are taken while that screen is open, not all the time. */
+  watch(channels: readonly string[], keys?: Record<string, readonly string[]>): () => void {
+    return socketOf(this.address, this.token).watch(channels, keys)
+  }
+  /**
+   * Delivers the host's events from its socket until the socket drops or `signal` aborts, running `ready` (hydration)
+   * with the listener already attached so nothing that changes during the snapshot is missed. The socket reconnects on
+   * its own; the caller starts another stream, and hydrates again, when this one ends.
+   */
   async stream(
     receive: (channel: keyof PushEvents, payload: any) => void,
     ready: () => Promise<void>,
     signal: AbortSignal,
   ) {
     if (signal.aborted) return
-    const controller = new AbortController()
-    this.controllers.add(controller)
-    const abort = () => controller.abort()
-    signal.addEventListener('abort', abort)
-    const timeout = setTimeout(abort, 15_000)
-    let watchdog: ReturnType<typeof setTimeout> | undefined
+    const socket = socketOf(this.address, this.token)
     try {
-      const response = await this.fetcher(`${this.address}/events`, {
-        headers: this.headers(),
-        signal: controller.signal,
-      })
-      clearTimeout(timeout)
-      if (!response.ok)
-        throw new HostError(
-          response.status === 401
-            ? 'Pairing was revoked. Pair again.'
-            : `Event stream unavailable (${response.status})`,
-          response.status,
-        )
-      if (!response.body) throw new Error('Streaming is unavailable on this device')
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      const parser = new EventParser(receive)
-      // Begin reading before hydration: changes during the snapshot are buffered by the store.
-      let hydrationError: unknown
-      const hydration = ready().catch((error) => {
-        hydrationError = error
-        controller.abort()
-      })
-      try {
-        while (!signal.aborted) {
-          clearTimeout(watchdog)
-          watchdog = setTimeout(abort, 65_000)
-          const chunk = await reader.read()
-          if (chunk.done) break
-          parser.push(decoder.decode(chunk.value, { stream: true }))
-        }
-        await hydration
-        if (hydrationError) throw hydrationError
-      } finally {
-        await reader.cancel().catch(() => {})
-        await hydration.catch(() => {})
-      }
-      if (!signal.aborted) throw new HostError('The host disconnected')
-    } finally {
-      clearTimeout(timeout)
-      clearTimeout(watchdog)
-      signal.removeEventListener('abort', abort)
-      this.controllers.delete(controller)
+      await socket.whenReady(15_000, signal)
+    } catch (error) {
+      if (signal.aborted) return
+      throw await this.diagnose(error)
     }
+    if (signal.aborted) return
+    let gone!: () => void
+    const dropped = new Promise<void>((resolve) => (gone = resolve))
+    const abort = () => gone()
+    signal.addEventListener('abort', abort, { once: true })
+    this.streams.add(abort)
+    const stop = socket.listen({
+      event: (channel, payload) => {
+        if (!signal.aborted) receive(channel as keyof PushEvents, payload)
+      },
+      state: (state) => {
+        if (state !== 'ready') gone()
+      },
+    })
+    let hydrationError: unknown
+    const hydration = ready().catch((error) => {
+      hydrationError = error
+      gone()
+    })
+    try {
+      await dropped
+      await hydration
+      if (hydrationError) throw hydrationError
+    } finally {
+      stop()
+      this.streams.delete(abort)
+      signal.removeEventListener('abort', abort)
+    }
+    if (!signal.aborted) throw new HostError('The host disconnected')
   }
 }

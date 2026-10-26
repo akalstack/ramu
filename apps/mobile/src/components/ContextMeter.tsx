@@ -24,12 +24,14 @@ export function ContextMeter({ computerId, sessionId }: { computerId: string; se
       },
       () => {},
     )
+    const unwatch = store.watch(computerId, ['context:changed'], { 'context:changed': [sessionId] })
     const off = store.subscribe(computerId, (channel, payload) => {
       if (channel === 'context:changed' && payload.sessionId === sessionId) setContext(payload.context)
     })
     return () => {
       alive = false
       off()
+      unwatch()
     }
   }, [computerId, sessionId, online])
   if (!context) return null

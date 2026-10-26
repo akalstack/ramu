@@ -73,9 +73,14 @@ export default function AsideScreen() {
   useEffect(() => {
     void load().catch(() => {})
     if (!computerId) return
-    return store.subscribe(computerId, (channel, payload) => {
+    const unwatch = sessionId ? store.watch(computerId, ['aside:changed'], { 'aside:changed': [sessionId] }) : () => {}
+    const off = store.subscribe(computerId, (channel, payload) => {
       if (channel === 'aside:changed' && payload.sessionId === sessionId) void load().catch(() => {})
     })
+    return () => {
+      off()
+      unwatch()
+    }
   }, [computerId, sessionId, load])
 
   if (!chat || !sessionId)

@@ -6,7 +6,12 @@ import type { SocketFactory } from './socket'
 export const nodeSocketFactory: SocketFactory = (url, headers, handlers) => {
   const ws = new WebSocket(url, { headers, maxPayload: MAX_SOCKET_FRAME_BYTES, handshakeTimeout: 10_000 })
   let status: number | undefined
-  ws.on('open', handlers.onopen)
+  let code: string | undefined
+  ws.on('open', () => {
+    // Pooled sockets must not keep a short-lived client (the CLI) from exiting; pending calls keep their own timers.
+    ;(ws as unknown as { _socket?: { unref?: () => void } })._socket?.unref?.()
+    handlers.onopen()
+  })
   ws.on('message', (data, binary) => {
     if (!binary) handlers.onmessage(data.toString())
   })
@@ -15,8 +20,10 @@ export const nodeSocketFactory: SocketFactory = (url, headers, handlers) => {
     response.resume()
     ws.terminate()
   })
-  ws.on('error', () => {})
-  ws.on('close', () => handlers.onclose({ ...(status ? { status } : {}) }))
+  ws.on('error', (error) => {
+    code = (error as NodeJS.ErrnoException).code
+  })
+  ws.on('close', () => handlers.onclose({ ...(status ? { status } : {}), ...(code ? { code } : {}) }))
   return {
     send: (text) => ws.send(text),
     close: () => ws.terminate(),

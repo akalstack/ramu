@@ -664,6 +664,18 @@ export interface RamuMethods {
   'tasks.cancelBranch'(requestId: string): void
   'tasks.create'(input: CreateTaskInput, plan?: WorktreePlanEntry[]): Task
   'tasks.setup'(taskId: string): RepositoryBinding[]
+  /**
+   * `tasks.create`, then `tasks.setup` for a worktree, then `agent.start`, in one call. A failure after the thread
+   * exists comes back as `error` with its `task` (and no session), so the caller can keep and retry it.
+   */
+  'thread.start'(
+    input: CreateTaskInput,
+    plan: WorktreePlanEntry[] | undefined,
+    prompt: string,
+    settings?: AgentSettings,
+    attachments?: string[],
+    context?: FileContext[],
+  ): { task: Task; session: AgentSessionInfo | null; error?: string }
   'tasks.rename'(taskId: string, title: string): Task
   /** AI-written title. An automatic call leaves a title the user typed alone; `force` replaces it. */
   'tasks.generateTitle'(taskId: string, settings: AgentSettings, force?: boolean): Task

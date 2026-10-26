@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { request } from 'node:http'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { test } from 'node:test'
@@ -164,14 +164,19 @@ test('desktop shell starts without fatal errors', async () => {
       }
     }
     // Closing the desktop leaves its service running; stop only this disposable profile's service.
+    // The service speaks only its WebSocket: ask it to stop with one call, then leave.
     await new Promise((done) => {
-      const req = request({ socketPath, path: '/invoke', method: 'POST' }, (res) => {
-        res.resume()
-        res.on('end', done)
+      const WebSocket = createRequire(join(root, 'packages/client-runtime/package.json'))('ws')
+      const ws = new WebSocket(`ws+unix://${socketPath}:/socket`)
+      const give = setTimeout(() => (ws.terminate(), done()), 3_000)
+      const finish = () => (clearTimeout(give), done())
+      ws.on('error', finish)
+      ws.on('close', finish)
+      ws.on('message', (data) => {
+        const frame = JSON.parse(data.toString())
+        if (frame.t === 'ready') ws.send(JSON.stringify({ t: 'invoke', id: 1, method: 'background.stop', args: [] }))
+        else if (frame.t === 'result' || frame.t === 'error') ws.close()
       })
-      req.on('error', done)
-      req.setTimeout(3_000, () => req.destroy())
-      req.end(JSON.stringify({ method: 'background.stop', args: [] }))
     })
     await delay(300)
     rmSync(dir, { recursive: true, force: true })

@@ -79,5 +79,21 @@ describe('flow control frames', () => {
       flow: true,
     })
     expect(decodeSocketFrame('{"t":"subscribe","id":1,"channels":["term:data"],"flow":"yes"}', 'client')).toBeNull()
+    expect(
+      decodeSocketFrame(
+        '{"t":"subscribe","id":1,"channels":["agent:event"],"skip":{"agent:event":["text"]}}',
+        'client',
+      ),
+    ).toMatchObject({ skip: { 'agent:event': ['text'] } })
+    for (const skip of [
+      '"text"',
+      '{"agent:event":"text"}',
+      '{"agent:event":[1]}',
+      '{"agent:event":[""]}',
+      `{"a":${JSON.stringify(Array(65).fill('k'))}}`,
+    ])
+      expect(
+        decodeSocketFrame(`{"t":"subscribe","id":1,"channels":["agent:event"],"skip":${skip}}`, 'client'),
+      ).toBeNull()
   })
 })

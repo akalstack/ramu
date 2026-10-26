@@ -1,31 +1,29 @@
-import { createServer, type Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
-import { isTransportFailure, runtimeInvokeRecoverable } from '../src'
+import { closeHostSockets, isTransportFailure, runtimeInvokeRecoverable } from '../src'
+import { DROP, socketHost } from './support/socketHost'
 
-let server: Server | undefined
-afterEach(() => new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve())))
+let stop: (() => Promise<void>) | undefined
+afterEach(async () => {
+  closeHostSockets()
+  await stop?.()
+  stop = undefined
+})
 
 async function host(options: { operationKeys: boolean; dropFirst?: number }) {
-  const seen: { method: string; key?: string }[] = []
   let drops = options.dropFirst ?? 0
-  server = createServer((req, res) => {
-    const chunks: Buffer[] = []
-    req.on('data', (c) => chunks.push(c))
-    req.on('end', () => {
-      const { method, operationKey } = JSON.parse(Buffer.concat(chunks).toString())
-      if (method === 'background.status') {
-        res.end(JSON.stringify({ value: { capabilities: options.operationKeys ? ['operation-keys'] : [] } }))
-        return
-      }
-      seen.push({ method, key: operationKey })
-      if (drops-- > 0) return void req.socket.destroy()
-      res.end(JSON.stringify({ value: seen.length }))
-    })
+  const running = await socketHost({
+    token: 't',
+    answer: (call) => {
+      if (call.method === 'background.status') return { capabilities: options.operationKeys ? ['operation-keys'] : [] }
+      return drops-- > 0 ? DROP : 'done'
+    },
   })
-  await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve))
-  const { port } = server.address() as AddressInfo
-  return { target: { kind: 'http' as const, url: `http://127.0.0.1:${port}`, token: 't' }, seen }
+  stop = running.close
+  const seen = () =>
+    running.calls
+      .filter((call) => call.method !== 'background.status')
+      .map((call) => ({ method: call.method, key: call.operationKey }))
+  return { target: running.endpoint, seen }
 }
 
 describe('runtimeInvokeRecoverable', () => {
@@ -33,28 +31,28 @@ describe('runtimeInvokeRecoverable', () => {
     const { target, seen } = await host({ operationKeys: true, dropFirst: 1 })
     const result = await runtimeInvokeRecoverable(target, 'agent.send', ['s', 'hi'], {
       backoffMs: 1,
-      newKey: () => 'k1',
+      newKey: () => 'operation-key-1',
     })
-    expect(result).toBe(2)
-    expect(seen.map((entry) => entry.key)).toEqual(['k1', 'k1'])
+    expect(result).toBe('done')
+    expect(seen().map((entry) => entry.key)).toEqual(['operation-key-1', 'operation-key-1'])
   })
 
   it('does not retry on a host without operation keys, and sends no key', async () => {
     const { target, seen } = await host({ operationKeys: false, dropFirst: 1 })
     await expect(runtimeInvokeRecoverable(target, 'agent.send', ['s', 'hi'], { backoffMs: 1 })).rejects.toThrow()
-    expect(seen).toEqual([{ method: 'agent.send', key: undefined }])
+    expect(seen()).toEqual([{ method: 'agent.send', key: undefined }])
   })
 
   it('leaves unlisted methods alone', async () => {
     const { target, seen } = await host({ operationKeys: true, dropFirst: 1 })
     await expect(runtimeInvokeRecoverable(target, 'tasks.list', [], { backoffMs: 1 })).rejects.toThrow()
-    expect(seen).toEqual([{ method: 'tasks.list', key: undefined }])
+    expect(seen()).toEqual([{ method: 'tasks.list', key: undefined }])
   })
 
   it('gives up after the bounded retries', async () => {
     const { target, seen } = await host({ operationKeys: true, dropFirst: 5 })
     await expect(runtimeInvokeRecoverable(target, 'tasks.create', [{}], { backoffMs: 1, retries: 2 })).rejects.toThrow()
-    expect(seen).toHaveLength(3)
+    expect(seen()).toHaveLength(3)
   })
 })
 

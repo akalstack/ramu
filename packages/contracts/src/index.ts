@@ -6,14 +6,14 @@ export const PROTOCOL_VERSION = 1
 
 /** Features a server advertises so independently updated clients can adapt. */
 export const CAPABILITIES = {
-  /** POST /invoke with { method, args }; the response is { value } or { error }. */
+  /** Calls `{ method, args }` answered with a value or an error, over the WebSocket. */
   invoke: 'invoke',
   /** Sequenced snapshots, terminal recovery and remote folder browsing. */
   mobileCompanion: 'mobile-companion',
   liveActivities: 'mobile-live-activities',
   /** Host-owned browser readiness, explicit per-device/thread grants and bounded authenticated viewing. */
   hostBrowser: 'host-browser',
-  /** GET /events server-sent events carrying { channel, payload }. */
+  /** Events carrying `{ channel, payload }`, over the WebSocket. */
   events: 'events',
   /** The server can ask a local client to run native dialogs (folder picker, reveal in Finder). */
   hostRequests: 'host-requests',
@@ -23,9 +23,9 @@ export const CAPABILITIES = {
   pairing: 'pairing',
   /** POST /renew rotates this device's token with a bounded overlap. */
   renewal: 'renewal',
-  /** POST /invoke accepts an `operationKey` so a mutation retried after a lost reply runs once. */
+  /** A call accepts an `operationKey` so a mutation retried after a lost reply runs once. */
   operationKeys: 'operation-keys',
-  /** GET /socket upgrades to one WebSocket carrying the same calls and events; HTTP and SSE stay available. */
+  /** GET /socket upgrades to the one WebSocket that carries every call and event; there is no HTTP or SSE equivalent. */
   webSocket: 'websocket',
 } as const
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES]
@@ -75,6 +75,7 @@ export const OPERATION_KEY_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 /** Mutations whose reply can be lost after the host already ran them: a retry must carry an operation key. */
 export const RECOVERABLE_MUTATIONS: ReadonlySet<string> = new Set([
   'tasks.create',
+  'thread.start',
   'agent.start',
   'agent.send',
   'agent.sendQueuedNow',
@@ -92,7 +93,18 @@ export const MAX_SOCKET_FRAME_BYTES = MAX_REQUEST_BYTES
 export type SocketClientFrame =
   | { t: 'invoke'; id: number; method: string; args: unknown[]; operationKey?: string }
   /** `flow` asks the host to hold back terminal output the client has not acknowledged (see `ack`). */
-  | { t: 'subscribe'; id: number; channels: string[]; keys?: Record<string, string[]>; flow?: boolean }
+  | {
+      t: 'subscribe'
+      id: number
+      channels: string[]
+      keys?: Record<string, string[]>
+      /**
+       * For a keyed channel, event kinds to leave out for resources not named in `keys`: a client that follows every
+       * thread's state but streams the transcript of only the threads it shows. Resources in `keys` arrive in full.
+       */
+      skip?: Record<string, string[]>
+      flow?: boolean
+    }
   /** Output of terminal `id` the client has processed, in the characters of its `term:data` chunks. */
   | { t: 'ack'; id: string; bytes: number }
   | { t: 'ping' }
@@ -112,6 +124,7 @@ export const SOCKET_EVENT_KEYS: Readonly<Record<string, 'sessionId' | 'id'>> = {
 export const TERMINAL_FLOW_WINDOW = 1_000_000
 export const MAX_SUBSCRIBED_CHANNELS = 64
 export const MAX_SUBSCRIBED_KEYS = 200
+export const MAX_SUBSCRIBED_SKIPPED_KINDS = 64
 export type SocketServerFrame =
   | { t: 'ready'; epoch: string }
   | { t: 'result'; id: number; value: unknown }
@@ -304,6 +317,17 @@ export function decodeSocketFrame(
       frame.channels.length <= MAX_SUBSCRIBED_CHANNELS &&
       frame.channels.every((c: unknown) => typeof c === 'string' && c.length > 0 && c.length <= 64) &&
       (frame.flow === undefined || typeof frame.flow === 'boolean') &&
+      (frame.skip === undefined ||
+        (frame.skip &&
+          typeof frame.skip === 'object' &&
+          !Array.isArray(frame.skip) &&
+          Object.keys(frame.skip).length <= MAX_SUBSCRIBED_CHANNELS &&
+          Object.values(frame.skip).every(
+            (list) =>
+              Array.isArray(list) &&
+              list.length <= MAX_SUBSCRIBED_SKIPPED_KINDS &&
+              list.every((k) => typeof k === 'string' && k.length > 0 && k.length <= 64),
+          ))) &&
       (frame.keys === undefined ||
         (frame.keys &&
           typeof frame.keys === 'object' &&

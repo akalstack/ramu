@@ -72,12 +72,23 @@ export const MAX_LEARNED_ROUTES = 8
 /** The addresses a host's proven answer names: a few short http(s) origins, nothing else. */
 export function learnedRoutes(value: unknown): string[] {
   if (!Array.isArray(value)) return []
-  return [
-    ...new Set(
-      value.filter(
-        (entry): entry is string =>
-          typeof entry === 'string' && entry.length <= 200 && /^https?:\/\/[^\s/]+$/.test(entry),
-      ),
-    ),
-  ].slice(0, MAX_LEARNED_ROUTES)
+  const origins = value.flatMap((entry) => {
+    if (typeof entry !== 'string' || entry.length > 200) return []
+    try {
+      const url = new URL(entry)
+      return ['http:', 'https:'].includes(url.protocol) &&
+        !url.username &&
+        !url.password &&
+        url.pathname === '/' &&
+        !url.search &&
+        !url.hash
+        ? [url.origin]
+        : []
+    } catch {
+      return []
+    }
+  })
+  // Keep mesh VPNs even on machines with many VM/container bridges before bounding persisted routes.
+  const mesh = (origin: string) => /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(new URL(origin).hostname)
+  return [...new Set(origins)].sort((a, b) => Number(mesh(b)) - Number(mesh(a))).slice(0, MAX_LEARNED_ROUTES)
 }

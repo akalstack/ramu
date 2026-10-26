@@ -89,19 +89,24 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     open.add(ws)
     // Until a client subscribes it receives every event, as an SSE client does. A subscription narrows delivery to the
     // listed channels, and for resource channels to the listed ids; it is replaced whole by the next one.
-    let filter: { channels: Set<string>; keys: Map<string, Set<string>> } | null = null
+    let filter: { channels: Set<string>; keys: Map<string, Set<string>>; skip: Map<string, Set<string>> } | null = null
     // The channel is read from the front of the event text, so an unwanted or unkeyed event is never fully parsed; only
-    // a keyed channel the client narrowed to particular ids is.
+    // a keyed channel the client narrowed to particular ids, or whose event kinds it skips, is.
     const wanted = (json: string) => {
       if (!filter) return true
       const channel = /^\{"channel":"((?:[^"\\]|\\.)*)"/.exec(json)?.[1]
       if (channel === undefined || !filter.channels.has(channel)) return false
       const keys = filter.keys.get(channel)
+      const skip = filter.skip.get(channel)
       const field = SOCKET_EVENT_KEYS[channel]
-      if (!keys || !field) return true
+      if ((!keys && !skip) || !field) return true
       try {
-        const event = JSON.parse(json) as { payload?: Record<string, unknown> }
-        return keys.has(String(event.payload?.[field]))
+        const event = JSON.parse(json) as { payload?: Record<string, unknown> & { event?: { kind?: unknown } } }
+        // A resource the client named is delivered in full; any other loses the kinds it asked to skip, or all of it
+        // when it named resources and skipped nothing.
+        if (keys?.has(String(event.payload?.[field]))) return true
+        if (skip) return !skip.has(String(event.payload?.event?.kind))
+        return !keys
       } catch {
         return false
       }
@@ -203,6 +208,7 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
         filter = {
           channels: new Set(frame.channels),
           keys: new Map(Object.entries(frame.keys ?? {}).map(([channel, list]) => [channel, new Set(list)])),
+          skip: new Map(Object.entries(frame.skip ?? {}).map(([channel, list]) => [channel, new Set(list)])),
         }
         send({ t: 'result', id: frame.id, value: { channels: frame.channels.length } })
         return

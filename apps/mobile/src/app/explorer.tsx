@@ -332,6 +332,7 @@ export default function Explorer() {
       if (!scope) return
       reload((value) => value + 1)
       let timer: ReturnType<typeof setTimeout> | undefined
+      const unwatch = store.watch(scope.host, ['fs:changed'])
       const off = store.subscribe(scope.host, (channel, payload) => {
         if (channel === 'fs:changed' && bindingsRef.current.some((b) => b.cwd === payload.cwd)) {
           clearTimeout(timer)
@@ -341,6 +342,7 @@ export default function Explorer() {
       return () => {
         clearTimeout(timer)
         off()
+        unwatch()
       }
     }, [scope?.host, scope?.context]),
   )

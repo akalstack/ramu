@@ -1,10 +1,12 @@
 import { RuntimeSocket, type SocketFactory } from '@ramu/client-runtime/socket'
-import { registerSocketProvider } from './transport'
+import { hostSubscription, type Interest } from './hostSubscription'
+import { registerSocketProvider, type HostSocket } from './transport'
 
 /**
  * React Native's WebSocket accepts request headers as a third argument (a React Native extension), which the host's
  * header authentication needs. It does not report the HTTP status of a refused upgrade, so a refusal looks like an
- * ordinary close and the socket keeps its bounded, jittered retries; calls then use HTTP, which does report it.
+ * ordinary close and the socket keeps its bounded, jittered retries; the host answers the first call over the socket
+ * with its own error, which the caller reports.
  */
 export const nativeSocketFactory: SocketFactory = (url, headers, handlers) => {
   const WS = globalThis.WebSocket as unknown as new (
@@ -22,41 +24,85 @@ export const nativeSocketFactory: SocketFactory = (url, headers, handlers) => {
   return { send: (text) => ws.send(text), close: () => ws.close() }
 }
 
-/**
- * Opt-in, like the desktop's `RAMU_SOCKET` (set `EXPO_PUBLIC_RAMU_SOCKET=1` for a build): the plan makes the socket the default only after a measured comparison. It
- * carries calls only; events keep their SSE stream so nothing is delivered twice.
- */
-let enabled = process.env.EXPO_PUBLIC_RAMU_SOCKET === '1'
-const sockets = new Map<string, RuntimeSocket>()
-
-export function setSocketTransport(on: boolean) {
-  enabled = on
-  if (on) return
-  for (const socket of sockets.values()) socket.close()
-  sockets.clear()
+interface Listener {
+  event(channel: string, payload: unknown): void
+  state?(state: string): void
 }
+interface Entry {
+  socket: RuntimeSocket
+  listeners: Set<Listener>
+  interests: Set<Interest>
+}
+/** Narrows the host's pushes to what the phone shows; the socket restores it after a reconnect. */
+function narrow(entry: Entry) {
+  const { channels, keys, skip } = hostSubscription(entry.interests)
+  void entry.socket.subscribe(channels, keys, skip).catch(() => {})
+}
+const hosts = new Map<string, Entry>()
+const keyOf = (address: string, token: string) => `${address}#${token.length}:${token.slice(-8)}`
 
-/** The socket for this host and token, started on first use; null when sockets are off or the host cannot use them. */
-export function socketFor(address: string, token: string): RuntimeSocket | null {
-  if (!enabled) return null
-  const key = `${address}#${token.length}:${token.slice(-8)}`
-  let socket = sockets.get(key)
-  if (!socket) {
+/**
+ * The phone talks to a host over one WebSocket, as T3 Code's clients do: every call and every event, with no HTTP
+ * fallback. HTTP remains for pairing and token renewal, which happen before a socket can be authenticated. The socket
+ * keeps itself connected with bounded, jittered retries; the store hydrates again whenever a stream ends.
+ */
+export function socketFor(address: string, token: string): HostSocket {
+  const key = keyOf(address, token)
+  let entry = hosts.get(key)
+  if (!entry) {
     // A rotated token is a new socket; close the old one for this host.
-    for (const [k, old] of sockets)
+    for (const [k, old] of hosts)
       if (k.startsWith(`${address}#`)) {
-        old.close()
-        sockets.delete(k)
+        old.socket.close()
+        hosts.delete(k)
       }
-    socket = new RuntimeSocket({ url: address, token, factory: nativeSocketFactory, onEvent: () => {}, events: false })
-    sockets.set(key, socket)
+    const listeners = new Set<Listener>()
+    const socket = new RuntimeSocket({
+      url: address,
+      token,
+      factory: nativeSocketFactory,
+      // A phone changes networks frequently; detect a silent old route within about 30 seconds.
+      heartbeatMs: 10_000,
+      onEvent: (channel, payload) => {
+        for (const listener of [...listeners]) listener.event(channel, payload)
+      },
+      onState: (state) => {
+        for (const listener of [...listeners]) listener.state?.(state)
+      },
+      // Terminal output is acknowledged as it is handled; a slow phone is told to fetch the gap instead of buffering it.
+      flowControl: true,
+    })
+    entry = { socket, listeners, interests: new Set() }
+    hosts.set(key, entry)
+    narrow(entry)
     socket.start()
   }
-  return socket.state === 'rejected' || socket.state === 'unsupported' ? null : socket
+  const { socket, listeners, interests } = entry
+  const current = entry
+  return {
+    get state() {
+      return socket.state
+    },
+    whenReady: (timeoutMs, signal) => socket.whenReady(timeoutMs, signal),
+    invoke: (method, args, options) => socket.invoke(method, args, options),
+    watch: (channels, keys) => {
+      const interest: Interest = { channels, ...(keys ? { keys } : {}) }
+      interests.add(interest)
+      narrow(current)
+      return () => {
+        interests.delete(interest)
+        narrow(current)
+      }
+    },
+    listen: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+  }
 }
 
 registerSocketProvider(socketFor, (address, token) => {
-  const key = `${address}#${token.length}:${token.slice(-8)}`
-  sockets.get(key)?.close()
-  sockets.delete(key)
+  const key = keyOf(address, token)
+  hosts.get(key)?.socket.close()
+  hosts.delete(key)
 })

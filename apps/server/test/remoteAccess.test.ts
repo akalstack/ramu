@@ -26,7 +26,7 @@ async function fixture(hostId?: string, routes?: () => string[]) {
   const server: Server = createServer(async (req, res) => {
     const device = await access.accept(req, res)
     if (device === undefined) return
-    if (!deviceMayInvoke(device ?? undefined, 'agent.start') && req.url === '/invoke') {
+    if (!deviceMayInvoke(device ?? undefined, 'agent.start') && req.url === '/act') {
       res.writeHead(403).end()
       return
     }
@@ -63,7 +63,7 @@ it('pairs through HTTP once, and rejects used, expired and evicted codes', async
   expect(paired.status).toBe(200)
   expect(paired.headers.get('cache-control')).toBe('no-store')
   const data = (await paired.json()) as { token: string; deviceId: string }
-  expect((await f.request('/events', { headers: { Authorization: `Bearer ${data.token}` } })).status).toBe(200)
+  expect((await f.request('/session', { headers: { Authorization: `Bearer ${data.token}` } })).status).toBe(200)
   expect((await f.pair(code)).status).toBe(401)
   const expired = f.devices.createCode(f.now()).code
   f.advance(PAIRING_TTL_MS)
@@ -72,7 +72,7 @@ it('pairs through HTTP once, and rejects used, expired and evicted codes', async
   expect((await f.pair(codes[0]!)).status).toBe(401)
   expect((await f.pair(codes[5]!)).status).toBe(200)
   f.devices.revoke(data.deviceId)
-  for (const path of ['/invoke', '/events'])
+  for (const path of ['/session', '/act'])
     expect((await f.request(path, { headers: { Authorization: `Bearer ${data.token}` } })).status).toBe(401)
 })
 
@@ -92,7 +92,7 @@ it('binds the role to the host-issued code and denies viewer execution', async (
   const paired = (await (await f.pair(code, { role: 'owner' })).json()) as { token: string; role: string }
   expect(paired.role).toBe('viewer')
   const headers = { Authorization: `Bearer ${paired.token}` }
-  expect((await f.request('/invoke', { method: 'POST', headers })).status).toBe(403)
+  expect((await f.request('/act', { method: 'POST', headers })).status).toBe(403)
   const device = f.devices.authenticate(headers.Authorization)!
   for (const method of ['agent.get', 'agent.nextRoute', 'agent.replyPermission', 'agent.replyQuestion'])
     expect(deviceMayInvoke(device, method)).toBe(true)
@@ -118,7 +118,7 @@ it('rejects unapproved browser origins, and only emits CORS for explicitly enabl
   expect(health.status).toBe(200)
   expect(health.headers.has('access-control-allow-origin')).toBe(false)
   expect((await f.request('/health', { headers: { Origin: 'https://evil.example' } })).status).toBe(403)
-  const allowed = await f.request('/invoke', { method: 'OPTIONS', headers: { Origin: 'https://companion.example' } })
+  const allowed = await f.request('/session', { method: 'OPTIONS', headers: { Origin: 'https://companion.example' } })
   expect(allowed.status).toBe(204)
   expect(allowed.headers.get('access-control-allow-origin')).toBe('https://companion.example')
 })
@@ -157,7 +157,7 @@ it('renews a device token over HTTP without a gap, and refuses renewal without a
   expect(response.status).toBe(200)
   expect(response.headers.get('cache-control')).toBe('no-store')
   const renewed = (await response.json()) as { token: string }
-  const events = (token: string) => f.request('/events', { headers: { Authorization: `Bearer ${token}` } })
+  const events = (token: string) => f.request('/session', { headers: { Authorization: `Bearer ${token}` } })
   expect((await events(paired.token)).status).toBe(200)
   expect((await events(renewed.token)).status).toBe(200)
   f.advance(3 * 60_000)

@@ -22,12 +22,13 @@ import { registerRuleHandlers } from './handlers/rules'
 import { registerSummaryHandlers } from './handlers/summaries'
 import { registerTerminalHandlers } from './handlers/terminals'
 import { registerUiHandlers } from './handlers/ui'
+import { registerThreadStartHandlers } from './handlers/threadStart'
 import { registerWorkspaceHandlers } from './handlers/workspace'
 import type { HandlerContext, MethodTable } from './types'
 
 /** The renderer's method table: every handler group, merged. Method names are unique across groups. */
-export const registerHandlers = (ctx: HandlerContext): MethodTable =>
-  mergeMethods(
+export const registerHandlers = (ctx: HandlerContext): MethodTable => {
+  const base = mergeMethods(
     {
       'interactive.get': {
         args: z.tuple([z.string().min(1).max(200), z.string().uuid(), z.number().int().positive()]),
@@ -65,3 +66,6 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable =>
     registerComputerHandlers(ctx),
     registerScheduleHandlers(ctx),
   )
+  // Composed from the methods above, so it runs them exactly as they run on their own.
+  return mergeMethods(base, registerThreadStartHandlers(base))
+}

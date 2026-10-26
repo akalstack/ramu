@@ -52,7 +52,7 @@ import {
 import { remainingJournal, restoreOutbox } from './sendJournal'
 import { renewalDue, renewCredential } from './tokenRenewal'
 import { HostClient, HostError, normalizeAddress, operationKey } from './transport'
-import { verifyHost } from '@ramu/shared/hostProof'
+import { verifyHost, findHostRoute, rememberRoutes } from './hostRoutes'
 import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
 import { transcript, visibleText, deliveryBaseline, reconcileDelivered } from './transcript'
 import { isOutdated, type Language } from './settingsModel'
@@ -60,6 +60,7 @@ import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } f
 import { GOAL_VERIFY_METHOD, isMethodMissing } from './goalVerify'
 import { mergeTranscript, transcriptRows, updateThreadMetadata, readTranscriptBundle } from './transcriptChanges'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
+import type { Task } from '@ramu/shared/types'
 
 export type { Language }
 
@@ -113,6 +114,8 @@ interface Store extends State {
     ...args: Parameters<RamuMethods[M]>
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>>
   subscribe(computerId: string, listener: (channel: keyof PushEvents, payload: any) => void): () => void
+  /** Asks a host for on-demand channels (file changes, a thread's context size, terminal output) while a screen shows them. */
+  watch(computerId: string, channels: readonly string[], keys?: Record<string, readonly string[]>): () => void
   /** `full` re-reads every transcript (after a reconnect); otherwise chats already streaming keep their live transcript. */
   refresh(computerId: string, full?: boolean): Promise<void>
   send(
@@ -244,7 +247,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   })
   const ref = useRef(state)
   ref.current = state
-  const connections = useRef(new Map<string, { client: HostClient; controller: AbortController; generation: number }>())
+  const connections = useRef(
+    new Map<string, { client: HostClient; controller: AbortController; generation: number; live?: boolean }>(),
+  )
   const generations = useRef(new Map<string, number>())
   const eventRows = useRef(new Map<string, Map<number, AgentEvent>>())
   // The host's change counter for each transcript held in `eventRows`, so a refresh reads only what changed.
@@ -705,54 +710,94 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let sessionId = chat.sessionId
     if (item.kind === 'chat') {
       let taskId = chat.taskId
+      let started = false
       if (!taskId) {
         const projectId = item.projectId === STANDALONE ? STANDALONE : raw(item.projectId!)
-        const repos = projectId === STANDALONE ? [] : await invoke(item.computerId, 'repos.list', projectId)
         const title = item.text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments'
-        const task = await createWorkspaceTask(
-          workspaceCreation({
-            projectId,
-            title,
-            checkout: item.checkout,
-            workspaceId: item.workspaceId,
-            branchPrefix: item.branchPrefix,
-            branchNaming: item.branchNaming,
-            branchChoice: item.branchChoice,
-            requestId: item.id,
-          }),
-          () =>
-            invoke(
-              item.computerId,
-              'tasks.plan',
-              projectId,
-              title,
-              repos.map((r) => r.id),
+        const creation = workspaceCreation({
+          projectId,
+          title,
+          checkout: item.checkout,
+          workspaceId: item.workspaceId,
+          branchPrefix: item.branchPrefix,
+          branchNaming: item.branchNaming,
+          branchChoice: item.branchChoice,
+          requestId: item.id,
+        })
+        // Only a new worktree needs a plan, and only a plan needs the repository list: skip both round trips otherwise.
+        const planned = () =>
+          createWorkspaceTask(
+            creation,
+            async () => {
+              const repos = projectId === STANDALONE ? [] : await invoke(item.computerId, 'repos.list', projectId)
+              return invoke(
+                item.computerId,
+                'tasks.plan',
+                projectId,
+                title,
+                repos.map((r) => r.id),
+              )
+            },
+            async (_input, plan) => plan,
+            item.reviewedPlan,
+          )
+        // Persist the host task immediately; if the start fails, the thread remains reviewable.
+        const adopt = (task: Task) =>
+          change((s) => ({
+            ...s,
+            chats: s.chats.map((c) =>
+              c.id === chat.id
+                ? {
+                    ...c,
+                    taskId: task.id,
+                    workspaceId: task.workspaceId,
+                    branchNamingFallback: task.branchNamingFallback,
+                  }
+                : c,
             ),
-          (input, plan) => invoke(item.computerId, 'tasks.create', input, plan),
-          item.reviewedPlan,
-        )
-        taskId = task.id
-        // Persist the host task immediately; if agent.start fails, it remains reviewable.
-        change((s) => ({
-          ...s,
-          chats: s.chats.map((c) =>
-            c.id === chat.id
-              ? { ...c, taskId, workspaceId: task.workspaceId, branchNamingFallback: task.branchNamingFallback }
-              : c,
-          ),
-        }))
+          }))
+        // One host call creates the thread, sets a worktree up and starts the agent. A host that predates it answers
+        // that the method is unknown, and the same steps run one call at a time below.
+        const plan = await planned()
+        const result = await invoke(
+          item.computerId,
+          'thread.start',
+          creation,
+          plan,
+          item.text,
+          item.settings,
+          item.attachments,
+          item.context,
+        ).catch((error) => {
+          if (isMethodMissing(error)) return null
+          throw error
+        })
+        if (result) {
+          adopt(result.task)
+          if (result.error || !result.session) throw new Error(result.error ?? 'The agent did not start.')
+          taskId = result.task.id
+          sessionId = result.session.id
+          started = true
+        } else {
+          const task = await invoke(item.computerId, 'tasks.create', creation, plan)
+          adopt(task)
+          taskId = task.id
+        }
       }
-      await invoke(item.computerId, 'tasks.setup', taskId)
-      const session = await invoke(
-        item.computerId,
-        'agent.start',
-        taskId,
-        item.text,
-        item.settings,
-        item.attachments,
-        item.context,
-      )
-      sessionId = session.id
+      if (!started) {
+        // Only a worktree has anything to set up; the host's setup of a current checkout does nothing.
+        if (item.checkout === 'worktree') await invoke(item.computerId, 'tasks.setup', taskId)
+        const session = await invoke(
+          item.computerId,
+          'agent.start',
+          taskId,
+          item.text,
+          item.settings,
+          item.attachments,
+          item.context,
+        )
+        sessionId = session.id
+      }
       change((s) => ({
         ...s,
         chats: s.chats.map((c) => (c.id === chat.id ? { ...c, taskId, sessionId, pending: false } : c)),
@@ -787,7 +832,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
     // Keep the acknowledged bubble until the authoritative message or queue entry is mounted.
     // Finish reconciliation before another identical message takes its history baseline.
-    await refresh(item.computerId, true).catch(report)
+    const reconcile = refresh(item.computerId, true).catch(report)
+    // Another message for this host takes its history baseline next, so only then wait for the refresh.
+    if (ref.current.outbox.some((o) => o.computerId === item.computerId && o.id !== item.id && o.state !== 'accepted'))
+      await reconcile
   }
   const flush = async (id: string) => {
     if (flushing.current.has(id) || ref.current.outbox.some((o) => o.computerId === id && o.state === 'accepted'))
@@ -797,11 +845,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       while (
         active.current &&
         !connections.current.get(id)?.controller.signal.aborted &&
-        ref.current.computers.find((c) => c.id === id)?.status === 'online' &&
+        (ref.current.computers.find((c) => c.id === id)?.status === 'online' || connections.current.get(id)?.live) &&
         ref.current.computers.find((c) => c.id === id)?.access !== 'viewer'
       ) {
         const item = ref.current.outbox.find((o) => o.computerId === id && o.state !== 'accepted')
         if (!item || item.state === 'uncertain' || item.state === 'sending' || item.state === 'review') break
+        // While the first refresh after reconnecting still runs, only a follow-up on a thread this phone already has
+        // may go out: a new thread or session is created against the refreshed lists.
+        if (
+          ref.current.computers.find((c) => c.id === id)?.status !== 'online' &&
+          !(item.kind === 'message' && ref.current.chats.find((c) => c.id === item.chatId)?.sessionId)
+        )
+          break
         change((s) => ({
           ...s,
           outbox: s.outbox.map((o) =>
@@ -880,7 +935,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   /** While the host answers, keep the other addresses it names. Only a proven answer is believed. */
   async function learnRoutes(id: string) {
     const computer = ref.current.computers.find((c) => c.id === id)
-    if (!computer?.hostId || !computer.deviceId || !due(`learn:${id}`, 3_600_000)) return
+    if (!computer?.hostId || !computer.deviceId || !due(`learn:${id}`, 60_000)) return
     const token = await readToken(id)
     if (!token) return
     const result = await verifyHost({
@@ -892,16 +947,80 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       challenge: operationKey(),
       signal: AbortSignal.timeout(8000),
     }).catch(() => null)
-    if (result?.state !== 'verified') return
-    change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? { ...c, routes: result.routes } : c)) }))
+    if (result?.state !== 'verified' || !active.current) return
+    change((s) => ({
+      ...s,
+      computers: s.computers.map((c) =>
+        c.id === id && c.address === computer.address && c.deviceId === computer.deviceId
+          ? { ...c, routes: rememberRoutes(c.address, result.routes, c.routes) }
+          : c,
+      ),
+    }))
   }
 
   /** When the saved address stops answering, try the learned ones; each must prove it is this host before it is used. */
-  async function tryRoutes(id: string) {
-    if (!due(`try:${id}`, 60_000)) return
-    for (const route of ref.current.computers.find((c) => c.id === id)?.routes ?? []) {
-      if (!active.current || !ref.current.computers.some((c) => c.id === id)) return
-      if ((await reviewAddressFor(id, route).catch(() => 'unreachable')) === 'moved') return
+  const routeChecks = useRef(new Set<string>())
+  async function tryRoutes(
+    id: string,
+    connection: { controller: AbortController; generation: number; live?: boolean },
+  ) {
+    if (routeChecks.current.has(id) || !due(`try:${id}`, 5000)) return
+    const computer = ref.current.computers.find((c) => c.id === id)
+    if (!computer?.hostId || !computer.deviceId || !computer.routes?.length) return
+    routeChecks.current.add(id)
+    try {
+      const token = await readToken(id)
+      if (!token || connection.controller.signal.aborted) return
+      const result = await findHostRoute({
+        address: computer.address,
+        routes: computer.routes,
+        signal: connection.controller.signal,
+        verify: (address, signal) =>
+          verifyHost({
+            fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
+            baseUrl: address,
+            deviceId: computer.deviceId!,
+            token,
+            expectedHostId: computer.hostId,
+            challenge: operationKey(),
+            signal,
+          }),
+        usable: async (address, signal) => {
+          if (signal.aborted) return false
+          const probe = new HostClient(address, token, expoFetch as typeof globalThis.fetch)
+          const close = () => probe.close()
+          signal.addEventListener('abort', close, { once: true })
+          try {
+            const info = await probe.invoke('background.status')
+            return info.protocol === 1 && !!info.capabilities?.includes('mobile-companion')
+          } finally {
+            signal.removeEventListener('abort', close)
+            close()
+          }
+        },
+      })
+      const current = ref.current.computers.find((c) => c.id === id)
+      if (
+        !result ||
+        !active.current ||
+        connection.controller.signal.aborted ||
+        connection.live ||
+        generations.current.get(id) !== connection.generation ||
+        current?.address !== computer.address ||
+        current.deviceId !== computer.deviceId
+      )
+        return
+      const moved: Computer = {
+        ...current,
+        address: result.address,
+        routes: rememberRoutes(computer.address, result.routes, current.routes),
+        status: 'connecting',
+        error: undefined,
+      }
+      change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? moved : c)) }))
+      void connect(moved).catch(report)
+    } finally {
+      routeChecks.current.delete(id)
     }
   }
 
@@ -925,7 +1044,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       signal: AbortSignal.timeout(8000),
     })
     if (result.state !== 'verified') return result.state
-    const moved: Computer = { ...computer, address: url, routes: result.routes, status: 'connecting', error: undefined }
+    const current = ref.current.computers.find((c) => c.id === id)
+    if (!current || current.address !== computer.address || current.deviceId !== computer.deviceId || !active.current)
+      return 'unchanged'
+    const moved: Computer = {
+      ...current,
+      address: url,
+      routes: rememberRoutes(computer.address, result.routes, computer.routes),
+      status: 'connecting',
+      error: undefined,
+    }
     change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? moved : c)) }))
     void connect(moved).catch(report)
     return 'moved'
@@ -946,88 +1074,125 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       status(computer.id, 'revoked', 'Missing device credential. Pair again.')
       return
     }
-    const connection = {
+    const connection: { client: HostClient; controller: AbortController; generation: number; live?: boolean } = {
       client: new HostClient(computer.address, token, expoFetch as typeof globalThis.fetch),
       controller: new AbortController(),
       generation,
     }
     connections.current.set(computer.id, connection)
+    // Probe alternatives during an initial socket timeout instead of waiting for HTTP diagnosis too.
+    const routeWatch = setInterval(() => {
+      if (!connection.live && !connection.controller.signal.aborted)
+        void tryRoutes(computer.id, connection).catch(report)
+    }, 2000)
+    connection.controller.signal.addEventListener('abort', () => clearInterval(routeWatch), { once: true })
     let attempt = 0
-    while (!connection.controller.signal.aborted && active.current) {
-      try {
-        const info = await connection.client.invoke('background.status')
-        if (!connection.controller.signal.aborted)
-          change((s) => ({
-            ...s,
-            computers: s.computers.map((c) =>
-              c.id === computer.id
-                ? {
-                    ...c,
-                    access: info.access ?? c.access,
-                    os: info.platform === 'darwin' ? 'macos' : info.platform === 'win32' ? 'windows' : 'linux',
-                    ...(c.auto && info.hostname ? { name: info.hostname, auto: false } : {}),
-                  }
-                : c,
-            ),
-          }))
-        if (info.protocol !== 1 || !info.capabilities?.includes('mobile-companion'))
-          throw new HostError('Update Ramu on this host: its protocol is incompatible.', 426)
-        // Rotate the device token about monthly on hosts that support it; a failure only retries next connect.
-        if (info.capabilities?.includes('renewal'))
-          void readRenewedAt(computer.id)
-            .then((renewedAt) =>
-              renewalDue(Date.now(), renewedAt)
-                ? renewCredential(
-                    {
-                      address: connection.client.address,
-                      token: () => connection.client.currentToken(),
-                      useToken: (next) => connection.client.useToken(next),
-                    },
-                    connection.client.fetch,
-                    (next) => saveToken(computer.id, next),
-                    (at) => saveRenewedAt(computer.id, at),
-                  )
-                : false,
-            )
-            .catch(() => {})
-        await connection.client.stream(
-          (channel, payload) => {
-            if (connections.current.get(computer.id) === connection && !connection.controller.signal.aborted)
-              receive(computer.id, channel, payload)
-          },
-          async () => {
-            if (connection.controller.signal.aborted || connections.current.get(computer.id) !== connection) return
-            await refreshing.current.get(computer.id)?.catch(() => {})
-            if (connection.controller.signal.aborted || connections.current.get(computer.id) !== connection) return
-            await refresh(computer.id, true)
-            if (!connection.controller.signal.aborted) {
-              attempt = 0
-              status(computer.id, 'online')
-              void learnRoutes(computer.id)
-              if (pushToken.current) void registerPushOn(computer.id).catch(report)
-              void flush(computer.id)
-            }
-          },
-          connection.controller.signal,
-        )
-      } catch (error) {
-        if (connection.controller.signal.aborted) break
-        if (error instanceof HostError && [401, 426].includes(error.status)) {
-          status(computer.id, 'revoked', error.message)
-          break
-        }
-        status(computer.id, 'offline', error instanceof Error ? error.message : 'Host unreachable')
-        void tryRoutes(computer.id)
-        await new Promise<void>((resolve) => {
-          const done = () => {
-            clearTimeout(timer)
-            connection.controller.signal.removeEventListener('abort', done)
-            resolve()
+    try {
+      while (!connection.controller.signal.aborted && active.current) {
+        try {
+          // An old LAN address may now belong to another computer. Prove it before opening an authenticated socket.
+          if (computer.hostId && computer.deviceId) {
+            const identity = await verifyHost({
+              fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
+              baseUrl: computer.address,
+              deviceId: computer.deviceId,
+              token: connection.client.currentToken(),
+              expectedHostId: computer.hostId,
+              challenge: operationKey(),
+              signal: AbortSignal.timeout(4000),
+            })
+            if (connection.controller.signal.aborted) break
+            if (identity.state !== 'verified')
+              throw new HostError('The saved address could not prove this host. Checking other addresses…')
+            routeTimes.current.set(`learn:${computer.id}`, Date.now())
+            change((s) => ({
+              ...s,
+              computers: s.computers.map((c) =>
+                c.id === computer.id ? { ...c, routes: rememberRoutes(c.address, identity.routes, c.routes) } : c,
+              ),
+            }))
           }
-          const timer = setTimeout(done, Math.min(30_000, 1000 * 2 ** attempt++) + Math.random() * 500)
-          connection.controller.signal.addEventListener('abort', done, { once: true })
-        })
+          if (connection.controller.signal.aborted) break
+          const info = await connection.client.invoke('background.status')
+          if (!connection.controller.signal.aborted)
+            change((s) => ({
+              ...s,
+              computers: s.computers.map((c) =>
+                c.id === computer.id
+                  ? {
+                      ...c,
+                      access: info.access ?? c.access,
+                      os: info.platform === 'darwin' ? 'macos' : info.platform === 'win32' ? 'windows' : 'linux',
+                      ...(c.auto && info.hostname ? { name: info.hostname, auto: false } : {}),
+                    }
+                  : c,
+              ),
+            }))
+          if (info.protocol !== 1 || !info.capabilities?.includes('mobile-companion'))
+            throw new HostError('Update Ramu on this host: its protocol is incompatible.', 426)
+          // Rotate the device token about monthly on hosts that support it; a failure only retries next connect.
+          if (info.capabilities?.includes('renewal'))
+            void readRenewedAt(computer.id)
+              .then((renewedAt) =>
+                renewalDue(Date.now(), renewedAt)
+                  ? renewCredential(
+                      {
+                        address: connection.client.address,
+                        token: () => connection.client.currentToken(),
+                        useToken: (next) => connection.client.useToken(next),
+                      },
+                      connection.client.fetch,
+                      (next) => saveToken(computer.id, next),
+                      (at) => saveRenewedAt(computer.id, at),
+                    )
+                  : false,
+              )
+              .catch(() => {})
+          await connection.client.stream(
+            (channel, payload) => {
+              if (connections.current.get(computer.id) === connection && !connection.controller.signal.aborted)
+                receive(computer.id, channel, payload)
+            },
+            async () => {
+              if (connection.controller.signal.aborted || connections.current.get(computer.id) !== connection) return
+              // The stream is open: a follow-up on a known thread need not wait for the full refresh below.
+              connection.live = true
+              void flush(computer.id)
+              await refreshing.current.get(computer.id)?.catch(() => {})
+              if (connection.controller.signal.aborted || connections.current.get(computer.id) !== connection) return
+              await refresh(computer.id, true)
+              if (!connection.controller.signal.aborted) {
+                attempt = 0
+                status(computer.id, 'online')
+                void learnRoutes(computer.id)
+                if (pushToken.current) void registerPushOn(computer.id).catch(report)
+                void flush(computer.id)
+              }
+            },
+            connection.controller.signal,
+          )
+        } catch (error) {
+          connection.live = false
+          if (connection.controller.signal.aborted) break
+          if (error instanceof HostError && [401, 426].includes(error.status)) {
+            status(computer.id, 'revoked', error.message)
+            break
+          }
+          status(computer.id, 'offline', error instanceof Error ? error.message : 'Host unreachable')
+          void tryRoutes(computer.id, connection).catch(report)
+          await new Promise<void>((resolve) => {
+            const done = () => {
+              clearTimeout(timer)
+              connection.controller.signal.removeEventListener('abort', done)
+              resolve()
+            }
+            const timer = setTimeout(done, Math.min(30_000, 1000 * 2 ** attempt++) + Math.random() * 500)
+            connection.controller.signal.addEventListener('abort', done, { once: true })
+          })
+        }
       }
+    } finally {
+      clearInterval(routeWatch)
     }
   }
   useEffect(() => {
@@ -1075,7 +1240,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const poll = setInterval(() => {
       if (active.current)
         for (const computer of ref.current.computers)
-          if (computer.status === 'online') void refresh(computer.id, true).catch(report)
+          if (computer.status === 'online') {
+            void refresh(computer.id, true).catch(report)
+            void learnRoutes(computer.id)
+          }
     }, 20_000)
     return () => {
       app.remove()
@@ -1278,6 +1446,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     retry: (id) => {
       const computer = ref.current.computers.find((c) => c.id === id)
       if (computer) void connect(computer).catch(report)
+    },
+    watch: (id, channels, keys) => {
+      const off = connections.current.get(id)?.client.watch(channels, keys)
+      // Threads other than the ones on screen arrive in brief, so a thread just asked for is read up to date, from where
+      // its last read left off, as the periodic refresh does.
+      if (off && channels.includes('agent:event')) void refresh(id, true).catch(report)
+      return off ?? (() => {})
     },
     subscribe: (id, listener) => {
       const set = listeners.current.get(id) ?? new Set()
