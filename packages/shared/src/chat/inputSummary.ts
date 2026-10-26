@@ -65,6 +65,7 @@ export function inputSummary(events: AgentEvent[], sessionId: string): ThreadInp
             ? (event.questions[0]?.question ?? '')
             : event.message
         ).slice(0, 240),
+        ...(event.kind === 'elicitation' && event.serverName ? { connector: event.serverName.slice(0, 100) } : {}),
         ...(event.requestSource
           ? { source: { ...event.requestSource, name: event.requestSource.name.slice(0, 100) } }
           : {}),

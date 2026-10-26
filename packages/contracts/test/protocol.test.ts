@@ -58,3 +58,26 @@ describe('pairing links', () => {
     expect(() => parseSshTarget('a b')).toThrow()
   })
 })
+
+describe('flow control frames', () => {
+  it('accepts a bounded acknowledgement and a boolean flow flag, and nothing else', async () => {
+    const { decodeSocketFrame } = await import('../src')
+    expect(decodeSocketFrame('{"t":"ack","id":"term-1","bytes":12}', 'client')).toEqual({
+      t: 'ack',
+      id: 'term-1',
+      bytes: 12,
+    })
+    for (const bad of [
+      '{"t":"ack","id":"","bytes":1}',
+      '{"t":"ack","id":"a","bytes":-1}',
+      '{"t":"ack","id":"a","bytes":1.5}',
+      '{"t":"ack","id":"a"}',
+      `{"t":"ack","id":"${'x'.repeat(200)}","bytes":1}`,
+    ])
+      expect(decodeSocketFrame(bad, 'client')).toBeNull()
+    expect(decodeSocketFrame('{"t":"subscribe","id":1,"channels":["term:data"],"flow":true}', 'client')).toMatchObject({
+      flow: true,
+    })
+    expect(decodeSocketFrame('{"t":"subscribe","id":1,"channels":["term:data"],"flow":"yes"}', 'client')).toBeNull()
+  })
+})

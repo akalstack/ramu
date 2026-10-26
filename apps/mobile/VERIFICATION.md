@@ -1,6 +1,6 @@
 # Outstanding mobile acceptance
 
-This checklist contains only checks still requiring device, account or live-provider evidence. Existing unit/integration tests and prior simulator/browser checks do not establish physical-device acceptance. Setup and current capabilities are in [README](README.md); unfinished implementation is in [PLAN](PLAN.md).
+This checklist contains only checks still requiring device, account or live-provider evidence. Existing unit/integration tests and prior simulator/browser checks do not establish physical-device acceptance. Setup and current capabilities are in [README](README.md); unfinished implementation is in [PLAN](../../docs/ROADMAP.md).
 
 Use disposable host profiles and simulated providers where possible. Paid live-provider calls remain opt-in. Remove a check when it passes and put any lasting setup requirements in README or the release guide.
 

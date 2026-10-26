@@ -90,7 +90,7 @@ function load(file, os, overrides = {}, globals = {}) {
       translate: (_language, text, params = {}) =>
         text.replace(/\{(\w+)\}/g, (_, key) => String(params[key] ?? `{${key}}`)),
     },
-    'expo-router': { Stack, useRouter: () => ({ push() {} }), useFocusEffect() {} },
+    'expo-router': { Stack, useLocalSearchParams: () => ({}), useRouter: () => ({ push() {} }), useFocusEffect() {} },
     'lucide-react-native': components,
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     'react-native-screens/experimental': {},
@@ -118,7 +118,13 @@ function load(file, os, overrides = {}, globals = {}) {
     ...overrides,
   }
   mocks['react-native'] = { ...native, ...mocks['react-native'] }
-  mocks['expo-router'] = { Stack, useRouter: () => ({ push() {} }), useFocusEffect() {}, ...mocks['expo-router'] }
+  mocks['expo-router'] = {
+    Stack,
+    useLocalSearchParams: () => ({}),
+    useRouter: () => ({ push() {} }),
+    useFocusEffect() {},
+    ...mocks['expo-router'],
+  }
   const code = ts.transpileModule(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), {
     compilerOptions: {
       esModuleInterop: false,

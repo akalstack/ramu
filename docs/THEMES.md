@@ -22,4 +22,4 @@ Export a kept theme as `<id>.ramu-theme.json` or copy its JSON. File and pasted-
 
 Theme data uses the shared versioned schema and explicit colors. Imports are data, not instructions or executable CSS. Device preferences, provider credentials and reference attachments do not belong in theme exports. Selecting or sharing a saved theme needs no model call.
 
-Remaining audit and acceptance are in the [theme plan](AI-THEMES-PLAN.md).
+Remaining audit and acceptance are in the [theme plan](ROADMAP.md).

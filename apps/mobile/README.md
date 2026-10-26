@@ -31,13 +31,13 @@ A project's menu offers **Manage actions** for the selected host. Inspect the co
 
 ## Files, workspace defaults and usage
 
-**Browse files** in a project's ⋯ menu on Threads opens its checkout without creating a thread. Thread headers and project actions open Explorer for their exact checkout. Direct and transcript links share the existing code/Markdown/image/diff viewer. Its File, Changes and Staged views keep combined changes under Changes, including older links to All. Empty diffs explain that there are no changes. Directory responses contain at most 2,000 entries per page, with **Load more files** on supporting hosts and a truncation notice on older hosts. A changed directory requires refresh; filename/path search uses the bounded quick-open index and shows at most 200 matches. Native existing-workspace acceptance and file-management context actions remain in the [Explorer plan](../../docs/EXPLORER-PLAN.md).
+**Browse files** in a project's ⋯ menu on Threads opens its checkout without creating a thread. Thread headers and project actions open Explorer for their exact checkout. Direct and transcript links share the existing code/Markdown/image/diff viewer. Its File, Changes and Staged views keep combined changes under Changes, including older links to All. Empty diffs explain that there are no changes. Directory responses contain at most 2,000 entries per page, with **Load more files** on supporting hosts and a truncation notice on older hosts. A changed directory requires refresh; filename/path search uses the bounded quick-open index and shows at most 200 matches. Native existing-workspace acceptance and file-management context actions remain in the [Explorer plan](../../docs/ROADMAP.md).
 
 **Plan usage** appears as a usage ring in the Threads header and beside the composer's model, opening a full-screen usage view grouped by provider and account. **Account details** remembers whether to show account IDs and update times; quota windows stay visible without repeated account headings. Missing readings, notice-only limits, last-known readings and measured percentages are distinct. Percentages mean used; they are account-wide rather than per-thread. The refresh action is specifically for Claude. Cursor/Antigravity allowance explanations are shared with desktop and localized. Transient refresh failures preserve the last reading and allow retry; reconnect refreshes the account data. Native layout, routing projection and other remaining work are in the [usage acceptance](../../docs/ROADMAP.md#plan-usage-acceptance).
 
 In New thread → Workspace, select an existing workspace and use **Rename workspace** to edit its shared label. Saving keeps thread titles, Git branches, files and checkout IDs intact. The name is checked against the one the editor opened with; concurrent changes require review, and an older host shows an update hint. Offline saves are disabled.
 
-Host Git settings now provide a default checkout mode and fixed branch prefix. A manual draft choice overrides the default; Use default restores inheritance. Sending freezes the chosen mode/prefix in the outbox, and creation retries use the same request ID. On a supporting host, optional branch-name details preserve manual edits and offer Generate name for semantic/custom naming. Further draft and device acceptance remains in the [workspace plan](../../docs/WORKSPACE-DEFAULTS-PLAN.md).
+Host Git settings now provide a default checkout mode and fixed branch prefix. A manual draft choice overrides the default; Use default restores inheritance. Sending freezes the chosen mode/prefix in the outbox, and creation retries use the same request ID. On a supporting host, optional branch-name details preserve manual edits and offer Generate name for semantic/custom naming. Further draft and device acceptance remains in the [workspace plan](../../docs/ROADMAP.md).
 
 ## New-thread model defaults
 
@@ -131,7 +131,7 @@ artifacts (iOS App Store/TestFlight, Android app bundle) with auto-incremented b
 `pnpm --filter @ramu/mobile eas:release:ios` / `eas:release:android` build and submit them to
 TestFlight and the Android internal track (as a draft). Signing keys, the App Store Connect app and the Google Play
 service account stay in the owner's EAS account (`eas credentials`, `eas submit`); nothing is committed. Run
-these only after the [remote-security prerequisites](../../docs/REMOTE-SECURITY-PLAN.md#plan). If enhanced Expo push security is
+these only after the [remote-security prerequisites](../../docs/ROADMAP.md). If enhanced Expo push security is
 configured, set `RAMU_EXPO_PUSH_ACCESS_TOKEN` on the host, never in the phone bundle.
 A physical phone and signed development build are required to validate delivery.
 Expo Go/web/simulators show a clear setup message. Delivery is best effort; forgotten
@@ -152,7 +152,7 @@ pnpm --filter @ramu/server exec vitest run test/mobileCompanion.test.ts test/mob
 transport chunk boundaries, URL/QR validation, ambiguous sends, resolved input,
 browse-root escapes, push revocation/privacy, stale discard previews and PTY recovery.
 Physical iOS/Android network, camera, keyboard and background-push checks remain
-necessary before distribution. See [PLAN.md](PLAN.md) for the wider release roadmap.
+necessary before distribution. See [the roadmap](../../docs/ROADMAP.md#mobile-companion) for the wider release roadmap.
 
 The iOS header uses native Stack navigation and SF Symbol toolbar buttons, including
 system Liquid Glass on supported iOS versions. The navigation bar stays transparent

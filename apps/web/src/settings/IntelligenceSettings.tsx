@@ -1,6 +1,6 @@
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { InstalledSkills } from './InstalledSkills'
-import { SearchInput } from '../SearchInput'
+import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { Badge } from '@/components/ui/badge'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
@@ -14,7 +14,7 @@ import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 import { useModelSets, modelStepName } from '../models/ModelSets'
 import { takeLibraryFocus } from '../summaries/libraryFocus'
-import { SettingsCard, SettingsCardList, usePaged } from './cards'
+import { SettingsCard, SettingsCardList } from './cards'
 import { type IntelligencePreferences, type LearningSnapshot, type ManagedSkill } from '@ramu/shared/types'
 
 type Props = { value: IntelligencePreferences; onChange: (value: IntelligencePreferences) => void }
@@ -178,7 +178,14 @@ export function LearningSettings({ value, onChange }: Props) {
     const change = JSON.parse(job.proposal) as { memories: unknown[]; skills: unknown[]; archive: unknown[] }
     return change.memories.length + change.skills.length + change.archive.length > 0
   })
-  const pagedReviews = usePaged(reviews ?? [], 10)
+  const [reviewStatus, setReviewStatus] = useState('all')
+  const reviewView = useListView(reviews ?? [], {
+    text: (job) => `${job.sessionTitle ?? ''} ${job.status} ${job.error ?? ''}`,
+    match: (job) => reviewStatus === 'all' || job.status === reviewStatus,
+    size: 10,
+    filterKey: reviewStatus,
+  })
+  const pagedReviews = reviewView.paged
   return (
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 mt-6">
       <SettingsGroupTitle>{t('Learning & skills')}</SettingsGroupTitle>
@@ -221,6 +228,31 @@ export function LearningSettings({ value, onChange }: Props) {
       >
         {snapshot?.running ? t('Reviewing…') : t('Run learning maintenance')}
       </Button>
+      <ListToolbar
+        view={reviewView}
+        label={t('Search reviews')}
+        filters={[
+          {
+            key: 'status',
+            label: t('Status'),
+            value: reviewStatus,
+            options: [
+              { value: 'all', label: t('All') },
+              ...[...new Set((reviews ?? []).map((job) => job.status))].map((value) => ({ value, label: t(value) })),
+            ],
+            onChange: setReviewStatus,
+          },
+        ]}
+      />
+      <ListCount view={reviewView} />
+      {reviewView.empty === 'filtered' && (
+        <ListEmpty
+          view={reviewView}
+          none=""
+          filtered="No reviews match your search."
+          onReset={() => setReviewStatus('all')}
+        />
+      )}
       <SettingsCardList>
         {pagedReviews.shown.map((job) => (
           <SettingsCard
@@ -299,8 +331,15 @@ const SKILL_STATUS_LABELS: Record<SkillStatusFilter, string> = {
 /** The skills Ramu wrote itself, searchable and a page at a time; installed skills are managed above them. */
 export function ManagedSkills() {
   const { invoke, snapshot, busy, act, viewOnly } = useLearning()
-  const [query, setQuery] = useState('')
   const [status, setStatus] = useState<SkillStatusFilter>('active')
+  const own = (snapshot?.skills ?? []).filter((skill) => !skill.installation)
+  const view = useListView(own, {
+    text: (skill) => `${skill.name} ${skill.description}`,
+    match: (skill) => status === 'all' || skill.status === status,
+    size: 10,
+    filterKey: status,
+  })
+  const { setQuery } = view
   const [history, setHistory] = useState<ManagedSkill[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -316,7 +355,7 @@ export function ManagedSkills() {
     take()
     window.addEventListener('ramu:library-focus', take)
     return () => window.removeEventListener('ramu:library-focus', take)
-  }, [])
+  }, [setQuery])
   useEffect(() => {
     if (!focusId || !snapshot) return
     const timer = window.setTimeout(() => {
@@ -328,43 +367,32 @@ export function ManagedSkills() {
     }, 150)
     return () => window.clearTimeout(timer)
   }, [focusId, snapshot])
-  const own = (snapshot?.skills ?? []).filter((skill) => !skill.installation)
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const shown = own.filter(
-    (skill) =>
-      (status === 'all' || skill.status === status) &&
-      words.every((word) => `${skill.name} ${skill.description}`.toLowerCase().includes(word)),
-  )
-  const paged = usePaged(shown, 10, `${query}|${status}`)
+  const { paged } = view
   return (
     <div className="settings-form flex flex-col gap-2 mt-6">
       <SettingsGroupTitle className="mb-1">{t('Managed skills')}</SettingsGroupTitle>
       {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
-      {own.length > 0 && (
-        <div className="flex items-center gap-2">
-          <SearchInput
-            className="flex-1 min-w-0"
-            aria-label={t('Search skills')}
-            placeholder={t('Search skills')}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onClear={() => setQuery('')}
-          />
-          <Dropdown
-            className="w-[120px]! flex-none"
-            label={t('Status')}
-            value={status}
-            options={SKILL_STATUS_FILTERS.map((value) => ({ value, label: t(SKILL_STATUS_LABELS[value]) }))}
-            onChange={(next) => setStatus(next as SkillStatusFilter)}
-          />
-        </div>
-      )}
-      {snapshot && !shown.length && (
-        <p className="muted text-muted-foreground small text-caption py-6 text-center m-0">
-          {own.length
-            ? t('No skills match your search.')
-            : t('No skills yet. Ramu adds them here when it learns a repeatable procedure.')}
-        </p>
+      <ListToolbar
+        view={view}
+        label={t('Search skills')}
+        filters={[
+          {
+            key: 'status',
+            label: t('Status'),
+            value: status,
+            options: SKILL_STATUS_FILTERS.map((value) => ({ value, label: t(SKILL_STATUS_LABELS[value]) })),
+            onChange: (next) => setStatus(next as SkillStatusFilter),
+          },
+        ]}
+      />
+      <ListCount view={view} />
+      {snapshot && (
+        <ListEmpty
+          view={view}
+          none="No skills yet. Ramu adds them here when it learns a repeatable procedure."
+          filtered="No skills match your search."
+          onReset={() => setStatus('active')}
+        />
       )}
       <SettingsCardList>
         {paged.shown.map((skill) => (

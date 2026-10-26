@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import * as nodePty from 'node-pty'
 import type { BackgroundTerminalHistory, BackgroundTerminalRecord } from './backgroundTerminalHistory'
+import { planResume } from '@ramu/shared/sync/streamSync'
 import { removalCommands, type TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
 
 import type { TerminalInfo, BackgroundTerminalInfo, BackgroundTerminalState } from '@ramu/shared/api'
@@ -27,6 +28,14 @@ interface Entry extends TerminalInfo {
 }
 
 const MAX_COMMAND = 4000
+
+/** `resume` says how `output` relates to what the viewer shows: nothing missed, the missed tail, or all held output again. */
+export type TerminalSnapshot = {
+  output: string
+  cursor: number
+  exited: boolean
+  resume: 'live' | 'replay' | 'snapshot'
+}
 
 export class TerminalService {
   private readonly terms = new Map<string, Entry>()
@@ -238,17 +247,23 @@ export class TerminalService {
    * it when the held tail still covers that, so a reconnecting viewer fetches the gap instead of the whole buffer.
    * Output ends at `cursor`, so a client can place it from `cursor - output.length` either way.
    */
-  snapshot(id: string, since?: number): { output: string; cursor: number; exited: boolean } {
+  snapshot(id: string, since?: number): TerminalSnapshot {
     const saved = this.history.get(id)
     const entry = !this.terms.has(id) && saved ? { ...saved, exited: true } : { ...this.require(id) }
-    const missed = since === undefined ? undefined : entry.cursor - since
+    // The held tail is the replayable window; a cursor it no longer covers (or from the future) gets all of it again.
+    const held = entry.output.length
+    const plan = planResume(
+      { epoch: id, cursor: since ?? null },
+      { epoch: id, first: entry.cursor - held, last: entry.cursor },
+      { maxReplayItems: Infinity, maxReplayBytes: Infinity },
+    )
     const output =
-      missed !== undefined && missed >= 0 && missed <= entry.output.length
-        ? missed === 0
-          ? ''
-          : entry.output.slice(-missed)
-        : entry.output
-    return { output, cursor: entry.cursor, exited: entry.exited }
+      plan.kind === 'live'
+        ? ''
+        : plan.kind === 'replay'
+          ? entry.output.slice(-(entry.cursor - plan.from + 1))
+          : entry.output
+    return { output, cursor: entry.cursor, exited: entry.exited, resume: plan.kind }
   }
 
   get(id: string): TerminalInfo | undefined {

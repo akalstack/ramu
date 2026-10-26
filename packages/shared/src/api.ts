@@ -952,7 +952,10 @@ export interface RamuMethods {
   /** Requests termination of that command's process group (`force` kills it). Safe to repeat and after it ended. */
   'term.background.stop'(taskId: string, termId: string, force?: boolean): BackgroundTerminalInfo
   /** With `since` (the cursor already shown), only the output after it when the host still holds that much; the output always ends at `cursor`. */
-  'term.snapshot'(termId: string, since?: number): { output: string; cursor: number; exited: boolean }
+  'term.snapshot'(
+    termId: string,
+    since?: number,
+  ): { output: string; cursor: number; exited: boolean; resume?: 'live' | 'replay' | 'snapshot' }
   /** Your messages and the agent's replies that contain `query`, newest first, across every chat. */
   'agent.searchMessages'(query: string): ChatSearchHit[]
   'agent.scope'(taskId: string): AgentScope
@@ -1139,6 +1142,8 @@ export type PushEvents = {
   'aside:changed': { sessionId: string; aside: Aside | null; asideId: string }
   'term:data': { id: string; data: string; cursor?: number }
   'term:exit': { id: string; code: number }
+  /** Output of terminal `id` was withheld from a slow connection; fetch `term.snapshot(id, since)` to catch up. */
+  'term:behind': { id: string }
   /** A shell was opened, ended or closed in this workspace (`taskId` is the workspace context). */
   'term:changed': { taskId: string }
   'notices:changed': import('./chat/notices').InboxNotice[]

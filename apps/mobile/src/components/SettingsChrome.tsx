@@ -6,6 +6,7 @@ import {
   CalendarClock,
   ChevronRight,
   Cpu,
+  Globe,
   GitBranch,
   Info,
   MessageSquare,
@@ -24,6 +25,7 @@ import { Card, ConnectionDot, Row, T } from './ui'
 const icons: Record<SettingsSection, LucideIcon> = {
   appearance: Palette,
   git: GitBranch,
+  browser: Globe,
   chats: MessageSquare,
   providers: Cpu,
   access: ShieldCheck,

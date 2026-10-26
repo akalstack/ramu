@@ -95,3 +95,23 @@ it('splits pending counts by kind, and leaves non-approvals unclassified for an 
     mergeInputSummaries([old, { count: 1, approvals: 0, connectors: 1, requests: [] }])?.connectors,
   ).toBeUndefined()
 })
+
+it('records which connector an elicitation is for, bounded, so the Inbox can group sign-ins', () => {
+  const summary = inputSummary(
+    [
+      { kind: 'elicitation', requestId: 'e1', serverName: 'Atlassian', message: 'Sign in', mode: 'url', fields: [] },
+      {
+        kind: 'elicitation',
+        requestId: 'e2',
+        serverName: 'x'.repeat(300),
+        message: 'Sign in',
+        mode: 'url',
+        fields: [],
+      },
+    ],
+    'session',
+  )
+  expect(summary?.connectors).toBe(2)
+  expect(summary?.requests[0]?.connector).toBe('Atlassian')
+  expect(summary?.requests[1]?.connector).toHaveLength(100)
+})

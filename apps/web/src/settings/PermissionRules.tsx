@@ -7,7 +7,8 @@ import { t } from '../i18n'
 import { errorText } from '../lib/errors'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
-import { SettingsCard, SettingsCardList, usePaged } from './cards'
+import { SettingsCard, SettingsCardList } from './cards'
+import { ListCount, ListToolbar, useListView } from './ListView'
 
 export function PermissionRules({ disabled }: { disabled: boolean }) {
   const invoke = useSettingsInvoke()
@@ -79,7 +80,11 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
       (target === 'projects' && rule.scope === 'project') ||
       target === `project:${rule.projectId}`,
   )
-  const paged = usePaged(shown, 20)
+  const view = useListView(shown, {
+    text: (rule) => `${rule.label} ${rule.provider} ${rule.projectName ?? ''}`,
+    filterKey: target,
+  })
+  const paged = view.paged
   return (
     <div className="space-y-3">
       <SettingsGroupTitle>{t('Saved approvals')}</SettingsGroupTitle>
@@ -103,7 +108,8 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
         />
         <Button
           variant="secondary"
-          disabled={viewOnly || disabled || busy || !shown.length}
+          disabled={viewOnly || disabled || busy || !shown.length || view.query !== ''}
+          title={view.query ? t('Clear the search to remove a whole scope.') : undefined}
           onClick={() => void change()}
         >
           {t('Remove displayed approvals')}
@@ -112,6 +118,8 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
           {t('Refresh')}
         </Button>
       </div>
+      <ListToolbar view={view} label={t('Search approvals')} />
+      <ListCount view={view} />
       {!shown.length && (
         <p className="m-0 text-caption text-muted-foreground">{t('No saved approvals in this scope.')}</p>
       )}

@@ -37,6 +37,11 @@ export interface RuntimeSocketOptions {
   onState?(state: SocketState): void
   /** The host's run identity changed: it restarted and every cursor held is void. */
   onRestart?(): void
+  /**
+   * Ask the host to hold back terminal output this client has not processed, and acknowledge each `term:data` chunk
+   * once `onEvent` has returned. A `term:behind` event then means chunks were withheld: fetch `term.snapshot(id, since)`.
+   */
+  flowControl?: boolean
   /** False asks the host for calls only, for a client whose events already arrive on another stream. */
   events?: boolean
   connectTimeoutMs?: number
@@ -121,8 +126,10 @@ export class RuntimeSocket {
           this.startHeartbeat(socket)
           // A new connection starts unfiltered; the interest the caller declared is restored before it matters.
           if (this.subscription) void this.sendSubscription(this.subscription).catch(() => {})
-        } else if (frame.t === 'event') this.options.onEvent(frame.channel, frame.payload)
-        else if (frame.t === 'result') this.settle(frame.id, (call) => call.resolve(frame.value))
+        } else if (frame.t === 'event') {
+          this.options.onEvent(frame.channel, frame.payload)
+          if (this.options.flowControl && frame.channel === 'term:data') this.acknowledge(socket, frame.payload)
+        } else if (frame.t === 'result') this.settle(frame.id, (call) => call.resolve(frame.value))
         else if (frame.t === 'error')
           this.settle(frame.id, (call) =>
             call.reject(Object.assign(new Error(frame.error), frame.status ? { status: frame.status } : {})),
@@ -151,6 +158,17 @@ export class RuntimeSocket {
       },
     })
     this.socket = socket
+  }
+
+  /** Tells the host this much of a terminal's output has been handled, in the characters of its chunks. */
+  private acknowledge(socket: SocketLike, payload: unknown) {
+    const { id, data } = (payload ?? {}) as { id?: unknown; data?: unknown }
+    if (typeof id !== 'string' || typeof data !== 'string' || !data.length) return
+    try {
+      socket.send(encodeSocketFrame({ t: 'ack', id, bytes: data.length }))
+    } catch {
+      // A socket that cannot send is closing; the reconnect resynchronizes from the terminal's cursor.
+    }
   }
 
   private startHeartbeat(socket: SocketLike) {
@@ -237,7 +255,14 @@ export class RuntimeSocket {
         reject: (error) => (clearTimeout(timer), this.timers.delete(timer), reject(error)),
       })
       try {
-        socket.send(encodeSocketFrame({ t: 'subscribe', id, ...subscription }))
+        socket.send(
+          encodeSocketFrame({
+            t: 'subscribe',
+            id,
+            ...subscription,
+            ...(this.options.flowControl ? { flow: true } : {}),
+          }),
+        )
       } catch (error) {
         this.pending.delete(id)
         reject(lost(error instanceof Error ? error.message : 'The socket could not send'))

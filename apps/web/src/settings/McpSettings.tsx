@@ -21,6 +21,7 @@ import { useModelSets } from '../models/ModelSets'
 import { useAppSettings } from './AppSettings'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { SettingsCard, SettingsCardList } from './cards'
+import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { availabilityLabels, connectionAvailability } from './mcpAvailability'
 
 type Definition = Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>
@@ -447,7 +448,10 @@ export function McpSettings() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
+  const view = useListView(query.data?.connections ?? [], {
+    text: ({ connection }) => `${connection.name} ${connection.providers.map(providerName).join(' ')}`,
+    size: 20,
+  })
   const [signingIn, setSigningIn] = useState<string | null>(null)
   const epoch = useRef(0)
   useEffect(() => {
@@ -531,14 +535,6 @@ export function McpSettings() {
         </Alert>
       )}
       <div className="flex flex-wrap gap-2">
-        {(data?.connections.length ?? 0) > 5 && (
-          <Input
-            aria-label={t('Search MCP servers')}
-            placeholder={t('Search MCP servers')}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        )}
         <Button disabled={!canAdminister || busy} onClick={() => setEditing('new')}>
           {t('Add server')}
         </Button>
@@ -556,13 +552,18 @@ export function McpSettings() {
         </p>
       )}
       {!data && !query.error && <p role="status">{t('Loading…')}</p>}
-      {data?.connections.length === 0 && (
-        <p className="m-0 text-caption text-muted-foreground">{t('No servers connected through Ramu yet.')}</p>
+      <ListToolbar view={view} label={t('Search MCP servers')} />
+      <ListCount view={view} />
+      {data && (
+        <ListEmpty
+          view={view}
+          none="No servers connected through Ramu yet."
+          filtered="No MCP servers match your search."
+        />
       )}
       <SettingsCardList>
-        {data?.connections
-          .filter(({ connection }) => connection.name.toLowerCase().includes(search.toLowerCase()))
-          .map(({ connection, status, reason, checkedAt, toolCount }) => (
+        {data &&
+          view.paged.shown.map(({ connection, status, reason, checkedAt, toolCount }) => (
             <SettingsCard
               key={connection.id}
               title={connection.name}
@@ -702,6 +703,7 @@ export function McpSettings() {
               </div>
             </SettingsCard>
           ))}
+        {view.paged.more}
       </SettingsCardList>
       {editing && (
         <ConnectionEditor

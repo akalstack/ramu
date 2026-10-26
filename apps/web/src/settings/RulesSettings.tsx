@@ -14,6 +14,7 @@ import { Dialog, Dropdown, timeAgo } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { SettingsCard, SettingsCardList } from './cards'
+import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { ruleCharacters, ruleDuplicates, ruleScopeCosts } from '@ramu/shared/rules'
 import { NativeInstructions } from './NativeInstructions'
 import { duplicateNote, ruleReach, ruleTokens, scopeCostLine } from './rulesView'
@@ -269,6 +270,12 @@ export function RulesSettings() {
   const list = useMemo(() => rules.data ?? [], [rules.data])
   const duplicates = useMemo(() => ruleDuplicates(list), [list])
   const costs = useMemo(() => ruleScopeCosts(list), [list])
+  const [kind, setKind] = useState('all')
+  const view = useListView(list, {
+    text: (rule) => `${rule.name} ${rule.body} ${projectName(rule.projectId)}`,
+    match: (rule) => kind === 'all' || (kind === 'off' ? !rule.enabled : rule.enabled && rule.activation === kind),
+    filterKey: kind,
+  })
   const act = async (work: () => Promise<unknown>) => {
     if (!allowed()) return
     setError(null)
@@ -306,8 +313,35 @@ export function RulesSettings() {
           </ul>
         </div>
       )}
+      <ListToolbar
+        view={view}
+        label={t('Search rules')}
+        filters={[
+          {
+            key: 'kind',
+            label: t('Show'),
+            value: kind,
+            options: [
+              { value: 'all', label: t('All rules') },
+              { value: 'always', label: t('Always') },
+              { value: 'manual', label: t('Manual') },
+              { value: 'off', label: t('Off') },
+            ],
+            onChange: setKind,
+          },
+        ]}
+      />
+      <ListCount view={view} />
+      {rules.data && view.total > 0 && (
+        <ListEmpty
+          view={view}
+          none="No rules yet."
+          filtered="No rules match your search."
+          onReset={() => setKind('all')}
+        />
+      )}
       <SettingsCardList>
-        {list.map((rule) => (
+        {view.paged.shown.map((rule) => (
           <SettingsCard
             key={rule.id}
             title={rule.name}
@@ -373,6 +407,7 @@ export function RulesSettings() {
             )}
           </SettingsCard>
         ))}
+        {view.paged.more}
       </SettingsCardList>
       {rules.data?.length === 0 && <p className={CAPTION}>{t('No rules yet.')}</p>}
       <div className="mt-3">

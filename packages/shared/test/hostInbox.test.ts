@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest'
-import { buildInbox, inboxBlocker, type InboxChat, type InboxSummary } from '../src/hostInbox'
+import {
+  blockerTally,
+  blockerTallyLine,
+  buildInbox,
+  inboxBlocker,
+  type InboxChat,
+  type InboxSummary,
+} from '../src/hostInbox'
 import { hostInboxInput, isHostDestination, type HostOverview } from '../src/hostOverview'
 
 const now = Date.now()
@@ -269,4 +276,64 @@ it('gives no blocker for a thread that is not waiting, and a generic question wh
   expect(inboxBlocker({ ...base, goalState: { status: 'active' } })).toBeNull()
   expect(inboxBlocker({ ...base, goalState: { status: 'paused', pausedBy: 'provider-limit' } })).toBeNull()
   expect(inboxBlocker({ ...base, status: 'needs-input' })).toEqual({ kind: 'question', count: 1 })
+})
+
+it('tallies waiting threads by what they need, in the order a person acts on them', () => {
+  const waiting = (taskId: string, extra: Partial<InboxChat>): InboxChat => ({ ...chat('host', taskId), ...extra })
+  const input = (approvals: number, connectors: number, count: number) => ({
+    count,
+    approvals,
+    connectors,
+    questions: count - approvals - connectors,
+    other: 0,
+    requests: [],
+  })
+  const tally = blockerTally([
+    waiting('a', { inputSummary: input(0, 1, 1) }),
+    waiting('b', { inputSummary: input(2, 0, 2) }),
+    waiting('c', { inputSummary: input(1, 1, 2) }),
+    waiting('d', { status: 'ready-for-review' }),
+    waiting('e', { goalState: { status: 'turn-limit' } }),
+  ])
+  expect(tally).toEqual([
+    { kind: 'approval', threads: 2 },
+    { kind: 'connector', threads: 1 },
+    { kind: 'turn-limit', threads: 1 },
+  ])
+  expect(blockerTally([])).toEqual([])
+})
+
+it('writes the tally as one translated line', () => {
+  const line = blockerTallyLine(
+    [
+      { kind: 'approval', threads: 2 },
+      { kind: 'connector', threads: 1 },
+    ],
+    (source, values) => source.replace('{0}', String(values['0'])),
+  )
+  expect(line).toBe('2 need approval · 1 need sign-in')
+})
+
+it('groups sign-ins by connector so threads waiting on the same one read as a single ask', () => {
+  const request = (connector?: string) => ({
+    sessionId: 's',
+    requestId: 'r',
+    kind: 'connector' as const,
+    title: 'Sign in',
+    ...(connector ? { connector } : {}),
+  })
+  const signIn = (taskId: string, connector?: string): InboxChat => ({
+    ...chat('host', taskId),
+    inputSummary: { count: 1, approvals: 0, connectors: 1, requests: [request(connector)] },
+  })
+  const tally = blockerTally([signIn('a', 'Atlassian'), signIn('b', 'Atlassian'), signIn('c', 'Linear'), signIn('d')])
+  expect(tally).toEqual([
+    { kind: 'connector', threads: 2, connector: 'Atlassian' },
+    { kind: 'connector', threads: 1, connector: 'Linear' },
+    { kind: 'connector', threads: 1 },
+  ])
+  expect(blockerTallyLine(tally, (source, values) => source.replace(/\{(\d)\}/g, (_m, i) => String(values[i])))).toBe(
+    '2 need sign-in to Atlassian · 1 need sign-in to Linear · 1 need sign-in',
+  )
+  expect(inboxBlocker(signIn('a', 'Atlassian'))).toEqual({ kind: 'connector', count: 1, connector: 'Atlassian' })
 })

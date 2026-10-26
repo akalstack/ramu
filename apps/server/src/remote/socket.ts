@@ -7,9 +7,11 @@ import {
   MAX_SOCKET_FRAME_BYTES,
   SOCKET_EVENT_KEYS,
   SOCKET_PATH,
+  TERMINAL_FLOW_WINDOW,
   type InvokeRequest,
   type SocketServerFrame,
 } from '@ramu/contracts'
+import { OutputWindow } from '@ramu/shared/sync/streamSync'
 import type { DeviceInfo } from './devices'
 
 /** What the event broadcast needs from a connected client; an SSE response and a WebSocket both fit. */
@@ -104,12 +106,36 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
         return false
       }
     }
+    // With flow control on, terminal output the client has not acknowledged is bounded: past the window further chunks are
+    // withheld, and one `term:behind` tells the client to fetch the gap from the terminal's own cursor once it has caught up.
+    let flow = false
+    const windows = new Map<string, OutputWindow>()
+    const behind = new Set<string>()
+    const held = (json: string) => {
+      if (!flow || !json.startsWith('{"channel":"term:data"')) return false
+      try {
+        const { payload } = JSON.parse(json) as { payload?: { id?: unknown; data?: unknown } }
+        if (typeof payload?.id !== 'string' || typeof payload.data !== 'string') return false
+        // Once a chunk was withheld, every later one is too: the client then fetches one contiguous gap, never a hole.
+        if (behind.has(payload.id)) return true
+        let window = windows.get(payload.id)
+        if (!window) windows.set(payload.id, (window = new OutputWindow(TERMINAL_FLOW_WINDOW)))
+        if (window.canSend(payload.data.length)) {
+          window.sent(payload.data.length)
+          return false
+        }
+        behind.add(payload.id)
+        return true
+      } catch {
+        return false
+      }
+    }
     const sink: EventSink = {
       write(chunk) {
         // Only data lines are events; SSE comments (keep-alives) have no meaning here.
         if (!chunk.startsWith('data: ') || ws.readyState !== ws.OPEN) return true
         const json = chunk.slice(6).trimEnd()
-        if (!wanted(json)) return true
+        if (!wanted(json) || held(json)) return true
         ws.send(`{"t":"event",${json.slice(1)}`)
         return ws.bufferedAmount < maxBuffered
       },
@@ -157,11 +183,23 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
         send({ t: 'pong' })
         return
       }
+      if (frame.t === 'ack') {
+        const window = windows.get(frame.id)
+        if (!flow || !window) return
+        window.ack(frame.bytes)
+        if (window.pending > 0) return
+        windows.delete(frame.id)
+        if (behind.delete(frame.id)) send({ t: 'event', channel: 'term:behind', payload: { id: frame.id } })
+        return
+      }
       if (frame.t === 'subscribe') {
         if (callsOnly) {
           send({ t: 'error', id: frame.id, error: 'This connection carries no events.', status: 400 })
           return
         }
+        flow = frame.flow === true
+        windows.clear()
+        behind.clear()
         filter = {
           channels: new Set(frame.channels),
           keys: new Map(Object.entries(frame.keys ?? {}).map(([channel, list]) => [channel, new Set(list)])),

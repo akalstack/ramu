@@ -16,6 +16,7 @@ export type SettingsGroup = 'workspace' | 'agents' | 'system' | 'phone'
 export type SettingsSection =
   | 'appearance'
   | 'git'
+  | 'browser'
   | 'chats'
   | 'providers'
   | 'access'
@@ -41,6 +42,7 @@ export const SETTINGS_SECTIONS: { id: SettingsSection; group: SettingsGroup; sco
   [
     { id: 'appearance', group: 'workspace', scope: 'phone', label: { en: 'Appearance', id: 'Tampilan' } },
     { id: 'git', group: 'workspace', scope: 'host', label: { en: 'Git', id: 'Git' } },
+    { id: 'browser', group: 'workspace', scope: 'host', label: { en: 'Browser', id: 'Peramban' } },
     { id: 'chats', group: 'agents', scope: 'host', label: { en: 'Threads', id: 'Thread' } },
     { id: 'providers', group: 'agents', scope: 'host', label: { en: 'Providers & models', id: 'Penyedia & model' } },
     { id: 'access', group: 'agents', scope: 'host', label: { en: 'Access & Fallback', id: 'Akses & Cadangan' } },
@@ -221,6 +223,23 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           options: [
             { value: 'new-branch', label: 'Create feature branch' },
             { value: 'current', label: 'Continue on current branch' },
+          ],
+        },
+      ],
+    },
+  ],
+  browser: [
+    {
+      rows: [
+        {
+          kind: 'choice',
+          path: 'agentBrowser.agentBrowser',
+          title: 'Agent browser',
+          help: 'Applies on the selected host, which must keep Ramu desktop open. Changes apply on the next provider launch.',
+          words: 'browser agent integrated provider web',
+          options: [
+            { value: 'provider', label: 'Provider browser setup' },
+            { value: 'integrated', label: 'Ramu integrated browser' },
           ],
         },
       ],
@@ -540,6 +559,13 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           title: 'Check app updates',
           help: 'Look for new Ramu releases on the host.',
           words: 'release version check',
+        },
+        {
+          kind: 'toggle',
+          path: 'appAutoUpdate',
+          title: 'Install updates automatically',
+          help: 'Download and install new Ramu releases on the host when they are found.',
+          words: 'release version auto download install',
         },
       ],
     },

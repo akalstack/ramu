@@ -11,6 +11,7 @@ export function readInputSummaries(db: Db, taskId?: string): Map<string, ThreadI
       substr(CASE json_extract(e.event, '$.kind')
         WHEN 'permission-request' THEN COALESCE(NULLIF(json_extract(e.event, '$.title'), ''), json_extract(e.event, '$.toolName'))
         WHEN 'question' THEN json_extract(e.event, '$.questions[0].question') ELSE json_extract(e.event, '$.message') END, 1, 240) AS title,
+      CASE WHEN json_extract(e.event, '$.kind') = 'elicitation' THEN substr(NULLIF(json_extract(e.event, '$.serverName'), ''), 1, 100) END AS connectorName,
       json_extract(e.event, '$.requestSource.sessionId') AS sourceSession,
       json_extract(e.event, '$.requestSource.agentId') AS sourceAgent,
       substr(json_extract(e.event, '$.requestSource.name'), 1, 100) AS sourceName,
@@ -35,6 +36,7 @@ export function readInputSummaries(db: Db, taskId?: string): Map<string, ThreadI
     count: number
     approvals: number
     connectors: number
+    connectorName: string | null
     sourceSession: string | null
     sourceAgent: string | null
     sourceName: string | null
@@ -53,6 +55,7 @@ export function readInputSummaries(db: Db, taskId?: string): Map<string, ThreadI
       requestId: row.requestId,
       kind: row.kind,
       title: row.title ?? '',
+      ...(row.connectorName ? { connector: row.connectorName } : {}),
       ...(row.sourceSession && row.sourceAgent
         ? {
             source: {

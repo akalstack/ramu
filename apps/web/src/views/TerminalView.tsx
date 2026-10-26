@@ -277,7 +277,8 @@ export function TerminalView({
                     if (disposed) return
                     const unseen = unseenOutput({ id: info.id, data: snap.output, cursor: snap.cursor }, replayed)
                     if (!unseen) return
-                    if (unseen.reset)
+                    // The host says it could not replay the gap, so the view starts again from what it still holds.
+                    if (unseen.reset || snap.resume === 'snapshot')
                       term.write(
                         `\x1bc\x1b[2m[${t('Showing the most recent terminal output. Older output was truncated.')}]\x1b[0m\r\n`,
                       )

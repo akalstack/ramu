@@ -27,7 +27,12 @@ it('terminals reattach with bounded output and a cursor that includes missed chu
   expect(chunks).toEqual([5, 300_005])
   expect(service.list('task')).toEqual([terminal])
   expect(service.list('another')).toEqual([])
-  expect(service.snapshot(terminal.id)).toEqual({ output: 'x'.repeat(256_000), cursor: 300_005, exited: false })
+  expect(service.snapshot(terminal.id)).toEqual({
+    output: 'x'.repeat(256_000),
+    cursor: 300_005,
+    exited: false,
+    resume: 'snapshot',
+  })
   callbacks.exit({ exitCode: 0 })
   expect(service.snapshot(terminal.id).exited).toBe(true)
   service.close(terminal.id)
@@ -44,12 +49,14 @@ it('returns only the output after a cursor the viewer already shows, or everythi
   callbacks.data('two')
   callbacks.data('three')
   // cursor is 11: "onetwothree"
-  expect(service.snapshot(terminal.id, 3)).toEqual({ output: 'twothree', cursor: 11, exited: false })
-  expect(service.snapshot(terminal.id, 11)).toEqual({ output: '', cursor: 11, exited: false })
+  expect(service.snapshot(terminal.id, 3)).toEqual({ output: 'twothree', cursor: 11, exited: false, resume: 'replay' })
+  expect(service.snapshot(terminal.id, 11)).toEqual({ output: '', cursor: 11, exited: false, resume: 'live' })
   // A cursor from before the held output, from the future, or none at all gets the whole held output.
   callbacks.data('x'.repeat(300_000))
-  expect(service.snapshot(terminal.id, 5).output).toHaveLength(256_000)
-  expect(service.snapshot(terminal.id, 999_999).output).toHaveLength(256_000)
-  expect(service.snapshot(terminal.id).output).toHaveLength(256_000)
+  for (const since of [5, 999_999, undefined]) {
+    const snap = service.snapshot(terminal.id, since)
+    expect(snap.output).toHaveLength(256_000)
+    expect(snap.resume).toBe('snapshot')
+  }
   service.close(terminal.id)
 })

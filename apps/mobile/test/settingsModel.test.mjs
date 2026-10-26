@@ -247,3 +247,16 @@ test('branch naming shows only the inputs used by the selected strategy', () => 
   assert.deepEqual(paths('semantic'), ['worktreeBranchNaming'])
   assert.deepEqual(paths('custom'), ['worktreeBranchNaming', 'worktreeBranchInstructions'])
 })
+
+test('browser and automatic update rows appear only when the host offers them', () => {
+  const agent = setting('agentBrowser.agentBrowser', 'integrated', { type: 'string', enum: ['integrated', 'provider'] })
+  assert.equal(visibleGroups('browser', []).length, 0)
+  assert.equal(visibleGroups('browser', [agent])[0].rows[0].path, agent.path)
+  const auto = setting('appAutoUpdate', false, { type: 'boolean' })
+  const rows = visibleGroups('system', [auto]).flatMap((group) => group.rows)
+  assert.deepEqual(
+    rows.map((row) => row.path),
+    ['appAutoUpdate'],
+  )
+  assert.ok(SETTINGS_SECTIONS.some((section) => section.id === 'browser'))
+})

@@ -1,7 +1,7 @@
 import { Alert, Platform, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import Constants from 'expo-constants'
-import { Check, Plus, RefreshCw } from 'lucide-react-native'
+import { Check, ChevronRight, Plus, RefreshCw } from 'lucide-react-native'
 import { font, space, useTheme, type Appearance, type TextSize } from '../../theme'
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
@@ -113,6 +113,8 @@ function AppearancePage() {
  * first, then the setting shared by all your phones on this computer, then the computer's own setting.
  */
 function BusyBehavior({ computerId }: { computerId: string }) {
+  const router = useRouter()
+  const { c } = useTheme()
   const { drafts, setDraft, appPreferences, mobileLayers } = useStore()
   const t = useT()
   const sharedBusy = sharedValue(mobileLayers[computerId], 'queueWhileBusy')
@@ -165,6 +167,15 @@ function BusyBehavior({ computerId }: { computerId: string }) {
           onPress={() => setDraft(MODEL_WARNING_DEVICE_KEY, '')}
         />
       ) : null}
+      <Card style={{ marginHorizontal: space.l }}>
+        <Row
+          accessibilityRole="button"
+          onPress={() => router.dismissTo({ pathname: '/', params: { filter: 'archived' } })}
+        >
+          <T style={{ flex: 1 }}>{t.homeArchived}</T>
+          {Platform.OS !== 'android' ? <ChevronRight size={16} color={c.muted} /> : null}
+        </Row>
+      </Card>
     </>
   )
 }
@@ -337,6 +348,7 @@ function Usage({ computer }: { computer: string }) {
 
 /** What the desktop edits that the phone leaves to it, so a missing row is explained rather than puzzling. */
 const desktopOnly: Partial<Record<SettingsSection, string>> = {
+  browser: 'Browser profiles, imports and downloads are managed in Ramu on the host.',
   providers: 'Model sets, provider executable paths and sign-in are managed in Ramu on the host.',
   access: 'Permission rules and the provider fallback order are edited in Ramu on the host.',
   workflows: 'Sub-agent routing and the advisor are set up in Ramu on the host.',

@@ -8,6 +8,7 @@ import { useStore } from '../runtime/store'
 import { font, radius, space, useTheme } from '../theme'
 import { Button, Row, Segmented, Sheet, T } from './ui'
 import { ToggleRow } from './SettingRows'
+import { matchesWords, searchWords } from '@ramu/shared/listView'
 
 /** Uses the host rule collection; editing text never grants agent permissions or starts work. */
 export function RulesSettings({ hostId }: { hostId: string }) {
@@ -54,9 +55,8 @@ export function RulesSettings({ hostId }: { hostId: string }) {
       unsubscribe()
     }
   }, [read, online])
-  const matches = rules.filter((rule) =>
-    `${rule.name} ${rule.body}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
-  )
+  const words = searchWords(query)
+  const matches = rules.filter((rule) => matchesWords(`${rule.name} ${rule.body}`, words))
   return (
     <View style={{ padding: space.l, gap: space.m }}>
       <T tone="muted">

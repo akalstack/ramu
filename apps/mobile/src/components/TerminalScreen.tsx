@@ -1,3 +1,4 @@
+import { LiveBuffer } from '@ramu/shared/sync/streamSync'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Keyboard as NativeKeyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -185,6 +186,61 @@ export function TerminalScreen({
     const off = store.subscribe(computerId, (channel, value) => {
       if (channel === 'term:changed' && value.taskId === ctx) load(false).catch(() => {})
     })
+    return () => {
+      alive = false
+      off()
+    }
+  }, [computerId, ctx, connected])
+  useEffect(() => {
+    if (!terminal) return
+    let alive = true,
+      hydrating = true
+    // Chunks that arrive while a snapshot is loading wait here, bounded; past the bounds the snapshot is fetched again.
+    const buffer = new LiveBuffer<{ data: string; cursor?: number }>(2000, 2_000_000)
+    const append = (value: { data: string; cursor?: number }) => {
+      if (value.cursor != null && value.cursor <= cursor.current) return
+      const data =
+        value.cursor != null
+          ? value.data.slice(Math.max(0, cursor.current - (value.cursor - value.data.length)))
+          : value.data
+      cursor.current = value.cursor ?? cursor.current + data.length
+      setOutput((old) => (old + data).slice(-256_000))
+    }
+    // `since` fetches only what this view has not shown; without it the view starts again from the held output.
+    const hydrate = (since?: number) => {
+      hydrating = true
+      store
+        .invoke(chat.computerId, 'term.snapshot', terminal.id, since)
+        .then((snapshot) => {
+          if (!alive) return
+          const queued = buffer.drain()
+          if (since === undefined || snapshot.resume === 'snapshot') {
+            cursor.current = snapshot.cursor
+            setOutput(snapshot.output)
+          } else append({ data: snapshot.output, cursor: snapshot.cursor })
+          hydrating = false
+          if (queued) queued.forEach(append)
+          else hydrate(cursor.current)
+          setError('')
+        })
+        .catch((e) => {
+          if (alive) setError(e.message)
+        })
+    }
+    const off = store.subscribe(chat.computerId, (channel, value) => {
+      if (value.id !== terminal.id) return
+      if (channel === 'term:data') {
+        if (hydrating) buffer.push({ seq: 0, size: value.data.length, value })
+        else append(value)
+      }
+      // The host held output back from a slow connection: fetch the gap from where this view stopped.
+      if (channel === 'term:behind' && !hydrating) hydrate(cursor.current)
+      if (channel === 'term:exit') setTabs((old) => old.map((t) => (t.id === value.id ? { ...t, exited: true } : t)))
+    })
+    setOutput('')
+    setOutputOwner(terminal.id)
+    cursor.current = 0
+    hydrate()
     return () => {
       alive = false
       off()

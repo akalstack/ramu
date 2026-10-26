@@ -35,6 +35,8 @@ export interface InboxBlocker {
   count?: number
   /** The host's own explanation, for a blocked goal. */
   reason?: string
+  /** The connector a sign-in is for, when the host reported it. */
+  connector?: string
 }
 
 /**
@@ -46,7 +48,10 @@ export function inboxBlocker(chat: InboxChat): InboxBlocker | null {
   const input = chat.inputSummary
   if (input?.count) {
     if (input.approvals > 0) return { kind: 'approval', count: input.approvals }
-    if (input.connectors) return { kind: 'connector', count: input.connectors }
+    if (input.connectors) {
+      const connector = input.requests.find((request) => request.kind === 'connector' && request.connector)?.connector
+      return { kind: 'connector', count: input.connectors, ...(connector ? { connector } : {}) }
+    }
     return { kind: 'question', count: input.count }
   }
   const goal = chat.goal === undefined ? chat.goalState : chat.goal
@@ -58,6 +63,64 @@ export function inboxBlocker(chat: InboxChat): InboxBlocker | null {
   if (goal?.status === 'paused' && !goalContinues(goal)) return { kind: 'goal-paused' }
   return chat.status === 'needs-input' ? { kind: 'question', count: 1 } : null
 }
+
+const BLOCKER_ORDER: InboxBlockerKind[] = [
+  'approval',
+  'connector',
+  'question',
+  'verification-failed',
+  'goal-blocked',
+  'turn-limit',
+  'goal-paused',
+]
+
+/**
+ * How many waiting threads need each kind of action, in the order a person would act on them. A long Waiting list
+ * with the same ask repeated reads as one line (“3 need approval, 2 need sign-in”) instead of the person counting rows.
+ * Threads with no blocker are not counted; a thread counts once, under its first blocker.
+ */
+export function blockerTally(chats: InboxChat[]): { kind: InboxBlockerKind; threads: number; connector?: string }[] {
+  // Sign-ins are counted per connector, so five threads waiting on the same one read as one ask rather than five.
+  const counts = new Map<string, { kind: InboxBlockerKind; threads: number; connector?: string }>()
+  for (const chat of chats) {
+    const blocker = inboxBlocker(chat)
+    if (!blocker) continue
+    const connector = blocker.kind === 'connector' ? blocker.connector : undefined
+    const key = `${blocker.kind}\0${connector ?? ''}`
+    const entry = counts.get(key) ?? { kind: blocker.kind, threads: 0, ...(connector ? { connector } : {}) }
+    entry.threads++
+    counts.set(key, entry)
+  }
+  return [...counts.values()].sort(
+    (a, b) => BLOCKER_ORDER.indexOf(a.kind) - BLOCKER_ORDER.indexOf(b.kind) || b.threads - a.threads,
+  )
+}
+
+const TALLY_PHRASES: Record<InboxBlockerKind, string> = {
+  approval: '{0} need approval',
+  connector: '{0} need sign-in',
+  question: '{0} have a question',
+  'verification-failed': '{0} failed a goal check',
+  'goal-blocked': '{0} are blocked',
+  'turn-limit': '{0} reached the turn limit',
+  'goal-paused': '{0} are paused',
+}
+
+/** The tally as one line, each phrase translated by the caller's own `translate` (they register the same sources). */
+export const blockerTallyLine = (
+  tally: ReturnType<typeof blockerTally>,
+  translate: (source: string, values: Record<string, string | number>) => string,
+) =>
+  tally
+    .map((entry) =>
+      entry.connector
+        ? translate('{0} need sign-in to {1}', { '0': entry.threads, '1': entry.connector })
+        : translate(TALLY_PHRASES[entry.kind], { '0': entry.threads }),
+    )
+    .join(' · ')
+
+/** Threads needed before a summary line is worth showing; two rows can simply be read. */
+export const TALLY_MIN_THREADS = 3
 
 export interface InboxRecap {
   computerId: string

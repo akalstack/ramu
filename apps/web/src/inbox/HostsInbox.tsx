@@ -1,6 +1,15 @@
 import { RowButton } from '@/components/row-button'
 import { useState, useEffect } from 'react'
-import { buildInbox, inboxBlocker, INBOX_TABS, type InboxChat, type InboxTab } from '@ramu/shared/hostInbox'
+import {
+  blockerTally,
+  blockerTallyLine,
+  TALLY_MIN_THREADS,
+  buildInbox,
+  inboxBlocker,
+  INBOX_TABS,
+  type InboxChat,
+  type InboxTab,
+} from '@ramu/shared/hostInbox'
 import { hostInboxInput } from '@ramu/shared/hostOverview'
 import type { Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
@@ -232,6 +241,11 @@ export function HostsInbox() {
             {pending && (
               <p role="status" className="text-caption text-muted-foreground">
                 {t('Loading…')}
+              </p>
+            )}
+            {(tab === 'all' || tab === 'needs-you') && model.waiting.length >= TALLY_MIN_THREADS && (
+              <p role="status" className="m-0 text-caption text-muted-foreground">
+                {blockerTallyLine(blockerTally(model.waiting), t)}
               </p>
             )}
             {section('needs-you', t('Waiting for your input'), model.waiting.length, chats(model.waiting))}

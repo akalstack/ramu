@@ -91,7 +91,10 @@ export const MAX_SOCKET_FRAME_BYTES = MAX_REQUEST_BYTES
  */
 export type SocketClientFrame =
   | { t: 'invoke'; id: number; method: string; args: unknown[]; operationKey?: string }
-  | { t: 'subscribe'; id: number; channels: string[]; keys?: Record<string, string[]> }
+  /** `flow` asks the host to hold back terminal output the client has not acknowledged (see `ack`). */
+  | { t: 'subscribe'; id: number; channels: string[]; keys?: Record<string, string[]>; flow?: boolean }
+  /** Output of terminal `id` the client has processed, in the characters of its `term:data` chunks. */
+  | { t: 'ack'; id: string; bytes: number }
   | { t: 'ping' }
 
 /** Payload field that names the resource of a high-volume channel, so a client can ask for only the threads and terminals it shows. */
@@ -102,7 +105,11 @@ export const SOCKET_EVENT_KEYS: Readonly<Record<string, 'sessionId' | 'id'>> = {
   'aside:changed': 'sessionId',
   'term:data': 'id',
   'term:exit': 'id',
+  'term:behind': 'id',
 }
+
+/** Terminal output one connection may have sent and unacknowledged before the host holds back further chunks. */
+export const TERMINAL_FLOW_WINDOW = 1_000_000
 export const MAX_SUBSCRIBED_CHANNELS = 64
 export const MAX_SUBSCRIBED_KEYS = 200
 export type SocketServerFrame =
@@ -273,6 +280,14 @@ export function decodeSocketFrame(
   if (from === 'client') {
     if (frame.t === 'ping') return { t: 'ping' }
     if (
+      frame.t === 'ack' &&
+      typeof frame.id === 'string' &&
+      frame.id.length > 0 &&
+      frame.id.length <= 128 &&
+      int(frame.bytes)
+    )
+      return { t: 'ack', id: frame.id, bytes: frame.bytes }
+    if (
       frame.t === 'invoke' &&
       int(frame.id) &&
       typeof frame.method === 'string' &&
@@ -288,6 +303,7 @@ export function decodeSocketFrame(
       Array.isArray(frame.channels) &&
       frame.channels.length <= MAX_SUBSCRIBED_CHANNELS &&
       frame.channels.every((c: unknown) => typeof c === 'string' && c.length > 0 && c.length <= 64) &&
+      (frame.flow === undefined || typeof frame.flow === 'boolean') &&
       (frame.keys === undefined ||
         (frame.keys &&
           typeof frame.keys === 'object' &&

@@ -10,7 +10,8 @@ import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown } from '../Menu'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
-import { SettingsCard, SettingsCardList, usePaged } from './cards'
+import { SettingsCard, SettingsCardList } from './cards'
+import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { useWorkspace } from '../workspace/workspace'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import { t } from '../i18n'
@@ -70,7 +71,15 @@ export function InstalledSkills() {
     content: string
     projectId: string
   } | null>(null)
-  const paged = usePaged(currentHost ? skills : [], 10)
+  const [skillScope, setSkillScope] = useState('all')
+  const view = useListView(currentHost ? skills : [], {
+    text: (skill) => `${skill.name} ${skill.description}`,
+    match: (skill) =>
+      skillScope === 'all' || (skillScope === 'global' ? !skill.projectId : skill.projectId === skillScope),
+    size: 10,
+    filterKey: skillScope,
+  })
+  const paged = view.paged
   const load = useCallback(async () => {
     if (viewOnly || access.current.host !== host || access.current.viewOnly) return
     const snapshot = await invoke('learning.get')
@@ -275,9 +284,35 @@ export function InstalledSkills() {
             {error}
           </p>
         )}
-        {skills.length === 0 && (
-          <p className="m-0 py-3 text-center text-caption text-muted-foreground">{t('No installed skills yet.')}</p>
-        )}
+        <ListToolbar
+          view={view}
+          label={t('Search installed skills')}
+          filters={
+            projects.length
+              ? [
+                  {
+                    key: 'scope',
+                    label: t('Scope'),
+                    value: skillScope,
+                    width: 'wide',
+                    options: [
+                      { value: 'all', label: t('Everything') },
+                      { value: 'global', label: t('All projects') },
+                      ...projects.map((p) => ({ value: p.id, label: p.name })),
+                    ],
+                    onChange: setSkillScope,
+                  },
+                ]
+              : []
+          }
+        />
+        <ListCount view={view} />
+        <ListEmpty
+          view={view}
+          none="No installed skills yet."
+          filtered="No installed skills match your search."
+          onReset={() => setSkillScope('all')}
+        />
         <SettingsCardList>
           {paged.shown.map((skill) => (
             <SettingsCard

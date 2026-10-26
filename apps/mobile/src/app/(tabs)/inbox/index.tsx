@@ -16,9 +16,17 @@ import type { LibrarySummary } from '@ramu/shared/types'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { useAutomation } from '../../../runtime/automation'
-import { buildInbox, INBOX_TABS, type InboxChat, type InboxTab } from '../../../runtime/inbox'
+import {
+  blockerTally,
+  blockerTallyLine,
+  TALLY_MIN_THREADS,
+  buildInbox,
+  INBOX_TABS,
+  type InboxChat,
+  type InboxTab,
+} from '../../../runtime/inbox'
 import { STANDALONE, type Chat } from '../../../runtime/types'
-import { ago, useT, type Strings } from '../../../i18n'
+import { ago, useSay, useT, type Strings } from '../../../i18n'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { TopFade } from '../../../components/Glass'
 import { InboxThread } from '../../../components/InputRequests'
@@ -99,6 +107,13 @@ export default function InboxScreen() {
       : store.projects.find((p) => p.computerId === computerId && p.id === projectId)?.name
   const where = (computerId: string, projectId: string) =>
     [projectName(computerId, projectId), multi ? computerName(computerId) : undefined].filter(Boolean).join(' · ')
+  const say = useSay()
+  const tallyLine = (list: InboxChat[]) =>
+    list.length >= TALLY_MIN_THREADS ? (
+      <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
+        {blockerTallyLine(blockerTally(list), say)}
+      </T>
+    ) : null
   const rows = (list: InboxChat[]) => (
     <Group>
       {list.map((chat, i) => {
@@ -237,6 +252,7 @@ export default function InboxScreen() {
           count={inbox.waiting.length}
           onSeeAll={inbox.waiting.length > PREVIEW ? () => choose('needs-you') : undefined}
         >
+          {tallyLine(inbox.waiting)}
           {rows(inbox.waiting.slice(0, PREVIEW))}
         </Section>
       ) : null}
@@ -298,6 +314,7 @@ export default function InboxScreen() {
       <>
         {inbox.waiting.length ? (
           <Section title={t.waitingForInput} count={inbox.waiting.length}>
+            {tallyLine(inbox.waiting)}
             {rows(inbox.waiting)}
           </Section>
         ) : null}

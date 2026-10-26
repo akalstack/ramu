@@ -1,5 +1,5 @@
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
-import { usePaged } from './cards'
+import { ListToolbar, useListView } from './ListView'
 import { useSettingsInvoke } from './SettingsScope'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
@@ -14,7 +14,6 @@ import { takeLibraryFocus } from '../summaries/libraryFocus'
 import { DateTime } from 'luxon'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
-import { SearchInput } from '../SearchInput'
 import { ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
 import { useWorkspace } from '../workspace/workspace'
@@ -104,9 +103,15 @@ export function MemoryBrowser() {
     id: string
     entries: Awaited<ReturnType<typeof ramu.invoke<'memory.history'>>>
   } | null>(null)
-  const [query, setQuery] = useState('')
   const [scope, setScope] = useState('all')
   const [status, setStatus] = useState<Memory['status']>('active')
+  const view = useListView(snapshot?.memories ?? [], {
+    text: (m) => `${m.title} ${m.content} ${m.tags.join(' ')}`,
+    match: (m) =>
+      m.status === status && (scope === 'all' || (scope === GLOBAL ? m.projectId === null : m.projectId === scope)),
+    filterKey: `${scope}|${status}`,
+  })
+  const { setQuery } = view
   const [editing, setEditing] = useState<{ id?: string; input: MemoryInput } | null>(null)
   const reload = useCallback(() => invoke('memory.get').then(setSnapshot), [])
   // A summary item that was clicked: show just that note, wherever it is.
@@ -123,7 +128,7 @@ export function MemoryBrowser() {
     take()
     window.addEventListener('ramu:library-focus', take)
     return () => window.removeEventListener('ramu:library-focus', take)
-  }, [])
+  }, [setQuery])
   useEffect(() => {
     const target = focused.current && snapshot?.memories.find((m) => m.id === focused.current!.id)
     if (!target) return
@@ -156,14 +161,8 @@ export function MemoryBrowser() {
   const projects = ws.projects.filter((p) => p.id !== NO_PROJECT)
   const projectName = (id: string | null) =>
     id ? (projects.find((p) => p.id === id)?.name ?? t('Removed project')) : t('All projects')
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const shown = (snapshot?.memories ?? []).filter(
-    (m) =>
-      m.status === status &&
-      (scope === 'all' || (scope === GLOBAL ? m.projectId === null : m.projectId === scope)) &&
-      words.every((w) => `${m.title} ${m.content} ${m.tags.join(' ')}`.toLowerCase().includes(w)),
-  )
-  const paged = usePaged(shown, 20, `${query}|${scope}|${status}`)
+  const shown = view.matched
+  const paged = view.paged
   const author = (m: Memory) =>
     m.source.actor === 'agent' && m.source.provider
       ? providerName(m.source.provider)
@@ -182,56 +181,58 @@ export function MemoryBrowser() {
         {t('Saved memories')}
         {snapshot && shown.length > 0 ? ` · ${shown.length}` : ''}
       </SettingsGroupTitle>
-      <div className="flex items-center gap-2">
-        <SearchInput
-          className="flex-1 min-w-0"
-          aria-label={t('Search memories')}
-          placeholder={t('Search memories')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onClear={() => setQuery('')}
-        />
-        <Dropdown
-          className="w-[150px]! flex-none"
-          label={t('Scope')}
-          value={scope}
-          options={[
-            { value: 'all', label: t('Everything') },
-            { value: GLOBAL, label: t('All projects') },
-            ...projects.map((p) => ({ value: p.id, label: p.name })),
-          ]}
-          onChange={setScope}
-        />
-        <Dropdown
-          className="w-[120px]! flex-none"
-          label={t('Status')}
-          value={status}
-          options={[
-            { value: 'active', label: t('Active') },
-            { value: 'archived', label: t('Archived') },
-          ]}
-          onChange={(s) => setStatus(s === 'archived' ? 'archived' : 'active')}
-        />
-        <Button
-          variant="secondary"
-          className="bg-fill hover:bg-fill-hover flex-none h-8! min-h-8!"
-          onClick={() =>
-            setEditing({
-              input: {
-                projectId: scope !== 'all' && scope !== GLOBAL ? scope : null,
-                kind: 'feedback',
-                title: '',
-                content: '',
-                tags: [],
-                importance: 3,
-              },
-            })
-          }
-        >
-          <Plus size={13} />
-          {t('Add')}
-        </Button>
-      </div>
+      <ListToolbar
+        view={view}
+        alwaysShow
+        label={t('Search memories')}
+        filters={[
+          {
+            key: 'scope',
+            label: t('Scope'),
+            width: 'wide',
+            value: scope,
+            options: [
+              { value: 'all', label: t('Everything') },
+              { value: GLOBAL, label: t('All projects') },
+              ...projects.map((p) => ({ value: p.id, label: p.name })),
+            ],
+            onChange: setScope,
+          },
+          {
+            key: 'status',
+            label: t('Status'),
+            value: status,
+            options: [
+              { value: 'active', label: t('Active') },
+              { value: 'archived', label: t('Archived') },
+            ],
+            onChange: (s) => setStatus(s === 'archived' ? 'archived' : 'active'),
+          },
+        ]}
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              className="bg-fill hover:bg-fill-hover flex-none h-8! min-h-8!"
+              onClick={() =>
+                setEditing({
+                  input: {
+                    projectId: scope !== 'all' && scope !== GLOBAL ? scope : null,
+                    kind: 'feedback',
+                    title: '',
+                    content: '',
+                    tags: [],
+                    importance: 3,
+                  },
+                })
+              }
+            >
+              <Plus size={13} />
+              {t('Add')}
+            </Button>
+          </>
+        }
+      />
       <div className="flex items-center gap-2 small text-caption text-muted-foreground">
         <span>
           {snapshot?.dreaming

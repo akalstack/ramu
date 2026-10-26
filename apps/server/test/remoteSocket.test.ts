@@ -259,3 +259,47 @@ it('filters keyed channels by id without needing the id on unkeyed ones, and dro
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(events(frames).map((e) => e.split(':')[0] + ':' + e.split(':')[1])).toEqual(['usage:changed', 'agent:event'])
 })
+
+it('holds back terminal output a flow-controlled client has not acknowledged, then says it fell behind', async () => {
+  const { connect, sinks } = await start()
+  const { ws, frames, until } = connect()
+  await until(() => frames.some((frame) => frame.t === 'ready'))
+  ws.send(encodeSocketFrame({ t: 'subscribe', id: 1, channels: ['term:data', 'term:behind'], flow: true }))
+  await until(() => frames.some((frame) => frame.t === 'result'))
+  const [sink] = [...sinks]
+  const chunk = (data: string) =>
+    sink!.write(`data: ${JSON.stringify({ channel: 'term:data', payload: { id: 'a', data } })}\n\n`)
+  const delivered = () => frames.filter((frame) => frame.t === 'event' && frame.channel === 'term:data').length
+
+  chunk('x'.repeat(600_000))
+  chunk('y'.repeat(600_000)) // would pass the 1,000,000 window: withheld
+  chunk('z'.repeat(10)) // still behind: withheld
+  await until(() => delivered() === 1)
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(delivered()).toBe(1)
+
+  // A partial acknowledgement does not say it caught up; the full one does, exactly once.
+  ws.send(encodeSocketFrame({ t: 'ack', id: 'a', bytes: 300_000 } as never))
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(frames.some((frame) => frame.t === 'event' && frame.channel === 'term:behind')).toBe(false)
+  ws.send(encodeSocketFrame({ t: 'ack', id: 'a', bytes: 300_000 } as never))
+  await until(() => frames.filter((frame) => frame.t === 'event' && frame.channel === 'term:behind').length === 1)
+
+  // Output flows again afterwards.
+  chunk('after')
+  await until(() => delivered() === 2)
+})
+
+it('leaves terminal output unbounded for a client that did not ask for flow control', async () => {
+  const { connect, sinks } = await start()
+  const { ws, frames, until } = connect()
+  await until(() => frames.some((frame) => frame.t === 'ready'))
+  ws.send(encodeSocketFrame({ t: 'subscribe', id: 1, channels: ['term:data'] }))
+  await until(() => frames.some((frame) => frame.t === 'result'))
+  const [sink] = [...sinks]
+  for (let i = 0; i < 3; i++)
+    sink!.write(
+      `data: ${JSON.stringify({ channel: 'term:data', payload: { id: 'a', data: 'x'.repeat(600_000) } })}\n\n`,
+    )
+  await until(() => frames.filter((frame) => frame.t === 'event').length === 3)
+})

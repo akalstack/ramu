@@ -11,6 +11,7 @@ import { errorText } from '../workspace/TaskPane'
 import { useWorkspace } from '../workspace/workspace'
 import { TaskRow } from '../sidebar/projects/TaskRow'
 import { SETTINGS_FORM_CLASS } from './constants'
+import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 
 /** Archived history belongs to the current workspace, independently of preference targets. */
 export function ArchivedThreads() {
@@ -24,20 +25,24 @@ export function ArchivedThreads() {
   const archivedChats = ws.tasks
     .filter((task) => task.status === 'archived')
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  const projectName = (id: string) => ws.projects.find((project) => project.id === id)?.name
+  const view = useListView(archivedChats, {
+    text: (task) => `${task.title} ${projectName(task.projectId) ?? ''}`,
+    size: 30,
+  })
   return (
     <div className={SETTINGS_FORM_CLASS}>
       <SettingsGroupTitle>
         {t('Archived threads')} · {archivedChats.length}
       </SettingsGroupTitle>
+      <ListToolbar view={view} label={t('Search archived threads')} />
+      <ListCount view={view} />
+      <ListEmpty view={view} none="No archived threads" filtered="No archived threads match your search." />
       <div className="task-list flex flex-col gap-0.5">
-        {archivedChats.length === 0 && <p className="text-muted-foreground">{t('No archived threads')}</p>}
-        {archivedChats.map((task) => (
-          <TaskRow
-            key={task.id}
-            task={task}
-            projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
-          />
+        {view.paged.shown.map((task) => (
+          <TaskRow key={task.id} task={task} projectName={projectName(task.projectId)} />
         ))}
+        {view.paged.more}
       </div>
       {archivedChats.length > 0 && !viewOnly && (
         <Button

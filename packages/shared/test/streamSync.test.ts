@@ -67,3 +67,18 @@ describe('OutputWindow', () => {
     expect(window.pending).toBe(0)
   })
 })
+
+describe('LiveBuffer.drain', () => {
+  it('returns values in arrival order once, and null after overflowing', () => {
+    const buffer = new LiveBuffer<string>(2, 100)
+    buffer.push({ seq: 0, size: 5, value: 'a' })
+    buffer.push({ seq: 0, size: 5, value: 'b' })
+    expect(buffer.drain()).toEqual(['a', 'b'])
+    expect(buffer.drain()).toEqual([])
+    const small = new LiveBuffer<string>(1, 100)
+    small.push({ seq: 0, size: 5, value: 'a' })
+    small.push({ seq: 0, size: 5, value: 'b' })
+    expect(small.overflowed).toBe(true)
+    expect(small.drain()).toBeNull()
+  })
+})

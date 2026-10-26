@@ -81,6 +81,18 @@ export class LiveBuffer<T> {
   }
 
   /**
+   * Everything buffered, in arrival order, for a stream whose positions are offsets rather than consecutive numbers
+   * (terminal output): the consumer places each value itself. Null after an overflow: resynchronize instead.
+   */
+  drain(): T[] | null {
+    if (this.over) return null
+    const out = this.items.map((item) => item.value)
+    this.items = []
+    this.bytes = 0
+    return out
+  }
+
+  /**
    * The buffered values that follow `cursor`, in order and without repeats. A hole between the cursor and the first
    * buffered item, or an overflow, returns null: the caller must resynchronize.
    */

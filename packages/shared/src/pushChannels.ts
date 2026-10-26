@@ -11,6 +11,7 @@ export const HOST_PUSH_CHANNELS = [
   'agent:rewound',
   'term:data',
   'term:exit',
+  'term:behind',
   'term:changed',
   'workspace:changed',
   'automation:changed',

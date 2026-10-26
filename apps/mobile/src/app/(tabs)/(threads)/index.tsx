@@ -3,7 +3,7 @@ import { recentThreads } from '../../../runtime/recentThreads'
 import { groupThreads, type ThreadGroup } from '../../../runtime/threadGroups'
 import { useMemo, useState } from 'react'
 import { Platform, Pressable, ScrollView as HScroll, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Check,
   Folder,
@@ -72,7 +72,8 @@ export default function Threads() {
   const [usageOpen, setUsageOpen] = useState(false)
 
   type StatusFilter = 'all' | 'running' | 'needs-input' | 'failed' | 'archived'
-  const [filter, setFilter] = useState<StatusFilter>('all')
+  const { filter: initialFilter } = useLocalSearchParams<{ filter?: string }>()
+  const [filter, setFilter] = useState<StatusFilter>(initialFilter === 'archived' ? 'archived' : 'all')
   const [projectMenu, setProjectMenu] = useState<MobileProject | null>(null)
   // Folded projects and projects showing all their threads, by group key (host + project).
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())

@@ -156,6 +156,8 @@ export interface ThreadInputRequest {
   kind: 'approval' | 'question' | 'connector'
   title: string
   source?: { sessionId: string; agentId: string; name: string; requestId?: string }
+  /** The MCP server a `connector` request is for, so the Inbox can group threads waiting on the same sign-in. */
+  connector?: string
 }
 /** Independently running helpers of a thread's main sessions; advisors, shell commands and restored activity are excluded. */
 export interface ThreadHelperSummary {

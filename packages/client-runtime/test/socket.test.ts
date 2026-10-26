@@ -175,3 +175,31 @@ it('sends its subscription once ready and restores it on every reconnect', () =>
   host(1, { t: 'ready', epoch: 'e1' })
   expect(subscriptions(1)).toMatchObject([{ channels: ['term:data'] }])
 })
+
+it('with flow control asks for it, acknowledges each terminal chunk after delivering it, and ignores other events', () => {
+  const { socket, opened, host, events } = make({ flowControl: true })
+  socket.start()
+  host(0, { t: 'ready', epoch: 'e1' })
+  void socket.subscribe(['term:data', 'term:behind'], { 'term:data': ['a'] })
+  const sent = () => opened[0]!.sent.map((text) => decodeSocketFrame(text, 'client'))
+  expect(sent().find((frame) => frame?.t === 'subscribe')).toMatchObject({ flow: true })
+
+  host(0, { t: 'event', channel: 'term:data', payload: { id: 'a', data: 'hello', cursor: 5 } })
+  host(0, { t: 'event', channel: 'term:behind', payload: { id: 'a' } })
+  host(0, { t: 'event', channel: 'term:data', payload: { id: 'a', data: '' } })
+  expect(events.map(([channel]) => channel)).toEqual(['term:data', 'term:behind', 'term:data'])
+  expect(sent().filter((frame) => frame?.t === 'ack')).toEqual([{ t: 'ack', id: 'a', bytes: 5 }])
+  socket.close()
+})
+
+it('does not acknowledge or ask for flow control unless enabled', () => {
+  const { socket, opened, host } = make()
+  socket.start()
+  host(0, { t: 'ready', epoch: 'e1' })
+  void socket.subscribe(['term:data'])
+  host(0, { t: 'event', channel: 'term:data', payload: { id: 'a', data: 'hello' } })
+  const frames = opened[0]!.sent.map((text) => decodeSocketFrame(text, 'client'))
+  expect(frames.some((frame) => frame?.t === 'ack')).toBe(false)
+  expect(frames.find((frame) => frame?.t === 'subscribe')).not.toHaveProperty('flow')
+  socket.close()
+})
