@@ -16,7 +16,7 @@ import { homedir } from 'node:os'
 import { join, dirname, relative } from 'node:path'
 import { createHash } from 'node:crypto'
 import { runtimeBuild, runtimeVersion } from '@ramu/server/build'
-import { runtimeInvoke, runtimeSocket } from '@ramu/client-runtime'
+import { runtimeInvoke, runtimeSocket, forgetHostSocket } from '@ramu/client-runtime'
 
 /** A packaged daemon must not lazy-load code from an app bundle being updated. */
 export function pinnedRuntime(userData: string, daemonPath: string, executable = process.execPath) {
@@ -50,6 +50,13 @@ export async function ensureRuntime(
     // a healthy service, because it may own running chats.
     if (status?.running) return socketPath
   } catch (error) {
+    if ((error as { status?: number }).status === 426) {
+      forgetHostSocket({ kind: 'socket', path: socketPath })
+      throw new Error(
+        'An older Ramu background service is still running. This version requires a service with WebSocket support. Restart the background service from the older Ramu app, then open this version again. Running agents have been left untouched.',
+        { cause: error },
+      )
+    }
     if (!['ECONNREFUSED', 'ENOENT'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
   }
   try {

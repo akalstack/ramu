@@ -1294,4 +1294,8 @@ async function main() {
   app.on('window-all-closed', () => app.quit())
 }
 
-void main()
+void main().catch((error: unknown) => {
+  console.error('Ramu startup failed:', error)
+  dialog.showErrorBox(t('Could not start Ramu'), error instanceof Error ? error.message : String(error))
+  app.quit()
+})
