@@ -3,7 +3,10 @@
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { tmpdir } from 'node:os'
-import { remoteRequests } from './limits'
+import { remoteRequests, WorkLimiter } from './limits'
+
+// Local startup hydrates many panels at once. Stay below the service's per-connection request budget.
+const localRequests = new WorkLimiter(24, 24)
 import { runtimeNetwork, type NetworkMonitor } from './network'
 import { forgetHostSocket, hostSocket, listenToHost, type HostListener } from './hostSocket'
 export { refreshRuntimeNetwork } from './network'
@@ -57,7 +60,9 @@ export async function runtimeInvoke(
 ): Promise<any> {
   const endpoint = toEndpoint(target)
   const release =
-    endpoint.kind === 'http' ? await remoteRequests.acquire(new URL(endpoint.url).origin, policy.signal) : () => {}
+    endpoint.kind === 'http'
+      ? await remoteRequests.acquire(new URL(endpoint.url).origin, policy.signal)
+      : await localRequests.acquire(endpoint.path, policy.signal)
   try {
     // A host is called over its one socket, waiting briefly for it to connect. There is no second transport: a refused
     // token or a host without a socket is reported as such. A call lost after it was sent has an unknown outcome; one

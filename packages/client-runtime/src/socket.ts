@@ -323,7 +323,11 @@ export class RuntimeSocket {
         else if (this.state === 'rejected')
           finish(Object.assign(new Error('The server rejected the access token'), { status: 401 }))
         else if (this.state === 'unsupported')
-          finish(Object.assign(new Error('This host has no WebSocket. Update Ramu on it.'), { status: 426 }))
+          finish(
+            Object.assign(new Error('Cannot connect to this host. Restart Ramu on the host and try again.'), {
+              status: 426,
+            }),
+          )
         else if (this.closed) finish(lost('The connection was closed', true))
         // A one-shot caller (the CLI, the app starting its service) wants to know at once that nothing is listening.
         else if (options.failFast && !this.everReady && this.state === 'closed')

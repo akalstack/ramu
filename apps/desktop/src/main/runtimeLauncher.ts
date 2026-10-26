@@ -53,7 +53,7 @@ export async function ensureRuntime(
     if ((error as { status?: number }).status === 426) {
       forgetHostSocket({ kind: 'socket', path: socketPath })
       throw new Error(
-        'An older Ramu background service is still running. This version requires a service with WebSocket support. Restart the background service from the older Ramu app, then open this version again. Running agents have been left untouched.',
+        'The background service needs to restart before Ramu can open. Restart the service and try again. Running agents have been left untouched.',
         { cause: error },
       )
     }

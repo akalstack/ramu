@@ -25,7 +25,7 @@ it('reports a live pre-WebSocket service without replacing it or leaking an unsu
   await new Promise<void>((resolve) => server.listen(socketPath, resolve))
   try {
     await expect(ensureRuntime(directory, '/not-a-real-daemon.js', '/not-a-real-executable')).rejects.toMatchObject({
-      message: expect.stringContaining('older Ramu background service is still running'),
+      message: expect.stringContaining('background service needs to restart'),
       cause: { status: 426 },
     })
     expect(server.listening).toBe(true)

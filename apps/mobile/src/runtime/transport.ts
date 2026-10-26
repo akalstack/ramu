@@ -61,7 +61,7 @@ export function registerSocketProvider(
   closeSocket = close
 }
 const socketOf = (address: string, token: string): HostSocket => {
-  if (!socketProvider) throw new HostError('Connecting to a host needs a WebSocket, which this build does not have.')
+  if (!socketProvider) throw new HostError('This build cannot connect to a host. Update Ramu and try again.')
   return socketProvider(address, token)
 }
 /** Waiting for the socket fails the way an HTTP answer would have: a refused token or a host that predates sockets. */
@@ -69,9 +69,7 @@ function connectionError(error: unknown): HostError {
   const failure = error as { status?: number; message?: string }
   if (failure?.status === 401 || failure?.status === 426)
     return new HostError(
-      failure.status === 401
-        ? 'Pairing was revoked. Pair this host again.'
-        : 'Update Ramu on this host: it has no WebSocket.',
+      failure.status === 401 ? 'Pairing was revoked. Pair this host again.' : 'Update Ramu on this host and try again.',
       failure.status,
     )
   return new HostError(
@@ -160,7 +158,9 @@ export class HostClient {
       })
       if (response.status === 401) return new HostError('Pairing was revoked. Pair this host again.', 401)
       if (response.ok)
-        return new HostError('The host is reachable but this network blocks WebSockets. Try another network or route.')
+        return new HostError(
+          'The host is reachable but this network blocks live connections. Try another network or route.',
+        )
     } catch {
       // Unreachable over HTTP as well: the plain message below stands.
     } finally {

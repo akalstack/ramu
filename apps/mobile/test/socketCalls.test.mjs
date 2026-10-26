@@ -77,7 +77,7 @@ test('a host answer over the socket is final', async () => {
 
 test('a build without sockets says so rather than falling back', async () => {
   registerSocketProvider(null)
-  await assert.rejects(client().invoke('projects.list'), /needs a WebSocket/)
+  await assert.rejects(client().invoke('projects.list'), /cannot connect to a host/)
 })
 
 test('a refused token is reported as revoked, and a host without sockets as needing an update', async () => {
@@ -102,7 +102,7 @@ test('a socket that never connects is checked once over HTTP to say why', async 
   await assert.rejects(revoked.invoke('tasks.list'), (error) => error.status === 401)
   assert.deepEqual(probes, [{ url: 'https://host.example/session', auth: 'Bearer token' }])
   const blocked = client(async () => new Response('{"access":"owner"}'))
-  await assert.rejects(blocked.invoke('tasks.list'), /blocks WebSockets/)
+  await assert.rejects(blocked.invoke('tasks.list'), /blocks live connections/)
   const offline = client(async () => Promise.reject(new Error('offline')))
   await assert.rejects(offline.invoke('tasks.list'), (error) => error.message === 'Host unreachable')
 })

@@ -68,7 +68,7 @@ it('reports a refused token, and a host with no socket, instead of falling back 
   const running = await host()
   await expect(runtimeInvoke({ ...running.endpoint, token: 'wrong' }, 'ok')).rejects.toThrow(/access token/)
   const old = await host({ refuse: 404 })
-  await expect(runtimeInvoke(old.endpoint, 'ok')).rejects.toThrow(/Update Ramu/)
+  await expect(runtimeInvoke(old.endpoint, 'ok')).rejects.toThrow(/Cannot connect to this host/)
 })
 
 it('streams events and reports connection state', async () => {
