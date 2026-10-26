@@ -38,7 +38,18 @@ import type {
   ProviderCatalog,
   UsageReading,
 } from '@ramu/shared/types'
-import { deleteToken, readLocal, readRenewedAt, readToken, saveRenewedAt, saveToken, writeLocal } from '../storage'
+import {
+  deleteToken,
+  readLocal,
+  readRenewedAt,
+  readSendJournal,
+  readToken,
+  saveRenewedAt,
+  saveToken,
+  writeLocal,
+  writeSendJournal,
+} from '../storage'
+import { remainingJournal, restoreOutbox } from './sendJournal'
 import { renewalDue, renewCredential } from './tokenRenewal'
 import { HostClient, HostError, normalizeAddress, operationKey } from './transport'
 import { verifyHost } from '@ramu/shared/hostProof'
@@ -215,20 +226,20 @@ const settingsFor = (provider: AgentProvider, model: string, effort: string): Ag
   autoFallback: true,
 })
 
+/** Outbox ids handed to the network but not yet recorded in the saved profile; see `sendJournal.ts`. */
+let sendJournal: string[] = []
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(() => {
     const saved = readLocal(defaults)
+    sendJournal = readSendJournal()
     return {
       ...defaults,
       ...saved,
       ready: false,
       chats: saved.chats.map((chat) => ({ ...chat, items: normalizeHelperGroups(chat.items) })),
       computers: saved.computers.map((c) => ({ ...c, status: c.status === 'revoked' ? 'revoked' : 'connecting' })),
-      outbox: saved.outbox.map((o) =>
-        o.state === 'sending'
-          ? { ...o, state: 'uncertain', error: 'App closed during delivery. Check the host before retrying.' }
-          : o,
-      ),
+      outbox: restoreOutbox(saved.outbox, sendJournal),
     }
   })
   const ref = useRef(state)
@@ -820,13 +831,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           break
         }
         try {
-          await writeLocal({
-            ...ref.current,
-            ready: undefined,
-            error: undefined,
-            usage: undefined,
-            catalogs: undefined,
-          })
+          // Record only this message before the call; the full profile (every transcript) saves on its own schedule.
+          sendJournal = [...sendJournal, item.id]
+          writeSendJournal(sendJournal)
           if (!active.current || connections.current.get(id)?.controller.signal.aborted) {
             change((s) => ({ ...s, outbox: s.outbox.map((o) => (o.id === item.id ? { ...o, state: 'waiting' } : o)) }))
             break
@@ -1085,15 +1092,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
   useEffect(() => {
     const timer = setTimeout(() => {
+      const outbox = ref.current.outbox
       void writeLocal({
         computers: ref.current.computers,
         projects: ref.current.projects,
         chats: ref.current.chats,
         selected: ref.current.selected,
         language: ref.current.language,
-        outbox: ref.current.outbox,
+        outbox,
         drafts: ref.current.drafts,
       })
+        .then(() => {
+          // The profile now records these messages' outcomes, so the journal no longer needs them.
+          const left = remainingJournal(sendJournal, outbox)
+          if (left.length !== sendJournal.length) {
+            sendJournal = left
+            writeSendJournal(left)
+          }
+        })
         .then(clearSaveError)
         .catch((error) =>
           report(new Error(`Could not save phone data. ${error instanceof Error ? error.message : String(error)}`)),

@@ -54,6 +54,19 @@ const writeSmall = (name: string, value: string) => {
   if (Platform.OS === 'web') localStorage.setItem(name, value)
   else new File(Paths.document, name).writeSync(value)
 }
+const sendingKey = 'ramu.mobile.sending'
+/** Outbox ids handed to the network but not yet recorded in the saved profile; see `sendJournal.ts`. */
+export function readSendJournal(): string[] {
+  try {
+    const value = JSON.parse(readSmall(sendingKey) ?? '[]')
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+export function writeSendJournal(ids: readonly string[]) {
+  writeSmall(sendingKey, JSON.stringify(ids))
+}
 /** Themes kept on this phone, as stored text; callers validate each document before use. */
 export const readThemeLibraryText = () => readSmall(themeLibraryKey)
 export const saveThemeLibraryText = (text: string) => writeSmall(themeLibraryKey, text)

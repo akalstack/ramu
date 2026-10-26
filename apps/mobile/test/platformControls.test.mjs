@@ -1,5 +1,6 @@
 import * as toolActivity from '../../../packages/shared/src/chat/toolActivity.ts'
 import * as recentThreads from '../src/runtime/recentThreads.ts'
+import * as sendJournal from '../src/runtime/sendJournal.ts'
 import * as threadGroups from '../src/runtime/threadGroups.ts'
 import * as sideChat from '../src/runtime/sideChat.ts'
 import * as scrollSurface from '../src/runtime/scrollSurface.ts'
@@ -172,6 +173,7 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id === '@ramu/shared/browserLiveViewer')
         return load('../../../packages/shared/src/browserLiveViewer.ts', os, {}, globals)
       if (id === '@ramu/shared/chat/toolActivity') return toolActivity
+      if (id === './sendJournal') return sendJournal
       if (id === '../../../runtime/recentThreads') return recentThreads
       if (id === '../../../runtime/threadGroups') return threadGroups
       if (id === '../../../runtime/sideChat') return sideChat
@@ -3052,7 +3054,8 @@ for (const ambiguous of [false, true]) {
     const hooks = hookHarness()
     const refs = []
     const calls = [],
-      writes = []
+      writes = [],
+      journals = []
     let failWrite = false
     class HostError extends Error {
       constructor(message, status = 0, ambiguous = false) {
@@ -3086,6 +3089,11 @@ for (const ambiguous of [false, true]) {
         writeLocal: (value) => {
           if (failWrite) throw new Error('Storage full')
           writes.push(JSON.parse(JSON.stringify(value)))
+        },
+        readSendJournal: () => [],
+        writeSendJournal: (ids) => {
+          if (failWrite) throw new Error('Storage full')
+          journals.push([...ids])
         },
       },
       './newChatHost': { newChatHost },
@@ -3185,6 +3193,10 @@ for (const ambiguous of [false, true]) {
       )
       assert.equal(store.chats.length, 1)
     }
+    assert.ok(
+      journals.some((ids) => ids.includes(item.id)),
+      'the message is journalled before it reaches the network',
+    )
     hooks.dispose()
   })
 }
@@ -5567,7 +5579,12 @@ for (const os of ['ios', 'android']) {
         },
       },
       'react-native': { AppState: { currentState: 'active' } },
-      '../storage': { readLocal: (defaults) => ({ ...defaults, ...initial }), writeLocal() {} },
+      '../storage': {
+        readLocal: (defaults) => ({ ...defaults, ...initial }),
+        writeLocal() {},
+        readSendJournal: () => [],
+        writeSendJournal() {},
+      },
       './transport': { HostError },
       './newChatHost': { newChatHost: () => 'a' },
       './threadActivity': { normalizeHelperGroups: (rows) => rows },
@@ -5642,7 +5659,12 @@ for (const os of ['ios', 'android']) {
         },
       },
       'react-native': { AppState: { currentState: 'active' } },
-      '../storage': { readLocal: (defaults) => ({ ...defaults, ...initial }), writeLocal() {} },
+      '../storage': {
+        readLocal: (defaults) => ({ ...defaults, ...initial }),
+        writeLocal() {},
+        readSendJournal: () => [],
+        writeSendJournal() {},
+      },
       './transport': { HostError },
       './threadActivity': { normalizeHelperGroups: (rows) => rows },
     })
@@ -6908,7 +6930,12 @@ function deliveryStoreHarness() {
       },
     },
     'react-native': { AppState: { currentState: 'active' } },
-    '../storage': { readLocal: (defaults) => ({ ...defaults, ...initial }), writeLocal: async () => {} },
+    '../storage': {
+      readLocal: (defaults) => ({ ...defaults, ...initial }),
+      writeLocal: async () => {},
+      readSendJournal: () => [],
+      writeSendJournal() {},
+    },
     './threadActivity': { normalizeHelperGroups: (rows) => rows },
     './transport': { HostError: class HostError extends Error {} },
     './transcript': mobileTranscript,
