@@ -20,9 +20,10 @@ import {
 } from './composerDrafts'
 import { createWorkspaceTask, workspaceCreation } from './workspaces'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { AppState } from 'react-native'
+import { AppState, NativeModules } from 'react-native'
 import { fetch as expoFetch } from 'expo/fetch'
 import * as Device from 'expo-device'
+import Constants from 'expo-constants'
 import type { PushEvents, RamuMethods, ReviewAddressResult } from '@ramu/shared/api'
 import type { BackgroundActivity } from '@ramu/shared/chat/activity'
 import { isUserPaused } from '@ramu/shared/chat/goalHold'
@@ -51,8 +52,16 @@ import {
 } from '../storage'
 import { remainingJournal, restoreOutbox } from './sendJournal'
 import { renewalDue, renewCredential } from './tokenRenewal'
-import { HostClient, HostError, normalizeAddress, operationKey } from './transport'
-import { verifyHost, findHostRoute, rememberRoutes } from './hostRoutes'
+import {
+  HostClient,
+  HostError,
+  normalizeAddress,
+  operationKey,
+  checkHostConnection,
+  readConnectionStatus,
+} from './transport'
+import { probeReachableHosts, type ReachableHostProbe } from './reachableHosts'
+import { verifyHost, findHostRoute, chooseHostRoute, rememberRoutes, developmentHostRoute } from './hostRoutes'
 import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
 import { transcript, visibleText, deliveryBaseline, reconcileDelivered } from './transcript'
 import { isOutdated, type Language } from './settingsModel'
@@ -61,6 +70,15 @@ import { GOAL_VERIFY_METHOD, isMethodMissing } from './goalVerify'
 import { mergeTranscript, transcriptRows, updateThreadMetadata, readTranscriptBundle } from './transcriptChanges'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
 import type { Task } from '@ramu/shared/types'
+
+/** Expo metadata also works in bridgeless builds where SourceCode is not exposed through NativeModules. */
+function developmentBundleUrl(): string | undefined {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) return undefined
+  const host = Constants?.expoConfig?.hostUri
+  if (host) return /^https?:\/\//.test(host) ? host : `http://${host}`
+  const source = NativeModules?.SourceCode
+  return source?.scriptURL ?? source?.getConstants?.().scriptURL
+}
 
 export type { Language }
 
@@ -105,7 +123,8 @@ interface Store extends State {
   setLanguage(language: Language): void
   pair(name: string, address: string, code: string, allowHttp: boolean): Promise<string>
   /** Moves a saved host to a new address only after that address proves it is the host this phone paired with. */
-  reviewAddress(id: string, address: string): Promise<ReviewAddressResult>
+  reviewAddress(id: string, address: string, signal?: AbortSignal): Promise<ReviewAddressResult>
+  probeHosts: ReachableHostProbe
   forget(id: string): Promise<void>
   retry(id: string): void
   invoke<M extends keyof RamuMethods>(
@@ -958,99 +977,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }
 
-  /** When the saved address stops answering, try the learned ones; each must prove it is this host before it is used. */
-  const routeChecks = useRef(new Set<string>())
-  async function tryRoutes(
-    id: string,
-    connection: { controller: AbortController; generation: number; live?: boolean },
-  ) {
-    if (routeChecks.current.has(id) || !due(`try:${id}`, 5000)) return
-    const computer = ref.current.computers.find((c) => c.id === id)
-    if (!computer?.hostId || !computer.deviceId || !computer.routes?.length) return
-    routeChecks.current.add(id)
-    try {
-      const token = await readToken(id)
-      if (!token || connection.controller.signal.aborted) return
-      const result = await findHostRoute({
-        address: computer.address,
-        routes: computer.routes,
-        signal: connection.controller.signal,
-        verify: (address, signal) =>
-          verifyHost({
-            fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
-            baseUrl: address,
-            deviceId: computer.deviceId!,
-            token,
-            expectedHostId: computer.hostId,
-            challenge: operationKey(),
-            signal,
-          }),
-        usable: async (address, signal) => {
-          if (signal.aborted) return false
-          const probe = new HostClient(address, token, expoFetch as typeof globalThis.fetch)
-          const close = () => probe.close()
-          signal.addEventListener('abort', close, { once: true })
-          try {
-            const info = await probe.invoke('background.status')
-            return info.protocol === 1 && !!info.capabilities?.includes('mobile-companion')
-          } finally {
-            signal.removeEventListener('abort', close)
-            close()
-          }
-        },
-      })
-      const current = ref.current.computers.find((c) => c.id === id)
-      if (
-        !result ||
-        !active.current ||
-        connection.controller.signal.aborted ||
-        connection.live ||
-        generations.current.get(id) !== connection.generation ||
-        current?.address !== computer.address ||
-        current.deviceId !== computer.deviceId
-      )
-        return
-      const moved: Computer = {
-        ...current,
-        address: result.address,
-        routes: rememberRoutes(computer.address, result.routes, current.routes),
-        status: 'connecting',
-        error: undefined,
-      }
-      change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? moved : c)) }))
-      void connect(moved).catch(report)
-    } finally {
-      routeChecks.current.delete(id)
-    }
-  }
+  const reconnectTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 
-  async function reviewAddressFor(id: string, address: string): Promise<ReviewAddressResult> {
+  async function reviewAddressFor(id: string, address: string, signal?: AbortSignal): Promise<ReviewAddressResult> {
     const computer = ref.current.computers.find((c) => c.id === id)
     if (!computer) throw new Error('That host is no longer saved')
+    if (signal?.aborted) return 'unreachable'
     const url = normalizeAddress(address, true)
     if (url === computer.address) return 'unchanged'
-    if (!computer.hostId || !computer.deviceId) return 'unsupported'
-    // A credential issued over HTTPS never moves to plain HTTP on its own.
+    if (!computer.deviceId) return 'unsupported'
     if (computer.address.startsWith('https:') && url.startsWith('http:')) return 'insecure'
     const token = await readToken(id)
     if (!token) return 'unsupported'
-    const result = await verifyHost({
-      fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
-      baseUrl: url,
-      deviceId: computer.deviceId,
-      token,
-      expectedHostId: computer.hostId,
-      challenge: operationKey(),
-      signal: AbortSignal.timeout(8000),
+    let failure: ReviewAddressResult = 'unreachable'
+    const result = await findHostRoute({
+      address: computer.address,
+      routes: [url],
+      signal: signal ?? new AbortController().signal,
+      verify: async (candidate, probeSignal) => {
+        const identity = await verifyHost({
+          fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
+          baseUrl: candidate,
+          deviceId: computer.deviceId!,
+          token,
+          expectedHostId: computer.hostId,
+          challenge: operationKey(),
+          signal: probeSignal,
+        })
+        if (identity.state !== 'verified') failure = identity.state
+        return identity
+      },
+      usable: (candidate, probeSignal) =>
+        checkHostConnection(candidate, token, expoFetch as typeof globalThis.fetch, probeSignal),
     })
-    if (result.state !== 'verified') return result.state
+    if (!result) return failure
     const current = ref.current.computers.find((c) => c.id === id)
-    if (!current || current.address !== computer.address || current.deviceId !== computer.deviceId || !active.current)
-      return 'unchanged'
+    if (
+      !current ||
+      current.deviceId !== computer.deviceId ||
+      (current.hostId && current.hostId !== result.hostId) ||
+      !active.current ||
+      signal?.aborted
+    )
+      return 'unreachable'
     const moved: Computer = {
       ...current,
       address: url,
-      routes: rememberRoutes(computer.address, result.routes, computer.routes),
+      hostId: result.hostId,
+      routes: rememberRoutes(current.address, result.routes, current.routes),
       status: 'connecting',
       error: undefined,
     }
@@ -1059,7 +1033,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return 'moved'
   }
 
-  const connect = async (computer: Computer, resuming = false) => {
+  const connect = async (computer: Computer, resuming = false, retries = 0): Promise<void> => {
+    clearTimeout(reconnectTimers.current.get(computer.id))
+    reconnectTimers.current.delete(computer.id)
     const old = connections.current.get(computer.id)
     old?.controller.abort()
     old?.client.close()
@@ -1080,119 +1056,128 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       generation,
     }
     connections.current.set(computer.id, connection)
-    // Probe alternatives during an initial socket timeout instead of waiting for HTTP diagnosis too.
-    const routeWatch = setInterval(() => {
-      if (!connection.live && !connection.controller.signal.aborted)
-        void tryRoutes(computer.id, connection).catch(report)
-    }, 2000)
-    connection.controller.signal.addEventListener('abort', () => clearInterval(routeWatch), { once: true })
-    let attempt = 0
+    const current = () =>
+      active.current && !connection.controller.signal.aborted && connections.current.get(computer.id) === connection
+    let backoff = retries
     try {
-      while (!connection.controller.signal.aborted && active.current) {
-        try {
-          // An old LAN address may now belong to another computer. Prove it before opening an authenticated socket.
-          if (computer.hostId && computer.deviceId) {
-            const identity = await verifyHost({
+      if (computer.deviceId) {
+        const hint = developmentHostRoute(computer.address, developmentBundleUrl())
+        const route = await chooseHostRoute({
+          address: computer.address,
+          routes: [...(hint ? [hint] : []), ...(computer.routes ?? [])],
+          signal: connection.controller.signal,
+          verify: (address, signal) =>
+            verifyHost({
               fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
-              baseUrl: computer.address,
-              deviceId: computer.deviceId,
-              token: connection.client.currentToken(),
+              baseUrl: address,
+              deviceId: computer.deviceId!,
+              token,
               expectedHostId: computer.hostId,
               challenge: operationKey(),
-              signal: AbortSignal.timeout(4000),
-            })
-            if (connection.controller.signal.aborted) break
-            if (identity.state !== 'verified')
-              throw new HostError('The saved address could not prove this host. Checking other addresses…')
-            routeTimes.current.set(`learn:${computer.id}`, Date.now())
-            change((s) => ({
-              ...s,
-              computers: s.computers.map((c) =>
-                c.id === computer.id ? { ...c, routes: rememberRoutes(c.address, identity.routes, c.routes) } : c,
-              ),
-            }))
-          }
-          if (connection.controller.signal.aborted) break
-          const info = await connection.client.invoke('background.status')
-          if (!connection.controller.signal.aborted)
-            change((s) => ({
-              ...s,
-              computers: s.computers.map((c) =>
-                c.id === computer.id
-                  ? {
-                      ...c,
-                      access: info.access ?? c.access,
-                      os: info.platform === 'darwin' ? 'macos' : info.platform === 'win32' ? 'windows' : 'linux',
-                      ...(c.auto && info.hostname ? { name: info.hostname, auto: false } : {}),
-                    }
-                  : c,
-              ),
-            }))
-          if (info.protocol !== 1 || !info.capabilities?.includes('mobile-companion'))
-            throw new HostError('Update Ramu on this host: its protocol is incompatible.', 426)
-          // Rotate the device token about monthly on hosts that support it; a failure only retries next connect.
-          if (info.capabilities?.includes('renewal'))
-            void readRenewedAt(computer.id)
-              .then((renewedAt) =>
-                renewalDue(Date.now(), renewedAt)
-                  ? renewCredential(
-                      {
-                        address: connection.client.address,
-                        token: () => connection.client.currentToken(),
-                        useToken: (next) => connection.client.useToken(next),
-                      },
-                      connection.client.fetch,
-                      (next) => saveToken(computer.id, next),
-                      (at) => saveRenewedAt(computer.id, at),
-                    )
-                  : false,
-              )
-              .catch(() => {})
-          await connection.client.stream(
-            (channel, payload) => {
-              if (connections.current.get(computer.id) === connection && !connection.controller.signal.aborted)
-                receive(computer.id, channel, payload)
-            },
-            async () => {
-              if (connection.controller.signal.aborted || connections.current.get(computer.id) !== connection) return
-              // The stream is open: a follow-up on a known thread need not wait for the full refresh below.
-              connection.live = true
-              void flush(computer.id)
-              await refreshing.current.get(computer.id)?.catch(() => {})
-              if (connection.controller.signal.aborted || connections.current.get(computer.id) !== connection) return
-              await refresh(computer.id, true)
-              if (!connection.controller.signal.aborted) {
-                attempt = 0
-                status(computer.id, 'online')
-                void learnRoutes(computer.id)
-                if (pushToken.current) void registerPushOn(computer.id).catch(report)
-                void flush(computer.id)
-              }
-            },
-            connection.controller.signal,
-          )
-        } catch (error) {
-          connection.live = false
-          if (connection.controller.signal.aborted) break
-          if (error instanceof HostError && [401, 426].includes(error.status)) {
-            status(computer.id, 'revoked', error.message)
-            break
-          }
-          status(computer.id, 'offline', error instanceof Error ? error.message : 'Host unreachable')
-          void tryRoutes(computer.id, connection).catch(report)
-          await new Promise<void>((resolve) => {
-            const done = () => {
-              clearTimeout(timer)
-              connection.controller.signal.removeEventListener('abort', done)
-              resolve()
-            }
-            const timer = setTimeout(done, Math.min(30_000, 1000 * 2 ** attempt++) + Math.random() * 500)
-            connection.controller.signal.addEventListener('abort', done, { once: true })
-          })
+              signal,
+            }),
+          usable: (address, signal) =>
+            checkHostConnection(address, token, expoFetch as typeof globalThis.fetch, signal),
+        })
+        if (!current()) return
+        if (!route) throw new HostError('Host unreachable. Checking saved addresses again shortly.')
+        const saved = ref.current.computers.find((c) => c.id === computer.id)
+        if (!saved || saved.deviceId !== computer.deviceId) return
+        const resolved: Computer = {
+          ...saved,
+          address: route.address,
+          hostId: route.hostId,
+          routes: rememberRoutes(saved.address, route.routes, saved.routes),
+          error: undefined,
+        }
+        routeTimes.current.set(`learn:${computer.id}`, Date.now())
+        change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === computer.id ? resolved : c)) }))
+        if (route.address !== computer.address) {
+          void connect(resolved).catch(report)
+          return
         }
       }
-    } finally {
-      clearInterval(routeWatch)
+      const info = await readConnectionStatus(connection.client, connection.controller.signal)
+      if (!current()) return
+      if (info.protocol !== 1 || !info.capabilities?.includes('mobile-companion'))
+        throw new HostError('Update Ramu on this host: its protocol is incompatible.', 426)
+      change((s) => ({
+        ...s,
+        computers: s.computers.map((c) =>
+          c.id === computer.id
+            ? {
+                ...c,
+                access: info.access ?? c.access,
+                os: info.platform === 'darwin' ? 'macos' : info.platform === 'win32' ? 'windows' : 'linux',
+                ...(c.auto && info.hostname ? { name: info.hostname, auto: false } : {}),
+              }
+            : c,
+        ),
+      }))
+      // Rotate the device token about monthly on hosts that support it; a failure only retries next connect.
+      if (info.capabilities?.includes('renewal'))
+        void readRenewedAt(computer.id)
+          .then((renewedAt) =>
+            renewalDue(Date.now(), renewedAt)
+              ? renewCredential(
+                  {
+                    address: connection.client.address,
+                    token: () => connection.client.currentToken(),
+                    useToken: (next) => connection.client.useToken(next),
+                  },
+                  connection.client.fetch,
+                  (next) => saveToken(computer.id, next),
+                  (at) => saveRenewedAt(computer.id, at),
+                )
+              : false,
+          )
+          .catch(() => {})
+      await connection.client.stream(
+        (channel, payload) => {
+          if (current()) receive(computer.id, channel, payload)
+        },
+        async () => {
+          if (!current()) return
+          connection.live = true
+          backoff = 0
+          // Reachability and history synchronization are separate. A long transcript must not keep the host Connecting.
+          status(computer.id, 'online')
+          void flush(computer.id)
+          void learnRoutes(computer.id)
+          if (pushToken.current) void registerPushOn(computer.id).catch(report)
+          try {
+            await refreshing.current.get(computer.id)?.catch(() => {})
+            if (!current()) return
+            await refresh(computer.id, true)
+            if (current()) void flush(computer.id)
+          } catch (error) {
+            if (current()) report(error)
+          }
+        },
+        connection.controller.signal,
+      )
+    } catch (error) {
+      connection.live = false
+      if (!current()) return
+      if (error instanceof HostError && [401, 426].includes(error.status)) {
+        status(computer.id, 'revoked', error.message)
+        return
+      }
+      status(computer.id, 'offline', error instanceof Error ? error.message : 'Host unreachable')
+      // Retire this generation now, so late history reads cannot hold up or overwrite the next connection.
+      connection.controller.abort()
+      connection.client.close()
+      connections.current.delete(computer.id)
+      const timer = setTimeout(
+        () => {
+          reconnectTimers.current.delete(computer.id)
+          if (!active.current || generations.current.get(computer.id) !== generation) return
+          const saved = ref.current.computers.find((c) => c.id === computer.id)
+          if (saved && saved.status !== 'revoked') void connect(saved, false, backoff + 1).catch(report)
+        },
+        Math.min(30_000, 1000 * 2 ** Math.min(backoff, 5)) + Math.random() * 500,
+      )
+      reconnectTimers.current.set(computer.id, timer)
     }
   }
   useEffect(() => {
@@ -1214,6 +1199,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (foreground === active.current) return
       active.current = foreground
       if (!foreground) {
+        for (const timer of reconnectTimers.current.values()) clearTimeout(timer)
+        reconnectTimers.current.clear()
         void writeLocal({
           ...ref.current,
           usage: undefined,
@@ -1248,6 +1235,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => {
       app.remove()
       clearInterval(poll)
+      for (const timer of reconnectTimers.current.values()) clearTimeout(timer)
+      reconnectTimers.current.clear()
       for (const timer of [...changeTimers.current.values(), ...rebuilds.current.values()]) clearTimeout(timer)
       changeTimers.current.clear()
       rebuilds.current.clear()
@@ -1386,7 +1375,64 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     },
     reviewAddress: reviewAddressFor,
+    probeHosts: (signal, found) => {
+      const computers = ref.current.computers
+      return probeReachableHosts({
+        computers,
+        bundleUrl: developmentBundleUrl(),
+        signal,
+        found: (host) => {
+          if (signal.aborted) return
+          if (host.pairedHostId) {
+            const original = computers.find((c) => c.id === host.pairedHostId)
+            const current = ref.current.computers.find((c) => c.id === host.pairedHostId)
+            if (
+              !current ||
+              current.deviceId !== original?.deviceId ||
+              (current.hostId && current.hostId !== host.hostId)
+            )
+              return
+            // A device proof can upgrade older pairings that saved their device id but not the host id.
+            change((s) => ({
+              ...s,
+              computers: s.computers.map((c) =>
+                c.id === current.id
+                  ? {
+                      ...c,
+                      hostId: host.hostId,
+                      routes: rememberRoutes(
+                        c.address,
+                        host.routes.map((route) => route.url),
+                        c.routes,
+                      ),
+                    }
+                  : c,
+              ),
+            }))
+          }
+          found(host)
+        },
+        tokenFor: readToken,
+        fetch: expoFetch as typeof globalThis.fetch,
+        usable: async (address, token, probeSignal) => {
+          // Reuse a live client: closing a temporary probe of its pooled socket would disconnect the conversation.
+          const existing = [...connections.current.values()].find(
+            (connection) =>
+              !connection.controller.signal.aborted &&
+              connection.client.address === address &&
+              connection.client.currentToken() === token,
+          )
+          if (existing) {
+            const info = await existing.client.invoke('background.status')
+            return info.protocol === 1 && !!info.capabilities?.includes('mobile-companion')
+          }
+          return checkHostConnection(address, token, expoFetch as typeof globalThis.fetch, probeSignal)
+        },
+      })
+    },
     forget: async (id) => {
+      clearTimeout(reconnectTimers.current.get(id))
+      reconnectTimers.current.delete(id)
       await invoke(id, 'notifications.unregister').catch(() => {})
       const current = ref.current
       const computers = current.computers.filter((c) => c.id !== id)

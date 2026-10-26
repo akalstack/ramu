@@ -91,17 +91,15 @@ export function ComputerFloat({
   hidden,
   covered = false,
   onVisibleChange,
-  top,
   onOpen,
   onReveal,
 }: {
   chat: Chat
   hidden: boolean
-  /** Another preview holds the corner; this one still notices new activity and returns when it is free. */
+  /** Another preview holds the dock; this one still notices new activity and returns when it is free. */
   covered?: boolean
-  /** Whether this preview is on screen, so the other one knows when the corner is free. */
+  /** Whether this preview is on screen, so the other one knows when the dock is free. */
   onVisibleChange?(visible: boolean): void
-  top: number
   onOpen(): void
   onReveal?(): void
 }) {
@@ -165,7 +163,6 @@ export function ComputerFloat({
   if (!visible || !session) return null
   return (
     <FloatPreview
-      top={top}
       image={image}
       fallback={Monitor}
       title={session.target.name}

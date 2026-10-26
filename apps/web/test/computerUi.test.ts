@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { controllerLabel } from '../src/chat/computerLabels'
-import { appControlHelp, runtimeHelp } from '../src/settings/computerStatus'
+import { appControlHelp, runtimeHelp } from '@ramu/shared/computerStatus'
 
 const runtime = { id: 'local', name: 'Mac' }
 const target = { id: 'display:main', kind: 'display' as const, name: 'Main display' }

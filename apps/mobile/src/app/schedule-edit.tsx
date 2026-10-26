@@ -27,6 +27,7 @@ import { GlassButton, Header, PageScrollView, Screen } from '../components/Scree
 import { ModelChip, type ModelChoice } from '../components/Composer'
 import { Field, Stepper, TextField, TimeField, WeekdayPicker } from '../components/ScheduleFields'
 import { Row, Segmented, Sheet, T } from '../components/ui'
+import { SheetGroup, SheetOption } from '../components/SheetOptions'
 
 const UNITS = [
   { key: 'minutes', label: 'min', factor: 1 },
@@ -338,25 +339,24 @@ export default function ScheduleEdit() {
       </View>
       {busy ? <ActivityIndicator style={{ position: 'absolute', alignSelf: 'center', top: 120 }} /> : null}
       <Sheet open={projectSheet} onClose={() => setProjectSheet(false)} title={t.scope}>
-        {[
-          { id: NO_PROJECT, name: t.noProject },
-          // The computer knows projects by their own id; the phone's ids carry the computer in front.
-          ...projects.map((p) => ({ id: p.id.slice(p.id.indexOf(':') + 1), name: p.name })),
-        ].map((p) => (
-          <Row
-            key={p.id}
-            onPress={() => {
-              patch({ projectId: p.id, workspaceId: null })
-              setProjectSheet(false)
-            }}
-          >
-            {p.id === NO_PROJECT ? <MessagesSquare size={17} color={c.soft} /> : <Folder size={17} color={c.soft} />}
-            <T style={{ flex: 1 }} numberOfLines={1} weight={p.id === input.projectId ? '600' : '400'}>
-              {p.name}
-            </T>
-            {p.id === input.projectId ? <Check size={16} color={c.accent} /> : null}
-          </Row>
-        ))}
+        <SheetGroup>
+          {[
+            { id: NO_PROJECT, name: t.noProject },
+            // The computer knows projects by their own id; the phone's ids carry the computer in front.
+            ...projects.map((p) => ({ id: p.id.slice(p.id.indexOf(':') + 1), name: p.name })),
+          ].map((p) => (
+            <SheetOption
+              key={p.id}
+              icon={p.id === NO_PROJECT ? MessagesSquare : Folder}
+              title={p.name}
+              selected={p.id === input.projectId}
+              onPress={() => {
+                patch({ projectId: p.id, workspaceId: null })
+                setProjectSheet(false)
+              }}
+            />
+          ))}
+        </SheetGroup>
       </Sheet>
     </Screen>
   )

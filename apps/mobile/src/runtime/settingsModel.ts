@@ -17,6 +17,7 @@ export type SettingsSection =
   | 'appearance'
   | 'git'
   | 'browser'
+  | 'computer'
   | 'chats'
   | 'providers'
   | 'access'
@@ -43,11 +44,10 @@ export const SETTINGS_SECTIONS: { id: SettingsSection; group: SettingsGroup; sco
     { id: 'appearance', group: 'workspace', scope: 'phone', label: { en: 'Appearance', id: 'Tampilan' } },
     { id: 'git', group: 'workspace', scope: 'host', label: { en: 'Git', id: 'Git' } },
     { id: 'browser', group: 'workspace', scope: 'host', label: { en: 'Browser', id: 'Peramban' } },
+    { id: 'computer', group: 'workspace', scope: 'host', label: { en: 'Computer use', id: 'Penggunaan komputer' } },
     { id: 'chats', group: 'agents', scope: 'host', label: { en: 'Threads', id: 'Thread' } },
-    { id: 'providers', group: 'agents', scope: 'host', label: { en: 'Providers & models', id: 'Penyedia & model' } },
-    { id: 'access', group: 'agents', scope: 'host', label: { en: 'Access & Fallback', id: 'Akses & Cadangan' } },
-    { id: 'workflows', group: 'agents', scope: 'host', label: { en: 'Goals & delegation', id: 'Tujuan & delegasi' } },
-    { id: 'memory', group: 'agents', scope: 'host', label: { en: 'Memory & skills', id: 'Memori & skill' } },
+    { id: 'providers', group: 'agents', scope: 'host', label: { en: 'Models & access', id: 'Model & akses' } },
+    { id: 'workflows', group: 'agents', scope: 'host', label: { en: 'Goals & memory', id: 'Tujuan & memori' } },
     { id: 'rules', group: 'agents', scope: 'host', label: { en: 'Rules', id: 'Aturan' } },
     {
       id: 'system',
@@ -60,7 +60,21 @@ export const SETTINGS_SECTIONS: { id: SettingsSection; group: SettingsGroup; sco
     { id: 'about', group: 'phone', scope: 'phone', label: { en: 'About', id: 'Tentang' } },
   ]
 
-export const sectionById = (id: string) => SETTINGS_SECTIONS.find((section) => section.id === id)
+/**
+ * Pages that carry another section's rows, so a short section is not a menu entry of its own: permissions and the provider
+ * fallback sit with the models, memory and skills with goals.
+ */
+export const PAGE_PARTS: Partial<Record<SettingsSection, SettingsSection[]>> = {
+  providers: ['access'],
+  workflows: ['memory'],
+}
+/** The page a section's rows are drawn on. */
+export const pageOf = (section: SettingsSection): SettingsSection =>
+  (Object.entries(PAGE_PARTS).find(([, parts]) => parts.includes(section))?.[0] as SettingsSection | undefined) ??
+  section
+
+export const sectionById = (id: string) =>
+  SETTINGS_SECTIONS.find((section) => section.id === pageOf(id as SettingsSection))
 export const sectionLabel = (id: SettingsSection, language: Language) => sectionById(id)!.label[language]
 
 type Value = string | number | boolean | null
@@ -192,6 +206,18 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
     {
       title: 'Commits',
       rows: [
+        {
+          kind: 'choice',
+          path: 'defaultCommitAction',
+          title: 'Default commit action',
+          help: 'What the commit button does first, on this computer and on your phones. Each commit can pick another.',
+          words: 'commit push sync button primary default',
+          options: [
+            { value: 'commit', label: 'Commit' },
+            { value: 'push', label: 'Commit & Push' },
+            { value: 'sync', label: 'Commit & Sync' },
+          ],
+        },
         {
           kind: 'choice',
           path: 'commitStyle',
@@ -418,6 +444,33 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         },
       ],
     },
+    {
+      title: 'Sub-agents',
+      rows: [
+        {
+          kind: 'choice',
+          path: 'subagents.maxConcurrent',
+          title: 'At once per thread',
+          help: 'Additional sub-agents wait for an available slot.',
+          words: 'subagent concurrent parallel helpers limit',
+          options: choice([1, 2, 3, 4, 5, 6, 7, 8], (n) => count(Number(n))),
+        },
+        {
+          kind: 'toggle',
+          path: 'subagents.isolate',
+          title: 'Separate checkout for each',
+          help: 'Run each sub-agent in a separate checkout. Apply its changes back when finished; keep conflicts for review.',
+          words: 'subagent isolate worktree copy',
+        },
+        {
+          kind: 'toggle',
+          path: 'subagents.shareContext',
+          title: 'Share thread context',
+          help: "Attach the thread's recent transcript to each sub-agent's task.",
+          words: 'subagent transcript context share',
+        },
+      ],
+    },
   ],
   memory: [
     {
@@ -446,6 +499,47 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           words: 'memory stale decay archive expire days',
           options: choice([30, 60, 90, 180, 365], days),
           when: { path: 'memory.enabled', equals: true },
+        },
+      ],
+    },
+    {
+      title: 'Recall',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'intelligence.crossThreadRecall',
+          title: 'Recall past conversations',
+          help: 'Let agents search and recall your earlier threads. Turning it off blocks new recalls at once and keeps your history.',
+          words: 'search history cross thread previous conversations remember',
+        },
+      ],
+    },
+    {
+      title: 'What Ramu learned',
+      rows: [
+        {
+          kind: 'choice',
+          path: 'intelligence.summaryInterval',
+          title: 'Learning summaries',
+          help: 'How often Ramu writes up what it learned. Uses model tokens.',
+          words: 'recap summary daily weekly digest learned',
+          options: [
+            { value: 'off', label: 'Off' },
+            { value: 'daily', label: 'Daily' },
+            { value: 'weekly', label: 'Weekly' },
+          ],
+        },
+        {
+          kind: 'toggle',
+          path: 'intelligence.summaryMemory',
+          title: 'Include memories',
+          words: 'summary recap memories',
+        },
+        {
+          kind: 'toggle',
+          path: 'intelligence.summarySkills',
+          title: 'Include skills',
+          words: 'summary recap skills',
         },
       ],
     },
@@ -582,6 +676,11 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
   { section: 'appearance', title: 'Voice input', words: 'microphone dictation speech voice dictate language' },
   { section: 'notifications', title: 'Background alerts', words: 'push notifications needs attention' },
   { section: 'notifications', title: 'Live Activities', words: 'lock screen dynamic island ongoing work ios' },
+  {
+    section: 'computer',
+    title: 'Computer use',
+    words: 'screen display desktop control agent app pointer accessibility screen recording share',
+  },
   { section: 'computers', title: 'Paired hosts', words: 'pair connect switch host reconnect revoke forget' },
 ]
 
@@ -675,7 +774,7 @@ export function searchSettings(
           .filter((row) => !known || offered(row, known))
           .map((row) => (known ? forHost(row, known) : row))
           .map((row) => ({
-            section: section as SettingsSection,
+            section: pageOf(section as SettingsSection),
             title: row.title,
             words: `${group.title ?? ''} ${row.words ?? ''}`,
           })),

@@ -294,6 +294,17 @@ describe('Stashes', () => {
     expect(left).toEqual(['new.txt'])
     expect((await git.stashes(mine))[0]?.subject).toContain('Staged only')
   })
+
+  it('refuses to apply or pop over uncommitted changes and says which action it refused', async () => {
+    writeFileSync(join(mine, 'shared.txt'), 'saved\n')
+    await git.stash(mine, 'Saved')
+    const [entry] = await git.stashes(mine)
+    writeFileSync(join(mine, 'dirty.txt'), 'dirty\n')
+    await expect(git.popStash(mine, entry!.oid)).rejects.toThrow('before popping a stash')
+    await expect(git.applyStash(mine, entry!.oid)).rejects.toThrow('before applying a stash')
+    await expect(git.checkout(mine, 'main')).rejects.toThrow('before switching branches or pulling')
+    expect(await git.stashes(mine)).toHaveLength(1)
+  })
 })
 
 describe('Commit on a feature branch', () => {

@@ -43,9 +43,16 @@ export default function Pair() {
   const insets = useSafeAreaInsets()
   const scroll = useRef<import('react-native').ScrollViewInstance>(null)
   const pairing = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
   const { c } = useTheme()
   const router = useRouter()
-  const { pair, reviewAddress, computers } = useStore()
+  const { pair, reviewAddress, computers, probeHosts, retry, select } = useStore()
   const [moved, setMoved] = useState<ReviewAddressResult | 'checking' | null>(null)
   const params = useLocalSearchParams<{ url?: string; code?: string; exp?: string; name?: string }>()
   const [address, setAddress] = useState('')
@@ -78,6 +85,7 @@ export default function Pair() {
   const nearby = useNearbyHosts(
     browsingActive(method, foreground),
     (hostId) => computers.find((computer) => computer.hostId === hostId)?.id ?? null,
+    probeHosts,
   )
   const choose = (next: PairMethod) => {
     if (pairing.current) return
@@ -125,16 +133,11 @@ export default function Pair() {
     !!savedHost &&
     !!selected &&
     savedHost.address.replace(/^https?:\/\//, '') !== selected.url.replace(/^https?:\/\//, '')
+  const reconnectHost =
+    savedHost?.status !== 'revoked' && !['unsupported', 'insecure', 'mismatch'].includes(moved ?? '')
+      ? savedHost
+      : undefined
   useEffect(() => setMoved(null), [selected?.key, selected?.url])
-  const applyAddress = async () => {
-    if (!savedHost || !selected) return
-    setMoved('checking')
-    try {
-      setMoved(await reviewAddress(savedHost.id, selected.url))
-    } catch {
-      setMoved('unreachable')
-    }
-  }
   const field = {
     color: c.text,
     fontSize: font.body,
@@ -243,11 +246,16 @@ export default function Pair() {
                       <T weight="600" numberOfLines={1}>
                         {host.label}
                       </T>
-                      <T size={font.caption} tone="muted" numberOfLines={1}>
-                        {route ? route.url.replace(/^https?:\/\//, '') : ''}
-                        {host.scheme === 'http' ? ` · ${t.nearbyPlain}` : ''}
-                        {host.pairedHostId ? ` · ${t.nearbyPaired}` : ''}
+                      <T size={font.caption} tone="muted" numberOfLines={2}>
+                        {host.routes.map((item) => item.url.replace(/^https?:\/\//, '')).join(' · ')}
                       </T>
+                      {host.scheme === 'http' || host.pairedHostId ? (
+                        <T size={font.caption} tone="muted" numberOfLines={1}>
+                          {[host.scheme === 'http' ? t.nearbyPlain : '', host.pairedHostId ? t.nearbyPaired : '']
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </T>
+                      ) : null}
                     </View>
                   </Pressable>
                 )
@@ -292,18 +300,34 @@ export default function Pair() {
                                   : fill(t.nearbyAlready, savedHost.name)}
                     </T>
                   ) : null}
-                  {newAddress && moved !== 'moved' ? (
-                    <GlassButton
-                      title={moved === 'checking' ? t.nearbyChecking : fill(t.nearbyUseAddress, savedHost!.name)}
-                      disabled={moved === 'checking'}
-                      onPress={() => void applyAddress()}
-                    />
-                  ) : null}
                   <GlassButton
                     primary
-                    title={fill(t.nearbyContinue, current.label)}
-                    disabled={!current.routes.some((route) => route.url === selected.url)}
-                    onPress={() => {
+                    title={fill(
+                      reconnectHost ? t.nearbyReconnect : t.nearbyContinue,
+                      reconnectHost?.name ?? current.label,
+                    )}
+                    disabled={moved === 'checking' || !current.routes.some((route) => route.url === selected.url)}
+                    onPress={async () => {
+                      if (reconnectHost) {
+                        if (pairing.current) return
+                        pairing.current = true
+                        setMoved('checking')
+                        try {
+                          const result = await reviewAddress(reconnectHost.id, selected.url)
+                          if (!mounted.current) return
+                          setMoved(result)
+                          if (result !== 'moved' && result !== 'unchanged') return
+                          if (result === 'unchanged' && reconnectHost.status !== 'online') retry(reconnectHost.id)
+                          select(reconnectHost.id)
+                          if (router.canDismiss()) router.dismissAll()
+                          else router.replace('/')
+                        } catch {
+                          if (mounted.current) setMoved('unreachable')
+                        } finally {
+                          pairing.current = false
+                        }
+                        return
+                      }
                       const choice = pairingFill(current, selected.url)
                       if (!choice) return
                       setAddress(choice.address)

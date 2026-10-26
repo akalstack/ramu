@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { HostAddressSheet } from '../components/HostAddressSheet'
 import { goBackOrHome } from '../runtime/navigation'
 import { Alert, Pressable, View } from 'react-native'
 import { useRouter } from 'expo-router'
@@ -13,6 +15,7 @@ export default function Computers() {
   const { c } = useTheme()
   const t = useT()
   const router = useRouter()
+  const [editing, setEditing] = useState<string | null>(null)
   const { computers, chats, selected, select, forget, retry } = useStore()
   return (
     <Screen bg="canvas">
@@ -93,6 +96,13 @@ export default function Computers() {
                   <Pressable
                     accessibilityRole="button"
                     style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s }}
+                    onPress={() => setEditing(pc.id)}
+                  >
+                    <T tone="accent">{t.hostChangeAddress}</T>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s }}
                     onPress={() => router.push('/pair')}
                   >
                     <T tone="accent">Pair again</T>
@@ -126,6 +136,13 @@ export default function Computers() {
           Agents keep running on each computer. The phone follows them while the app is open.
         </T>
       </ScrollView>
+      {editing && computers.find((pc) => pc.id === editing) ? (
+        <HostAddressSheet
+          key={editing}
+          computer={computers.find((pc) => pc.id === editing)!}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
     </Screen>
   )
 }

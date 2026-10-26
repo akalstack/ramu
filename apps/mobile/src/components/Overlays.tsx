@@ -1,12 +1,12 @@
 import { useEffect, useState, useSyncExternalStore, type ComponentProps } from 'react'
-import { View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Check, Monitor, Plus, RefreshCw, Settings, Search, SquareTerminal } from 'lucide-react-native'
-import { font, space, useTheme } from '../theme'
+import { Monitor, Plus, RefreshCw, Settings, Search, SquareTerminal } from 'lucide-react-native'
+import { space, useTheme } from '../theme'
 import { counts, useStore } from '../runtime/store'
 import { useT } from '../i18n'
 import { HeaderButton } from './Screen'
-import { ConnectionDot, Row, SectionLabel, Sheet, T, tap, type Icon } from './ui'
+import { ConnectionDot, Row, Sheet, T, tap, type Icon } from './ui'
+import { SheetGroup, SheetOption } from './SheetOptions'
 
 // Shared host and connection sheets. New thread uses one native-stack page for its project list and composer.
 
@@ -41,7 +41,6 @@ export const openNeedComputer = (reason: NeedComputer) => needComputer.set(reaso
 const later = (run: () => void) => setTimeout(run, 300)
 
 function ComputerMenu() {
-  const { c } = useTheme()
   const t = useT()
   const router = useRouter()
   const store = useStore()
@@ -55,63 +54,51 @@ function ComputerMenu() {
   const projectList = store.projects.filter((p) => p.computerId === store.selected)
   return (
     <Sheet open={open} onClose={close} title={t.computers}>
-      {store.computers.map((pc) => {
-        const n = counts(store.chats, pc.id)
-        const here = pc.id === store.selected
-        return (
-          <Row
-            key={pc.id}
-            onPress={() => {
-              tap()
-              store.select(pc.id)
-              close()
-            }}
-          >
-            <Monitor size={17} color={here ? c.accent : c.soft} strokeWidth={1.8} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <T weight={here ? '600' : '500'} numberOfLines={1} style={{ flexShrink: 1 }}>
-                  {pc.name}
-                </T>
-                <ConnectionDot status={pc.status} />
-              </View>
-              <T size={font.caption} tone="muted" numberOfLines={1}>
-                {[
-                  pc.address.replace(/^https?:\/\//, ''),
-                  n.running ? `${n.running} ${t.running}` : '',
-                  n.waiting ? `${n.waiting} ${t.waiting}` : '',
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </T>
-            </View>
-            {here ? <Check size={16} color={c.accent} /> : null}
-          </Row>
-        )
-      })}
-      <Row onPress={() => go(() => router.push('/pair'))}>
-        <Plus size={17} color={c.soft} />
-        <T style={{ flex: 1 }}>{t.pair}</T>
-      </Row>
-      {projectList.length ? <SectionLabel>{t.terminal}</SectionLabel> : null}
-      {projectList.map((p) => (
-        <Row
-          key={p.id}
-          onPress={() =>
-            go(() =>
-              router.push({
-                pathname: '/terminal',
-                params: { computer: store.selected, ctx: `project:${p.id.slice(p.id.indexOf(':') + 1)}` },
-              }),
-            )
-          }
-        >
-          <SquareTerminal size={17} color={c.soft} />
-          <T style={{ flex: 1 }} numberOfLines={1}>
-            {p.name}
-          </T>
-        </Row>
-      ))}
+      <SheetGroup>
+        {store.computers.map((pc) => {
+          const n = counts(store.chats, pc.id)
+          return (
+            <SheetOption
+              key={pc.id}
+              icon={Monitor}
+              title={pc.name}
+              help={[
+                pc.address.replace(/^https?:\/\//, ''),
+                n.running ? `${n.running} ${t.running}` : '',
+                n.waiting ? `${n.waiting} ${t.waiting}` : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              selected={pc.id === store.selected}
+              trailing={<ConnectionDot status={pc.status} />}
+              onPress={() => {
+                store.select(pc.id)
+                close()
+              }}
+            />
+          )
+        })}
+        <SheetOption icon={Plus} title={t.pair} onPress={() => go(() => router.push('/pair'))} />
+      </SheetGroup>
+      {projectList.length ? (
+        <SheetGroup title={t.terminal}>
+          {projectList.map((p) => (
+            <SheetOption
+              key={p.id}
+              icon={SquareTerminal}
+              title={p.name}
+              onPress={() =>
+                go(() =>
+                  router.push({
+                    pathname: '/terminal',
+                    params: { computer: store.selected, ctx: `project:${p.id.slice(p.id.indexOf(':') + 1)}` },
+                  }),
+                )
+              }
+            />
+          ))}
+        </SheetGroup>
+      ) : null}
     </Sheet>
   )
 }

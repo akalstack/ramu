@@ -53,12 +53,15 @@ export interface HostSocket {
 }
 let socketProvider: ((address: string, token: string) => HostSocket) | null = null
 let closeSocket: ((address: string, token: string) => void) | undefined
+let probeSocket: ((address: string, token: string, signal: AbortSignal) => Promise<boolean>) | undefined
 export function registerSocketProvider(
   provider: typeof socketProvider,
   close?: (address: string, token: string) => void,
+  probe?: typeof probeSocket,
 ) {
   socketProvider = provider
   closeSocket = close
+  probeSocket = probe
 }
 const socketOf = (address: string, token: string): HostSocket => {
   if (!socketProvider) throw new HostError('This build cannot connect to a host. Update Ramu and try again.')
@@ -150,24 +153,35 @@ export class HostClient {
     const known = connectionError(error)
     if (known.status === 401 || known.status === 426 || this.lifetime.signal.aborted) return known
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 8_000)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<HostError>((resolve) => {
+      timer = setTimeout(() => {
+        controller.abort()
+        resolve(known)
+      }, 8000)
+    })
+    const check = async (): Promise<HostError> => {
+      try {
+        const response = await this.fetcher(`${this.address}/session`, {
+          headers: { Authorization: `Bearer ${this.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) },
+          signal: controller.signal,
+        })
+        if (response.status === 401) return new HostError('Pairing was revoked. Pair this host again.', 401)
+        if (response.ok)
+          return new HostError(
+            'The host is reachable but this network blocks live connections. Try another network or route.',
+          )
+      } catch {}
+      return known
+    }
     try {
-      const response = await this.fetcher(`${this.address}/session`, {
-        headers: { Authorization: `Bearer ${this.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) },
-        signal: controller.signal,
-      })
-      if (response.status === 401) return new HostError('Pairing was revoked. Pair this host again.', 401)
-      if (response.ok)
-        return new HostError(
-          'The host is reachable but this network blocks live connections. Try another network or route.',
-        )
-    } catch {
-      // Unreachable over HTTP as well: the plain message below stands.
+      return await Promise.race([check(), timeout])
     } finally {
       clearTimeout(timer)
+      controller.abort()
     }
-    return known
   }
+
   private async call(method: string, args: unknown[], operationKey?: string): Promise<any> {
     if (this.lifetime.signal.aborted) throw new HostError('Connection suspended before sending.')
     // One socket carries every call. There is no second transport: a call waits briefly for the socket, and a refused
@@ -237,13 +251,13 @@ export class HostClient {
       },
     })
     let hydrationError: unknown
-    const hydration = ready().catch((error) => {
+    void ready().catch((error) => {
       hydrationError = error
       gone()
     })
     try {
       await dropped
-      await hydration
+      // History reads may still be pending on the dead route; their rejection is already handled above.
       if (hydrationError) throw hydrationError
     } finally {
       stop()
@@ -251,5 +265,57 @@ export class HostClient {
       signal.removeEventListener('abort', abort)
     }
     if (!signal.aborted) throw new HostError('The host disconnected')
+  }
+}
+
+/** An identity response alone is insufficient: the same address must also carry the app connection. */
+export async function checkHostConnection(
+  address: string,
+  token: string,
+  fetcher: Fetcher,
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (signal.aborted) return false
+  if (probeSocket) return probeSocket(address, token, signal)
+  const probe = new HostClient(address, token, fetcher)
+  const close = () => probe.close()
+  signal.addEventListener('abort', close, { once: true })
+  try {
+    const info = await probe.invoke('background.status')
+    return info.protocol === 1 && !!info.capabilities?.includes('mobile-companion')
+  } finally {
+    signal.removeEventListener('abort', close)
+    close()
+  }
+}
+
+/** Initial status reads have a short deadline independent of full history synchronization or native fetch cancellation. */
+export async function readConnectionStatus(client: HostClient, signal: AbortSignal) {
+  if (signal.aborted) {
+    client.close()
+    throw new HostError('Connection suspended before sending.')
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let abort: () => void = () => {}
+  const deadline = new Promise<never>((_resolve, reject) => {
+    abort = () => {
+      client.close()
+      reject(new HostError('Connection suspended before sending.'))
+    }
+    if (signal.aborted) {
+      abort()
+      return
+    }
+    signal.addEventListener('abort', abort, { once: true })
+    timer = setTimeout(() => {
+      client.close()
+      reject(new HostError('The host did not finish connecting. Trying again.'))
+    }, 8000)
+  })
+  try {
+    return await Promise.race([client.invoke('background.status'), deadline])
+  } finally {
+    clearTimeout(timer)
+    signal.removeEventListener('abort', abort)
   }
 }

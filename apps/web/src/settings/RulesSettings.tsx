@@ -9,7 +9,6 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
-import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown, timeAgo } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
@@ -288,7 +287,6 @@ export function RulesSettings() {
   }
   return (
     <>
-      <SettingsGroupTitle className="mt-8">{t('Rules')}</SettingsGroupTitle>
       {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <p className={`${CAPTION} mb-4`}>
         {t('Instructions for how agents work, sent at the start of a thread. They never grant permissions.')}

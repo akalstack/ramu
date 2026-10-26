@@ -7,12 +7,19 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   ChevronDown,
   ChevronRight,
+  Copy,
   File,
+  Files,
+  FileText,
   Folder,
+  FolderInput,
   FolderGit2,
   RefreshCw,
   GitBranch,
   ListCollapse,
+  Pencil,
+  Share2,
+  Trash2,
 } from 'lucide-react-native'
 import type { DirEntry, RepositoryBinding } from '@ramu/shared/types'
 import {
@@ -31,9 +38,10 @@ import { duplicateName, explorerActions, parentFolder, planMove, planRename } fr
 import { shareDownloadedFile } from '../runtime/explorerShare'
 import { HostError } from '../runtime/transport'
 import { readExplorerNavigation } from '../runtime/explorerNavigation'
-import { font, space, useTheme } from '../theme'
+import { font, radius, space, useTheme } from '../theme'
 import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen'
-import { Row, Sheet, T } from '../components/ui'
+import { Button, Row, Sheet, T } from '../components/ui'
+import { SheetGroup, SheetOption } from '../components/SheetOptions'
 
 type ExplorerScope = { host: string; context: string; label?: string }
 /** A tree row. With several repositories each one gets a `root` row (path '') and its files sit one level below. */
@@ -428,6 +436,7 @@ export default function Explorer() {
           : {}),
       },
     })
+  const available = acting ? explorerActions({ online, viewOnly, kind: acting.entry.kind }) : []
   return (
     <Screen>
       <Header
@@ -783,24 +792,27 @@ export default function Explorer() {
       <Sheet open={!!acting} onClose={closeActions} title={acting?.entry.name}>
         {acting && scope && (
           <>
-            {actionError ? <T tone="muted">{actionError}</T> : null}
+            {actionError ? (
+              <T tone="bad" style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
+                {actionError}
+              </T>
+            ) : null}
             {writerActive && renameDraft === null && !moving ? (
-              <T tone="muted" size={font.caption}>
+              <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
                 {t.explorerWriterWarning}
               </T>
             ) : null}
             {moving ? (
-              <>
-                <T tone="muted" size={font.caption}>
-                  {t.explorerMoveTitle}
-                </T>
+              <SheetGroup title={t.explorerMoveTitle}>
                 {Object.keys(directories[acting.repoId] ?? {})
                   .sort()
                   .map((folder) => ({ folder, plan: planMove(acting.entry.path, folder) }))
                   .filter(({ plan }) => plan.ok)
                   .map(({ folder, plan }) => (
-                    <Row
+                    <SheetOption
                       key={folder}
+                      icon={Folder}
+                      title={folder || t.explorerRootFolder}
                       disabled={acted}
                       onPress={() =>
                         plan.ok &&
@@ -821,153 +833,170 @@ export default function Explorer() {
                           if (binding) void loadDirectory(binding, folder)
                         })
                       }
-                    >
-                      <T numberOfLines={1}>{folder || t.explorerRootFolder}</T>
-                    </Row>
+                    />
                   ))}
-              </>
+              </SheetGroup>
             ) : renameDraft === null ? (
               <>
-                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('copy-path') && (
-                  <Row
-                    onPress={() => {
-                      void Clipboard.setStringAsync(acting.entry.path)
-                      closeActions()
+                <SheetGroup>
+                  {available.includes('copy-path') && (
+                    <SheetOption
+                      icon={Copy}
+                      title={t.explorerCopyPath}
+                      help={fill(
+                        t.explorerCopyPathNote,
+                        store.computers.find((pc) => pc.id === scope.host)?.name ?? '',
+                      )}
+                      onPress={() => {
+                        void Clipboard.setStringAsync(acting.entry.path)
+                        closeActions()
+                      }}
+                    />
+                  )}
+                  {available.includes('copy-contents') && (
+                    <SheetOption
+                      icon={FileText}
+                      title={t.explorerCopyContents}
+                      disabled={acted}
+                      onPress={() => void withContents((text) => Clipboard.setStringAsync(text))}
+                    />
+                  )}
+                  {available.includes('share') && (
+                    <SheetOption
+                      icon={Share2}
+                      title={t.explorerShare}
+                      disabled={acted}
+                      onPress={() =>
+                        void withContents(async (text) => {
+                          if (!(await shareDownloadedFile(acting.entry.name, text)))
+                            throw new Error(t.explorerShareUnavailable)
+                        })
+                      }
+                    />
+                  )}
+                </SheetGroup>
+                <SheetGroup>
+                  {available.includes('duplicate') && (
+                    <SheetOption
+                      icon={Files}
+                      title={t.explorerDuplicate}
+                      disabled={acted}
+                      onPress={() =>
+                        void change(
+                          () =>
+                            store.invoke(
+                              scope.host,
+                              'files.copy',
+                              scope.context,
+                              acting.repoId,
+                              acting.entry.path,
+                              duplicateName(
+                                acting.entry.path,
+                                (directories[acting.repoId]?.[parentFolder(acting.entry.path)] ?? []).map(
+                                  (entry) => entry.name,
+                                ),
+                              ),
+                            ),
+                          parentFolder(acting.entry.path),
+                          acting.repoId,
+                        )
+                      }
+                    />
+                  )}
+                  {available.includes('move') && (
+                    <SheetOption icon={FolderInput} title={t.explorerMove} onPress={() => setMoving(true)} />
+                  )}
+                  {available.includes('rename') && (
+                    <SheetOption
+                      icon={Pencil}
+                      title={t.explorerRename}
+                      onPress={() => setRenameDraft(acting.entry.name)}
+                    />
+                  )}
+                </SheetGroup>
+                <SheetGroup>
+                  {available.includes('delete') && (
+                    <SheetOption
+                      icon={Trash2}
+                      danger
+                      title={t.explorerDelete}
+                      disabled={acted}
+                      onPress={() =>
+                        Alert.alert(
+                          t.explorerDelete,
+                          fill(t.explorerDeleteConfirm, acting.entry.path) +
+                            (writerActive ? `\n\n${t.explorerWriterWarning}` : ''),
+                          [
+                            { text: t.cancel, style: 'cancel' },
+                            {
+                              text: t.explorerDelete,
+                              style: 'destructive',
+                              onPress: () =>
+                                void change(
+                                  () =>
+                                    store.invoke(
+                                      scope.host,
+                                      'files.delete',
+                                      scope.context,
+                                      acting.repoId,
+                                      acting.entry.path,
+                                    ),
+                                  parentFolder(acting.entry.path),
+                                  acting.repoId,
+                                ),
+                            },
+                          ],
+                        )
+                      }
+                    />
+                  )}
+                </SheetGroup>
+              </>
+            ) : (
+              <>
+                <View style={{ paddingHorizontal: space.l, gap: space.m }}>
+                  <TextInput
+                    autoFocus
+                    accessibilityLabel={t.explorerRenameTitle}
+                    value={renameDraft}
+                    onChangeText={setRenameDraft}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    style={{
+                      color: c.text,
+                      fontSize: font.body,
+                      minHeight: 48,
+                      paddingHorizontal: space.m,
+                      borderRadius: radius.m,
+                      backgroundColor: c.raised2,
                     }}
-                  >
-                    <T>{t.explorerCopyPath}</T>
-                    <T tone="muted" size={font.caption}>
-                      {fill(t.explorerCopyPathNote, store.computers.find((pc) => pc.id === scope.host)?.name ?? '')}
-                    </T>
-                  </Row>
-                )}
-                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('copy-contents') && (
-                  <Row disabled={acted} onPress={() => void withContents((text) => Clipboard.setStringAsync(text))}>
-                    <T>{t.explorerCopyContents}</T>
-                  </Row>
-                )}
-                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('share') && (
-                  <Row
+                  />
+                  <Button
+                    title={t.explorerRename}
                     disabled={acted}
-                    onPress={() =>
-                      void withContents(async (text) => {
-                        if (!(await shareDownloadedFile(acting.entry.name, text)))
-                          throw new Error(t.explorerShareUnavailable)
-                      })
-                    }
-                  >
-                    <T>{t.explorerShare}</T>
-                  </Row>
-                )}
-                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('duplicate') && (
-                  <Row
-                    disabled={acted}
-                    onPress={() =>
+                    onPress={() => {
+                      const plan = planRename(acting.entry.path, renameDraft)
+                      if (!plan.ok) {
+                        if (plan.reason === 'invalid') setActionError(t.explorerNameInvalid)
+                        else if (plan.reason === 'unchanged') closeActions()
+                        return
+                      }
                       void change(
                         () =>
                           store.invoke(
                             scope.host,
-                            'files.copy',
+                            'files.rename',
                             scope.context,
                             acting.repoId,
                             acting.entry.path,
-                            duplicateName(
-                              acting.entry.path,
-                              (directories[acting.repoId]?.[parentFolder(acting.entry.path)] ?? []).map(
-                                (entry) => entry.name,
-                              ),
-                            ),
+                            plan.destination,
                           ),
                         parentFolder(acting.entry.path),
                         acting.repoId,
                       )
-                    }
-                  >
-                    <T>{t.explorerDuplicate}</T>
-                  </Row>
-                )}
-                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('move') && (
-                  <Row onPress={() => setMoving(true)}>
-                    <T>{t.explorerMove}</T>
-                  </Row>
-                )}
-                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('rename') && (
-                  <Row onPress={() => setRenameDraft(acting.entry.name)}>
-                    <T>{t.explorerRename}</T>
-                  </Row>
-                )}
-                {explorerActions({ online, viewOnly, kind: acting.entry.kind }).includes('delete') && (
-                  <Row
-                    disabled={acted}
-                    onPress={() =>
-                      Alert.alert(
-                        t.explorerDelete,
-                        fill(t.explorerDeleteConfirm, acting.entry.path) +
-                          (writerActive ? `\n\n${t.explorerWriterWarning}` : ''),
-                        [
-                          { text: t.cancel, style: 'cancel' },
-                          {
-                            text: t.explorerDelete,
-                            style: 'destructive',
-                            onPress: () =>
-                              void change(
-                                () =>
-                                  store.invoke(
-                                    scope.host,
-                                    'files.delete',
-                                    scope.context,
-                                    acting.repoId,
-                                    acting.entry.path,
-                                  ),
-                                parentFolder(acting.entry.path),
-                                acting.repoId,
-                              ),
-                          },
-                        ],
-                      )
-                    }
-                  >
-                    <T>{t.explorerDelete}</T>
-                  </Row>
-                )}
-              </>
-            ) : (
-              <>
-                <TextInput
-                  autoFocus
-                  accessibilityLabel={t.explorerRenameTitle}
-                  value={renameDraft}
-                  onChangeText={setRenameDraft}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={{ color: c.text, fontSize: font.body, paddingVertical: space.s, minHeight: 44 }}
-                />
-                <Row
-                  disabled={acted}
-                  onPress={() => {
-                    const plan = planRename(acting.entry.path, renameDraft)
-                    if (!plan.ok) {
-                      if (plan.reason === 'invalid') setActionError(t.explorerNameInvalid)
-                      else if (plan.reason === 'unchanged') closeActions()
-                      return
-                    }
-                    void change(
-                      () =>
-                        store.invoke(
-                          scope.host,
-                          'files.rename',
-                          scope.context,
-                          acting.repoId,
-                          acting.entry.path,
-                          plan.destination,
-                        ),
-                      parentFolder(acting.entry.path),
-                      acting.repoId,
-                    )
-                  }}
-                >
-                  <T>{t.explorerRename}</T>
-                </Row>
+                    }}
+                  />
+                </View>
               </>
             )}
           </>

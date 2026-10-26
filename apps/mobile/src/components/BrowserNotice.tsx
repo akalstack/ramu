@@ -91,10 +91,8 @@ export function BrowserNotice({ chat, tabs, onOpen }: { chat: Chat; tabs: Browse
   )
 }
 
-const PREVIEW_WIDTH = 152
-
 /**
- * When the agent opens a page, a small live preview floats over the chat so the person sees it without leaving the
+ * When the agent opens a page, a small live preview docks above the composer so the person sees it without leaving the
  * conversation. Tapping it opens that tab full screen; it hides when dismissed, closed, or the app is in the background.
  */
 export function BrowserFloat({
@@ -104,7 +102,6 @@ export function BrowserFloat({
   hidden,
   covered = false,
   onVisibleChange,
-  top,
   onOpen,
   onReveal,
 }: {
@@ -113,11 +110,10 @@ export function BrowserFloat({
   viewable: boolean
   /** The browser or another full-screen surface is open over the chat. */
   hidden: boolean
-  /** Another preview holds the corner; this one still notices new activity and returns when it is free. */
+  /** Another preview holds the dock; this one still notices new activity and returns when it is free. */
   covered?: boolean
-  /** Whether this preview is on screen, so the other one knows when the corner is free. */
+  /** Whether this preview is on screen, so the other one knows when the dock is free. */
   onVisibleChange?(visible: boolean): void
-  top: number
   onOpen(tabId: string): void
   /** A new page appeared, so the chat can show this preview rather than another one. */
   onReveal?(): void
@@ -175,7 +171,6 @@ export function BrowserFloat({
   if (!visible || !tab) return null
   return (
     <FloatPreview
-      top={top}
       image={frame}
       fallback={Globe}
       title={tabTitle(tab, t)}
@@ -191,9 +186,8 @@ export function BrowserFloat({
   )
 }
 
-/** The small live card that floats over a chat: a picture, who is driving it, and a hide button. */
+/** The compact live card docked above the composer: a picture, who is driving it, and a hide button. */
 export function FloatPreview({
-  top,
   image,
   fallback: Fallback,
   title,
@@ -203,7 +197,6 @@ export function FloatPreview({
   onOpen,
   onHide,
 }: {
-  top: number
   image: { uri: string; aspect: number } | null
   fallback: Icon
   title: string
@@ -215,32 +208,35 @@ export function FloatPreview({
   onHide(): void
 }) {
   const { c } = useTheme()
-  const aspect = Math.min(Math.max(image?.aspect ?? 4 / 3, 0.5), 2)
   return (
-    <Glass radius={radius.l} style={{ position: 'absolute', right: space.m, top, width: PREVIEW_WIDTH, zIndex: 30 }}>
+    <Glass radius={radius.l} style={{ marginBottom: space.s, flexDirection: 'row', alignItems: 'center' }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={openLabel}
+        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.s }}
         onPress={() => {
           tap()
           onOpen()
         }}
       >
-        <View style={{ width: PREVIEW_WIDTH, aspectRatio: aspect, backgroundColor: c.canvas }}>
+        <View
+          pointerEvents="none"
+          style={{ width: 80, height: 56, borderRadius: radius.s, overflow: 'hidden', backgroundColor: c.canvas }}
+        >
           {image ? (
-            <Image source={{ uri: image.uri }} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
+            <Image source={{ uri: image.uri }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <Fallback size={22} color={c.muted} strokeWidth={1.5} />
             </View>
           )}
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: space.s }}>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <View
             style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: agent ? c.warn : c.accent }}
             accessibilityElementsHidden
           />
-          <T size={font.caption} numberOfLines={1} style={{ flex: 1 }}>
+          <T size={font.caption} numberOfLines={2} style={{ flex: 1 }}>
             {title}
           </T>
         </View>
@@ -248,21 +244,10 @@ export function FloatPreview({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={hideLabel}
-        hitSlop={10}
         onPress={onHide}
-        style={{
-          position: 'absolute',
-          top: 6,
-          right: 6,
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'rgba(0,0,0,0.55)',
-        }}
+        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
       >
-        <X size={12} color="#ffffff" strokeWidth={2.4} />
+        <X size={18} color={c.muted} strokeWidth={2} />
       </Pressable>
     </Glass>
   )

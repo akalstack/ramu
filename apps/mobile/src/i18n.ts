@@ -29,10 +29,11 @@ const en = {
   pairScanAgain: 'Scan again',
   pairQrHint:
     'On your host open Ramu → Settings → Remote access → Pair a device, then point the camera at its QR code.',
-  nearbyIntro: 'Hosts on this network that chose to be found. Pick one, then enter the pairing code from that host.',
-  nearbySearching: 'Looking for hosts on this network…',
+  nearbyIntro:
+    'Nearby and reachable saved hosts. Connect to a paired host, or pick a new host and enter its pairing code.',
+  nearbySearching: 'Looking for nearby and saved hosts…',
   nearbyNone:
-    'No hosts found. That does not mean none exist: a host appears only when Discoverable on this network is on, and some networks block discovery. Scan its QR code or enter the details instead.',
+    'No hosts responded. Keep your host awake and connected to the same LAN or VPN. For a new host, turn on Discoverable on this network or scan its QR code.',
   nearbyDenied:
     'Ramu is not allowed to use the local network. Turn on Local Network (or Nearby devices) for Ramu in system settings, then search again. You can still scan a QR code or enter the details.',
   nearbyUnavailable:
@@ -40,6 +41,10 @@ const en = {
   nearbyTimedOut: 'Stopped searching after a while. Search again, scan the QR code or enter the details.',
   nearbyRetry: 'Search again',
   nearbyContinue: 'Continue with {0}',
+  nearbyReconnect: 'Connect to {0}',
+  hostChangeAddress: 'Change address',
+  hostAddressHelp:
+    'Choose a saved address or enter another. Ramu checks the host before switching. Your pairing and drafts stay saved.',
   nearbyChanged: 'Its address changed. Review the new one before continuing.',
   nearbyGone: 'That host is no longer visible. Pick another one or enter its address.',
   nearbyPlain: 'Not encrypted',
@@ -544,10 +549,10 @@ const id: typeof en = {
   pairQrHint:
     'Di host Anda buka Ramu → Pengaturan → Akses jarak jauh → Pasangkan perangkat, lalu arahkan kamera ke kode QR-nya.',
   nearbyIntro:
-    'Host di jaringan ini yang memilih untuk dapat ditemukan. Pilih satu, lalu masukkan kode pairing dari host itu.',
-  nearbySearching: 'Mencari host di jaringan ini…',
+    'Host sekitar dan host tersimpan yang dapat dijangkau. Hubungkan ke host yang sudah dipasangkan, atau pilih host baru dan masukkan kode pairing-nya.',
+  nearbySearching: 'Mencari host sekitar dan host tersimpan…',
   nearbyNone:
-    'Tidak ada host ditemukan. Bukan berarti tidak ada: host hanya muncul jika Dapat ditemukan di jaringan ini aktif, dan beberapa jaringan memblokir penemuan. Pindai kode QR-nya atau isi detailnya.',
+    'Tidak ada host yang merespons. Pastikan host menyala dan terhubung ke LAN atau VPN yang sama. Untuk host baru, aktifkan Dapat ditemukan di jaringan ini atau pindai kode QR-nya.',
   nearbyDenied:
     'Ramu tidak diizinkan memakai jaringan lokal. Aktifkan Jaringan Lokal (atau Perangkat sekitar) untuk Ramu di pengaturan sistem, lalu cari lagi. Anda tetap bisa memindai kode QR atau mengisi detailnya.',
   nearbyUnavailable:
@@ -555,6 +560,10 @@ const id: typeof en = {
   nearbyTimedOut: 'Pencarian berhenti setelah beberapa saat. Cari lagi, pindai kode QR, atau isi detailnya.',
   nearbyRetry: 'Cari lagi',
   nearbyContinue: 'Lanjutkan dengan {0}',
+  nearbyReconnect: 'Hubungkan ke {0}',
+  hostChangeAddress: 'Ubah alamat',
+  hostAddressHelp:
+    'Pilih alamat tersimpan atau masukkan alamat lain. Ramu memeriksa host sebelum beralih. Pairing dan draf Anda tetap tersimpan.',
   nearbyChanged: 'Alamatnya berubah. Periksa alamat barunya sebelum melanjutkan.',
   nearbyGone: 'Host itu tidak terlihat lagi. Pilih yang lain atau masukkan alamatnya.',
   nearbyPlain: 'Tidak terenkripsi',

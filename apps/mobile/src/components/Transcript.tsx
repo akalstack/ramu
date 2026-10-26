@@ -185,7 +185,13 @@ function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: numb
         />
       </Pressable>
       <Sheet open={full} onClose={() => setFull(false)} title={alt ?? 'Image'}>
-        <Image source={{ uri }} resizeMode="contain" style={{ width: '100%', aspectRatio: ratio, maxHeight: 520 }} />
+        <Card style={{ marginHorizontal: space.l, padding: space.s }}>
+          <Image
+            source={{ uri }}
+            resizeMode="contain"
+            style={{ width: '100%', aspectRatio: ratio, maxHeight: 520, borderRadius: radius.s }}
+          />
+        </Card>
       </Sheet>
     </>
   )
@@ -881,7 +887,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
       </Collapse>
       {item.detail ? (
         <Sheet open={full} onClose={() => setFull(false)} title={`${item.verb} ${item.subject}`.trim()}>
-          <View style={{ paddingHorizontal: space.l, paddingBottom: space.m }}>
+          <Card style={{ marginHorizontal: space.l, padding: space.m }}>
             <T
               size={font.caption}
               mono
@@ -891,7 +897,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
             >
               {item.detail}
             </T>
-          </View>
+          </Card>
         </Sheet>
       ) : null}
     </View>

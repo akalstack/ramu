@@ -16,9 +16,10 @@ import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen
 import { DiffLines } from '../components/DiffLines'
 import { CodeTokens, grammarFor, highlightLines } from '../components/Code'
 import { Markdown } from '../components/Markdown'
+import { diffMethod, type Revision } from '../runtime/gitRevision'
 import { Button, Segmented, T, tap } from '../components/ui'
 
-type Mode = 'file' | 'changes' | 'staged'
+type Mode = 'file' | 'changes' | 'staged' | 'revision'
 const IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i
 const OTHER_MEDIA = /\.(pdf|mp3|wav|ogg|m4a|flac|mp4|mov|webm)$/i
 const MARKDOWN = /\.(md|markdown|mdx)$/i
@@ -64,6 +65,7 @@ export function FileViewer({
   path,
   line,
   initial,
+  revision,
   composer,
 }: {
   computerId?: string
@@ -71,14 +73,16 @@ export function FileViewer({
   repoId: string
   path: string
   line?: string
-  initial?: Mode | 'all'
+  initial?: Exclude<Mode, 'revision'> | 'all'
+  /** A file as one commit or stash changed it: opened from its row in Source Control, read-only. */
+  revision?: Revision
   composer?: NewComposerOrigin
 }) {
   const say = useSay()
   const store = useStore()
   const router = useRouter()
   const t = useT()
-  const identity = JSON.stringify([computerId, taskId, repoId, path])
+  const identity = JSON.stringify([computerId, taskId, repoId, path, revision])
   const online = !!computerId && store.isOnline(computerId)
   const catalog = useWorkspaces(computerId ?? '', !!taskId?.startsWith('worktree:'))
   const [referenceError, setReferenceError] = useState('')
@@ -88,7 +92,7 @@ export function FileViewer({
   const activeIdentity = useRef(identity)
   activeIdentity.current = identity
   const { c } = useTheme()
-  const [mode, setMode] = useState<Mode>(initial === 'all' ? 'changes' : (initial ?? 'file'))
+  const [mode, setMode] = useState<Mode>(revision ? 'revision' : initial === 'all' ? 'changes' : (initial ?? 'file'))
   const readIdentity = JSON.stringify([identity, mode])
   const activeRead = useRef(readIdentity)
   activeRead.current = readIdentity
@@ -174,14 +178,17 @@ export function FileViewer({
     const run = async () => {
       if (mode !== 'file') {
         if (!gitAvailable) return { kind: 'unsupported' as const, note: t.fileNoGit }
-        const diff = await store.invoke(
-          computerId,
-          'git.diff',
-          taskId,
-          repoId,
-          path,
-          mode === 'changes' ? 'all' : mode === 'staged',
-        )
+        const diff =
+          mode === 'revision' && revision
+            ? await store.invoke(computerId, diffMethod(revision), taskId, repoId, revision.oid, path)
+            : await store.invoke(
+                computerId,
+                'git.diff',
+                taskId,
+                repoId,
+                path,
+                mode === 'changes' ? 'all' : mode === 'staged',
+              )
         return {
           kind: 'diff' as const,
           file: diff.original === diff.modified ? null : changedFile(path, repoName, diff.original, diff.modified),
@@ -205,7 +212,14 @@ export function FileViewer({
         if (alive)
           setFile({
             owner: readIdentity,
-            value: { kind: 'error', message: error instanceof Error ? error.message : String(error) },
+            value: {
+              kind: 'error',
+              message: isMethodMissing(error)
+                ? say('This computer is too old to show a commit’s file. Update Ramu on it.')
+                : error instanceof Error
+                  ? error.message
+                  : String(error),
+            },
           })
       },
     )
@@ -257,7 +271,11 @@ export function FileViewer({
     sourceProject === 'no-project' ||
     store.projects.some((project) => project.computerId === computerId && project.id === sourceProject)
   const canAdd =
-    online && binding?.setupState === 'ready' && knownProject && ['text', 'image', 'diff'].includes(state.kind)
+    !revision &&
+    online &&
+    binding?.setupState === 'ready' &&
+    knownProject &&
+    ['text', 'image', 'diff'].includes(state.kind)
   const addFile = async () => {
     if (!canAdd || addition.current || activeRead.current !== readIdentity) return
     addition.current = true
@@ -322,11 +340,15 @@ export function FileViewer({
       <T size={font.caption} mono tone="muted" numberOfLines={2}>
         {[repoName, dir].filter(Boolean).join('/') || path}
       </T>
-      <Button
-        title={state.kind === 'image' ? t.addImageReference : thread || composer ? t.addToMessage : t.newThreadWithFile}
-        disabled={!canAdd || adding}
-        onPress={addFile}
-      />
+      {revision ? null : (
+        <Button
+          title={
+            state.kind === 'image' ? t.addImageReference : thread || composer ? t.addToMessage : t.newThreadWithFile
+          }
+          disabled={!canAdd || adding}
+          onPress={addFile}
+        />
+      )}
       {!online ? <T tone="muted">{t.explorerOffline}</T> : null}
       {scope.owner === identity && scope.error ? <T tone="bad">{scope.error}</T> : null}
       {taskId.startsWith('worktree:') && catalog.loading ? <T tone="muted">{t.loadingWorkspaces}</T> : null}
@@ -360,20 +382,22 @@ export function FileViewer({
         />
       ) : null}
       <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
-        <Segmented<Mode>
-          value={mode}
-          onChange={setMode}
-          options={
-            (gitAvailable
-              ? [
-                  { key: 'file', label: t.fileLabel },
-                  { key: 'changes', label: t.changes },
-                  { key: 'staged', label: t.stagedChanges },
-                ]
-              : [{ key: 'file', label: t.fileLabel }]) as { key: Mode; label: string }[]
-          }
-          style={{ flex: 1 }}
-        />
+        {revision ? null : (
+          <Segmented<Mode>
+            value={mode}
+            onChange={setMode}
+            options={
+              (gitAvailable
+                ? [
+                    { key: 'file', label: t.fileLabel },
+                    { key: 'changes', label: t.changes },
+                    { key: 'staged', label: t.stagedChanges },
+                  ]
+                : [{ key: 'file', label: t.fileLabel }]) as { key: Mode; label: string }[]
+            }
+            style={{ flex: 1 }}
+          />
+        )}
         {markdown && state.kind === 'text' ? (
           <Pressable
             accessibilityRole="button"
@@ -405,11 +429,14 @@ export function FileViewer({
         subtitle={
           <T size={font.caption} tone="muted" numberOfLines={1}>
             {store.computers.find((host) => host.id === computerId)?.name} · {repoName}
+            {revision ? ` · ${revision.stash ? 'stash' : revision.oid.slice(0, 7)}` : ''}
           </T>
         }
         right={
           <>
-            <HeaderButton icon={FolderSearch} label={t.showInExplorer} systemIcon="folder" onPress={reveal} />
+            {revision ? null : (
+              <HeaderButton icon={FolderSearch} label={t.showInExplorer} systemIcon="folder" onPress={reveal} />
+            )}
             <HeaderButton
               icon={Copy}
               label={t.copyPath}

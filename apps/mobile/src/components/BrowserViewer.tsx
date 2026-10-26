@@ -14,11 +14,11 @@ import {
   RotateCw,
   Upload,
   X,
-  Check,
   Globe,
   Minus,
   RefreshCcwDot,
   SunMoon,
+  Trash2,
 } from 'lucide-react-native'
 import type {
   BrowserDialog,
@@ -33,7 +33,8 @@ import type { Chat } from '../runtime/types'
 import type { RemoteKey } from '../runtime/remoteKeyboard'
 import { useStore } from '../runtime/store'
 import { font, radius, space, useTheme } from '../theme'
-import { Button, Segmented, SectionLabel, Sheet, T } from './ui'
+import { Button, Card, Segmented, Sheet, T } from './ui'
+import { SheetGroup, SheetOption, SheetPanelGroup, useSheetInputStyle } from './SheetOptions'
 import {
   ControlPill,
   ControlStrip,
@@ -122,7 +123,6 @@ export function BrowserViewer({
   const downloadsVisible = useRef(downloadsOpen)
   downloadsVisible.current = downloadsOpen
   const [active, setActive] = useState(AppState.currentState === 'active')
-  const [width, setWidth] = useState(1)
   const current = useRef<BrowserTabInfo | undefined>(undefined)
   const io = useRef(store)
   io.current = store
@@ -307,13 +307,18 @@ export function BrowserViewer({
         })
   }
   const aspect = frameSize.width / frameSize.height
-  const touch = useRef({ at: 0, lastTap: 0, dx: 0, dy: 0, scrolling: false })
+  const width = area.width && area.height ? Math.min(area.width, area.height * aspect) : area.width
+  const touch = useRef({ at: 0, lastTap: 0, lastX: 0, lastY: 0, x: 0, y: 0, dx: 0, dy: 0, scrolling: false })
   const gestureState = useRef({ input, width, aspect, pageWidth: frameSize.width, enabled: false })
-  gestureState.current = { input, width, aspect, pageWidth: frameSize.width, enabled: own && !busy }
+  gestureState.current = { input, width, aspect, pageWidth: frameSize.width, enabled: own && !busy && width > 0 }
+  const gestureFrame = useRef({ width: 0, aspect: 0, pageWidth: 0 })
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => gestureState.current.enabled,
-      onPanResponderGrant: () => {
+      onPanResponderGrant: (event) => {
+        gestureFrame.current = { ...gestureState.current }
+        touch.current.x = event.nativeEvent.locationX
+        touch.current.y = event.nativeEvent.locationY
         touch.current.at = Date.now()
         touch.current.dx = 0
         touch.current.dy = 0
@@ -321,16 +326,31 @@ export function BrowserViewer({
       },
       onPanResponderMove: (_event, gesture) => {
         const current = gestureState.current
-        if (!current.enabled || (!touch.current.scrolling && Math.hypot(gesture.dx, gesture.dy) <= 8)) return
+        if (
+          !current.enabled ||
+          current.width !== gestureFrame.current.width ||
+          current.aspect !== gestureFrame.current.aspect ||
+          (!touch.current.scrolling && Math.hypot(gesture.dx, gesture.dy) <= 8)
+        )
+          return
         touch.current.scrolling = true
         current.input(frameScroll(gesture.dx - touch.current.dx, gesture.dy - touch.current.dy, current))
         touch.current.dx = gesture.dx
         touch.current.dy = gesture.dy
       },
+      onPanResponderTerminate: () => {
+        touch.current.lastTap = 0
+      },
       onPanResponderTerminationRequest: () => false,
-      onPanResponderRelease: (event, gesture) => {
+      onPanResponderRelease: (_event, gesture) => {
         const now = Date.now()
         const current = gestureState.current
+        if (
+          !current.enabled ||
+          current.width !== gestureFrame.current.width ||
+          current.aspect !== gestureFrame.current.aspect
+        )
+          return
         if (touch.current.scrolling) {
           current.input(frameScroll(gesture.dx - touch.current.dx, gesture.dy - touch.current.dy, current))
           touch.current.lastTap = 0
@@ -338,16 +358,25 @@ export function BrowserViewer({
         }
         const result = frameGesture(
           {
-            x: event.nativeEvent.locationX,
-            y: event.nativeEvent.locationY,
+            x: touch.current.x + gesture.dx,
+            y: touch.current.y + gesture.dy,
             dx: gesture.dx,
             dy: gesture.dy,
             ms: now - touch.current.at,
-            afterTapMs: touch.current.lastTap ? now - touch.current.lastTap : null,
+            afterTapMs:
+              touch.current.lastTap &&
+              Math.hypot(
+                touch.current.x + gesture.dx - touch.current.lastX,
+                touch.current.y + gesture.dy - touch.current.lastY,
+              ) <= 20
+                ? now - touch.current.lastTap
+                : null,
           },
           { width: current.width, aspect: current.aspect, pageWidth: current.pageWidth },
         )
         touch.current.lastTap = result.kind === 'click' && result.button === 'left' ? now : 0
+        touch.current.lastX = touch.current.x + gesture.dx
+        touch.current.lastY = touch.current.y + gesture.dy
         current.input(result)
       },
     }),
@@ -467,16 +496,9 @@ export function BrowserViewer({
     key,
     ...MENU_ITEMS[key],
   }))
-  const inputStyle = {
-    color: theme.text,
-    backgroundColor: theme.fill,
-    borderRadius: radius.m,
-    paddingHorizontal: space.m,
-    paddingVertical: space.s + 2,
-    fontSize: font.body,
-  }
+  const inputStyle = useSheetInputStyle()
   // The touch surface is exactly the drawn frame: gestures map touches through its width and aspect ratio.
-  const fitWidth = area.width && area.height ? Math.min(area.width, area.height * aspect) : area.width
+  const fitWidth = width
   if (viewOnly)
     return (
       <View style={{ flex: 1 }}>
@@ -637,14 +659,24 @@ export function BrowserViewer({
       >
         {frame && fitWidth > 0 ? (
           <View
-            {...pan.panHandlers}
             accessibilityRole="image"
             accessibilityLabel={t('Browser page on the execution host')}
             accessibilityHint={own ? t('Tap to click, hold to right-click, drag to scroll') : undefined}
-            onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
             style={{ width: fitWidth, aspectRatio: aspect }}
           >
-            <Image source={{ uri: frame }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
+            <Image
+              pointerEvents="none"
+              source={{ uri: frame }}
+              resizeMode="contain"
+              style={{ width: '100%', height: '100%' }}
+            />
+            {/* One native hit target: image descendants must never change touch coordinates. */}
+            <View
+              {...pan.panHandlers}
+              pointerEvents="box-only"
+              collapsable={false}
+              style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}
+            />
           </View>
         ) : (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl, gap: space.m }}>
@@ -661,64 +693,42 @@ export function BrowserViewer({
       {own ? <RemoteKeyboard handle={keyboard} label={t('Typing into the website')} onKeys={typeKeys} /> : null}
       <ViewerMenu at={menu.at} onClose={menu.close} items={menuItems} label={t('Close menu')} />
       <Sheet open={panel === 'tabs'} onClose={() => setPanel(null)} title={t('Tabs')}>
-        <View style={{ paddingHorizontal: space.m, gap: space.xs }}>
-          {tabs.map((entry) => {
-            const chosen = entry.id === tab?.id
-            return (
-              <Pressable
+        {tabs.length ? (
+          <SheetGroup>
+            {tabs.map((entry) => (
+              <SheetOption
                 key={entry.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: chosen }}
+                icon={Globe}
+                title={tabTitle(entry, t)}
+                help={`${entry.url}${entry.controller === 'agent' ? ` · ${t('Agent')}` : ''}`}
+                selected={entry.id === tab?.id}
                 onPress={() => selectTab(entry.id)}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: space.m,
-                  minHeight: 56,
-                  paddingHorizontal: space.m,
-                  borderRadius: radius.m,
-                  backgroundColor: pressed ? theme.pressed : chosen ? theme.accentWash : 'transparent',
-                })}
-              >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <T weight="600" numberOfLines={1}>
-                    {tabTitle(entry, t)}
-                  </T>
-                  <T tone="muted" size={font.caption} numberOfLines={1}>
-                    {entry.url}
-                    {entry.controller === 'agent' ? ` · ${t('Agent')}` : ''}
-                  </T>
-                </View>
-                {chosen ? <Check size={18} color={theme.accent} /> : null}
-              </Pressable>
-            )
-          })}
-          {!tabs.length ? <T tone="muted">{t('No browser tabs in this thread.')}</T> : null}
-          <Button
-            kind="secondary"
-            icon={Plus}
-            title={t('New tab')}
-            onPress={startNewTab}
-            style={{ marginTop: space.s }}
-          />
-        </View>
+              />
+            ))}
+          </SheetGroup>
+        ) : (
+          <T tone="muted" style={{ paddingHorizontal: space.l, paddingTop: space.s }}>
+            {t('No browser tabs in this thread.')}
+          </T>
+        )}
+        <SheetGroup>
+          <SheetOption icon={Plus} title={t('New tab')} onPress={startNewTab} />
+        </SheetGroup>
       </Sheet>
       <Sheet open={panel === 'display'} onClose={() => setPanel(null)} title={t('Display')}>
-        <View style={{ paddingHorizontal: space.l, gap: space.s, paddingBottom: space.m }}>
-          {hostManaged ? (
-            <>
-              <SectionLabel>{t('Layout')}</SectionLabel>
-              <Segmented
-                value={phoneLayout ? 'phone' : 'desktop'}
-                onChange={(next) => store.setDraft(LAYOUT_KEY, next === 'desktop' ? 'desktop' : '')}
-                options={[
-                  { key: 'phone', label: t('Phone') },
-                  { key: 'desktop', label: t('Desktop') },
-                ]}
-              />
-            </>
-          ) : null}
-          <SectionLabel>{t('Appearance')}</SectionLabel>
+        {hostManaged ? (
+          <SheetPanelGroup title={t('Layout')}>
+            <Segmented
+              value={phoneLayout ? 'phone' : 'desktop'}
+              onChange={(next) => store.setDraft(LAYOUT_KEY, next === 'desktop' ? 'desktop' : '')}
+              options={[
+                { key: 'phone', label: t('Phone') },
+                { key: 'desktop', label: t('Desktop') },
+              ]}
+            />
+          </SheetPanelGroup>
+        ) : null}
+        <SheetPanelGroup title={t('Appearance')}>
           <Segmented
             value={tab?.colorScheme ?? 'system'}
             onChange={(colorScheme) => adjust({ colorScheme })}
@@ -728,7 +738,8 @@ export function BrowserViewer({
               { key: 'dark', label: t('Dark') },
             ]}
           />
-          <SectionLabel>{t('Zoom')}</SectionLabel>
+        </SheetPanelGroup>
+        <SheetPanelGroup title={t('Zoom')}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
             <ControlPill
               icon={Minus}
@@ -751,20 +762,18 @@ export function BrowserViewer({
               onPress={() => adjust({ zoom: zoomStep(tab?.zoom ?? 1, 1) })}
             />
           </View>
-          <Button
-            kind="secondary"
+        </SheetPanelGroup>
+        <SheetGroup footer={t('Clears saved page files only. Sign-ins and cookies stay.')}>
+          <SheetOption
+            icon={Trash2}
             title={t('Clear cache')}
             disabled={busy}
             onPress={() => adjust({ clearCache: true })}
-            style={{ marginTop: space.s }}
           />
-          <T tone="muted" size={font.caption}>
-            {t('Clears saved page files only. Sign-ins and cookies stay.')}
-          </T>
-        </View>
+        </SheetGroup>
       </Sheet>
       <Sheet open={panel === 'text'} onClose={() => setPanel(null)} title={t('Page text')}>
-        <View style={{ paddingHorizontal: space.l, gap: space.s }}>
+        <Card style={{ marginHorizontal: space.l, padding: space.m }}>
           {pageText ? (
             <T selectable copyable={pageText}>
               {pageText}
@@ -772,7 +781,7 @@ export function BrowserViewer({
           ) : (
             <T tone="muted">{busy ? t('Reading the page…') : t('This page has no readable text.')}</T>
           )}
-        </View>
+        </Card>
       </Sheet>
       <Sheet open={panel === 'upload'} onClose={() => setPanel(null)} title={t('Upload a file')}>
         <View style={{ paddingHorizontal: space.l, gap: space.s }}>

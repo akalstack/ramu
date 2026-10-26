@@ -1,10 +1,12 @@
+import { useState } from 'react'
+import { HostAddressSheet } from '../../components/HostAddressSheet'
 import { Alert, Platform, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import Constants from 'expo-constants'
 import { Check, ChevronRight, Plus, RefreshCw } from 'lucide-react-native'
 import { font, space, useTheme, type Appearance, type TextSize } from '../../theme'
 import { useStore, type Language } from '../../runtime/store'
-import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
+import { PAGE_PARTS, sectionById, visibleGroups, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
 import { sharedValue } from '@ramu/shared/sharedFields'
 import {
@@ -30,6 +32,7 @@ import { RulesSettings } from '../../components/RulesSettings'
 import { VoiceSettings } from '../../components/VoiceSettings'
 import { ProviderCompatibility } from '../../components/ProviderCompatibility'
 import { HostingStatus } from '../../components/HostingStatus'
+import { ComputerUseSettings } from '../../components/ComputerUseSettings'
 import { ThemeLibrary } from '../../components/ThemeLibrary'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import { ScopeControl } from '../../components/ScopeControl'
@@ -257,6 +260,8 @@ function Computers() {
   const router = useRouter()
   const { c } = useTheme()
   const { computers, selected, select, retry } = useStore()
+  const t = useT()
+  const [addressOpen, setAddressOpen] = useState(false)
   const pc = computers.find((computer) => computer.id === selected)
   return (
     <>
@@ -292,10 +297,16 @@ function Computers() {
               <RefreshCw size={16} color={c.muted} />
             </Row>
             <Divider inset={space.l} />
+            <Row onPress={() => setAddressOpen(true)}>
+              <RowLabel title={t.hostChangeAddress} help={pc.address} />
+              <ChevronRight size={16} color={c.muted} />
+            </Row>
+            <Divider inset={space.l} />
             <Row onPress={() => router.push('/computers')}>
               <T style={{ flex: 1 }}>Manage computers</T>
             </Row>
           </Card>
+          {addressOpen ? <HostAddressSheet key={pc.id} computer={pc} onClose={() => setAddressOpen(false)} /> : null}
         </>
       ) : null}
     </>
@@ -349,10 +360,10 @@ function Usage({ computer }: { computer: string }) {
 /** What the desktop edits that the phone leaves to it, so a missing row is explained rather than puzzling. */
 const desktopOnly: Partial<Record<SettingsSection, string>> = {
   browser: 'Browser profiles, imports and downloads are managed in Ramu on the host.',
-  providers: 'Model sets, provider executable paths and sign-in are managed in Ramu on the host.',
-  access: 'Permission rules and the provider fallback order are edited in Ramu on the host.',
-  workflows: 'Sub-agent routing and the advisor are set up in Ramu on the host.',
-  memory: 'The memory and skills library, and its model choices, are managed in Ramu on the host.',
+  providers:
+    'Model sets, provider executable paths, sign-in, permission rules and the fallback order are managed in Ramu on the host.',
+  workflows:
+    'Sub-agent routing, the advisor, and the memory and skills library with its model choices are set up in Ramu on the host.',
   git: 'The commit message model is chosen in Ramu on the host.',
 }
 
@@ -366,6 +377,7 @@ export default function SettingsSectionPage() {
   if (!section) return null
   const id = section.id
   const note = desktopOnly[id]
+  const readySettings = host.state.status === 'ready' ? host.state.settings : []
   return (
     <Screen bg="window">
       <Header align="center" title={section.label[language]} scrollEdge scrolled={edge.scrolled} />
@@ -383,9 +395,16 @@ export default function SettingsSectionPage() {
         {id === 'providers' ? <ProviderCompatibility key={selected} hostId={selected} /> : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
         {id === 'chats' ? <BusyBehavior key={selected} computerId={selected} /> : null}
+        {id === 'computer' ? <ComputerUseSettings key={selected} hostId={selected} /> : null}
         {id === 'git' ? <HostingStatus key={selected} hostId={selected} /> : null}
         {id === 'rules' ? <RulesSettings key={selected} hostId={selected} /> : null}
-        {section.scope === 'host' ? <HostGroups section={id} host={host} name={name} /> : null}
+        {section.scope === 'host' && id !== 'computer' ? <HostGroups section={id} host={host} name={name} /> : null}
+        {section.scope === 'host' && host.state.status === 'ready'
+          ? (PAGE_PARTS[id] ?? [])
+              // A part this host has nothing for is left out rather than announced in the middle of the page.
+              .filter((part) => visibleGroups(part, readySettings, host.read).length > 0)
+              .map((part) => <HostGroups key={part} section={part} host={host} name={name} />)
+          : null}
         {note ? <Hint>{note}</Hint> : null}
       </ScrollView>
     </Screen>

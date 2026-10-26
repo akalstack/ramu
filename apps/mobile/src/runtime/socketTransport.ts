@@ -14,7 +14,9 @@ export const nativeSocketFactory: SocketFactory = (url, headers, handlers) => {
     protocols: string | string[] | null,
     options: { headers: Record<string, string> },
   ) => WebSocket
-  const ws = new WS(url, null, { headers })
+  // Native bearer-authenticated clients have no browser origin. Explicitly suppress
+  // Android's synthesized HTTP Origin; the server keeps its browser allowlist intact.
+  const ws = new WS(url, null, { headers: { ...headers, origin: '' } })
   ws.onopen = () => handlers.onopen()
   ws.onmessage = (event) => {
     if (typeof event.data === 'string') handlers.onmessage(event.data)
@@ -101,8 +103,37 @@ export function socketFor(address: string, token: string): HostSocket {
   }
 }
 
-registerSocketProvider(socketFor, (address, token) => {
-  const key = keyOf(address, token)
-  hosts.get(key)?.socket.close()
-  hosts.delete(key)
-})
+registerSocketProvider(
+  socketFor,
+  (address, token) => {
+    const key = keyOf(address, token)
+    hosts.get(key)?.socket.close()
+    hosts.delete(key)
+  },
+  async (address, token, signal) => {
+    // Discovery must not borrow and then close the conversation's pooled socket at the same address.
+    const socket = new RuntimeSocket({
+      url: address,
+      token,
+      factory: nativeSocketFactory,
+      events: false,
+      connectTimeoutMs: 3000,
+      onEvent() {},
+    })
+    const close = () => socket.close()
+    signal.addEventListener('abort', close, { once: true })
+    try {
+      if (signal.aborted) return false
+      socket.start()
+      await socket.whenReady(3000, signal)
+      const info = (await socket.invoke('background.status', [], { signal, timeoutMs: 3000 })) as {
+        protocol?: number
+        capabilities?: unknown
+      } | null
+      return info?.protocol === 1 && Array.isArray(info.capabilities) && info.capabilities.includes('mobile-companion')
+    } finally {
+      signal.removeEventListener('abort', close)
+      close()
+    }
+  },
+)

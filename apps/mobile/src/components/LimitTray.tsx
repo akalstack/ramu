@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
-import { Check, ChevronDown, Clock3 } from 'lucide-react-native'
+import { ChevronDown, Clock3 } from 'lucide-react-native'
 import { autoResumeOverride } from '@ramu/shared/chat/limitPolicy'
 import { font, radius, space, useTheme } from '../theme'
 import { fill, useT } from '../i18n'
 import { useStore } from '../runtime/store'
 import { autoResumeMenu, hostHasAutoResume, limitTrayModel, limitWaitOf } from '../runtime/limitTray'
-import { Row, Sheet, T, tap } from './ui'
+import { Sheet, T, tap } from './ui'
+import { SheetGroup, SheetOption } from './SheetOptions'
 
 const timeOf = (at: number) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
@@ -14,38 +15,24 @@ const timeOf = (at: number) => new Date(at).toLocaleTimeString([], { hour: '2-di
 export function AutoResumeRows({ chatId, onPicked }: { chatId: string; onPicked?: () => void }) {
   const store = useStore()
   const t = useT()
-  const { c } = useTheme()
   const chat = store.chats.find((entry) => entry.id === chatId)
   if (!chat) return null
   const items = autoResumeMenu(chat.settings, store.appPreferences[chat.computerId]?.fallback)
   return (
-    <>
+    <SheetGroup title={t.autoResume} footer={t.autoResumeHint}>
       {items.map((item) => (
-        <Row
+        <SheetOption
           key={item.choice}
-          accessibilityRole="menuitem"
-          accessibilityState={{ selected: item.selected, disabled: !store.isOnline(chat.computerId) }}
+          title={t.autoResumeText[item.label] ?? item.label}
+          selected={item.selected}
+          disabled={!store.isOnline(chat.computerId)}
           onPress={() => {
-            if (!store.isOnline(chat.computerId)) return
-            tap()
             if (!item.selected) store.setAutoResume(chat.id, autoResumeOverride(item.choice))
             onPicked?.()
           }}
-        >
-          <T style={{ flex: 1 }} weight={item.selected ? '600' : '400'}>
-            {t.autoResumeText[item.label] ?? item.label}
-          </T>
-          {item.selected ? <Check size={17} color={c.primary} /> : null}
-        </Row>
+        />
       ))}
-      <T
-        size={font.caption}
-        tone="muted"
-        style={{ paddingHorizontal: space.l, paddingVertical: space.s, lineHeight: 18 }}
-      >
-        {t.autoResumeHint}
-      </T>
-    </>
+    </SheetGroup>
   )
 }
 

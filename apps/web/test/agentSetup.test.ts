@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { expect, it, vi } from 'vitest'
 import type { ProjectMcpServer, ProjectSetup } from '@ramu/shared/mcp'
-import { AgentSetup } from '../src/settings/AgentSetup'
+import { AgentSetup, type SetupView } from '../src/settings/AgentSetup'
 
 vi.mock('../src/i18n', () => ({
   useLanguage: () => {},
@@ -42,7 +42,7 @@ const server = (overrides: Partial<ProjectMcpServer>): ProjectMcpServer => ({
   ...overrides,
 })
 
-function render(setup: Partial<ProjectSetup>, viewer = false) {
+function render(setup: Partial<ProjectSetup>, viewer = false, view: SetupView = 'mcp') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(['mcp-projects', ''], [{ id: 'project', name: 'Lionparcel' }])
   client.setQueryData(['mcp-settings', ''], { canAdminister: true, connections: [] })
@@ -71,7 +71,7 @@ function render(setup: Partial<ProjectSetup>, viewer = false) {
                 } as unknown as SettingsScope)
               : null,
           },
-          createElement(AgentSetup),
+          createElement(AgentSetup, { initialView: view }),
         ),
       ),
     )
@@ -110,28 +110,32 @@ it('explains why a server cannot be shared and disables its switch', () => {
 })
 
 it('lists skills with where they come from', () => {
-  const html = render({
-    skills: [
-      {
-        name: 'review-pr',
-        description: 'Reviews a pull request.',
-        providers: ['claude-code', 'opencode'],
-        nativeProviders: ['claude-code', 'opencode'],
-        shared: false,
-        shareScope: 'default',
-        scope: 'project',
-        sources: [
-          {
-            scope: 'project',
-            label: 'agent-knowledge-workflow',
-            file: '.claude/skills/review-pr/SKILL.md',
-            enabled: true,
-          },
-        ],
-        nameConflict: false,
-      },
-    ],
-  })
+  const html = render(
+    {
+      skills: [
+        {
+          name: 'review-pr',
+          description: 'Reviews a pull request.',
+          providers: ['claude-code', 'opencode'],
+          nativeProviders: ['claude-code', 'opencode'],
+          shared: false,
+          shareScope: 'default',
+          scope: 'project',
+          sources: [
+            {
+              scope: 'project',
+              label: 'agent-knowledge-workflow',
+              file: '.claude/skills/review-pr/SKILL.md',
+              enabled: true,
+            },
+          ],
+          nameConflict: false,
+        },
+      ],
+    },
+    false,
+    'skills',
+  )
   expect(html).toContain('review-pr')
   expect(html).toContain('Share review-pr with every provider and account')
   expect(html).toContain('From agent-knowledge-workflow/.claude/skills/review-pr/SKILL.md')
@@ -168,6 +172,17 @@ it('lists provider-managed servers apart from declared ones, with a connectors l
   expect(html.match(/Manage connectors/g)).toHaveLength(1)
   expect(html).toMatch(/<a\b[^>]*href="[^"]+"[^>]*>Manage connectors<\/a>/)
   expect(render({})).not.toContain('Managed by the provider')
+})
+
+it('shows one concern at a time, with a count on the tabs that have items', () => {
+  const html = render({ mcp: [server({})] })
+  expect(html).toContain('MCP servers')
+  expect(html).toContain('Skills')
+  expect(html).toContain('Rules')
+  expect(html).toContain('atlassian')
+  expect(html).not.toContain('Search skills')
+  expect(render({}, false, 'skills')).toContain('No skills found yet.')
+  expect(render({}, false, 'skills')).not.toContain('No MCP servers found yet.')
 })
 
 it('keeps setup readable but disables sharing when a cached admin snapshot belongs to a viewer', () => {

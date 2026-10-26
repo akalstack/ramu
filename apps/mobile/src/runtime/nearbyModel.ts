@@ -1,7 +1,7 @@
 // Pure rules for nearby-host discovery on the phone: how a native sighting becomes a listed host, which pairing method
 // is showing, and when the camera or the network browse may run. No React Native imports, so Node tests cover it.
-import { parseAdvert } from '@ramu/shared/discovery/contract'
-import type { Sighting } from '@ramu/shared/discovery/tracker'
+import { parseAdvert, MAX_DISCOVERY_HOSTS } from '@ramu/shared/discovery/contract'
+import type { Sighting, NearbyHost } from '@ramu/shared/discovery/tracker'
 
 /** The order the pairing screen offers its methods in: discovery first, QR second, typing last. */
 export const PAIR_METHODS = ['nearby', 'qr', 'manual'] as const
@@ -55,4 +55,46 @@ export function pairingFill(
   url: string,
 ): { address: string; name: string } | null {
   return host.routes.some((route) => route.url === url) ? { address: url, name: host.name } : null
+}
+
+/** A proven direct route takes priority, while native rows retain stable selection keys. */
+export function mergeReachableHosts(
+  advertised: readonly NearbyHost[],
+  reachable: readonly NearbyHost[],
+  previous: readonly NearbyHost[] = [],
+): NearbyHost[] {
+  const rows = advertised.map((host) => ({ ...host, routes: [...host.routes] }))
+  for (const host of reachable) {
+    const index = rows.findIndex(
+      (row) =>
+        row.scheme === host.scheme &&
+        ((host.hostId && row.hostId === host.hostId) ||
+          row.routes.some((route) => host.routes.some((other) => other.url === route.url))),
+    )
+    if (index < 0) {
+      rows.push({ ...host, routes: [...host.routes] })
+      continue
+    }
+    const previous = rows[index]!
+    const preferred = host.pairedHostId ? host : previous
+    rows[index] = {
+      ...preferred,
+      key: previous.key,
+      routes: [
+        ...preferred.routes,
+        ...(host.pairedHostId ? previous.routes : host.routes).filter(
+          (route) => !preferred.routes.some((known) => known.url === route.url),
+        ),
+      ],
+    }
+  }
+  return rows.slice(0, MAX_DISCOVERY_HOSTS).map((host) => {
+    const held = previous.find(
+      (row) =>
+        row.scheme === host.scheme &&
+        ((host.hostId && row.hostId === host.hostId) ||
+          row.routes.some((route) => host.routes.some((other) => other.url === route.url))),
+    )
+    return held ? { ...host, key: held.key } : host
+  })
 }

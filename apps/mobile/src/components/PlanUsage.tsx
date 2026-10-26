@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Pressable, View, useWindowDimensions } from 'react-native'
-import { Gauge } from 'lucide-react-native'
+import { Gauge, Monitor, Network, Settings } from 'lucide-react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { useRouter } from 'expo-router'
 import { isMethodMissing } from '../runtime/goalVerify'
@@ -20,6 +20,7 @@ import { useStore } from '../runtime/store'
 import { providerNames } from '../runtime/types'
 import { font, space, useTheme } from '../theme'
 import { Card, Divider, Row, SectionLabel, Sheet, T, Toggle } from './ui'
+import { SheetGroup, SheetOption } from './SheetOptions'
 
 export function PlanUsageReading({
   reading: r,
@@ -263,19 +264,23 @@ export function PlanUsageSheet({
         </Row>
       ) : null}
       {hosts.length > 1 ? (
-        <>
-          <Row onPress={() => setFilter(null)}>
-            <T>{store.language === 'id' ? 'Semua host' : 'All hosts'}</T>
-          </Row>
+        <SheetGroup>
+          <SheetOption
+            icon={Network}
+            title={store.language === 'id' ? 'Semua host' : 'All hosts'}
+            selected={!filter}
+            onPress={() => setFilter(null)}
+          />
           {hosts.map((id) => (
-            <Row key={id} onPress={() => setFilter(id)}>
-              <T>
-                {store.computers.find((h) => h.id === id)?.name ?? id}
-                {filter === id ? ' ✓' : ''}
-              </T>
-            </Row>
+            <SheetOption
+              key={id}
+              icon={Monitor}
+              title={store.computers.find((h) => h.id === id)?.name ?? id}
+              selected={filter === id}
+              onPress={() => setFilter(id)}
+            />
           ))}
-        </>
+        </SheetGroup>
       ) : null}
       {hosts
         .filter((id) => !filter || id === filter)
@@ -360,16 +365,18 @@ export function PlanUsageSheet({
             </View>
           )
         })}
-      <Row
-        onPress={() => {
-          const target = filter ?? (hosts.length === 1 ? hosts[0] : undefined)
-          if (target) store.select(target)
-          onClose()
-          router.push('/settings/access')
-        }}
-      >
-        <T>{store.language === 'id' ? 'Pengaturan akses & fallback' : 'Access & Fallback settings'}</T>
-      </Row>
+      <SheetGroup>
+        <SheetOption
+          icon={Settings}
+          title={store.language === 'id' ? 'Pengaturan model & akses' : 'Models & access settings'}
+          onPress={() => {
+            const target = filter ?? (hosts.length === 1 ? hosts[0] : undefined)
+            if (target) store.select(target)
+            onClose()
+            router.push('/settings/providers')
+          }}
+        />
+      </SheetGroup>
     </Sheet>
   )
 }

@@ -13,7 +13,7 @@ import { useComputers } from '../workspace/computers'
 import { t, useLanguage } from '../i18n'
 import { KeepAwakeSettings } from './KeepAwakeSettings'
 import type { DraftProps } from './ToggleRow'
-import { appControlHelp, runtimeHelp } from './computerStatus'
+import { appControlHelp, runtimeHelp } from '@ramu/shared/computerStatus'
 import { errorText } from '../lib/errors'
 
 type Status = ReturnType<RamuMethods['computer.status']>

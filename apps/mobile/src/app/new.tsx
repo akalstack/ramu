@@ -33,6 +33,8 @@ import {
   MessageCircle,
   Monitor,
   Pencil,
+  RotateCcw,
+  Search,
   Sparkles,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
@@ -44,6 +46,7 @@ import { useKeyboardInset } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
 import { Button, Row, Sheet, T, tap } from '../components/ui'
+import { SheetGroup, SheetOption } from '../components/SheetOptions'
 import { BranchNameControls } from '../components/BranchNameControls'
 import { WorkspaceNameSheet } from '../components/WorkspaceNameSheet'
 
@@ -708,130 +711,131 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       </View>
 
       <Sheet open={picker === 'host'} onClose={() => setPicker(null)} title={t.computers}>
-        {computers.map((computer) => (
-          <Row
-            key={computer.id}
-            onPress={() => {
-              if (computer.status === 'revoked') return
-              if (computer.id !== selected) {
-                const choice = readRoutingSelection(
-                  store.drafts,
-                  computer.id,
-                  projects.filter((project) => project.computerId === computer.id).map((project) => project.id),
-                  store.appPreferences[computer.id]?.autoProjectSelection !== false,
-                )
-                setHost(computer.id)
-                setProjectId(choice.projectId)
-                setAuto(choice.auto)
-              }
-              setPicker('project')
-            }}
-          >
-            <Monitor size={17} color={c.soft} />
-            <View style={{ flex: 1 }}>
-              <T weight="500">{computer.name}</T>
-              <T size={font.caption} tone="muted">
-                {t[computer.status]}
-              </T>
-            </View>
-            {computer.id === selected ? <Check size={16} color={c.accent} /> : null}
-          </Row>
-        ))}
+        <SheetGroup>
+          {computers.map((computer) => (
+            <SheetOption
+              key={computer.id}
+              icon={Monitor}
+              title={computer.name}
+              help={t[computer.status]}
+              selected={computer.id === selected}
+              disabled={computer.status === 'revoked'}
+              onPress={() => {
+                if (computer.id !== selected) {
+                  const choice = readRoutingSelection(
+                    store.drafts,
+                    computer.id,
+                    projects.filter((project) => project.computerId === computer.id).map((project) => project.id),
+                    store.appPreferences[computer.id]?.autoProjectSelection !== false,
+                  )
+                  setHost(computer.id)
+                  setProjectId(choice.projectId)
+                  setAuto(choice.auto)
+                }
+                setPicker('project')
+              }}
+            />
+          ))}
+        </SheetGroup>
       </Sheet>
       <Sheet open={picker === 'choice'} onClose={() => setPicker(null)} title={say('Choose a project')}>
-        <Button kind="ghost" title={say('Choose another project')} onPress={() => setPicker('project')} />
-        <T tone="muted">
-          {choices?.some((choice) => choice.reason)
-            ? 'More than one project could fit. Choose where to start.'
-            : 'No project matched. Choose where to start.'}
-        </T>
-        {choices?.map((choice) => {
-          const match = list.find((p) => rawId(p.id) === choice.projectId)
-          if (!match) return null
-          const label = choiceLabels.get(choice.projectId)
-          return (
-            <Row
-              key={choice.projectId}
-              onPress={() => {
-                const request = pending.current
-                setPicker(null)
-                if (request)
-                  void startInAuto(
-                    request.text,
-                    request.attachments as Send[2],
-                    request.context as Send[3],
-                    choice.projectId,
-                  ).catch(() => setPicker('choice'))
-              }}
-            >
-              <Folder size={17} color={c.soft} />
-              <View style={{ flex: 1 }}>
-                <T weight="500">{label?.label ?? match.name}</T>
-                {choice.reason || !label?.showsRoot ? (
-                  <T size={font.caption} tone="muted">
-                    {choice.reason || match.root}
-                  </T>
-                ) : null}
-              </View>
-            </Row>
-          )
-        })}
+        <SheetGroup
+          footer={say(
+            choices?.some((choice) => choice.reason)
+              ? 'More than one project could fit. Choose where to start.'
+              : 'No project matched. Choose where to start.',
+          )}
+        >
+          {choices?.map((choice) => {
+            const match = list.find((p) => rawId(p.id) === choice.projectId)
+            if (!match) return null
+            const label = choiceLabels.get(choice.projectId)
+            return (
+              <SheetOption
+                key={choice.projectId}
+                icon={Folder}
+                title={label?.label ?? match.name}
+                help={choice.reason || (!label?.showsRoot ? match.root : undefined) || undefined}
+                onPress={() => {
+                  const request = pending.current
+                  setPicker(null)
+                  if (request)
+                    void startInAuto(
+                      request.text,
+                      request.attachments as Send[2],
+                      request.context as Send[3],
+                      choice.projectId,
+                    ).catch(() => setPicker('choice'))
+                }}
+              />
+            )
+          })}
+        </SheetGroup>
+        <SheetGroup>
+          <SheetOption icon={Search} title={say('Choose another project')} onPress={() => setPicker('project')} />
+        </SheetGroup>
       </Sheet>
 
       <Sheet open={picker === 'mode'} onClose={() => setPicker(null)} title={say('Workspace')}>
         {workspaceOptions?.configSource ? <T tone="muted">{workspaceOptions.configSource}</T> : null}
         {workspaceOptions?.configError ? <T tone="bad">{workspaceOptions.configError}</T> : null}
-        <Row
-          onPress={() => {
-            chooseWorkspace({ mode: null, branch: choice.branch })
-            setPicker(null)
-          }}
-        >
-          <T>
-            Use default:{' '}
-            {(workspaceOptions?.defaultCheckoutMode ?? store.appPreferences[selected]?.defaultCheckoutMode) ===
-            'worktree'
-              ? 'New worktree'
-              : 'Current checkout'}
+        {resolution.reason ? (
+          <T
+            tone={resolution.blocked ? 'bad' : 'muted'}
+            style={{ paddingHorizontal: space.l + 4, paddingBottom: space.s }}
+          >
+            {resolution.reason}
           </T>
-        </Row>
-        {resolution.reason ? <T tone={resolution.blocked ? 'bad' : 'muted'}>{resolution.reason}</T> : null}
-        {(
-          [
-            ['current', 'Current checkout', 'Work directly in the folders on disk.'],
-            ['worktree', 'Isolated worktrees', 'A new branch and worktree per repository.'],
-          ] as const
-        ).map(([value, label, hint]) => {
-          // A mode that cannot be used says why in place instead of silently doing nothing.
-          const why =
-            value !== 'worktree'
-              ? null
-              : projectId === STANDALONE
-                ? t.worktreeNeedsProject
-                : offline && !workspaceOptions
-                  ? t.worktreeCheckOffline
-                  : (workspaceOptions?.worktreeUnavailable ?? null)
-          return (
-            <Row
-              key={value}
-              disabled={Boolean(why) && manualMode !== value}
-              accessibilityState={{ disabled: Boolean(why) && manualMode !== value }}
-              style={{ opacity: why && manualMode !== value ? 0.6 : 1 }}
-              onPress={() => {
-                chooseWorkspace({ mode: value, branch: choice.branch })
-                setPicker(null)
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <T weight="500">{label}</T>
-                <T size={font.caption} tone={why ? 'bad' : 'muted'}>
-                  {why ?? hint}
-                </T>
-              </View>
-              {!workspaceId && manualMode === value ? <Check size={16} color={c.accent} /> : null}
-            </Row>
-          )
-        })}
+        ) : null}
+        <SheetGroup>
+          {(
+            [
+              ['current', 'Current checkout', 'Work directly in the folders on disk.', Folder],
+              ['worktree', 'Isolated worktrees', 'A new branch and worktree per repository.', GitBranch],
+            ] as const
+          ).map(([value, label, hint, icon]) => {
+            // A mode that cannot be used says why in place instead of silently doing nothing.
+            const why =
+              value !== 'worktree'
+                ? null
+                : projectId === STANDALONE
+                  ? t.worktreeNeedsProject
+                  : offline && !workspaceOptions
+                    ? t.worktreeCheckOffline
+                    : (workspaceOptions?.worktreeUnavailable ?? null)
+            return (
+              <SheetOption
+                key={value}
+                icon={icon}
+                title={say(label)}
+                help={why ?? say(hint)}
+                disabled={Boolean(why) && manualMode !== value}
+                selected={!workspaceId && manualMode === value}
+                onPress={() => {
+                  chooseWorkspace({ mode: value, branch: choice.branch })
+                  setPicker(null)
+                }}
+              />
+            )
+          })}
+        </SheetGroup>
+        <SheetGroup>
+          <SheetOption
+            icon={RotateCcw}
+            title={say('Use default')}
+            help={
+              (workspaceOptions?.defaultCheckoutMode ?? store.appPreferences[selected]?.defaultCheckoutMode) ===
+              'worktree'
+                ? say('New worktree')
+                : say('Current checkout')
+            }
+            selected={!workspaceId && manualMode === null}
+            onPress={() => {
+              chooseWorkspace({ mode: null, branch: choice.branch })
+              setPicker(null)
+            }}
+          />
+        </SheetGroup>
         {optionsError ? (
           <T tone="muted">{optionsState.unsupported ? t.workspaceSettingsUnsupported : t.workspaceSettingsFailed}</T>
         ) : null}

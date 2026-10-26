@@ -5,7 +5,6 @@ import { useMemo, useState } from 'react'
 import { Platform, Pressable, ScrollView as HScroll, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
-  Check,
   Folder,
   FolderGit2,
   Network,
@@ -28,6 +27,7 @@ import { ChatRow } from '../../../components/ChatRow'
 import { ProjectActionsSheet } from '../../../components/ChatActions'
 import { Disclosure, animateLayout } from '../../../components/Motion'
 import { Chip, IconButton, Row, SectionLabel, Sheet, T, tap } from '../../../components/ui'
+import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { confirmCancel } from '../../../components/Outbox'
 import { TopFade } from '../../../components/Glass'
 import { useTabActions } from '../../../components/Overlays'
@@ -509,43 +509,34 @@ export default function Threads() {
       {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}
       {projectMenu ? <ProjectActionsSheet project={projectMenu} open onClose={() => setProjectMenu(null)} /> : null}
       <Sheet open={hostSheet} onClose={() => setHostSheet(false)} title={t.homeHost}>
-        {[
-          { id: null as string | null, name: t.allHosts },
-          ...computers.map((x) => ({ id: x.id as string | null, name: x.name })),
-        ].map((o) => (
-          <Row
-            key={o.id ?? 'all'}
+        <SheetGroup>
+          {[
+            { id: null as string | null, name: t.allHosts },
+            ...computers.map((x) => ({ id: x.id as string | null, name: x.name })),
+          ].map((o) => (
+            <SheetOption
+              key={o.id ?? 'all'}
+              icon={Network}
+              title={o.name}
+              selected={o.id === null ? merged : !merged && o.id === selected}
+              onPress={() => {
+                if (o.id) select(o.id)
+                setAllHosts(o.id === null)
+                setHostSheet(false)
+              }}
+            />
+          ))}
+        </SheetGroup>
+        <SheetGroup>
+          <SheetOption
+            icon={SquarePen}
+            title={t.pair}
             onPress={() => {
-              tap()
-              if (o.id) select(o.id)
-              setAllHosts(o.id === null)
               setHostSheet(false)
+              router.push('/pair')
             }}
-          >
-            <Network size={17} color={c.soft} />
-            <T
-              style={{ flex: 1 }}
-              weight={(o.id === null ? merged : !merged && o.id === selected) ? '600' : '400'}
-              numberOfLines={1}
-            >
-              {o.name}
-            </T>
-            {(o.id === null ? merged : !merged && o.id === selected) ? (
-              <Check size={16} color={c.accent} />
-            ) : (
-              <View style={{ width: 16 }} />
-            )}
-          </Row>
-        ))}
-        <Row
-          onPress={() => {
-            setHostSheet(false)
-            router.push('/pair')
-          }}
-        >
-          <SquarePen size={17} color={c.soft} />
-          <T style={{ flex: 1 }}>{t.pair}</T>
-        </Row>
+          />
+        </SheetGroup>
       </Sheet>
       <PlanUsageSheet
         hosts={merged ? computers.map((host) => host.id) : [selected]}

@@ -5,7 +5,8 @@ import type { RecapItem } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import { useT } from '../i18n'
 import { SNOOZE_MENU, snoozeEnds } from '../runtime/recapActions'
-import { Chip, Row, SectionLabel, Sheet, T, tap } from './ui'
+import { Chip, SectionLabel, Sheet, T, tap } from './ui'
+import { SheetGroup, SheetOption } from './SheetOptions'
 import { SwipeRow, type SwipeAction } from './SwipeRow'
 
 /** A row of filter chips with counts, as at the top of Home and Inbox. */
@@ -220,18 +221,19 @@ export function RecapCard({
         </View>
       </SwipeRow>
       <Sheet open={menu} onClose={() => setMenu(false)} title={t.snooze}>
-        {SNOOZE_MENU.map(({ choice, label }) => (
-          <Row
-            key={choice}
-            accessibilityRole="menuitem"
-            onPress={() => {
-              setMenu(false)
-              act('snoozed', snoozeEnds(choice))
-            }}
-          >
-            <T style={{ flex: 1 }}>{t[label]}</T>
-          </Row>
-        ))}
+        <SheetGroup>
+          {SNOOZE_MENU.map(({ choice, label }) => (
+            <SheetOption
+              key={choice}
+              icon={Clock}
+              title={t[label]}
+              onPress={() => {
+                setMenu(false)
+                act('snoozed', snoozeEnds(choice))
+              }}
+            />
+          ))}
+        </SheetGroup>
       </Sheet>
     </View>
   )

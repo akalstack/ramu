@@ -64,6 +64,8 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
   const open = new Set<WebSocket>()
 
   server.on('upgrade', (req, socket, head) => {
+    // A reachability probe may cancel while authentication is still pending, before ws owns the connection.
+    socket.on('error', () => socket.destroy())
     const path = (req.url ?? '/').split('?')[0]
     if (path !== SOCKET_PATH) {
       socket.destroy()
@@ -71,6 +73,7 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     }
     // A response bound to the upgrade's socket lets the ordinary authentication answer 401/429 itself.
     const res = new ServerResponse(req)
+    res.on('error', () => socket.destroy())
     res.assignSocket(socket as Socket)
     // A refusal ends the connection once it is written; an upgrade request has no further use for the socket.
     res.once('finish', () => socket.end())

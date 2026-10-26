@@ -1,3 +1,4 @@
+import { runsBy } from '../src/runtime/groupRuns.ts'
 import * as toolActivity from '../../../packages/shared/src/chat/toolActivity.ts'
 import * as recentThreads from '../src/runtime/recentThreads.ts'
 import * as sendJournal from '../src/runtime/sendJournal.ts'
@@ -1359,6 +1360,7 @@ for (const os of ['ios', 'android']) {
       },
     }
     const { PlanUsageSheet, PlanUsageReading } = load('components/PlanUsage.tsx', os, {
+      './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
       react: hooks.react,
       '@ramu/shared/usage/presentation': presentation,
       '@ramu/shared/providers/providers': providers,
@@ -1450,6 +1452,7 @@ test('usage refresh explains old hosts, preserves data and opens the selected ho
     },
   }
   const { PlanUsageSheet, PlanUsageReading } = load('components/PlanUsage.tsx', 'android', {
+    './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
     react: hooks.react,
     'expo-router': { useRouter: () => ({ push: (path) => destinations.push(path) }) },
     '@ramu/shared/usage/presentation': presentation,
@@ -1486,10 +1489,12 @@ test('usage refresh explains old hosts, preserves data and opens the selected ho
       (node) => typeof node.props?.children === 'string' && node.props.children.includes('Refresh unavailable'),
     ),
   )
-  action(tree, 'Access & Fallback settings').props.onPress()
+  nodes(tree)
+    .find((node) => node.type === 'SheetOption' && node.props.title === 'Models & access settings')
+    .props.onPress()
   assert.equal(selected, 'a')
   assert.equal(closed, 1)
-  assert.deepEqual(destinations, ['/settings/access'])
+  assert.deepEqual(destinations, ['/settings/providers'])
   assert.deepEqual(calls, [
     ['a', 'usage.accounts'],
     ['a', 'usage.refresh'],
@@ -1616,6 +1621,7 @@ for (const os of ['ios', 'android']) {
       {
         react: hooks.react,
         './ui': new Proxy({}, { get: (_, key) => (key === 'tap' ? () => {} : String(key)) }),
+        './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
         '@ramu/shared/chat/composerDraft': {
           composerDraft: (text) => ({ chips: [], segments: [{ kind: 'text', source: text }] }),
         },
@@ -1645,8 +1651,7 @@ for (const os of ['ios', 'android']) {
       },
     }
     const render = () => hooks.render(() => Composer(props))
-    const action = (tree, text) =>
-      nodes(tree).find((node) => node.type === 'Row' && nodes(node).some((child) => child.props?.children === text))
+    const action = (tree, text) => nodes(tree).find((node) => node.type === 'SheetOption' && node.props.title === text)
     render()
     assert.equal(action(render(), 'Add a host file'), undefined)
     assert.equal(action(render(), 'Enter a command'), undefined)
@@ -1753,6 +1758,8 @@ for (const os of ['ios', 'android']) {
       react: hooks.react,
       '../runtime/store': { useStore: () => store },
       '../i18n': { useT: () => labels },
+      './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
+      '../runtime/groupRuns': { runsBy },
     })
     let chat = {
       id: 'remote:task',
@@ -1767,13 +1774,13 @@ for (const os of ['ios', 'android']) {
     }
     const render = () => hooks.render(() => ChatActionsSheet({ chat, open: true, onClose() {} }))
     const action = (tree, label) =>
-      nodes(tree).find((node) => node.type === 'Row' && nodes(node).some((child) => child.props?.children === label))
+      nodes(tree).find((node) => node.type === 'SheetOption' && node.props.title === label)
     let row = action(render(), labels.namingThread)
     assert.equal(row.props.onPress, undefined)
-    assert.equal(row.props.accessibilityState.busy, true)
+    assert.equal(row.props.disabled, true)
     chat = { ...chat, titleGenerationState: 'failed' }
     row = action(render(), labels.retryTitleGeneration)
-    assert.equal(row.props.accessibilityState.disabled, false)
+    assert.equal(row.props.disabled, false)
     row.props.onPress()
     row.props.onPress()
     assert.equal(calls.length, 1)
@@ -1786,7 +1793,7 @@ for (const os of ['ios', 'android']) {
     online = false
     row = action(render(), labels.retryTitleGeneration)
     assert.equal(row.props.onPress, undefined)
-    assert.equal(row.props.accessibilityState.disabled, true)
+    assert.equal(row.props.disabled, true)
     assert.equal(find(render(), 'Sheet').props.title, 'My chosen title')
     hooks.dispose()
   })
@@ -3529,6 +3536,7 @@ test('usage refresh recovers after transient failure and reconnect without losin
     },
   }
   const { PlanUsageSheet, PlanUsageReading } = load('components/PlanUsage.tsx', 'android', {
+    './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
     react: hooks.react,
     'expo-router': { useRouter: () => ({ push() {} }) },
     '@ramu/shared/usage/presentation': presentation,
@@ -3760,6 +3768,8 @@ for (const os of ['ios', 'android']) {
       '../runtime/store': { useStore: () => store },
       '../i18n': { useT: () => actionSettingsCopy },
       './ProjectCommandSettings': { ProjectCommandSettings: 'ProjectCommandSettings' },
+      './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
+      '../runtime/groupRuns': { runsBy },
     })
     const render = () =>
       hooks.render(() =>
@@ -3772,7 +3782,7 @@ for (const os of ['ios', 'android']) {
         }),
       )
     nodes(render())
-      .find((node) => node.type === 'Row' && nodes(node).some((child) => child.props?.children === 'Manage actions'))
+      .find((node) => node.type === 'SheetOption' && node.props.title === 'Manage actions')
       .props.onPress()
     const manager = find(render(), 'ProjectCommandSettings')
     assert.equal(manager.props.hostId, 'remote')
@@ -4770,6 +4780,7 @@ test('the thread usage chip follows the host-reported next route and keeps the s
       },
     }
     const { ThreadUsageChip, PlanUsageSheet } = load('components/PlanUsage.tsx', 'android', {
+      './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
       react: hooks.react,
       'expo-router': { useRouter: () => ({ push() {} }) },
       '@ramu/shared/usage/presentation': presentation,
@@ -5519,6 +5530,8 @@ for (const os of ['ios', 'android']) {
       react: hooks.react,
       '../runtime/store': { useStore: () => store },
       '../i18n': { useT: () => ({ renameWithAI: 'Rename with AI' }) },
+      './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
+      '../runtime/groupRuns': { runsBy },
       '@ramu/shared/chat/taskRemoval': taskRemoval,
       'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
     })
@@ -5531,8 +5544,7 @@ for (const os of ['ios', 'android']) {
       mode: 'current',
     }
     const render = () => hooks.render(() => ChatActionsSheet({ chat, open: true, onClose() {} }))
-    const row = (tree, label) =>
-      nodes(tree).find((node) => node.type === 'Row' && nodes(node).some((child) => child.props.children === label))
+    const row = (tree, label) => nodes(tree).find((node) => node.type === 'SheetOption' && node.props.title === label)
     let tree = render()
     const pin = row(tree, 'Pin to top'),
       rename = row(tree, 'Rename'),
@@ -5762,6 +5774,8 @@ for (const os of ['ios', 'android']) {
         react: hooks.react,
         '../runtime/store': { useStore: () => store },
         '../i18n': { useT: () => actionSettingsCopy },
+        './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
+        '../runtime/groupRuns': { runsBy },
         'expo-router': { useRouter: () => ({ push: (route) => routes.push(route) }) },
         'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
       },
@@ -5775,8 +5789,7 @@ for (const os of ['ios', 'android']) {
           onClose() {},
         }),
       )
-    const row = (tree, label) =>
-      nodes(tree).find((node) => node.type === 'Row' && nodes(node).some((child) => child.props.children === label))
+    const row = (tree, label) => nodes(tree).find((node) => node.type === 'SheetOption' && node.props.title === label)
     let tree = render()
     const rename = row(tree, 'Rename'),
       manage = row(tree, 'Manage actions')
@@ -5940,6 +5953,12 @@ for (const os of ['ios', 'android']) {
       {
         react: hooks.react,
         '../runtime/store': { useStore: () => store },
+        './SheetOptions': {
+          SheetGroup: 'SheetGroup',
+          SheetOption: 'SheetOption',
+          SheetPanelGroup: 'SheetPanelGroup',
+          useSheetInputStyle: () => ({}),
+        },
         'react-native': {
           AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
           PanResponder: { create: () => ({ panHandlers: {} }) },
@@ -6410,6 +6429,12 @@ for (const os of ['ios', 'android']) {
       {
         react: hooks.react,
         '../runtime/store': { useStore: () => store },
+        './SheetOptions': {
+          SheetGroup: 'SheetGroup',
+          SheetOption: 'SheetOption',
+          SheetPanelGroup: 'SheetPanelGroup',
+          useSheetInputStyle: () => ({}),
+        },
         'react-native': {
           AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
           PanResponder: {
@@ -6433,9 +6458,6 @@ for (const os of ['ios', 'android']) {
     for (const node of nodes(tree).filter((node) => node.props.onLayout))
       node.props.onLayout({ nativeEvent: { layout: { width: 200, height: 400 } } })
     tree = render()
-    nodes(tree)
-      .find((node) => node.props.accessibilityLabel === 'Browser page on the execution host')
-      .props.onLayout({ nativeEvent: { layout: { width: 200 } } })
     assert.equal(find(tree, 'ControlStrip').props.action.title, 'Take control')
     find(tree, 'ControlStrip').props.action.onPress()
     await settle()
@@ -6443,7 +6465,7 @@ for (const os of ['ios', 'android']) {
     await settle()
     render()
     assert.equal(pan.onStartShouldSetPanResponder(), true)
-    pan.onPanResponderGrant()
+    pan.onPanResponderGrant({ nativeEvent: { locationX: 40, locationY: 40 } })
     pan.onPanResponderMove({}, { dx: 0, dy: -20 })
     assert.equal(calls.filter((call) => call[1] === 'hostBrowser.input').length, 1, 'scroll is sent before release')
     pan.onPanResponderMove({}, { dx: 0, dy: -35 })
@@ -6461,6 +6483,45 @@ for (const os of ['ios', 'android']) {
     )
     finish()
     await settle()
+    // Release events can report coordinates from a nested native target. Only the original
+    // surface-local touch plus its displacement may determine the browser click.
+    tree = render()
+    const image = nodes(tree).find((node) => node.props?.source?.uri?.includes('frame'))
+    assert.equal(image.props.pointerEvents, 'none')
+    assert.ok(nodes(tree).some((node) => node.props.pointerEvents === 'box-only' && node.props.collapsable === false))
+    pan.onPanResponderGrant({ nativeEvent: { locationX: 50, locationY: 60 } })
+    pan.onPanResponderRelease({ nativeEvent: { locationX: 999, locationY: 999 } }, { dx: 0, dy: 0 })
+    const click = calls
+      .filter((call) => call[1] === 'hostBrowser.input')
+      .at(-1)
+      .at(-1)
+    assert.equal(click.kind, 'click')
+    assert.equal(click.x, 0.25)
+    assert.equal(click.y, 0.4)
+    finish()
+    await settle()
+    pan.onPanResponderGrant({ nativeEvent: { locationX: 150, locationY: 60 } })
+    pan.onPanResponderRelease({ nativeEvent: { locationX: 0, locationY: 0 } }, { dx: 0, dy: 0 })
+    const nextClick = calls
+      .filter((call) => call[1] === 'hostBrowser.input')
+      .at(-1)
+      .at(-1)
+    assert.equal(nextClick.x, 0.75)
+    assert.equal(nextClick.clickCount, 1, 'rapid taps on different targets are separate clicks')
+    finish()
+    await settle()
+    const count = calls.filter((call) => call[1] === 'hostBrowser.input').length
+    pan.onPanResponderGrant({ nativeEvent: { locationX: 50, locationY: 60 } })
+    nodes(tree)
+      .find((node) => node.props.onLayout)
+      .props.onLayout({ nativeEvent: { layout: { width: 300, height: 400 } } })
+    render()
+    pan.onPanResponderRelease({ nativeEvent: { locationX: 50, locationY: 60 } }, { dx: 0, dy: 0 })
+    assert.equal(
+      calls.filter((call) => call[1] === 'hostBrowser.input').length,
+      count,
+      'rotation cancels an old-frame tap',
+    )
   })
 }
 
@@ -7832,3 +7893,38 @@ test('side-question input uses the thread dock and lifts the transcript inset wi
   assert.equal(find(tree, 'TextInput').props.value, 'draft stays here')
   hooks.dispose()
 })
+
+for (const os of ['ios', 'android']) {
+  test(`${os} browser preview occupies composer layout and offers separate open and hide targets`, () => {
+    let opened = 0,
+      hidden = 0
+    const { FloatPreview } = load('components/BrowserNotice.tsx', os, { './ui': { ...components, tap() {} } })
+    const tree = FloatPreview({
+      image: { uri: 'data:image/jpeg;base64,preview', aspect: 0.5 },
+      fallback: 'Globe',
+      title: 'Example page',
+      agent: true,
+      openLabel: 'Open browser',
+      hideLabel: 'Hide preview',
+      onOpen() {
+        opened++
+      },
+      onHide() {
+        hidden++
+      },
+    })
+    assert.equal(tree.props.style.position, undefined, 'preview reserves height instead of covering messages')
+    assert.equal(tree.props.style.top, undefined)
+    const image = nodes(tree).find((node) => node.props?.source?.uri?.includes('preview'))
+    assert.equal(image.props.resizeMode, 'contain', 'thumbnail preserves the entire page')
+    const close = nodes(tree).find((node) => node.props.accessibilityLabel === 'Hide preview')
+    assert.ok(close.props.style.width >= 44 && close.props.style.height >= 44)
+    close.props.onPress()
+    assert.equal(hidden, 1)
+    assert.equal(opened, 0)
+    nodes(tree)
+      .find((node) => node.props.accessibilityLabel === 'Open browser')
+      .props.onPress()
+    assert.equal(opened, 1)
+  })
+}

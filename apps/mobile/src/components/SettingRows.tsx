@@ -5,7 +5,7 @@ import { translate } from '@ramu/shared/i18n'
 import { ModelFlowRow } from './ModelFlowRow'
 import { useStore } from '../runtime/store'
 import { ActivityIndicator, TextInput, View } from 'react-native'
-import { Check, ChevronsUpDown } from 'lucide-react-native'
+import { ChevronsUpDown } from 'lucide-react-native'
 import type { LimitChoice } from '@ramu/shared/chat/limitPolicy'
 import { font, radius, space, useTheme } from '../theme'
 import {
@@ -18,7 +18,8 @@ import {
   type Option,
 } from '../runtime/settingsModel'
 import type { useHostSettings } from '../runtime/useHostSettings'
-import { Button, Card, Divider, Row, SectionLabel, Sheet, T, Toggle, tap } from './ui'
+import { Button, Card, Divider, Row, SectionLabel, Sheet, T, Toggle } from './ui'
+import { SheetGroup, SheetOption } from './SheetOptions'
 import { useSay } from '../i18n'
 
 type Host = ReturnType<typeof useHostSettings>
@@ -84,26 +85,19 @@ export function ChoiceRow({
         <ChevronsUpDown size={15} color={c.muted} />
       </Row>
       <Sheet open={open} onClose={() => setOpen(false)} title={title}>
-        {options.map((option) => {
-          const selected = option.value === value
-          return (
-            <Row
+        <SheetGroup footer={help}>
+          {options.map((option) => (
+            <SheetOption
               key={String(option.value)}
-              accessibilityRole="menuitem"
-              accessibilityState={{ selected }}
+              title={option.label}
+              selected={option.value === value}
               onPress={() => {
-                tap()
                 setOpen(false)
-                if (!selected) onChange(option.value)
+                if (option.value !== value) onChange(option.value)
               }}
-            >
-              <T style={{ flex: 1 }} weight={selected ? '600' : '400'}>
-                {option.label}
-              </T>
-              {selected ? <Check size={17} color={c.primary} /> : null}
-            </Row>
-          )
-        })}
+            />
+          ))}
+        </SheetGroup>
       </Sheet>
     </>
   )

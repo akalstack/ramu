@@ -7,7 +7,7 @@ import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { font, space } from '../theme'
-import { Button, Row, Sheet, T } from './ui'
+import { Button, Card, Divider, Row, Sheet, T } from './ui'
 import TerminalView from './TerminalView'
 
 type Status = 'loading' | 'ready' | 'offline' | 'unsupported' | 'error'
@@ -350,24 +350,30 @@ export function BackgroundTerminals({
               {status === 'ready' && !rows.length && (
                 <T tone="muted">{t('No tracked background commands in this thread.')}</T>
               )}
-              {rows.map((command) => (
-                <Row
-                  key={command.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${command.command} · ${stateLabel(command)}${stopLabel(command)}`}
-                  onPress={() => setSelection({ scope, id: command.id })}
-                >
-                  <View style={{ flex: 1, gap: space.xs }}>
-                    <T mono numberOfLines={2}>
-                      {command.command}
-                    </T>
-                    <T size={font.caption} tone="muted">
-                      {stateLabel(command)}
-                      {stopLabel(command)}
-                    </T>
-                  </View>
-                </Row>
-              ))}
+              {rows.length ? (
+                <Card>
+                  {rows.map((command, index) => (
+                    <View key={command.id}>
+                      {index ? <Divider inset={space.l} /> : null}
+                      <Row
+                        accessibilityRole="button"
+                        accessibilityLabel={`${command.command} · ${stateLabel(command)}${stopLabel(command)}`}
+                        onPress={() => setSelection({ scope, id: command.id })}
+                      >
+                        <View style={{ flex: 1, gap: space.xs }}>
+                          <T mono numberOfLines={2}>
+                            {command.command}
+                          </T>
+                          <T size={font.caption} tone="muted">
+                            {stateLabel(command)}
+                            {stopLabel(command)}
+                          </T>
+                        </View>
+                      </Row>
+                    </View>
+                  ))}
+                </Card>
+              ) : null}
             </>
           )}
         </View>

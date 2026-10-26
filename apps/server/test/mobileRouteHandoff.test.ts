@@ -8,6 +8,8 @@ import { DeviceStore } from '../src/remote/devices'
 import { RemoteAccess } from '../src/remote/access'
 import { serveSockets, type EventSink } from '../src/remote/socket'
 import { findHostRoute, rememberRoutes, verifyHost } from '../../mobile/src/runtime/hostRoutes'
+import { probeReachableHosts } from '../../mobile/src/runtime/reachableHosts'
+import type { NearbyHost } from '@ramu/shared/discovery/tracker'
 import { HostClient, registerSocketProvider, type HostSocket } from '../../mobile/src/runtime/transport'
 
 const cleanup: (() => void | Promise<void>)[] = []
@@ -176,6 +178,29 @@ it('pairs once, loses LAN during an action, switches to VPN, and returns to LAN 
   await expect(original.invoke('tasks.rename', 'thread', 'new title')).rejects.toMatchObject({ ambiguous: true })
   await dropped
   original.close()
+  const nearby: NearbyHost[] = []
+  await probeReachableHosts({
+    computers: [
+      {
+        id: 'saved-mac',
+        name: 'Work Mac',
+        hostId: paired.hostId,
+        deviceId: paired.deviceId,
+        address: lan.address,
+        routes: identity.routes,
+        status: 'offline',
+        os: 'macos',
+        lastSeen: 0,
+      },
+    ],
+    tokenFor: async () => paired.token,
+    fetch,
+    signal: AbortSignal.timeout(5000),
+    found: (host) => nearby.push(host),
+  })
+  expect(nearby).toHaveLength(1)
+  expect(nearby[0]?.pairedHostId).toBe('saved-mac')
+  expect(nearby[0]?.routes[0]?.url).toBe(vpn.address)
   const moved = await findHostRoute({
     address: lan.address,
     routes: identity.routes,

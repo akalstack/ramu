@@ -12,6 +12,7 @@ import { changedFile } from '../../../runtime/diff'
 import { GlassButton, Header, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { BottomFade, floatingChrome } from '../../../components/Glass'
 import { Button, Card, Divider, Pill, Sheet, T, tap } from '../../../components/ui'
+import { useSheetInputStyle } from '../../../components/SheetOptions'
 import { useOpenFile } from '../../../runtime/openFile'
 import { DiffLines } from '../../../components/DiffLines'
 import { useSay } from '../../../i18n'
@@ -134,6 +135,7 @@ function FileDiff({
 
 export default function Changes() {
   const say = useSay()
+  const commentStyle = useSheetInputStyle(true)
   const { c } = useTheme()
   // A transcript Changes card names its review, and a file row in it the file to open first.
   const {
@@ -398,7 +400,7 @@ export default function Changes() {
             multiline
             placeholder={say('Comment for the agent…')}
             placeholderTextColor={c.muted}
-            style={{ minHeight: 80, padding: space.m, color: c.text, backgroundColor: c.fill, borderRadius: radius.m }}
+            style={commentStyle}
           />
           <Button title={say('Add comment')} disabled={!draft.trim() || busy} onPress={saveComment} />
         </View>

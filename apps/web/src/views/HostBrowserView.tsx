@@ -13,6 +13,7 @@ import type {
 import type { ViewDescriptor } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
+import { Dropdown } from '../Menu'
 import { useHost } from '../workspace/HostProvider'
 import { useAppSettings } from '../settings/AppSettings'
 import { t } from '../i18n'
@@ -464,19 +465,14 @@ export function HostBrowserView({
                 })
             }}
           >
-            <select
-              aria-label={t('Website file input')}
+            <Dropdown
+              label={t('Website file input')}
               value={uploadRef}
-              onChange={(event) => setUploadRef(event.target.value)}
-            >
-              {observation.elements
+              onChange={setUploadRef}
+              options={observation.elements
                 .filter((element) => element.type === 'file')
-                .map((element) => (
-                  <option key={element.ref} value={element.ref}>
-                    {element.name || t('Website file input')}
-                  </option>
-                ))}
-            </select>
+                .map((element) => ({ value: String(element.ref), label: element.name || t('Website file input') }))}
+            />
             <Input
               aria-label={t('Upload from workspace path')}
               value={uploadPath}

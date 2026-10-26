@@ -1,6 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { HostClient, HostError, registerSocketProvider } from '../src/runtime/transport.ts'
+import {
+  HostClient,
+  HostError,
+  registerSocketProvider,
+  checkHostConnection,
+  readConnectionStatus,
+} from '../src/runtime/transport.ts'
 
 const never = async () => {
   throw new Error('HTTP must not carry calls')
@@ -226,4 +232,85 @@ test('a stream ends cleanly when aborted or when its client closes, and surfaces
     /Hydration failed/,
   )
   assert.equal(host.listeners.size, 0)
+})
+
+test('discovery readiness uses an isolated probe without opening or closing the conversation socket', async () => {
+  let probes = 0
+  registerSocketProvider(
+    () => assert.fail('must not borrow a live conversation socket'),
+    () => assert.fail('must not close a live conversation socket'),
+    async (address, token, signal) => {
+      assert.equal(address, 'http://host:7788')
+      assert.equal(token, 'saved-token')
+      assert.equal(signal.aborted, false)
+      probes++
+      return true
+    },
+  )
+  assert.equal(await checkHostConnection('http://host:7788', 'saved-token', never, new AbortController().signal), true)
+  assert.equal(probes, 1)
+  const controller = new AbortController()
+  controller.abort()
+  assert.equal(await checkHostConnection('http://host:7788', 'saved-token', never, controller.signal), false)
+  assert.equal(probes, 1)
+  registerSocketProvider(null)
+})
+
+test(
+  'disconnect and suspension settle immediately even when history hydration never completes',
+  { timeout: 1000 },
+  async () => {
+    const host = socket()
+    provide(host)
+    let rejectHistory
+    const running = client().stream(
+      () => {},
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectHistory = reject
+        }),
+      new AbortController().signal,
+    )
+    await new Promise((resolve) => setImmediate(resolve))
+    host.move('closed')
+    await assert.rejects(running, /disconnected/)
+    rejectHistory(new Error('old history finished late'))
+    await new Promise((resolve) => setImmediate(resolve))
+    const controller = new AbortController()
+    const suspended = client().stream(
+      () => {},
+      () => new Promise(() => {}),
+      controller.signal,
+    )
+    await new Promise((resolve) => setImmediate(resolve))
+    controller.abort()
+    await suspended
+    assert.equal(host.listeners.size, 0)
+  },
+)
+
+test('the initial status read times out and closes a half-open connection', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  provide(socket({ invoke: () => new Promise(() => {}) }))
+  const owner = client()
+  const pending = readConnectionStatus(owner, new AbortController().signal)
+  await new Promise((resolve) => setImmediate(resolve))
+  t.mock.timers.tick(8000)
+  await assert.rejects(pending, /finish connecting/)
+  await assert.rejects(owner.invoke('tasks.list'), /suspended/)
+})
+
+test('failed-connection diagnosis still finishes when native fetch ignores its abort signal', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  provide(
+    socket({
+      whenReady: async () => {
+        throw Object.assign(new Error('late'), { notSent: true })
+      },
+    }),
+  )
+  const pending = client(() => new Promise(() => {})).invoke('tasks.list')
+  await new Promise((resolve) => setImmediate(resolve))
+  t.mock.timers.tick(8000)
+  await assert.rejects(pending, /Host unreachable/)
 })

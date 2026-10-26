@@ -10,7 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Dialog, Dropdown } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
@@ -23,6 +24,20 @@ import { McpSettings } from './McpSettings'
 import { RulesSettings } from './RulesSettings'
 
 const CAPTION = 'm-0 text-caption text-muted-foreground'
+
+export type SetupView = 'mcp' | 'skills' | 'rules'
+
+/** An empty list says so inside a soft panel instead of leaving bare text between headings. */
+function EmptyNote({ children }: { children: ReactNode }) {
+  return (
+    <p
+      role="status"
+      className="m-0 mb-4 rounded-(--radius-m) bg-fill px-4 py-6 text-center text-caption text-muted-foreground"
+    >
+      {children}
+    </p>
+  )
+}
 
 /** Claude's own help page on connectors, which says where to manage them. Other providers have no such page Ramu can point to yet. */
 const CLAUDE_CONNECTORS_URL =
@@ -261,7 +276,7 @@ function Skills({
  * files (every project) and from the project's folders, each with one switch that gives it to every provider and
  * account, followed by servers connected through Ramu itself.
  */
-export function AgentSetup() {
+export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView }) {
   useLanguage()
   const invoke = useSettingsInvoke(),
     on = useSettingsEvents()
@@ -276,6 +291,7 @@ export function AgentSetup() {
     enabled: ready,
   })
   const status = useQuery({ queryKey: ['mcp-settings', hostKey], queryFn: () => invoke('mcp.status'), enabled: ready })
+  const [view, setView] = useState<SetupView>(initialView)
   const [picked, setPicked] = useState<string>()
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -374,10 +390,24 @@ export function AgentSetup() {
     />
   )
   const projectName = projects.data?.find((project) => project.id === projectId)?.name
+  const mcpCount = mcp('user').length + mcp('project').length
   return (
-    <div className="flex flex-col">
-      {projects.data && projects.data.length > 0 && (
-        <SettingsRow>
+    <Tabs value={view} onValueChange={(next) => setView(next as SetupView)} className="flex-col gap-5">
+      <TabsList variant="line" className="h-9! w-full justify-start gap-4 border-b border-(--line) p-0">
+        <TabsTrigger value="mcp" className="flex-none gap-1.5 px-0.5 text-control">
+          {t('MCP servers')}
+          {mcpCount > 0 && <span className="text-caption text-muted-foreground">{mcpCount}</span>}
+        </TabsTrigger>
+        <TabsTrigger value="skills" className="flex-none gap-1.5 px-0.5 text-control">
+          {t('Skills')}
+          {!!data?.skills.length && <span className="text-caption text-muted-foreground">{data.skills.length}</span>}
+        </TabsTrigger>
+        <TabsTrigger value="rules" className="flex-none px-0.5 text-control">
+          {t('Rules')}
+        </TabsTrigger>
+      </TabsList>
+      {view !== 'rules' && projects.data && projects.data.length > 0 && (
+        <SettingsRow className="mb-0">
           <SettingsLabel title={t('Project')} help={t('Choose a project to see what its agents get.')} />
           <Dropdown
             label={t('Project')}
@@ -387,140 +417,142 @@ export function AgentSetup() {
           />
         </SettingsRow>
       )}
-      {(error || setup.error || projects.error) && (
-        <Alert variant="destructive" className="mb-3">
+      {view !== 'rules' && (error || setup.error || projects.error) && (
+        <Alert variant="destructive">
           <AlertDescription>{error || errorText(setup.error ?? projects.error)}</AlertDescription>
         </Alert>
       )}
-      {!data && !setup.error && !!projectId && (
-        <p role="status" className={`${CAPTION} mb-4`}>
+      {view !== 'rules' && !data && !setup.error && !!projectId && (
+        <p role="status" className={CAPTION}>
           {t('Loading…')}
         </p>
       )}
 
-      <SettingsGroupTitle>{t('MCP servers')}</SettingsGroupTitle>
-      <p className={`${CAPTION} mb-4`}>
-        {t(
-          'Tools agents can call. Sharing a server gives it to every provider and account in this project. New threads pick up changes.',
-        )}
-      </p>
-      {data && mcp('user').length + mcp('project').length === 0 && (
-        <p className={`${CAPTION} mb-4`}>{t('No MCP servers found yet.')}</p>
-      )}
-      {mcp('user').length > 0 && (
-        <Group title={t('Your settings')} help={t('From your own provider files, so every project has them.')}>
-          {servers('user')}
-        </Group>
-      )}
-      {mcp('project').length > 0 && (
-        <Group
-          title={projectName ? t('{project} only', { project: projectName }) : t('This project')}
-          help={t('From the project’s repositories and Claude’s per-project list.')}
-        >
-          {servers('project')}
-        </Group>
-      )}
-      {data?.providerManaged && data.providerManaged.length > 0 && (
-        <Group
-          title={t('Managed by the provider')}
-          help={t(
-            'Seen in an earlier thread. Only the provider holds their definitions, so Ramu cannot share them. To share one, add it below as a Ramu MCP server.',
+      <TabsContent value="mcp" className="flex flex-col">
+        <p className={`${CAPTION} mb-4`}>
+          {t(
+            'Tools agents can call. Sharing a server gives it to every provider and account in this project. New threads pick up changes.',
           )}
-        >
-          <ul className="m-0 flex list-none flex-col gap-1 p-0">
-            {data.providerManaged.map((item) => (
-              <li key={`${item.provider}:${item.name}`} className="flex items-center gap-2">
-                <strong className="min-w-0 truncate">{item.name}</strong>
-                <span className={CAPTION}>{providerName(item.provider)}</span>
-                {item.provider === 'claude-code' && (
-                  <InlineLink
-                    href={CLAUDE_CONNECTORS_URL}
-                    onClick={(event) => {
-                      event.preventDefault()
-                      void ramu.invoke('app.openExternal', CLAUDE_CONNECTORS_URL).catch(() => {})
-                    }}
-                  >
-                    {t('Manage connectors')}
-                  </InlineLink>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Group>
-      )}
-      {data && data.diagnostics.length > 0 && (
-        <details className={`${CAPTION} mb-4`}>
-          <summary className="cursor-pointer select-none">
-            {t('{count} files could not be read', { count: data.diagnostics.length })}
-          </summary>
-          <ul className="m-0 mt-1 flex list-none flex-col gap-0.5 p-0">
-            {data.diagnostics.map((item) => (
-              <li key={item.file} className="break-all">
-                {item.file}: {item.message}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-
-      {importing && projectId && (
-        <ImportDialog
-          server={importing}
-          projectName={projectName ?? ''}
-          hostName={scope?.available.find((host) => host.id === scope.primaryId)?.name ?? t('This host')}
-          busy={pending !== null}
-          error={error}
-          onCancel={() => {
-            if (pending === null) setImporting(null)
-          }}
-          onImport={(providers) =>
-            void share(importing.key, async () => {
-              await invoke('mcp.import', importing.key, projectId, providers)
-              setImporting(null)
-            })
-          }
-        />
-      )}
-
-      <McpSettings />
-
-      <RulesSettings />
-
-      <SettingsGroupTitle className="mt-8">{t('Skills')}</SettingsGroupTitle>
-      <p className={`${CAPTION} mb-4`}>
-        {t(
-          'Instructions agents can load. Sharing a skill copies it to every provider and account in this project that lacks it. Original files stay unchanged.',
-        )}
-      </p>
-      {(data?.skills.length ?? 0) > 10 && (
-        <div className="mb-4">
-          <Input
-            aria-label={t('Search skills')}
-            placeholder={t('Search skills')}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
-      )}
-      {data?.skills.length === 0 && <p className={CAPTION}>{t('No skills found yet.')}</p>}
-      {!!data?.skills.length && skills.length === 0 && (
-        <p role="status" className={CAPTION}>
-          {t('No skills match your search.')}
         </p>
-      )}
-      {skillsIn('user').length > 0 && (
-        <Group title={t('Your settings')} help={t('From your own provider folders, so every project has them.')}>
-          {skillList('user')}
-        </Group>
-      )}
-      {skillsIn('project').length > 0 && (
-        <Group
-          title={projectName ? t('{project} only', { project: projectName }) : t('This project')}
-          help={t('From the project’s repositories.')}
-        >
-          {skillList('project')}
-        </Group>
-      )}
-    </div>
+        {data && mcpCount === 0 && <EmptyNote>{t('No MCP servers found yet.')}</EmptyNote>}
+        {mcp('user').length > 0 && (
+          <Group title={t('Your settings')} help={t('From your own provider files, so every project has them.')}>
+            {servers('user')}
+          </Group>
+        )}
+        {mcp('project').length > 0 && (
+          <Group
+            title={projectName ? t('{project} only', { project: projectName }) : t('This project')}
+            help={t('From the project’s repositories and Claude’s per-project list.')}
+          >
+            {servers('project')}
+          </Group>
+        )}
+        {data?.providerManaged && data.providerManaged.length > 0 && (
+          <Group
+            title={t('Managed by the provider')}
+            help={t(
+              'Seen in an earlier thread. Only the provider holds their definitions, so Ramu cannot share them. To share one, add it below as a Ramu MCP server.',
+            )}
+          >
+            <ul className="m-0 flex list-none flex-col gap-1 p-0">
+              {data.providerManaged.map((item) => (
+                <li key={`${item.provider}:${item.name}`} className="flex items-center gap-2">
+                  <strong className="min-w-0 truncate">{item.name}</strong>
+                  <span className={CAPTION}>{providerName(item.provider)}</span>
+                  {item.provider === 'claude-code' && (
+                    <InlineLink
+                      href={CLAUDE_CONNECTORS_URL}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        void ramu.invoke('app.openExternal', CLAUDE_CONNECTORS_URL).catch(() => {})
+                      }}
+                    >
+                      {t('Manage connectors')}
+                    </InlineLink>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Group>
+        )}
+        {data && data.diagnostics.length > 0 && (
+          <details className={`${CAPTION} mb-4`}>
+            <summary className="cursor-pointer select-none">
+              {t('{count} files could not be read', { count: data.diagnostics.length })}
+            </summary>
+            <ul className="m-0 mt-1 flex list-none flex-col gap-0.5 p-0">
+              {data.diagnostics.map((item) => (
+                <li key={item.file} className="break-all">
+                  {item.file}: {item.message}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        {importing && projectId && (
+          <ImportDialog
+            server={importing}
+            projectName={projectName ?? ''}
+            hostName={scope?.available.find((host) => host.id === scope.primaryId)?.name ?? t('This host')}
+            busy={pending !== null}
+            error={error}
+            onCancel={() => {
+              if (pending === null) setImporting(null)
+            }}
+            onImport={(providers) =>
+              void share(importing.key, async () => {
+                await invoke('mcp.import', importing.key, projectId, providers)
+                setImporting(null)
+              })
+            }
+          />
+        )}
+
+        <McpSettings />
+      </TabsContent>
+
+      <TabsContent value="rules" className="flex flex-col">
+        <RulesSettings />
+      </TabsContent>
+
+      <TabsContent value="skills" className="flex flex-col">
+        <p className={`${CAPTION} mb-4`}>
+          {t(
+            'Instructions agents can load. Sharing a skill copies it to every provider and account in this project that lacks it. Original files stay unchanged.',
+          )}
+        </p>
+        {(data?.skills.length ?? 0) > 10 && (
+          <div className="mb-4">
+            <Input
+              aria-label={t('Search skills')}
+              placeholder={t('Search skills')}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+        )}
+        {data?.skills.length === 0 && <EmptyNote>{t('No skills found yet.')}</EmptyNote>}
+        {!!data?.skills.length && skills.length === 0 && (
+          <p role="status" className={CAPTION}>
+            {t('No skills match your search.')}
+          </p>
+        )}
+        {skillsIn('user').length > 0 && (
+          <Group title={t('Your settings')} help={t('From your own provider folders, so every project has them.')}>
+            {skillList('user')}
+          </Group>
+        )}
+        {skillsIn('project').length > 0 && (
+          <Group
+            title={projectName ? t('{project} only', { project: projectName }) : t('This project')}
+            help={t('From the project’s repositories.')}
+          >
+            {skillList('project')}
+          </Group>
+        )}
+      </TabsContent>
+    </Tabs>
   )
 }

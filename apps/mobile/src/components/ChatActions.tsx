@@ -1,6 +1,8 @@
+import { SheetGroup, SheetOption } from './SheetOptions'
+import { runsBy } from '../runtime/groupRuns'
 import { translate } from '@ramu/shared/i18n'
 import { readRemovalCommands, removalReview, removalError } from '@ramu/shared/chat/taskRemoval'
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import {
@@ -24,7 +26,7 @@ import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { useT } from '../i18n'
-import { Button, Row, Sheet, T, type Icon } from './ui'
+import { Button, Sheet, T, type Icon } from './ui'
 import { ProjectCommandSettings } from './ProjectCommandSettings'
 import { ProjectRoutingSettings } from './ProjectRoutingSettings'
 
@@ -338,31 +340,21 @@ export function ChatActionsSheet({
           </View>
         </View>
       ) : (
-        visible.map((item, index) => (
-          <Fragment key={item.label}>
-            {/* Tools, info and thread actions read as separate groups, like the native menu's sections. */}
-            {index && (item.group ?? 'thread') !== (visible[index - 1]!.group ?? 'thread') ? (
-              <View
-                style={{
-                  height: 1,
-                  backgroundColor: c.line,
-                  marginVertical: space.xs,
-                  marginHorizontal: space.l,
-                }}
+        runsBy(visible, (item) => item.group ?? 'thread').map((run) => (
+          <SheetGroup key={run[0]!.label}>
+            {run.map((item) => (
+              <SheetOption
+                key={item.label}
+                icon={item.icon}
+                title={item.label}
+                danger={item.danger}
+                disabled={
+                  !item.onPress || (item.icon === Sparkles && (naming || chat.titleGenerationState === 'pending'))
+                }
+                onPress={item.onPress}
               />
-            ) : null}
-            <Row
-              onPress={item.onPress}
-              accessibilityRole="button"
-              accessibilityState={{
-                disabled: !item.onPress,
-                busy: item.icon === Sparkles && (naming || chat.titleGenerationState === 'pending'),
-              }}
-            >
-              <item.icon size={18} color={item.danger ? c.bad : item.onPress ? c.soft : c.muted} />
-              <T tone={item.danger ? 'bad' : item.onPress ? 'text' : 'muted'}>{item.label}</T>
-            </Row>
-          </Fragment>
+            ))}
+          </SheetGroup>
         ))
       )}
     </Sheet>
@@ -573,27 +565,23 @@ export function ProjectActionsSheet({
           </View>
         </View>
       ) : (
-        items
-          .filter((item) => !viewOnly || item.viewer)
-          .map((item, index, shown) => (
-            <Fragment key={item.key}>
-              {index && item.group !== shown[index - 1]!.group ? (
-                <View
-                  style={{ height: 1, backgroundColor: c.line, marginVertical: space.xs, marginHorizontal: space.l }}
-                />
-              ) : null}
-              <Row
+        runsBy(
+          items.filter((item) => !viewOnly || item.viewer),
+          (item) => item.group,
+        ).map((run) => (
+          <SheetGroup key={run[0]!.key}>
+            {run.map((item) => (
+              <SheetOption
+                key={item.key}
+                icon={item.icon}
+                title={item.label}
+                danger={item.danger}
+                disabled={!item.onPress}
                 onPress={item.onPress}
-                accessibilityRole="button"
-                accessibilityState={{
-                  disabled: !item.onPress,
-                }}
-              >
-                <item.icon size={18} color={item.danger ? c.bad : c.soft} />
-                <T tone={item.danger ? 'bad' : 'text'}>{item.label}</T>
-              </Row>
-            </Fragment>
-          ))
+              />
+            ))}
+          </SheetGroup>
+        ))
       )}
     </Sheet>
   )

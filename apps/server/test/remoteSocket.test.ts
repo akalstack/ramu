@@ -338,3 +338,37 @@ it('leaves terminal output unbounded for a client that did not ask for flow cont
     )
   await until(() => frames.filter((frame) => frame.t === 'event').length === 3)
 })
+
+it('survives a reset while authenticating a cancelled connection probe and still accepts the next client', async () => {
+  let received!: (socket: import('node:net').Socket) => void
+  const waiting = new Promise<import('node:net').Socket>((resolve) => {
+    received = resolve
+  })
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let first = true
+  const { connect, sockets } = await start({
+    accept: async (_req, res) => {
+      if (first) {
+        first = false
+        received(res.socket!)
+        await gate
+      }
+      return DEVICE
+    },
+  })
+  const aborted = connect()
+  const closed = new Promise<void>((resolve) => aborted.ws.once('close', () => resolve()))
+  const pending = await waiting
+  expect(() =>
+    pending.emit('error', Object.assign(new Error('connection reset'), { code: 'ECONNRESET' })),
+  ).not.toThrow()
+  release()
+  await closed
+  expect(sockets.connections()).toBe(0)
+  const next = connect()
+  await next.until(() => next.frames.some((frame) => frame.t === 'ready'))
+  expect(sockets.connections()).toBe(1)
+})

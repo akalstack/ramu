@@ -35,6 +35,7 @@ import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
 import { Header, HeaderButton, HeaderMenu, Screen, PageFlatList } from '../../../components/Screen'
+import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
 import { BrowserActivity } from '../../../components/BrowserActivity'
@@ -53,7 +54,7 @@ import {
   TranscriptListRow,
   type ItemMeta,
 } from '../../../components/Transcript'
-import { ConnectionDot, Row, Sheet, T, tap } from '../../../components/ui'
+import { ConnectionDot, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { OfflineBanner, PendingBubble } from '../../../components/Outbox'
@@ -1015,6 +1016,28 @@ export default function ChatScreen() {
               <BottomFade height={composerHeight * 0.75} color={c.window} />
               {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
               <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+                {/* One preview at a time: whichever the agent started most recently. */}
+                <BrowserFloat
+                  chat={chat}
+                  tabs={browserTabs.tabs}
+                  viewable={browserTabs.viewable}
+                  hidden={tool !== null}
+                  covered={floating === 'computer' && floatShown.computer}
+                  onVisibleChange={(browser) => setFloatShown((shown) => ({ ...shown, browser }))}
+                  onReveal={() => setFloating('browser')}
+                  onOpen={(tabId) => {
+                    setBrowserTab(tabId)
+                    setTool('browser')
+                  }}
+                />
+                <ComputerFloat
+                  chat={chat}
+                  hidden={tool !== null}
+                  covered={floating === 'browser' && floatShown.browser}
+                  onVisibleChange={(computer) => setFloatShown((shown) => ({ ...shown, computer }))}
+                  onReveal={() => setFloating('computer')}
+                  onOpen={() => setTool('computer')}
+                />
                 <Composer
                   activity={
                     <>
@@ -1214,30 +1237,6 @@ export default function ChatScreen() {
           onClose={() => setActions('closed')}
         />
       ) : null}
-      {/* One preview at a time: whichever the agent started most recently. */}
-      <BrowserFloat
-        chat={chat}
-        tabs={browserTabs.tabs}
-        viewable={browserTabs.viewable}
-        hidden={tool !== null}
-        covered={floating === 'computer' && floatShown.computer}
-        onVisibleChange={(browser) => setFloatShown((shown) => ({ ...shown, browser }))}
-        top={(ios ? topInset : insets.top + 56) + space.s}
-        onReveal={() => setFloating('browser')}
-        onOpen={(tabId) => {
-          setBrowserTab(tabId)
-          setTool('browser')
-        }}
-      />
-      <ComputerFloat
-        chat={chat}
-        hidden={tool !== null}
-        covered={floating === 'browser' && floatShown.browser}
-        onVisibleChange={(computer) => setFloatShown((shown) => ({ ...shown, computer }))}
-        top={(ios ? topInset : insets.top + 56) + space.s}
-        onReveal={() => setFloating('computer')}
-        onOpen={() => setTool('computer')}
-      />
       <BrowserActivity
         key={`browser:${chat.computerId}:${chat.taskId}`}
         chat={chat}
@@ -1254,53 +1253,62 @@ export default function ChatScreen() {
         open={tool === 'computer'}
         onClose={() => setTool(null)}
       />
-      <Sheet open={sheet} onClose={() => setSheet(false)} title={branch || 'Source control'}>
+      <Sheet open={sheet} onClose={() => setSheet(false)} title={branch || tr('Source control')}>
         {(
           [
-            {
-              icon: CircleCheck,
-              title: 'Commit',
-              sub: !live
-                ? 'Open Source Control'
-                : changed
-                  ? `${changed} file${changed === 1 ? '' : 's'} changed`
-                  : 'No changes to commit',
-              run: openScm,
-            },
-            {
-              icon: CircleArrowUp,
-              title: 'Commit & push',
-              sub: changed ? 'AI message, commit all, push' : 'No changes to commit',
-              run: quickCommit,
-              off: !changed || busy,
-            },
-            { icon: CircleArrowUp, title: 'Push', sub: pushReason, run: push, off: !canPush || busy },
-            {
-              icon: GitCompareArrows,
-              title: 'Review changes',
-              sub: 'Inspect turn diffs and worktree changes',
-              run: openChanges,
-            },
-            { icon: GitBranch, title: 'Branches', sub: 'Switch, create, stash, and sync', run: openScm },
+            [
+              {
+                icon: CircleCheck,
+                title: 'Commit',
+                sub: !live
+                  ? 'Open Source Control'
+                  : changed
+                    ? changed === 1
+                      ? '1 file changed'
+                      : `${changed} files changed`
+                    : 'No changes to commit',
+                run: openScm,
+              },
+              {
+                icon: CircleArrowUp,
+                title: 'Commit & push',
+                sub: changed ? 'AI message, commit all, push' : 'No changes to commit',
+                run: quickCommit,
+                off: !changed || busy,
+              },
+              { icon: CircleArrowUp, title: 'Push', sub: pushReason, run: push, off: !canPush || busy },
+            ],
+            [
+              {
+                icon: GitCompareArrows,
+                title: 'Review changes',
+                sub: 'Inspect turn diffs and worktree changes',
+                run: openChanges,
+              },
+              {
+                icon: GitBranch,
+                title: 'Branches and history',
+                sub: 'Switch, create, stash, and browse commits',
+                run: openScm,
+              },
+            ],
           ] as const
-        ).map((item) => (
-          <Row
-            key={item.title}
-            disabled={'off' in item && item.off}
-            style={{ opacity: 'off' in item && item.off ? 0.45 : 1 }}
-            onPress={() => {
-              setSheet(false)
-              setTimeout(item.run, 300)
-            }}
-          >
-            <item.icon size={19} color={c.soft} />
-            <View style={{ flex: 1 }}>
-              <T weight="600">{item.title}</T>
-              <T size={font.caption} tone="muted">
-                {item.sub}
-              </T>
-            </View>
-          </Row>
+        ).map((group) => (
+          <SheetGroup key={group[0].title}>
+            {group.map((item) => (
+              <SheetOption
+                key={item.title}
+                icon={item.icon}
+                title={tr(item.title)}
+                help={tr(item.sub)}
+                disabled={'off' in item && item.off}
+                onPress={() => {
+                  setSheet(false)
+                  setTimeout(item.run, 300)
+                }}
+              />
+            ))}
+          </SheetGroup>
         ))}
       </Sheet>
     </Screen>

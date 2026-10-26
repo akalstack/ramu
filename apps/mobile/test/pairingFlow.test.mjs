@@ -8,7 +8,7 @@ import * as nearby from '../src/runtime/nearbyModel.ts'
 import { decodePairQr, encodePairQr } from '../../../packages/contracts/src/index.ts'
 
 const require = createRequire(import.meta.url)
-function harness(os) {
+function harness(os, options = {}) {
   const slots = []
   let cursor = 0
   const calls = [],
@@ -63,6 +63,7 @@ function harness(os) {
             finish = resolve
           })
         },
+        ...options.store,
       }),
     },
     '../components/Screen': {
@@ -75,9 +76,13 @@ function harness(os) {
     },
     '../components/ui': { T: 'T', Card: 'Card', Toggle: 'Toggle', tap() {} },
     '../components/Motion': { animateLayout() {} },
-    '../i18n': { useT: () => new Proxy({}, { get: (_, key) => key }), useSay: () => (text) => text },
+    '../i18n': {
+      useT: () => new Proxy({}, { get: (_, key) => key }),
+      useSay: () => (text) => text,
+      fill: (text, value) => text.replace('{0}', value),
+    },
     '@ramu/shared/discovery/tracker': { reviewSelection: () => null },
-    '../runtime/nearby': { useNearbyHosts: () => ({ state: { hosts: [] } }) },
+    '../runtime/nearby': { useNearbyHosts: () => ({ state: { hosts: options.hosts ?? [] } }) },
     '../runtime/nearbyModel': nearby,
   }
   const module = { exports: {} }
@@ -162,5 +167,125 @@ for (const os of ['ios', 'android']) {
     tree = h.render()
     assert.equal(find(tree, 'Toggle').props.value, false)
     assert.equal(find(tree, 'GlassButton', (props) => props.primary).props.disabled, true)
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os}: a verified VPN result reconnects the existing host without requesting a pairing code`, async () => {
+    const events = []
+    const host = {
+      key: 'paired-mac',
+      name: 'Work Mac',
+      label: 'Work Mac',
+      hostId: 'a'.repeat(32),
+      pairedHostId: 'mac',
+      scheme: 'http',
+      routes: [{ url: 'http://100.99.224.30:7788', interfaceName: null }],
+    }
+    const h = harness(os, {
+      hosts: [host],
+      store: {
+        computers: [{ id: 'mac', name: 'Work Mac', address: 'http://192.168.1.3:7788', status: 'offline' }],
+        reviewAddress: async (...args) => {
+          events.push(['review', ...args])
+          return 'moved'
+        },
+        select: (id) => events.push(['select', id]),
+        retry: (id) => events.push(['retry', id]),
+      },
+    })
+    let tree = h.render()
+    find(
+      tree,
+      'Pressable',
+      (props) => props.accessibilityRole === 'button' && props.accessibilityState?.selected === false,
+    ).props.onPress()
+    tree = h.render()
+    const button = find(tree, 'GlassButton', (props) => props.primary && props.title === 'nearbyReconnect')
+    assert.ok(button)
+    const pending = button.props.onPress()
+    await button.props.onPress()
+    await pending
+    assert.deepEqual(events, [
+      ['review', 'mac', host.routes[0].url],
+      ['select', 'mac'],
+    ])
+    assert.equal(h.calls.length, 0, 'no new pairing request or credential')
+    assert.deepEqual(h.navigation, ['/'])
+  })
+
+  test(`${os}: failed host proof stays in discovery and never reconnects or pairs`, async () => {
+    const host = {
+      key: 'paired-mac',
+      name: 'Work Mac',
+      label: 'Work Mac',
+      pairedHostId: 'mac',
+      scheme: 'http',
+      routes: [{ url: 'http://100.99.224.30:7788', interfaceName: null }],
+    }
+    const h = harness(os, {
+      hosts: [host],
+      store: {
+        computers: [{ id: 'mac', name: 'Work Mac', address: 'http://192.168.1.3:7788' }],
+        reviewAddress: async () => 'mismatch',
+        select: () => assert.fail('must not select an impostor'),
+        retry: () => assert.fail('must not connect'),
+      },
+    })
+    find(
+      h.render(),
+      'Pressable',
+      (props) => props.accessibilityRole === 'button' && props.accessibilityState?.selected === false,
+    ).props.onPress()
+    await find(h.render(), 'GlassButton', (props) => props.primary && props.title === 'nearbyReconnect').props.onPress()
+    assert.equal(h.calls.length, 0)
+    assert.deepEqual(h.navigation, [])
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os}: both Mac interface addresses are visible and selecting .3 reconnects without pairing`, async () => {
+    const requests = []
+    const host = {
+      key: 'paired-mac',
+      name: 'Work Mac',
+      label: 'Work Mac',
+      pairedHostId: 'mac',
+      scheme: 'http',
+      routes: ['http://192.168.1.4:7788', 'http://192.168.1.3:7788'].map((url) => ({ url, interfaceName: null })),
+    }
+    const h = harness(os, {
+      hosts: [host],
+      store: {
+        computers: [{ id: 'mac', name: 'Work Mac', address: 'http://192.168.1.4:7788', status: 'offline' }],
+        reviewAddress: async (_id, address) => {
+          requests.push(address)
+          return 'moved'
+        },
+        select() {},
+        retry() {},
+      },
+    })
+    let tree = h.render()
+    assert.ok(
+      find(
+        tree,
+        'T',
+        (props) =>
+          String(props.children).includes('192.168.1.3:7788') && String(props.children).includes('192.168.1.4:7788'),
+      ),
+    )
+    find(
+      tree,
+      'Pressable',
+      (props) => props.accessibilityRole === 'button' && props.accessibilityState?.selected === false,
+    ).props.onPress()
+    tree = h.render()
+    const radios = nodes(tree).filter((node) => node.type === 'Pressable' && node.props.accessibilityRole === 'radio')
+    assert.equal(radios.length, 2)
+    radios[1].props.onPress()
+    await find(h.render(), 'GlassButton', (props) => props.primary && props.title === 'nearbyReconnect').props.onPress()
+    assert.deepEqual(requests, ['http://192.168.1.3:7788'])
+    assert.equal(h.calls.length, 0)
   })
 }

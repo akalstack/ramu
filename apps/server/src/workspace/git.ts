@@ -485,14 +485,17 @@ export async function branches(cwd: string): Promise<GitBranchInfo[]> {
       return { name: name!, current: current === '*', upstream: upstream ?? '', worktree: worktree ?? '' }
     })
 }
-export async function requireClean(cwd: string, autostash = false): Promise<void> {
+/** `action` finishes the sentence "Commit or stash your working changes before …". */
+export async function requireClean(
+  cwd: string,
+  autostash = false,
+  action = 'switching branches or pulling',
+): Promise<void> {
   const current = await status(cwd)
   if (current.operation)
     throw new Error(`A ${current.operation} is in progress. Continue or abort it in Source Control first.`)
   if (current.entries.length && (!autostash || current.entries.some((entry) => entry.staged === 'unmerged')))
-    throw new Error(
-      'Commit or stash your working changes before switching branches or pulling. Ramu does not stash them automatically.',
-    )
+    throw new Error(`Commit or stash your working changes before ${action}. Ramu does not stash them automatically.`)
 }
 export async function createBranch(cwd: string, name: string): Promise<void> {
   await requireClean(cwd)
@@ -588,13 +591,13 @@ export async function stash(cwd: string, name: string, stagedOnly = false): Prom
 }
 /** Applies a stash and removes it. pop and drop take a stash@{n} reference, not an oid. */
 export async function popStash(cwd: string, oid: string): Promise<void> {
-  await requireClean(cwd)
+  await requireClean(cwd, false, 'popping a stash')
   const entry = (await stashes(cwd)).find((item) => item.oid === oid)
   if (!entry) throw new Error('This stash is no longer available. Refresh first.')
   await git(cwd, ['stash', 'pop', '--index', entry.ref])
 }
 export async function applyStash(cwd: string, oid: string): Promise<void> {
-  await requireClean(cwd)
+  await requireClean(cwd, false, 'applying a stash')
   if (!(await stashes(cwd)).some((entry) => entry.oid === oid))
     throw new Error('This stash is no longer available. Refresh first.')
   await git(cwd, ['stash', 'apply', '--index', oid])

@@ -2,7 +2,7 @@ import { LiveBuffer } from '@ramu/shared/sync/streamSync'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Keyboard as NativeKeyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Check, FolderGit2, GitBranch, MessageCircle, TerminalSquare } from 'lucide-react-native'
+import { FolderGit2, GitBranch, MessageCircle, RotateCcw, TerminalSquare } from 'lucide-react-native'
 import { space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { Stack } from 'expo-router'
@@ -14,7 +14,8 @@ import { DEFAULT_RAIL, parseRail, terminalKeyGroups, toggleRailKey } from '../ru
 import { STANDALONE, type Chat } from '../runtime/types'
 import { TerminalDock } from './TerminalDock'
 import { TerminalTabs } from './TerminalTabs'
-import { Button, Row, SectionLabel, Sheet, T, tap } from './ui'
+import { Button, Sheet, T, tap } from './ui'
+import { SheetGroup, SheetOption, SheetPanelGroup } from './SheetOptions'
 import { useSay } from '../i18n'
 
 /** Where a shell runs: a chat's checkout, or a whole project's folders (`project:<id>` on the host). */
@@ -440,72 +441,49 @@ export function TerminalScreen({
           keepKeyboard(keyboardBeforeSheet.current)
         }}
       >
-        <T size={12} tone="muted" style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-          Shells keep running in their own workspace while you look at another.
-        </T>
         {(['project', 'worktree', 'chat'] as const).map((kind) => {
           const group = targets.filter((target) => target.kind === kind)
           if (!group.length) return null
           return (
-            <View key={kind}>
-              <SectionLabel>
-                {kind === 'project' ? 'Projects' : kind === 'worktree' ? 'Worktrees' : 'Threads'}
-              </SectionLabel>
-              {group.map((target) => {
-                const current = target.ctx === ctx
-                return (
-                  <Row
-                    key={target.ctx}
-                    onPress={() => {
-                      setSessionsOpen(false)
-                      if (!current) switchTo(target)
-                      keepKeyboard(keyboardBeforeSheet.current)
-                    }}
-                    style={current ? { backgroundColor: c.accentWash } : undefined}
-                  >
-                    {kind === 'worktree' ? (
-                      <GitBranch size={18} color={c.accent} />
-                    ) : kind === 'chat' ? (
-                      <MessageCircle size={18} color={c.accent} />
-                    ) : (
-                      <FolderGit2 size={18} color={c.accent} />
-                    )}
-                    <View style={{ flex: 1, gap: 3 }}>
-                      <T numberOfLines={1} weight={current ? '600' : '500'}>
-                        {target.title}
-                      </T>
-                      <T size={12} tone="muted" numberOfLines={1} mono={kind === 'worktree'}>
-                        {target.subtitle}
-                      </T>
-                    </View>
-                    {current ? <Check size={18} color={c.accent} /> : null}
-                  </Row>
-                )
-              })}
-            </View>
+            <SheetGroup
+              key={kind}
+              title={say(kind === 'project' ? 'Projects' : kind === 'worktree' ? 'Worktrees' : 'Threads')}
+            >
+              {group.map((target) => (
+                <SheetOption
+                  key={target.ctx}
+                  icon={kind === 'worktree' ? GitBranch : kind === 'chat' ? MessageCircle : FolderGit2}
+                  title={target.title}
+                  help={target.subtitle}
+                  selected={target.ctx === ctx}
+                  onPress={() => {
+                    setSessionsOpen(false)
+                    if (target.ctx !== ctx) switchTo(target)
+                    keepKeyboard(keyboardBeforeSheet.current)
+                  }}
+                />
+              ))}
+            </SheetGroup>
           )
         })}
+        <T size={12} tone="muted" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s }}>
+          {say('Shells keep running in their own workspace while you look at another.')}
+        </T>
       </Sheet>
       <Sheet open={keysOpen} title={say('Terminal keys')} onClose={() => setKeysOpen(false)}>
-        <T size={12} tone="muted" style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-          Press a key to send it. Long press to add or remove it on the key rail; highlighted keys are on the rail.
-        </T>
         {rail.join() !== DEFAULT_RAIL.join() ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={say('Reset key rail')}
-            onPress={() => store.setDraft('terminal-rail', '')}
-            style={{ paddingHorizontal: 20, paddingBottom: 8 }}
-          >
-            <T size={13} tone="muted">
-              Reset key rail
-            </T>
-          </Pressable>
+          <SheetGroup>
+            <SheetOption
+              icon={RotateCcw}
+              title={say('Reset key rail')}
+              help={say('Go back to the default keys on the rail.')}
+              onPress={() => store.setDraft('terminal-rail', '')}
+            />
+          </SheetGroup>
         ) : null}
         {terminalKeyGroups.map((group) => (
-          <View key={group.title}>
-            <SectionLabel>{group.title}</SectionLabel>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 16 }}>
+          <SheetPanelGroup key={group.title} title={group.title}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {group.keys.map((label) => (
                 <Pressable
                   key={label}
@@ -535,8 +513,13 @@ export function TerminalScreen({
                 </Pressable>
               ))}
             </View>
-          </View>
+          </SheetPanelGroup>
         ))}
+        <T size={12} tone="muted" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s }}>
+          {say(
+            'Press a key to send it. Long press to add or remove it on the key rail; highlighted keys are on the rail.',
+          )}
+        </T>
       </Sheet>
     </View>
   )

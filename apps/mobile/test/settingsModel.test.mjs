@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   SETTINGS_ROWS,
   SETTINGS_SECTIONS,
+  pageOf,
   allowedOptions,
   applyValue,
   buildEdit,
@@ -48,7 +49,7 @@ test('model selection offers the host-supported flow and patches only that choic
 test('every section has a page, rows only exist for known sections, and sections are unique', () => {
   const ids = SETTINGS_SECTIONS.map((section) => section.id)
   assert.equal(new Set(ids).size, ids.length)
-  for (const id of Object.keys(SETTINGS_ROWS)) assert.ok(ids.includes(id), id)
+  for (const id of Object.keys(SETTINGS_ROWS)) assert.ok(ids.includes(pageOf(id)), id)
 })
 
 test('no two rows edit the same setting, so a setting is never shown twice', () => {
@@ -221,7 +222,7 @@ test('a host with both settings gets the limit choice; one with only the fallbac
   assert.ok(!rows([]).some((row) => row.path === 'defaultAutoFallback'))
   const title = (settings) =>
     searchSettings('fallback', settings)
-      .filter((hit) => hit.section === 'access')
+      .filter((hit) => hit.section === 'providers')
       .map((hit) => hit.title)
   assert.ok(title(both).includes('When a usage limit is reached'))
   assert.ok(title([setting('defaultAutoFallback', true)]).includes('Automatic provider fallback'))
@@ -259,4 +260,21 @@ test('browser and automatic update rows appear only when the host offers them', 
     ['appAutoUpdate'],
   )
   assert.ok(SETTINGS_SECTIONS.some((section) => section.id === 'browser'))
+})
+
+test('computer use has its own page, found by search, and sub-agent, recall and commit-action rows follow the host', () => {
+  assert.ok(SETTINGS_SECTIONS.some((section) => section.id === 'computer' && section.scope === 'host'))
+  assert.ok(searchSettings('screen recording', null).some((hit) => hit.section === 'computer'))
+  const paths = (section, settings) =>
+    visibleGroups(section, settings).flatMap((group) => group.rows.map((row) => row.path))
+  assert.deepEqual(
+    paths('workflows', [setting('subagents.maxConcurrent', 3, { type: 'integer', minimum: 1, maximum: 8 })]),
+    ['subagents.maxConcurrent'],
+  )
+  assert.deepEqual(paths('memory', [setting('intelligence.crossThreadRecall', true)]), [
+    'intelligence.crossThreadRecall',
+  ])
+  assert.ok(paths('git', [setting('defaultCommitAction', 'commit')]).includes('defaultCommitAction'))
+  // Older hosts without the setting simply do not show the row.
+  assert.deepEqual(paths('workflows', []), [])
 })

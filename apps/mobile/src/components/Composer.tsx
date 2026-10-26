@@ -32,6 +32,9 @@ import {
   Image as ImageIcon,
   SlidersHorizontal,
   Sparkles,
+  LockOpen,
+  Shuffle,
+  Zap,
 } from 'lucide-react-native'
 import type { AgentProvider, AgentSettings, ChatGoal, FileContext, QueuedMessage, SkillInfo } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
@@ -42,7 +45,19 @@ import { sharedValue } from '@ramu/shared/sharedFields'
 import { useModelFlow } from '../runtime/useModelFlow'
 import { fill, useT, useSay } from '../i18n'
 import { translate } from '@ramu/shared/i18n'
-import { Chip, IconButton, Row, Segmented, Sheet, T, tap, type Icon } from './ui'
+import { Chip, IconButton, Row, Segmented, Sheet, T, Toggle, tap, type Icon } from './ui'
+import { SheetGroup, SheetOption } from './SheetOptions'
+
+const ACCESS_MODES = [
+  { key: 'edits', label: 'Allow edits', help: 'File edits go through; commands still ask first.', icon: Pencil },
+  {
+    key: 'auto',
+    label: 'Auto',
+    help: 'Routine actions are approved for you where the provider supports it; the rest still ask.',
+    icon: Sparkles,
+  },
+  { key: 'full', label: 'Full access', help: 'Commands and edits run without asking.', icon: LockOpen },
+] as const
 import { ProviderIcon } from './Logos'
 import { Glass } from './Glass'
 import { AutoResumeRows, LimitTray } from './LimitTray'
@@ -1152,22 +1167,60 @@ export function Composer({
         </View>
       </View>
       <Sheet open={menu === 'actions'} onClose={() => setMenu(null)} title={say('Add to message')}>
-        {(
-          [
-            { key: 'file', icon: Paperclip, label: 'Attach a file', run: () => void upload('document') },
-            { key: 'photo', icon: ImageIcon, label: 'Choose a photo', run: () => void upload('photos') },
-            { key: 'camera', icon: Camera, label: 'Take a photo', run: () => void upload('camera') },
-            ...(discoverScope && !offline
-              ? [{ key: 'skills', icon: Sparkles, label: 'Use a skill', run: () => void discover() }]
-              : []),
-            { key: 'settings', icon: SlidersHorizontal, label: 'Agent settings', run: () => setMenu('settings') },
-          ] as { key: string; icon: Icon; label: string; run(): void }[]
-        ).map((item) => (
-          <Row key={item.key} accessibilityLabel={say(item.label)} onPress={() => afterMenu(item.run)}>
-            <item.icon size={18} color={c.soft} />
-            <T>{say(item.label)}</T>
-          </Row>
-        ))}
+        <SheetGroup>
+          {(
+            [
+              {
+                key: 'file',
+                icon: Paperclip,
+                label: 'Attach a file',
+                help: 'Any document up to 10 MB.',
+                run: () => void upload('document'),
+              },
+              {
+                key: 'photo',
+                icon: ImageIcon,
+                label: 'Choose a photo',
+                help: 'From your photo library.',
+                run: () => void upload('photos'),
+              },
+              {
+                key: 'camera',
+                icon: Camera,
+                label: 'Take a photo',
+                help: 'Use the camera now.',
+                run: () => void upload('camera'),
+              },
+              ...(discoverScope && !offline
+                ? [
+                    {
+                      key: 'skills',
+                      icon: Sparkles,
+                      label: 'Use a skill',
+                      help: 'Point the agent at a skill on the host.',
+                      run: () => void discover(),
+                    },
+                  ]
+                : []),
+            ] as { key: string; icon: Icon; label: string; help: string; run(): void }[]
+          ).map((item) => (
+            <SheetOption
+              key={item.key}
+              icon={item.icon}
+              title={say(item.label)}
+              help={say(item.help)}
+              onPress={() => afterMenu(item.run)}
+            />
+          ))}
+        </SheetGroup>
+        <SheetGroup>
+          <SheetOption
+            icon={SlidersHorizontal}
+            title={say('Agent settings')}
+            help={say('Permissions, provider fallback and speed for this thread.')}
+            onPress={() => afterMenu(() => setMenu('settings'))}
+          />
+        </SheetGroup>
       </Sheet>
       <Sheet
         open={menu === 'skills'}
@@ -1175,87 +1228,112 @@ export function Composer({
         title={say('Host skills')}
         search={{ value: filter, onChangeText: setFilter, placeholder: say('Search…') }}
       >
-        {skills
-          .filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(filter.toLowerCase()))
-          .slice(0, 200)
-          .map((skill) => (
-            <Row
-              key={skill.path}
-              onPress={() => {
-                append(`\nUse the host skill at ${skill.path}.`)
-                setMenu(null)
-              }}
-            >
-              <View>
-                <T>{skill.name}</T>
-                <T size={font.caption} tone="muted">
-                  {skill.description}
-                </T>
-              </View>
-            </Row>
-          ))}
+        <SheetGroup>
+          {skills
+            .filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(filter.toLowerCase()))
+            .slice(0, 200)
+            .map((skill) => (
+              <SheetOption
+                key={skill.path}
+                icon={Sparkles}
+                title={skill.name}
+                help={skill.description}
+                onPress={() => {
+                  append(`\nUse the host skill at ${skill.path}.`)
+                  setMenu(null)
+                }}
+              />
+            ))}
+        </SheetGroup>
       </Sheet>
       <Sheet open={menu === 'settings'} onClose={() => setMenu(null)} title={say('Agent settings')}>
-        {(['edits', 'auto', 'full'] as const).map((access) => (
-          <Row
-            key={access}
+        <SheetGroup title={say('Permissions')} footer={say('Applies to this thread from its next step.')}>
+          {ACCESS_MODES.map((mode) => (
+            <SheetOption
+              key={mode.key}
+              icon={mode.icon}
+              title={say(mode.label)}
+              help={say(mode.help)}
+              selected={(model.settings?.access ?? 'auto') === mode.key}
+              onPress={() =>
+                onModel({
+                  ...model,
+                  settings: {
+                    access: mode.key,
+                    autoFallback: model.settings?.autoFallback ?? true,
+                    serviceTier: model.settings?.serviceTier,
+                  },
+                })
+              }
+            />
+          ))}
+        </SheetGroup>
+        <SheetGroup title={say('Behavior')}>
+          <SheetOption
+            icon={Shuffle}
+            title={say('Automatic provider fallback')}
+            help={say('Switch to the next provider when this one hits a limit.')}
+            trailing={
+              <Toggle
+                accessibilityLabel={say('Automatic provider fallback')}
+                value={model.settings?.autoFallback ?? true}
+                onValueChange={(autoFallback) =>
+                  onModel({
+                    ...model,
+                    settings: {
+                      access: model.settings?.access ?? 'auto',
+                      autoFallback,
+                      serviceTier: model.settings?.serviceTier,
+                    },
+                  })
+                }
+              />
+            }
             onPress={() =>
               onModel({
                 ...model,
                 settings: {
-                  access,
-                  autoFallback: model.settings?.autoFallback ?? true,
+                  access: model.settings?.access ?? 'auto',
+                  autoFallback: !(model.settings?.autoFallback ?? true),
                   serviceTier: model.settings?.serviceTier,
                 },
               })
             }
-          >
-            <T>
-              {access === 'edits' ? 'Ask before commands' : access === 'auto' ? 'Automatic approvals' : 'Full access'}
-              {(model.settings?.access ?? 'auto') === access ? ' ✓' : ''}
-            </T>
-          </Row>
-        ))}
-        <Row
-          onPress={() =>
-            onModel({
-              ...model,
-              settings: {
-                access: model.settings?.access ?? 'auto',
-                autoFallback: !(model.settings?.autoFallback ?? true),
-                serviceTier: model.settings?.serviceTier,
-              },
-            })
-          }
-        >
-          <T>Automatic provider fallback: {(model.settings?.autoFallback ?? true) ? 'On' : 'Off'}</T>
-        </Row>
-        <Row
-          onPress={() =>
-            onModel({
-              ...model,
-              settings: {
-                access: model.settings?.access ?? 'auto',
-                autoFallback: model.settings?.autoFallback ?? true,
-                serviceTier: model.settings?.serviceTier === 'fast' ? 'standard' : 'fast',
-              },
-            })
-          }
-        >
-          <T>Service tier: {model.settings?.serviceTier ?? 'standard'}</T>
-        </Row>
+          />
+          <SheetOption
+            icon={Zap}
+            title={say('Fast mode')}
+            help={say('Answers sooner on providers that offer a priority tier, at a higher usage cost.')}
+            trailing={
+              <Toggle
+                accessibilityLabel={say('Fast mode')}
+                value={model.settings?.serviceTier === 'fast'}
+                onValueChange={(fast) =>
+                  onModel({
+                    ...model,
+                    settings: {
+                      access: model.settings?.access ?? 'auto',
+                      autoFallback: model.settings?.autoFallback ?? true,
+                      serviceTier: fast ? 'fast' : 'standard',
+                    },
+                  })
+                }
+              />
+            }
+            onPress={() =>
+              onModel({
+                ...model,
+                settings: {
+                  access: model.settings?.access ?? 'auto',
+                  autoFallback: model.settings?.autoFallback ?? true,
+                  serviceTier: model.settings?.serviceTier === 'fast' ? 'standard' : 'fast',
+                },
+              })
+            }
+          />
+        </SheetGroup>
         {limitChat?.sessionId && hostHasAutoResume(store.appPreferences[limitChat.computerId]?.fallback) ? (
-          <>
-            <T
-              size={font.caption}
-              weight="600"
-              tone="muted"
-              style={{ paddingHorizontal: space.l, paddingTop: space.m }}
-            >
-              {t.autoResume}
-            </T>
-            <AutoResumeRows chatId={limitChat.id} />
-          </>
+          <AutoResumeRows chatId={limitChat.id} />
         ) : null}
       </Sheet>
     </Glass>

@@ -1,6 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { findHostRoute, rememberRoutes, verifyHost } from '../src/runtime/hostRoutes.ts'
+import {
+  findHostRoute,
+  rememberRoutes,
+  verifyHost,
+  developmentHostRoute,
+  chooseHostRoute,
+} from '../src/runtime/hostRoutes.ts'
 import { deviceProofKey, hostProof } from '@ramu/shared/hostProof'
 const lan = 'http://192.168.1.3:7788'
 const vpn = 'http://100.99.224.30:7788'
@@ -157,4 +163,109 @@ test('unproven candidates never receive a credential-bearing WebSocket probe', a
     usable: () => assert.fail('must prove the host before authenticating a socket'),
   })
   assert.equal(result, null)
+})
+
+test('a development bundle on NetBird provides a recovery candidate before the host has taught any routes', async () => {
+  const hint = developmentHostRoute(lan, 'http://100.99.224.30:8081/node_modules/expo-router/entry.bundle?platform=ios')
+  assert.equal(hint, vpn)
+  const result = await findHostRoute({
+    address: lan,
+    routes: [hint],
+    signal: new AbortController().signal,
+    verify: async () => verified,
+    usable: async () => true,
+  })
+  assert.equal(result.address, vpn)
+})
+
+test('development hints preserve the API port and TLS instead of copying Metro settings', () => {
+  assert.equal(
+    developmentHostRoute('https://192.168.1.3:8443', 'http://100.99.224.30:8081/index.bundle'),
+    'https://100.99.224.30:8443',
+  )
+  assert.equal(developmentHostRoute(lan, 'http://[fd00::12]:8081/index.bundle'), 'http://[fd00::12]:7788')
+  assert.equal(developmentHostRoute(lan, 'http://192.168.1.3:8081/index.bundle'), null)
+})
+
+test('public tunnels, localhost, credentials and missing bundle URLs are not guessed as API servers', () => {
+  for (const bundle of [
+    undefined,
+    'file:///bundle.js',
+    'http://localhost:8081',
+    'http://127.0.0.1:8081',
+    'https://metro.exp.direct',
+    'http://user:password@100.99.224.30:8081',
+    'broken',
+  ])
+    assert.equal(developmentHostRoute(lan, bundle), null)
+})
+
+test('a working manual address stays selected while NetBird is also available', async () => {
+  const checked = []
+  const result = await chooseHostRoute({
+    address: lan,
+    routes: [vpn],
+    signal: new AbortController().signal,
+    verify: async (address) => {
+      checked.push(address)
+      return verified
+    },
+    usable: async () => true,
+  })
+  assert.equal(result.address, lan)
+  assert.deepEqual(checked, [lan])
+})
+
+test('offline recovery chooses verified NetBird over a faster alternate LAN reply', async () => {
+  const other = 'http://192.168.1.4:7788'
+  let release
+  const gate = new Promise((resolve) => {
+    release = resolve
+  })
+  let finished = false
+  const pending = chooseHostRoute({
+    address: lan,
+    routes: [other, vpn],
+    signal: new AbortController().signal,
+    verify: async (address) => {
+      if (address === lan) return { state: 'unreachable' }
+      if (address === vpn) await gate
+      return verified
+    },
+    usable: async () => true,
+  }).then((result) => {
+    finished = true
+    return result
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(finished, false)
+  release()
+  assert.equal((await pending).address, vpn)
+})
+
+test('a reachable identity endpoint that cannot carry the app teaches the VPN fallback', async () => {
+  const result = await chooseHostRoute({
+    address: lan,
+    routes: [],
+    signal: new AbortController().signal,
+    verify: async () => verified,
+    usable: async (address) => address === vpn,
+  })
+  assert.equal(result.address, vpn)
+})
+
+test('an unresponsive VPN cannot hold offline recovery forever when another LAN route works', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const other = 'http://192.168.1.4:7788'
+  const pending = chooseHostRoute({
+    address: lan,
+    routes: [vpn, other],
+    signal: new AbortController().signal,
+    verify: async (address) =>
+      address === lan ? { state: 'unreachable' } : address === vpn ? new Promise(() => {}) : verified,
+    usable: async () => true,
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  t.mock.timers.tick(4000)
+  assert.equal((await pending).address, other)
 })
