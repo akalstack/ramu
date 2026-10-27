@@ -8,6 +8,16 @@ Build only what helps a person working with AI agents complete a concrete task a
 
 Follow [Architecture](docs/ARCHITECTURE.md) and [UI](docs/UI.md). Reuse existing navigation, components and services. Agents, files, Git and workspace state belong on the execution server behind the typed API; device interactions and preferences belong on the device. Preserve host isolation and provider boundaries. Add abstractions or settings only for demonstrated needs.
 
+## Code conventions
+
+Follow [Code conventions](docs/CODE-STYLE.md) for every change; it is the reference that keeps human and agent contributions consistent. In short:
+
+- Extend what exists before adding anything. Shared pure logic goes in `packages/shared`; the server owns agents, files, Git, terminals and storage.
+- Strict TypeScript, no new `any`, no `@ts-ignore`, no dead code or unused exports. Prettier and ESLint decide style; run `pnpm format`.
+- Validate and bound every server input with `zod`; enforce authorization on the server; keep secrets in `credentials/`; never build shell strings.
+- Every visible string goes through `t()` with an Indonesian translation; UI is built from the app-owned wrappers in `apps/web/src/components`, never raw buttons.
+- Comments explain why, not what, and never narrate history. Docs describe current behavior only.
+
 ## UI components
 
 Treat `apps/web/src/components/ui/` as upstream-owned shadcn primitives: do not edit or copy them for Ramu-specific behavior. Compose reusable app components outside that directory, following `apps/web/src/components/desktop-button.tsx`. Keep shared variants, theme tokens and interaction states there, preserving accessibility, refs and composition APIs.
@@ -22,7 +32,7 @@ For desktop-facing changes, run `pnpm build` followed by `pnpm test:desktop-smok
 
 ## Planning docs
 
-Plans describe unfinished work: the human need and how the delivery makes that person's work easier (steps removed, context carried over, mistakes prevented), the full intended delivery, existing services to extend and acceptance checks. Keep later options separate. Validate with a representative task: the person finishes it with less effort than before.
+Unfinished work lives only in [the roadmap](docs/ROADMAP.md). Plans describe unfinished work: the human need and how the delivery makes that person's work easier (steps removed, context carried over, mistakes prevented), the full intended delivery, existing services to extend and acceptance checks. Keep later options separate. Validate with a representative task: the person finishes it with less effort than before.
 
 Remove completed items and delete finished plans. Put lasting behavior in feature guides, remaining checks or blockers in [the roadmap](docs/ROADMAP.md) or an active plan, and update links. Do not keep completed-plan ledgers.
 

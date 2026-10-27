@@ -1,0 +1,87 @@
+# Agents and routing
+
+## Changing models while working
+
+Choosing a model during a running turn starts a five-second countdown: **Apply now** switches immediately and **Cancel** restores the applied model and effort. Adjusting effort while a change is pending keeps the original deadline. The countdown is cancelled if the turn stops; idle threads switch at once.
+
+Before applying, the server checks the provider adapter and the live runner's negotiated capabilities. A supported change restarts the process and resumes the native conversation, keeping process-bound tools and access settings (the transcript says **Settings changed**). A provider that needs a fresh session gets a budgeted **Context handoff**. A rejected change leaves the current process intact, and usage-limit fallback skips rejected targets. ACP runners check the model list and advertised resume support before the old process stops.
+
+Moving to a smaller context window uses the destination's capacity: if the native history fits, the session resumes; otherwise Ramu starts a fresh session with a compacted handoff from the saved thread record. Capacities (provider-reported or observed) are saved per provider, account and model. Unknown capacity or usage means a fresh handoff.
+
+## MCP connections
+
+**/mcp** in a thread shows connection status without sending a prompt. Claude and OpenCode report live server states with **Refresh** and per-server **Reconnect**; Codex reads its thread-scoped inventory and offers **Reload MCP servers** (effective next turn); Cursor and ACP runtimes show the configuration Ramu supplied, labelled as configuration. Runtimes without HTTP MCP mark remote servers unsupported but still receive stdio servers. Without a running provider process the dialog shows the last reported startup snapshot.
+
+A workspace needs no MCP configuration of its own. Every provider merges `.mcp.json` from the covered repositories (including the original directories behind isolated workspaces) and shares Claude-local entries for those repositories: Claude reads the selected account's `.claude.json`, and other providers import repository entries from the host's default Claude configuration. Global Claude-only entries and unrelated projects are not imported. The current checkout wins repository-file conflicts, local definitions beat repository files, and Ramu's own server name is reserved.
+
+Claude gets up to 60 seconds for MCP startup (explicit `MCP_TIMEOUT` and `CLAUDE_CODE_MCP_STARTUP_WAIT_MS` win), and imported Codex and OpenCode servers get the same budget unless their definition sets one. Pending connections are shown apart from failures. Changes apply on the next launch.
+
+## Rules
+
+**Settings → Agent setup → Rules** (and Settings → Rules on mobile) edit the same host-owned collection of your own instructions. Enabled **Always** rules reach each new thread in a labelled section that says they never grant permissions; **Manual** rules stay stored. Mobile requires an explicit host, project and provider scope before creating a rule.
+
+- Budget: 24,000 characters (names plus text) per scope, host-wide rules plus the project's. A save over budget is refused, not trimmed, and a host-wide rule is checked against every project. Settings estimates tokens (about four characters each).
+- Rules are additive. Identical text (ignoring whitespace) or the same name (ignoring case) among rules that can reach one thread shows a warning on both; Ramu never merges them.
+- Edits use the revision opened for editing; a concurrent edit refuses the save and keeps the draft. History can be previewed and saved as a new revision. Offline and viewer devices cannot change rules.
+- **Instruction files providers read** lists `AGENTS.md`, `CLAUDE.md` and rules-folder files (`.claude/rules`, `.cursor/rules`) for the project (two levels deep, skipping dependency and build folders) plus `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`. It is read-only: Ramu never edits, imports or sends them. Each shows its folder, the providers documented to read it, size, a bounded preview and frontmatter. `@path` includes are followed only inside the project (or user folder), five levels and 20 files deep; cycles, missing, outside and oversized files are reported, never fetched.
+- **Agent setup** in **/mcp** lists the rules, shared servers, skills and Shared MCP connections resolved for the thread (`agent.setup`, `agent/effectiveSetup.ts`), each **Configured**, **Delivered**, **Runtime confirmed**, **Needs refresh** or **Not sent** with a reason. Only names and states are returned, never rule text, addresses or credentials, and Ramu never claims a skill or rule was read or followed.
+
+## Thread titles
+
+A new thread shows its opening-message title at once. After the first user message the server schedules one isolated naming request (also for mobile and API starts; closing a client does not cancel it). Titles describe the task and intended outcome in the message's language from bounded user messages and relevant replies; helper output and tool results are excluded.
+
+**Rename** is authoritative; **Rename with AI** regenerates from the conversation, even over a manual name. A later manual edit or newer regeneration wins. A useful automatic title stays stable, with at most one refinement after the first reply. Titles never rename branches, folders or workspace labels. The title action shows **Naming thread** while pending and **Retry title generation** after a failure; a failed or limited request keeps the current name. Each attempt has a 15-second deadline, title work shares a two-request limit and never waits for quota resets, and pending work retries once after a restart. The server accepts a title a provider supplies itself, but no provider is enabled for that until verified against a live session.
+
+## Sub-agents
+
+Sub-agent cards show progress and transcripts; open one to inspect it, message it or stop it. Stopping the main thread stops its sub-agents. Native sub-agents already running keep their provider; after a restart Ramu reads saved transcripts so the main agent can reconcile unfinished work, without reattaching processes.
+
+- **Routing:** Ramu can send sub-agents to another provider or model. **Native** uses the provider's own. Type rules override general routing. Codex's optional hook routes before launch and adds a trust entry to `~/.codex/config.toml`.
+- **Isolation:** an isolated sub-agent uses its own checkout and applies its changes back on finish; conflicting patches stay in the checkout for review. Its tracked-change snapshot excludes untracked files, and it takes no follow-up messages.
+- **Automatic selection** (Settings → Workflows → Sub-agents, off by default): **Model and effort** lets the destination provider pick from its catalog per cross-provider task; **Effort only** keeps the configured model. It uses an isolated request with a 30-second timeout and no fallback, and falls back to the configured settings if the pick is invalid. **Maximum sub-agent effort** and **Per-model effort caps** apply to Ramu-managed sub-agents (the lower ceiling wins); the helper card records what was chosen.
+- **Activity row:** states are ordered connection, pending input, provider holds, parent work, helpers, goals, advisor, queue; secondary actions stay reachable. Helper groups keep their launch position and show each helper's latest state (current-turn helpers plus older active ones; earlier work is under History). A parent going idle does not stop a separately owned child; stopped and failed differ, and late progress cannot revive a settled helper. The server rechecks Stop and Message. Forwarded requests keep their IDs and child-origin labels, so answers route correctly, and a request in the desktop popover opens its owning session.
+
+## Usage limits and fallback
+
+**Settings → Models → Provider fallback** is one ordered list of provider and model pairs, best first (default: Claude Code, then Codex).
+
+- When a model reaches its limit the thread moves to the highest entry with room; unavailable or limited entries are skipped. The switch point is **Only at the limit** by default; 80%, 90% and 95% switch earlier.
+- Threads keep their current model while it has room; a higher model becoming available does not trigger a switch. The rule covers manual choices and models outside the list, including after a restart.
+- The composer's usage chip shows where the next message goes and can keep the current model for one message or the thread.
+- Titles, recaps and commit messages keep their model until it is limited. Sub-agents use the main list or their own list and threshold, and only move down it.
+- Fallback needs installed, authenticated providers and carries visible conversation context, never private reasoning. Authentication and tool errors do not trigger it.
+
+### When every provider is limited
+
+The thread goes idle with **Limit reached · resumes around …** instead of failing; a clock replaces its sidebar status and Inbox lists it under Running. It keeps waiting in the background and survives restarts.
+
+- Messages sent or queued meanwhile stay in the queue and go out together as one request on resume (or the unfinished request continues). Stopping the thread ends the wait.
+- Ramu rechecks at the known reset, otherwise backs off from one to 15 minutes. Waits are keyed by provider login: threads on one login share a timer and check, and resume with a small random spread.
+- A limit is a pause, not a failed turn. **Wait on this model** (or fallback off) waits on the same provider; a goal waits the same way. A 429 with exhausted retries counts as a limit; a bare "rate limit" gets one quiet retry first; "prompt is too long" stays an error.
+- A sub-agent with nowhere to go waits with its login and says so. Background work nobody is blocked on (advisor, reviews, learning, recaps) waits up to 45 minutes. Titles, commit messages and Asides report the limit at once. Scheduled runs stay *running* through the wait.
+
+**Auto-resume** is the thread's choice (`agent.setAutoResume`), otherwise the global `fallback.autoResume` (on), read live. Sub-agents and the advisor follow their parent. With it off the wait is shown, no timer runs and messages stay queued; once a known reset passes, one push says the thread can resume (a guessed reset never notifies). **Try again** (`agent.retryLimitNow`) works either way: it re-reads usage and continues only if a reading shows room or the provider has no reading of its own; otherwise the wait stays with an updated time. Resuming a waiting goal tries immediately.
+
+Reset times come from the provider's reading, else from the notice ("in 2 hours", "resets at 5pm", "17:00 UTC", ISO times, in the reported zone or the host's). With none, the wait is marked *guessed*.
+
+### Carrying the conversation to another provider
+
+A switch, a lost native session or a rewind starts a provider session that has not seen the conversation. Ramu builds a handoff from the thread's event log (no model call) and sends it in a `<ramu-handoff>` block apart from the request (`Next request: …`): a frame naming the cause, a state block (latest request and outcome, last reply, open questions and approvals, queue, helpers, changed files, last failing tool result, and the goal for providers without session guidance), the checkpoint if valid and labelled historical, and the transcript.
+
+- **Compaction is tiered:** user messages, questions, answers and approvals are never cut and the latest turn stays whole. Old tool results shorten first, then old calls and assistant text, then drop. Each dropped run becomes a line with its event range and a `session_recall` `startSeq` to read it.
+- **Returning providers resume their own session** and get only unseen events (Codex, OpenCode, Cursor, Antigravity); if resume fails, a full handoff. Claude Code always gets a full handoff. Native session IDs are kept per login with the last event each saw; a rewind forgets them.
+- **The checkpoint is sent once**, in the handoff. Near a limit it is refreshed ahead of time ([Learning](LEARNING.md#checkpoint-refresh-near-a-limit)); the handoff only reads what is saved.
+- **Budget:** one token per UTF-8 byte, up to a quarter of the destination window and at most 400,000 bytes (32,000 for an unknown window, estimated at 128,000 tokens); the rest is reserved for instructions, the request, attachments and output. A conversation that still does not fit is never truncated silently: a model switch is refused before the live session stops, fallback skips that model (or holds the thread at its limit with the reason), and an impossible launch fails clearly.
+- **The transcript records it** (`handoffInfo`: cause, full or delta, event range, size, dropped or shortened events, checkpoint boundary). **New events only** is a delta into a returning session; **compacted handoff** means a checkpoint was used or content was shortened or omitted; **full handoff** means none was. Provider-private reasoning and credentials are never transferred.
+
+## Asides and advice
+
+Select thread text to quote it or ask a read-only Aside; replies stay separate from the main conversation. The optional advisor sends thread context to a second model ([Providers](PROVIDERS.md#advisor)).
+
+## Inbox
+
+Home stays a start screen with one line under the box: what is running, new recaps and completed work (opens Inbox), and what is blocked on you. **Inbox** (⌘⇧I) opens on **All** and has **Waiting**, **Running**, **Recaps**, **Learned** and **Completed** tabs; its badge counts threads waiting on you and recaps needing a decision. Rows are threads drawn like the sidebar's; answer questions, connector requests and approvals in place. Sub-agents appear as a count on their thread, and only one waiting for your answer gets its own row.
+
+Nothing needs clearing. **Waiting** empties as you answer or dismiss; **Completed** shows threads finished in the last 7 days (at most 50) grouped by day with an unread dot and **Archive** on hover; **Learned** shows the latest 20 summaries. Unfinished goals stay out of Completed: active goals and limit holds stay in Running, paused, blocked and turn-limited goals in Waiting; pending questions and approvals take priority. Sub-agent threads have a **Back to parent thread** link.
+
+After a restart, completed turns keep their outcome. Older stopped records whose last activity was a successful result are restored as transcript-only sessions; later user, helper, tool, request or error activity prevents that.

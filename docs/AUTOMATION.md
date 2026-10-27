@@ -69,6 +69,6 @@ Connector forms and browser-link requests appear in the thread with Submit, Decl
 
 Provider text and command output update existing rows while running. Completed results replace live output. The change summary records saved revisions separately from live patch previews.
 
-## Checks
+## Tests
 
-Run `pnpm check`, then `pnpm test:desktop-smoke` on macOS after building. The single startup check uses an isolated profile and simulated providers. Cover automation behavior with focused unit or integration tests. Live provider behavior and installed login startup need separate validation.
+Cover automation behavior with focused unit or integration tests; live provider behavior and installed login startup need manual validation.

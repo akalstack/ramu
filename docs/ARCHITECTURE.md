@@ -4,7 +4,7 @@ Ramu is a pnpm workspace. The desktop app is a thin Electron shell around a work
 
 ```
 apps/web (React UI) ──► apps/desktop (Electron main + preload) ──► @ramu/client-runtime ──► apps/server
-                                                                   (local socket or HTTPS + bearer token)
+                                                                   (Unix socket, or WebSocket + bearer token)
 ```
 
 The UI never touches the filesystem, Git, or providers directly. It calls named methods; the server executes them.
@@ -22,7 +22,7 @@ Call an ongoing conversation and its work a **thread** in product copy. A **task
 | `apps/site` | Project website. |
 | `packages/shared` | Domain types, the API method table, and pure helpers used by every app, grouped into `chat/`, `review/`, `search/`, `workspace/` and `providers/` (import as `@ramu/shared/<folder>/<module>`). |
 | `packages/contracts` | Wire protocol: versions, capabilities, request encoding. |
-| `packages/client-runtime` | Node client for a server: local socket or authenticated HTTP, reconnects, limits. |
+| `packages/client-runtime` | Node client for a server: Unix socket or authenticated WebSocket, reconnects, limits. |
 | `scripts/smoke/` | One desktop startup smoke test. |
 | `scripts/` | `release/` packaging and release tooling. |
 
@@ -38,17 +38,34 @@ Every call is a method in the table in `packages/shared/src/api.ts`, for example
 
 Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockCheckouts`) when a handler must not interleave with another on the same thread or repository.
 
+## Transport
+
+A paired remote host is reached over one authenticated WebSocket per host (`RuntimeSocket`, pooled in `hostSocket.ts` for the Node client and `socketTransport.ts` on the phone). It carries every call and every event; there is no HTTP/SSE path. The local service speaks the same socket over its Unix socket. HTTP remains only for pairing, token renewal, health and `GET /session`, which happen before a socket can authenticate.
+
+- **Reconnect:** bounded, jittered backoff. After three failed attempts an `events`-mode host waits for an announcement or wake; a `periodic` host checks every five minutes. A network loss suspends the socket; a network change or wake reconnects at once. The phone rehydrates whenever its stream ends.
+- **Errors:** a refused socket or a host that predates sockets is reported as such ("Pairing was revoked", "Update Ramu on this host"). A socket that never connects is probed once over HTTP so a blocked WebSocket is named.
+- **Subscriptions:** clients subscribe by channel and resource (`hostSubscription.ts` on the phone). Agent events stream in full only for the thread on screen; state, questions, permission requests, queue and goal events still arrive for all threads.
+- **Recovery:** `agent.changes(sessionId, cursor, knownLastSeq)` resumes a transcript from a per-row revision counter, with a full snapshot for no cursor, a future cursor, a rewind or more than 2000 changes. `TerminalService.snapshot(id, since)` fetches only the missed terminal gap.
+- **Flow control:** terminal flow control is opt-in per subscription. A client with `flow: true` acknowledges each `term:data` chunk; the host holds output past a 1,000,000-character unacknowledged window and sends `term:behind` once the client catches up so it fetches the gap. The phone enables it.
+- **New threads:** `thread.start` creates, sets up a worktree if needed, and starts in one operation-keyed call. A failure after the thread exists returns the thread so it is kept and retried.
+
+A warm HTTP call and a socket call cost the same; the socket's benefit is one connection and one authenticated channel per host for calls and events, not speed.
+
 ## Hosts and windows
 
-The desktop has one shell renderer for every paired host. `HostSelectionProvider` selects a host and destination; `WorkspaceProvider` lazily mounts a `HostWorkspace` store for each requested connected host. Sidebar rows read those live stores, and `useWorkspace()` refers to the store on screen. Main retains connection lifecycle and delivers host-tagged events to the shell. `workspace/hostEvents.ts` routes them to host listeners and coalesces hidden-store work fairly; terminal output has bounded cursor-aware buffers.
+The desktop has one shell renderer for every paired host. `HostSelectionProvider` selects a host and destination; `WorkspaceProvider` lazily mounts a `HostWorkspace` store per connected host. Sidebar rows read those stores, and `useWorkspace()` returns the store on screen. The main process owns connection lifecycle and delivers host-tagged events; `workspace/hostEvents.ts` routes them to listeners and coalesces work for hidden stores. Terminal output uses bounded, cursor-aware buffers.
 
-`invokeOn(host, method, ...args)` in `apps/web/src/ipc.ts` routes explicit host calls through `hostInvoke.ts` (known, connected host; server-only allow-list). Native menus, dialogs, clipboard and device lifecycle operations stay local. Queries use `['ipc', hostId, method, ...]`; content state lives under `host:<hostId>:`. `deviceState.ts` owns device-wide UI choices. Legacy remote storage partitions are imported once before the shell starts, without overwriting newer shell values, and then no remote renderer is retained. Notification clicks select their host and thread in the same shell. Remaining real-host measurements and migration acceptance are tracked in [the roadmap](ROADMAP.md#host-and-provider-acceptance).
+`invokeOn(host, method, ...args)` in `apps/web/src/ipc.ts` routes explicit host calls through `hostInvoke.ts` (known, connected host; server-only allowlist). Native menus, dialogs, the clipboard and device lifecycle stay local. Query keys are `['ipc', hostId, method, ...]`; content state lives under `host:<hostId>:`. `deviceState.ts` owns device-wide UI choices.
 
-### Integrated browser boundary
+### Integrated browser
 
-The execution server's browser broker resolves a runtime per turn: host-managed Chromium by default (prepared on first use), or one named local desktop event stream when the host runtime is turned off over the existing Unix-socket transport. An acknowledgement precedes readiness; replies require an opaque connection credential. Browser tool arguments cannot choose another thread, run or desktop. The backend/profile selection is frozen with the provider connection, obsolete connections are refused, and disconnect/run stop settles pending work without replaying mutations. Remote execution has no implicit bridge to the viewing desktop's localhost or website identities. The optional host runtime uses the same ownership, snapshot and transfer domain code through a Playwright factory with sandboxed persistent/Temporary contexts. Its authenticated viewer uses the existing paired-owner connection, like terminals, with tabs scoped to their thread. A private CDP compositor feed keeps only the latest bounded JPEG per tab; cursor-based reads wait for a changed frame and share one feed across viewers. Frame reads have their own concurrency budget so they do not occupy desktop viewer input slots, stop when unwatched, and recheck device/thread access before returning. No CDP endpoint or page JavaScript authority is exposed to clients; viewer-role devices cannot control it. The same viewer operations (`viewer` bridge commands, answered by the desktop's `BrowserRuntime` as the paired device, never as an agent run, with their own concurrency cap) let a paired phone view and control the attached desktop's browser when the host runtime is off, so one viewer works with either backend.
+The server's browser broker resolves a runtime per turn: host-managed Chromium (default; prepared on first use) or, when that is off, one named local desktop event stream.
 
-Electron owns sandboxed, context-isolated guest contents, the non-secret local profile catalog, persistent/Temporary partitions, native input and user-only sign-in windows. Fixed isolated-world scripts handle DOM observations and element actions. Private fixed CDP operations provide named keys, bounded network metadata and live website-dialog handling; there is no general-purpose evaluation or public debugging endpoint. Website data never enters host preferences. Profile administration locks all owned contexts and waits for their destruction before clearing site data; failed metadata/data writes retain a retry path. The web pane receives metadata and explicit user actions through named desktop APIs. See [browser behavior](UI.md#integrated-browser) and [remaining delivery](ROADMAP.md).
+- **Isolation:** tool arguments cannot choose another thread, run or desktop. The backend and profile are frozen with the provider connection; a disconnect or run stop settles pending work without replaying a mutation. Remote execution has no implicit bridge to the viewing desktop's localhost or sign-ins.
+- **Viewing:** paired owner devices view the host browser through the existing host connection, like terminals. A private CDP compositor feed keeps only the newest bounded JPEG per tab, shared across viewers. No CDP endpoint or page JavaScript authority reaches clients, and viewer-role devices cannot control it.
+- **Desktop browser:** Electron owns sandboxed, context-isolated guest contents, the non-secret profile catalog, partitions, native input and sign-in windows. Fixed isolated-world scripts read the DOM and act on elements; there is no general evaluation or debugging endpoint. Website data never enters host preferences.
+
+User-facing behavior is in [UI](UI.md#integrated-browser).
 
 ## Server layout (`apps/server/src`)
 
@@ -56,33 +73,35 @@ Electron owns sandboxed, context-isolated guest contents, the non-secret local p
 | --- | --- |
 | `agent/` | Thread lifecycle, one collaborator per concern: session store and registry, recorder, message dispatcher, goals, provider wait, user requests (questions, permissions, elicitation), fallback router, advisor, sub-agents, stream pump, restart recovery. Each owns its state and sees the rest through a narrow `*Host` interface. `agent.ts` is the thin `AgentService` façade that wires them together. |
 | `providers/` | Provider plumbing and the `ProviderAdapter` interface (`adapter.ts`) with one adapter per provider in `adapters/`: binary lookup, account environment, sign-in checks, login arguments and update plans. Also usage and usage-limit detection and `fakeAgent.ts` for simulated runs. |
-| `workspace/` | Repositories, files, Git, isolation checkouts, terminals (PTY), editorconfig, discard previews. |
+| `workspace/` | Repositories, files, Git, isolation checkouts, terminals (PTY), editorconfig, discard previews, forge (GitHub) adapters. |
 | `review/` | Recorded diffs, review state and stats, undo and restore with conflict checks. |
 | `memory/` | Shared memory notes, memory files, learning, recaps. |
-| `remote/` | Pairing, devices, network listener, presence announcements, mobile push, host folder browsing. |
+| `remote/` | Pairing, devices, network listener and socket, presence announcements, mobile push, host folder browsing. |
 | `background/` | Schedules, activity, keep-awake, app update checks, notices. |
-| `browser/` | Private local-desktop browser broker and scoped provider tools; no Electron imports. |
-| `mcp/` | Host-owned Shared MCP management, policy, external gateway, SQLite metadata and isolated HTTP/stdio clients. Chats receive approved tools through a separate `shared_mcp` server (`mcp/sessionTools.ts`). |
-| `credentials/` | OS-backed host credential storage shared by integrations; only opaque references belong in ordinary storage. |
+| `browser/` | Host browser broker and scoped provider tools; no Electron imports. |
+| `computer/` | Computer-use sessions and control leases. |
+| `interactive/` | Agent-generated interactive documents: compile, bundle, store. |
+| `mcp/` | Shared MCP: management, policy, external gateway, SQLite metadata, isolated HTTP/stdio clients. |
+| `credentials/` | OS-backed credential storage shared by integrations; only opaque references go in ordinary storage. |
+| `settings/` | Host preferences and model sets. |
 | `ipc/` | Dispatcher, handler groups, shared context, schemas. |
 
-`index.ts` is the service entry point, `cli.ts` the CLI, `db.ts` the database, and `build.ts` the build fingerprint used to decide when a running service is stale.
+`index.ts` is the service entry point, `cli.ts` the CLI, `db.ts` the database, and `build.ts` the build fingerprint that detects a stale running service.
 
-Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`; SQLite retains operational state and the legacy migration archive. Existing workspace preference readers delegate to this store. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or expanding permissions. See [Configuration files](CONFIGURATION.md).
+Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`; SQLite keeps operational state. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or widening permissions. See [Configuration files](CONFIGURATION.md).
 
-### Shared MCP server boundary
+### Shared MCP
 
-`packages/shared/src/mcp.ts` defines non-secret connections and account-sharing grants. `mcp/policy.ts` binds grants to one execution host, stable connection and service-account IDs, provider-account IDs, project scope, configuration revision and catalog digest. Explicit account setup can share approvals bidirectionally; opting out or removing an account removes its shared access. Connection renames preserve identity; security-relevant definition changes invalidate grants. Production policy and outcome metadata use an atomically replaced SQLite `app_state` record through `SharedMcpStorage`; a failed save leaves live policy unchanged. An interrupted pending call becomes an unknown outcome on restart, and uncertain calls are retained when old settled history is pruned. Policy approval is not a runtime-readiness or authentication result.
+`packages/shared/src/mcp.ts` defines non-secret connections and account-sharing grants. `mcp/policy.ts` binds a grant to one host, connection, service account, provider accounts, project scope, configuration revision and catalog digest; security-relevant changes invalidate grants. Policy approval is not a readiness or authentication result.
 
-`mcp/gateway.ts` owns one upstream session per thread and connection. External tools never enter the trusted Ramu `ToolRegistry`. Discovery filters the catalog through the same policy used before dispatch; restricted sessions are denied, and background sessions need an explicit external-access policy. Catalog pages, total size, tool arguments, output, concurrent operations and requests are bounded. Catalog changes invalidate approvals, including changes while a per-call approval is pending. Outcome recording precedes dispatch; transport failure records an unknown outcome without replaying the operation. The host manager persists these records and binds credentials to the selected service account. `mcp/sessionTools.ts` serves each chat's approved tools on `/mcp/external` under the `shared_mcp` server name, never `ramu`, so no permission mode that trusts Ramu's own tools trusts them. Names are `<server>-<hash of the connection ID>__<tool>` within Claude's 64-character limit. Every list and call goes through a gateway bound to that chat's provider login, project and role; sub-agents and review chats get none, and each call asks through the chat's existing permission card with the server, service account, login and arguments. Claude, Codex, OpenCode, Cursor and ACP runners add the server only when a connection applies to the provider and project. Upstream errors are replaced with setup/recovery messages rather than copied into diagnostics.
+`mcp/gateway.ts` owns one upstream session per thread and connection. External tools never enter Ramu's trusted `ToolRegistry`; `mcp/sessionTools.ts` serves each chat's approved tools on `/mcp/external` under the `shared_mcp` server name, so no permission mode that trusts Ramu's own tools trusts them. Every call goes through a gateway bound to the chat's login, project and role, asks through the thread's permission card, and records its outcome before dispatch. A transport failure records an unknown outcome and is never replayed. Sub-agents and review chats get no external tools. Catalog size, arguments, output and concurrency are bounded.
 
-`mcp/stdio.ts` uses the installed MCP SDK's shell-free executable/argument spawning and platform environment allowlist. Local commands have the host user's filesystem/process access: this is not an OS sandbox and must be disclosed before explicit connection setup. Stderr is discarded, and Ramu/provider credentials and unrelated environment variables are not automatically inherited. Environment-secret references require an injected host-owned secret reader; missing or locked storage fails before execution. There is no plaintext fallback. `mcp/http.ts` uses Streamable HTTP with a separate TLS pool per upstream session, exact-origin requests, no automatic redirects, bounded bodies, and vetted DNS answers used directly by the socket. Private/reserved addresses are denied unless the host administrator explicitly enables private-network access on that definition; TLS certificate validation remains enabled. Reconnect never automatically repeats a tool invocation.
+- **Transports:** `mcp/stdio.ts` spawns without a shell, with an environment allowlist and discarded stderr. Local commands run with the host user's access; this is not a sandbox and is disclosed before setup. `mcp/http.ts` uses Streamable HTTP with exact-origin requests, no automatic redirects, bounded bodies and vetted DNS answers; private and reserved addresses are denied unless an administrator enables them for that definition.
+- **Credentials:** header and environment secrets are write-only (`mcp.setCredential`, `mcp.removeCredential`), stored in the host credential store under a fresh reference, and never copied into diagnostics. Replacing one changes the revision, so approvals are reviewed again.
+- **OAuth:** `mcp/oauth.ts` runs the MCP SDK authorization flow on the host with a one-transaction loopback callback (single use, matching `state`, ten minutes at most). Tokens live in one credential entry; an expired login shows as Sign-in required.
+- **Administration** is enforced on the server: paired clients can read status but not change connections, run checks or set credentials. Settings → Agent setup → MCP servers is the UI.
 
-Settings → Agent setup → MCP servers provides host-scoped status, search, remote definitions, project/provider selection, explicit Connect/Check and catalog review, enable/disable, edit, disconnect and removal. Saving never starts a command or opens a connection. Administration is enforced on the execution server: paired clients can read status but cannot mutate connections, run checks or provision credentials. Management checks use isolated sessions, close after five idle minutes, and reject late responses after an edit/disconnect. Catalog review permits selection of tools; calls currently retain per-call approval rather than trusting upstream read-only hints. A connection check is not provider-runtime readiness. The editor covers remote servers and local commands (executable, one argument per line, working folder, private-network approval, service-account label). Header and environment credentials are write-only (`mcp.setCredential`, `mcp.removeCredential`): the value goes to the host credential store under a fresh reference, the old entry is deleted only after the new definition is saved, a locked store leaves the working credential in place, and changing the service account deletes the old account's entries. Replacing a credential changes the configuration revision, so approvals are reviewed again. Remote servers sign in with OAuth (`mcp/oauth.ts`): the MCP SDK's authorization flow (protected-resource and authorization-server discovery, resource binding, dynamic registration of a public PKCE client, `state`) runs on the host, and the sign-in page opens on the host's own window only, because the callback is a loopback listener that exists for one transaction (ten minutes at most), accepts a single callback with the matching `state`, and refuses it if the connection's revision or service account changed or the sign-in was cancelled. Tokens and the registered client live in one host credential entry referenced as `mcp-oauth`; refresh rewrites that entry in place so approvals are not invalidated, and an expired or revoked login surfaces as Sign-in required. Requests to the authorization server go through the same vetted-address fetch, with no MCP headers carried to another origin. Native discovery/import and provider availability remain in the [Shared MCP plan](ROADMAP.md).
-
-`credentials/store.ts` uses [`@napi-rs/keyring`](https://github.com/Brooooooklyn/keyring-node) through asynchronous native APIs, without Electron imports or secret process arguments. Entries are bound to host, integration, connection, account and opaque reference. Linux explicitly requires Secret Service instead of silently falling back to a kernel keyring. Verification performs a write/read/delete round trip; locked or unavailable storage fails with a sanitized error. Replacement writes a fresh reference and preserves the old entry until its caller validates and publishes the replacement. Headless hosts need an unlocked OS credential service in the execution user's session; no secret provisioning is available merely because a paired client can open Settings. Disconnect/removal revokes grants and deletes only Ramu-owned referenced credentials; failed deletion retains the definition for retry and never logs out a CLI.
-
-Focused tests use real SQLite reopenings, SDK in-memory client/server pairs, a child-process stdio fixture, DNS/HTTP transport tests and Settings rendering. Opt-in acceptance on 2026-10-19 verified native credential write/read/delete on this Mac and the production HTTP gateway against the public [DeepWiki endpoint](https://docs.devin.ai/work-with-devin/deepwiki-mcp), reading a public repository for two configured provider principals. This does not establish paid/live provider-thread injection, OAuth/Atlassian support, packaged native storage or Linux/Windows/headless acceptance.
+`credentials/store.ts` uses [`@napi-rs/keyring`](https://github.com/Brooooooklyn/keyring-node) without Electron imports. Entries are bound to host, integration, connection, account and reference. Linux requires Secret Service rather than falling back to a kernel keyring. Locked or unavailable storage fails with a sanitized error; headless hosts need an unlocked OS credential service in the execution user's session. Removing a connection deletes only Ramu-owned credentials and never logs out a CLI.
 
 ## Web layout (`apps/web/src`)
 
@@ -118,9 +137,6 @@ Accounts: every enabled account of a provider is tried in order (selected accoun
 
 ## Code quality
 
-`pnpm check` also runs ESLint (`eslint.config.mjs`: typescript-eslint and the classic React hooks rules) and [knip](https://knip.dev) (`knip.json`) to catch unused files, exports and dependencies. Desktop lists runtime packages (for example the provider SDKs) that its bundled service loads, so `knip.json` ignores them on purpose.
+`pnpm check` runs Prettier, ESLint (`eslint.config.mjs`: typescript-eslint and the React hooks rules) and [knip](https://knip.dev) (`knip.json`) for unused files, exports and dependencies. `knip.json` ignores runtime packages that bundled code loads by name (provider SDKs, interactive-content libraries). Conventions are in [Code conventions](CODE-STYLE.md).
 
-## Known follow-ups
-
-- Warnings remain for `react-hooks/exhaustive-deps` and `@typescript-eslint/no-explicit-any`; they are not errors yet.
-- Provider install, login and update flows are only exercised by live providers; validate changes there against real CLIs.
+Provider install, login and update flows run only against live providers; validate changes there with the real CLIs.

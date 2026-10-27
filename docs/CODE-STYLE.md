@@ -1,0 +1,74 @@
+# Code conventions
+
+Rules for human and agent contributors. Tools enforce what they can (`pnpm check`: Prettier, ESLint, knip, `tsc`, tests); this page covers the rest. When code and this page disagree, fix whichever is wrong in the same change.
+
+## Before writing code
+
+1. Find the existing module, component or service that already does the job, and extend it. Search `packages/shared` first: pure logic used by more than one app lives there.
+2. Put code where [Architecture](ARCHITECTURE.md) says it belongs. The server owns agents, files, Git, terminals and storage; the UI calls typed methods and never touches them directly.
+3. Add an abstraction, setting or dependency only for a need that exists today.
+
+## TypeScript
+
+- Prettier decides formatting (no semicolons, single quotes, 120 columns, trailing commas). Run `pnpm format`; do not hand-format.
+- `strict` and `noUncheckedIndexedAccess` are on. Narrow indexed reads instead of asserting with `!` unless the invariant is local and obvious.
+- Avoid `any`; use `unknown` and narrow, or a precise type. A new `any` needs a reason in a comment. Do not add `@ts-ignore`; use `@ts-expect-error` with the reason, and only when the error is real.
+- Prefer `const`, early returns, small functions and discriminated unions over flags and optional-field bags. Name things for what they are, not how they are used.
+- Imports: ES modules only. Shared code is imported as `@ramu/shared/<folder>/<module>`; never reach into another package's `src` by relative path. `apps/server` must not import Electron or `apps/desktop`.
+- Throw `Error` with a message a person can act on (a sentence, no stack jargon). When rethrowing, pass `{ cause }`. Never put tokens, prompts or file contents in error text or logs.
+- Empty `catch {}` is allowed only when failure is expected and harmless; say why in a comment if it is not obvious.
+- Disabling an ESLint rule needs a one-line reason after `--`. Regexes that deliberately match control characters are the usual case.
+- No dead code, commented-out code or exports nothing imports (`pnpm knip` fails the build). Delete rather than deprecate.
+
+## Comments and naming
+
+- Comment the why: a constraint, an ordering requirement, a security boundary or a surprising platform behavior. Do not narrate what the next line does.
+- Exported functions and types that are not self-explanatory get a short `/** … */`. Keep comments true to the current code; no history ("now", "previously", "fixed in …"), no task or ticket references.
+- Files are `camelCase.ts` for modules, `PascalCase.tsx` for components, `kebab-case.tsx` for the app-owned shared controls in `apps/web/src/components`. Tests are `<module>.test.ts` (`.test.mjs` in `apps/mobile`) in the package's `test/` directory.
+- User-facing words: **thread** (product copy), **task** (internal and API names). See [Architecture](ARCHITECTURE.md).
+
+## Server (`apps/server`)
+
+- A new call is a method in `packages/shared/src/api.ts`, implemented in a handler group under `src/ipc/handlers/`. Handlers take the shared `HandlerContext`, not globals.
+- Validate every input at the handler boundary with a `zod` schema from `ipc/schemas.ts` or beside the handler. Bound strings, arrays and numbers (`max`, `int`, `positive`); unbounded input is a defect.
+- Serialize work that must not interleave with the keyed locks in `ipc/helpers.ts`.
+- Authorization is server-side. Hiding a control in the UI is never a permission check. New methods are denied to viewer-role devices unless added to the viewer allowlist (`viewerMayInvoke` in `packages/shared/src/viewerAccess.ts`) on purpose (see [Security](../SECURITY.md)).
+- Secrets go through `credentials/`. Only opaque references are stored in settings or SQLite.
+- Mutations that may be retried take an operation key so a repeat returns the first result.
+- Build commands Ramu runs itself as an executable plus an argument array, never a shell string. (Terminals, background terminals and goal `verify:` commands run user-supplied shell text on purpose; keep their approvals and limits.) Resolve paths and check containment before reading or writing user-supplied paths.
+- Keep one collaborator per concern with a narrow `*Host` interface, as in `agent/`; do not grow the façade files.
+
+## Web (`apps/web`)
+
+- Function components and hooks. Satisfy `react-hooks/exhaustive-deps`; if a dependency is deliberately omitted, say why on the disable comment.
+- Server data goes through `ipc.ts` (`ramu.invoke`, `invokeOn`) and TanStack Query keys of the form `['ipc', hostId, method, ...]`. Do not keep a second copy of server state in component state.
+- Every visible string goes through `t()`; add the Indonesian translation in the same change ([Localization](LOCALIZATION.md)).
+- UI is composed from `components/ui` (upstream shadcn, never edited) through the app-owned wrappers (`desktop-button.tsx`, `row-button.tsx`, `drag-handle.tsx`, …). No raw `<button>`; `sharedButtons.test.ts` enforces it. See [UI](UI.md).
+- Respect reduced motion, keyboard operation and accessible names for every new control.
+- Keep per-device choices (layout, appearance) on the device and anything an agent or repository depends on on the server.
+
+## Mobile (`apps/mobile`)
+
+- Share logic with desktop by moving it into `packages/shared`; keep screens thin.
+- Copy goes through `useT()` or `useSay()` and the shared dictionary.
+- Controls need accessible labels and touch targets, and must work when the host is offline or the device is a viewer. Row actions are siblings of the row, not nested inside it.
+
+## Tests
+
+- Vitest for packages and apps (`apps/mobile` uses `node --test`). Add or update a test for every behavior change or bug fix, in the package's `test/` directory.
+- Test observable behavior and edge cases: failure paths, limits, races, permission denial. Do not assert implementation details or re-test the library.
+- Prefer real boundaries (SQLite on a temp directory, an in-process server) over mocks; use fakes for providers (`providers/fakeAgent.ts`). Tests must not need network, credentials or a paid model; opt-in live tests use the `*.live.test.ts` suffix and skip unless their environment variable is set.
+- Leave nothing behind: temp directories and timers are cleaned up.
+- The single desktop startup check is `scripts/smoke/desktop-smoke.mjs`; do not add another end-to-end suite.
+
+## Documentation
+
+- Docs describe how things work now. No changelogs, status ledgers, dates of when something was verified, or "we plan to" outside [the roadmap](ROADMAP.md).
+- One home per fact. Link instead of repeating. A feature guide covers behavior a person or contributor needs; implementation detail belongs in code comments.
+- Write short, concrete sentences in the present tense. Cut filler, hedging and marketing. Prefer a list or table to a long paragraph.
+- Update the guide in the same change that alters the behavior; delete the guide's section when the feature goes.
+
+## Commits and pull requests
+
+- Conventional commit subjects: `feat(scope): …`, `fix(scope): …`, `docs: …`, `refactor`, `test`, `chore`. Describe the outcome, not the files.
+- One focused change per pull request. State what you ran (`pnpm check`, desktop smoke) and attach screenshots for UI changes.

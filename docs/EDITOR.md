@@ -22,6 +22,6 @@ Drop Explorer files or folders onto the thread input or conversation to add file
 
 **Settings → Appearance → Crisper text** enables grayscale font smoothing, primarily on macOS. Turn it off to use platform defaults.
 
-## Checks
+## Tests
 
-Run `pnpm check`. Add focused unit or integration tests for editor and save-conflict behavior. On macOS, build and run `pnpm test:desktop-smoke` for startup validation; manually verify font smoothing, native Explorer imports and thread drops when changing them.
+Add focused unit or integration tests for editor and save-conflict behavior. On macOS, manually verify font smoothing, native Explorer imports and thread drops when changing them.

@@ -16,7 +16,7 @@ Built-in themes live in `packages/shared/src/themePresets.ts`. They are ordinary
 
 A trial is temporary and is not persisted. **Keep theme** validates, saves and selects the theme; **Revert**, closing the editor or restarting restores the saved selection. The recovery controls use a fixed readable palette. Desktop trials affect the current window. Kept desktop themes use device storage shared by host windows; they are not execution-host preferences.
 
-The [production-component preview](UI.md) includes thread/request states, code/diffs, terminal output and interactive content. Custom colors map to app chrome, terminal and Monaco workbench surfaces; syntax token colors retain the editor's GitHub palette. Interactive documents receive appearance updates without resetting their controls.
+The production-component preview ([UI](UI.md)) includes thread/request states, code/diffs, terminal output and interactive content. Custom colors map to app chrome, terminal and Monaco workbench surfaces; syntax token colors retain the editor's GitHub palette. Interactive documents receive appearance updates without resetting their controls.
 
 ## Generate or refine
 
@@ -29,5 +29,3 @@ An agent can offer a validated draft with `propose_theme`. **Preview theme** ope
 Export a kept theme as `<id>.ramu-theme.json` or copy its JSON. File and pasted-JSON imports go through validation and preview before Keep. A digest detects changed data, not author identity; an edited file is flagged and a changed copy of an installed ID becomes a separate theme. **Copy recipe** copies a short Markdown creation prompt rather than the conversation.
 
 Theme data uses the shared versioned schema and explicit colors. Imports are data, not instructions or executable CSS. Device preferences, provider credentials and reference attachments do not belong in theme exports. Selecting or sharing a saved theme needs no model call.
-
-Remaining audit and acceptance are in the [theme plan](ROADMAP.md).

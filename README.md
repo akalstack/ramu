@@ -46,7 +46,7 @@ Provider capabilities vary. Agents run on your host, which must stay awake; mobi
 
 Download installers and SHA-256 checksums from [GitHub Releases](https://github.com/ahxar/ramu/releases).
 
-Ramu is in alpha. Release targets are **macOS arm64/x64** and **Linux x64**; Linux packaged GUI validation is pending. Windows is experimental, with no release downloads. CI macOS builds are unsigned and not notarized. Install alpha updates manually; automatic installation requires a signed macOS app and excludes prereleases.
+Ramu is in alpha. Release targets are **macOS arm64/x64** and **Linux x64**; Linux packaged GUI validation is pending. Windows is not supported yet. CI macOS builds are unsigned and not notarized. Install alpha updates manually; automatic installation requires a signed macOS app and excludes prereleases.
 
 Install and sign in to an agent provider, select it in **Settings → Providers**, then add a repository or start a thread. See [provider setup](docs/PROVIDERS.md). For iOS and Android setup and pairing, see the [mobile guide](apps/mobile/README.md).
 
@@ -78,9 +78,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and validation requirements. [R
 
 ## Guides
 
-[Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENTS.md) · [Goals](docs/GOALS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Pull requests and issues](docs/PULL-REQUESTS.md) · [Memory](docs/MEMORY.md) · [Learning](docs/LEARNING.md) · [Mobile](apps/mobile/README.md) · [Editor](docs/EDITOR.md)
+[Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENT-ROUTING.md) · [Goals](docs/GOALS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Pull requests and issues](docs/PULL-REQUESTS.md) · [Memory](docs/MEMORY.md) · [Learning](docs/LEARNING.md) · [Mobile](apps/mobile/README.md) · [Editor](docs/EDITOR.md) · [Themes](docs/THEMES.md) · [Configuration](docs/CONFIGURATION.md) · [Headless server](docs/HEADLESS-SERVER.md)
 
-Remaining implementation and release work is tracked in [the roadmap](docs/ROADMAP.md). Completed plans are removed.
+Unfinished work is in [the roadmap](docs/ROADMAP.md); contributors should read the [code conventions](docs/CODE-STYLE.md).
 
 ## License
 

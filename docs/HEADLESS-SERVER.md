@@ -1,109 +1,96 @@
-# Headless server
+# Headless server and remote hosts
 
-The workspace server (`apps/server`) is the background service that owns agents, terminals, schedules, Git and the database. It runs without Electron, so a host can host Ramu with no window open, and the desktop app is one of its clients.
+The workspace server (`apps/server`) owns agents, terminals, schedules, Git and the database. It runs without Electron, so a computer can host Ramu with no window open; the desktop app and the [mobile app](../apps/mobile/README.md) are clients. Read [Security](../SECURITY.md) before exposing one.
 
 ## Run it
 
 ```sh
 pnpm build
-node apps/server/dist/cli.js serve        # or: pnpm server serve
+pnpm server serve        # node apps/server/dist/cli.js serve
 ```
 
-Commands (also installed as `ramu` and `ramu-server` when the package is linked):
+The package also installs `ramu` and `ramu-server`.
 
 | Command | Purpose |
 | --- | --- |
-| `ramu [serve]` | Run in the foreground. `start` also works. |
+| `ramu [serve]` | Run in the foreground (`start` also works). |
 | `ramu status` | Print pid, version, protocol and listen address. Exits 3 when not running. |
 | `ramu stop` / `ramu restart` | Stop (threads are not resumed) or restart (unfinished threads resume). |
-| `ramu pair [--url <address>]` | Print a one-time pairing code and the addresses the other device can use. |
-| `ramu devices` / `ramu devices revoke <id\|all>` | List paired devices, or revoke one (or all) immediately. |
-| `ramu token [--rotate]` | Print the shared access token; `--rotate` revokes it and every paired device. |
+| `ramu pair [--url <address>] [--role viewer]` | Print a one-time pairing code and the addresses another device can use. |
+| `ramu devices` / `ramu devices revoke <id\|all>` | List paired devices or revoke one (or all) immediately. |
+| `ramu token [--rotate]` | Print the legacy shared token; `--rotate` revokes it and every paired device. |
+| `ramu browser status\|threads\|setup\|stop` | Host browser readiness, thread IDs, Chromium preflight, or cancel work and close host tabs. |
 
-Options: `--data-dir`, `--listen [host:]port`, `--discoverable`, `--worktrees`, `--private-network` (alias `--allow-plaintext-remote`), `--tls-cert` and `--tls-key`. Environment equivalents: `RAMU_USER_DATA`, `RAMU_LISTEN`, `RAMU_DISCOVERABLE`, `RAMU_WORKTREES`, `RAMU_ALLOW_PLAINTEXT_REMOTE`, `RAMU_TLS_CERT`, `RAMU_TLS_KEY`, `RAMU_SOCKET`, `RAMU_TOKEN_FILE`, `RAMU_DEVICES_FILE`.
+Options: `--data-dir`, `--listen [host:]port`, `--discoverable`, `--worktrees`, `--private-network` (alias `--allow-plaintext-remote`), `--tls-cert`, `--tls-key`. Environment equivalents: `RAMU_USER_DATA`, `RAMU_LISTEN`, `RAMU_DISCOVERABLE`, `RAMU_WORKTREES`, `RAMU_ALLOW_PLAINTEXT_REMOTE`, `RAMU_TLS_CERT`, `RAMU_TLS_KEY`, `RAMU_SOCKET`, `RAMU_TOKEN_FILE`, `RAMU_DEVICES_FILE`.
 
-The default data directory is the desktop app's (`~/Library/Application Support/Ramu`, `~/.config/Ramu`, `%APPDATA%\Ramu`), so the headless server and the desktop app share threads, settings and the database. Only one server runs per data directory. If the desktop app starts and finds a running server, it attaches to it instead of starting another.
+The default data directory is the desktop app's (`~/Library/Application Support/Ramu`, `~/.config/Ramu`, `%APPDATA%\Ramu`), so the headless server and the desktop share threads, settings and database. One server runs per data directory; a desktop that finds one running attaches to it.
 
-## Local and remote access
+## Access
 
-- **Local socket** (always on): a unix socket with mode `0600`. The desktop app uses it, and only socket clients can answer native dialogs such as the folder picker.
-- **Network** (opt-in with `--listen`): HTTP(S) with a bearer token. Each device has its own token (see below); the shared token in `<data-dir>/remote-token` (mode `0600`) still works. Repeated bad tokens or codes from one address are rate limited. `GET /health` needs no token. Calls and events use the WebSocket (see Wire contract below).
+- **Local socket** (always on): a Unix socket with mode `0600`. The desktop uses it, and only socket clients can answer native dialogs such as the folder picker.
+- **Network** (opt-in with `--listen`): HTTP(S) with a per-device bearer token. `GET /health` needs no token; everything else, calls and events included, runs over one WebSocket ([Architecture](ARCHITECTURE.md#transport)).
 
-A bare port such as `--listen 7788` binds `127.0.0.1` only. Binding any other address is refused unless the traffic is encrypted or you say the network is trusted, because Ramu cannot tell what kind of network an address is on:
+A bare port (`--listen 7788`) binds `127.0.0.1` only. Binding any other address is refused unless traffic is encrypted or you declare the network trusted:
 
-- `--tls-cert <file> --tls-key <file>` serves HTTPS, so any address is allowed. Use a certificate from your VPN, a private CA, or a TLS-terminating proxy in front of a loopback listener.
-- `--private-network` accepts plain HTTP when every device that can reach the address is on a network you trust. Use it for a VPN or a LAN.
+- `--tls-cert <file> --tls-key <file>` serves HTTPS on any address. Use a certificate from your VPN, a private CA, or a TLS-terminating proxy in front of a loopback listener.
+- `--private-network` accepts plain HTTP when every device that can reach the address is on a network you trust (a VPN or LAN).
 
-If the address is not available yet (a VPN that comes up after the service), the server keeps running for local clients and retries the listener with backoff instead of exiting.
+If the address is not available yet (a VPN that comes up after the service), the server keeps serving local clients and retries the listener with backoff.
 
-## From the desktop app
+### Pair a device
 
-Settings → Remote access does the same without a terminal.
-
-- **Let other devices connect:** switch network access on, choose which network to listen on (all of them, or one address such as your VPN's) and a port. It applies at once, with no restart, and is saved in `<data-dir>/network.json`. Ramu asks you to confirm before listening beyond this host without TLS. If the server was started with `--listen`, the screen shows that setting and leaves it alone.
-- **Discoverable on this network:** off by default and available only while network access is on. When on, the host advertises its name, an opaque random identifier, the protocol version, the transport (HTTP or HTTPS) and the bound port with multicast DNS (`_ramu._tcp`), only on the interfaces the listener serves (a specific bind advertises only the interface owning that address; loopback-only listeners advertise nothing). It starts after the listener binds, follows network changes and wake, withdraws on disable, shutdown or a listener change, renames itself when another host uses the same name, and reports a failure in Settings without affecting the listener. It never carries pairing codes, tokens, project paths, user names or provider details, and finding a host grants nothing: pairing still needs a one-time code. The identifier is stored in `<data-dir>/discovery.json` and is only a hint; anyone on the network can see it with the name. A headless host with `--listen` uses `--discoverable`.
-- **Pair a device:** shows a one-time code and this host's addresses (Docker and VM networks are tucked away). The dialog notices when the other device pairs. Paired devices are listed with their last-seen time, and Revoke cuts one off immediately.
-- **Hosts:** **Nearby hosts** is the first way to add one: this computer listens for discoverable hosts only while that panel is open and the window is in front (and for at most two minutes), lists them with their name and address, and choosing one fills in its address and name for the pairing code. Nothing is paired or sent because a host was found. It says **No hosts found** without claiming none exist, and **Enter an address** and **Use SSH** stay reachable when discovery is empty, blocked (including a refused Local Network permission) or unavailable. Otherwise enter another host's address, pairing code and an optional name. The desktop app keeps the token in the main process (encrypted with the system keychain when there is one) and never shows it to the page. Enabled hosts stay connected together while the app runs. Each card shows its address, status, activity and whether its workspace is open. **Connection settings** lets you rename the saved host, copy its address, choose a reconnect policy, or turn off **Keep connected** to pause it without removing its credentials. **Resume** reconnects a paused host. Names and connection policies belong to this device. **Open** shows its workspace immediately; **Retry** reconnects an offline host, and **Forget** removes its saved connection and workspace storage. Forgetting the host you are viewing brings you back to this host.
-- **Switch hosts:** after pairing a second host, a switcher appears at the top of the sidebar. Each host keeps its own workspace, browser storage and open threads as you switch. The menu shows connection status and counts of working threads and threads waiting for input. Notifications from another host include its name and open the thread on that host. A revoked connection shows **Pair again** and stops retrying; forget it and pair with a fresh code.
-- **Workspace location:** a workspace hosted on another host shows **Remote · host name** in the top bar, including when the sidebar is hidden. The indicator remains if that host goes offline and shows its connection status; its tooltip explains where files, terminals and agents run. Local workspaces have no remote badge.
-- **Offline hosts:** after an initial failure, Ramu tries again after 1, 2 and 4 seconds, then waits. The default **When the network or host returns** policy uses network changes, waking from sleep, signed host announcements, or **Retry**, with no periodic connection attempts. **Also check every five minutes** adds a quiet fallback if announcements cannot reach this device. Without a usable interface, requests pause and the host shows **Waiting for network**. Paused connections ignore all wake-up signals; rejected tokens never retry automatically. Retries stay silent, and activity polling pauses while disconnected. Switching workspaces does not start or stop a connection.
-
-While viewing another host, threads, files, terminals and settings come from it. Add projects and use native file dialogs on the host hosting them; those dialogs are unavailable from a paired host's workspace. Background service controls and network access are managed on the hosting host. Files deleted in Explorer, and untracked files discarded in Source Control, are deleted permanently on the host that owns the workspace.
-
-### Many saved hosts
-
-Connections are independent of workspace views. All enabled hosts keep their event streams and notifications in the main process, even when their workspace is suspended or released. Network-interface detection and the announcement listener are shared. At most eight remote connection handshakes start at once (two per address), and remote RPCs are limited to sixteen at once (four per address). Activity counts use one request at a time per host, with a ten-second timeout and coalesced follow-up changes.
-
-The desktop app caches saved records and decrypted credentials, and batches computer-status bursts into one snapshot for the visible workspace. Hidden workspaces pause layout, transcript delivery, activity polling and usage refreshes. Terminal output is buffered with a size limit; if that limit is exceeded, the terminal shows a truncation marker when you return. The shell keeps running on its host.
-
-Up to four remote workspace views stay warm. Clean hidden views are released under cache pressure or after ten minutes idle, after checkpointing their workspace layout and composer drafts in this client’s isolated storage. Clean offline or paused views can be released as well. Reopening restores their isolated storage and workspace state without reconnecting the host. Views with unsaved files, open terminals, attachments, unfinished forms, pending uploads, pinned file context, failed persistence or an incomplete load stay protected. Protected workspaces can exceed the warm-view limit; Ramu preserves your work instead of forcing an eviction. The local workspace remains loaded.
-
-Unit tests cover 100 simultaneous loopback host sockets delivering 10,000 events (`packages/client-runtime/test/scale.test.ts`) and a simulated 100-host status burst (`apps/desktop/test/computers.scale.test.ts`). The warm-view limit, eviction and the protection of unsaved work have no end-to-end test; check them by hand after changing them. These are local checks, not a guarantee for a particular VPN or machine's available memory.
-
-The mobile companion in `apps/mobile` pairs with a host by QR code, deep link or manual address and code; see the [mobile guide](../apps/mobile/README.md). It is built from source and is not yet distributed through the app stores.
-
-### Host availability announcements
-
-The desktop app opens a small UDP listener while running and advertises its port in the header of each authenticated socket connection. The host remembers the source address and port for a paired device, then sends a short signed announcement when its network listener starts or its interfaces change. Announcements only request reconnection: Ramu still establishes and authenticates the regular HTTP(S) connection before reporting the host online. They do not execute commands or change settings.
-
-Messages are signed using a key derived from the paired device token; invalid, expired and replayed packets are ignored. The host stores recipient addresses in `<data-dir>/presence.json`, not their raw tokens, and revoked devices receive no announcements. This works over reachable LAN/VPN paths, without a provider-specific integration or relay. Firewalls, NAT, older hosts, or clock differences over two minutes can prevent delivery. In those cases use **Retry**, a local network change, or opt into the five-minute fallback in the host's connection settings.
-
-
-## Pair a device
-
-```sh
-ramu pair
-```
-
-prints a code such as `K7QM2-X9RTD` that works once and expires in 10 minutes, plus every address this host has (one line per network interface, so a LAN, Tailscale or NetBird address all show up). Use `--url` to print a name instead, such as a MagicDNS or `*.netbird.cloud` hostname or a proxy address.
-
-The other device trades the code for its own token:
+`ramu pair` prints a code such as `K7QM2-X9RTD`, valid once for 10 minutes, and every address of this host (one line per interface, so LAN, Tailscale or NetBird addresses all appear). `--url` prints a name instead, such as a MagicDNS hostname or proxy address. The other device trades the code for its own token:
 
 ```sh
 curl -s -X POST <address>/pair -H 'Content-Type: application/json' -d '{"code":"K7QM2-X9RTD","name":"My laptop"}'
 # {"deviceId":"99b9962f","token":"…"}
 ```
 
-It then sends `Authorization: Bearer <token>` on every request. `packages/client-runtime` has `runtimePair()` for this. Only a hash of the token is stored on the host, so it cannot be recovered there; pair again if it is lost. `ramu devices` lists devices and `ramu devices revoke <id>` blocks new requests immediately, without a restart. Revocation from Settings also closes active event streams immediately; CLI revocation closes them at the next heartbeat, within 20 seconds. A paired device can only be made by someone at this host: `/pair` is the one route that takes a code instead of a token, and device management is local to the host through the CLI or desktop Settings.
+It then sends `Authorization: Bearer <token>`; `packages/client-runtime` provides `runtimePair()`. The host stores only a hash of the token, so a lost token means pairing again. Revoking from Settings closes active streams immediately; the CLI closes them at the next heartbeat (within 20 seconds). Only someone at the host can create or revoke a device.
 
 ### Works with any network
 
-Ramu does not look for a particular VPN. It listens where you tell it to and reports the addresses it has, so anything that gives this host a reachable address works:
-
 | Network | How |
 | --- | --- |
-| Tailscale, NetBird, ZeroTier, WireGuard | Bind the VPN address or `0.0.0.0` with `--private-network`, then `ramu pair`. Pass `--url` to use the VPN's DNS name. These VPNs encrypt traffic between peers. |
-| LAN | Same as above, if you trust everyone on it. |
-| SSH tunnel | Keep the loopback listener and run `ssh -L 7788:127.0.0.1:7788 host`; pair against `http://127.0.0.1:7788`. |
-| Reverse proxy or a public name | Terminate TLS in the proxy, or give Ramu `--tls-cert` and `--tls-key`, and pass `--url https://…`. |
+| Tailscale, NetBird, ZeroTier, WireGuard | Bind the VPN address (or `0.0.0.0` with `--private-network`), then `ramu pair`; `--url` can use the VPN's DNS name. |
+| LAN | Same, if you trust everyone on it. |
+| SSH tunnel | Keep the loopback listener, run `ssh -L 7788:127.0.0.1:7788 host`, and pair against `http://127.0.0.1:7788`. |
+| Reverse proxy or public name | Terminate TLS in the proxy or give Ramu `--tls-cert`/`--tls-key`, and pass `--url https://…`. |
 
-`--private-network` with `0.0.0.0` listens on every interface, including ones that are not your VPN. Prefer binding the VPN address when it is stable, and keep a firewall in front of anything else.
+`--private-network` with `0.0.0.0` listens on every interface, not only the VPN. Prefer binding the VPN address and keep a firewall in front of anything else. **A full-access device can do whatever the desktop can, including running terminals and agents with your provider credentials.** Treat each like an SSH key.
 
-**A paired device can do what the desktop app can do, including running terminal commands and agents with your provider credentials.** Treat each device like an SSH key and revoke the ones you no longer use.
+### Discovery and availability
+
+- **Discoverable** (off by default; needs network access on): the host advertises its name, a random identifier, protocol version, transport and port over mDNS (`_ramu._tcp`) on the interfaces its listener serves, and nothing else. Finding a host grants nothing; pairing still needs a code. The identifier lives in `<data-dir>/discovery.json`. Headless hosts use `--discoverable`.
+- **Announcements:** the desktop listens on a small UDP port and tells the host where; when the host's listener starts or its interfaces change it sends a short signed packet asking paired devices to reconnect. Packets are signed with a key derived from the device token, replays and expired packets are ignored, and recipients are stored in `<data-dir>/presence.json` without tokens. Firewalls, NAT, older hosts or clock skew over two minutes can block delivery; use **Retry** or the five-minute fallback.
+- **Browse roots:** the mobile app can browse the host's folders to add projects. Roots default to the home folder and existing projects; set `RAMU_BROWSE_ROOTS` to restrict them.
+
+## From the desktop app
+
+**Settings → Remote access** does the same without a terminal.
+
+- **Let other devices connect:** choose the network (all, or one address such as the VPN's) and a port. It applies at once and is saved in `<data-dir>/network.json`; Ramu asks before listening beyond this host without TLS. A server started with `--listen` shows that setting and leaves it alone.
+- **Pair a device:** shows a one-time code and this host's addresses (Docker and VM networks tucked away), notices when the device pairs, and lists devices with last-seen time and Revoke.
+- **Hosts:** to add one, use **Nearby hosts** (this computer listens for discoverable hosts only while the panel is open and focused, for at most two minutes; choosing one fills in its address and name, and nothing is paired because it was found), or enter an address, pairing code and optional name. **Enter an address** and **Use SSH** stay available when discovery is empty, blocked or denied. Tokens stay in the main process, encrypted with the system keychain when available.
+- **Host cards** show address, status, activity and whether the workspace is open. **Connection settings** renames the host, copies its address, sets the reconnect policy, or turns off **Keep connected** (pause without removing credentials). **Open**, **Retry**, **Resume** and **Forget** do what they say. Names and policies belong to this device.
+- **Switch hosts:** with a second host, a switcher appears at the top of the sidebar showing status, working threads and threads waiting for input. Each host keeps its own workspace, browser storage and open threads. Notifications name the host and open its thread. A revoked connection shows **Pair again** and stops retrying. A workspace on another host shows **Remote · host name** in the top bar.
+- **Reconnect:** after a failure Ramu retries after 1, 2 and 4 seconds, then waits. The default policy, **When the network or host returns**, reconnects on a network change, wake, signed announcement or **Retry**; **Also check every five minutes** adds a fallback. With no usable interface the host shows **Waiting for network**. Paused connections ignore wake signals and rejected tokens never retry. Switching workspaces does not start or stop a connection.
+
+While viewing another host, threads, files, terminals and settings come from it. Add projects and use native file dialogs on the host that has the files; background service controls and network access are managed there too. Files deleted in Explorer and untracked files discarded in Source Control are deleted permanently on the owning host.
+
+### Many hosts
+
+Connections are independent of workspace views: all enabled hosts keep event streams and notifications in the main process. At most eight handshakes (two per address) start at once and sixteen remote calls (four per address) run at once. Up to four remote views stay warm; clean hidden views are released after memory pressure or ten minutes idle, after saving layout and drafts. Views with unsaved files, open terminals, attachments, unfinished forms, pending uploads or failed persistence are kept even beyond four. Hidden views pause layout, transcript delivery and polling; hidden terminal output is buffered with a bound and shows a truncation marker if exceeded.
+
+Tests cover 100 loopback sockets delivering 10,000 events (`packages/client-runtime/test/scale.test.ts`) and a 100-host status burst (`apps/desktop/test/computers.scale.test.ts`). Warm-view eviction has no end-to-end test; check it by hand when changing it.
+
+### Editing settings on several hosts
+
+The **Apply settings to** selector in the Settings header edits **All environments** or one host. Controls show **Mixed** when hosts differ, offer values valid on every selected host, and **Use this value for all** applies the displayed value. A save patches only changed settings, checks for concurrent edits and reports failures per host; successful hosts stay saved. Provider sign-in, service management, pairing and other machine actions need a single host selected.
 
 ## Protocol
 
-`packages/contracts` defines the wire format: one WebSocket, `GET /socket`, carries every call and every event, as T3 Code's server does. A network host authenticates the upgrade by its `Authorization` header (never in the URL); the local service on this machine accepts the same socket on its unix socket, owner-only, and the desktop names itself in a header. Frames are `invoke` (with an optional `operationKey` so a retried mutation runs once), `subscribe` (channels and the threads or terminals wanted), `ack` (terminal flow control) and `ping`; the host answers with `ready` (its run identity), `result`, `error` and `event`. There is no `POST /invoke` or server-sent `GET /events` any more: a client that predates the socket is told to update. HTTP remains for what happens before a socket can be authenticated or only needs an answer: `POST /pair`, `POST /renew`, `GET /health`, `GET /session` (does this token still work, and as what role) and host-proof checks. `background.status` returns `protocol` and `capabilities` so clients that update independently can check compatibility. `RuntimeSocket` in `packages/client-runtime` is the client; the desktop's remote-host and local connections, the command line and the phone all use it, and a connection that cannot be made is reported as what it is (refused token, no socket on the host, nothing listening) rather than retried over another transport.
+`packages/contracts` defines the wire format. `GET /socket` upgrades to the one WebSocket that carries every call and event; a network host authenticates the upgrade by its `Authorization` header (never the URL), and the local service accepts the same socket on its Unix socket. Frames: `invoke` (optional `operationKey` so a retried mutation runs once), `subscribe`, `ack` (terminal flow control) and `ping`; the host answers `ready`, `result`, `error` and `event`. HTTP remains for `POST /pair`, `POST /renew`, `GET /health`, `GET /session` (does this token work, and as which role) and host-proof checks. `background.status` returns `protocol` and `capabilities` so independently updated clients can check compatibility. `RuntimeSocket` in `packages/client-runtime` is the client used by the desktop, the CLI and the phone; a failed connection is reported as what it is (refused token, no socket on the host, nothing listening) rather than retried over another transport.
 
 ## Run it as a service
 
@@ -119,27 +106,12 @@ Environment=PATH=/usr/local/bin:/usr/bin:/bin
 WantedBy=default.target
 ```
 
-`ramu stop` exits successfully, so `Restart=on-failure` does not fight an intentional stop. On macOS the desktop app installs its own launchd agent (Settings → background service).
+`ramu stop` exits successfully, so `Restart=on-failure` respects an intentional stop. On macOS the desktop app installs its own launchd agent (Settings → background service).
 
-## Not built yet
-
-There is no TLS setup screen (use `--tls-cert` and `--tls-key`), no end-to-end encryption independent of the network, no relay for reaching a host that is on no shared network, no expiry or rotation for device tokens (revoke them by hand), and no read-only or scoped device role. Those would build on this server and protocol.
-
-`ramu pair` prints a pairing link that the mobile app and desktop client can open, and the mobile app can browse the host's folders to add projects. Browse roots default to the host home and existing project roots; set `RAMU_BROWSE_ROOTS` to restrict them.
-
-## Editing settings on multiple hosts
-
-Use the **Apply settings to** selector in the Settings header. **All environments** edits matching settings on every connected host; choose a host to edit only that one. The selection stays active as you move between categories, including Appearance, Providers and model sets. Offline hosts keep their settings.
-
-Each host reports its current settings and constraints. Controls offer common choices, show **Mixed** when values differ, and disable incompatible settings. Structured lists can be shared when their formats match. Model pickers use models and reasoning efforts available on every selected host. **Use this value for all** explicitly applies the displayed value or list when targets differ.
-
-Saving patches only changed settings, checks for concurrent edits and changed options, and reports failures per host. Successful saves remain saved if another host fails. Reloading discards pending changes and reads current settings. Provider sign-in, service management, pairing and other machine actions require selecting a single host in the header.
-
+Not built: a TLS setup screen (use `--tls-cert`/`--tls-key`), end-to-end encryption independent of the network, and a relay for hosts on no shared network.
 
 ## Host browser
 
-Open Browser in a thread from any paired owner device. The browser runs on the execution host, like terminals, without separate setup or expiring browser grants. First use downloads compatible Chromium and checks its sandbox. `ramu browser setup` remains an optional preflight/retry command. An administrator can set `RAMU_BROWSER_EXECUTABLE` to an installed Chromium executable. Missing system dependencies or sandbox support are reported; Ramu never adds `--no-sandbox`. Website profiles stay on this host, separate from desktop Electron profiles. An existing agent turn keeps its selected runtime.
+Browser in a thread works from any paired owner device. The browser runs on the host like terminals, with no extra setup. First use downloads a compatible Chromium and checks its sandbox (`ramu browser setup` is an optional preflight); set `RAMU_BROWSER_EXECUTABLE` to use an installed one. Missing dependencies or sandbox support are reported and Ramu never adds `--no-sandbox`. Website profiles stay on this host, separate from the desktop's, and a running turn keeps its runtime.
 
-`ramu browser status` reports readiness; `ramu browser threads` lists thread IDs. Viewer-role devices cannot use the host browser. Profile administration and turning the runtime on/off remain local to the owning host. Desktop and mobile view bounded JPEG frames through authenticated RPC; they never receive cookies or a public debug endpoint. Hidden/background viewers stop capturing. A missing heartbeat pauses human control after five seconds without returning it to the agent. The owning host can explicitly take control to recover a disconnected device.
-
-`ramu browser stop` cancels work, closes host tabs and revokes grants. Persistent website profiles remain; Temporary profiles are isolated and removed when their run/tabs end. Completed downloads expire after an hour and are never opened automatically. Human and agent file transfers use relative paths within the thread's authorized workspace, with bounds and no download overwrites. See [browser behavior](UI.md#integrated-browser) for ownership and transfer details.
+Viewers see bounded JPEG frames over authenticated calls and never receive cookies or a debug endpoint; background viewers stop capturing. Five seconds without a heartbeat pauses human control without handing it to the agent, and the host can take control to recover a lost device. Viewer-role devices cannot use it; profile administration and the runtime switch stay on the host. `ramu browser stop` cancels work, closes tabs and revokes grants; persistent profiles remain, Temporary ones are removed with their tabs, and completed downloads expire after an hour. See [UI](UI.md#integrated-browser) for ownership and transfers.

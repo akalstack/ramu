@@ -2,7 +2,7 @@
   "name": "ramu-monorepo",
   "version": "0.1.0-alpha.1",
   "private": true,
-  "description": "Ramu \u2014 your project, every repo, one workspace.",
+  "description": "Ramu — your project, every repo, one workspace.",
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @ramu/desktop dev",
@@ -50,5 +50,13 @@
   "packageManager": "pnpm@11.21.0",
   "engines": {
     "node": ">=24 <25"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahxar/ramu.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ahxar/ramu/issues"
+  },
+  "homepage": "https://github.com/ahxar/ramu#readme"
 }

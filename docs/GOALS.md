@@ -37,7 +37,7 @@ verify: pnpm --filter @ramu/server test
 
 A last line `verify: <command>` in a new goal sets the command; `/goal verify: <command>` changes it on the current goal and `/goal verify: off` removes it. The command runs in the thread's folder, with a ten-minute limit.
 
-On the desktop, the shield button in the goal bar edits the same command: a command to set or change it, a blank field (or `off`) to remove it. It calls `agent.goal.verify`, a call the agent's goal tools do not have, so an agent cannot set it. The mobile app has the same editor: the shield button in the composer's goal tray opens a sheet with the current command, the last check (passed, or how it failed with the end of its output) and one field, with the same rules (2000 characters, blank or `off` removes it, hidden for a completed goal). `/goal verify:` still works in both. A host that predates `agent.goal.verify` answers "Unknown method"; the phone then says to update Ramu on that host and hides the button for it.
+The shield button in the desktop goal bar and in the phone's goal tray edits the same command: set or change it, or leave the field blank (or `off`) to remove it (2000 characters; hidden for a completed goal). The call is `agent.goal.verify`, which the agent's goal tools do not have, so an agent cannot set it. A host that predates it answers "Unknown method"; the phone then asks to update that host and hides the button.
 
 ## Continuation
 
@@ -58,13 +58,13 @@ With a verification command, a claim does not complete the goal by itself. Ramu 
 
 Before each continuation Ramu compares what the previous turn left behind with what the continuation before it left: the files changed since the goal began, and the tool calls with their results. When two continuations in a row leave the same, the goal becomes **blocked** with the reason "No progress", instead of spending the remaining turns. A message from you, or **Resume**, starts the count again. A retry after a usage limit is not a continuation and never counts, and the turn limit is checked first.
 
-The tool comparison associates each parent call with bounded result summaries, text, terminal output, resource text and diff content, plus error/running state. Changing remote results can therefore count as progress even when local files do not change. Tool/terminal IDs, unrelated results and helper output do not reset the parent’s stall count. This detects repeated activity; it does not establish that changing output is useful progress.
+The tool comparison associates each parent call with bounded result summaries, text, terminal output, resource text and diff content, plus error/running state. Changing remote results can therefore count as progress even when local files do not change. Tool/terminal IDs, unrelated results and helper output do not reset the parent’s stall count. This detects repetition, not whether changing output is useful.
 
 The block leaves a **No progress** row in the transcript with the reason. It is separate from **Goal needs input** (the agent asked for something), **Goal paused** (you paused it) and **Limit reached** (a provider's usage limit, which is never a failure of the goal).
 
 A completed goal's row lists the evidence: the checks the agent ran with their results, the files it changed, and the verification command that passed.
 
-Limits: the baseline and the stall count survive a restart. In a folder outside git the file part of the comparison is empty, so only the tool trail decides.
+The baseline and stall count survive a restart. Outside a git repository only the tool trail decides.
 
 Usage failures try the thread's fallback list first. If no provider is available, the goal waits for a reset and retries. Unknown reset times retry with increasing delays, up to 15 minutes. Authentication errors require intervention.
 
@@ -72,12 +72,12 @@ Whether a waiting goal continues by itself is the thread's **auto-resume**: the 
 
 ### Paused: by you or by a limit
 
-A goal held back from continuing has one status, `paused`, and a `pausedBy` that says who holds it: `user` (you paused it, or pressed Stop; it never resumes by itself) or `provider-limit` (the provider's usage limit; it continues at the reset). A missing `pausedBy` means `user`, which is what every goal paused before the merge was. The words stay different: **Limit reached · resumes …** for the limit and **Goal paused** for yours. The field is `pausedBy` and not `reason`, because `reason` is the goal's progress text. A limit hold is never a stall (no continuation was spent on it, and the retry does not count), never counts towards the turn limit, and never fails a verification; the **Pause** button on a held goal turns it into your pause, which the retry timer then leaves alone.
+A held goal has one status, `paused`, and a `pausedBy`: `user` (you paused it or pressed Stop; it never resumes by itself, and a missing value means this) or `provider-limit` (the provider's usage limit; it continues at the reset). The wording differs: **Limit reached · resumes …** versus **Goal paused**. A limit hold is never a stall, never counts toward the turn limit and never fails a verification; pressing **Pause** on it turns it into your pause, which the retry timer leaves alone.
 
-Older data and hosts used a separate status, `waiting-provider`. A database upgrade rewrites those goal events into the merged shape, goals still read it from a host that has not been updated (`goalHold` in `packages/shared/src/chat/goalHold.ts` accepts both), and Ramu never writes it again. The other direction degrades: an app or host from before the merge that talks to a newer one shows a goal held at a limit as **Goal paused**, and its Resume acts as **Try again**. Every provider in a fallback switch carries the goal: providers that receive session guidance get it there, the others get it in the handoff's state block. See [limits and handoff](AGENTS.md#usage-limits-and-fallback).
+`goalHold` (`packages/shared/src/chat/goalHold.ts`) still reads the retired `waiting-provider` status from older data and hosts but never writes it. An older app talking to a newer host shows a limit hold as **Goal paused**, and its Resume acts as **Try again**. A goal travels through every provider switch: providers with session guidance get it there, others in the handoff's state block ([limits and handoff](AGENT-ROUTING.md#usage-limits-and-fallback)).
 
 Goal detection depends on the model following its instructions. Creating a goal does not grant permission for additional work.
 
-## Checks
+## Tests
 
-`apps/server/test/goals.test.ts` covers lifecycle, limits, waiting, persistence, the evidence gate, verification and stalls; `goalMigration.test.ts` covers the rewrite of persisted goals and their re-arming after the upgrade; `packages/shared/test/goalHold.test.ts` covers the two kinds of pause; `goalVerifyIpc.test.ts` covers the verification-command call. `packages/shared/test/goalHistory.test.ts`, `apps/web/test/goalBar.test.ts` and `apps/mobile/test/turns.test.mjs` cover the history rows; `apps/mobile/test/goalVerify.test.mjs` covers the phone's verify editor logic. `apps/server/test/goalProbes.test.ts` runs the git snapshot and the command runner for real. Add focused unit or integration tests for goal behavior changes. After building, run `pnpm test:desktop-smoke` for desktop startup validation. Live model checks are opt-in: `RAMU_REAL_GOALS=1 pnpm exec vitest run test/goals.live.test.ts`.
+Goal behavior is covered by `apps/server/test/goals.test.ts` (lifecycle, limits, waiting, evidence, verification, stalls) and the related `goal*.test.ts` files in `packages/shared`, `apps/web` and `apps/mobile`. `goalProbes.test.ts` runs the git snapshot and command runner for real. Live model checks are opt-in: `RAMU_REAL_GOALS=1 pnpm exec vitest run test/goals.live.test.ts`.

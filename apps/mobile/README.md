@@ -1,153 +1,90 @@
 # Ramu mobile
 
-A live iOS/Android companion for a Ramu workspace server. Hosts run agents,
-providers, Git and terminals; the phone connects directly over HTTPS or a trusted
-LAN/VPN. The production app has no seeded hosts or simulated conversations.
+An iOS and Android companion for a Ramu workspace server. The host runs agents, providers, Git and terminals; the phone connects directly over HTTPS or a trusted LAN/VPN. There are no seeded hosts or simulated conversations. There are no store or TestFlight builds yet: build from source.
 
 ## Connect a phone
 
-1. Build this checkout's desktop/server (`pnpm build`) and start Ramu on the host.
-2. Open desktop **Settings → Remote access**, enable network access, then **Pair a
-   device**. Review [remote access and device privileges](../../SECURITY.md#remote-access). Choose the reachable address in the QR selector. For a headless host,
-   use `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`.
-3. Install a development build once: from EAS with `pnpm --filter @ramu/mobile eas:ios` (or `eas:android`), or locally with `pnpm --filter @ramu/mobile build:ios` (or `build:android`). Then run `pnpm dev:mobile` and open **Hosts → Pair**.
-   **Pair a host** opens on **Nearby hosts** with the camera off. It combines local hosts that enabled **Discoverable on this network** with direct checks of saved hosts' addresses, including NetBird/Tailscale routes. In development it also checks the private computer serving the app bundle on the default API port, so a new development host can appear without multicast. Saved hosts must prove their device identity and answer over the app connection before appearing as paired. **Connect to…** updates a verified address and opens the existing host without another pairing code; new hosts still require the host's ten-character code. Native local discovery needs the development build's `RamuDiscovery` module; direct checks of known hosts remain available when that module or multicast is unavailable. Checks stop when you leave the screen, switch pairing method, or background the app, and expire after two minutes with **Search again** available. Choose **Scan QR code** or **Enter manually** when no route answers. After a successful scan, the camera closes and the filled details appear for review. **Pair** stays in a bottom action bar above the keyboard; **Scan again** replaces the offer. Changing the address clears HTTP consent.
-   Review the address and explicitly allow HTTP only on a trusted network.
-4. Select a project or Standalone, then send an instruction. Provider installation
-   and sign-in belong to the host; the model picker reads that host's catalog.
+1. Run `pnpm build` and start Ramu on the host.
+2. Desktop: **Settings → Remote access**, enable network access, then **Pair a device**, and pick the reachable address in the QR selector. Read [remote access privileges](../../SECURITY.md#remote-access) first. Headless: `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair` ([headless server](../../docs/HEADLESS-SERVER.md)).
+3. Install a development build once, from EAS (`pnpm --filter @ramu/mobile eas:ios` or `eas:android`) or locally (`build:ios`, `build:android`). Then run `pnpm dev:mobile` and open **Hosts → Pair**.
+4. **Pair a host** opens on **Nearby hosts** with the camera off. It combines discoverable hosts on the local network with direct checks of saved hosts' addresses (NetBird and Tailscale routes included). In development it also checks the computer serving the bundle on the default API port. Saved hosts must prove their device identity and answer over the app connection before appearing as paired; **Connect to…** updates a verified address without a new code. New hosts need the host's ten-character code. Checks stop when you leave the screen or background the app and expire after two minutes (**Search again**). **Scan QR code** and **Enter manually** are always available; after a scan the camera closes and the details appear for review, with **Pair** in a bottom bar above the keyboard. Review the address and allow plain HTTP only on a trusted network (changing the address clears the consent; loopback addresses show no warning).
+5. Select a project or Standalone and send an instruction. Provider installation and sign-in belong to the host, and the model picker reads its catalog.
 
-Use the host's reachable LAN/VPN address on a physical phone, not `localhost`.
-Once paired, the phone learns the host's LAN/VPN addresses on connection and every minute while online. When the current route fails, it checks the alternatives concurrently and switches only after the candidate proves the paired host's identity and answers over the app's WebSocket. An identity endpoint alone does not make a route usable. The saved address is also verified before opening a new authenticated connection, so a reassigned LAN address does not receive the device credential. In development, if no working alternate was learned before leaving Wi-Fi, the private computer address serving the app bundle is also tried on the saved API port. It must pass the same identity and live-connection checks and is never inferred from a public Metro tunnel. The previous working address stays saved for the next network change; drafts and queued messages stay with the same host. HTTPS pairings never automatically downgrade to HTTP. The VPN interface must be active on the host during a successful route refresh so its address can be learned; subnet routing does not provide nearby multicast discovery. New, previously unseen addresses still need a QR scan or manual address review if every saved route is unreachable.
-A healthy selected address stays selected. If connection or history loading stalls, bounded connection checks allow offline recovery instead of leaving the phone on Connecting. For manual recovery, open **Settings → Computers → Change address** (also available on the Computers screen), choose a saved LAN/VPN route or enter an address, and tap **Use address**. The phone verifies the existing host before saving the change; no re-pairing is needed.
-The Expo development tunnel exposes the app bundle, **not** your workspace server.
-The host must remain awake and reachable. Old hosts without the `mobile-companion`
-capability show an update error; rebuild/restart the host rather than reusing mocks.
+Use the host's LAN/VPN address on a physical phone, never `localhost`. The Expo development tunnel exposes the app bundle, not your workspace server. The host must stay awake and reachable, and a host without the `mobile-companion` capability asks you to update.
 
-The React Native/React pins are isolated from desktop React through Metro. Install
-SDK-compatible native modules with `pnpm --filter @ramu/mobile exec expo install …`.
-`pnpm dev:mobile` starts one Metro server on all interfaces and prints phone launch links for every private LAN/VPN address, with NetBird/Tailscale first. Links open the selected development build or Expo Go directly and keep the network address the phone used, including manifest, bundle and asset requests. Expo's default QR remains a single address. Nearby Expo discovery (Bonjour) is enabled for local-network clients; VPNs generally do not forward multicast, so open a printed VPN link when away. The list refreshes when interfaces change without restarting Metro. If the default port is occupied, the script chooses an available port before printing links; an explicit busy `--port` reports the conflict. Explicit `REACT_NATIVE_PACKAGER_HOSTNAME`, `EXPO_PACKAGER_PROXY_URL`, `--host`, `--tunnel`, and `--localhost` choices are preserved and disable the automatic list. Set `EXPO_UNSTABLE_BONJOUR=0` to disable nearby Expo discovery. The development build is the default because pairing now uses WebRTC, and the native adaptive header, background push and scroll-view bridge need native code that Expo Go does not include. `pnpm --filter @ramu/mobile dev:go` still starts Metro for Expo Go as an opt-in layout preview, without pairing or native features.
+**Routes.** Once paired, the phone learns the host's LAN/VPN addresses on connection and every minute while online. When the current route fails it checks the alternatives concurrently and switches only after a candidate proves the paired host's identity and answers over the app's WebSocket; an identity endpoint alone is not enough. The saved address is verified before each authenticated connection, so a reassigned LAN address never receives the credential. HTTPS pairings never downgrade to HTTP. The VPN must be active on the host while routes are refreshed, and subnet routing gives no multicast discovery. If every saved route is unreachable, use **Settings → Computers → Change address** to pick a saved route or enter one; the phone verifies the host before saving, with no re-pairing.
 
-## Project actions
-
-A project's menu offers **Manage actions** for the selected host. Inspect the command and its repository source, move visible actions, hide/show commands or restore repository order. These settings are shared with other clients of that host. They never run a command, create a terminal or edit repository files. Hidden actions remain recoverable and are excluded from desktop menus and shortcuts. Offline and older hosts explain unavailable changes. Add or edit command definitions on desktop or in `ramu.json`.
-
-## Files, workspace defaults and usage
-
-**Browse files** in a project's ⋯ menu on Threads opens its checkout without creating a thread. Thread headers and project actions open Explorer for their exact checkout. Direct and transcript links share the existing code/Markdown/image/diff viewer. Its File, Changes and Staged views keep combined changes under Changes, including older links to All. Empty diffs explain that there are no changes. Directory responses contain at most 2,000 entries per page, with **Load more files** on supporting hosts and a truncation notice on older hosts. A changed directory requires refresh; filename/path search uses the bounded quick-open index and shows at most 200 matches. Native existing-workspace acceptance and file-management context actions remain in the [Explorer plan](../../docs/ROADMAP.md).
-
-**Plan usage** appears as a usage ring in the Threads header and beside the composer's model, opening a full-screen usage view grouped by provider and account. **Account details** remembers whether to show account IDs and update times; quota windows stay visible without repeated account headings. Missing readings, notice-only limits, last-known readings and measured percentages are distinct. Percentages mean used; they are account-wide rather than per-thread. The refresh action is specifically for Claude. Cursor/Antigravity allowance explanations are shared with desktop and localized. Transient refresh failures preserve the last reading and allow retry; reconnect refreshes the account data. Native layout, routing projection and other remaining work are in the [usage acceptance](../../docs/ROADMAP.md#plan-usage-acceptance).
-
-In New thread → Workspace, select an existing workspace and use **Rename workspace** to edit its shared label. Saving keeps thread titles, Git branches, files and checkout IDs intact. The name is checked against the one the editor opened with; concurrent changes require review, and an older host shows an update hint. Offline saves are disabled.
-
-Host Git settings now provide a default checkout mode and fixed branch prefix. A manual draft choice overrides the default; Use default restores inheritance. Sending freezes the chosen mode/prefix in the outbox, and creation retries use the same request ID. On a supporting host, optional branch-name details preserve manual edits and offer Generate name for semantic/custom naming. Further draft and device acceptance remains in the [workspace plan](../../docs/ROADMAP.md).
-
-## New-thread model defaults
-
-A registered project's `ramu.json` (or `.ramu/config.json`) can suggest `agent.preferredProvider` and `agent.preferredModel`. New thread shows the source and resolves the choice on that host. An explicit model choice stays with the active draft and survives reopening; **Use project default** resumes inheritance. Unavailable or invalid preferences keep the draft intact and offer a different model or a known **Use host default**. Changes detected during Send require review before anything is queued.
-
-When host defaults have not loaded, reconnect or choose a reviewed model; the app does not label its own fallback as the host's default. Restored manual choices keep their reviewed access/fallback policy offline. Queuing freezes the selected settings, so a later repository edit does not change pending work. Existing threads and restored saved-message content keep their current model choices.
-
-Expo Router's native peers (`react-native-reanimated`, `react-native-worklets` and `react-native-gesture-handler`) are pinned to the versions in the installed Expo SDK. Keep them aligned during SDK upgrades; incompatible hoisted peers can pass JavaScript export and still fail pod installation or native compilation. Regenerate native projects after an SDK upgrade before rebuilding. Android prebuild also applies the narrow R8 exclusion for the orphan `Dav1dDecoderJni` interface reference shipped in WebRTC 155.0.1; other missing-class errors remain enabled. Recheck this exclusion when upgrading WebRTC.
+**Development.** The React Native pins are isolated from desktop React through Metro; add SDK-compatible native modules with `pnpm --filter @ramu/mobile exec expo install …`. `pnpm dev:mobile` starts one Metro server on all interfaces and prints launch links for every private LAN/VPN address (NetBird and Tailscale first), refreshed as interfaces change; it picks a free port if the default is busy. Explicit `REACT_NATIVE_PACKAGER_HOSTNAME`, `EXPO_PACKAGER_PROXY_URL`, `--host`, `--tunnel` and `--localhost` disable the automatic list, and `EXPO_UNSTABLE_BONJOUR=0` disables nearby Expo discovery. A development build is the default because pairing uses WebRTC and the adaptive header, push and scroll bridge need native code; `pnpm --filter @ramu/mobile dev:go` starts Metro for an Expo Go layout preview without pairing or native features. Keep `react-native-reanimated`, `react-native-worklets` and `react-native-gesture-handler` aligned with the Expo SDK, and regenerate native projects after an SDK upgrade. Android prebuild applies a narrow R8 exclusion for the orphan `Dav1dDecoderJni` reference in WebRTC 155.0.1; recheck it when upgrading WebRTC. JDK 21 is recommended for Android.
 
 ## Navigation
 
 A native tab bar (Liquid Glass on iOS 26) with four places, each with its own stack:
 
-- **Threads**: projects and threads for the selected host (the old Home list).
-- **Inbox**: what needs you (threads waiting, recaps that need a decision) across every connected
-  host, plus Running, Recaps, Learned (what Ramu learned) and Completed. The tab badge and the app
-  icon count what needs you. Recap cards swipe left for Done, Snooze and Dismiss (Snooze offers
-  In 3 hours, Tomorrow and Next week), and every action shows an Undo toast; a host that predates
-  snooze times snoozes for a day. Opening a summary shows its changes and starts a thread about it.
-- **Schedules**: the selected host's schedules with their next and last runs; swipe to
-  pause, run now or delete; tap for runs; the editor covers daily, weekly, monthly, interval and one-time rules.
-- **Search**: the native search tab; finds threads on every host.
+- **Threads:** pinned work, then one card per project (most recently active first) and standalone threads last. A card shows its newest three threads plus every running, waiting or failed one (**Show N more**). Tap a header to fold it (it then summarizes what is waiting or running); ⋯ or a long press opens the project menu, ✎ starts a thread. Projects without threads keep their card. A status filter (Running, Waiting, Failed, Archived) switches to one flat list. The project menu has New thread, Browse files, Open terminal, Rename, Copy folder path, **Names for Auto…** (aliases and a description for routing, saved on the host), **Manage actions** and Remove.
+- **Inbox:** what needs you across every connected host, plus Running, Recaps, Learned and Completed. The tab and app icon badges count what needs you. Recap cards swipe for Done, Snooze (in 3 hours, tomorrow, next week) and Dismiss with an Undo toast. **Answer requests** on a row expands the transcript's own approval, question and form cards, sharing their drafts.
+- **Schedules:** the host's schedules with next and last runs; swipe to pause, run now or delete; the editor covers daily, weekly, monthly, interval and one-time rules.
+- **Search:** finds threads on every host.
 
-Every tab carries a primary action (start a thread; new schedule on Schedules) and a Settings button in the
-navigation bar. With no host paired, or a revoked/offline one, the primary action opens a sheet that
-says why and offers Pair or Reconnect. Switch hosts from the host row at the top of Threads and
-Schedules. Pair opens Nearby hosts first; Scan QR code and Enter manually stay available as alternatives. A successful scan closes the camera and opens review, with Pair in the bottom action bar.
-Shared action buttons grow with larger or wrapped labels. Android sheets can reopen during dismissal without an earlier animation hiding the new sheet.
-All pop-ups are our one `Sheet`: on Android it is the official Material 3 modal bottom sheet (Jetpack Compose via
-`@expo/ui`, opaque, with its own handle, scrim and swipe-to-dismiss; `MaterialSheet.android.tsx`), elsewhere a glass sheet.
-Android uses the native stack header (left-aligned titles), the Material 3 bottom bar, opaque Material surfaces
-instead of blur, and one shared `Toggle`. JDK 21 is recommended for Android builds. A thread opened from any tab pushes above the tab bar.
+Every tab has a primary action and a Settings button. With no host paired, or a revoked or offline one, the primary action explains why and offers Pair or Reconnect. Switch hosts from the host row on Threads and Schedules. Pop-ups are one `Sheet` component: the Material 3 modal bottom sheet on Android (`MaterialSheet.android.tsx`), a glass sheet elsewhere. Android uses the native stack header, Material 3 bottom bar and one shared `Toggle`.
 
-## Connected features
+## Features
 
-- Multiple saved hosts connect concurrently while the app is active, with
-  independent status, revocation, catalog, usage and thread state. Selecting one
-  does not reconnect the others. In-app alerts open their originating host.
-- Live thread/tool/helper transcripts, host models, reasoning/access/fallback settings, host file context and skills, queue/
-  steer, stop, permissions, ID-based questions, elicitation forms and goal controls (pause, resume, clear and a verify-command editor on hosts that support `agent.goal.verify`).
-- Persistent host metadata, drafts, question drafts and offline outbox. Native
-  bearer tokens use SecureStore; the web preview uses browser local storage.
-- Explicitly offline messages deliver in order after reconnect. Delivery interrupted
-  after a request starts is marked **uncertain** and is never automatically retried.
-  Check the host transcript before cancelling/editing and sending again. Removing
-  an uncertain item does not undo something the host already received.
-- Host folder browsing, folder creation, repository cloning and adding projects.
-  Browse roots default to the host home and existing project roots; set
-  `RAMU_BROWSE_ROOTS` to a platform-delimited allowlist to restrict the browser.
-  Symlinks outside allowed roots are rejected. Clone uses host Git credentials;
-  failed/slow clones leave the destination available for inspection.
-- Document, photo-library and camera uploads (up to 10 MB per file), bounded by the existing server limits.
-  Queued attachment IDs belong to their originating host.
-- Source Control: actual status, staging, unstaging, commits/AI drafts, branches,
-  fetch/pull/push/sync, stashes and expected-HEAD undo. Discard previews identify
-  permanent untracked-file deletion and reject changed contents before applying.
-  Tapping a commit or stash opens its files, and each file opens its read-only diff
-  (`runtime/gitRevision.ts`); a stash can be applied, popped or deleted from there.
-  The commit box follows the desktop's gates (`runtime/gitGates.ts`): no commit with
-  conflicts or during a rebase or merge, remote actions need a remote, undo is refused
-  for the root or an already-pushed commit, and a rebase or merge in progress shows
-  Continue and Abort. Hosts that predate these file methods say so instead of failing.
-- Sheets of choices and actions use grouped cards (`components/SheetOptions.tsx`)
-  rather than flat lists. Settings keeps Models & access and Goals & memory as
-  single pages that carry the sections they used to split into.
-- Recorded run diffs, review comments sent to the agent, and host-checked undo
-  previews that skip conflicting files.
-- Real host PTYs with a bundled xterm renderer, terminal tabs, Ctrl/Alt latch,
-  escape/tab/arrows/control keys, clipboard paste confirmation and explicit close.
-  Terminals survive screen changes. Reattach recovers the last 256,000 characters
-  and merges subsequent output by cursor; no tokens enter the renderer.
-- English/Bahasa Indonesia, persistent System/Light/Dark appearance and native
-  safe-area/keyboard handling. Transcript rows are virtualized.
+- Several saved hosts connect at once with independent status, revocation, catalog, usage and thread state; alerts open their originating host.
+- Live transcripts of threads, tools and helpers; host models, reasoning, access and fallback settings; file context and skills; queue and steer; stop; permissions, questions, elicitation forms; goal controls including the verify-command editor. A compact row above the composer opens pending input, helpers, advisor consultations, goals and the server queue; helper cards keep provider, model, effort, timing and capabilities, and Message and Stop appear only when supported and connected.
+- Drafts, question drafts and an offline outbox persist on the device (bearer tokens in SecureStore). Profile saves use a serialized queue and verify each write. Offline messages deliver in order after reconnecting. A delivery interrupted after the request started is **uncertain** and never retried automatically: check the host transcript before cancelling and sending again.
+- Host folder browsing, folder creation, cloning and adding projects. Browse roots default to the home folder and project roots (`RAMU_BROWSE_ROOTS` restricts them); symlinks outside them are rejected. Clone uses the host's Git credentials.
+- Uploads from files, the photo library and the camera (10 MB each).
+- **Source Control:** status, staging, commits and AI drafts, branches, fetch/pull/push/sync, stashes, expected-HEAD undo. Discard previews name permanent deletions and reject changed contents. A commit or stash opens its files and read-only diffs (a stash can be applied, popped or deleted). The commit box follows desktop's gates: none with conflicts or during a rebase or merge, remote actions need a remote, undo is refused for the root or a pushed commit, and an in-progress rebase or merge offers Continue and Abort.
+- Recorded run diffs, review comments sent to the agent, and host-checked undo that skips conflicts.
+- **Terminals:** real host PTYs with an xterm renderer, tabs, Ctrl/Alt latches, an extra-key rail with Paste, and confirmed close. Terminals survive screen changes; reattach recovers the last 256,000 characters and merges output by cursor. The canvas fills the screen above a compact dock (host, folder, state, session count). Hold for 650 ms to reveal directional cursor control: drag past the neutral area to pick an arrow, farther to repeat faster; release, cancel, backgrounding, multitouch or disconnect stops input.
+- **Files:** Browse files and thread Explorer share one viewer for code, Markdown, images and diffs ([UI](../../docs/UI.md#mobile-surfaces)). Explorer remembers folder expansion and scroll for 12 host/checkout scopes (80 folders each) on the device.
+- **Plan usage:** a ring in the Threads header opens a usage view grouped by provider and account. Account details remember whether to show IDs and times. Missing readings, notice-only limits, last-known and measured percentages stay distinct; percentages mean used and are account-wide. Refresh is Claude-specific, a transient failure keeps the last reading, and reconnecting refreshes.
+- **Workspaces:** New thread → Workspace picks an existing workspace and **Rename workspace** edits its shared label (checked against the name you opened; offline disabled). Host Git settings set the default checkout mode and branch prefix; a manual choice overrides, **Use default** restores. Sending freezes the mode, prefix and naming inputs in the outbox, and retries reuse the request ID. Semantic or custom naming runs on the host at delivery and falls back to "Used default branch name." **Generate name** and per-repository previews never create a thread; **Keep these base commits** binds a preview to an unchanged request, and a moved base pauses delivery with **Review changed base commits**. Older hosts keep ordinary creation and hide unsupported controls.
+- **Default model:** `agent.preferredProvider` and `agent.preferredModel` from `ramu.json` are resolved on the host and shown with their source; a manual choice stays with the draft, **Use project default** resumes inheritance, and a change detected at Send needs review. If host defaults have not loaded, reconnect or choose a reviewed model. Queuing freezes the settings ([Configuration](../../docs/CONFIGURATION.md#default-model)).
+- **Rules:** Settings → Rules manages the host's shared instructions: search, create and edit with explicit project and provider scope, Always or Manual, enable, history preview and confirmed deletion. Edits keep their starting revision so another client's change is never overwritten.
+- **Browser and computer viewers:** the thread's Browser viewer shows the host tab the agent controls, with latest-frame buffering (up to 30 fps) and a screenshot fallback on older hosts. A new browser or computer preview docks above the composer with separate open and dismiss controls. Touch uses one native surface aligned to the frame, and a resize cancels gestures started on the old geometry. See [UI](../../docs/UI.md#integrated-browser).
+- Settings → Threads has one phone-local Steer/Queue control and one model-change warning; host choices stay the defaults until overridden.
+- English and Bahasa Indonesia, System/Light/Dark appearance, safe-area and keyboard handling, virtualized transcripts.
 
-The thread's Browser viewer shows the same host tab the agent controls. Live Chromium frames arrive independently of tab/status refreshes, with a latest-frame buffer and up to 30 displayed frames per second on a fast connection. A newly opened browser or computer-use preview docks above the composer in a compact row with separate open and dismiss controls; its measured height is included in the transcript inset. Touches use a single native surface aligned with the displayed frame, and a resize cancels gestures started on the previous geometry. Touch drags scroll while the finger moves; tapping a page field raises the matching phone keyboard, and clicks, keys and text keep their order behind pending input. While the phone controls a host-managed page, the page is laid out at the phone's size and restored when control changes. Backgrounding or closing the viewer stops requests and pauses control. Older hosts retain the screenshot fallback. This uses the existing native Image component and needs no new native module.
+The app suspends streams when backgrounded and rehydrates every saved host on return; agents keep running on their hosts and the app never promises background event delivery. Full-access devices can run shells and agents; the host can instead issue a viewer pairing. Device access expires after 90 days of inactivity (activity extends it). Network and device administration stay on the host.
 
-The app suspends streams when backgrounded and rehydrates all saved hosts on
-return. Agents continue on their hosts. It never promises background event delivery.
-Full-access devices can run shells and agents. The host can instead issue a viewer pairing for reading threads and answering input requests. Device access expires after 90 days of inactivity by default; active use extends it. Network/device administration stays on the host desktop/CLI. See [remote access](../../SECURITY.md#remote-access).
+## Notifications
 
-## Background notifications
+Opt-in under Settings. Each paired device registers its Expo push token with every host. Hosts send generic completion, input and failure alerts through Expo's gateway with opaque routing IDs, never prompt or transcript content. Revocation and invalid-token receipts remove registrations. Foreground banners are suppressed (the event stream supplies the in-app notification), and taps wait for saved hosts to load, then open the destination once.
 
-The implementation is opt-in under Settings. Each paired device registers its Expo
-push token independently with every host. Hosts send generic completion/input/failure
-alerts through Expo's gateway, with opaque host/task/session routing IDs instead
-of prompt or transcript content. Revocation and invalid-token receipts remove registrations.
-Foreground push banners are suppressed so the host's event stream supplies the in-app notification. Notification taps wait for saved hosts to load before routing, and duplicate startup/live responses open the destination once.
+Settings → Notifications has a switch per kind, sent with the registration so the host pushes only what is on: needs you, failed, finished, scheduled run finished, failed or could not start (such a thread counts there, not under failed or finished), and **Daily recap**. Recaps are otherwise silent. The daily recap is off by default; when on, the host sends "Your daily recap is ready." once a day with no content and a tap opens Inbox → Recaps. A scheduled run that cannot start pushes "A scheduled run could not start." once and a tap opens Schedules. Hosts that predate the switches send every alert except the daily recap.
 
-Settings → Notifications has one switch per kind of alert, sent to each host with the registration so the host only pushes what is on: a thread needs you, a thread fails, a thread finishes, a scheduled run finishes, fails or could not start (a thread started by a schedule counts here instead of under failed or finished; needing input is still "needs you"), and the **Daily recap**. A scheduled run that fails before its thread exists pushes "A scheduled run could not start." once and a tap opens the Schedules tab. The daily recap is off by default: when on, the host sends one "Your daily recap is ready." a day (no content) and a tap opens Inbox → Recaps. Recaps and learned summaries are otherwise silent and only show in the Inbox. Hosts that predate the switches ignore them and send every alert except the daily recap.
-
-A build owner must supply an Expo project ID and configure APNs/FCM credentials:
+A build owner supplies an Expo project ID and APNs/FCM credentials:
 
 ```sh
 EXPO_PUBLIC_EAS_PROJECT_ID=<project-uuid> pnpm --filter @ramu/mobile build:ios
 # Or build:android; RAMU_GOOGLE_SERVICES_FILE can point to google-services.json.
 ```
 
-EAS development/preview profiles are in `eas.json`. The `production` profile builds store
-artifacts (iOS App Store/TestFlight, Android app bundle) with auto-incremented build numbers, and
-`pnpm --filter @ramu/mobile eas:release:ios` / `eas:release:android` build and submit them to
-TestFlight and the Android internal track (as a draft). Signing keys, the App Store Connect app and the Google Play
-service account stay in the owner's EAS account (`eas credentials`, `eas submit`); nothing is committed. Run
-these only after the [remote-security prerequisites](../../docs/ROADMAP.md). If enhanced Expo push security is
-configured, set `RAMU_EXPO_PUSH_ACCESS_TOKEN` on the host, never in the phone bundle.
-A physical phone and signed development build are required to validate delivery.
-Expo Go/web/simulators show a clear setup message. Delivery is best effort; forgotten
-phones should also be revoked on the host if it was unreachable when forgotten.
-See [Expo push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/).
+`eas.json` has development and preview profiles. `production` builds store artifacts with auto-incremented build numbers, and `eas:release:ios` / `eas:release:android` build and submit them to TestFlight and the Android internal track (as a draft). Signing keys, the App Store Connect app and the Google Play service account stay in the owner's EAS account (`eas credentials`, `eas submit`); nothing is committed. If enhanced Expo push security is configured, set `RAMU_EXPO_PUSH_ACCESS_TOKEN` on the host, never in the phone bundle. Delivery needs a physical phone and a signed build; Expo Go, web and simulators show a setup message. Delivery is best effort, so revoke a forgotten phone on the host. See [Expo push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/).
+
+## Live Activities and Dynamic Island
+
+On iOS, Settings → Live Activity controls one activity for the selected host's ongoing work. Native SwiftUI layouts cover the Lock Screen, banner and compact, minimal and expanded Dynamic Island, showing running and waiting counts, attention state and elapsed time with a deep link to the task. Prompts, transcripts, project paths and host names are never shown or pushed, and there is no invented completion percentage. Completed work stays on the Lock Screen for at most 15 minutes; disabling, forgetting or revoking dismisses it.
+
+Foreground updates use the live connection. Without host APNs setup, background content becomes **Open to refresh**. With it, ActivityKit push updates continue while the phone is suspended; data is marked stale after ten minutes and activities expire after eight hours. Apple may throttle delivery, and a dismissed activity is not restarted until the current group of tasks finishes.
+
+The widget extension uses `dev.ramu.mobile.activities` and app group `group.dev.ramu.mobile`. A signed build must provision both targets, the app group and the push entitlement. Background delivery needs an APNs signing key on every participating host, set in the host process environment (never in Expo public variables):
+
+```sh
+RAMU_APNS_KEY_PATH=/private/path/AuthKey.p8
+RAMU_APNS_KEY_ID=<ten-character-key-id>
+RAMU_APNS_TEAM_ID=<ten-character-team-id>
+RAMU_APNS_BUNDLE_ID=dev.ramu.mobile # optional; match your app
+```
+
+The phone registers each activity's token with its paired host; debug builds use APNs sandbox and production builds use production. Tokens are stored privately and ownership is enforced, unchanged status is coalesced, invalid tokens are removed, and the payload stays under Apple's 4 KB limit. Expo Go cannot load the extension; rebuild after dependency or configuration changes. Design follows Apple's [Live Activity guidance](https://developer.apple.com/design/human-interface-guidelines/live-activities/) and [ActivityKit lifecycle](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities), using [Expo's SwiftUI/ActivityKit integration](https://docs.expo.dev/versions/v58.0.0/sdk/widgets/).
+
+## Native appearance
+
+The iOS header uses native Stack navigation and SF Symbol toolbar buttons (Liquid Glass where supported), transparent at the top with UIKit's hard scroll-edge effect as content scrolls under it. A small pinned `react-native-screens` patch connects the native `ScrollViewMarker` to `UIViewController.setContentScrollView(_:for:)` after the marked view mounts, as T3 Code's v5 navigation fork does; the OS owns material, scroll tracking and transitions, with no JS listener or blur overlay. Rebuild native code after installing dependencies; Expo Go cannot load the patch. Android uses the native Stack app bar, matching gutters and floating controls, with RenderNode blur on Android 12+ and tonal surfaces before. Composer actions use 44-point targets.
+
+Launcher artwork uses `assets/Ramu.icon` on iOS (system Liquid Glass); Android has separate full-canvas foreground, background and monochrome layers. Regenerate the flat assets on macOS with `pnpm --filter @ramu/mobile gen:icons`. SDK 58 includes Expo scene support so Xcode 27 builds launch on iOS 27. The wordmark plays the desktop's r-and-dot reveal at startup (skipped under reduced motion), and launch assets follow light and dark appearance.
 
 ## Verify
 
@@ -155,121 +92,8 @@ See [Expo push setup](https://docs.expo.dev/push-notifications/push-notification
 pnpm check
 pnpm --filter @ramu/mobile export:ios
 pnpm --filter @ramu/mobile export:android
-pnpm --filter @ramu/mobile test # transport, store and model unit tests
+pnpm --filter @ramu/mobile test
 pnpm --filter @ramu/server exec vitest run test/mobileCompanion.test.ts test/mobileTerminal.test.ts test/mobileLiveActivity.test.ts
 ```
 
-`pnpm --filter @ramu/mobile web` provides a phone-sized browser preview. Tests cover
-transport chunk boundaries, URL/QR validation, ambiguous sends, resolved input,
-browse-root escapes, push revocation/privacy, stale discard previews and PTY recovery.
-Physical iOS/Android network, camera, keyboard and background-push checks remain
-necessary before distribution. See [the roadmap](../../docs/ROADMAP.md#mobile-companion) for the wider release roadmap.
-
-The iOS header uses native Stack navigation and SF Symbol toolbar buttons, including
-system Liquid Glass on supported iOS versions. The navigation bar stays transparent
-at the top and uses UIKit's hard scroll-edge effect as content moves behind it.
-A small pinned `react-native-screens` patch connects the library's native `ScrollViewMarker` to
-`UIViewController.setContentScrollView(_:for:)` after the marked view mounts, following the
-same UIKit connection used by T3 Code's v5 navigation fork. The OS owns the material,
-scroll tracking and transitions; no JS scroll listener or blur overlay is used.
-Rebuild the native app after installing dependencies; Expo Go cannot load the patch.
-Android uses the native Stack app bar, matching content gutters and floating controls. Android 12+ uses native RenderNode blur; older versions use tonal surfaces. Web keeps the browser fallback header. Composer actions use 44-point targets.
-Loopback HTTP addresses (localhost, 127/8 and ::1) do not show the network HTTP warning.
-
-Mobile launcher artwork uses `assets/Ramu.icon` directly on iOS for system Liquid
-Glass. Android uses separate full-canvas foreground, background and monochrome
-layers; no desktop rim or rounded mask is baked in. Regenerate the flat mobile
-assets on macOS with `pnpm --filter @ramu/mobile gen:icons`. SDK 58 includes
-Expo scene support so Xcode 27 builds launch on iOS 27.
-
-## Startup and terminal gestures
-
-The Threads tab uses the native **Threads** navigation title. The wordmark appears during
-startup with the same r-and-dot reveal as the desktop; reduced motion skips the
-movement. Native launch assets match light/dark appearance without baked-in masks.
-
-Hold a terminal for 650 ms to reveal directional cursor control. Drag beyond the
-neutral area to choose an arrow; greater distance increases repeat speed and shows
-more chevrons. Blue arrow fill animates with drag distance, draining when you move
-closer and growing when you move farther. The thin timing track fills for each
-real PTY arrow key. The rounded glass overlay stays beside the hold point,
-clamping to the terminal's edges so it does not follow or obscure your finger. Release, cancel,
-backgrounding, multitouch, exit or disconnect stops input. Ordinary taps and swipes
-remain ordinary terminal interactions. Application-cursor mode uses the proper
-SS3 sequences. No terminal credential is exposed to the renderer.
-
-## Live Activities and Dynamic Island
-
-On iOS, Settings → Live Activity controls one activity for the selected host's
-ongoing agent work. Native SwiftUI layouts cover the Lock Screen, small banner,
-compact/minimal Dynamic Island, and its expanded view. They show running/waiting
-counts, attention state and elapsed time, with a deep link to the relevant task.
-Prompts, transcripts, project paths and host names are never shown or pushed.
-There is no invented percentage of completion. Completed work remains on the
-Lock Screen for at most 15 minutes; disabling, forgetting or revoking dismisses it.
-
-Foreground updates use the live connection. Without APNs host setup, background
-or disconnected content explicitly becomes **Open to refresh**. With host APNs
-setup, direct ActivityKit push updates continue while the phone is suspended;
-stale data is marked after ten minutes. Activities expire after eight hours.
-Apple may throttle delivery. A user-dismissed activity isn't restarted until the
-current group of tasks finishes.
-
-The widget extension uses `dev.ramu.mobile.activities` and app group
-`group.dev.ramu.mobile`. A signed distribution/development build must provision
-both targets, the app group and push entitlement. Background delivery also needs
-an Apple APNs signing key on every participating host:
-
-```sh
-RAMU_APNS_KEY_PATH=/private/path/AuthKey.p8
-RAMU_APNS_KEY_ID=<ten-character-key-id>
-RAMU_APNS_TEAM_ID=<ten-character-team-id>
-RAMU_APNS_BUNDLE_ID=dev.ramu.mobile # optional default; match your actual app
-```
-
-Set these in the host process environment, never in Expo public variables. The
-phone registers each activity's token with its paired host. Debug builds use APNs
-sandbox; production builds use production. Tokens are stored privately and paired
-ownership is enforced. Unchanged status is coalesced; invalid tokens are removed.
-The compact JSON content is below Apple's 4 KB limit. Expo Go cannot load this
-extension; rebuild after dependency/configuration changes.
-
-Design and lifecycle follow [Apple Live Activity guidance](https://developer.apple.com/design/human-interface-guidelines/live-activities/)
-and [ActivityKit lifecycle documentation](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities),
-using [Expo's native SwiftUI/ActivityKit integration](https://docs.expo.dev/versions/v58.0.0/sdk/widgets/).
-
-## Terminal console layout
-
-The terminal uses the full canvas with a compact bottom dock instead of a title
-bar, top tabs and command composer. The dock shows the host, current folder,
-connection state and session count; tap it to switch or close sessions. Back,
-New and the keyboard toggle remain within thumb reach. Opening is guarded while
-a shell is being created. Closing a shell still requires confirmation.
-
-The keyboard button focuses xterm directly. Input goes straight to the real PTY;
-there is no second command field. An extra-key rail appears with the keyboard,
-with visible Ctrl/Alt latches and a pinned Paste action. The same layout is shared
-on iOS and Android; safe areas, keyboard avoidance and native materials remain
-platform-aware. The terminal canvas stays dark while controls follow Ramu's theme.
-
-## Thread activity and Inbox answers
-
-A compact measured row above the composer opens pending input, helpers, advisor consultations, goals and the server queue. Connection and input take priority; cached offline requests remain visible with a reconnect explanation. The existing goal/queue controls move into this sheet when the activity row is present. Provider-limit controls keep their existing behavior. Context compaction has its own label, and the phone outbox remains a separate delivery surface.
-
-Helper cards preserve provider/model/effort, timing, recovery, isolation, capability and waiting metadata. Counts distinguish active, completed, failed and stopped tasks; advisors have their own groups. Helpers launched in older turns remain selected while active, while routine settled groups start collapsed. Message and Stop appear only when supported and connected. Output is labelled an excerpt; no fake child thread is created to display it.
-
-Inbox thread rows offer **Answer requests** to expand the same approval/question/form cards used in the transcript. Their host, session, request IDs and saved draft keys are shared, so answering in place requires no thread navigation. Offline rows preserve the request and explain reconnecting. Native device, long-list and accessibility acceptance remain in the activity plan.
-
-New-worktree outbox entries retain their host's naming strategy, instructions and bounded opening message along with checkout mode and prefix. Semantic/custom naming runs on that host during delivery. If it cannot generate a valid name within the deadline, the thread shows “Used default branch name.” New thread → Workspace offers an editable candidate, explicit Generate name and provisional per-repository previews. Generation cancels on dismissal, edits and scope changes; late results cannot replace newer work. Candidates stay in active and explicitly saved drafts; generated candidates expire when their prompt or naming settings change. **Keep these base commits** binds the current preview to an unchanged request when it enters the outbox. Before enqueue, editing the request invalidates that review; leaving or restarting the form requires reviewing again. A confirmed moved-base rejection pauses delivery and offers **Review changed base commits** in the pending message. Approval keeps the original message, naming inputs and request ID; ambiguous outcomes retain their original plan for reconciliation. Older hosts keep ordinary automatic creation and hide unsupported naming controls.
-
-Project menus include **Names for Auto…** to edit aliases and a short description on the owning host. Auto matches aliases against the first message and shares the description with its routing model. Failed saves keep the entered text; offline and view-only clients cannot save. Older hosts explain when an update is needed.
-
-Explorer remembers folder expansion and scroll position for up to 12 host/checkout scopes (80 folders per scope). Navigation metadata stays in the existing device store and is removed when its host is forgotten. Reopening reloads listings from the host; file-reveal links take priority over the remembered offset. Search text and file contents are not persisted by this navigation feature.
-
-Settings → Rules manages the selected host’s shared user instructions: search, create/edit, explicit project/provider scope, Always/Manual, enable/disable, history preview and confirmed deletion. A history revision is copied into the editor for review before Save. Edits retain their starting revision so another client’s changes cannot be overwritten silently. Unsupported hosts and offline/read-only devices retain their existing access boundaries.
-
-Phone profile saves use a serialized asynchronous queue and verify each completed write before advancing the recovery slot. Message delivery, reviewed outbox retries, host removal and file-to-draft navigation await the required save. Failed saves keep the last committed profile and allow later retries. Native file exports wait for their write before opening Share.
-
-Threads settings show one phone-local Steer/Queue control and one model-change warning control. Existing shared-phone and host choices remain defaults until overridden; resetting a phone choice restores that default. Desktop notifications are labeled separately from phone alerts. Content actions use a full-screen, padded action list, with Save scenario as the primary action.
-
-Threads shows pinned work, then one card per project, the most recently active first, with standalone threads last. Each card shows its newest three threads plus every running, waiting or failed one; **Show N more** expands the card. Tapping a project header folds it (the header then says what is waiting or running inside); its ⋯ button or a long press opens the project menu, and ✎ starts a thread there. Projects without threads keep their card so their menu stays reachable. A status filter (Running, Waiting, Failed, Archived) switches to one flat list labelled by project, with **Show more threads** for older history; the filter row appears only when there is something to filter. The composer attachment menu offers device files/photos, skills and agent settings; workspace file mentions remain available through `@`, and commands through `/`.
+`pnpm --filter @ramu/mobile web` gives a phone-sized browser preview. Tests cover transport chunking, URL and QR validation, ambiguous sends, resolved input, browse-root escapes, push revocation and privacy, stale discard previews and PTY recovery. Physical-device checks are in [VERIFICATION.md](VERIFICATION.md) and the [roadmap](../../docs/ROADMAP.md).

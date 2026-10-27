@@ -32,13 +32,13 @@ pnpm workspace; each package has its own `src`, `test`, and `typecheck`/`test` s
 | `apps/web` | React workspace UI and editor, rendered inside the desktop app |
 | `apps/server` | Workspace server and `ramu` CLI: agents, providers, files, Git, terminals, schedules, database |
 | `packages/contracts` | Wire protocol: versions, capabilities, request encoding |
-| `packages/client-runtime` | Node client for a workspace server (local socket or authenticated HTTP) |
+| `packages/client-runtime` | Node client for a workspace server (local socket or authenticated WebSocket) |
 | `packages/shared` | Domain types, the API method table, and pure helpers |
 | `scripts/smoke` | One desktop startup smoke test |
 | `scripts/release` | Packaging and release tooling |
 
 Read the [architecture overview](docs/ARCHITECTURE.md) before a large change; it explains how a call travels from the UI to the server and where new code belongs. Import shared code as `@ramu/shared/<module>`. Server code must not import Electron or `apps/desktop`; desktop reaches the server through `@ramu/client-runtime`. See [headless server](docs/HEADLESS-SERVER.md).
 
-Match the existing TypeScript style. Keep changes focused and test behavior where useful. See [UI development](docs/UI.md), [localization](docs/LOCALIZATION.md), and [release maintenance](docs/RELEASING.md).
+Follow the [code conventions](docs/CODE-STYLE.md), keep changes focused, and test behavior. See also [UI development](docs/UI.md), [localization](docs/LOCALIZATION.md), [the roadmap](docs/ROADMAP.md) and [release maintenance](docs/RELEASING.md).
 
 Contributions use the [MIT license](LICENSE). Be respectful in issues and reviews. For vulnerabilities, follow [SECURITY.md](SECURITY.md).

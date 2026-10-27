@@ -14,6 +14,6 @@ English strings are translation keys and fallbacks. Indonesian translations live
 - Keep familiar developer terms such as Git, commit, workspace, and terminal. Use natural Indonesian for actions: Cari, Simpan, Batal, Hapus.
 - Include language in dependencies for memoized translated text. Update both languages when changing copy and remove unused strings for retired features.
 
-## Checks
+## Tests
 
-Run `pnpm typecheck` and `pnpm test`. Add focused unit tests for localization changes. After building, run `pnpm test:desktop-smoke` for startup validation; manually verify language switching, persistence, native menus and editor buffers when changing them.
+Add focused unit tests for localization changes, and manually verify language switching, persistence, native menus and editor buffers when changing them.

@@ -14,6 +14,6 @@ Use **History** to compare earlier text and restore a revision. User-confirmed a
 
 Unused project notes can be archived after the configured period. Preferences and references last twice as long; important notes get a longer retention period. User-written or user-edited notes and essential memories are kept. Archived notes remain available for restoration until the retention policy removes them.
 
-## Checks
+## Tests
 
-`apps/server/test/memory.test.ts` covers storage, search, scope, cleanup, and history. Model-generated cleanup depends on the selected provider and available tokens.
+`apps/server/test/memory.test.ts` covers storage, search, scope, cleanup and history.
