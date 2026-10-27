@@ -7,6 +7,7 @@ import {
   type RamuTheme,
   type ThemeIssue,
 } from '@ramu/shared/theme'
+import { THEME_PRESETS, themePreset } from '@ramu/shared/themePresets'
 import { deviceStorage } from '../deviceStorage'
 import { resolvedAppearance, subscribeAppearance, type ResolvedAppearance } from '../appearance'
 
@@ -45,9 +46,16 @@ export function themeLibrary(): RamuTheme[] {
   return cachedLibrary
 }
 
+/** A kept theme or one that ships with Ramu; Ramu Default is neither and is found by its own id. */
+export function themeById(id: string | null | undefined): RamuTheme | undefined {
+  if (!id) return undefined
+  return id === DEFAULT_THEME.id ? DEFAULT_THEME : (themeLibrary().find((theme) => theme.id === id) ?? themePreset(id))
+}
+export const builtInThemes = (): readonly RamuTheme[] => THEME_PRESETS
+export const isBuiltInTheme = (id: string) => !!themePreset(id)
+
 export function selectedTheme(): RamuTheme {
-  const id = deviceStorage.getItem(SELECTED_KEY)
-  return (id && themeLibrary().find((theme) => theme.id === id)) || DEFAULT_THEME
+  return themeById(deviceStorage.getItem(SELECTED_KEY)) ?? DEFAULT_THEME
 }
 
 /** What this window shows: the theme being tried, otherwise the selected one. */
@@ -66,11 +74,34 @@ export function keepTheme(theme: RamuTheme): ThemeIssue[] {
   return []
 }
 
-/** Selects a saved theme, or Ramu Default with no id. */
+/** Selects a kept or built-in theme, or Ramu Default with no id. */
 export function selectTheme(id: string | null) {
-  if (id && themeLibrary().some((theme) => theme.id === id)) deviceStorage.setItem(SELECTED_KEY, id)
+  if (id && id !== DEFAULT_THEME.id && themeById(id)) deviceStorage.setItem(SELECTED_KEY, id)
   else deviceStorage.removeItem(SELECTED_KEY)
   emit()
+}
+
+/** Renames a kept theme without touching its colors or id. Built-in themes keep their names. */
+export function renameTheme(id: string, name: string): boolean {
+  const next = name.trim().slice(0, 80)
+  if (!next) return false
+  const library = themeLibrary()
+  if (!library.some((theme) => theme.id === id)) return false
+  deviceStorage.setItem(
+    LIBRARY_KEY,
+    JSON.stringify(library.map((theme) => (theme.id === id ? { ...theme, name: next } : theme))),
+  )
+  emit()
+  return true
+}
+
+/** A new kept-theme id for a copy of `theme`, unique among the kept themes. */
+export function copyOfTheme(theme: RamuTheme, copyName: string): RamuTheme {
+  return {
+    ...theme,
+    id: `${theme.id.replace(/-copy-[a-z0-9]+$/, '')}-copy-${Date.now().toString(36)}`,
+    name: copyName.slice(0, 80),
+  }
 }
 
 export function removeTheme(id: string) {

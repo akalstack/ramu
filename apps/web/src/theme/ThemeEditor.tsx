@@ -70,7 +70,7 @@ type Variant = 'light' | 'dark'
 
 const MAX_DIRECTIONS = 3
 
-async function share(theme: RamuTheme, how: 'download' | 'copy') {
+export async function shareTheme(theme: RamuTheme, how: 'download' | 'copy') {
   try {
     const text = await exportThemeFile(theme)
     if (how === 'copy') return await navigator.clipboard.writeText(text)
@@ -275,7 +275,7 @@ export function ThemeEditor({
   return (
     <Dialog open onOpenChange={(open) => !open && revert()}>
       <DialogContent
-        className="w-[min(560px,calc(100vw-40px))] max-h-[calc(100vh-40px)] flex flex-col gap-3 overflow-hidden"
+        className="w-[min(560px,calc(100vw-40px))] sm:max-w-none max-h-[calc(100vh-40px)] flex flex-col gap-3 overflow-hidden"
         aria-describedby={undefined}
         showCloseButton={false}
         // The editor keeps Ramu Default's colors, so it stays readable however the draft looks.
@@ -446,7 +446,7 @@ export function ThemeEditor({
         )}
         {notice && <p className="m-0 text-caption text-warn">{notice}</p>}
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" disabled={issues.length > 0} onClick={() => void share(draft, 'download')}>
+          <Button variant="ghost" disabled={issues.length > 0} onClick={() => void shareTheme(draft, 'download')}>
             {t('Export file')}
           </Button>
           <Button
@@ -460,7 +460,7 @@ export function ThemeEditor({
           >
             {t('Copy recipe')}
           </Button>
-          <Button variant="ghost" disabled={issues.length > 0} onClick={() => void share(draft, 'copy')}>
+          <Button variant="ghost" disabled={issues.length > 0} onClick={() => void shareTheme(draft, 'copy')}>
             {t('Copy JSON')}
           </Button>
         </div>
@@ -493,7 +493,10 @@ export function PasteTheme({
   const [text, setText] = useState('')
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-[min(520px,calc(100vw-40px))] flex flex-col gap-3" aria-describedby={undefined}>
+      <DialogContent
+        className="w-[min(520px,calc(100vw-40px))] sm:max-w-none flex flex-col gap-3"
+        aria-describedby={undefined}
+      >
         <DialogTitle>{t('Paste theme JSON')}</DialogTitle>
         <textarea
           aria-label={t('Theme JSON')}

@@ -2,6 +2,14 @@
 
 Settings → Appearance keeps appearance and theme selection on the device. Desktop offers Match device / Light / Dark and preserves Dark for existing profiles; mobile offers System / Light / Dark. Selection does not require a provider. Custom themes change colors while retaining Ramu's layout, controls and accessibility preferences.
 
+## Choose and manage
+
+Desktop **Settings → Appearance → Themes** is one gallery: Ramu Default and the built-in themes (Graphite, Midnight, Forest, Rose, Sand, High contrast) first, then **Yours**. Clicking a tile applies it at once on this device; nothing is saved to a host. A kept theme's menu offers Edit colors, Rename, Duplicate and edit, Export file, Copy JSON and Delete (with confirmation). A built-in theme's menu offers **Customize a copy**, Export and Copy JSON, because editing always works on a copy and the original stays available. **New from current** starts a copy of what is in use. Import and Paste JSON sit in the header.
+
+Mobile **Settings → Appearance → Themes** lists the same built-in themes, then your kept ones. Choosing a row applies it on this phone. Each theme's menu offers Rename, Duplicate (or Save a copy for a built-in), Share and Remove; a duplicate opens as the usual trial with Keep and Revert.
+
+Built-in themes live in `packages/shared/src/themePresets.ts`. They are ordinary themes, and a test requires every one to pass the readability checks and to produce a complete phone palette.
+
 ## Edit and try
 
 **Customize colors** edits both appearances of the same theme draft. The editor supports exact colors, per-role reset, Undo/Redo and a preview of the selected appearance. Manually changed roles stay locked during AI refinement until released. Readability checks reject invalid foreground/background pairs and indistinguishable success, warning and error colors.

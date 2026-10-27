@@ -10,6 +10,7 @@ import {
   type TextSize,
 } from '../storage'
 import { DEFAULT_THEME, checkTheme, parseTheme, type RamuTheme, type ThemeIssue } from '@ramu/shared/theme'
+import { themePreset } from '@ramu/shared/themePresets'
 import { mobilePalette } from '@ramu/shared/themeMobile'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Appearance, Platform, useColorScheme } from 'react-native'
@@ -129,8 +130,11 @@ interface ThemeValue {
   tryTheme: (theme: RamuTheme | null) => void
   /** Keeps and selects a theme; one that fails the readability checks is refused with its issues. */
   keepTheme: (theme: RamuTheme) => ThemeIssue[]
+  /** Selects a kept or built-in theme, or Ramu Default with no id. */
   selectTheme: (id: string | null) => void
   removeTheme: (id: string) => void
+  /** Renames a kept theme; false when the name is empty or the theme is not a kept one. */
+  renameTheme: (id: string, name: string) => boolean
   c: Palette
   scheme: 'light' | 'dark'
   appearance: Appearance
@@ -181,9 +185,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return []
   }
   const selectTheme = (id: string | null) => {
-    const next = id && themes.some((theme) => theme.id === id) ? id : ''
+    const next = id && (themes.some((theme) => theme.id === id) || themePreset(id)) ? id : ''
     saveSelectedThemeId(next)
     setSelectedId(next)
+  }
+  const renameTheme = (id: string, name: string) => {
+    const label = name.trim().slice(0, 80)
+    if (!label || !themes.some((theme) => theme.id === id)) return false
+    const next = themes.map((theme) => (theme.id === id ? { ...theme, name: label } : theme))
+    saveThemeLibraryText(JSON.stringify(next))
+    setThemes(next)
+    return true
   }
   const removeTheme = (id: string) => {
     const next = themes.filter((theme) => theme.id !== id)
@@ -194,7 +206,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setSelectedId('')
     }
   }
-  const theme = trial ?? themes.find((item) => item.id === selectedId) ?? DEFAULT_THEME
+  const theme = trial ?? themes.find((item) => item.id === selectedId) ?? themePreset(selectedId) ?? DEFAULT_THEME
   const value = useMemo(
     () => ({
       theme,
@@ -204,6 +216,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       keepTheme,
       selectTheme,
       removeTheme,
+      renameTheme,
       c: theme.id === DEFAULT_THEME.id ? (scheme === 'light' ? light : dark) : mobilePalette(theme[scheme]),
       scheme,
       appearance,

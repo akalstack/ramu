@@ -760,6 +760,7 @@ test('appearance overrides reach native controls and System releases the overrid
       Appearance: { setColorScheme: (scheme) => nativeSchemes.push(scheme) },
     },
     '@ramu/shared/theme': { DEFAULT_THEME: { id: 'default' } },
+    '@ramu/shared/themePresets': { themePreset: () => undefined, THEME_PRESETS: [] },
     '../storage': {
       readAppearance: () => preference,
       readTextSize: () => 'normal',
@@ -6678,6 +6679,7 @@ test('mobile web startup applies its theme without calling a native-only Appeara
     react: { ...hooks.react, createContext: () => ({ Provider: 'ThemeProvider' }) },
     'react-native': { Appearance: {}, useColorScheme: () => 'light' },
     '@ramu/shared/theme': { DEFAULT_THEME: { id: 'default' } },
+    '@ramu/shared/themePresets': { themePreset: () => undefined, THEME_PRESETS: [] },
     '../storage': {
       readAppearance: () => 'dark',
       readTextSize: () => 'normal',

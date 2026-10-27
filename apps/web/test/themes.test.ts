@@ -56,6 +56,36 @@ describe('theme library', () => {
     expect(themes.effectiveTheme().id).toBe('ramu-default')
   })
 
+  it('selects a built-in theme without copying it into the library', () => {
+    const [first] = themes.builtInThemes()
+    themes.selectTheme(first!.id)
+    expect(themes.selectedTheme().id).toBe(first!.id)
+    expect(themes.themeLibrary()).toEqual([])
+    expect(themes.isBuiltInTheme(first!.id)).toBe(true)
+    themes.selectTheme(null)
+    expect(themes.selectedTheme().id).toBe('ramu-default')
+  })
+
+  it('does not select an id nobody has', () => {
+    themes.selectTheme('missing')
+    expect(themes.selectedTheme().id).toBe('ramu-default')
+  })
+
+  it('renames a kept theme and nothing else', () => {
+    themes.keepTheme(custom())
+    expect(themes.renameTheme('calm', '  Quiet  ')).toBe(true)
+    expect(themes.themeLibrary()[0]).toMatchObject({ id: 'calm', name: 'Quiet' })
+    expect(themes.renameTheme('calm', '   ')).toBe(false)
+    expect(themes.renameTheme(themes.builtInThemes()[0]!.id, 'Mine')).toBe(false)
+  })
+
+  it('makes a copy with its own id and the name it was given', () => {
+    const copy = themes.copyOfTheme(custom(), 'Calm copy')
+    expect(copy.id).not.toBe('calm')
+    expect(copy.name).toBe('Calm copy')
+    expect(themes.copyOfTheme(copy, 'Again').id.match(/-copy-/g)).toHaveLength(1)
+  })
+
   it('ignores corrupt stored themes', () => {
     storage.set('theme.library', JSON.stringify([{ id: 'x' }, custom()]))
     expect(themes.themeLibrary().map((theme) => theme.id)).toEqual(['calm'])

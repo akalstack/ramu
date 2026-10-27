@@ -3,7 +3,8 @@ import { Button } from '@/components/desktop-button'
 import type { AppPreferences } from '@ramu/shared/types'
 import { t } from '../i18n'
 import { PasteTheme, ThemeEditor } from '../theme/ThemeEditor'
-import { removeTheme, selectTheme, themeLibrary, useSelectedTheme, useThemeLibrary } from '../theme/themes'
+import { selectTheme, themeLibrary, useSelectedTheme } from '../theme/themes'
+import { ThemeGallery } from '../theme/ThemeGallery'
 import { useRef, useState } from 'react'
 import { importThemeFile, themeDigest, type RamuTheme } from '@ramu/shared/theme'
 import { notifyError } from '../chat/Notifications'
@@ -21,7 +22,6 @@ export function AppearanceSettings({
 }: DraftProps & { sizesReset: boolean; onResetSizes: () => void }) {
   const toggleProps = { draft, onChange, busy }
   const appearance = useAppearance()
-  const [editing, setEditing] = useState(false)
   const [opened, setOpened] = useState<{ theme: RamuTheme; notice?: string } | null>(null)
   const [pasting, setPasting] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -46,7 +46,6 @@ export function AppearanceSettings({
     setOpened({ theme, notice })
     return true
   }
-  const saved = useThemeLibrary()
   const current = useSelectedTheme()
   return (
     <div className={SETTINGS_FORM_CLASS}>
@@ -79,40 +78,11 @@ export function AppearanceSettings({
           onChange={(value) => setAppearance(value as Appearance)}
         />
       </SettingsRow>
-      <SettingsRow>
-        <SettingsLabel
-          title={t('Colors')}
-          help={t('Adjust every color of the app, light and dark. Nothing changes until you keep it.')}
-        />
-        <span className="flex flex-wrap items-center justify-end gap-2 min-w-0">
-          {saved.length > 0 && (
-            <Dropdown
-              label={t('Color theme')}
-              value={current.id}
-              options={[
-                { value: 'ramu-default', label: 'Ramu Default' },
-                ...saved.map((x) => ({ value: x.id, label: x.name })),
-              ]}
-              onChange={(id) => selectTheme(id === 'ramu-default' ? null : id)}
-            />
-          )}
-          <Button variant="secondary" className={SECONDARY_BUTTON_CLASS} onClick={() => setEditing(true)}>
-            {t('Customize colors')}
-          </Button>
-          <Button variant="secondary" className={SECONDARY_BUTTON_CLASS} onClick={() => fileInput.current?.click()}>
-            {t('Import theme')}
-          </Button>
-          <Button variant="ghost" onClick={() => setPasting(true)}>
-            {t('Paste JSON')}
-          </Button>
-          {current.id !== 'ramu-default' && (
-            <Button variant="ghost" onClick={() => removeTheme(current.id)}>
-              {t('Delete theme')}
-            </Button>
-          )}
-        </span>
-      </SettingsRow>
-      {editing && <ThemeEditor onClose={() => setEditing(false)} />}
+      <ThemeGallery
+        onEdit={(theme) => setOpened({ theme })}
+        onImportFile={() => fileInput.current?.click()}
+        onPaste={() => setPasting(true)}
+      />
       {pasting && <PasteTheme onClose={() => setPasting(false)} onPreview={openImported} />}
       {opened && <ThemeEditor imported={opened.theme} notice={opened.notice} onClose={() => setOpened(null)} />}
       <input

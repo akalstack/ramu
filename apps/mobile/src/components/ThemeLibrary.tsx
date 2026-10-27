@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Share, View } from 'react-native'
+import { Alert, Share, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { Check } from 'lucide-react-native'
+import { Check, Copy, Ellipsis, Pencil, Share2, Trash2 } from 'lucide-react-native'
 import { translate } from '@ramu/shared/i18n'
 import {
   DEFAULT_THEME,
@@ -12,9 +12,11 @@ import {
   themeDigest,
   type RamuTheme,
 } from '@ramu/shared/theme'
+import { THEME_PRESETS } from '@ramu/shared/themePresets'
 import { useStore } from '../runtime/store'
 import { font, radius, space, useTheme } from '../theme'
-import { Button, Card, Divider, Row, SectionLabel, Sheet, T } from './ui'
+import { Button, Card, Divider, IconButton, Row, SectionLabel, Sheet, T } from './ui'
+import { SheetGroup, SheetOption, useSheetInputStyle } from './SheetOptions'
 import { Hint } from './SettingRows'
 
 const SWATCHES = ['window', 'canvas', 'raised', 'primary', 'accent', 'ok', 'warn', 'bad'] as const
@@ -47,11 +49,15 @@ function Swatches({ theme, scheme }: { theme: RamuTheme; scheme: 'light' | 'dark
  */
 export function ThemeLibrary() {
   const { language } = useStore()
-  const { theme, themes, trial, scheme, tryTheme, keepTheme, selectTheme, removeTheme, c } = useTheme()
+  const { theme, themes, trial, scheme, tryTheme, keepTheme, selectTheme, removeTheme, renameTheme, c } = useTheme()
   const t = (key: string, values?: Record<string, string>) => translate(language, key, values)
   const [importing, setImporting] = useState(false)
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+  const [acting, setActing] = useState<RamuTheme | null>(null)
+  const [renaming, setRenaming] = useState<RamuTheme | null>(null)
+  const [name, setName] = useState('')
+  const field = useSheetInputStyle()
   const revert = useRef(tryTheme)
   revert.current = tryTheme
   // Leaving this screen reverts a trial, so a bad palette can never strand the person elsewhere in the app.
@@ -103,7 +109,47 @@ export function ThemeLibrary() {
     }
   }
   const issues = trial ? checkTheme(trial) : []
-  const rows = [DEFAULT_THEME, ...themes]
+  const builtIn = [DEFAULT_THEME, ...THEME_PRESETS]
+  const copy = (item: RamuTheme) => ({
+    ...item,
+    id: `${item.id.replace(/-copy-[a-z0-9]+$/, '')}-copy-${Date.now().toString(36)}`,
+    name: t('{0} copy', { '0': item.name }),
+  })
+  const row = (item: RamuTheme, index: number) => {
+    const selected = !trial && theme.id === item.id
+    const label = item.id === DEFAULT_THEME.id ? t('Ramu Default') : item.name
+    return (
+      <View key={item.id}>
+        {index ? <Divider inset={space.l} /> : null}
+        <Row
+          accessibilityRole="radio"
+          accessibilityState={{ selected }}
+          accessibilityLabel={label}
+          onPress={() => {
+            tryTheme(null)
+            selectTheme(item.id === DEFAULT_THEME.id ? null : item.id)
+          }}
+          style={{ paddingVertical: space.m }}
+        >
+          <View style={{ flex: 1, gap: 6 }}>
+            <T weight="500">{label}</T>
+            <Swatches theme={item} scheme={scheme} />
+          </View>
+          {selected ? <Check size={17} color={c.primary} /> : null}
+          {item.id !== DEFAULT_THEME.id ? (
+            <IconButton
+              icon={Ellipsis}
+              label={t('Theme actions for {0}', { '0': label })}
+              size={34}
+              tone="muted"
+              onPress={() => setActing(item)}
+            />
+          ) : null}
+        </Row>
+      </View>
+    )
+  }
+  const kept = (item: RamuTheme) => themes.some((saved) => saved.id === item.id)
   return (
     <>
       <SectionLabel>{t('Themes')}</SectionLabel>
@@ -143,47 +189,11 @@ export function ThemeLibrary() {
           </View>
         </Card>
       ) : null}
+      <Card style={{ marginHorizontal: space.l }}>{builtIn.map(row)}</Card>
+      <SectionLabel>{t('Yours')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
-        {rows.map((item, index) => {
-          const selected = !trial && theme.id === item.id
-          return (
-            <View key={item.id}>
-              {index ? <Divider inset={space.l} /> : null}
-              <Row
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                accessibilityLabel={item.id === DEFAULT_THEME.id ? t('Ramu Default') : item.name}
-                onPress={() => {
-                  tryTheme(null)
-                  selectTheme(item.id === DEFAULT_THEME.id ? null : item.id)
-                }}
-                style={{ paddingVertical: space.m }}
-              >
-                <View style={{ flex: 1, gap: 6 }}>
-                  <T weight="500">{item.id === DEFAULT_THEME.id ? t('Ramu Default') : item.name}</T>
-                  <Swatches theme={item} scheme={scheme} />
-                </View>
-                {selected ? <Check size={17} color={c.primary} /> : null}
-              </Row>
-              {item.id !== DEFAULT_THEME.id ? (
-                <View style={{ flexDirection: 'row', paddingHorizontal: space.l, paddingBottom: space.s }}>
-                  <Button kind="ghost" title={t('Share theme')} onPress={() => void share(item)} />
-                  <Button
-                    kind="ghost"
-                    title={t('Remove')}
-                    onPress={() =>
-                      Alert.alert(t('Remove theme'), t('Remove {0}? Other themes are unchanged.', { '0': item.name }), [
-                        { text: t('Cancel'), style: 'cancel' },
-                        { text: t('Remove'), style: 'destructive', onPress: () => removeTheme(item.id) },
-                      ])
-                    }
-                  />
-                </View>
-              ) : null}
-            </View>
-          )
-        })}
-        <Divider inset={space.l} />
+        {themes.map(row)}
+        {themes.length ? <Divider inset={space.l} /> : null}
         <Row accessibilityRole="button" onPress={() => setImporting(true)}>
           <T tone="accent">{t('Import theme')}</T>
         </Row>
@@ -207,6 +217,93 @@ export function ThemeLibrary() {
             onPress={() => void fromClipboard()}
           />
           {notice ? <T tone="bad">{notice}</T> : null}
+        </View>
+      </Sheet>
+      <Sheet open={!!acting} onClose={() => setActing(null)} title={acting?.name}>
+        {acting ? (
+          <>
+            <SheetGroup>
+              {kept(acting) ? (
+                <SheetOption
+                  icon={Pencil}
+                  title={t('Rename')}
+                  onPress={() => {
+                    const item = acting
+                    setActing(null)
+                    setName(item.name)
+                    setTimeout(() => setRenaming(item), 300)
+                  }}
+                />
+              ) : null}
+              <SheetOption
+                icon={Copy}
+                title={kept(acting) ? t('Duplicate') : t('Save a copy')}
+                help={t('Opens it as a trial; keep it to add it to your themes.')}
+                onPress={() => {
+                  const item = acting
+                  setActing(null)
+                  tryTheme(copy(item))
+                }}
+              />
+              <SheetOption
+                icon={Share2}
+                title={t('Share theme')}
+                onPress={() => {
+                  const item = acting
+                  setActing(null)
+                  setTimeout(() => void share(item), 300)
+                }}
+              />
+            </SheetGroup>
+            {kept(acting) ? (
+              <SheetGroup>
+                <SheetOption
+                  icon={Trash2}
+                  danger
+                  title={t('Remove')}
+                  onPress={() => {
+                    const item = acting
+                    setActing(null)
+                    setTimeout(
+                      () =>
+                        Alert.alert(
+                          t('Remove theme'),
+                          t('Remove {0}? Other themes are unchanged.', { '0': item.name }),
+                          [
+                            { text: t('Cancel'), style: 'cancel' },
+                            { text: t('Remove'), style: 'destructive', onPress: () => removeTheme(item.id) },
+                          ],
+                        ),
+                      300,
+                    )
+                  }}
+                />
+              </SheetGroup>
+            ) : null}
+          </>
+        ) : null}
+      </Sheet>
+      <Sheet open={!!renaming} onClose={() => setRenaming(null)} title={t('Rename theme')}>
+        <View style={{ paddingHorizontal: space.l, gap: space.m }}>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            autoFocus
+            maxLength={80}
+            accessibilityLabel={t('Theme name')}
+            returnKeyType="done"
+            onSubmitEditing={() => {
+              if (renaming && renameTheme(renaming.id, name)) setRenaming(null)
+            }}
+            style={field}
+          />
+          <Button
+            title={t('Rename')}
+            disabled={!name.trim()}
+            onPress={() => {
+              if (renaming && renameTheme(renaming.id, name)) setRenaming(null)
+            }}
+          />
         </View>
       </Sheet>
     </>
