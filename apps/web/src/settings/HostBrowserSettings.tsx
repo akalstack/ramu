@@ -215,7 +215,7 @@ export function HostBrowserSettings({
           if (!open) setReview(null)
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{review?.remove ? t('Delete profile') : t('Clear website data')}</DialogTitle>
             <DialogDescription>

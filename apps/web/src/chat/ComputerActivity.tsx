@@ -229,7 +229,7 @@ function Viewer({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="flex h-[min(92vh,980px)] w-[min(96vw,1500px)] max-w-none flex-col gap-3 sm:max-w-none">
+      <DialogContent className="flex h-[min(92vh,980px)] w-[min(96vw,1500px)] sm:max-w-none flex-col gap-3 sm:max-w-none">
         <DialogHeader className="pr-8">
           <DialogTitle>{session.target.name}</DialogTitle>
           <DialogDescription>

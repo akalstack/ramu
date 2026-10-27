@@ -227,7 +227,7 @@ function CommitForm({
   return (
     <Dialog open onOpenChange={(open) => !open && onDone(null)}>
       <DialogContent
-        className="dialog flex max-h-[min(680px,calc(100vh-48px))] w-[min(520px,calc(100vw-48px))] max-w-none flex-col gap-0 rounded-(--radius-l) p-0 [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_24px_64px_rgba(0,_0,_0,_0.55)] ring-0"
+        className="dialog flex max-h-[min(680px,calc(100vh-48px))] w-[min(520px,calc(100vw-48px))] sm:max-w-none flex-col gap-0 rounded-(--radius-l) p-0 [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_24px_64px_rgba(0,_0,_0,_0.55)] ring-0"
         showCloseButton={false}
       >
         <DialogHeader className="flex-none gap-1 px-5 pt-[18px] pb-3">

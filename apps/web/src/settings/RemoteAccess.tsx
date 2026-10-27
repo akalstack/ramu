@@ -482,7 +482,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
         if (!open) onClose()
       }}
     >
-      <DialogContent className="max-w-[520px]" aria-describedby={undefined}>
+      <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-[520px]" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{joined ? t('{0} is paired', { 0: joined.name }) : t('Pair a device')}</DialogTitle>
           {!joined && (
@@ -1064,7 +1064,7 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
         if (!open && !busy) onClose()
       }}
     >
-      <DialogContent className="max-w-[540px]">
+      <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-[540px]">
         <DialogHeader>
           <DialogTitle>{t('Connection settings')}</DialogTitle>
           <DialogDescription>

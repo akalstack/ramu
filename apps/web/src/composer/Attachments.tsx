@@ -182,7 +182,7 @@ function AttachmentPreview({
       }}
     >
       <DialogContent
-        className={`attachment-preview [&.expanded]:w-[96vw] [&.expanded]:max-h-[94vh] [&.expanded_.attachment-preview-body.image]:h-[74vh] [&.expanded_.attachment-preview-body.image]:max-h-[74vh] w-[min(92vw,_1100px)] max-w-[none]! max-h-[88vh] p-0 gap-0 overflow-hidden [background:var(--raised)] [backdrop-filter:none] ${expanded ? ' expanded' : ''}`}
+        className={`attachment-preview [&.expanded]:w-[96vw] [&.expanded]:max-h-[94vh] [&.expanded_.attachment-preview-body.image]:h-[74vh] [&.expanded_.attachment-preview-body.image]:max-h-[74vh] w-[min(92vw,_1100px)] sm:max-w-[none]! max-h-[88vh] p-0 gap-0 overflow-hidden [background:var(--raised)] [backdrop-filter:none] ${expanded ? ' expanded' : ''}`}
         showCloseButton
         finalFocus={() => (opener?.isConnected ? opener : false)}
         aria-describedby={undefined}

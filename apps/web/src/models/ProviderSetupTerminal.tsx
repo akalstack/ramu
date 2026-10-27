@@ -30,7 +30,7 @@ export function ProviderSetupTerminal() {
       }}
     >
       <DialogContent
-        className="provider-terminal-dialog [&_.terminal-view]:h-full [&_.terminal-view]:min-h-0 w-[min(900px,_calc(100vw_-_48px))] max-w-[900px] h-[min(520px,_calc(100vh_-_80px))] p-0 overflow-hidden"
+        className="provider-terminal-dialog [&_.terminal-view]:h-full [&_.terminal-view]:min-h-0 w-[min(900px,_calc(100vw_-_48px))] sm:max-w-[900px] h-[min(520px,_calc(100vh_-_80px))] p-0 overflow-hidden"
         showCloseButton={false}
         aria-describedby={undefined}
         initialFocus={false}

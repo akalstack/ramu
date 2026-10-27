@@ -70,7 +70,7 @@ export function SessionCheckpointButton({ sessionId }: { sessionId: string }) {
         {t('Checkpoint')}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[min(640px,calc(100vh-48px))] w-[min(600px,calc(100vw-48px))] max-w-none flex-col gap-0 p-0">
+        <DialogContent className="flex max-h-[min(640px,calc(100vh-48px))] w-[min(600px,calc(100vw-48px))] sm:max-w-none flex-col gap-0 p-0">
           <DialogHeader className="flex-none gap-1.5 px-5 pt-5 pb-3.5 pr-12 [border-bottom:1px_solid_var(--line)]">
             <DialogTitle className="flex items-center gap-2 text-heading font-semibold">
               <BookmarkCheck size={15} className="text-brand" />

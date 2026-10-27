@@ -75,7 +75,7 @@ export function SummaryView({ id, call, host }: { id: string; call: SummaryCall;
   return (
     <Dialog open onOpenChange={(open) => !open && closeSummary()}>
       <DialogContent
-        className="summary-view flex max-h-[calc(100vh-48px)] w-[min(680px,calc(100vw-48px))] max-w-none flex-col gap-0 p-0 sm:max-w-none"
+        className="summary-view flex max-h-[calc(100vh-48px)] w-[min(680px,calc(100vw-48px))] sm:max-w-none flex-col gap-0 p-0 sm:max-w-none"
         showCloseButton
       >
         <header className="flex-none p-[18px_20px_8px]">

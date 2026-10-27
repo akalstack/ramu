@@ -88,7 +88,10 @@ export function EditFromHereDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onCancel()}>
-      <DialogContent className="w-[min(480px,calc(100vw-48px))] max-w-none gap-0 p-0" showCloseButton={false}>
+      <DialogContent
+        className="max-h-[calc(100vh-48px)] overflow-y-auto w-[min(480px,calc(100vw-48px))] sm:max-w-none gap-0 p-0"
+        showCloseButton={false}
+      >
         <DialogHeader className="gap-1.5 px-5 pt-5 pb-4">
           <DialogTitle className="flex items-center gap-2 text-heading font-semibold">
             <History size={15} className="text-brand" />

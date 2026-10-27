@@ -139,14 +139,26 @@ export function BrowserProfilesSettings({
           </Button>
         </div>
       )}
-      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void run(async valid => {
-        const sources = await ramu.invoke('browser.profiles.importSources', hostId)
-        if (valid()) setSources(sources)
-      })}>{t('Import signed-in sessions')}</Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={busy}
+        onClick={() =>
+          void run(async (valid) => {
+            const sources = await ramu.invoke('browser.profiles.importSources', hostId)
+            if (valid()) setSources(sources)
+          })
+        }
+      >
+        {t('Import signed-in sessions')}
+      </Button>
       {sources && (
         <div className="space-y-2 text-caption">
           <p className="text-muted-foreground">
-            {t('Import copies sign-in cookies once into a new profile. Nothing is read until you choose a browser, and the source browser is never changed.')}
+            {t(
+              'Import copies sign-in cookies once into a new profile. Nothing is read until you choose a browser, and the source browser is never changed.',
+            )}
           </p>
           {sources.map((source) => (
             <div key={source.id} className="flex flex-wrap items-center gap-2">
@@ -155,16 +167,33 @@ export function BrowserProfilesSettings({
                 {!source.supported && ` · ${t(source.reason ?? 'Unavailable')}`}
               </span>
               {source.supported && source.installed && (
-                <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => setImporting(source)}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setImporting(source)}
+                >
                   {t('Import…')}
                 </Button>
               )}
             </div>
           ))}
-          <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => {
-            const profile = catalog?.profiles.find(profile => profile.id === 'default')
-            if (profile) { setSignIn(profile); setAddress('') }
-          }}>{t('Sign in instead')}</Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              const profile = catalog?.profiles.find((profile) => profile.id === 'default')
+              if (profile) {
+                setSignIn(profile)
+                setAddress('')
+              }
+            }}
+          >
+            {t('Sign in instead')}
+          </Button>
         </div>
       )}
       {importing && (
@@ -182,7 +211,7 @@ export function BrowserProfilesSettings({
           if (!open && !busy) setSignIn(null)
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('Sign in to a website')}</DialogTitle>
             <DialogDescription>

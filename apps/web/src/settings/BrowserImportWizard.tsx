@@ -118,7 +118,7 @@ export function BrowserImportWizard({
 
   return (
     <Dialog open onOpenChange={(open) => !open && step !== 'importing' && void finish(step === 'result')}>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('Import signed-in sessions from {0}', { 0: source.name })}</DialogTitle>
           <DialogDescription>
