@@ -63,7 +63,7 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
       animation.stop()
       clearTimeout(fallback)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [reduced, r, dot, letters] by design; the values it reads beyond these are current as of that run
   }, [reduced, r, dot, letters])
   useEffect(() => {
     if (!ready || !motionDone) return

@@ -127,7 +127,7 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
       off()
       clearTimeout(timer)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [on, bindings, searchOptions, search.refetch] by design; the values it reads beyond these are current as of that run
   }, [on, bindings, searchOptions, search.refetch])
   const hasDirtyMatches = (files: { repoId: string; path: string }[]) =>
     (ws.taskUi[context]?.views ?? []).some(

@@ -54,7 +54,7 @@ export default function SummaryScreen() {
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [computer, id] by design; the values it reads beyond these are current as of that run
   }, [computer, id])
 
   const send = async () => {

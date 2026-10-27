@@ -113,7 +113,7 @@ export default function Pair() {
     } catch (error) {
       Alert.alert(t.pairInvalidLink, error instanceof Error ? error.message : String(error))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [params.url, params.code, params.exp, params.name] by design; the values it reads beyond these are current as of that run
   }, [params.url, params.code, params.exp, params.name])
   const insecure = needsHttpConsent(address)
   const ready = address.trim().length > 3 && code.length === LENGTH && (!insecure || http)

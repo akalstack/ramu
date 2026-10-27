@@ -181,7 +181,7 @@ function CommitForm({
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [request.taskId, request.repoId, defaultNewBranch] by design; the values it reads beyond these are current as of that run
   }, [request.taskId, request.repoId, defaultNewBranch])
   const onDefault = !!branchInfo?.branch && branchInfo.branch === branchInfo.defaultBranch
   // A plain commit on the default branch hides the new-branch choice, so it never applies there.

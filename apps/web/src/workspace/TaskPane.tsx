@@ -72,7 +72,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   const workspaceId = ws.workspaceOf(taskId)
   useEffect(() => {
     void ws.refreshBindings(workspaceId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [workspaceId, ws.refreshBindings] by design; the values it reads beyond these are current as of that run
   }, [workspaceId, ws.refreshBindings])
   const state = ws.taskUi[taskId] ?? { views: [], activeViewId: null }
   const bindings = ws.bindings[taskId] ?? []
@@ -188,7 +188,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
     const latest = sessions.reduce((a, b) => (a.createdAt > b.createdAt ? a : b))
     ws.openView(taskId, { kind: 'agent', sessionId: latest.id })
     if (editorView) ws.activateView(taskId, editorView.id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [visible, taskId, sessionsLoadedFor, sessions, agentViews.length, ed...] by design; the values it reads beyond these are current as of that run
   }, [visible, taskId, sessionsLoadedFor, sessions, agentViews.length, editorView?.id, ws.openView, ws.activateView])
 
   // Switching conversations focuses their composer without moving focus during streaming.
@@ -201,7 +201,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
       input?.focus({ preventScroll: true })
     })
     return () => cancelAnimationFrame(frame)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [visible, taskId, chatView?.id, showLauncherMain, composing] by design; the values it reads beyond these are current as of that run
   }, [visible, taskId, chatView?.id, showLauncherMain, composing])
 
   const repoName = (repoId?: string) => (repoId ? (ws.binding(taskId, repoId)?.repoName ?? '?') : 'workspace')
@@ -617,7 +617,7 @@ function NewChat({ taskId, onStarted }: { taskId: string; onStarted: (s: AgentSe
   const [settings, setSettings] = useState<AgentSettings>(initialSettings)
   useEffect(
     () => setSettings(initialSettings),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [initialSettings.provider, initialSettings.model, initialSettings.ef...] by design; the values it reads beyond these are current as of that run
     [
       initialSettings.provider,
       initialSettings.model,

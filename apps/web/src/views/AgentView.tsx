@@ -192,7 +192,7 @@ export const AgentView = memo(function AgentView({
   )
   const dockQuestions = useMemo(
     () => pendingQuestions.filter((e): e is Extract<AgentEvent, { kind: 'question' }> => e.kind === 'question'),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [events, live, outcomes] by design; the values it reads beyond these are current as of that run
     [events, live, outcomes],
   )
   // A new question opens the dock, even after "Answer later".
@@ -201,7 +201,7 @@ export const AgentView = memo(function AgentView({
   useEffect(() => {
     if (dockQuestions.some((e) => !seenQuestions.current.has(e.requestId))) setQuestionDockOpen(true)
     dockQuestions.forEach((e) => seenQuestions.current.add(e.requestId))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [dockKey] by design; the values it reads beyond these are current as of that run
   }, [dockKey])
   const helperSelection = useMemo(() => helperGroups(events), [events])
   const allTasks = useMemo(() => latestTasks(events), [events])
@@ -404,7 +404,7 @@ export const AgentView = memo(function AgentView({
     }
     window.addEventListener(INTERACTIVE_FOLLOWUP_EVENT, receive)
     return () => window.removeEventListener(INTERACTIVE_FOLLOWUP_EVENT, receive)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [host.id, view.sessionId] by design; the values it reads beyond these are current as of that run
   }, [host.id, view.sessionId])
 
   const recallIntoComposer = (files: Attachment[], text: string) => {

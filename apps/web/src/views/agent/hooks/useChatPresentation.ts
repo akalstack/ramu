@@ -60,6 +60,6 @@ export function useChatPresentation({
       if (current.session) queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.get', sessionId), current.session)
       queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.events', sessionId), current.events)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [sessionId, host] by design; the values it reads beyond these are current as of that run
   }, [sessionId, host])
 }

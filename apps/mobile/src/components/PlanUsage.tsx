@@ -183,7 +183,7 @@ export function PlanUsageSheet({
       ++generation.current
       for (const off of subscriptions) off()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [open, key, connectionKey, store.language] by design; the values it reads beyond these are current as of that run
   }, [open, key, connectionKey, store.language])
   const refreshHosts = hosts.filter(
     (id) => (!filter || filter === id) && store.isOnline(id) && !unsupportedRefresh.includes(id),

@@ -113,7 +113,7 @@ export function SelectionActions({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [pick, readOnly] by design; the values it reads beyond these are current as of that run
   }, [pick, readOnly])
   if (!pick) return null
   // Pressing a half must not clear the selection it acts on.

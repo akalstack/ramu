@@ -191,7 +191,7 @@ export function TerminalScreen({
       alive = false
       off()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [computerId, ctx, connected] by design; the values it reads beyond these are current as of that run
   }, [computerId, ctx, connected])
   const hostStatus = store.computers.find((c) => c.id === chat?.computerId)?.status
   useEffect(() => {
@@ -254,13 +254,13 @@ export function TerminalScreen({
       off()
       unwatch()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [chat?.computerId, terminal?.id, hostStatus] by design; the values it reads beyond these are current as of that run
   }, [chat?.computerId, terminal?.id, hostStatus])
   // The view stays mounted across tabs, so it will not report its size again; hand the new shell the one on screen.
   useEffect(() => {
     if (terminal && !terminal.exited && connected && size.current)
       void store.invoke(computerId, 'term.resize', terminal.id, size.current.cols, size.current.rows).catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [terminal?.id, connected] by design; the values it reads beyond these are current as of that run
   }, [terminal?.id, connected])
   const press = async (label: string) => {
     tap()

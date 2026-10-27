@@ -50,7 +50,7 @@ export function CreatePullRequestDialog({
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [taskId, repoId] by design; the values it reads beyond these are current as of that run
   }, [taskId, repoId])
 
   const create = async () => {

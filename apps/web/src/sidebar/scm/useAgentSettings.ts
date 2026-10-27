@@ -25,7 +25,7 @@ export function useAgentSettings(taskId: string) {
       cancelled = true
       off()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [invoke, on, taskId, activeViewId] by design; the values it reads beyond these are current as of that run
   }, [invoke, on, taskId, activeViewId])
   return [settings, setSettings] as const
 }

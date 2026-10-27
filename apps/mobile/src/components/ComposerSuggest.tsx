@@ -92,7 +92,7 @@ export function useComposerSuggest({
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [visible, scope, online, computerId] by design; the values it reads beyond these are current as of that run
   }, [visible, scope, online, computerId])
   const data = loaded && loaded.scope === scope && loaded.computerId === computerId ? loaded : undefined
 
@@ -186,7 +186,7 @@ export function useComposerSuggest({
     return options
       .filter((choice) => `${choice.label} ${choice.description}`.toLowerCase().includes(query))
       .slice(0, 30)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mode, query, data, chatId, computerId] by design; the values it reads beyond these are current as of that run
   }, [mode, query, data, chatId, computerId])
 
   return {

@@ -41,7 +41,7 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
       }),
       Animated.timing(drop, { toValue: 1, duration: 620, delay: 420, easing: Easing.linear, useNativeDriver: true }),
     ]).start()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
   }, [])
   const replay = () => {
     haptic()

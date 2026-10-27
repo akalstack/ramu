@@ -250,7 +250,7 @@ function MarkdownImage({ src, alt }: { src: string; alt: string }) {
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [src] by design; the values it reads beyond these are current as of that run
   }, [src])
   useEffect(() => {
     if (uri)

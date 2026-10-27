@@ -218,7 +218,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         : null
     pending.current = restored
     setChoices(restored?.candidates ?? null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [routeSnapshot, projectId, auto, selected] by design; the values it reads beyond these are current as of that run
   }, [routeSnapshot, projectId, auto, selected])
   const branchTitle = draftText.split('\n')[0]!.slice(0, 60) || 'Discuss attachments'
   const namingIntent = {

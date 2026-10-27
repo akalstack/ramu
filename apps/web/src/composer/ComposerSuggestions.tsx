@@ -83,7 +83,7 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
     return () => {
       disposed = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [scope, mode, invoke] by design; the values it reads beyond these are current as of that run
   }, [scope, mode, invoke])
   const repoName = (repoId: string) =>
     Object.values(ws.repos)
@@ -248,7 +248,7 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
             })),
           ]
     return options.filter((c) => `${c.label} ${c.description}`.toLowerCase().includes(query)).slice(0, 30)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mount only] by design; the values it reads beyond these are current as of that run
   }, [
     mode,
     query,

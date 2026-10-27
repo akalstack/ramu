@@ -260,7 +260,7 @@ export function Notifications() {
       reconnect()
       notices.setHost([])
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [invoke, on] by design; the values it reads beyond these are current as of that run
   }, [invoke, on])
   // A notice about a chat that is on screen is stale.
   const noticeList = notices.list()
@@ -270,7 +270,7 @@ export function Notifications() {
         notify.close(entry.id)
         dismissHost(entry.id)
       }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [ws.ui.activeTaskId, ws.taskUi, ws.composing, ws.ui.sidebar, noticeList] by design; the values it reads beyond these are current as of that run
   }, [ws.ui.activeTaskId, ws.taskUi, ws.composing, ws.ui.sidebar, noticeList])
   useEffect(() => {
     const offToast = ramu.on('notify:inapp', (notice) => {
@@ -314,7 +314,7 @@ export function Notifications() {
       offToast()
       offOpen()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [ws] by design; the values it reads beyond these are current as of that run
   }, [ws])
   useEffect(() => {
     const receive = (event: Event) => {

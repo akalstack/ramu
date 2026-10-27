@@ -94,7 +94,7 @@ export function ModelPicker({
           ]
         }),
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [usage, language] by design; the values it reads beyond these are current as of that run
     [usage, language],
   )
   const matchingModels = useMemo(

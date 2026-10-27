@@ -308,7 +308,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           () => syncAttempts.current.delete(key),
         )
       }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mobileLayers] by design; the values it reads beyond these are current as of that run
   }, [mobileLayers])
   const loadDefaults = (id: string) => {
     // Older computers have no shared mobile layer; they keep working with the computer's own setting and this phone's.
@@ -1250,7 +1250,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         connection.client.close()
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
   }, [])
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1278,7 +1278,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         )
     }, 250)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [state.computers, state.projects, state.chats, state.selected, state...] by design; the values it reads beyond these are current as of that run
   }, [state.computers, state.projects, state.chats, state.selected, state.language, state.outbox, state.drafts])
   const sessionAction = (id: string, fn: (computer: string, session: string) => Promise<unknown>) => {
     const chat = ref.current.chats.find((c) => c.id === id)

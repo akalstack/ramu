@@ -187,14 +187,14 @@ function Shell() {
     if (sidebarHidden && !panel.isCollapsed()) panel.collapse()
     if (!sidebarHidden && panel.isCollapsed()) panel.expand()
     return fade
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [sidebarHidden] by design; the values it reads beyond these are current as of that run
   }, [sidebarHidden])
   // Settings → reset layout sizes (and any other change of the saved width) applies to the live panel.
   useEffect(() => {
     const panel = sidebarPanel.current
     if (panel && !panel.isCollapsed() && Math.abs(panel.getSize().inPixels - sidebarWidth) > 1)
       panel.resize(sidebarWidth)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [sidebarWidth] by design; the values it reads beyond these are current as of that run
   }, [sidebarWidth])
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance')
   const [settingsTarget, setSettingsTarget] = useState<string | undefined>()
@@ -282,7 +282,7 @@ function Shell() {
           }))
         : []),
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [ws, computers?.scope, select, hostInvoke, language, actionContext, ...] by design; the values it reads beyond these are current as of that run
     [
       ws,
       computers?.scope,
@@ -965,7 +965,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
         window.dispatchEvent(new Event('ramu:git-updated'))
       }
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [taskId, binding?.repoId, binding?.setupState, invoke] by design; the values it reads beyond these are current as of that run
   }, [taskId, binding?.repoId, binding?.setupState, invoke])
   useAutoFetch(binding?.setupState === 'ready' ? autoFetch : null)
 

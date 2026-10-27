@@ -256,7 +256,7 @@ export function ReviewDiff({
         modified.dispose()
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [file.id, flow, mounted] by design; the values it reads beyond these are current as of that run
   }, [file.id, flow, mounted])
   useLayoutEffect(() => {
     // Cached off-screen editors retain their models and rendered surface,
@@ -274,7 +274,7 @@ export function ReviewDiff({
       lineHeight: Math.round(preferences.editorFontSize * 1.6),
     })
     size()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [sideBySide, preferences.editorFontSize, mounted] by design; the values it reads beyond these are current as of that run
   }, [sideBySide, preferences.editorFontSize, mounted])
   useLayoutEffect(() => {
     if (flow)
@@ -352,7 +352,7 @@ export function ReviewDiff({
       cleanup()
       if (clearZones.current === cleanup) clearZones.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [file.id, zoneSpec, sideBySide, lineChanges, mounted] by design; the values it reads beyond these are current as of that run
   }, [file.id, zoneSpec, sideBySide, lineChanges, mounted])
   const revealLine = (target: { side: 'old' | 'new'; line: number; endLine: number }) => {
     if (!editor.current?.getLineChanges()) {
@@ -386,7 +386,7 @@ export function ReviewDiff({
     }
     window.addEventListener('ramu:review-line', reveal)
     return () => window.removeEventListener('ramu:review-line', reveal)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [file.id, flow] by design; the values it reads beyond these are current as of that run
   }, [file.id, flow])
   useEffect(() => {
     const diff = editor.current
@@ -484,7 +484,7 @@ export function ReviewDiff({
       pendingNavigation.current = null
       navigateRef.current(direction)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mounted, computed, lineChanges] by design; the values it reads beyond these are current as of that run
   }, [mounted, computed, lineChanges])
   useEffect(() => {
     enterRef.current()

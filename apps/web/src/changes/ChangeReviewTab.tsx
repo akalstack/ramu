@@ -68,7 +68,7 @@ export function ChangeReviewTab({
   useEffect(() => {
     const fileId = review?.comments.find((c) => c.id === threadTarget)?.fileId
     if (fileId) setActiveFileId(fileId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [threadTarget, review?.id] by design; the values it reads beyond these are current as of that run
   }, [threadTarget, review?.id])
   useEffect(() => {
     setActiveFileId(null)
@@ -97,7 +97,7 @@ export function ChangeReviewTab({
       thread?.scrollIntoView({ block: 'center', behavior: 'smooth' })
     })
     return () => cancelAnimationFrame(frame)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [threadTarget, review?.id] by design; the values it reads beyond these are current as of that run
   }, [threadTarget, review?.id])
   useEffect(() => {
     if (review?.id === view.reviewId && view.fileId && !view.threadId) {
@@ -108,7 +108,7 @@ export function ChangeReviewTab({
       })
       return () => cancelAnimationFrame(frame)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [review?.id, view.requestId] by design; the values it reads beyond these are current as of that run
   }, [review?.id, view.requestId])
   const act = async (fn: () => Promise<ChangeReview>) => {
     setBusy(true)

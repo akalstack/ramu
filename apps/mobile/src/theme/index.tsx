@@ -224,7 +224,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       textSize,
       setTextSize,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [scheme, appearance, textSize, theme, themes, trial] by design; the values it reads beyond these are current as of that run
     [scheme, appearance, textSize, theme, themes, trial],
   )
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

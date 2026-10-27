@@ -170,7 +170,7 @@ export function FileViewer({
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [identity, online] by design; the values it reads beyond these are current as of that run
   }, [identity, online])
 
   useEffect(() => {
@@ -228,7 +228,7 @@ export function FileViewer({
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [readIdentity, online, binding] by design; the values it reads beyond these are current as of that run
   }, [readIdentity, online, binding])
 
   const rows = useMemo(() => (state.kind === 'text' ? state.lines : []), [state])

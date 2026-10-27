@@ -32,7 +32,7 @@ function AgentImage({ content, taskId }: { content: Extract<AgentContent, { type
   const inline = useMemo(() => {
     const normalized = agentContent(content)[0]
     return normalized?.type === 'image' ? inlineMedia(normalized.mimeType, normalized.data, 'image') : undefined
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [content.mimeType, content.data, content.uri] by design; the values it reads beyond these are current as of that run
   }, [content.mimeType, content.data, content.uri])
   const { invoke } = useHost()
   const [src, setSrc] = useState(inline)

@@ -102,7 +102,7 @@ export function useSidePanels({
     }
     window.addEventListener('ramu:chat-panel', openPanel)
     return () => window.removeEventListener('ramu:chat-panel', openPanel)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [openAside, openAgent, asides, tasks] by design; the values it reads beyond these are current as of that run
   }, [openAside, openAgent, asides, tasks])
   // ⌘⇧A with no text selected opens an aside on the whole chat (a selection is handled by SelectionActions).
   useEffect(() => {
@@ -115,7 +115,7 @@ export function useSidePanels({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
   }, [])
 
   return { dock, openAgent, openAside, asides, panelOpen, setOpenAgent, setOpenAside, toggleAside }

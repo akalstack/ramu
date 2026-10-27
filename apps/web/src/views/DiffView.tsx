@@ -131,7 +131,7 @@ export function DiffView({
       original.dispose()
       modified.dispose()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [taskId, binding.repoId, binding.cwd, view.path, view.staged, view.o...] by design; the values it reads beyond these are current as of that run
   }, [taskId, binding.repoId, binding.cwd, view.path, view.staged, view.oid, view.stash, invoke, on])
 
   useEffect(() => {

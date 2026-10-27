@@ -22,7 +22,7 @@ export function useChatFind(root: RefObject<HTMLDivElement | null>) {
     }
     window.addEventListener('ramu:find-in-chat', onFind)
     return () => window.removeEventListener('ramu:find-in-chat', onFind)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
   }, [])
   return { finding, findRequest, findQuery, openFind, closeFind }
 }

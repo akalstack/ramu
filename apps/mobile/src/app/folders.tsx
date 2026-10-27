@@ -46,7 +46,7 @@ export default function HostFolders() {
   const browse = (path: string) => run(async () => setListing(await store.invoke(computerId, 'folders.list', path)))
   useEffect(() => {
     void run(async () => setRoots(await store.invoke(computerId, 'folders.roots')))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [computerId] by design; the values it reads beyond these are current as of that run
   }, [computerId])
   return (
     <Screen bg="canvas">

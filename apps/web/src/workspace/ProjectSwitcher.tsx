@@ -50,7 +50,7 @@ export function ProjectSwitcher() {
         /* Keep navigation memory for this session. */
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [active, project?.id, workspace] by design; the values it reads beyond these are current as of that run
   }, [active, project?.id, workspace])
   if (ws.ui.sidebar === 'schedules' || ws.ui.sidebar === 'inbox' || !project) return null
   const valid = (context: string | undefined, projectId: string) =>

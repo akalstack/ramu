@@ -45,7 +45,7 @@ function useHostGroupRows(id: string) {
   const [overview] = useHostOverviews([id], () => !!store)
   useEffect(() => {
     if (store) rememberHostRows(id, { tasks: store.tasks, projects: store.projects })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [id, store?.tasks, store?.projects] by design; the values it reads beyond these are current as of that run
   }, [id, store?.tasks, store?.projects])
   return { store, ...hostRows({ store, overview }) }
 }

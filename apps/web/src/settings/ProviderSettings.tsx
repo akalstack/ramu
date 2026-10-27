@@ -104,7 +104,7 @@ export function ProviderSettings({
       // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
       sequence.current++
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [config, invoke, viewOnly] by design; the values it reads beyond these are current as of that run
   }, [config, invoke, viewOnly])
   const change = (provider: AgentProvider, patch: Partial<NonNullable<(typeof config)[AgentProvider]>>) =>
     allowed() &&
@@ -122,7 +122,7 @@ export function ProviderSettings({
     const onFocus = () => void refresh(false, true)
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [config, invoke, viewOnly] by design; the values it reads beyond these are current as of that run
   }, [config, invoke, viewOnly])
   /** The top enabled login is the one new threads use. */
   const arrange = (

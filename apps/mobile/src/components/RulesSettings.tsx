@@ -42,7 +42,7 @@ export function RulesSettings({ hostId }: { hostId: string }) {
     } finally {
       if (sequence.current === version) setLoading(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [hostId] by design; the values it reads beyond these are current as of that run
   }, [hostId])
   useEffect(() => {
     void read()
@@ -56,7 +56,7 @@ export function RulesSettings({ hostId }: { hostId: string }) {
       ++sequence.current
       unsubscribe()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [read, online] by design; the values it reads beyond these are current as of that run
   }, [read, online])
   const words = searchWords(query)
   const matches = rules.filter((rule) => matchesWords(`${rule.name} ${rule.body}`, words))

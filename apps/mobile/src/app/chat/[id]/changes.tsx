@@ -169,7 +169,7 @@ export default function Changes() {
   const drafts = review?.comments.filter((x) => x.author === 'human' && x.state === 'draft') ?? []
   useEffect(() => {
     void load().catch((e) => setError(e.message))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [chat?.computerId, chat?.sessionId] by design; the values it reads beyond these are current as of that run
   }, [chat?.computerId, chat?.sessionId])
   // `reviews.list` leaves file contents out to stay light (as desktop does); the opened review's diffs come from
   // `reviews.get`, re-read whenever the list changes after an action.
@@ -184,7 +184,7 @@ export default function Changes() {
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [reviewId, chat?.computerId, reviews] by design; the values it reads beyond these are current as of that run
   }, [reviewId, chat?.computerId, reviews])
   useEffect(() => {
     if (detail?.id === reviewId)

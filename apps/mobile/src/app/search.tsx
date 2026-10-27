@@ -58,7 +58,7 @@ export default function SearchScreen() {
         label(chat.computerId, chat.projectId).toLowerCase().includes(q) ||
         (store.computers.find((pc) => pc.id === chat.computerId)?.name ?? '').toLowerCase().includes(q),
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [store.chats, store.projects, store.computers, q] by design; the values it reads beyond these are current as of that run
   }, [store.chats, store.projects, store.computers, q])
   // What was said inside threads, searched by each online computer.
   const online = store.computers
@@ -85,7 +85,7 @@ export default function SearchScreen() {
       alive = false
       clearTimeout(timer)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [q, online] by design; the values it reads beyond these are current as of that run
   }, [q, online])
   const messageHits = hits.flatMap(({ query: searchedQuery, computerId, hit }) => {
     if (searchedQuery !== q || !q) return []

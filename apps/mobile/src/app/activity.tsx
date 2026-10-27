@@ -28,7 +28,7 @@ export default function ActivityRoute() {
       store.chats.find((c) => c.computerId === computer.id && c.status === 'running')
     if (task) router.replace({ pathname: '/chat/[id]', params: { id: task.id } })
     else router.replace('/')
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [store.ready, computerId, store.computers, store.chats] by design; the values it reads beyond these are current as of that run
   }, [store.ready, computerId, store.computers, store.chats])
   return (
     <Screen scrollable={false}>

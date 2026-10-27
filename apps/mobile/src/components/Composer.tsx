@@ -774,15 +774,15 @@ export function Composer({
   }
   useEffect(() => {
     if (draftKey) store.setDraft(`${draftKey}:attachments`, JSON.stringify(attachments))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [attachments] by design; the values it reads beyond these are current as of that run
   }, [attachments])
   useEffect(() => {
     if (draftKey) store.setDraft(`${draftKey}:context`, JSON.stringify(context))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [context] by design; the values it reads beyond these are current as of that run
   }, [context])
   useEffect(() => {
     if (draftKey) store.setDraft(`${draftKey}:mentions`, JSON.stringify(mentions))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mentions] by design; the values it reads beyond these are current as of that run
   }, [mentions])
   const restoredOwner = useRef(draftKey)
   useEffect(() => {
@@ -792,7 +792,7 @@ export function Composer({
     setAttachments(decodeDraft('attachments', []))
     setContext(decodeDraft('context', []))
     setMentions(decodeDraft('mentions', []))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [draftKey] by design; the values it reads beyond these are current as of that run
   }, [draftKey])
   // Explorer can append a reference while this screen remains mounted underneath its file preview.
   const storedContext = draftKey ? store.drafts[`${draftKey}:context`] : undefined
@@ -800,7 +800,7 @@ export function Composer({
     useCallback(() => {
       const next = decodeDraft<FileContext[]>('context', [])
       setContext((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next))
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [draftKey, storedContext] by design; the values it reads beyond these are current as of that run
     }, [draftKey, storedContext]),
   )
   const { mode } = resolveBusyMode(

@@ -274,7 +274,7 @@ export default function SourceControl() {
     return () => {
       canceled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [chat?.computerId, chat?.taskId] by design; the values it reads beyond these are current as of that run
   }, [chat?.computerId, chat?.taskId])
   const readRef = useRef<() => Promise<void>>(async () => {})
   const read = async () => {
@@ -330,7 +330,7 @@ export default function SourceControl() {
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [chat?.computerId, chat?.taskId, binding?.repoId] by design; the values it reads beyond these are current as of that run
   }, [chat?.computerId, chat?.taskId, binding?.repoId])
   // Coming back from a commit or stash screen (where a stash may have been popped), and while the host's files change:
   // the agent or the desktop edits, stages or commits, as the desktop's panel follows.
@@ -352,7 +352,7 @@ export default function SourceControl() {
         off()
         unwatch()
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [chat?.computerId, binding?.repoId, binding?.cwd] by design; the values it reads beyond these are current as of that run
     }, [chat?.computerId, binding?.repoId, binding?.cwd]),
   )
   const mine = files.filter((f) => f.repo === repo)
@@ -369,7 +369,7 @@ export default function SourceControl() {
   const savedAction = store.appPreferences[chat?.computerId ?? '']?.defaultCommitAction
   useEffect(() => {
     if (gitStatus && !actionPicked.current) setAction(startingAction(savedAction, gates))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [loaded, savedAction, gates.canRemote] by design; the values it reads beyond these are current as of that run
   }, [loaded, savedAction, gates.canRemote])
   const notify = (text: string, failed = false) => {
     setToast({ text, failed })
