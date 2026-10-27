@@ -232,29 +232,34 @@ export default function Threads() {
         (() => {
           const chat = chats.find((x) => x.id === row.o.chatId)
           return (
-            <Row
-              onPress={() => router.push({ pathname: '/chat/[id]', params: { id: row.o.chatId } })}
-              style={{ paddingVertical: 10 }}
-            >
-              <Clock size={16} color={c.muted} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <T size={font.body} weight="500" numberOfLines={1}>
-                  {row.o.kind === 'chat'
-                    ? `New thread · ${nameOf(chat?.projectId ?? '') ?? 'Standalone'}`
-                    : chat?.title}
-                </T>
-                <T size={font.control} tone="muted" numberOfLines={1}>
-                  {row.o.text}
-                </T>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Row
+                onPress={() => router.push({ pathname: '/chat/[id]', params: { id: row.o.chatId } })}
+                style={{ paddingVertical: 10, flex: 1 }}
+              >
+                <Clock size={16} color={c.muted} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <T size={font.body} weight="500" numberOfLines={1}>
+                    {row.o.kind === 'chat'
+                      ? `New thread · ${nameOf(chat?.projectId ?? '') ?? 'Standalone'}`
+                      : chat?.title}
+                  </T>
+                  <T size={font.control} tone="muted" numberOfLines={1}>
+                    {row.o.text}
+                  </T>
+                </View>
+              </Row>
+              {/* Beside the row, not inside it: a pressable row hides its children from VoiceOver. */}
+              <View style={{ paddingRight: space.s }}>
+                <IconButton
+                  icon={X}
+                  label={t.cancel}
+                  size={32}
+                  tone="muted"
+                  onPress={() => confirmCancel(row.o, undefined, cancelOutbox)}
+                />
               </View>
-              <IconButton
-                icon={X}
-                label={t.cancel}
-                size={32}
-                tone="muted"
-                onPress={() => confirmCancel(row.o, undefined, cancelOutbox)}
-              />
-            </Row>
+            </View>
           )
         })()
       ) : row.kind === 'chat' ? (

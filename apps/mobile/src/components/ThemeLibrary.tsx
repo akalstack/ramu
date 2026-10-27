@@ -121,31 +121,36 @@ export function ThemeLibrary() {
     return (
       <View key={item.id}>
         {index ? <Divider inset={space.l} /> : null}
-        <Row
-          accessibilityRole="radio"
-          accessibilityState={{ selected }}
-          accessibilityLabel={label}
-          onPress={() => {
-            tryTheme(null)
-            selectTheme(item.id === DEFAULT_THEME.id ? null : item.id)
-          }}
-          style={{ paddingVertical: space.m }}
-        >
-          <View style={{ flex: 1, gap: 6 }}>
-            <T weight="500">{label}</T>
-            <Swatches theme={item} scheme={scheme} />
-          </View>
-          {selected ? <Check size={17} color={c.primary} /> : null}
+        {/* The actions button sits beside the row, not inside it: a pressable row hides its children from VoiceOver. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Row
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={label}
+            onPress={() => {
+              tryTheme(null)
+              selectTheme(item.id === DEFAULT_THEME.id ? null : item.id)
+            }}
+            style={{ paddingVertical: space.m, flex: 1 }}
+          >
+            <View style={{ flex: 1, gap: 6 }}>
+              <T weight="500">{label}</T>
+              <Swatches theme={item} scheme={scheme} />
+            </View>
+            {selected ? <Check size={17} color={c.primary} /> : null}
+          </Row>
           {item.id !== DEFAULT_THEME.id ? (
-            <IconButton
-              icon={Ellipsis}
-              label={t('Theme actions for {0}', { '0': label })}
-              size={34}
-              tone="muted"
-              onPress={() => setActing(item)}
-            />
+            <View style={{ paddingRight: space.s }}>
+              <IconButton
+                icon={Ellipsis}
+                label={t('Theme actions for {0}', { '0': label })}
+                size={36}
+                tone="muted"
+                onPress={() => setActing(item)}
+              />
+            </View>
           ) : null}
-        </Row>
+        </View>
       </View>
     )
   }
