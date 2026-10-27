@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { Button } from '@/components/desktop-button'
 import type { DirEntry, RepositoryBinding } from '@ramu/shared/types'
-import { useLanguage } from '../../i18n'
+import { t, useLanguage } from '../../i18n'
 import { useContextMenu } from '../../Menu'
 import { notifyError } from '../../chat/Notifications'
 import { errorText } from '../../workspace/TaskPane'
@@ -105,12 +105,12 @@ export function RepoTree({
   /** Pastes into `dir`: a copy gets a free name, a cut moves (and keeps its name). */
   const pasteInto = async (dir: string, source = shared.clip, forceCopy = false) => {
     if (!source || source.repoId !== binding.repoId || (source.taskId !== taskId && source.repoId !== binding.repoId)) {
-      if (source) fail(new Error('Paste into the same repository the items came from.'))
+      if (source) fail(new Error(t('Paste into the same repository the items came from.')))
       return
     }
     const cut = source.cut && !forceCopy
     if (cut && hasDirty(source.paths)) {
-      fail(new Error('Save or close unsaved files in these items before moving them.'))
+      fail(new Error(t('Save or close unsaved files in these items before moving them.')))
       return
     }
     setBusy(true)
@@ -122,7 +122,7 @@ export function RepoTree({
         (path) => !source.paths.some((parent) => path !== parent && path.startsWith(`${parent}/`)),
       )) {
         if (cut && (path === dir || dir.startsWith(`${path}/`)))
-          throw new Error('A folder cannot be moved into itself.')
+          throw new Error(t('A folder cannot be moved into itself.'))
         if (cut && parentOf(path) === dir) continue
         const name = cut ? baseName(path) : freeName(baseName(path), taken)
         if (cut && taken.has(name)) throw new Error(`"${name}" already exists in the destination.`)
@@ -176,13 +176,13 @@ export function RepoTree({
       ? source.paths.map((path) => `${source.cwd}/${path}`)
       : [...event.dataTransfer.files].map((file) => ramu.pathForFile(file)).filter(Boolean)
     if (!paths.length) {
-      fail(new Error('Could not read the dropped file paths.'))
+      fail(new Error(t('Could not read the dropped file paths.')))
       return
     }
     setBusy(true)
     void (async () => {
       try {
-        if (!host.isLocal) throw new Error('Choose files on the remote host instead of dropping local paths.')
+        if (!host.isLocal) throw new Error(t('Choose files on the remote host instead of dropping local paths.'))
         const done = await invoke('files.import', taskId, binding.repoId, dir, paths)
         setOpen((current) => new Set([...current, dir]))
         setPicked(done)
@@ -337,7 +337,7 @@ export function RepoTree({
     setError(null)
     try {
       if (action.type === 'create') {
-        if (!isValidEntryName(name)) throw new Error('Enter a file or folder name without slashes.')
+        if (!isValidEntryName(name)) throw new Error(t('Enter a file or folder name without slashes.'))
         const path = action.parent ? `${action.parent}/${name}` : name
         await invoke('files.create', taskId, binding.repoId, path, action.kind)
         setOpen((current) => new Set([...current, action.parent, ...(action.kind === 'dir' ? [path] : [])]))
@@ -353,7 +353,7 @@ export function RepoTree({
             inside(view),
         )
         if (affected.some((view) => ws.dirty[view.id]))
-          throw new Error('Save or close unsaved files in these items before continuing.')
+          throw new Error(t('Save or close unsaved files in these items before continuing.'))
         for (const entry of action.entries) await invoke('files.delete', taskId, binding.repoId, entry.path)
         ws.closeViews(
           taskId,
@@ -369,9 +369,9 @@ export function RepoTree({
             isWithin(view.path, action.entry.path),
         )
         if (affected.some((view) => ws.dirty[view.id]))
-          throw new Error('Save or close unsaved files in this item before continuing.')
+          throw new Error(t('Save or close unsaved files in this item before continuing.'))
         const parent = parentOf(action.entry.path)
-        if (!isValidEntryName(name)) throw new Error('Enter a file or folder name without slashes.')
+        if (!isValidEntryName(name)) throw new Error(t('Enter a file or folder name without slashes.'))
         const destination = joinPath(parent, name)
         if (destination !== action.entry.path) {
           await invoke('files.rename', taskId, binding.repoId, action.entry.path, destination)

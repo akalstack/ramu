@@ -1,5 +1,6 @@
 import type { AgentSettings } from '@ramu/shared/types'
 import { invoke } from '../../ipc'
+import { t } from '../../i18n'
 import { isWorktreeCtx, type useWorkspace } from '../../workspace/workspace'
 import type { RamuBridge } from '@ramu/shared/api'
 
@@ -17,7 +18,7 @@ export async function startCheckoutChat(
   hostInvoke: RamuBridge['invoke'] = invoke,
 ): Promise<void> {
   const project = ws.projectOf(taskId)
-  if (!project) throw new Error('This checkout is not part of a project.')
+  if (!project) throw new Error(t('This checkout is not part of a project.'))
   const context = ws.workspaceOf(taskId)
   const isolated = isWorktreeCtx(context) ? context.slice('worktree:'.length) : undefined
   const task = await hostInvoke('tasks.create', {

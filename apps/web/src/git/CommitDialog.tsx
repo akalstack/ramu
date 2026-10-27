@@ -52,7 +52,7 @@ export const committable = (status: GitStatus) =>
 export function chooseCommit(request: Omit<Request, 'resolve'>): Promise<CommitPlan | null> {
   // A repeated shortcut must not replace a pending choice or start another commit.
   if (active) return Promise.resolve(null)
-  if (!listener) return Promise.reject(new Error('The commit dialog is unavailable.'))
+  if (!listener) return Promise.reject(new Error(t('The commit dialog is unavailable.')))
   return new Promise((resolve) => {
     active = { ...request, resolve }
     listener!(active)

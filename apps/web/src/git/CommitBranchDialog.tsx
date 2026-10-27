@@ -33,7 +33,7 @@ export async function chooseCommitBranch(
   if (forceNew) return { expectedBranch: branch, autoBranch: true }
   // A repeated shortcut must not replace a pending choice or start another commit.
   if (active) return null
-  if (!listener) throw new Error('The commit branch dialog is unavailable.')
+  if (!listener) throw new Error(t('The commit branch dialog is unavailable.'))
   return new Promise((resolve) => {
     active = { branch, forceNew, action, resolve }
     listener!(active)

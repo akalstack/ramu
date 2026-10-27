@@ -47,8 +47,12 @@ export function Onboarding() {
       .catch(() => {})
   }, [refresh])
   const finish = async () => {
-    await invoke('onboarding.complete')
-    setOpen(false)
+    try {
+      await invoke('onboarding.complete')
+      setOpen(false)
+    } catch (e) {
+      setError(errorText(e))
+    }
   }
   const next = async () => {
     setBusy(true)
@@ -94,7 +98,7 @@ export function Onboarding() {
       }}
       onConfirm={() => {
         if (step === 0) void next()
-        else void finish().catch((e) => setError(errorText(e)))
+        else void finish()
       }}
     >
       <p>{t('Chat with an agent beside your editor, terminal and Git. Let’s connect your tools and a project.')}</p>

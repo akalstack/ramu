@@ -337,7 +337,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
         const action = async (kind: 'sync' | 'fetch' | 'pull' | 'push' | 'stage' | 'unstage') => {
           if (!taskId) return
           if ((kind === 'pull' || kind === 'sync') && Object.values(ws.dirty).some(Boolean))
-            throw new Error('Save or close unsaved files before pulling.')
+            throw new Error(t('Save or close unsaved files before pulling.'))
           if (kind === 'stage' || kind === 'unstage') {
             const status = await hostInvoke('git.status', taskId, binding.repoId)
             const paths = status.entries

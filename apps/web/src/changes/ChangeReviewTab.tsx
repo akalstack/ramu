@@ -79,6 +79,7 @@ export function ChangeReviewTab({
     const r = await invoke('reviews.get', id)
     if (currentId.current !== id) return
     setReview(r)
+    setError(null)
   }, [invoke, id])
   useEffect(() => {
     if (!visible) return
@@ -199,14 +200,26 @@ export function ChangeReviewTab({
             <EmptyMedia variant="icon">
               <FileDiff />
             </EmptyMedia>
-            <EmptyTitle>{id && !error ? t('Loading changes…') : t('No changes to review')}</EmptyTitle>
-            <EmptyDescription>{t('Changed files will appear here after the agent finishes.')}</EmptyDescription>
+            <EmptyTitle>{error ? t('Could not load changes') : t('No changes to review')}</EmptyTitle>
+            <EmptyDescription>
+              {error ? t('Check the connection to the host, then try again.') : t('Changed files will appear here after the agent finishes.')}
+            </EmptyDescription>
           </EmptyHeader>
           {error && (
             <EmptyContent>
               <p className="error text-bad" role="alert">
                 {error}
               </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setError(null)
+                  void reload().catch((e) => setError(errorText(e)))
+                }}
+              >
+                {t('Try again')}
+              </Button>
             </EmptyContent>
           )}
         </Empty>

@@ -1002,7 +1002,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
   const run = async (action: () => Promise<unknown>, needsSaved = false, repository = binding) => {
     try {
       if (needsSaved && Object.values(ws.dirty).some(Boolean))
-        throw new Error('Save or close unsaved editor buffers before switching branches or pulling.')
+        throw new Error(t('Save or close unsaved editor buffers before switching branches or pulling.'))
       await withGitBusy(taskId, repository.repoId, action)
     } catch (e) {
       notifyError(errorText(e), `Git · ${repository.repoName}`)

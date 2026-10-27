@@ -86,7 +86,7 @@ export function ModelSetsProvider({ children }: { children: ReactNode }) {
           .then((snapshot) => {
             if (disposed || request !== requests.current || edit !== edits.current) return
             const field = snapshot.settings.find((field) => field.path === '$models')
-            if (!field) throw new Error('Update the host to save model defaults safely.')
+            if (!field) throw new Error(t('Update the host to save model defaults safely.'))
             return invoke('settings.app.patch', [
               { path: field.path, schema: field.schema, before: value, value: updated },
             ])
@@ -143,7 +143,7 @@ export function ModelSetsProvider({ children }: { children: ReactNode }) {
             ? snapshot.settings.find((field) => field.path === '$models.defaultBarMode')
             : undefined
           const field = modeField ?? snapshot.settings.find((field) => field.path === '$models')
-          if (!field) throw new Error('Update the host to save model preferences safely.')
+          if (!field) throw new Error(t('Update the host to save model preferences safely.'))
           const saved = await invoke('settings.app.patch', [
             {
               path: field.path,

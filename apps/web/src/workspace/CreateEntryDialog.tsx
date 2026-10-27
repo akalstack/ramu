@@ -38,7 +38,7 @@ export function CreateEntryDialog() {
     setBusy(true)
     setError(null)
     try {
-      if (!path.trim() || !repoId) throw new Error('Choose a repository and enter a relative path.')
+      if (!path.trim() || !repoId) throw new Error(t('Choose a repository and enter a relative path.'))
       await invoke('files.create', request.taskId, repoId, path.trim(), request.kind)
       if (request.kind === 'file')
         ws.openView(request.taskId, { kind: 'file', repoId, path: path.trim(), preview: false })

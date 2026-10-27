@@ -240,7 +240,7 @@ export function HostBrowserView({
   useEffect(() => {
     if (!controlled || !visible || !foreground || !frameReady || !tabId || generation === undefined) return
     const queue = new BrowserInputQueue(async (input) => {
-      if (!allowed()) throw new Error('Browser control changed.')
+      if (!allowed()) throw new Error(t('Browser control changed.'))
       await invokeHost('hostBrowser.input', taskId, tabId, generation, input)
     })
     inputQueue.current = queue

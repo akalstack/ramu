@@ -77,7 +77,7 @@ export function ChatLink({ href, children, taskId }: { href?: string; children: 
           void invoke('files.resolveLink', taskId, target, { folders: true })
             .then((file) => {
               if (!file)
-                throw new Error('This path was not found in this thread’s folders, or it matches more than one place.')
+                throw new Error(t('This path was not found in this thread’s folders, or it matches more than one place.'))
               // A folder opens in the Explorer, expanded and scrolled into view.
               if (file.kind === 'folder') {
                 ws.setSidebar('explorer')

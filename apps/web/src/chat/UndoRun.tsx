@@ -53,7 +53,7 @@ function UndoFiles({
     setBusy(true)
     setError(null)
     try {
-      if (dirty) throw new Error('Save or close unsaved files before previewing a restore.')
+      if (dirty) throw new Error(t('Save or close unsaved files before previewing a restore.'))
       const plan = reviewId
         ? await invoke('reviews.undoPreview', reviewId)
         : await invoke('reviews.chatUndoPreview', sessionId!, userSeq!)
@@ -72,7 +72,7 @@ function UndoFiles({
     setBusy(true)
     setError(null)
     try {
-      if (Object.values(ws.dirty).some(Boolean)) throw new Error('Save or close unsaved files before restoring files.')
+      if (Object.values(ws.dirty).some(Boolean)) throw new Error(t('Save or close unsaved files before restoring files.'))
       if (reviewId) await invoke('reviews.undoApply', preview.token, [...selected])
       else await invoke('reviews.chatUndoApply', preview.token, [...selected])
       onRestored()

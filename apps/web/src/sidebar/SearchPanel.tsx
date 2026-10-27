@@ -156,8 +156,8 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
     try {
       // Prepare and validate the complete set internally, then apply it directly.
       const files = await invoke('files.replacePreview', taskId, request.options, request.replacement)
-      if (hasDirtyMatches(files)) throw new Error('Save or close unsaved matching files before replacing them on disk.')
-      if (!files.length) throw new Error('No matches remain. Refresh search first.')
+      if (hasDirtyMatches(files)) throw new Error(t('Save or close unsaved matching files before replacing them on disk.'))
+      if (!files.length) throw new Error(t('No matches remain. Refresh search first.'))
       setReplaceConfirmation({ ...request, files })
     } catch (reason) {
       setReplaceError(errorText(reason))
@@ -174,7 +174,7 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
     setReplaceError(null)
     try {
       if (hasDirtyMatches(replaceConfirmation.files))
-        throw new Error('Save or close unsaved matching files before replacing them on disk.')
+        throw new Error(t('Save or close unsaved matching files before replacing them on disk.'))
       await invoke(
         'files.replaceApply',
         taskId,

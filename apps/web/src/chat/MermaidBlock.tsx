@@ -16,7 +16,7 @@ export function MermaidBlock({ source }: { source: string }) {
       .then(async () => {
         if (cancelled) return
         try {
-          if (source.length > 50000) throw new Error('Diagram too large')
+          if (source.length > 50000) throw new Error(t('Diagram too large'))
           const { default: mermaid } = await import('mermaid')
           if (cancelled) return
           mermaid.initialize({

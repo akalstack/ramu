@@ -8,8 +8,8 @@ let active: Request | null = null
 let listener: ((request: Request | null) => void) | null = null
 
 export function confirmProtectedSync(entries: Entry[]): Promise<boolean> {
-  if (active) throw new Error('Review the pending protected branch confirmation first.')
-  if (!listener) throw new Error('The sync confirmation dialog is unavailable.')
+  if (active) throw new Error(t('Review the pending protected branch confirmation first.'))
+  if (!listener) throw new Error(t('The sync confirmation dialog is unavailable.'))
   return new Promise((resolve) => {
     active = { entries, resolve }
     listener!(active)

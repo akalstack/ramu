@@ -244,7 +244,7 @@ export function Composer({
           files = files.filter((_, index) => !folders.has(paths[index]!))
         }
         if (files && files.length + currentFiles.current.length > 10)
-          throw new Error('Attach up to 10 files per message.')
+          throw new Error(t('Attach up to 10 files per message.'))
         const selected = files
           ? await Promise.all(
               files.map(async (file) => {
@@ -260,7 +260,7 @@ export function Composer({
               }),
             )
           : await ownInvoke('attachments.pick')
-        if (selected.length + currentFiles.current.length > 10) throw new Error('Attach up to 10 files per message.')
+        if (selected.length + currentFiles.current.length > 10) throw new Error(t('Attach up to 10 files per message.'))
         currentFiles.current = [...currentFiles.current, ...selected]
         onAttachmentsChange(currentFiles.current)
         return true
