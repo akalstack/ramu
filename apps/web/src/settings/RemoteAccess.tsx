@@ -595,7 +595,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
             </>
           )
         )}
-        <DialogFooter>
+        <DialogFooter className="sticky bottom-0 z-10 bg-popover">
           <Button
             variant={joined ? 'default' : 'secondary'}
             className={joined ? undefined : 'bg-fill hover:bg-fill-hover'}
@@ -1140,7 +1140,7 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
             </p>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="sticky bottom-0 z-10 bg-popover">
           <Button variant="secondary" disabled={busy} onClick={onClose}>
             {t('Cancel')}
           </Button>
