@@ -1349,12 +1349,12 @@ const pushReceipts = setInterval(() => {
   void mobilePush.checkReceipts().catch(() => {})
 }, 15 * 60_000)
 const heartbeat = setInterval(() => {
-  dropRevoked()
   try {
+    dropRevoked()
     mobilePush.prune()
     void mobileLiveActivities.flush().catch(() => {})
   } catch {
-    /* Push cleanup must not interrupt host agents. */
+    /* Revocation sweeps and push cleanup must not interrupt host agents. */
   }
   for (const client of clients) writeEvent(client, ': ping\n\n')
 }, 20000)
