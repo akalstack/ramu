@@ -84,7 +84,7 @@ export class RemoteAccess {
       const query = new URL(req.url ?? '/', 'http://host').searchParams
       const deviceId = query.get('device') ?? ''
       const challenge = query.get('challenge') ?? ''
-      const key = CHALLENGE_PATTERN.test(challenge) ? this.options.devices.presenceKey(deviceId) : null
+      const [key, ...others] = CHALLENGE_PATTERN.test(challenge) ? this.options.devices.presenceKeys(deviceId) : []
       if (!key) {
         rejected()
         return
@@ -93,6 +93,10 @@ export class RemoteAccess {
         JSON.stringify({
           hostId: this.options.hostId,
           proof: hostProof(key, this.options.hostId, challenge),
+          // The same proof for a renewed token the device may not have used yet; a client that holds that token checks it.
+          ...(others.length
+            ? { alternates: others.map((other) => hostProof(other, this.options.hostId!, challenge)) }
+            : {}),
           routes: this.options.routes?.() ?? [],
         }),
       )

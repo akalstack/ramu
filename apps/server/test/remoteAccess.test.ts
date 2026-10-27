@@ -196,6 +196,15 @@ it('does not verify a host that is not the one paired with, or a token it does n
   expect(await check('someone-elses-token', data.hostId)).toEqual({ state: 'mismatch' })
 })
 
+it('proves itself to a device that holds a renewed token it has not used yet, and still to one that does not', async () => {
+  const { f, data, check } = await pairedHost()
+  const renewed = f.devices.renew(`Bearer ${data.token}`, f.now())!
+  // Neither token has been used since the renewal, so the host answers for both.
+  expect(await check(renewed.token, data.hostId)).toEqual({ state: 'verified', hostId: HOST, routes: [] })
+  expect(await check(data.token, data.hostId)).toEqual({ state: 'verified', hostId: HOST, routes: [] })
+  expect(await check('someone-elses-token', data.hostId)).toEqual({ state: 'mismatch' })
+})
+
 it('reports a host without the endpoint as unsupported and an unreachable address as unreachable', async () => {
   const f = await fixture()
   const code = f.devices.createCode(f.now()).code

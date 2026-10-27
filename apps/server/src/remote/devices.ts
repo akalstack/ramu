@@ -341,6 +341,21 @@ export class DeviceStore {
     return this.read().devices.find((device) => device.id === id)?.tokenHash ?? null
   }
 
+  /**
+   * Every key a device may hold right now: the current token's, then a renewed token still waiting to be used and the
+   * previous one during its overlap. A device that has not yet used its renewed token proves with that one, so the host
+   * must be able to answer for it or the device could never reconnect to claim it.
+   */
+  presenceKeys(id: string, now = Date.now()): string[] {
+    const record = this.read().devices.find((device) => device.id === id)
+    if (!record) return []
+    return [
+      record.tokenHash,
+      ...(record.nextTokenHash && now - (record.nextIssuedAt ?? 0) < RENEWAL_PENDING_MS ? [record.nextTokenHash] : []),
+      ...(record.previousTokenHash && (record.previousUntil ?? 0) > now ? [record.previousTokenHash] : []),
+    ]
+  }
+
   /** Revokes by id, unique id prefix or "all". Returns the revoked devices. */
   revoke(target: string): DeviceInfo[] {
     const file = this.read()

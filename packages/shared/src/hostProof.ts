@@ -54,7 +54,7 @@ export async function verifyHost(input: {
   }
   if (response.status === 404) return { state: 'unsupported' }
   if (!response.ok) return { state: 'unreachable' }
-  let body: { hostId?: unknown; proof?: unknown; routes?: unknown }
+  let body: { hostId?: unknown; proof?: unknown; alternates?: unknown; routes?: unknown }
   try {
     body = (await response.json()) as typeof body
   } catch {
@@ -62,7 +62,12 @@ export async function verifyHost(input: {
   }
   if (typeof body.hostId !== 'string' || typeof body.proof !== 'string') return { state: 'mismatch' }
   if (input.expectedHostId && body.hostId !== input.expectedHostId) return { state: 'mismatch' }
-  return verifyHostProof(deviceProofKey(input.token), body.hostId, input.challenge, body.proof)
+  const key = deviceProofKey(input.token)
+  // A host answers for the current token and, while one is pending, a renewed one; whichever this device holds proves it.
+  const proofs = [body.proof, ...(Array.isArray(body.alternates) ? body.alternates.slice(0, 3) : [])]
+  return proofs.some(
+    (proof) => typeof proof === 'string' && verifyHostProof(key, body.hostId as string, input.challenge, proof),
+  )
     ? { state: 'verified', hostId: body.hostId, routes: learnedRoutes(body.routes) }
     : { state: 'mismatch' }
 }

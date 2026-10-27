@@ -196,6 +196,19 @@ it('renews a token: the old one keeps working until the new one is used, then st
   expect(devices.authenticate(`Bearer ${renewed.token}`, 4000 + RENEWAL_OVERLAP_MS + 1)).not.toBeNull()
 })
 
+it('names every key a device may hold: the current one, a pending renewed one and the previous one in its overlap', () => {
+  const { devices } = store()
+  const paired = devices.redeem(devices.createCode().code, 'phone', 1000)!
+  const id = paired.device.id
+  expect(devices.presenceKeys(id, 1500)).toHaveLength(1)
+  const renewed = devices.renew(`Bearer ${paired.token}`, 2000)!
+  expect(devices.presenceKeys(id, 2500)).toHaveLength(2)
+  devices.authenticate(`Bearer ${renewed.token}`, 3000)
+  expect(devices.presenceKeys(id, 3500)).toHaveLength(2)
+  expect(devices.presenceKeys(id, 3000 + RENEWAL_OVERLAP_MS + 1)).toHaveLength(1)
+  expect(devices.presenceKeys('missing')).toEqual([])
+})
+
 it('asking again before the new token is used replaces the unused one, and a replaced token cannot renew', () => {
   const { devices } = store()
   const paired = devices.redeem(devices.createCode().code, 'phone', 1000)!
