@@ -1144,7 +1144,7 @@ export function Composer({
 
               onPress={() => {
                 tap()
-                submit()
+                void submit()
               }}
               style={{
                 width: 34,

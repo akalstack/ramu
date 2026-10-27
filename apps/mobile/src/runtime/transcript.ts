@@ -2,7 +2,7 @@ import type { AgentEvent } from '@ramu/shared/types'
 import { helperGroups } from '@ramu/shared/chat/helperPresentation'
 import { toolKind } from '@ramu/shared/chat/agentTools'
 import { fileToolDiffs, fileToolLine } from '@ramu/shared/chat/fileTools'
-import type { Chat, TranscriptItem } from './types'
+import type { Chat, ToolKind, TranscriptItem } from './types'
 import type { OutboxItem } from './store'
 import {
   advisorTranscript,
@@ -19,6 +19,9 @@ import { providerWaitState, type ProviderWaitState } from '@ramu/shared/chat/pro
  * The line for a thread at a provider's usage limit. It names the cause and says the thread continues; "Paused" stays
  * for a goal the user paused themselves. A guessed time is not shown as a reset.
  */
+const isToolKind = (kind: string): kind is ToolKind =>
+  ['read', 'edit', 'search', 'execute', 'think', 'fetch'].includes(kind)
+
 export function limitNoteTitle(wait: Pick<ProviderWaitState, 'retryAt' | 'guessed'>): string {
   if (wait.guessed) return 'Limit reached · resuming automatically'
   const at = new Date(wait.retryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -195,7 +198,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       items.push({
         kind: 'tool',
         id: e.toolUseId,
-        tool: ['read', 'edit', 'search', 'execute', 'think', 'fetch'].includes(kind) ? (kind as any) : 'other',
+        tool: isToolKind(kind) ? kind : 'other',
         verb: file?.verb ?? e.name,
         subject: file ? `${file.name}${file.others ? ` +${file.others}` : ''}` : e.title || e.summary,
         ...(file ? { file, diffs: fileToolDiffs(e, result) } : {}),

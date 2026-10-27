@@ -4,7 +4,7 @@ import type { PushEvents } from '@ramu/shared/api'
 import type { HostChannel } from './hostEvents'
 import { TerminalOutputBuffer, type TerminalChunk } from './terminalOutput'
 
-type Invoke = (method: 'term.close' | 'term.busy', ...args: any[]) => Promise<any>
+type Invoke = (method: 'term.close' | 'term.busy', ...args: unknown[]) => Promise<unknown>
 type Subscribe = <E extends HostChannel>(channel: E, listener: (payload: PushEvents[E]) => void) => () => void
 
 export interface TerminalRegistryDeps {
@@ -151,8 +151,8 @@ export function createTerminalRegistry({
       // An idle prompt closes without asking; only a running command does.
       void invoke('term.busy', termIds)
         .catch(() => 0)
-        .then((busy: number) => {
-          if (!busy || confirm(busyMessage(busy))) go()
+        .then((busy) => {
+          if (typeof busy !== 'number' || !busy || confirm(busyMessage(busy))) go()
         })
     },
   }

@@ -12,7 +12,7 @@ Rules for human and agent contributors. Tools enforce what they can (`pnpm check
 
 - Prettier decides formatting (no semicolons, single quotes, 120 columns, trailing commas). Run `pnpm format`; do not hand-format.
 - `strict` and `noUncheckedIndexedAccess` are on. Narrow indexed reads instead of asserting with `!` unless the invariant is local and obvious.
-- Avoid `any`; use `unknown` and narrow, or a precise type. A new `any` needs a reason in a comment. Do not add `@ts-ignore`; use `@ts-expect-error` with the reason, and only when the error is real.
+- Avoid `any`; use `unknown` and narrow, or a precise type. `any` is allowed only at the untyped wire boundaries and in tests listed in `eslint.config.mjs`; elsewhere it is a lint warning to fix. Do not add `@ts-ignore`; use `@ts-expect-error` with the reason, and only when the error is real.
 - Prefer `const`, early returns, small functions and discriminated unions over flags and optional-field bags. Name things for what they are, not how they are used.
 - Imports: ES modules only. Shared code is imported as `@ramu/shared/<folder>/<module>`; never reach into another package's `src` by relative path. `apps/server` must not import Electron or `apps/desktop`.
 - Throw `Error` with a message a person can act on (a sentence, no stack jargon). When rethrowing, pass `{ cause }`. Never put tokens, prompts or file contents in error text or logs.

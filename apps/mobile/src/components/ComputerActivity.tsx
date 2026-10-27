@@ -298,7 +298,7 @@ function ComputerViewer({
             rect,
             surface,
           )
-          if (to) send({ kind: 'drag', fromX: from.x, fromY: from.y, toX: to.x, toY: to.y })
+          if (to) void send({ kind: 'drag', fromX: from.x, fromY: from.y, toX: to.x, toY: to.y })
           return
         }
         if (current.mode === 'hold') return send({ kind: 'click', ...from, button: 'right' })
@@ -309,7 +309,7 @@ function ComputerViewer({
           now - previous.at < DOUBLE_TAP_MS &&
           Math.hypot(previous.x - current.start.x, previous.y - current.start.y) < 24
         lastTap.current = double ? null : { at: now, ...current.start }
-        send({ kind: 'click', ...from, ...(double ? { clickCount: 2 } : {}) })
+        void send({ kind: 'click', ...from, ...(double ? { clickCount: 2 } : {}) })
       },
       onPanResponderTerminate: () => {
         clearTimeout(touch.current?.timer)
@@ -327,7 +327,7 @@ function ComputerViewer({
     const dx = Math.round(-(current.moved.dx - current.sent.dx) * scale)
     const dy = Math.round(-(current.moved.dy - current.sent.dy) * scale)
     current.sent = { dx: current.moved.dx, dy: current.moved.dy, at: Date.now() }
-    if (at && (dx || dy)) send({ kind: 'scroll', x: at.x, y: at.y, dx, dy })
+    if (at && (dx || dy)) void send({ kind: 'scroll', x: at.x, y: at.y, dx, dy })
   }
   const status = live
     ? t('Live video')
@@ -369,7 +369,7 @@ function ComputerViewer({
         void act(async () => {
           const value = (await Clipboard.getStringAsync()).slice(0, 2000)
           if (!value) throw new Error(t('The clipboard is empty.'))
-          send({ kind: 'type', text: value })
+          void send({ kind: 'type', text: value })
         }),
     },
     ...(zoom > 1

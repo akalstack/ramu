@@ -45,6 +45,27 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {
+    // Provider, JSON-RPC and WebRTC payloads arrive untyped; these boundaries narrow them on use. Elsewhere avoid `any`.
+    files: [
+      'apps/desktop/src/**/*.ts',
+      'apps/mobile/src/components/useComputerVideo.ts',
+      'apps/mobile/src/runtime/{store,transport}.{ts,tsx}',
+      'apps/server/src/{agent,providers,remote}/**/*.ts',
+      'apps/server/src/index.ts',
+      'apps/web/src/workspace/hostEvents.ts',
+      'apps/web/src/settings/SettingsScope.tsx',
+      'packages/client-runtime/src/**/*.ts',
+      'packages/contracts/src/**/*.ts',
+      'packages/shared/src/chat/agentContent.ts',
+    ],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
+  {
+    // Tests stub partial objects and private internals.
+    files: ['**/test/**/*.{ts,tsx,mjs}'],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
+  {
     files: ['**/*.cjs'],
     languageOptions: { globals: { ...globals.node } },
     rules: { '@typescript-eslint/no-require-imports': 'off' },

@@ -63,13 +63,16 @@ export function readRouteChoice(
       !data.attachments.every((id: unknown) => typeof id === 'string' && id.length <= 1000) ||
       !Array.isArray(data.context) ||
       data.context.length > 100 ||
-      !data.context.every((file: any) => file && typeof file.repoId === 'string' && typeof file.path === 'string') ||
+      !data.context.every(
+        (file: { repoId?: unknown; path?: unknown } | null) =>
+          file && typeof file.repoId === 'string' && typeof file.path === 'string',
+      ) ||
       !Array.isArray(data.candidates) ||
       data.candidates.length > 100
     )
       return null
     const candidates = data.candidates.filter(
-      (candidate: any) =>
+      (candidate: { projectId?: unknown; reason?: unknown } | null) =>
         candidate &&
         typeof candidate.projectId === 'string' &&
         eligible.includes(candidate.projectId) &&
