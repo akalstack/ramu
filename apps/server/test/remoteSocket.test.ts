@@ -266,7 +266,11 @@ it('refuses a malformed subscription and a subscription on a calls-only connecti
   await calls.until(() => calls.frames.some((f) => f.t === 'ready'))
   calls.ws.send(encodeSocketFrame({ t: 'subscribe', id: 1, channels: ['agent:event'] }))
   await calls.until(() => calls.frames.some((f) => f.t === 'error' && f.id === 1))
-  expect(sinks.size).toBe(0)
+  // It is attached (so revocation reaches it) but is sent no events.
+  expect(sinks.size).toBe(1)
+  push(sinks, 'usage:changed', [])
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(calls.frames.some((f) => f.t === 'event')).toBe(false)
   const bad = connect()
   await bad.until(() => bad.frames.some((f) => f.t === 'ready'))
   bad.ws.send('{"t":"subscribe","id":1,"channels":[1]}')

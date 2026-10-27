@@ -167,7 +167,9 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     send({ t: 'ready', epoch: host.epoch })
     // A client that already has an event stream asks for calls only, so nothing is delivered twice.
     const callsOnly = new URL(req.url ?? '/', 'http://host').searchParams.get('events') === 'none'
-    if (!callsOnly) host.attach(sink, req, device)
+    // A calls-only connection is attached too, listening to nothing, so revoking its device closes it like any stream.
+    if (callsOnly) filter = { channels: new Set(), keys: new Map(), skip: new Map() }
+    host.attach(sink, req, device)
     let inFlight = 0
     let alive = true
     ws.on('pong', () => (alive = true))
@@ -229,12 +231,20 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
             result.after?.()
           } else send({ t: 'error', id: frame.id, error: result.error, status: result.status })
         })
+        .catch((error: unknown) =>
+          send({
+            t: 'error',
+            id: frame.id,
+            error: error instanceof Error ? error.message : String(error),
+            status: 400,
+          }),
+        )
         .finally(() => inFlight--)
     })
     ws.on('close', () => {
       clearInterval(probe)
       open.delete(ws)
-      if (!callsOnly) host.detach(sink)
+      host.detach(sink)
     })
     ws.on('error', () => ws.terminate())
   }

@@ -2,7 +2,7 @@
 // The file is read on every check, so `ramu devices revoke` takes effect without a restart. Only hashes are stored.
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { AUTH_SCHEME } from '@ramu/contracts'
 
 export const PAIRING_TTL_MS = 10 * 60_000
@@ -157,8 +157,8 @@ export class DeviceStore {
     const replaced = owner ? file.pending.filter((p) => p.owner === owner) : []
     file.settled = this.settle(file, replaced, 'cancelled', now)
     if (owner) file.pending = file.pending.filter((p) => p.owner !== owner)
-    const bytes = randomBytes(10)
-    const raw = Array.from(bytes, (byte) => ALPHABET[byte % ALPHABET.length]).join('')
+    // randomInt draws uniformly; reducing random bytes modulo the alphabet size would favor the first characters.
+    const raw = Array.from({ length: 10 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('')
     const expiresAt = now + PAIRING_TTL_MS
     file.pending = [
       ...file.pending.filter((p) => p.expiresAt > now),
