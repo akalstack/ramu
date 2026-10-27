@@ -28,6 +28,7 @@ export function useRepoListing(
       queryFn: () => queryInvokerFor(host.id)('files.list', taskId, binding.repoId, dir),
     })),
   })
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   const children: Record<string, DirEntry[]> = {}
   directories.forEach((dir, index) => {
     const data = listings[index]?.data

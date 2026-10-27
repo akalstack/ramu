@@ -308,6 +308,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           () => syncAttempts.current.delete(key),
         )
       }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [mobileLayers])
   const loadDefaults = (id: string) => {
     // Older computers have no shared mobile layer; they keep working with the computer's own setting and this phone's.
@@ -1235,17 +1236,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => {
       app.remove()
       clearInterval(poll)
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup must see the latest value, not the one from mount
       for (const timer of reconnectTimers.current.values()) clearTimeout(timer)
       reconnectTimers.current.clear()
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup must see the latest value, not the one from mount
       for (const timer of [...changeTimers.current.values(), ...rebuilds.current.values()]) clearTimeout(timer)
       changeTimers.current.clear()
       rebuilds.current.clear()
       active.current = false
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup must see the latest value, not the one from mount
       for (const connection of connections.current.values()) {
         connection.controller.abort()
         connection.client.close()
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [])
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1273,6 +1278,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         )
     }, 250)
     return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [state.computers, state.projects, state.chats, state.selected, state.language, state.outbox, state.drafts])
   const sessionAction = (id: string, fn: (computer: string, session: string) => Promise<unknown>) => {
     const chat = ref.current.chats.find((c) => c.id === id)

@@ -33,6 +33,7 @@ export function ContextMeter({ computerId, sessionId }: { computerId: string; se
       off()
       unwatch()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [computerId, sessionId, online])
   if (!context) return null
   const color = context.percent >= 95 ? c.bad : context.percent >= 80 ? c.warn : c.muted

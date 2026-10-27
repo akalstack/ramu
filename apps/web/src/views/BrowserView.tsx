@@ -150,6 +150,7 @@ export function LocalBrowserView({
           setError(t('The selected profile is no longer available. This tab opened in Default.'))
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
     [host, taskId, tabId, run, profile, search.template],
   )
 
@@ -167,6 +168,7 @@ export function LocalBrowserView({
     setTab(opened.tab)
     setAddress('')
     editingAddress.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [host, taskId, profile, run, search.template])
   const newTabRef = useRef(newTab)
   newTabRef.current = newTab
@@ -230,6 +232,7 @@ export function LocalBrowserView({
       offWanted()
       offNavigation()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [host, taskId, tabId, visible, view.id, view.tabId, view.url, profile, run])
 
   // Restored panes retain their address without loading a website.
@@ -244,6 +247,7 @@ export function LocalBrowserView({
     setAddress(view.url ?? '')
     setError(null)
     setBusy(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [scope])
   // Dialogs, menus and popovers draw below the native page, so it steps aside while one reaches into the pane.
   useEffect(() => {

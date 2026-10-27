@@ -90,6 +90,7 @@ export default function Explorer() {
       next.delete(selected.repoId)
       return next
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [revealKey])
   const [project, setProject] = useState<(typeof store.projects)[number] | null>(null)
   const catalog = useWorkspaces(project?.computerId ?? '', !!project && !scope)
@@ -140,6 +141,7 @@ export default function Explorer() {
     return () => {
       current = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [acting?.repoId, acting?.entry.path])
   /** Reads a file's text from the host (bounded there) and hands it to the device's clipboard or share sheet. */
   const withContents = async (consume: (text: string) => Promise<unknown> | void) => {
@@ -198,7 +200,9 @@ export default function Explorer() {
     if (loading || query || navigation.current.identity !== scopeIdentity) return
     const timer = setTimeout(saveNavigation, 350)
     return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [expanded, loading, query, scopeIdentity])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   useFocusEffect(useCallback(() => () => saveNavigation(), []))
   const loadDirectory = async (binding: RepositoryBinding, path: string, version = epoch.current, cursor?: string) => {
     if (!scope || binding.setupState !== 'ready' || activeScope.current !== scopeIdentity || version !== epoch.current)
@@ -332,8 +336,10 @@ export default function Explorer() {
         if (version === epoch.current) setLoading(false)
       })
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
       ++epoch.current
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [scope?.host, scope?.context, online, revision, selected?.repoId, selected?.path, revealKey])
   useFocusEffect(
     useCallback(() => {
@@ -352,6 +358,7 @@ export default function Explorer() {
         off()
         unwatch()
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
     }, [scope?.host, scope?.context]),
   )
   useEffect(() => {
@@ -372,6 +379,7 @@ export default function Explorer() {
       alive = false
       clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [scope?.host, scope?.context, online, query, revision])
   const multiRoot = bindings.length > 1
   const rows = useMemo<ExplorerRow[]>(
@@ -407,6 +415,7 @@ export default function Explorer() {
       list.current?.scrollToIndex({ index, viewPosition: 0.4, animated: false }),
     )
     return () => cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [selected?.repoId, selected?.path, rows, query, loading])
   useEffect(() => {
     const value = navigation.current
@@ -417,6 +426,7 @@ export default function Explorer() {
       value.restored = true
     })
     return () => cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [rows, loading, query, selected?.repoId, selected?.path, scopeIdentity])
   const open = (repoId: string, path: string) =>
     scope &&

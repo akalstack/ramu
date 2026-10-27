@@ -46,6 +46,7 @@ export function useReviewLayout(root: RefObject<HTMLDivElement | null>, reviewId
     observer.observe(bar)
     measure()
     return () => observer.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [reviewId])
   return { narrow, split, showTree, toggleTree, changeLayout, closeNarrowTree: () => setNarrowTree(false) }
 }

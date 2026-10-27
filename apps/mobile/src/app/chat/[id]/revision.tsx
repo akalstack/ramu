@@ -65,6 +65,7 @@ export default function Revision() {
     return () => {
       alive = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [chat?.computerId, chat?.taskId, params.repoId, revision?.oid, revision?.stash])
   if (!chat || !revision || !params.repoId)
     return (

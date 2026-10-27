@@ -421,6 +421,7 @@ const HostWorkspace = memo(function HostWorkspace({
         )
       return current
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [invoke])
 
   const refreshBindings = useCallback(
@@ -1080,6 +1081,7 @@ const HostWorkspace = memo(function HostWorkspace({
       },
     }
     return api
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [
     projects,
     repos,

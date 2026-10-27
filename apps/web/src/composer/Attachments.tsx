@@ -104,6 +104,7 @@ function AttachmentPreview({
     return () => {
       active = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [file.id, host.invoke])
   useEffect(() => {
     const el = viewport.current
@@ -416,6 +417,7 @@ function AttachmentItem({
     return () => {
       active = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [file.id, file.mimeType, host.invoke])
   const menu = (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
     const opener =

@@ -272,6 +272,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
       model.dispose()
       editorRef.current = null
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [taskId, binding.repoId, binding.cwd, view.path, view.id, setDirty, invoke, onHostEvent, canWrite])
 
   useEffect(() => {
@@ -307,6 +308,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
   const [findRequest, setFindRequest] = useState(0)
   useEffect(() => {
     if (view.selection) setMode('source')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [view.selection?.requestId])
   useEffect(() => {
     setFindingPreview(false)

@@ -97,6 +97,7 @@ export function TerminalPanel({
       clearTimeout(timer)
       off()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [taskId, runtime, viewOnly, canWrite])
   const ready = (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready')
   const repoLabel = (repoId?: string) => (repoId ? (ws.binding(taskId, repoId)?.repoName ?? 'Terminal') : 'Workspace')

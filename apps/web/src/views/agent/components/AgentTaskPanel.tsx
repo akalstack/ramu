@@ -107,6 +107,7 @@ export function AgentTaskPanel({
         },
       ),
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [events, task?.agentId, task?.address, task?.taskType, task?.toolUseId])
   useEffect(() => {
     const el = body.current

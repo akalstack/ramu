@@ -16,6 +16,7 @@ export function useViewedFiles(id: string) {
   const [viewedState, setViewedState] = useState(() => ({ id, files: readViewed() }))
   const viewedFiles = useMemo(
     () => new Set(viewedState.id === id ? viewedState.files : readViewed()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
     [viewedState, id],
   )
   const markViewed = (fileId: string, viewed: boolean) => {

@@ -88,6 +88,7 @@ export function ModelBar({
     }
     const timer = window.setInterval(tick, 100)
     return () => window.clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [pending?.deadline, running, disabled])
 
   const [picker, setPicker] = useState<'bar' | 'model' | 'effort'>('bar')

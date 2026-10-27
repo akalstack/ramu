@@ -150,6 +150,7 @@ export function HostingAccounts() {
     setActionError(null)
     check()
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
       ++request.current
     }
   }, [check])

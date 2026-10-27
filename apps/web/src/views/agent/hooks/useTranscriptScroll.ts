@@ -59,6 +59,7 @@ export function useTranscriptScroll({
       observer.disconnect()
       release.disconnect()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [])
 
   return { scroller, stick, onScroll }

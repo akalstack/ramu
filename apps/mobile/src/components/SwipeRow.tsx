@@ -45,6 +45,7 @@ export function SwipeRow({
   }
   useEffect(() => {
     if (!width && state.current.open) settle('closed')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [width])
   const pan = useMemo(
     () =>
@@ -72,6 +73,7 @@ export function SwipeRow({
         },
         onPanResponderTerminate: () => settle(state.current.open ? 'open' : 'closed'),
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
     [x],
   )
 

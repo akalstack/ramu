@@ -429,6 +429,7 @@ function ScheduleEditor({
       disposed = true
       clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [input.rule, input.timezone])
   const rule = input.rule
   const setRule = (rule: ScheduleRule) => setInput((i) => ({ ...i, rule }))
@@ -669,6 +670,7 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
       setConnected(connected)
       if (connected) void reload()
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [])
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true)

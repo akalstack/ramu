@@ -75,6 +75,7 @@ export function useProviderEnvironment(scope: SettingsScope, active: boolean) {
     if (!active || readOnly || scope.loading || loaded.current === scope.loadKey) return
     loaded.current = scope.loadKey
     void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [active, scope.loadKey, scope.loading, invoke, readOnly])
   const changed = loadedKey === key && !!status?.values && !sameEnvironment(draft, status.values)
   const save = async () => {

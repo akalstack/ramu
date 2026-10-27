@@ -84,6 +84,7 @@ export function SettingsPanel({
     setDraft(structuredClone(scope.models))
     setSelected(scope.models.defaultSetId)
     setError(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [scope.loadKey])
   const save = async () => {
     if (busy || !hasChanges) return

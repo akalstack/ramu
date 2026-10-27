@@ -149,6 +149,7 @@ export function useSettingsScope(section: string) {
     return () => {
       active = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [target, connections, revision])
   const ready =
     !loading &&
@@ -164,6 +165,7 @@ export function useSettingsScope(section: string) {
   const preferences = renderPreferences(primary?.snapshot?.preferences)
   const snapshots = targets.flatMap((entry) => (entry.snapshot ? [entry.snapshot] : []))
   const common = ready ? commonSettings(snapshots) : []
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   const catalogs = useMemo(() => intersectCatalogs(snapshots.map((snapshot) => snapshot.catalogs ?? [])), [targets])
   const models = primary?.snapshot?.models ?? recommendedSets(catalogs)
   const field = (path: string) => {

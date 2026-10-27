@@ -37,6 +37,7 @@ export function ChatFind({
     }
     input.current?.focus()
     input.current?.select()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [focusRequest])
 
   const scan = () => {
@@ -84,6 +85,7 @@ export function ChatFind({
       observer.disconnect()
       window.clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [query])
   useEffect(() => {
     const highlights = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights

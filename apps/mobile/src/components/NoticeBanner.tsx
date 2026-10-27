@@ -37,6 +37,7 @@ export function NoticeBanner() {
   // Already in that chat: the transcript shows it, so drop the notice instead of covering the screen.
   useEffect(() => {
     if (notice && viewing) store.dismissNotification(store.notifications.indexOf(notice))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [key, viewing])
   useEffect(() => {
     if (!notice || viewing) {
@@ -55,6 +56,7 @@ export function NoticeBanner() {
     Animated.spring(slide, { toValue: 1, damping: 22, stiffness: 240, mass: 1, useNativeDriver: true }).start()
     const timer = setTimeout(park, notice.body === 'Needs your input' ? SHOW_MS_INPUT : SHOW_MS)
     return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [key, viewing])
 
   if (!shown) return null

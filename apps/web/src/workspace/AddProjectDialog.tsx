@@ -264,6 +264,7 @@ function HostFolderDialog() {
           })
           .catch((e) => setError(errorText(e)))
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
     [],
   )
   if (!request) return null

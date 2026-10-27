@@ -117,7 +117,8 @@ export function FileViewer({
     owner: readIdentity,
     value: { kind: 'loading' },
   })
-  const state: FileState = file.owner === readIdentity ? file.value : { kind: 'loading' }
+  const [loading] = useState<FileState>({ kind: 'loading' })
+  const state: FileState = file.owner === readIdentity ? file.value : loading
   const [scope, setScope] = useState<{
     owner: string
     bindings: RepositoryBinding[]
@@ -169,6 +170,7 @@ export function FileViewer({
     return () => {
       alive = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [identity, online])
 
   useEffect(() => {
@@ -226,6 +228,7 @@ export function FileViewer({
     return () => {
       alive = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [readIdentity, online, binding])
 
   const rows = useMemo(() => (state.kind === 'text' ? state.lines : []), [state])

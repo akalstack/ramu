@@ -51,6 +51,7 @@ function useNetworkStatus(interval: number) {
     } finally {
       loading.current = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [])
   useEffect(() => {
     void reload()
@@ -430,6 +431,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
   useEffect(() => {
     create()
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
       ++offerRequest.current
     }
   }, [create])

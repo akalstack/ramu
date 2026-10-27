@@ -9,9 +9,10 @@ export function useAgentSettings(taskId: string) {
   const { invoke } = useHost()
   const { on } = useHostRuntime()
   const [settings, setSettings] = useState<AgentSettings>(DEFAULT_AGENT_SETTINGS)
+  const activeViewId = ws.taskUi[taskId]?.activeAgentViewId
   useEffect(() => {
     let cancelled = false
-    const view = ws.taskUi[taskId]?.views.find((v) => v.id === ws.taskUi[taskId]?.activeAgentViewId)
+    const view = ws.taskUi[taskId]?.views.find((v) => v.id === activeViewId)
     if (view?.kind === 'agent')
       void invoke('agent.get', view.sessionId).then((s) => {
         if (!cancelled) setSettings(s.settings)
@@ -24,6 +25,7 @@ export function useAgentSettings(taskId: string) {
       cancelled = true
       off()
     }
-  }, [invoke, on, taskId, ws.taskUi[taskId]?.activeAgentViewId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+  }, [invoke, on, taskId, activeViewId])
   return [settings, setSettings] as const
 }

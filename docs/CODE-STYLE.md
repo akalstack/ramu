@@ -40,7 +40,7 @@ Rules for human and agent contributors. Tools enforce what they can (`pnpm check
 
 ## Web (`apps/web`)
 
-- Function components and hooks. Satisfy `react-hooks/exhaustive-deps`; if a dependency is deliberately omitted, say why on the disable comment.
+- Function components and hooks. List every dependency. Omit one only when the effect is deliberately keyed on a trigger, and say why on the disable comment; never put a call, conditional or fresh object in a dependency array. Prefer an event handler or a ref over a suppressed effect. Existing disables are debt, not precedent.
 - Server data goes through `ipc.ts` (`ramu.invoke`, `invokeOn`) and TanStack Query keys of the form `['ipc', hostId, method, ...]`. Do not keep a second copy of server state in component state.
 - Every visible string goes through `t()`; add the Indonesian translation in the same change ([Localization](LOCALIZATION.md)).
 - UI is composed from `components/ui` (upstream shadcn, never edited) through the app-owned wrappers (`desktop-button.tsx`, `row-button.tsx`, `drag-handle.tsx`, …). No raw `<button>`; `sharedButtons.test.ts` enforces it. See [UI](UI.md).

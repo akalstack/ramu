@@ -196,6 +196,7 @@ export default function Threads() {
       )
     })
     return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [
     outbox,
     pinned,

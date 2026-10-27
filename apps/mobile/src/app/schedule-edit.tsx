@@ -104,6 +104,7 @@ export default function ScheduleEdit() {
       alive = false
       clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [ruleKey, input.timezone, online, viewOnly, computerId])
 
   const problem = validateInput(input, Date.now(), lang)

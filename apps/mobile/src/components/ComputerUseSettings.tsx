@@ -52,6 +52,7 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
               : String(reason),
         )
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [hostId, store.invoke])
   useEffect(() => {
     setStatus(null)

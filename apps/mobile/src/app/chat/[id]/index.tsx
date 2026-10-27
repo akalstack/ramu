@@ -165,6 +165,7 @@ export default function ChatScreen() {
       const frame = requestAnimationFrame(() => toEnd(false))
       return () => cancelAnimationFrame(frame)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [composerHeight])
   // A row opened or closed by hand keeps the scroll position; content growth from the agent still follows the end.
   const held = useRef(0)
@@ -237,6 +238,7 @@ export default function ChatScreen() {
       return () => {
         alive = false
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
     }, [chat?.id, chat?.taskId, chat?.computerId, chat?.projectId, chat?.status, computer?.status, refresh]),
   )
   // Looking at a chat clears its notice on every device.
@@ -252,6 +254,7 @@ export default function ChatScreen() {
   )
   useEffect(() => {
     if (focused && hasNotice && chat) store.acknowledge(chat.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [focused, hasNotice, chat?.id])
   // Editing a sent message keeps its place with the draft text: leaving the chat or restarting does not drop it.
   const editDraftKey = chat ? `${chat.computerId}:chat:${chat.taskId || chat.id}:editing` : null
@@ -286,6 +289,7 @@ export default function ChatScreen() {
     } catch {
       return null
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [storedModel, chat?.id, chat?.provider, chat?.model, chat?.effort, chat?.settings])
   const setStaged = (next: { chatId: string; model: import('../../../components/Composer').ModelChoice } | null) => {
     if (modelDraftKey) store.setDraft(modelDraftKey, next ? JSON.stringify(next.model) : '')
@@ -298,6 +302,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!chat?.sessionId) return
     return store.watch(chat.computerId, ['agent:event'], { 'agent:event': [chat.sessionId] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [chat?.computerId, chat?.sessionId])
   // Recorded change reviews end their turns as Changes cards, as on desktop; re-read whenever the thread settles.
   const [reviews, setReviews] = useState<import('@ramu/shared/types').ChangeReview[]>([])
@@ -311,6 +316,7 @@ export default function ChatScreen() {
     return () => {
       alive = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [chat?.computerId, chat?.sessionId, chat?.status])
   const rows = useMemo(
     () =>
@@ -369,6 +375,7 @@ export default function ChatScreen() {
         ]
       : shown
     return { pageRows, hiddenTurns: hidden }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [rows, turnsShown, staged, chat?.id, chat?.provider, chat?.settings])
   // Where each message sits in time and in its turn: date labels above turns, time and copy under each turn's last answer.
   const itemMeta = useMemo(() => {

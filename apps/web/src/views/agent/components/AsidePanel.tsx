@@ -58,6 +58,7 @@ export function AsidePanel({
     setDraft('')
     setError(null)
     if (open === '*' || !open.keepFocus) requestAnimationFrame(() => input.current?.focus())
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [openKey])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

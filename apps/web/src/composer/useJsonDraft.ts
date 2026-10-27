@@ -17,6 +17,7 @@ export function useJsonDraft<T>(
   const stale = state.key !== key || state.host !== host
   const current = stale ? { key, host, value: load() } : state
   if (stale) setState(current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   useEffect(() => saveJsonDraft(key, host, current.value, isEmpty), [key, host, current.value])
   const set = useCallback(
     (update: T | ((current: T) => T)) =>

@@ -48,6 +48,7 @@ export function HostingStatus({ hostId }: { hostId: string }) {
     setStale(!online)
     if (online) void load()
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
       ++generation.current
     }
   }, [hostId, online, load])

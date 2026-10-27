@@ -260,15 +260,18 @@ export function Notifications() {
       reconnect()
       notices.setHost([])
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [invoke, on])
   // A notice about a chat that is on screen is stale.
+  const noticeList = notices.list()
   useEffect(() => {
     for (const entry of inbox.current)
       if (watching.current(entry.taskId, entry.sessionId)) {
         notify.close(entry.id)
         dismissHost(entry.id)
       }
-  }, [ws.ui.activeTaskId, ws.taskUi, ws.composing, ws.ui.sidebar, notices.list()])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
+  }, [ws.ui.activeTaskId, ws.taskUi, ws.composing, ws.ui.sidebar, noticeList])
   useEffect(() => {
     const offToast = ramu.on('notify:inapp', (notice) => {
       // No toast for the chat you are already looking at.
@@ -311,6 +314,7 @@ export function Notifications() {
       offToast()
       offOpen()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [ws])
   useEffect(() => {
     const receive = (event: Event) => {

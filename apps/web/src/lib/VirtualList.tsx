@@ -71,6 +71,7 @@ export function VirtualList<T>({
   }, [resetKey])
   useLayoutEffect(() => {
     if (revealKey) scrollTo(items.findIndex((item) => itemKey(item) === revealKey))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [revealKey, items, rowHeight])
   useLayoutEffect(() => {
     if (pendingFocus.current === null) return

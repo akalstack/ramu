@@ -44,6 +44,7 @@ export function useWorkspaces(host: string, enabled = true) {
       alive = false
       off()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [host, enabled, online, revision])
   return {
     ...(state.host === host ? state : { host, rows: [], loading: enabled && online, error: '', unsupported: false }),

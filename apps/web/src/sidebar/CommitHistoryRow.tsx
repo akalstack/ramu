@@ -67,6 +67,7 @@ export function CommitHistoryRow({
     return () => {
       disposed = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [expanded, files, taskId, binding.repoId, commit.oid])
   const details = () =>
     ws.openView(taskId, {

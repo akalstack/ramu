@@ -64,6 +64,7 @@ export function useTurnPaging({
         if (taskId) ws.consumeSourceNavigation(taskId, view.id, view.sourceRequestId)
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [view.sourceSeq, view.sourceRequestId, view.focusRequestId, events, eventSequences, visible, taskId, shownTurns])
   // A long chat draws its latest turns first; "Earlier turns" brings back the previous page, keeping the reader where they were.
   const hiddenTurns = Math.max(0, turns.length - shownTurns)
@@ -77,6 +78,7 @@ export function useTurnPaging({
     const keep = turnsToKeep(counted.current, { sessionId: view.sessionId, count: turns.length }, stick.current)
     counted.current = { sessionId: view.sessionId, count: turns.length }
     if (keep > 0) setShownTurns((count) => count + keep)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [turns.length, view.sessionId])
   // The scroller keeps the reader where they were while earlier turns are added above.
   const showEarlierTurns = () => {

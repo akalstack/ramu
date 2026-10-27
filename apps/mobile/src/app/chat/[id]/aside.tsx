@@ -69,6 +69,7 @@ export default function AsideScreen() {
   const load = useCallback(async () => {
     if (!computerId || !sessionId) return
     setAsides(await store.invoke(computerId, 'aside.list', sessionId))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [computerId, sessionId])
   useEffect(() => {
     void load().catch(() => {})
@@ -81,6 +82,7 @@ export default function AsideScreen() {
       off()
       unwatch()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [computerId, sessionId, load])
 
   if (!chat || !sessionId)

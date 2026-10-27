@@ -78,6 +78,7 @@ export function GitDetailsView({
       editor.dispose()
       model.dispose()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [taskId, binding.repoId, binding.cwd, view.oid, invoke, on])
   useEffect(() => {
     editorRef.current?.updateOptions({

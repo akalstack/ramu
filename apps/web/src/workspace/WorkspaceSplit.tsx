@@ -92,6 +92,7 @@ export function WorkspaceSplit({
     currentShare.current = next
     pixels.current = null
     setShare(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [id, epoch, host])
   useLayoutEffect(() => {
     const element = root.current

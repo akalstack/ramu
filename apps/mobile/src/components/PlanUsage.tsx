@@ -179,9 +179,11 @@ export function PlanUsageSheet({
         })
       })
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
       ++generation.current
       for (const off of subscriptions) off()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [open, key, connectionKey, store.language])
   const refreshHosts = hosts.filter(
     (id) => (!filter || filter === id) && store.isOnline(id) && !unsupportedRefresh.includes(id),

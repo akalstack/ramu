@@ -68,6 +68,7 @@ export function ChangeReviewTab({
   useEffect(() => {
     const fileId = review?.comments.find((c) => c.id === threadTarget)?.fileId
     if (fileId) setActiveFileId(fileId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [threadTarget, review?.id])
   useEffect(() => {
     setActiveFileId(null)
@@ -96,6 +97,7 @@ export function ChangeReviewTab({
       thread?.scrollIntoView({ block: 'center', behavior: 'smooth' })
     })
     return () => cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [threadTarget, review?.id])
   useEffect(() => {
     if (review?.id === view.reviewId && view.fileId && !view.threadId) {
@@ -106,6 +108,7 @@ export function ChangeReviewTab({
       })
       return () => cancelAnimationFrame(frame)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [review?.id, view.requestId])
   const act = async (fn: () => Promise<ChangeReview>) => {
     setBusy(true)
@@ -122,7 +125,8 @@ export function ChangeReviewTab({
     }
   }
   const revisions = reviews.filter((r) => r.taskId === review?.taskId)
-  const files = review?.files ?? []
+  const reviewFiles = review?.files
+  const files = useMemo(() => reviewFiles ?? [], [reviewFiles])
   const changedLines = useMemo(
     () => files.reduce((sum, file) => sum + (file.addedLines ?? 0) + (file.removedLines ?? 0), 0),
     [files],

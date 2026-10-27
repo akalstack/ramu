@@ -96,6 +96,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
       off()
       offHost()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [refreshProfiles])
   const catalog = profiles?.host === selectedHost ? profiles.catalog : null
   const [readiness, setReadiness] = useState<{ available: boolean; reason?: string; warning?: string } | null>(null)

@@ -66,6 +66,7 @@ export function ProviderCompatibility({ hostId }: { hostId: string }) {
     setStale(!online)
     if (online) void load(false)
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
       ++generation.current
     }
   }, [hostId, online, load])

@@ -191,6 +191,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
       selectComposerInput(element, Math.min(caret, value.length))
     }
     mounted.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [value])
   const insert = (text: string) => {
     const position = root.current ? offsets(root.current) : { start: value.length, end: value.length }

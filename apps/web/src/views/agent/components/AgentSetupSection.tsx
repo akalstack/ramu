@@ -67,6 +67,7 @@ export function AgentSetupSection({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     void refresh()
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
       request.current++
     }
   }, [refresh])

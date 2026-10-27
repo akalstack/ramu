@@ -50,7 +50,9 @@ export function useChatPresentation({
       chatPresentation.set(JSON.stringify([host, sessionId]), {
         draft: current.draft,
         attachments: current.attachments,
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup must see the latest value, not the one from mount
         top: scroller.current?.scrollTop ?? 0,
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup must see the latest value, not the one from mount
         stick: stick.current,
       })
       // Refresh cache lifetime on leaving an open chat, even if it was idle for
@@ -58,5 +60,6 @@ export function useChatPresentation({
       if (current.session) queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.get', sessionId), current.session)
       queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.events', sessionId), current.events)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [sessionId, host])
 }

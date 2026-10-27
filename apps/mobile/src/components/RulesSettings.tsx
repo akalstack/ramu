@@ -42,6 +42,7 @@ export function RulesSettings({ hostId }: { hostId: string }) {
     } finally {
       if (sequence.current === version) setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes only when the listed dependencies change
   }, [hostId])
   useEffect(() => {
     void read()
@@ -51,9 +52,11 @@ export function RulesSettings({ hostId }: { hostId: string }) {
         })
       : () => {}
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
       ++sequence.current
       unsubscribe()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [read, online])
   const words = searchWords(query)
   const matches = rules.filter((rule) => matchesWords(`${rule.name} ${rule.body}`, words))

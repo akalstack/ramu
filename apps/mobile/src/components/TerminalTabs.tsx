@@ -32,6 +32,7 @@ export function TerminalTabs({
     const frame = frames.current.get(tabs[active]?.id ?? '')
     if (frame)
       scroll.current?.scrollTo({ x: Math.max(0, frame.x + frame.width / 2 - viewport.current / 2), animated: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [active, tabs.length])
   return (
     <ScrollView

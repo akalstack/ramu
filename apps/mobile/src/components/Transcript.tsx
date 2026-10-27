@@ -215,6 +215,7 @@ function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
     return () => {
       alive = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [file.id, image, chat.computerId])
   if (image && uri) return <ImageBlock uri={uri} alt={file.name} size={88} />
   return (
@@ -1074,6 +1075,7 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
   const [other, setOther] = useState<Record<string, string>>(draft.other ?? {})
   useEffect(() => {
     store.setDraft(draftKey, JSON.stringify({ picked, other }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the listed dependencies change; other values are read as of that change
   }, [draftKey, picked, other])
   if (item.answers) return <QuestionHistory item={item} />
   const ready = item.questions.every(
