@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { cleanLabel } from '@ramu/shared/text'
 import { existsSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { mkdir, readdir, realpath } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import type { Db } from '../db'
 import type { SettingsStore } from '../settings/settingsStore'
 import { loadProjectConfig } from './projectConfig'
@@ -61,7 +61,7 @@ const SKIP_DIRS = new Set(['node_modules', 'vendor', 'dist', 'build', 'target'])
 
 function isWithin(root: string, target: string): boolean {
   const rel = relative(root, target)
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
 }
 
 export function slugify(s: string): string {

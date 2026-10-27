@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
-import { basename, dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { git, headOid, topLevel } from './git'
 
 // A sub-agent that writes files can work in its own copy of the checkout, so parallel helpers never overwrite each other
@@ -50,7 +50,7 @@ export async function createIsolation(options: {
   try {
     for (const [index, repo] of repos.entries()) {
       const inside = relative(resolve(options.cwd), repo.source)
-      const inCwd = inside === '' || (!inside.startsWith('..') && !inside.startsWith('/'))
+      const inCwd = inside === '' || (inside !== '..' && !inside.startsWith(`..${sep}`) && !isAbsolute(inside))
       const worktree = inCwd
         ? inside === ''
           ? options.root

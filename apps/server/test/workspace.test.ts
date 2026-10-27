@@ -315,6 +315,11 @@ describe('isolated worktrees (optional)', () => {
 })
 
 describe('path guard', () => {
+  it('accepts names that merely start with two dots', async () => {
+    const root = realpathSync(web)
+    await expect(resolveInRoot(root, '..notes.txt')).resolves.toBe(join(root, '..notes.txt'))
+    await expect(resolveInRoot(root, '...')).resolves.toBe(join(root, '...'))
+  })
   it('rejects escapes, absolute paths, .git and outward symlinks', async () => {
     const root = realpathSync(web)
     await expect(resolveInRoot(root, '../api/unstaged.txt')).rejects.toBeInstanceOf(PathEscapeError)

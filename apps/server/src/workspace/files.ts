@@ -226,7 +226,7 @@ export function assertNewName(relPath: string): void {
 
 function isInside(root: string, target: string): boolean {
   const rel = relative(root, target)
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
 }
 
 /**
