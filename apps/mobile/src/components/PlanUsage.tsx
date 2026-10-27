@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Pressable, View, useWindowDimensions } from 'react-native'
+import { Pressable, View } from 'react-native'
 import { Gauge, Monitor, Network, Settings } from 'lucide-react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { useRouter } from 'expo-router'
 import { isMethodMissing } from '../runtime/goalVerify'
-import type { AgentProvider, NextMessageRoute, UsageReading } from '@ramu/shared/types'
+import type { AgentProvider, UsageReading } from '@ramu/shared/types'
 import { providerEnabled } from '@ramu/shared/providers/providers'
 import {
-  relevantUsage,
   summaryUsage,
   usagePercent,
   usageStale,
@@ -458,70 +457,5 @@ function UsageRing({ percent }: { percent: number }) {
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />
     </Svg>
-  )
-}
-export function ThreadUsageChip({
-  hostId,
-  provider: selectedProvider,
-  accountId: selectedAccountId,
-  model: selectedModel,
-  sessionId,
-}: {
-  hostId: string
-  provider: AgentProvider
-  accountId?: string
-  model: string
-  /** The thread whose next message is previewed; without one the chip describes the selection. */
-  sessionId?: string | null
-}) {
-  const store = useStore()
-  const [open, setOpen] = useState(false)
-  const { width } = useWindowDimensions()
-  // The host's own answer for where the next message runs. Older hosts lack it, so the selection stays shown.
-  const [route, setRoute] = useState<NextMessageRoute | null>(null)
-  const usageKey = JSON.stringify(store.usage[hostId] ?? [])
-  useEffect(() => {
-    if (!sessionId) return setRoute(null)
-    let current = true
-    store.invoke(hostId, 'agent.nextRoute', sessionId).then(
-      (next) => current && setRoute(next.state === 'unknown' ? null : next),
-      () => current && setRoute(null),
-    )
-    return () => {
-      current = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hostId, sessionId, selectedProvider, selectedModel, selectedAccountId, usageKey, store.isOnline(hostId)])
-  const target = route?.state === 'switch' && !route.held ? route : null
-  const provider = target?.provider ?? selectedProvider
-  const model = target?.model ?? selectedModel
-  const accountId = target ? target.accountId : selectedAccountId
-  if (store.appPreferences[hostId]?.showUsageLimits === false) return null
-  const reading = relevantUsage(store.usage[hostId] ?? [], { provider, accountId, model })
-  const percent = reading ? usagePercent(reading) : null
-  return (
-    <>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'}, ${providerNames[provider]}, ${percent === null ? (store.language === 'id' ? 'tidak dilaporkan' : 'not reported') : `${Math.round(percent)}% ${store.language === 'id' ? 'terpakai' : 'used'}`}`}
-        onPress={() => setOpen(true)}
-        style={{ padding: space.s, minHeight: 34, justifyContent: 'center', flexShrink: 1 }}
-      >
-        <T size={font.caption} tone="muted" numberOfLines={1}>
-          {width >= 430 && percent !== null
-            ? `${Math.round(percent)}% ${store.language === 'id' ? 'terpakai' : 'used'}`
-            : store.language === 'id'
-              ? 'Paket'
-              : 'Usage'}
-        </T>
-      </Pressable>
-      <PlanUsageSheet
-        hosts={[hostId]}
-        open={open}
-        onClose={() => setOpen(false)}
-        provider={provider}
-        accountId={accountId}
-      />
-    </>
   )
 }

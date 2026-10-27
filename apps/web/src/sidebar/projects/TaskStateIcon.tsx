@@ -15,7 +15,8 @@ export function StateDot({ kind, label }: { kind: string; label: string }) {
 export function StatusMark({ task, status }: { task: Task; status: ThreadStatus | null }) {
   useLanguage()
   if (!status) return null
-  if (status.kind === 'working' || status.kind === 'goal' || status.kind === 'verifying') return <StateDot kind="spinner" label={t(status.full)} />
+  if (status.kind === 'working' || status.kind === 'goal' || status.kind === 'verifying')
+    return <StateDot kind="spinner" label={t(status.full)} />
   if (
     status.kind === 'approval' ||
     status.kind === 'input' ||

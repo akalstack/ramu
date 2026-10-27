@@ -92,14 +92,17 @@ it('refuses a launch when access changes while the approval is pending', async (
   expect(harness.terminals.listBackground('thread')).toEqual([])
 })
 
-it.skipIf(process.platform === 'win32')('attributes a command launched by a helper and keeps it after restart', async () => {
-  const { terminals } = await setup()
-  const mine = terminals.launchBackground('thread', null, tmpdir(), 'sleep 100')
-  const helper = terminals.launchBackground('thread', null, tmpdir(), 'sleep 101', 'helper')
-  expect(mine.startedBy).toBeUndefined()
-  expect(helper.startedBy).toBe('helper')
-  expect(terminals.listBackground('thread').find((entry) => entry.id === helper.id)?.startedBy).toBe('helper')
-})
+it.skipIf(process.platform === 'win32')(
+  'attributes a command launched by a helper and keeps it after restart',
+  async () => {
+    const { terminals } = await setup()
+    const mine = terminals.launchBackground('thread', null, tmpdir(), 'sleep 100')
+    const helper = terminals.launchBackground('thread', null, tmpdir(), 'sleep 101', 'helper')
+    expect(mine.startedBy).toBeUndefined()
+    expect(helper.startedBy).toBe('helper')
+    expect(terminals.listBackground('thread').find((entry) => entry.id === helper.id)?.startedBy).toBe('helper')
+  },
+)
 
 it('revalidates access and checkout at invocation rather than trusting a previously discovered tool', async () => {
   const { call, source, change, terminals } = await setup()

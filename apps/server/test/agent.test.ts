@@ -3,7 +3,7 @@ import { elicitationRequest, elicitationContent } from '../src/agent/elicitation
 import { AcpResumeUnavailable } from '../src/providers/acp'
 import { configureProviderBinaries } from '../src/providers/providerBinaries'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { query, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'

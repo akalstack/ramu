@@ -9,7 +9,7 @@ import { ReasoningPicker } from './ReasoningPicker'
 import { ModelPicker } from './ModelPicker'
 import { ProviderIcon } from './ProviderIcon'
 import { Menu } from '../Menu'
-import { effortDisplayName, modelDisplayName, settingsNames, useModelSets } from './ModelSets'
+import { effortDisplayName, modelDisplayName, useModelSets } from './ModelSets'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 

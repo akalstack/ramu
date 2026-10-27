@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { LibrarySummary, LibrarySummaryItem, SummariesSnapshot } from '@ramu/shared/types'
+import type { LibrarySummary, LibrarySummaryItem } from '@ramu/shared/types'
 import { activeSummaries, groupItems, nextSummaryAt, runMessage, unreadCount } from '../src/summaries/summaryLogic'
 
 const summary = (id: string, status: LibrarySummary['status'], createdAt: number): LibrarySummary => ({
@@ -14,12 +14,6 @@ const summary = (id: string, status: LibrarySummary['status'], createdAt: number
   chatIds: [],
   model: 'codex',
   createdAt,
-})
-const snapshot = (summaries: LibrarySummary[]): SummariesSnapshot => ({
-  summaries,
-  running: false,
-  error: null,
-  lastRunAt: null,
 })
 describe('summaries list', () => {
   it('hides dismissed summaries from the active list', () => {

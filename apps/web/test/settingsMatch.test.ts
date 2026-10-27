@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSettings } from '@ramu/shared/types'
 import { settingsMatch } from '../src/views/agent/settingsMatch'
 
-const base: AgentSettings = { provider: 'claude-code', model: 'opus', effort: 'medium', access: 'edits', autoFallback: false }
+const base: AgentSettings = {
+  provider: 'claude-code',
+  model: 'opus',
+  effort: 'medium',
+  access: 'edits',
+  autoFallback: false,
+}
 
 describe('settingsMatch', () => {
   it('treats identical settings as the same, so no pending separator is drawn', () => {

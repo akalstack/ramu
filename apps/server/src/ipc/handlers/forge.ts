@@ -76,7 +76,7 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     try {
       return await work()
     } catch (error) {
-      throw new Error(forgeAccounts.describe(error))
+      throw new Error(forgeAccounts.describe(error), { cause: error })
     }
   }
   const repoRoot = (repoId: string) => workspace.getRepository(repoId).root

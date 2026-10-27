@@ -27,7 +27,12 @@ it('requests summarized thinking on the request itself for models with effort le
 it("turns off Claude's own AskUserQuestion only when Ramu's question tools replace it", () => {
   const options = (replaceQuestions: boolean) =>
     claudeLaunchOptions({
-      session: { cwd: '/tmp', additionalDirs: [], covers: [], settings: { access: 'edits' } } as unknown as AgentSessionInfo,
+      session: {
+        cwd: '/tmp',
+        additionalDirs: [],
+        covers: [],
+        settings: { access: 'edits' },
+      } as unknown as AgentSessionInfo,
       connection: { url: 'http://127.0.0.1/mcp', token: 't', instructions: '', replaceQuestions },
       advisorModel: undefined,
       abort: new AbortController(),

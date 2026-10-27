@@ -1,10 +1,10 @@
 import WebSocket from 'ws'
-import { MAX_SOCKET_FRAME_BYTES } from '@ramu/contracts'
+import { MAX_REQUEST_BYTES } from '@ramu/contracts'
 import type { SocketFactory } from './socket'
 
 /** The Node WebSocket, which can send the Authorization header and reports why an upgrade was refused. */
 export const nodeSocketFactory: SocketFactory = (url, headers, handlers) => {
-  const ws = new WebSocket(url, { headers, maxPayload: MAX_SOCKET_FRAME_BYTES, handshakeTimeout: 10_000 })
+  const ws = new WebSocket(url, { headers, maxPayload: MAX_REQUEST_BYTES, handshakeTimeout: 10_000 })
   let status: number | undefined
   let code: string | undefined
   ws.on('open', () => {

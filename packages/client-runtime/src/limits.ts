@@ -77,5 +77,4 @@ export class WorkLimiter {
     }
   }
 }
-export const connectionAttempts = new WorkLimiter(8, 2)
 export const remoteRequests = new WorkLimiter(16, 4)

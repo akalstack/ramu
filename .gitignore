@@ -15,3 +15,4 @@ coverage/
 .ramu-*
 apps/web/_debug-*
 .playwright-cli/
+.expo/

@@ -247,7 +247,9 @@ export class OAuthSignIn {
       return { url: this.provider.authorizationUrl.toString() }
     } catch (error) {
       this.finish('The service did not offer a supported sign-in.')
-      throw new Error('The service did not offer a supported sign-in. Check its address and authorization support.')
+      throw new Error('The service did not offer a supported sign-in. Check its address and authorization support.', {
+        cause: error,
+      })
     }
   }
 

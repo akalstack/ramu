@@ -64,7 +64,9 @@ for (const provider of ['codex', 'claude-code'] as const)
         (event) => {
           events.push(event)
           if (event.kind === 'tool-use' && !steered)
-            steered = runner.steer('New instruction from the user: stop the earlier task and reply with only the word STEERED_OK.')
+            steered = runner.steer(
+              'New instruction from the user: stop the earlier task and reply with only the word STEERED_OK.',
+            )
           if (event.kind === 'result' || event.kind === 'error') finish()
         },
       )

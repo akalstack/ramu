@@ -50,7 +50,6 @@ import { useHostSelection } from './workspace/HostSelection'
 import { StatusDot, useComputers } from './workspace/computers'
 import {
   clearDraftDestination,
-  defaultStartProject,
   draftDestination,
   homeDestination,
   lastStartProject,

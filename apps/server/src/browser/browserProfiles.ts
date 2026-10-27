@@ -55,6 +55,7 @@ const files: BrowserProfileFiles = {
 const cleanName = (value: unknown): string => {
   if (typeof value !== 'string') throw new Error('Name the browser profile.')
   const name = value.trim()
+  // eslint-disable-next-line no-control-regex -- rejects control characters on purpose
   if (!name || name.length > 80 || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(name))
     throw new Error('Use a profile name of 1 to 80 characters without control characters.')
   return name

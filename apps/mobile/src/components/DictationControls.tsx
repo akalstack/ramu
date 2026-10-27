@@ -164,15 +164,7 @@ export function DictationStatus({
 }
 
 /** The microphone in the action row: one tap starts, and while a take runs it shows as active. */
-export function MicButton({
-  active,
-  disabled,
-  onPress,
-}: {
-  active: boolean
-  disabled?: boolean
-  onPress: () => void
-}) {
+export function MicButton({ active, disabled, onPress }: { active: boolean; disabled?: boolean; onPress: () => void }) {
   const { c } = useTheme()
   const t = useT()
   return (

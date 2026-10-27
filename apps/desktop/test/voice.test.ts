@@ -31,17 +31,32 @@ it('is unsupported off macOS so typing and system dictation stay the only option
 it('reports a denied microphone even when the recognizer is ready, and asks only while undecided', async () => {
   const asked: string[] = []
   const denied: MicrophoneAccess = { status: () => 'denied', ask: async () => (asked.push('ask'), false) }
-  const voice = new DesktopVoice({ dir, platform: 'darwin', microphone: denied, helper: helperFor({ capability: ready }) })
+  const voice = new DesktopVoice({
+    dir,
+    platform: 'darwin',
+    microphone: denied,
+    helper: helperFor({ capability: ready }),
+  })
   expect((await voice.capability('system')).readiness).toBe('permission-denied')
   await expect(voice.begin(1, 'system')).rejects.toThrow('voice:permission')
   expect(asked).toEqual([])
   const undecided: MicrophoneAccess = { status: () => 'not-determined', ask: async () => (asked.push('ask'), true) }
-  const fresh = new DesktopVoice({ dir, platform: 'darwin', microphone: undecided, helper: helperFor({ capability: ready }) })
+  const fresh = new DesktopVoice({
+    dir,
+    platform: 'darwin',
+    microphone: undecided,
+    helper: helperFor({ capability: ready }),
+  })
   expect((await fresh.capability('system')).readiness).toBe('permission-needed')
 })
 
 it('hands the microphone to one window at a time and frees it when the take ends', async () => {
-  const voice = new DesktopVoice({ dir, platform: 'darwin', microphone: granted, helper: helperFor({ capability: ready, transcribe: '{"text":"hello"}' }) })
+  const voice = new DesktopVoice({
+    dir,
+    platform: 'darwin',
+    microphone: granted,
+    helper: helperFor({ capability: ready, transcribe: '{"text":"hello"}' }),
+  })
   const first = await voice.begin(1, 'system')
   expect(voice.holds(1)).toBe(true)
   expect(voice.holds(2)).toBe(false)
@@ -81,7 +96,12 @@ it('deletes the temporary audio after transcription, failure and cancellation', 
 })
 
 it('rejects empty or oversized audio and a closed window releases its recording', async () => {
-  const voice = new DesktopVoice({ dir, platform: 'darwin', microphone: granted, helper: helperFor({ capability: ready }) })
+  const voice = new DesktopVoice({
+    dir,
+    platform: 'darwin',
+    microphone: granted,
+    helper: helperFor({ capability: ready }),
+  })
   const take = await voice.begin(1, 'system')
   await expect(voice.transcribe(1, take.token, new Uint8Array(0), 'system')).rejects.toThrow('voice:empty')
   expect(voice.holds(1)).toBe(false)

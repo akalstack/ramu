@@ -44,7 +44,6 @@ export function BrowserImportWizard({
   useLanguage()
   const [step, setStep] = useState<Step>('profile')
   const [profiles, setProfiles] = useState<BrowserImportProfile[] | null>(null)
-  const [profile, setProfile] = useState<BrowserImportProfile | null>(null)
   const [token, setToken] = useState('')
   const [domains, setDomains] = useState<BrowserImportDomain[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -76,7 +75,6 @@ export function BrowserImportWizard({
   }
 
   const choose = async (entry: BrowserImportProfile) => {
-    setProfile(entry)
     setError('')
     setStep('reading')
     try {

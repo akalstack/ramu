@@ -12,8 +12,6 @@ const normalize = (name: string) => name.replace(/[-_\s]/g, '').toLowerCase()
 const kebab = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
 const ICONS = new Map(Object.entries(icons).map(([name, node]) => [normalize(name), { name: kebab(name), node }]))
 
-export const INTERACTIVE_ICON_COUNT = ICONS.size
-
 /** Up to three known icon names closest to an unknown one. */
 function suggest(name: string): string[] {
   const target = normalize(name)
@@ -111,25 +109,30 @@ export const INTERACTIVE_KIT_CSS = `
 export function resolveInteractiveKit(html: string): string {
   const held: string[] = []
   const hold = (value: string) => `\u0000ramu-kit-${held.push(value) - 1}\u0000`
-  return html
-    .replace(/<!--[\s\S]*?-->|<(script|style|textarea)\b[\s\S]*?<\/\1\s*>/gi, (match, tag?: string) => {
-      if (tag?.toLowerCase() === 'script' && /^<script\b[^>]*\ssrc\s*=\s*["']?ramu:/i.test(match))
-        throw new Error('ramu: built-ins are stylesheets and icons only; there is no ramu: script.')
-      return hold(match)
-    })
-    .replace(/<link\b[^>]*\shref\s*=\s*(["']?)ramu:([^"'\s>]*)\1[^>]*>/gi, (_match, _q, name: string) => {
-      if (name !== 'kit') throw new Error(`Unknown built-in ramu:${name}. Use <link rel="stylesheet" href="ramu:kit">.`)
-      return `<style data-ramu-kit>${INTERACTIVE_KIT_CSS}</style>`
-    })
-    .replace(/<svg\b((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/gi, (match, attrs: string, selfClosing: string) => {
-      const name = attrs
-        .match(/\sdata-icon\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
-        ?.slice(1)
-        .find(Boolean)
-      if (name === undefined) return match
-      // The icon replaces the element's children; the closing tag marks where they end.
-      return `${icon(attrs.replace(/\s+$/, ''), name)}${selfClosing ? '' : '\u0001'}`
-    })
-    .replace(/\u0001[\s\S]*?<\/svg\s*>/gi, '')
-    .replace(/\u0000ramu-kit-(\d+)\u0000/g, (_match, index: string) => held[Number(index)]!)
+  return (
+    html
+      .replace(/<!--[\s\S]*?-->|<(script|style|textarea)\b[\s\S]*?<\/\1\s*>/gi, (match, tag?: string) => {
+        if (tag?.toLowerCase() === 'script' && /^<script\b[^>]*\ssrc\s*=\s*["']?ramu:/i.test(match))
+          throw new Error('ramu: built-ins are stylesheets and icons only; there is no ramu: script.')
+        return hold(match)
+      })
+      .replace(/<link\b[^>]*\shref\s*=\s*(["']?)ramu:([^"'\s>]*)\1[^>]*>/gi, (_match, _q, name: string) => {
+        if (name !== 'kit')
+          throw new Error(`Unknown built-in ramu:${name}. Use <link rel="stylesheet" href="ramu:kit">.`)
+        return `<style data-ramu-kit>${INTERACTIVE_KIT_CSS}</style>`
+      })
+      .replace(/<svg\b((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/gi, (match, attrs: string, selfClosing: string) => {
+        const name = attrs
+          .match(/\sdata-icon\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+          ?.slice(1)
+          .find(Boolean)
+        if (name === undefined) return match
+        // The icon replaces the element's children; the closing tag marks where they end.
+        return `${icon(attrs.replace(/\s+$/, ''), name)}${selfClosing ? '' : '\u0001'}`
+      })
+      // eslint-disable-next-line no-control-regex -- \u0001 marks where an icon.s children end
+      .replace(/\u0001[\s\S]*?<\/svg\s*>/gi, '')
+      // eslint-disable-next-line no-control-regex -- NUL delimits held placeholders; stripped input cannot contain it
+      .replace(/\u0000ramu-kit-(\d+)\u0000/g, (_match, index: string) => held[Number(index)]!)
+  )
 }

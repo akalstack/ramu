@@ -1,10 +1,4 @@
-import type {
-  IntelligencePreferences,
-  LibrarySummary,
-  LibrarySummaryItem,
-  SummariesSnapshot,
-  SummaryRunResult,
-} from '@ramu/shared/types'
+import type { IntelligencePreferences, LibrarySummary, LibrarySummaryItem, SummaryRunResult } from '@ramu/shared/types'
 
 /** The summary view's "nothing to change" button, which dismisses the summary. Kept in one place so it is easy to rename. */
 export const DISMISS_LABEL = 'Looks good'

@@ -46,7 +46,8 @@ export function foldChatTurn(items: ChatBlock[], outcomes: Map<string, string>, 
       continue
     }
     const event = block.event
-    const outcome = 'requestId' in event && typeof event.requestId === 'string' ? outcomes.get(event.requestId) ?? '' : ''
+    const outcome =
+      'requestId' in event && typeof event.requestId === 'string' ? (outcomes.get(event.requestId) ?? '') : ''
     const foldable =
       event.kind === 'text' ||
       event.kind === 'content' ||

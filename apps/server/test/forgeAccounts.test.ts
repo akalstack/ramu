@@ -32,7 +32,10 @@ function setup(fetchImpl: (url: string, init: RequestInit) => Promise<Response>,
 }
 
 const TOKEN = 'ghp_abcdefghijklmnopqrstuvwxyz0123456789'
-const ok = (login: string, scopes = 'repo, read:org') => async () => reply(200, { login }, { 'x-oauth-scopes': scopes })
+const ok =
+  (login: string, scopes = 'repo, read:org') =>
+  async () =>
+    reply(200, { login }, { 'x-oauth-scopes': scopes })
 
 describe('checking a token', () => {
   it('sends it only to the origin API and refuses redirects', async () => {
@@ -45,7 +48,8 @@ describe('checking a token', () => {
   })
 
   it('tells expired, rate limited, missing permission, offline and unsupported servers apart', async () => {
-    const state = async (response: () => Promise<Response>) => (await checkGithubToken('github.com', TOKEN, response)).state
+    const state = async (response: () => Promise<Response>) =>
+      (await checkGithubToken('github.com', TOKEN, response)).state
     expect(await state(async () => reply(401))).toBe('expired')
     expect(await state(async () => reply(403, {}, { 'x-ratelimit-remaining': '0' }))).toBe('rate-limited')
     expect(await state(async () => reply(429))).toBe('rate-limited')
@@ -81,7 +85,9 @@ describe('saved connections', () => {
     const { store, values } = setup(() => answer())
     const first = await store.save({ origin: 'github.com', token: TOKEN })
     answer = async () => reply(401)
-    await expect(store.save({ origin: 'github.com', token: 'ghp_other', replaceId: first.id })).rejects.toThrow(/rejected/)
+    await expect(store.save({ origin: 'github.com', token: 'ghp_other', replaceId: first.id })).rejects.toThrow(
+      /rejected/,
+    )
     expect([...values.values()]).toEqual([TOKEN])
     expect(await store.resolve('github.com')).toMatchObject({ kind: 'saved', token: TOKEN })
   })
@@ -89,7 +95,11 @@ describe('saved connections', () => {
   it('replaces atomically: the old secret is deleted only after the new one is published', async () => {
     const { store, values } = setup(ok('ana'))
     const first = await store.save({ origin: 'github.com', token: TOKEN })
-    const second = await store.save({ origin: 'github.com', token: 'ghp_replacement0123456789abcdefghij', replaceId: first.id })
+    const second = await store.save({
+      origin: 'github.com',
+      token: 'ghp_replacement0123456789abcdefghij',
+      replaceId: first.id,
+    })
     expect(second.id).toBe(first.id)
     expect([...values.values()]).toEqual(['ghp_replacement0123456789abcdefghij'])
   })

@@ -5,7 +5,9 @@ import { SessionSearch } from '../src/memory/sessionSearch'
 
 let db: Db, search: SessionSearch
 const event = (session: string, seq: number, value: AgentEvent) =>
-  db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)').run(session, seq, JSON.stringify(value))
+  db
+    .prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)')
+    .run(session, seq, JSON.stringify(value))
 beforeEach(() => {
   db = openDb(':memory:')
   db.exec(`INSERT INTO projects(id,name,created_at) VALUES ('p','Project',1),('q','Other project',1);

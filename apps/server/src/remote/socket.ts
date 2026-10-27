@@ -4,7 +4,7 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import {
   decodeSocketFrame,
   encodeSocketFrame,
-  MAX_SOCKET_FRAME_BYTES,
+  MAX_REQUEST_BYTES,
   SOCKET_EVENT_KEYS,
   SOCKET_PATH,
   TERMINAL_FLOW_WINDOW,
@@ -60,7 +60,7 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
   const heartbeatMs = options.heartbeatMs ?? 30_000
   const maxInFlight = options.maxInFlight ?? 32
   const maxBuffered = options.maxBuffered ?? 8 * 1024 * 1024
-  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_SOCKET_FRAME_BYTES })
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_REQUEST_BYTES })
   const open = new Set<WebSocket>()
 
   server.on('upgrade', (req, socket, head) => {

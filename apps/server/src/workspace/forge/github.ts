@@ -31,7 +31,7 @@ import {
   type ForgeRemote,
 } from '@ramu/shared/forgeRemote'
 import type { ForgeAccountStore } from '../forgeAccounts'
-import { registerForgeAdapter, type ForgeAdapter } from './adapter'
+import { registerForgeAdapter } from './adapter'
 import { findExecutable } from '../../providers/providerBinaries'
 import { branchExists, commitBranchInfo, currentBranch, git, headOid, publishRemote } from '../git'
 import {
@@ -521,7 +521,7 @@ async function remoteBranchName(cwd: string, branch: string): Promise<string> {
 /** The pull request for the checked-out branch, and whether forge features work here at all. */
 export async function pullRequestStatus(cwd: string, url?: string): Promise<ForgeStatus> {
   if (!(await hasRemote(cwd))) return { availability: 'no-remote', pullRequest: null }
-  let direct: ApiAccess | null = null
+  let direct: ApiAccess | null
   try {
     direct = await directAccess(cwd)
   } catch (error) {
@@ -1048,7 +1048,7 @@ export async function issueDetails(
 }
 
 /** GitHub behind the shared adapter boundary: `gh` when it is signed in, otherwise the direct API with a saved token. */
-export const githubAdapter: ForgeAdapter = registerForgeAdapter({
+registerForgeAdapter({
   id: 'github',
   repositoryAccount,
   checkAccess,

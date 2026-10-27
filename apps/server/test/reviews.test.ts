@@ -442,7 +442,9 @@ describe('agent changes and batched feedback', () => {
       { kind: 'tool-use', toolUseId: 'missing', name: 'Bash', summary: 'pnpm build' },
     ]
     events.forEach((e, i) =>
-      db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?,?,?)').run('session', i + 1, JSON.stringify(e)),
+      db
+        .prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?,?,?)')
+        .run('session', i + 1, JSON.stringify(e)),
     )
     const replied = service.agentReply(review.id, comment.id, 'Fixed and checked', true)
     expect(replied.comments[0]?.replies?.[0]).toMatchObject({ author: 'ai', text: 'Fixed and checked' })

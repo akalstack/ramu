@@ -105,7 +105,7 @@ export class ComputerSession {
   /** The person's own mouse or keyboard use wins: the agent or remote controller is paused and local control begins. */
   private async yieldToLocalInput(deviceId: string | null): Promise<void> {
     if (this.grant.target.kind !== 'display' || deviceId === 'local' || !this.backend.localInputActive) return
-    let active = false
+    let active: boolean
     try {
       active = await this.backend.localInputActive(this.grant.target)
     } catch {

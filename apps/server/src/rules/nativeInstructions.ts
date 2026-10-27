@@ -198,13 +198,6 @@ export function inspectNativeInstructions(
   const add = (file: NativeInstructionFile) => {
     if (files.length < MAX_FILES) files.push(file)
   }
-  const realHome = (() => {
-    try {
-      return realpathSync(home)
-    } catch {
-      return home
-    }
-  })()
   for (const [dir, name, kind, provider] of [
     [join(home, '.claude'), 'CLAUDE.md', 'CLAUDE.md', 'Claude'],
     [join(home, '.codex'), 'AGENTS.md', 'AGENTS.md', 'Codex'],

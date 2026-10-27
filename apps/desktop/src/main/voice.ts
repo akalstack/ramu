@@ -142,7 +142,8 @@ export class DesktopVoice {
     // One recording per computer: another window holding the microphone refuses this one rather than queueing it.
     if (!this.lease.acquire(id)) throw new Error(voiceErrorMessage('capture'))
     try {
-      if (status !== 'granted' && !(await this.options.microphone.ask())) throw new Error(voiceErrorMessage('permission'))
+      if (status !== 'granted' && !(await this.options.microphone.ask()))
+        throw new Error(voiceErrorMessage('permission'))
       const capability = await this.capability(language)
       if (capability.readiness === 'permission-needed') {
         const answer = JSON.parse(await this.run(['authorize'])) as { status?: string }
@@ -151,7 +152,9 @@ export class DesktopVoice {
       else if (capability.readiness !== 'ready') throw new Error(voiceErrorMessage('language'))
     } catch (error) {
       this.lease.release(id)
-      throw error instanceof Error && error.message.startsWith('voice:') ? error : new Error(voiceErrorMessage('unavailable'))
+      throw error instanceof Error && error.message.startsWith('voice:')
+        ? error
+        : new Error(voiceErrorMessage('unavailable'))
     }
     this.take = { token: id, owner }
     return { token: id }

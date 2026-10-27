@@ -48,28 +48,30 @@ export function groupThreads<
     buckets.set(key, bucket)
   }
   const latest = (list: T[]) => list.reduce((max, thread) => Math.max(max, thread.lastActiveAt), -Infinity)
-  return [...buckets.entries()]
-    .map(([key, bucket]) => {
-      const sorted = [...bucket.threads].sort((a, b) => b.lastActiveAt - a.lastActiveAt)
-      const visible = options.collapsed.has(key)
-        ? []
-        : options.expanded.has(key)
-          ? sorted
-          : sorted.filter((thread, index) => index < options.limit || active(thread.status))
-      return {
-        key,
-        computerId: bucket.computerId,
-        projectId: bucket.projectId,
-        project: bucket.project,
-        threads: visible,
-        total: sorted.length,
-        hidden: sorted.length - visible.length,
-        running: sorted.filter((thread) => thread.status === 'running').length,
-        attention: sorted.filter((thread) => thread.status === 'needs-input' || thread.status === 'failed').length,
-        latest: latest(sorted),
-      }
-    })
-    // Projects first, newest activity on top; standalone threads (no project) always sit at the bottom.
-    .sort((a, b) => Number(!a.project) - Number(!b.project) || b.latest - a.latest)
-    .map(({ latest: _, ...group }) => group)
+  return (
+    [...buckets.entries()]
+      .map(([key, bucket]) => {
+        const sorted = [...bucket.threads].sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+        const visible = options.collapsed.has(key)
+          ? []
+          : options.expanded.has(key)
+            ? sorted
+            : sorted.filter((thread, index) => index < options.limit || active(thread.status))
+        return {
+          key,
+          computerId: bucket.computerId,
+          projectId: bucket.projectId,
+          project: bucket.project,
+          threads: visible,
+          total: sorted.length,
+          hidden: sorted.length - visible.length,
+          running: sorted.filter((thread) => thread.status === 'running').length,
+          attention: sorted.filter((thread) => thread.status === 'needs-input' || thread.status === 'failed').length,
+          latest: latest(sorted),
+        }
+      })
+      // Projects first, newest activity on top; standalone threads (no project) always sit at the bottom.
+      .sort((a, b) => Number(!a.project) - Number(!b.project) || b.latest - a.latest)
+      .map(({ latest: _, ...group }) => group)
+  )
 }

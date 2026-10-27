@@ -82,7 +82,8 @@ export class BrowserDownloads {
     const name =
       item
         .name()
-        .replace(/[\/\\\x00-\x1f\x7f]/g, '_')
+        // eslint-disable-next-line no-control-regex -- file names must not contain control characters
+        .replace(/[/\\\x00-\x1f\x7f]/g, '_')
         .slice(0, 255) || 'download'
     const info: BrowserDownloadInfo = {
       id,

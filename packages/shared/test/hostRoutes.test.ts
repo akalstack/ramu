@@ -51,7 +51,5 @@ it('ignores malformed alternates and never reads more than a few', async () => {
     alternates: [1, null, 'x', 'y', hostProof(key, 'h', challenge)],
   })
   expect((await ask('mine', many)).state).toBe('mismatch')
-  expect((await ask('mine', (challenge) => ({ hostId: 'h', proof: 'nope', alternates: 'oops' }))).state).toBe(
-    'mismatch',
-  )
+  expect((await ask('mine', () => ({ hostId: 'h', proof: 'nope', alternates: 'oops' }))).state).toBe('mismatch')
 })

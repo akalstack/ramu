@@ -101,39 +101,42 @@ export function bundleInteractive(files: InteractiveFile[], entry = 'index.html'
     // Scripts and textarea text are set aside first so markup inside them is never rewritten.
     const scripts: string[] = []
     const hold = (value: string) => `\u0000ramu-held-${scripts.push(value) - 1}\u0000`
-    return text(file)
-      .replace(/<textarea\b[^>]*>[\s\S]*?<\/textarea\s*>/gi, hold)
-      .replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (match, attrs: string, body: string) => {
-        const src = attribute(attrs, 'src')
-        if (!src || external(src) || body.trim()) return hold(match)
-        if (/\stype\s*=\s*["']?module/i.test(attrs))
-          throw new Error(
-            `${file.path} loads ${src} as a module. Use classic scripts and share values through globals.`,
-          )
-        return hold(`<script${without(attrs, 'src')}>${script(resolve(file.path, src))}</script>`)
-      })
-      .replace(/<link\b([^>]*)>/gi, (match, attrs: string) => {
-        const href = attribute(attrs, 'href')
-        if (!href || external(href)) return match
-        const rel = attribute(attrs, 'rel')?.toLowerCase() ?? ''
-        if (rel.split(/\s+/).includes('stylesheet')) return `<style>${css(resolve(file.path, href))}</style>`
-        return /icon|preload|manifest/.test(rel) ? '' : match
-      })
-      .replace(
-        /<style\b([^>]*)>([\s\S]*?)<\/style\s*>/gi,
-        (_match, attrs: string, body: string) => `<style${attrs}>${css({ path: file.path, content: body })}</style>`,
-      )
-      .replace(
-        /(<(?:img|source|audio|video|track|image|use|input|embed)\b[^>]*?\s(?:src|poster|href|xlink:href)\s*=\s*)(["'])([^"']*)\2/gi,
-        (match, prefix: string, quote: string, ref: string) =>
-          external(ref) ? match : `${prefix}${quote}${dataUri(resolve(file.path, ref))}${quote}`,
-      )
-      .replace(
-        /(\sstyle\s*=\s*)(["'])([^"']*url\([^"']*)\2/gi,
-        (_match, prefix: string, quote: string, body: string) =>
-          `${prefix}${quote}${css({ path: file.path, content: body })}${quote}`,
-      )
-      .replace(/\u0000ramu-held-(\d+)\u0000/g, (_match, index: string) => scripts[Number(index)]!)
+    return (
+      text(file)
+        .replace(/<textarea\b[^>]*>[\s\S]*?<\/textarea\s*>/gi, hold)
+        .replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (match, attrs: string, body: string) => {
+          const src = attribute(attrs, 'src')
+          if (!src || external(src) || body.trim()) return hold(match)
+          if (/\stype\s*=\s*["']?module/i.test(attrs))
+            throw new Error(
+              `${file.path} loads ${src} as a module. Use classic scripts and share values through globals.`,
+            )
+          return hold(`<script${without(attrs, 'src')}>${script(resolve(file.path, src))}</script>`)
+        })
+        .replace(/<link\b([^>]*)>/gi, (match, attrs: string) => {
+          const href = attribute(attrs, 'href')
+          if (!href || external(href)) return match
+          const rel = attribute(attrs, 'rel')?.toLowerCase() ?? ''
+          if (rel.split(/\s+/).includes('stylesheet')) return `<style>${css(resolve(file.path, href))}</style>`
+          return /icon|preload|manifest/.test(rel) ? '' : match
+        })
+        .replace(
+          /<style\b([^>]*)>([\s\S]*?)<\/style\s*>/gi,
+          (_match, attrs: string, body: string) => `<style${attrs}>${css({ path: file.path, content: body })}</style>`,
+        )
+        .replace(
+          /(<(?:img|source|audio|video|track|image|use|input|embed)\b[^>]*?\s(?:src|poster|href|xlink:href)\s*=\s*)(["'])([^"']*)\2/gi,
+          (match, prefix: string, quote: string, ref: string) =>
+            external(ref) ? match : `${prefix}${quote}${dataUri(resolve(file.path, ref))}${quote}`,
+        )
+        .replace(
+          /(\sstyle\s*=\s*)(["'])([^"']*url\([^"']*)\2/gi,
+          (_match, prefix: string, quote: string, body: string) =>
+            `${prefix}${quote}${css({ path: file.path, content: body })}${quote}`,
+        )
+        // eslint-disable-next-line no-control-regex -- NUL delimits held placeholders; stripped input cannot contain it
+        .replace(/\u0000ramu-held-(\d+)\u0000/g, (_match, index: string) => scripts[Number(index)]!)
+    )
   }
   return html(byPath.get(entry)!)
 }

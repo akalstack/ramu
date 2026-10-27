@@ -168,7 +168,9 @@ it('does not call the model again until the thread or the model changes, and alw
   await service.refresh(false)
   expect(analyze).toHaveBeenCalledTimes(2)
   expect(service.snapshot().generatedAt).toBeTypeOf('number')
-  db.prepare("INSERT INTO agent_events (session_id, seq, event) VALUES ('session',3,?)").run(JSON.stringify({ kind: 'text', text: 'Done now' }))
+  db.prepare("INSERT INTO agent_events (session_id, seq, event) VALUES ('session',3,?)").run(
+    JSON.stringify({ kind: 'text', text: 'Done now' }),
+  )
   await service.refresh(false)
   expect(analyze).toHaveBeenCalledTimes(3)
   await service.refresh()

@@ -112,7 +112,10 @@ export function InteractiveDocumentCard({
   const currentTheme = useRef(theme)
   currentTheme.current = theme
   const html = useMemo(
-    () => (document ? interactiveHtml(document.html, instance, state.current, currentTheme.current, document.reference.network) : ''),
+    () =>
+      document
+        ? interactiveHtml(document.html, instance, state.current, currentTheme.current, document.reference.network)
+        : '',
     [document, instance],
   )
   useEffect(() => {

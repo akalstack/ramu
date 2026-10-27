@@ -149,7 +149,10 @@ export class VideoFeed {
             for (const waiter of waiting) waiter(this.info)
           } else if (message.kind === 3) {
             const unit = { key: message.key, nalus: splitNalus(message.annexB) }
-            if (process.env.RAMU_DEBUG_VIDEO) console.error(`[video] unit key=${unit.key} nalus=${unit.nalus.length} bytes=${message.annexB.length} listeners=${this.listeners.size}`)
+            if (process.env.RAMU_DEBUG_VIDEO)
+              console.error(
+                `[video] unit key=${unit.key} nalus=${unit.nalus.length} bytes=${message.annexB.length} listeners=${this.listeners.size}`,
+              )
             for (const listener of [...this.listeners]) listener(unit)
           }
         }

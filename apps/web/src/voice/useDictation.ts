@@ -24,10 +24,7 @@ const read = (): VoiceSettings => {
 /** Voice choices belong to this computer's input devices: device storage, never host preferences or a paired host. */
 export function useVoiceSettings(): [VoiceSettings, (patch: Partial<VoiceSettings>) => void] {
   const [settings, setSettings] = useState(read)
-  useEffect(
-    () => deviceStorage.subscribe((key) => key === VOICE_SETTINGS_KEY && setSettings(read())),
-    [],
-  )
+  useEffect(() => deviceStorage.subscribe((key) => key === VOICE_SETTINGS_KEY && setSettings(read())), [])
   const update = useCallback((patch: Partial<VoiceSettings>) => {
     const next = { ...read(), ...patch }
     if (next.inputDeviceId === undefined) delete next.inputDeviceId

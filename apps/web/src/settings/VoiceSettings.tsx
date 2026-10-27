@@ -42,7 +42,10 @@ export function VoiceSettings() {
         setMicrophones(
           devices
             .filter((device) => device.kind === 'audioinput' && device.deviceId && device.deviceId !== 'default')
-            .map((device, index) => ({ id: device.deviceId, label: device.label || `${t('Microphone')} ${index + 1}` })),
+            .map((device, index) => ({
+              id: device.deviceId,
+              label: device.label || `${t('Microphone')} ${index + 1}`,
+            })),
         )
       })
       .catch(() => current && setMicrophones([]))
@@ -97,7 +100,9 @@ export function VoiceSettings() {
           )}
           {capability?.readiness === 'permission-denied' && (
             <SettingsRow>
-              <SettingsLabel title={t('Microphone or speech access is off. Turn it on in system settings to dictate.')} />
+              <SettingsLabel
+                title={t('Microphone or speech access is off. Turn it on in system settings to dictate.')}
+              />
               <Button variant="secondary" size="sm" onClick={() => void window.ramu.voice?.openSettings()}>
                 {t('Open settings')}
               </Button>

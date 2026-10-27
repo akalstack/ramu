@@ -2,7 +2,6 @@ import { realpath } from 'node:fs/promises'
 import { extname, isAbsolute, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-export { THEME_EDITOR_PREVIEW_URL as THEME_PREVIEW_URL } from '@ramu/shared/themePreview'
 export const THEME_PREVIEW_CSP = [
   "default-src 'none'",
   "script-src 'self' 'wasm-unsafe-eval'",

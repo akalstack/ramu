@@ -83,8 +83,6 @@ export const RECOVERABLE_MUTATIONS: ReadonlySet<string> = new Set([
 
 /** Path of the WebSocket upgrade. Credentials travel in the upgrade's Authorization header, never in the URL. */
 export const SOCKET_PATH = '/socket'
-/** Largest single frame either side accepts. */
-export const MAX_SOCKET_FRAME_BYTES = MAX_REQUEST_BYTES
 
 /**
  * Frames on the socket. `id` correlates one request with its answer and is unrelated to an `operationKey`, which

@@ -3,7 +3,8 @@ import { agentContent } from '@ramu/shared/chat/agentContent'
 import { toolFallbackTitle } from '../src/views/agent/lib/toolSummary'
 import type { ToolUse } from '../src/views/agent/types'
 
-const use = (over: Partial<ToolUse>) => ({ kind: 'tool-use', toolUseId: '1', name: 'x', summary: '', ...over }) as ToolUse
+const use = (over: Partial<ToolUse>) =>
+  ({ kind: 'tool-use', toolUseId: '1', name: 'x', summary: '', ...over }) as ToolUse
 
 describe('toolFallbackTitle', () => {
   it('names the tools a tool search loaded', () => {

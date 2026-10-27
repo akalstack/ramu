@@ -29,7 +29,8 @@ export class BrowserUploads {
       size > MAX_BROWSER_UPLOAD ||
       !name ||
       name.length > 255 ||
-      /[\/\\\x00-\x1f\x7f]/.test(name)
+      // eslint-disable-next-line no-control-regex -- rejects control characters on purpose
+      /[/\\\x00-\x1f\x7f]/.test(name)
     )
       throw new Error('Invalid browser upload file or size (maximum 8 MiB).')
     if (this.uploads.size >= 4) throw new Error('Too many browser uploads. Finish or cancel a transfer first.')

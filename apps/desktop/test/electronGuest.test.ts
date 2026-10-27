@@ -86,7 +86,7 @@ it('blocks native input until the runtime enables it and revokes it immediately'
 it('executes fixed inspection/action code in a separate world with caller text encoded as data', async () => {
   const page = create()
   mock.execute.mockResolvedValue({ ok: true })
-  const text = '\"); globalThis.compromised = true; //'
+  const text = '"); globalThis.compromised = true; //'
   await page.inspect()
   await page.act({ kind: 'type', ref: 2, snapshot: 3, text, submit: false })
   const [world, scripts] = mock.execute.mock.calls[1]!

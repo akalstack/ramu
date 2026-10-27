@@ -24,12 +24,22 @@
         "zod",
         "@electron-forge/*",
         "@ramu/web",
-        "babel-plugin-react-compiler"
+        "babel-plugin-react-compiler",
+        "@dagrejs/dagre",
+        "chart.js",
+        "esbuild",
+        "react",
+        "react-dom",
+        "ws"
       ]
     },
     "apps/mobile": {
-      "ignoreDependencies": ["expo-updates"],
+      "ignoreBinaries": ["eas"],
+      "ignoreDependencies": ["expo-updates", "escape-string-regexp"],
       "entry": ["plugins/*.cjs"]
+    },
+    "apps/server": {
+      "ignoreDependencies": ["@dagrejs/dagre", "chart.js", "react", "react-dom"]
     }
   },
   "ignoreIssues": {

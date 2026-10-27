@@ -35,7 +35,15 @@ describe('parseForgeRemote', () => {
 describe('origins', () => {
   it('accepts only a plain host or host:port', () => {
     expect(normalizeOrigin(' GHE.Example.com:8443 ')).toBe('ghe.example.com:8443')
-    for (const bad of ['https://github.com', 'github.com/path', 'a b', 'user@github.com', 'host:0', 'host:70000', '-bad.com'])
+    for (const bad of [
+      'https://github.com',
+      'github.com/path',
+      'a b',
+      'user@github.com',
+      'host:0',
+      'host:70000',
+      '-bad.com',
+    ])
       expect(normalizeOrigin(bad)).toBeNull()
   })
   it('maps github.com and Enterprise servers to their API bases', () => {
