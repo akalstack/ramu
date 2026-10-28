@@ -42,8 +42,7 @@ export function StashRow({
     return () => {
       disposed = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [expanded, files, taskId, binding.repoId, stash.oid, attempt] by design; the values it reads beyond these are current as of that run
-  }, [expanded, files, taskId, binding.repoId, stash.oid, attempt])
+  }, [expanded, files, taskId, binding.repoId, stash.oid, attempt, invoke])
   const openDiff = (file: GitCommitFile, preview?: false) =>
     ws.openView(taskId, {
       kind: 'diff',

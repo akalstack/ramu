@@ -150,8 +150,7 @@ export function LocalBrowserView({
           setError(t('The selected profile is no longer available. This tab opened in Default.'))
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [host, taskId, tabId, run, profile, search.template] by design; the values it reads beyond these are current as of that run
-    [host, taskId, tabId, run, profile, search.template],
+    [host, taskId, tabId, run, profile, search.template, setTab],
   )
 
   // A new tab opens the search engine's own page, ready to search from, rather than an empty pane.
@@ -168,8 +167,7 @@ export function LocalBrowserView({
     setTab(opened.tab)
     setAddress('')
     editingAddress.current = false
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [host, taskId, profile, run, search.template] by design; the values it reads beyond these are current as of that run
-  }, [host, taskId, profile, run, search.template])
+  }, [host, taskId, profile, run, search.template, setTab])
   const newTabRef = useRef(newTab)
   newTabRef.current = newTab
 
@@ -232,8 +230,7 @@ export function LocalBrowserView({
       offWanted()
       offNavigation()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [host, taskId, tabId, visible, view.id, view.tabId, view.url, profil...] by design; the values it reads beyond these are current as of that run
-  }, [host, taskId, tabId, visible, view.id, view.tabId, view.url, profile, run])
+  }, [host, taskId, tabId, visible, view.id, view.tabId, view.url, profile, run, setTab])
 
   // Restored panes retain their address without loading a website.
   useEffect(() => {

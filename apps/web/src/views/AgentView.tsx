@@ -404,8 +404,7 @@ export const AgentView = memo(function AgentView({
     }
     window.addEventListener(INTERACTIVE_FOLLOWUP_EVENT, receive)
     return () => window.removeEventListener(INTERACTIVE_FOLLOWUP_EVENT, receive)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [host.id, view.sessionId] by design; the values it reads beyond these are current as of that run
-  }, [host.id, view.sessionId])
+  }, [host.id, view.sessionId, setContentAttachments])
 
   const recallIntoComposer = (files: Attachment[], text: string) => {
     setAttachments((current) => [...current, ...files.filter((file) => !current.some((entry) => entry.id === file.id))])
