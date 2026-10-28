@@ -703,6 +703,7 @@ export default function SourceControl() {
           {/* One picker instead of tabs: a workspace project can hold any number of repositories. */}
           {repos.length > 1 ? (
             <Pressable
+              accessibilityRole="button"
               onPress={() => {
                 tap()
                 setSheet('repo')
@@ -732,6 +733,7 @@ export default function SourceControl() {
           {/* Branch picker and sync, like the desktop's Git controls. */}
           <View style={{ flexDirection: 'row', gap: space.s }}>
             <Pressable
+              accessibilityRole="button"
               onPress={() => {
                 tap()
                 setSheet('branch')
@@ -754,6 +756,7 @@ export default function SourceControl() {
               <ChevronDown size={15} color={c.muted} />
             </Pressable>
             <Pressable
+              accessibilityRole="button"
               disabled={busy || !gates.canRemote}
               onPress={() => {
                 tap()
@@ -1049,6 +1052,7 @@ export default function SourceControl() {
                 }}
               >
                 <Pressable
+                  accessibilityRole="button"
                   disabled={busy || !!blocked}
                   accessibilityState={{ disabled: busy || !!blocked }}
                   onPress={() => {

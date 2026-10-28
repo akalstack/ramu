@@ -47,6 +47,7 @@ function FileDiff({
   return (
     <Card>
       <Pressable
+        accessibilityRole="button"
         onPress={() => {
           tap()
           onToggle()
