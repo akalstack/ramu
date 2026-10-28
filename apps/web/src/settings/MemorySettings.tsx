@@ -113,8 +113,7 @@ export function MemoryBrowser() {
   })
   const { setQuery } = view
   const [editing, setEditing] = useState<{ id?: string; input: MemoryInput } | null>(null)
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mount only] by design; the values it reads beyond these are current as of that run
-  const reload = useCallback(() => invoke('memory.get').then(setSnapshot), [])
+  const reload = useCallback(() => invoke('memory.get').then(setSnapshot), [invoke])
   // A summary item that was clicked: show just that note, wherever it is.
   const focused = useRef<{ id: string; title: string } | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(null)

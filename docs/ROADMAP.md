@@ -22,7 +22,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Provider compatibility:** compatibility rules for OpenCode's ACP runner, Cursor and Antigravity after protocol checks; entry points that bypass `validateSettings`.
 - **Git hosting:** GitLab, Bitbucket Cloud and Azure DevOps. A new forge adds an adapter beside GitHub's in `apps/server/src/workspace/forge/`.
 - **Remote security:** remaining viewer write-surface controls. The server allowlist is the boundary, not hidden controls.
-- **Code quality:** about 150 effects and memos carry a `react-hooks/exhaustive-deps` disable naming the trigger they are keyed on. Replace each with explicit dependencies, an event handler or a ref after checking that the effect neither loops nor refetches. Replace `any` at the wire boundaries with validated types over time.
+- **Code quality:** about 145 effects and memos carry a `react-hooks/exhaustive-deps` disable naming the trigger they are keyed on. Replace each with explicit dependencies, an event handler or a ref after checking that the effect neither loops nor refetches. Replace `any` at the wire boundaries with validated types over time.
 
 ## Acceptance
 

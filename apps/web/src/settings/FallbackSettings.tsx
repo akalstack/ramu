@@ -422,8 +422,7 @@ function CodexHookRow({
   const [working, setWorking] = useState(false)
   useEffect(() => {
     void invoke('codex.hook.status').then(setStatus, () => setStatus({ trusted: false }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
-  }, [])
+  }, [invoke])
   const toggle = async (next: boolean) => {
     if (!next) return onChange(false)
     setWorking(true)
@@ -743,8 +742,7 @@ export function AdvisorSettings({
       (status) => setClaude(status.model),
       () => setClaude(null),
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
-  }, [])
+  }, [invoke])
   const advisor = value.advisor
   const set = (patch: Partial<AdvisorPreferences>) => onChange({ ...value, advisor: { ...advisor, ...patch } })
   /** Starts from Claude Code's own advisor model when one is set, otherwise the first default model. */

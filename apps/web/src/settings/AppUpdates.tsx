@@ -30,8 +30,7 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
       off()
       clearInterval(timer)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
-  }, [])
+  }, [invoke, on])
   const act = async (method: 'updates.check' | 'updates.download' | 'updates.restart' | 'background.restart') => {
     setBusy(true)
     setError(null)
