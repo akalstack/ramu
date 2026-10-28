@@ -12,7 +12,7 @@ Rules for human and agent contributors. Tools enforce what they can (`pnpm check
 
 - Prettier decides formatting (no semicolons, single quotes, 120 columns, trailing commas). Run `pnpm format`; do not hand-format.
 - `strict` and `noUncheckedIndexedAccess` are on. Narrow indexed reads instead of asserting with `!` unless the invariant is local and obvious.
-- Avoid `any`; use `unknown` and narrow, or a precise type. `any` is allowed only at the untyped wire boundaries and in tests listed in `eslint.config.mjs`; elsewhere it is a lint warning to fix. Do not add `@ts-ignore`; use `@ts-expect-error` with the reason, and only when the error is real.
+- Avoid `any`; use `unknown` and narrow, or a precise type. `any` is allowed only at the untyped wire boundaries and in tests listed in `eslint.config.mjs`; elsewhere it is a lint error. Do not add `@ts-ignore`; use `@ts-expect-error` with the reason, and only when the error is real.
 - Prefer `const`, early returns, small functions and discriminated unions over flags and optional-field bags. Name things for what they are, not how they are used.
 - Imports: ES modules only. Shared code is imported as `@ramu/shared/<folder>/<module>`; never reach into another package's `src` by relative path. `apps/server` must not import Electron or `apps/desktop`.
 - Throw `Error` with a message a person can act on (a sentence, no stack jargon). When rethrowing, pass `{ cause }`. Never put tokens, prompts or file contents in error text or logs.
@@ -40,7 +40,7 @@ Rules for human and agent contributors. Tools enforce what they can (`pnpm check
 
 ## Web (`apps/web`)
 
-- Function components and hooks. List every dependency. Omit one only when the effect is deliberately keyed on a trigger, and say why on the disable comment; never put a call, conditional or fresh object in a dependency array. Prefer an event handler or a ref over a suppressed effect. Existing disables are debt, not precedent.
+- Function components and hooks. List every dependency. Omit one only when the effect is deliberately keyed on a trigger, and say why on the disable comment; never put a call, conditional or fresh object in a dependency array. Prefer an event handler or a ref over a suppressed effect. Both `react-hooks/exhaustive-deps` and `no-explicit-any` are lint errors, so a new violation fails `pnpm check`; existing disables are debt, not precedent.
 - Server data goes through `ipc.ts` (`ramu.invoke`, `invokeOn`) and TanStack Query keys of the form `['ipc', hostId, method, ...]`. Do not keep a second copy of server state in component state.
 - Every visible string goes through `t()`; add the Indonesian translation in the same change ([Localization](LOCALIZATION.md)).
 - UI is composed from `components/ui` (upstream shadcn, never edited) through the app-owned wrappers (`desktop-button.tsx`, `row-button.tsx`, `drag-handle.tsx`, …). No raw `<button>`; `sharedButtons.test.ts` enforces it. See [UI](UI.md).

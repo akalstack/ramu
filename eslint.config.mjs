@@ -26,7 +26,7 @@ export default tseslint.config(
     rules: {
       'no-empty': ['error', { allowEmptyCatch: true }],
       '@typescript-eslint/no-unused-expressions': ['error', { allowShortCircuit: true, allowTernary: true }],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
@@ -37,7 +37,7 @@ export default tseslint.config(
     files: ['apps/web/**/*.{ts,tsx}', 'apps/site/**/*.{ts,tsx}', 'apps/mobile/**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser } },
     plugins: { 'react-hooks': reactHooks },
-    rules: { 'react-hooks/rules-of-hooks': 'error', 'react-hooks/exhaustive-deps': 'warn' },
+    rules: { 'react-hooks/rules-of-hooks': 'error', 'react-hooks/exhaustive-deps': 'error' },
   },
   {
     // Mobile webview scripts run snippets inside a browser page.
