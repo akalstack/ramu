@@ -57,7 +57,7 @@ import {
 import { ConnectionDot, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
-import { OfflineBanner, PendingBubble } from '../../../components/Outbox'
+import { PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
 import { Arrive, Presence, ChatStatus, useReducedMotion } from '../../../components/Motion'
@@ -936,9 +936,6 @@ export default function ChatScreen() {
                         {store.language === 'id' ? 'Tampilkan giliran sebelumnya' : 'Show earlier turns'}
                       </T>
                     </Pressable>
-                  ) : null}
-                  {offline ? (
-                    <OfflineBanner computer={computer?.name ?? 'Host unavailable'} pending={pending.length} />
                   ) : null}
                 </View>
               }

@@ -257,28 +257,22 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     },
   })
   const model = asModelChoice(agentDraft.settings)
-  const modelNotice =
-    !preset && agentDraft.blocked
-      ? t.projectModelHostUnknown
-      : agentDraft.choice.selection
-        ? t.projectModelManual
-        : agentDraft.invalid
-          ? t.projectModelInvalid
-          : !preset
-            ? t.projectModelHostUnknown
-            : agentDraft.loading
-              ? t.projectModelLoading
-              : agentDraft.unsupported
-                ? t.projectModelUnsupported
-                : agentDraft.defaults?.status === 'invalid'
-                  ? t.projectModelConfigInvalid
-                  : agentDraft.defaults?.reason === 'provider'
-                    ? t.projectModelProviderUnavailable
-                    : agentDraft.defaults?.reason === 'model'
-                      ? t.projectModelUnavailable
-                      : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
-                        ? t.projectModelCatalogFailed
-                        : t.projectModelDefault
+  // Only a problem that stops or changes the send is worth words above the composer; the usual states say nothing.
+  const modelNotice = agentDraft.invalid
+    ? t.projectModelInvalid
+    : !preset || agentDraft.choice.selection || agentDraft.loading
+      ? null
+      : agentDraft.unsupported
+        ? t.projectModelUnsupported
+        : agentDraft.defaults?.status === 'invalid'
+          ? t.projectModelConfigInvalid
+          : agentDraft.defaults?.reason === 'provider'
+            ? t.projectModelProviderUnavailable
+            : agentDraft.defaults?.reason === 'model'
+              ? t.projectModelUnavailable
+              : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
+                ? t.projectModelCatalogFailed
+                : null
   const chooseModel = (next: ModelChoice) =>
     agentDraft.change({
       ...agentDraft.settings,
@@ -544,12 +538,6 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
               <T size={font.hero} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
                 {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
               </T>
-              {offline ? (
-                <T
-                  tone="muted"
-                  style={{ textAlign: 'center' }}
-                >{`${pc?.name} is offline. The thread waits in the outbox and starts when it reconnects.`}</T>
-              ) : null}
             </View>
           </View>
         ) : (
@@ -561,20 +549,11 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           </View>
         )}
         <View style={{ paddingBottom: Math.max(insets.bottom, space.s) + (asTab && !keyboardInset ? space.m : 0) }}>
-          {agentDraft.defaults?.requested ||
-          agentDraft.blocked ||
-          agentDraft.choice.selection ||
-          agentDraft.unsupported ? (
+          {modelNotice || agentDraft.choice.selection || (agentDraft.blocked && preset) ? (
             <View style={{ paddingHorizontal: space.m, gap: space.s }}>
-              <T tone="muted" size={font.caption}>
-                {modelNotice}
-              </T>
-              {agentDraft.defaults?.requested ? (
+              {modelNotice ? (
                 <T tone="muted" size={font.caption}>
-                  {`${agentDraft.defaults.source ?? 'ramu.json'} · `}
-                  {[agentDraft.defaults.requested.provider, agentDraft.defaults.requested.model]
-                    .filter(Boolean)
-                    .join(' · ')}
+                  {modelNotice}
                 </T>
               ) : null}
               {agentDraft.choice.selection ? (

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useT } from '../i18n'
 import { WorktreeBaseReview } from './WorktreeBaseReview'
 import { ActionSheetIOS, Alert, Platform, Pressable, View } from 'react-native'
-import { Clock, CloudOff, CornerDownRight, ListPlus } from 'lucide-react-native'
+import { Clock, CornerDownRight, ListPlus } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore, type OutboxItem } from '../runtime/store'
 import { T, tap } from './ui'
@@ -158,27 +158,3 @@ export function PendingBubble({
 }
 
 /** Thin strip under the header while the chat's computer is unreachable. */
-export function OfflineBanner({ computer, pending }: { computer: string; pending: number }) {
-  const { c } = useTheme()
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.s,
-        marginHorizontal: space.l,
-        marginBottom: space.xs,
-        paddingHorizontal: space.m,
-        paddingVertical: space.s,
-        borderRadius: radius.m,
-        backgroundColor: c.warnWash,
-      }}
-    >
-      <CloudOff size={15} color={c.warn} />
-      <T size={font.control} tone="soft" style={{ flex: 1 }} numberOfLines={2}>
-        {computer} is offline. {pending ? `${pending} waiting in the outbox; ` : 'Messages wait in the outbox and '}they
-        send when it reconnects.
-      </T>
-    </View>
-  )
-}
