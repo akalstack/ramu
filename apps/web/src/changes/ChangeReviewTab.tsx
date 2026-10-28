@@ -202,7 +202,9 @@ export function ChangeReviewTab({
             </EmptyMedia>
             <EmptyTitle>{error ? t('Could not load changes') : t('No changes to review')}</EmptyTitle>
             <EmptyDescription>
-              {error ? t('Check the connection to the host, then try again.') : t('Changed files will appear here after the agent finishes.')}
+              {error
+                ? t('Check the connection to the host, then try again.')
+                : t('Changed files will appear here after the agent finishes.')}
             </EmptyDescription>
           </EmptyHeader>
           {error && (

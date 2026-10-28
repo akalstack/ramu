@@ -72,7 +72,8 @@ function UndoFiles({
     setBusy(true)
     setError(null)
     try {
-      if (Object.values(ws.dirty).some(Boolean)) throw new Error(t('Save or close unsaved files before restoring files.'))
+      if (Object.values(ws.dirty).some(Boolean))
+        throw new Error(t('Save or close unsaved files before restoring files.'))
       if (reviewId) await invoke('reviews.undoApply', preview.token, [...selected])
       else await invoke('reviews.chatUndoApply', preview.token, [...selected])
       onRestored()

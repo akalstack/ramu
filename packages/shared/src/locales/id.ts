@@ -3955,4 +3955,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "This path was not found in this thread’s folders, or it matches more than one place.": "Path ini tidak ditemukan di folder thread ini, atau cocok dengan lebih dari satu tempat.",
   "Update the host to save model defaults safely.": "Perbarui host agar default model tersimpan dengan aman.",
   "Update the host to save model preferences safely.": "Perbarui host agar preferensi model tersimpan dengan aman.",
+  "Could not load changes": "Tidak dapat memuat perubahan",
+  "Check the connection to the host, then try again.": "Periksa koneksi ke host, lalu coba lagi.",
 }
