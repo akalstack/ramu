@@ -1,3 +1,4 @@
+import { warmModelSets } from '../models/modelSetsCache'
 import { latestOnly } from '@ramu/shared/latestOnly'
 import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
 import { changesThreadSummary } from '@ramu/shared/chat/inputSummary'
@@ -441,74 +442,90 @@ const HostWorkspace = memo(function HostWorkspace({
     [invoke],
   )
 
-  // Restore the previous session's UI.
+  // Restore the previous session's UI. A host that is still connecting refuses the first calls, so a failed attempt
+  // tries again until the host answers; otherwise its store would never load.
+  const [restoreAttempt, setRestoreAttempt] = useState(0)
   useEffect(() => {
+    let cancelled = false
+    let retry: ReturnType<typeof setTimeout> | undefined
     void (async () => {
-      await refresh()
-      const saved = await invoke('ui.get')
-      let resume: {
-        workspace: WorkspaceUiState
-        tasks: Record<string, TaskUiState>
-        composing: string | null
-        composingWorkspace: string | null
-      } | null
       try {
-        resume = JSON.parse(storage.getItem('ramu.workspace.resume') ?? 'null')
-        if (resume?.workspace && resume?.tasks) {
-          saved.workspace = resume.workspace
-          saved.tasks = resume.tasks
-        } else resume = null
-      } catch {
-        resume = null
-      }
-      saved.tasks = Object.fromEntries(Object.entries(saved.tasks).map(([id, state]) => [id, persistentTaskUi(state)]))
-      const known = new Set([
-        ...(await invoke('tasks.list')).map((t) => t.id),
-        ...(await invoke('projects.list')).map((p) => projectCtx(p.id)),
-        ...(await orWhenUnknown(() => invoke('workspaces.list'), [])).map((w) => worktreeCtx(w.id)),
-      ])
-      const openTaskIds = saved.workspace.openTaskIds.filter((t) => known.has(t))
-      setUi({
-        ...saved.workspace,
-        openTaskIds,
-        activeTaskId:
-          resume && saved.workspace.activeTaskId && known.has(saved.workspace.activeTaskId)
-            ? saved.workspace.activeTaskId
-            : null,
-        sidebar: resume ? saved.workspace.sidebar : 'projects',
-      })
-      const contextsToRestore = new Set(openTaskIds.filter(isWorkspaceCtx))
-      for (const task of await invoke('tasks.list')) {
-        const own = saved.tasks[task.id]
-        if (!own || task.projectId === NO_PROJECT) continue
-        const ctx = workspaceOfTask(task)
-        if (openTaskIds.includes(task.id)) contextsToRestore.add(ctx)
-        const shared = saved.tasks[ctx] ?? { views: [], activeViewId: null }
-        shared.views = shared.views.filter((v) => v.kind !== 'agent')
-        for (const view of own.views.filter((v) => v.kind !== 'agent')) {
-          const existing = shared.views.find(
-            (v) => v.id === view.id || (view.kind !== 'terminal' && viewKey(v) === viewKey(view)),
-          )
-          if (!existing) shared.views.push(view)
-          else if (own.activeViewId === view.id) own.activeViewId = existing.id
+        await refresh()
+        const saved = await invoke('ui.get')
+        let resume: {
+          workspace: WorkspaceUiState
+          tasks: Record<string, TaskUiState>
+          composing: string | null
+          composingWorkspace: string | null
+        } | null
+        try {
+          resume = JSON.parse(storage.getItem('ramu.workspace.resume') ?? 'null')
+          if (resume?.workspace && resume?.tasks) {
+            saved.workspace = resume.workspace
+            saved.tasks = resume.tasks
+          } else resume = null
+        } catch {
+          resume = null
         }
-        own.views = own.views.filter((v) => v.kind === 'agent')
-        saved.tasks[ctx] = shared
-        persistence.touch(task.id)
-        persistence.touch(ctx)
-      }
-      setTaskUi(saved.tasks)
-      if (resume) for (const id of Object.keys(saved.tasks)) persistence.touch(id)
-      for (const ctx of Object.keys(saved.tasks).filter((ctx) => contextsToRestore.has(ctx))) await refreshBindings(ctx)
-      for (const t of openTaskIds) await refreshBindings(t)
-      setLoaded(true)
-      if (resume) {
-        setComposing(resume.composing)
-        setComposingWorkspace(resume.composingWorkspace)
-        storage.removeItem('ramu.workspace.resume')
+        saved.tasks = Object.fromEntries(
+          Object.entries(saved.tasks).map(([id, state]) => [id, persistentTaskUi(state)]),
+        )
+        const known = new Set([
+          ...(await invoke('tasks.list')).map((t) => t.id),
+          ...(await invoke('projects.list')).map((p) => projectCtx(p.id)),
+          ...(await orWhenUnknown(() => invoke('workspaces.list'), [])).map((w) => worktreeCtx(w.id)),
+        ])
+        const openTaskIds = saved.workspace.openTaskIds.filter((t) => known.has(t))
+        setUi({
+          ...saved.workspace,
+          openTaskIds,
+          activeTaskId:
+            resume && saved.workspace.activeTaskId && known.has(saved.workspace.activeTaskId)
+              ? saved.workspace.activeTaskId
+              : null,
+          sidebar: resume ? saved.workspace.sidebar : 'projects',
+        })
+        const contextsToRestore = new Set(openTaskIds.filter(isWorkspaceCtx))
+        for (const task of await invoke('tasks.list')) {
+          const own = saved.tasks[task.id]
+          if (!own || task.projectId === NO_PROJECT) continue
+          const ctx = workspaceOfTask(task)
+          if (openTaskIds.includes(task.id)) contextsToRestore.add(ctx)
+          const shared = saved.tasks[ctx] ?? { views: [], activeViewId: null }
+          shared.views = shared.views.filter((v) => v.kind !== 'agent')
+          for (const view of own.views.filter((v) => v.kind !== 'agent')) {
+            const existing = shared.views.find(
+              (v) => v.id === view.id || (view.kind !== 'terminal' && viewKey(v) === viewKey(view)),
+            )
+            if (!existing) shared.views.push(view)
+            else if (own.activeViewId === view.id) own.activeViewId = existing.id
+          }
+          own.views = own.views.filter((v) => v.kind === 'agent')
+          saved.tasks[ctx] = shared
+          persistence.touch(task.id)
+          persistence.touch(ctx)
+        }
+        setTaskUi(saved.tasks)
+        if (resume) for (const id of Object.keys(saved.tasks)) persistence.touch(id)
+        for (const ctx of Object.keys(saved.tasks).filter((ctx) => contextsToRestore.has(ctx)))
+          await refreshBindings(ctx)
+        for (const t of openTaskIds) await refreshBindings(t)
+        setLoaded(true)
+        if (resume) {
+          setComposing(resume.composing)
+          setComposingWorkspace(resume.composingWorkspace)
+          storage.removeItem('ramu.workspace.resume')
+        }
+      } catch {
+        if (!cancelled) retry = setTimeout(() => setRestoreAttempt((count) => count + 1), 1500)
       }
     })()
-  }, [refresh, refreshBindings, invoke, storage, persistence])
+    return () => {
+      cancelled = true
+      clearTimeout(retry)
+    }
+    // `restoreAttempt` re-runs the restore after a failed attempt.
+  }, [refresh, refreshBindings, invoke, storage, persistence, restoreAttempt])
   useEffect(
     () =>
       onWorkspaceVisibility(() => {
@@ -524,6 +541,10 @@ const HostWorkspace = memo(function HostWorkspace({
     savedUi.current = ui
   }, [persistence, ui, taskUi])
   useEffect(() => persistence.setLoaded(loaded), [persistence, loaded])
+  // Warm what this host's shell needs first, so putting it on screen later shows no start screen.
+  useEffect(() => {
+    if (loaded) void warmModelSets(hostId, (method) => invoke(method)).catch(() => {})
+  }, [loaded, hostId, invoke])
 
   // A chat that stops working while you look elsewhere stays marked until you open it. Each host keeps its own marks;
   // only the store on screen counts as watching, so a hidden host never clears the chat it last had open.

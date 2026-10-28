@@ -17,6 +17,7 @@ import {
 import { useAppSettings } from '../settings/AppSettings'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
+import { cachedModelSets, rememberModelSets } from './modelSetsCache'
 
 export const modelDisplayName = (name: string) =>
   name
@@ -58,11 +59,14 @@ const Context = createContext<{
 } | null>(null)
 
 export function ModelSetsProvider({ children }: { children: ReactNode }) {
-  const { invoke } = useHost()
+  const { id: hostId, invoke } = useHost()
   const { on } = useHostRuntime()
   const app = useAppSettings()
-  const [preferences, setPreferences] = useState<ModelPreferences | null>(null)
-  const [catalogs, setCatalogs] = useState<ProviderCatalog[]>([])
+  // A host's last answer is shown at once while a fresh one loads, so switching hosts never waits on the start screen.
+  const [preferences, setPreferences] = useState<ModelPreferences | null>(
+    () => cachedModelSets(hostId)?.preferences ?? null,
+  )
+  const [catalogs, setCatalogs] = useState<ProviderCatalog[]>(() => cachedModelSets(hostId)?.catalogs ?? [])
   const [error, setError] = useState<string | null>(null)
   const requests = useRef(0)
   const edits = useRef(0)
@@ -81,6 +85,7 @@ export function ModelSetsProvider({ children }: { children: ReactNode }) {
       const value = saved.status === 'fulfilled' && saved.value ? saved.value : defaults
       const updated = migrateModelDefaults(value, defaults)
       setPreferences(updated)
+      rememberModelSets(hostId, { preferences: updated, catalogs: list })
       if (updated !== value)
         void invoke('settings.app.snapshot')
           .then((snapshot) => {
@@ -101,16 +106,18 @@ export function ModelSetsProvider({ children }: { children: ReactNode }) {
       disposed = true
       requests.current = request + 1
     }
-  }, [invoke, providerSelection])
+  }, [invoke, providerSelection, hostId])
   useEffect(
     () =>
       on('settings:models', (value) => {
         edits.current++
         pushed.current = value
         setPreferences(value)
+        const known = cachedModelSets(hostId)
+        if (known) rememberModelSets(hostId, { ...known, preferences: value })
         setError(null)
       }),
-    [on],
+    [on, hostId],
   )
   if (!preferences) return <BootScreen />
   const selected =
