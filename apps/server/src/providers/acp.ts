@@ -31,6 +31,8 @@ import { noteRuntimeTransports } from './runtimeTransports'
 import { ACP_TERMINAL_METHODS, type AcpTerminalHost } from './acpTerminals'
 import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 
+/** How long a cancelled turn may take to end before steering or interrupting gives up. */
+const cancelWaitMs = () => Number(process.env.RAMU_ACP_CANCEL_WAIT_MS) || 15_000
 type Wire = Record<string, any>
 type AcpProvider = 'cursor' | 'antigravity' | 'opencode'
 /** Trust qualified tool identities, never arguments or a command's descriptive title. */
@@ -657,7 +659,7 @@ class AcpSession implements AgentRunner {
     try {
       this.rpc.write({ method: 'session/cancel', params: { sessionId: this.sessionId } })
       this.cancelPending()
-      await this.active
+      await this.cancelled()
     } finally {
       this.steering = false
     }
@@ -667,8 +669,22 @@ class AcpSession implements AgentRunner {
     if (this.active) {
       this.rpc?.write({ method: 'session/cancel', params: { sessionId: this.sessionId } })
       this.cancelPending()
-      await this.active
+      await this.cancelled()
     }
+  }
+  /** Waits for a cancelled turn to end. A runtime that ignores `session/cancel` must not hang the caller. */
+  private async cancelled(): Promise<void> {
+    const active = this.active
+    if (!active) return
+    let timer: NodeJS.Timeout | undefined
+    const gave = await Promise.race([
+      active.then(() => false),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(true), cancelWaitMs())
+        timer.unref()
+      }),
+    ]).finally(() => clearTimeout(timer))
+    if (gave && this.active === active) throw new Error('The runtime did not stop the running turn. Try again.')
   }
   async stop(): Promise<void> {
     this.stopped = true

@@ -225,15 +225,22 @@ export class SubagentRunner {
             root: join(isolationRoot, randomUUID()),
           })
         : null
-    const child = this.host.createSession(
-      parent.taskId,
-      isolation
-        ? { cwd: isolation.cwd, additionalDirs: isolation.additionalDirs, covers: isolation.covers }
-        : { cwd: parent.cwd, additionalDirs: parent.additionalDirs, covers: parent.covers },
-      target.settings,
-      'starting',
-      parentId,
-    )
+    let child: ReturnType<typeof this.host.createSession>
+    try {
+      child = this.host.createSession(
+        parent.taskId,
+        isolation
+          ? { cwd: isolation.cwd, additionalDirs: isolation.additionalDirs, covers: isolation.covers }
+          : { cwd: parent.cwd, additionalDirs: parent.additionalDirs, covers: parent.covers },
+        target.settings,
+        'starting',
+        parentId,
+      )
+    } catch (error) {
+      // The copy is useless without a session to work in; do not leave worktrees behind.
+      if (isolation) await removeIsolation(isolation).catch(() => {})
+      throw error
+    }
     // A helper never inherits Shared MCP access, so say what it starts without instead of leaving it to be discovered.
     try {
       const note = this.host.helperSetupNote()?.(child)
@@ -324,14 +331,19 @@ export class SubagentRunner {
         clearTimeout(timer)
         resolve(result)
       }
-      signal?.addEventListener(
-        'abort',
-        () => {
-          clearTimeout(timer)
-          if (!run.settled) this.host.stop(child.id)
-        },
-        { once: true },
-      )
+      const onAbort = () => {
+        clearTimeout(timer)
+        if (!run.settled) this.host.stop(child.id)
+      }
+      if (signal?.aborted) onAbort()
+      else {
+        signal?.addEventListener('abort', onAbort, { once: true })
+        const settled = run.waiter
+        run.waiter = (result) => {
+          signal?.removeEventListener('abort', onAbort)
+          settled?.(result)
+        }
+      }
     })
   }
 

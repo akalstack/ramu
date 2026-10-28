@@ -398,6 +398,8 @@ export class GoalManager {
       this.scheduleGoal(id, Math.min(60_000, goal.retryAt! - Date.now()))
       return
     }
+    // Another timer may have started a dispatch while this one awaited the catalog.
+    if (this.goalDispatching.has(id) || this.host.shutdown()) return
     this.goalDispatching.add(id)
     const revision = this.host.revisions.get(id) ?? 0
     try {

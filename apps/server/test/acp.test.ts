@@ -60,7 +60,7 @@ rl.on('line',line=>{
   send({id:m.id,result:session});
  }
  if(['session/set_config_option','session/set_model','session/set_mode'].includes(m.method))send({id:m.id,result:{}});
- if(m.method==='session/cancel')send({id:promptID,result:{stopReason:'cancelled'}});
+ if(m.method==='session/cancel'&&!process.env.RAMU_IGNORE_CANCEL)send({id:promptID,result:{stopReason:'cancelled'}});
  if(m.method==='session/prompt'){
   promptID=m.id;current=m.params.prompt[0].text;
   if(current==='limit'){send({id:m.id,error:{code:-32000,message:'quota exceeded 429'}});return;}
@@ -303,6 +303,13 @@ it('steers by cancelling the running turn and continuing with the new message, r
   expect(events.filter((e) => e.kind === 'result')).toEqual([
     expect.objectContaining({ isError: true, text: expect.stringContaining('quota') }),
   ])
+})
+it('gives up on a runtime that ignores cancel instead of hanging steer and interrupt', async () => {
+  vi.stubEnv('RAMU_IGNORE_CANCEL', '1')
+  vi.stubEnv('RAMU_ACP_CANCEL_WAIT_MS', '100')
+  await start('long')
+  await expect(runner!.interrupt()).rejects.toThrow(/did not stop/)
+  await expect(runner!.steer('limit')).rejects.toThrow(/did not stop/)
 })
 it('refuses to steer when no turn is running', async () => {
   await start('limit')

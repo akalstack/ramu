@@ -439,7 +439,15 @@ export class OpenCodeSession implements AgentRunner {
     this.cancelPending()
     this.events.abort()
     this.turn?.done({ interrupted: true })
-    this.child?.kill()
+    const child = this.child
+    if (!child) return
+    child.kill()
+    // A server that ignores SIGTERM must not outlive the chat.
+    if (child.exitCode === null && child.signalCode === null) {
+      const timer = setTimeout(() => child.kill('SIGKILL'), 3000)
+      timer.unref()
+      child.once('exit', () => clearTimeout(timer))
+    }
   }
 
   replyPermission(id: string, allow: boolean): void {
