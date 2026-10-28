@@ -3957,4 +3957,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Update the host to save model preferences safely.": "Perbarui host agar preferensi model tersimpan dengan aman.",
   "Could not load changes": "Tidak dapat memuat perubahan",
   "Check the connection to the host, then try again.": "Periksa koneksi ke host, lalu coba lagi.",
+  "Delete “{name}” permanently? Its history is deleted too.": "Hapus “{name}” secara permanen? Riwayatnya juga ikut terhapus.",
 }

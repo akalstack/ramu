@@ -348,7 +348,10 @@ export function MemoryBrowser() {
                     size="icon-xs"
                     className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center"
                     aria-label={t('Delete memory')}
-                    onClick={() => void act(() => invoke('memory.delete', m.id))}
+                    onClick={() => {
+                      if (confirm(t('Delete “{name}” permanently? Its history is deleted too.', { name: m.title })))
+                        void act(() => invoke('memory.delete', m.id))
+                    }}
                   >
                     <Trash2 size={12} />
                   </Button>
