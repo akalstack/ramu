@@ -1021,12 +1021,13 @@ export async function codexAside(options: {
       ...(options.model ? { model: options.model } : {}),
       ...(options.effort ? { effort: options.effort } : {}),
     })
+    let timer: NodeJS.Timeout | undefined
     await Promise.race([
       done,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('The side question timed out')), options.timeoutMs ?? 120_000),
-      ),
-    ])
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('The side question timed out')), options.timeoutMs ?? 120_000)
+      }),
+    ]).finally(() => clearTimeout(timer))
     if (!answer.trim()) throw new Error('No answer came back')
     return answer.trim()
   } finally {

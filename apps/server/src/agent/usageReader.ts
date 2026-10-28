@@ -1,4 +1,5 @@
 import { tmpdir } from 'node:os'
+import { timeout } from './util'
 import type { Query } from '@anthropic-ai/claude-agent-sdk'
 import type { UsageReading } from '@ramu/shared/types'
 import { providerEnvironment } from '../providers/providerBinaries'
@@ -51,10 +52,11 @@ export class ClaudeUsageReader {
       },
     })
     try {
-      const response = await Promise.race([
+      const response = await timeout(
         query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out')), 20_000)),
-      ])
+        20_000,
+        'timed out',
+      )
       return claudeUsageReadings(response as ClaudeUsageResponse)
     } finally {
       input.close()
@@ -83,10 +85,11 @@ export class ClaudeUsageReader {
       },
     })
     try {
-      const response = await Promise.race([
+      const response = await timeout(
         query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out')), 20_000)),
-      ])
+        20_000,
+        'timed out',
+      )
       const readings = claudeUsageReadings(response as ClaudeUsageResponse)
       if (readings.length) this.host.usage()!.update(readings)
     } catch {
