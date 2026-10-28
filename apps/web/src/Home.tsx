@@ -7,6 +7,8 @@ import { AgentList, recentlyCompleted, rowsOf, useAgentOverview } from './HomeAg
 import { FeedSection } from './HomeSection'
 import { RecapCard, useRecaps } from './inbox/recaps'
 import { openInbox } from './inbox/navigation'
+import { useHost } from './workspace/HostProvider'
+import { errorText } from './lib/errors'
 
 const GLANCE = 3
 
@@ -17,6 +19,7 @@ const GLANCE = 3
 export function HomeFeed() {
   useLanguage()
   const ws = useWorkspace()
+  const host = useHost()
   const { groups, error } = useAgentOverview()
   const recaps = useRecaps()
   const waiting = rowsOf(groups, 'Waiting for your input')
@@ -44,9 +47,10 @@ export function HomeFeed() {
           <ChevronRight size={12} />
         </Button>
       </nav>
-      {error && (
+      {/* A host that is offline or rejected says so in the status bar; its failed read adds nothing but noise. */}
+      {error && (host.status === 'connected' || host.status === null) && (
         <p role="alert" className="text-bad small text-caption">
-          {String(error)}
+          {errorText(error)}
         </p>
       )}
       {waiting.length > 0 && (
