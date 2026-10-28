@@ -329,6 +329,18 @@ describe('run end and shutdown', () => {
     expect(runtime.list()[0]!.controller).toBe('none')
   })
 
+  it('forgets a tab and releases its temporary data even when its page fails to destroy', async () => {
+    const { runtime, created, cleared } = setup()
+    const { tab } = await runtime.open(user, 'https://a.test', 'temporary')
+    created[0]!.page.destroy = () => {
+      throw new Error('already destroyed')
+    }
+    runtime.closeAll()
+    expect(runtime.list()).toEqual([])
+    expect(cleared).toEqual([created[0]!.partition])
+    expect(tab.id).toBeTruthy()
+  })
+
   it('closeAll destroys every page and refuses new tabs', async () => {
     const { runtime, created } = setup()
     await runtime.open(user, 'https://a.test')

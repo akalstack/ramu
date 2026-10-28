@@ -555,7 +555,11 @@ export class BrowserRuntime {
   private destroy(tab: Tab) {
     this.downloads?.revoke(tab.id)
     this.uploads.closeTab(tab.id)
-    tab.page.destroy()
+    try {
+      tab.page.destroy()
+    } catch {
+      // A page that is already gone must not leave its tab registered or its temporary data behind.
+    }
     this.tabs.delete(tab.id)
     const last = ![...this.tabs.values()].some((other) => other.partition === tab.partition)
     if (last && tab.profileId === TEMPORARY_PROFILE_ID) {
