@@ -34,7 +34,14 @@ it.skipIf(!existsSync(executable))(
     const text = async (id: string) => {
       let last = ''
       for (let attempt = 0; attempt < 50; attempt++) {
-        last = (await browser.read('local', 'thread', id)).text
+        try {
+          last = (await browser.read('local', 'thread', id)).text
+        } catch (error) {
+          // The page re-lays out while it is read, which invalidates that snapshot; read again.
+          if (!/Take a new snapshot|Wait for the current/.test(String((error as Error).message))) throw error
+          await new Promise((resolve) => setTimeout(resolve, 100))
+          continue
+        }
         if (!expected || last.includes(expected)) return last
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
