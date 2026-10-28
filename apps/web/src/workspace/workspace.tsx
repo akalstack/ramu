@@ -308,6 +308,14 @@ export function WorkspaceProvider({
     status: (host) => computers?.computers.find((computer) => computer.id === host)?.status ?? null,
   })
   const mounted = hosts.join('\n')
+  // The shell stays on the host that was on screen until the new host's store has loaded, so a switch never falls
+  // back to the start screen. Before anything has loaded, `active` is what is shown.
+  const activeLoaded = useSyncExternalStore(subscribePublished, () => published.has(active))
+  const [presented, setPresented] = useState(active)
+  const shown = activeLoaded || !hosts.includes(presented) ? active : presented
+  useEffect(() => {
+    if (shown !== presented) setPresented(shown)
+  }, [shown, presented])
   useEffect(() => runtimes.retain(mounted.split('\n')), [mounted])
   useEffect(() => {
     if (computers) mountRequests.retain((host) => computers.computers.some((computer) => computer.id === host))
@@ -316,7 +324,7 @@ export function WorkspaceProvider({
     <>
       {hosts.map((host) => (
         <HostWorkspace key={host} hostId={host} active={host === active}>
-          {host === active ? children : null}
+          {host === shown ? children : null}
         </HostWorkspace>
       ))}
     </>
