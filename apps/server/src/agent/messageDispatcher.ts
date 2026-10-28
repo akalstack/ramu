@@ -43,6 +43,9 @@ export class MessageDispatcher {
 
   private wakingWorkspace = false
 
+  /** A wake that arrived mid-pass; the pass already visited the sessions it could have helped, so it runs again. */
+  private wakeAgain = false
+
   async withWorkspaceReservation<T>(covers: string[], action: () => Promise<T>): Promise<T> {
     if (
       this.host.activeWriter(covers) ||
@@ -352,7 +355,11 @@ export class MessageDispatcher {
   }
 
   wakeWorkspaceQueue(): void {
-    if (this.wakingWorkspace || this.host.shutdown()) return
+    if (this.host.shutdown()) return
+    if (this.wakingWorkspace) {
+      this.wakeAgain = true
+      return
+    }
     this.wakingWorkspace = true
     queueMicrotask(() => {
       void (async () => {
@@ -366,6 +373,10 @@ export class MessageDispatcher {
           }
         } finally {
           this.wakingWorkspace = false
+          if (this.wakeAgain) {
+            this.wakeAgain = false
+            this.wakeWorkspaceQueue()
+          }
         }
       })().catch(() => {})
     })

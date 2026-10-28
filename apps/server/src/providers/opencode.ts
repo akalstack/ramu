@@ -343,6 +343,8 @@ export class OpenCodeSession implements AgentRunner {
     }
     const server = await startServer(this.scope.cwd, env)
     this.child = server.child
+    // stop() ran while the server was still starting, when there was no child to kill yet.
+    if (this.stopped) server.child.kill()
     server.child.once('exit', (code) => {
       if (this.stopped) return
       this.emit({ kind: 'error', message: `OpenCode exited (${code ?? 'signal'})` })

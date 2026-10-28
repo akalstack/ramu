@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type AgentScope } from '@ramu/shared/types'
 import { CursorSession, cursorModel } from '../src/providers/cursor'
 import {
@@ -437,4 +440,39 @@ it('shows Cursor workspace configuration without claiming a verified connection'
     source: 'configuration',
     servers: [{ name: 'ramu', status: 'configured' }],
   })
+})
+
+describe('OpenCode server lifecycle', () => {
+  it('does not leave a server running when the chat is stopped while it was still starting', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ramu-opencode-'))
+    const bin = join(dir, 'opencode')
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env node
+require('node:fs').writeFileSync(process.env.RAMU_PID_FILE, String(process.pid));
+setTimeout(() => console.log('opencode server listening on http://127.0.0.1:1'), 300);
+setInterval(() => {}, 1000);
+`,
+    )
+    chmodSync(bin, 0o755)
+    vi.stubEnv('RAMU_OPENCODE_BIN', bin)
+    vi.stubEnv('RAMU_PID_FILE', join(dir, 'pid'))
+    const runner = new OpenCodeSession(
+      { ...scope, cwd: dir },
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode' },
+      () => {},
+    )
+    const started = runner.start('hello', null).catch(() => {})
+    try {
+      await vi.waitFor(() => expect(readFileSync(join(dir, 'pid'), 'utf8')).not.toBe(''))
+      const pid = Number(readFileSync(join(dir, 'pid'), 'utf8'))
+      await runner.stop()
+      await started
+      await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 5000 })
+    } finally {
+      await runner.stop()
+      vi.unstubAllEnvs()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15_000)
 })

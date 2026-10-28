@@ -10,7 +10,7 @@ import {
   codexHelperHistory,
   toolOfOtherItem,
 } from '../src/providers/codex'
-import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
+import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
 
 let tmp: string
 beforeEach(() => {
@@ -172,6 +172,23 @@ describe('Codex app-server wire adapter', () => {
         .filter((message) => message.method === 'thread/read')
         .every((message) => message.params.includeTurns),
     ).toBe(true)
+  })
+  it('starts each streamed message from empty once the previous one with that id completed', async () => {
+    const events: AgentEvent[] = []
+    const runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'full' }, (event) =>
+      events.push(event),
+    )
+    const results = () => events.filter((event) => event.kind === 'result').length
+    try {
+      await runner.start('hello', null)
+      await vi.waitFor(() => expect(results()).toBe(1))
+      await runner.send!('hello again')
+      await vi.waitFor(() => expect(results()).toBe(2))
+      const streamed = events.filter((event) => event.kind === 'text').map((event) => event.text)
+      expect(streamed).toEqual(['Hello ', 'Hello Ramu', 'Hello Ramu', 'Hello ', 'Hello Ramu', 'Hello Ramu'])
+    } finally {
+      await runner.stop()
+    }
   })
   it('reads thread-scoped MCP status across pages and reloads without starting another turn', async () => {
     const runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, () => {})

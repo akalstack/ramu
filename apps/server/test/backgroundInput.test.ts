@@ -97,3 +97,44 @@ it('prevents duplicate sends while the checkout is being validated', async () =>
   await first
   expect(send).toHaveBeenCalledOnce()
 })
+
+it('revisits a session skipped as busy when the workspace frees during a pass', async () => {
+  const sessions: Record<string, { state: string; covers: string[] }> = {
+    a: { state: 'idle', covers: ['/a'] },
+    b: { state: 'idle', covers: ['/b'] },
+  }
+  const queues: Record<string, QueuedMessage[]> = {
+    a: [{ id: 'ma', text: 'A', mode: 'queue' }],
+    b: [{ id: 'mb', text: 'B', mode: 'queue' }],
+  }
+  let release!: () => void
+  const slow = new Promise<void>((resolve) => (release = resolve))
+  const sent: string[] = []
+  const d = new MessageDispatcher({
+    shutdown: () => false,
+    get: (id: string) => ({ id, ...sessions[id]! }),
+    queued: (id: string) => queues[id]!,
+    queuePaused: () => false,
+    providerWait: () => null,
+    transitioning: new Set(),
+    activeWriter: () => null,
+    record: (id: string, event: AgentEvent) => {
+      if (event.kind === 'queue') queues[id] = event.messages
+    },
+    send: async (id: string) => {
+      sent.push(id)
+      if (id === 'a') await slow
+    },
+  } as unknown as MessageDispatcherHost)
+  d.workspaceReservations.add('/b')
+  d.workspaceQueue.add('b')
+  d.workspaceQueue.add('a')
+  d.wakeWorkspaceQueue()
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  expect(sent).toEqual(['a'])
+  d.workspaceReservations.delete('/b')
+  d.wakeWorkspaceQueue()
+  release()
+  await new Promise<void>((resolve) => setTimeout(resolve, 10))
+  expect(sent).toEqual(['a', 'b'])
+})

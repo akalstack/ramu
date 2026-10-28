@@ -561,6 +561,7 @@ class CodexSession implements CodexRunner {
       this.messages.delete(`${threadId}:${item.id}`)
       this.emit({ kind: 'text', text: item.text, messageId: `${threadId}:${item.id}`, ...tag })
     }
+    if (item.type === 'reasoning' && complete) this.thoughts.delete(`${threadId}:${item.id}`)
     const extra = toolOfOtherItem(item)
     if (extra)
       this.emit(
@@ -768,9 +769,11 @@ class CodexSession implements CodexRunner {
             this.emit({ kind: 'compaction', state: 'completed' })
         }
       }
+      if (item.type === 'agentMessage' && complete) this.messages.delete(item.id)
       if (item.type === 'agentMessage' && complete && item.text)
         this.emit({ kind: 'text', text: item.text, messageId: item.id })
       if (item.type === 'reasoning' && complete) {
+        this.thoughts.delete(`${this.threadId}:${item.id}`)
         const text = (Array.isArray(item.summary) ? item.summary : [])
           .filter((part: unknown) => typeof part === 'string' && part.trim())
           .join('\n\n')
