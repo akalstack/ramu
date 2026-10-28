@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, ArrowUpRight, Hand, Plus, RotateCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ArrowUpRight, Hand, Plus, RotateCw } from 'lucide-react'
 import type { BrowserDialog } from '@ramu/shared/browserBridge'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import type { ViewDescriptor } from '@ramu/shared/types'
@@ -310,10 +310,6 @@ export function LocalBrowserView({
     setTab(rest[0]!)
     setAddress(rest[0]!.url)
   }
-  const closeTab = async () => {
-    if (tab) await closeOther(tab)
-    else ws.closeView(taskId, view.id)
-  }
 
   const select = (entry: BrowserTabInfo) => {
     navigationGeneration.current++
@@ -535,15 +531,6 @@ export function LocalBrowserView({
             <ArrowUpRight size={14} />
           </Button>
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('Close tab')}
-          onClick={() => void closeTab()}
-        >
-          <X size={14} />
-        </Button>
       </form>
       {(error || listError || tab?.crashed || (tab && (tab.released || controllerText(tab.controller)))) && (
         <p

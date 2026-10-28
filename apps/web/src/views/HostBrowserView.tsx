@@ -1,5 +1,5 @@
 import { BrowserInputQueue, watchBrowserFrames } from '@ramu/shared/browserLiveViewer'
-import { BrowserTabButton } from '@/components/browser-tab-controls'
+import { BrowserTabButton, BrowserTabCloseButton, BrowserTabFrame } from '@/components/browser-tab-controls'
 import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Plus, RotateCw, X } from 'lucide-react'
@@ -300,34 +300,44 @@ export function HostBrowserView({
           className="flex items-center gap-1 overflow-x-auto border-b border-(--line) p-1"
         >
           {tabs.map((entry) => (
-            <BrowserTabButton
-              key={entry.id}
-              aria-selected={entry.id === tab?.id}
-              disabled={viewOnly}
-              onClick={() => {
-                if (!allowed()) return
-                setSelected(entry.id)
-                addressEdited.current = false
-                setAddress(entry.url)
-                setImage(null)
-                setOwned(null)
-              }}
-            >
-              {browserFaviconFrom(entry.url, entry.faviconUrl) && (
-                <img
-                  alt=""
-                  aria-hidden="true"
-                  width={14}
-                  height={14}
-                  referrerPolicy="no-referrer"
-                  src={entry.faviconUrl}
-                  onError={(event) => {
-                    event.currentTarget.style.visibility = 'hidden'
-                  }}
-                />
+            <BrowserTabFrame key={entry.id} active={entry.id === tab?.id}>
+              <BrowserTabButton
+                aria-selected={entry.id === tab?.id}
+                disabled={viewOnly}
+                onClick={() => {
+                  if (!allowed()) return
+                  setSelected(entry.id)
+                  addressEdited.current = false
+                  setAddress(entry.url)
+                  setImage(null)
+                  setOwned(null)
+                }}
+              >
+                {browserFaviconFrom(entry.url, entry.faviconUrl) && (
+                  <img
+                    alt=""
+                    aria-hidden="true"
+                    width={14}
+                    height={14}
+                    referrerPolicy="no-referrer"
+                    src={entry.faviconUrl}
+                    onError={(event) => {
+                      event.currentTarget.style.visibility = 'hidden'
+                    }}
+                  />
+                )}
+                <span className="truncate">{entry.title || entry.url}</span>
+              </BrowserTabButton>
+              {entry.id === tab?.id && (
+                <BrowserTabCloseButton
+                  aria-label={t('Close tab')}
+                  disabled={!controlled || busy}
+                  onClick={() => void act(() => host.invoke('hostBrowser.close', taskId, entry.id))}
+                >
+                  <X size={12} />
+                </BrowserTabCloseButton>
               )}
-              <span className="truncate">{entry.title || entry.url}</span>
-            </BrowserTabButton>
+            </BrowserTabFrame>
           ))}
         </div>
         <form
@@ -399,16 +409,6 @@ export function HostBrowserView({
               {controlled ? t('Give control to agent') : t('Take control')}
             </Button>
           )}
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t('Close tab')}
-            disabled={!controlled || busy}
-            onClick={() => tab && void act(() => host.invoke('hostBrowser.close', taskId, tab.id))}
-          >
-            <X size={14} />
-          </Button>
         </form>
         <p className="m-0 px-3 py-1 text-caption text-muted-foreground">
           {t('Browser runs on the selected execution host. Sign-ins stay there.')}
