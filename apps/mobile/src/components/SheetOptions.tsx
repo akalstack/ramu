@@ -1,5 +1,5 @@
 import { Children, Fragment, isValidElement, type ReactNode } from 'react'
-import { Platform, View } from 'react-native'
+import { View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { Card, Divider, Row, SectionLabel, T, tap, type Icon } from './ui'
@@ -13,13 +13,7 @@ export function SheetGroup({ title, footer, children }: { title?: string; footer
   return (
     <View style={{ paddingTop: title ? 0 : space.m }}>
       {title ? <SectionLabel>{title}</SectionLabel> : null}
-      <Card
-        style={{
-          marginHorizontal: space.l,
-          // Android settings lists sit flat on the sheet, as the Material sheet and Settings do.
-          ...(Platform.OS === 'android' ? { backgroundColor: 'transparent', borderRadius: 0 } : {}),
-        }}
-      >
+      <Card style={{ marginHorizontal: space.l }}>
         {rows.map((row, index) => (
           <View key={isValidElement(row) && row.key != null ? row.key : index}>
             {index ? <Divider inset={space.l} /> : null}
@@ -127,9 +121,6 @@ export function SheetPanelGroup({ title, children }: { title: string; children: 
         style={{
           marginHorizontal: space.l,
           padding: space.m,
-          ...(Platform.OS === 'android'
-            ? { backgroundColor: 'transparent', borderRadius: 0, paddingHorizontal: 0 }
-            : {}),
         }}
       >
         {children}

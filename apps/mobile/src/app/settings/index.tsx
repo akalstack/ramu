@@ -89,7 +89,6 @@ export default function SettingsMenu() {
           <Card
             style={{
               marginHorizontal: space.l,
-              ...(Platform.OS === 'android' ? { backgroundColor: 'transparent', borderRadius: 0 } : {}),
             }}
           >
             {results.length ? (
@@ -104,7 +103,7 @@ export default function SettingsMenu() {
                         {sectionLabel(hit.section, language)}
                       </T>
                     </View>
-                    {Platform.OS !== 'android' ? <ChevronRight size={16} color={c.muted} /> : null}
+                    <ChevronRight size={16} color={c.muted} />
                   </Row>
                 </View>
               ))
@@ -123,7 +122,6 @@ export default function SettingsMenu() {
                 <Card
                   style={{
                     marginHorizontal: space.l,
-                    ...(Platform.OS === 'android' ? { backgroundColor: 'transparent', borderRadius: 0 } : {}),
                   }}
                 >
                   {SETTINGS_SECTIONS.filter((section) => section.group === group.id).map((section, index) => (
@@ -132,7 +130,7 @@ export default function SettingsMenu() {
                       <Row onPress={() => open(section.id)}>
                         <SectionIcon section={section.id} />
                         <T style={{ flex: 1 }}>{section.label[language]}</T>
-                        {Platform.OS !== 'android' ? <ChevronRight size={16} color={c.muted} /> : null}
+                        <ChevronRight size={16} color={c.muted} />
                       </Row>
                     </View>
                   ))}

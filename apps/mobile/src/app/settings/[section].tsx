@@ -176,7 +176,7 @@ function BusyBehavior({ computerId }: { computerId: string }) {
           onPress={() => router.dismissTo({ pathname: '/', params: { filter: 'archived' } })}
         >
           <T style={{ flex: 1 }}>{t.homeArchived}</T>
-          {Platform.OS !== 'android' ? <ChevronRight size={16} color={c.muted} /> : null}
+          <ChevronRight size={16} color={c.muted} />
         </Row>
       </Card>
     </>

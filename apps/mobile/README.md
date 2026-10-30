@@ -25,7 +25,7 @@ A native tab bar (Liquid Glass on iOS 26) with four places, each with its own st
 - **Schedules:** the host's schedules with next and last runs; swipe to pause, run now or delete; the editor covers daily, weekly, monthly, interval and one-time rules.
 - **Search:** finds threads on every host.
 
-Every tab has a primary action and a Settings button. With no host paired, or a revoked or offline one, the primary action explains why and offers Pair or Reconnect. Switch hosts from the host row on Threads and Schedules. Pop-ups are one `Sheet` component: the Material 3 modal bottom sheet on Android (`MaterialSheet.android.tsx`), a glass sheet elsewhere. Android uses the native stack header, Material 3 bottom bar and one shared `Toggle`.
+Every tab has a primary action and a Settings button. With no host paired, or a revoked or offline one, the primary action explains why and offers Pair or Reconnect. Switch hosts from the host row on Threads and Schedules. Pop-ups are one `Sheet` component: the Material 3 modal bottom sheet on Android (`MaterialSheet.android.tsx`), a glass sheet elsewhere. Android uses the native stack header, Material 3 bottom bar and one shared `Toggle`; settings and sheet options use the same grouped cards and chevrons as iOS.
 
 ## Features
 
