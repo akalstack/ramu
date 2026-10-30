@@ -71,7 +71,7 @@
         {
           "backgroundColor": "#ffffff",
           "image": "./assets/splash-light.png",
-          "imageWidth": 110,
+          "imageWidth": 200,
           "dark": {
             "backgroundColor": "#1c1c1f",
             "image": "./assets/icon-foreground.png"
