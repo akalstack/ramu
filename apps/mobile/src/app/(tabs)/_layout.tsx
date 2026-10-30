@@ -17,6 +17,8 @@ export default function TabsLayout() {
           backgroundColor: c.raised2,
           labelVisibilityMode: 'labeled' as const,
           indicatorColor: scheme === 'dark' ? '#40376b' : '#e4dbff',
+          // Material 3's pressed state layer (the text color at about 10%), not the platform's darker default.
+          rippleColor: c.pressed,
           iconColor: { default: c.muted, selected: c.text },
           labelStyle: { default: { color: c.muted }, selected: { color: c.text } },
           badgeBackgroundColor: c.bad,
