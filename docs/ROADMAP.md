@@ -12,21 +12,21 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 ## Implementation
 
-- **Transport:** bounded replay and snapshot recovery for every resource, and a written set of connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keeps drafts and queued messages through each. Mutations that cannot be retried safely report an unknown outcome and reconcile.
+- **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; mutations that cannot be retried report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](ARCHITECTURE.md#transport)).
 - **Background terminals:** native command handles for Claude, Codex, OpenCode and Cursor need verified owner-lifecycle contracts. The ACP client-terminal boundary is written but enabled for no provider until one is verified against a live runtime.
 - **Agent setup:** skill source and ownership details, owned-link cleanup, per-adapter rule delivery (path-matched activation only where a runtime supports it), and an "effective setup" view that never claims a file is loaded merely because it was written.
 - **Shared MCP:** provider-session HTTP/stdio lifecycle and approvals around the gateway, discovery and import previews, and approvals shared across accounts so a backup account continues a task without another prompt.
 - **Mobile:** advanced composer parity (command and skill discovery, elicitation fields, IME), terminal customization, and pages for skills, MCP and memory. Add a phone entry for a desktop setting only when it clearly helps someone away from the laptop.
 - **Thread titles and state:** a verified provider that supplies titles, title provenance (provider, generated, manual), clearer approval/stopped/turn-limit labels, and request actions that open the exact owning session.
-- **Browser and computer use:** provider capability negotiation, remote and mobile collaborative control, more session-import sources. **Open on this phone** reaches only dev servers that listen beyond the host's loopback; an on-demand forward of one loopback port to one paired owner phone (expiring, IP-bound, shown with its port) needs a security review first. Computer use on Windows and Linux waits for native capture, permissions and signing.
+- **Browser and computer use:** provider capability negotiation and more session-import sources. **Open on this phone** reaches only dev servers listening beyond the host's loopback; forwarding one loopback port to one paired phone (expiring, IP-bound, shown with its port) needs a security review first. Computer use on Windows and Linux waits for native capture, permissions and signing.
 - **Provider compatibility:** compatibility rules for OpenCode's ACP runner, Cursor and Antigravity after protocol checks; entry points that bypass `validateSettings`.
 - **Git hosting:** GitLab, Bitbucket Cloud and Azure DevOps. A new forge adds an adapter beside GitHub's in `apps/server/src/workspace/forge/`.
-- **Remote security:** remaining viewer write-surface controls. The server allowlist is the boundary, not hidden controls.
-- **Code quality:** about 140 effects and memos carry a `react-hooks/exhaustive-deps` disable naming the trigger they are keyed on. Most are deliberate (reset on open, restart polling when membership changes, scroll when a tab changes) and correct as written; convert one to explicit dependencies, an event handler or a ref only when touching it, after checking that it neither loops nor refetches. Replace `any` at the wire boundaries with validated types over time.
+- **Remote security:** hide or disable the controls a viewer-role device, or a device without the matching permission, cannot use. The server allowlist and permissions are the boundary; the controls only avoid dead ends.
+- **Code quality:** replace `any` at the wire boundaries with validated types. About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
 ## Acceptance
 
-- **Physical iOS and Android devices:** host discovery and pairing, voice input, interactive content gestures, browser and computer-use viewers, Explorer, mobile settings and model flow, push and Live Activities, terminal customization, and viewer-role recovery. The checklist is [apps/mobile/VERIFICATION.md](../apps/mobile/VERIFICATION.md).
+- **Physical iOS and Android devices:** everything in [apps/mobile/VERIFICATION.md](../apps/mobile/VERIFICATION.md), from pairing and permissions to the viewers, keyboards, push and Live Activities.
 - **Packaged and signed desktop builds:** upgrading real profiles, browser session import with a real keychain, computer-use permission identity, theme and system-appearance changes, background-terminal stop timing, and installation on a second Mac.
 - **Live providers and second hosts:** provider version compatibility records, Shared MCP across two providers, skill and rule delivery, project routing quality, plan-usage and limit-notice handling, GitHub with live tokens and Enterprise hosts, interactive content, title generation, multi-host load, and a matched HTTP versus WebSocket comparison. Paid calls and credentials are opt-in.
 
@@ -38,10 +38,9 @@ Representative tasks to run once the above is available:
 
 ## Decisions and deferred scope
 
-- **Transport:** see [Architecture](ARCHITECTURE.md#transport). Revisit only with measurements from real networks.
 - **Certificate pinning:** not built. It needs a native transport replacement that cannot be verified without device builds. Reopen with a concrete threat that HTTPS pairing and host-identity checks do not cover.
 - **Preference sync:** hosts never talk to each other, and no account system exists, so settings do not follow a person across hosts. Credentials and workspace state stay out of any future sync.
-- **Mobile administration:** remote network and device administration stays host-only until explicit administrative grants, reviewable changes and recovery exist.
+- **Remote administration:** network access, pairing and device permissions are managed only at the host. A device's **Change settings** permission covers settings, not this; widening it needs reviewable changes and recovery first.
 - **Relay:** no relay or tunnel service. Design it separately from direct-host push.
 - **Deferred:** a full mobile editor, dedicated mobile provider sign-in, chunked large-file upload, marketplaces for MCP, themes or skills, arbitrary plugin or hook execution, automatic provider-file or credential synchronization, AI conflict resolution, local grounding models and VMs for computer use, and vector retrieval for learning.
 - **Evidence rule:** claim an improvement over another application only with matched-task evidence, not source inspection or one demo.
