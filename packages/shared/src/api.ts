@@ -552,6 +552,9 @@ export interface RamuMethods {
   'network.cancelOffer'(offerId: string): boolean
   /** What became of one offer: pending, redeemed by a device, cancelled or expired. */
   'network.offer'(offerId: string): PairingOfferStatus
+  /** Pairs a device that asked, spending the given open offer (and its access). Host-only, like the rest of `network.*`. */
+  'network.approveRequest'(requestId: string, offerId: string): NetworkStatus
+  'network.denyRequest'(requestId: string): NetworkStatus
   'network.revoke'(deviceId: string): NetworkStatus
   /** Days an unused device stays paired (1 to 3650), `never`, or null for the server default. Host-only, like the rest of `network.*`. */
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus
@@ -581,6 +584,9 @@ export interface RamuMethods {
   /** Brings a computer's window to the front. Rejects when it cannot be reached. */
   'computers.open'(id: string): void
   'computers.pair'(url: string, code: string, name?: string): Computers
+  /** Asks a nearby host to pair; a person there allows it when both show the number sent as `computers:pairCode`. */
+  'computers.pairByRequest'(url: string, name?: string): Computers
+  'computers.cancelPairRequest'(): null
   'computers.sshHosts'(): string[]
   /** Nearby hosts heard on this computer's networks. Browsing runs here, never on a selected host, and lists only. */
   'computers.discovery.start'(): NearbyHostsState
@@ -1134,6 +1140,8 @@ export type PushEvents = {
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
   'background:connection': { connected: boolean; rejected?: boolean; restarted?: boolean }
   'computers:changed': Computers
+  /** The number a nearby host shows while this computer asks it to pair (see `computers.pairByRequest`). */
+  'computers:pairCode': { address: string; code: string }
   'computers:navigate': { hostId: string; destination: HostDestination }
   'computers:activity': { ids: string[] }
   'updates:changed': AppUpdateStatus

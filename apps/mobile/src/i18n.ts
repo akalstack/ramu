@@ -41,6 +41,8 @@ const en = {
   nearbyTimedOut: 'Stopped searching after a while. Search again, scan the QR code or enter the details.',
   nearbyRetry: 'Search again',
   nearbyContinue: 'Continue with {0}',
+  pairAsking: 'Asking {0}…',
+  pairAskConfirm: 'Allow this phone on {0} if it shows this number',
   nearbyReconnect: 'Connect to {0}',
   hostChangeAddress: 'Change address',
   hostAddressHelp:
@@ -556,6 +558,8 @@ const id: typeof en = {
   nearbyTimedOut: 'Pencarian berhenti setelah beberapa saat. Cari lagi, pindai kode QR, atau isi detailnya.',
   nearbyRetry: 'Cari lagi',
   nearbyContinue: 'Lanjutkan dengan {0}',
+  pairAsking: 'Meminta {0}…',
+  pairAskConfirm: 'Izinkan ponsel ini di {0} jika menampilkan angka ini',
   nearbyReconnect: 'Hubungkan ke {0}',
   hostChangeAddress: 'Ubah alamat',
   hostAddressHelp:

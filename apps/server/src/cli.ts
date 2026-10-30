@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // `ramu` (also `ramu-server`): runs the Ramu workspace server without the desktop app and controls a running one.
 import { runtimeInvoke } from '@ramu/client-runtime'
+import type { NetworkStatus } from '@ramu/shared/types/remote'
 import { loadConfig, parseListen } from './config'
 import { loadToken } from './remote/auth'
 import { runtimeVersion } from './build'
@@ -49,6 +50,47 @@ Environment: RAMU_USER_DATA, RAMU_SOCKET, RAMU_LISTEN, RAMU_TOKEN_FILE, RAMU_DEV
              RAMU_ALLOW_LEGACY_TOKEN (1 to opt in), RAMU_BROWSER_ORIGINS (comma-separated exact origins),
              RAMU_BROWSER_EXECUTABLE (optional host Chromium executable; Setup checks its sandbox).
 A paired device has the same control as the desktop app, including shell access. Pair only devices you own.`
+
+/**
+ * Nearby devices that chose this host ask here; each shows a six-digit number, and only a matching one is allowed.
+ * Ends when the offer is used or expires. Ctrl-C leaves the code valid until it expires.
+ */
+async function answerNearby(offerId: string) {
+  const { createInterface } = await import('node:readline/promises')
+  const prompt = createInterface({ input: process.stdin, output: process.stdout })
+  console.log('\nOr choose this host under Nearby hosts on the other device. Waiting for it… (Ctrl-C to stop)')
+  const answered = new Set<string>()
+  try {
+    for (;;) {
+      const offer = await runtimeInvoke(config.socketPath, 'network.offer', [offerId])
+      if (offer.state === 'redeemed') {
+        console.log(`Paired ${offer.device?.name ?? 'the device'}.`)
+        return
+      }
+      if (offer.state !== 'pending') {
+        console.log('The pairing code expired. Run ramu pair again.')
+        return
+      }
+      const status = (await runtimeInvoke(config.socketPath, 'network.status')) as NetworkStatus
+      const request = status.requests?.find((entry) => !answered.has(entry.id))
+      if (!request) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        continue
+      }
+      answered.add(request.id)
+      const reply = await prompt.question(
+        `\n${request.name || 'A device'} (${request.address}) wants to pair and shows ${request.code}. Allow? [y/N] `,
+      )
+      if (/^y(es)?$/i.test(reply.trim()))
+        await runtimeInvoke(config.socketPath, 'network.approveRequest', [request.id, offerId]).catch((error) =>
+          console.log(error instanceof Error ? error.message : String(error)),
+        )
+      else await runtimeInvoke(config.socketPath, 'network.denyRequest', [request.id]).catch(() => {})
+    }
+  } finally {
+    prompt.close()
+  }
+}
 
 function fail(message: string): never {
   console.error(`ramu: ${message}`)
@@ -171,8 +213,11 @@ if (command === 'start') {
   }
   const role = text('role') ?? 'owner'
   if (role !== 'owner' && role !== 'viewer') fail('Role must be owner or viewer')
-  const { code, offerId } = new DeviceStore(config.devicesPath, config.deviceLifetimeMs).createCode(Date.now(), role)
-  const expiresAt = Date.now() + PAIRING_TTL_MS
+  // A running server opens the offer itself, so it also advertises nearby and accepts requests while the offer lasts.
+  const running = await runtimeInvoke(config.socketPath, 'network.pair', [role]).catch(() => null)
+  const { code, offerId } =
+    running ?? new DeviceStore(config.devicesPath, config.deviceLifetimeMs).createCode(Date.now(), role)
+  const expiresAt = running?.expiresAt ?? Date.now() + PAIRING_TTL_MS
   const links = urls.map(({ url }) => encodePairLink({ url, code, expiresAt }))
   if (flags.has('json')) {
     const status = await runtimeInvoke(config.socketPath, 'background.status').catch(() => null)
@@ -195,6 +240,7 @@ if (command === 'start') {
   console.log(
     `\nOn that device, send the code to <address>/pair, which returns its own token:\n  curl -s -X POST <address>/pair -H 'Content-Type: application/json' -d '{"code":"${code}","name":"My laptop"}'`,
   )
+  if (running && process.stdin.isTTY) await answerNearby(offerId)
 } else if (command === 'browser') {
   const action = positional[1] ?? 'status'
   try {

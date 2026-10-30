@@ -4,6 +4,8 @@ import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
 import { hostProof } from '@ramu/shared/hostProof'
 import { authorized } from './auth'
 import type { DeviceInfo, DeviceStore } from './devices'
+import { PAIR_REQUEST_PATH, PAIR_REVEAL_PATH, PAIR_WAIT_PATH } from '@ramu/shared/pairRequest'
+import { PairingError, type PairingRequests } from './pairingRequests'
 
 export const deviceMayInvoke = (device: DeviceInfo | undefined, method: string): boolean =>
   device?.role !== 'viewer' || viewerMayInvoke(method)
@@ -23,6 +25,8 @@ export class RemoteAccess {
       hostId?: string
       /** This host's own addresses, named in the identity answer so a paired device can find it when its address changes. */
       routes?: () => string[]
+      /** Pairing by request from a nearby device. Absent: those endpoints do not exist and devices type a code. */
+      pairing?: PairingRequests
       now?: () => number
     },
   ) {}
@@ -102,6 +106,41 @@ export class RemoteAccess {
       )
       return
     }
+    const pairing = this.options.pairing
+    if (
+      pairing &&
+      req.method === 'POST' &&
+      path &&
+      [PAIR_REQUEST_PATH, PAIR_REVEAL_PATH, PAIR_WAIT_PATH].includes(path)
+    ) {
+      const body = await readJson(req)
+      if (body === undefined) {
+        rejected('Invalid pairing request')
+        return
+      }
+      const reply = (value: unknown) =>
+        res
+          .writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+          .end(JSON.stringify(value))
+      try {
+        if (path === PAIR_REQUEST_PATH) reply(pairing.begin(peer, body))
+        else if (path === PAIR_REVEAL_PATH) {
+          pairing.reveal(peer, body)
+          reply({ ok: true })
+        } else {
+          const closed = new AbortController()
+          res.once('close', () => closed.abort())
+          reply(await pairing.wait(peer, body, closed.signal))
+        }
+      } catch (error) {
+        const status = error instanceof PairingError ? error.status : 400
+        const message = error instanceof Error ? error.message : 'Invalid pairing request'
+        // Refusals count toward the same back-off as wrong codes, so nobody can probe or flood the host.
+        if (status === 401 || status === 403 || status === 400) rejected(message)
+        else res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: message }))
+      }
+      return
+    }
     if (path === PAIR_PATH && req.method === 'POST') {
       let bytes = 0
       const chunks: Buffer[] = []
@@ -163,5 +202,21 @@ export class RemoteAccess {
       if (device.expiresAt !== null) res.setHeader('X-Ramu-Token-Expires', String(device.expiresAt))
     }
     return device
+  }
+}
+
+/** A small JSON body, or undefined when it is too large or not JSON. */
+async function readJson(req: IncomingMessage): Promise<unknown> {
+  let bytes = 0
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    bytes += chunk.length
+    if (bytes > 4096) return undefined
+    chunks.push(chunk)
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString() || '{}') ?? {}
+  } catch {
+    return undefined
   }
 }

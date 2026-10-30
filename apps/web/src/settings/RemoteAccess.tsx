@@ -17,7 +17,7 @@ import { Check, Copy, Link2, Monitor, Network, Plus, Radar, Settings2, Terminal 
 import { useContext, useCallback, useEffect, useRef, useState } from 'react'
 import type { Computer, Computers as ComputerList, NetworkStatus, PairingOffer } from '@ramu/shared/types'
 import { Dialog as ConfirmDialog, Dropdown, timeAgo } from '../Menu'
-import { copyText, invoke } from '../ipc'
+import { copyText, invoke, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
 import { t, useLanguage } from '../i18n'
@@ -489,7 +489,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
           {!joined && (
             <DialogDescription>
               {t(
-                'On the other device open Ramu, go to Settings → Remote access → Connect to a host, then enter one of these addresses and the code.',
+                'On the other device open Ramu and choose this host under Nearby hosts, then allow it here when both show the same number. Or enter one of these addresses and the code.',
               )}
             </DialogDescription>
           )}
@@ -510,6 +510,39 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
             {error}
           </p>
         )}
+        {!joined &&
+          offerId &&
+          !expired &&
+          status?.requests?.map((request) => (
+            <div
+              key={request.id}
+              role="alert"
+              className="flex flex-col gap-2 rounded-(--radius-m) border border-(--line) bg-fill p-[14px_16px]"
+            >
+              <strong className="text-control">{t('{0} wants to pair', { 0: request.name || t('A device') })}</strong>
+              <span className="muted text-muted-foreground small text-caption">
+                {t('Allow it only if it shows this number. From {0}.', { 0: request.address })}
+              </span>
+              <div className="font-mono text-[28px] font-semibold tracking-[0.12em]">{request.code}</div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() =>
+                    void Promise.resolve(invoke('network.approveRequest', request.id, offerId)).catch((e) =>
+                      setError(errorText(e)),
+                    )
+                  }
+                >
+                  {t('Allow')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => void Promise.resolve(invoke('network.denyRequest', request.id)).catch(() => {})}
+                >
+                  {t('Deny')}
+                </Button>
+              </div>
+            </div>
+          ))}
         {joined ? (
           <p className="muted text-muted-foreground">
             {t(joined.role === 'viewer' ? 'View threads and answer requests' : 'Full access')}
@@ -626,6 +659,12 @@ function Computers({ state }: { state: ComputerList }) {
   const [target, setTarget] = useState(''),
     [hosts, setHosts] = useState<string[]>([])
   const [forgetting, setForgetting] = useState<string | null>(null)
+  // Asking a nearby host to pair: the number to match once it answers.
+  const [asking, setAsking] = useState<{ name: string; code: string | null } | null>(null)
+  useEffect(
+    () => ramu.on('computers:pairCode', ({ code }) => setAsking((current) => current && { ...current, code })),
+    [],
+  )
   const others = state.computers.filter((computer) => !computer.local)
   const selected = state.computers.find((computer) => computer.id === editing)
   const act = async (fn: () => Promise<unknown>) => {
@@ -885,21 +924,65 @@ function Computers({ state }: { state: ComputerList }) {
               {t('SSH')}
             </Button>
           </div>
-          {mode === 'nearby' ? (
+          {mode === 'nearby' && (
             <NearbyHosts
               onFallback={choose}
               onChoose={(host, url) => {
-                // Only the address and a name are filled in; the pairing code still comes from that host.
-                setAddress(url)
-                setName((current) => current || host.name)
-                setLink('')
-                setLinkError(null)
-                setCode('')
-                setMode('link')
-                setFocusCode(true)
+                const typeCode = () => {
+                  setAddress(url)
+                  setName((current) => current || host.name)
+                  setLink('')
+                  setLinkError(null)
+                  setCode('')
+                  setMode('link')
+                  setFocusCode(true)
+                }
+                // Ask the host; a person there allows it when both show the same number. Older hosts need the code.
+                setAsking({ name: host.name, code: null })
+                void Promise.resolve(invoke('computers.pairByRequest', url, host.name))
+                  .then(() => {
+                    setAsking(null)
+                    reset()
+                    setAdding(false)
+                  })
+                  .catch((error) => {
+                    setAsking(null)
+                    const message = errorText(error)
+                    if (!/cancelled|aborted/i.test(message) && !/needs a pairing code/i.test(message))
+                      notifyError(message, t('Hosts'))
+                    if (!/cancelled|aborted/i.test(message)) typeCode()
+                  })
               }}
             />
-          ) : mode === 'link' ? (
+          )}
+          {mode === 'nearby' && asking ? (
+            <div
+              role="status"
+              className="mt-3 flex flex-col items-start gap-2 rounded-(--radius-m) bg-fill p-[14px_16px]"
+            >
+              {asking.code ? (
+                <>
+                  <span className="text-control">
+                    {t('Allow this computer on {0} if it shows this number', { 0: asking.name })}
+                  </span>
+                  <span className="font-mono text-[28px] font-semibold tracking-[0.12em]">{asking.code}</span>
+                </>
+              ) : (
+                <span className="text-control">{t('Asking {0}…', { 0: asking.name })}</span>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setAsking(null)
+                  void Promise.resolve(invoke('computers.cancelPairRequest')).catch(() => {})
+                }}
+              >
+                {t('Cancel')}
+              </Button>
+            </div>
+          ) : null}
+          {mode === 'nearby' ? null : mode === 'link' ? (
             <>
               <p className="m-[0_0_12px] text-caption text-muted-foreground">
                 {t(

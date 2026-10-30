@@ -63,6 +63,7 @@ import { loadConfig } from './config'
 import { TokenStore } from './remote/auth'
 import { DeviceStore, validLifetime, type DeviceInfo } from './remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
+import { PairingRequests } from './remote/pairingRequests'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
   candidateUrls,
@@ -109,9 +110,11 @@ mkdirSync(userData, { recursive: true })
 const remoteTokens = config.allowLegacyToken ? new TokenStore(config.tokenPath) : null
 const devices = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
 const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
+const pairingRequests = new PairingRequests({ devices, hostId })
 const remoteAccess = new RemoteAccess({
   devices,
   hostId,
+  pairing: pairingRequests,
   // The addresses the listener really serves, for a paired device to try when its saved one stops answering.
   routes: () =>
     network.enabled
@@ -1252,8 +1255,10 @@ function startRemote() {
   listenRemote(server)
 }
 /** Advertises the address the listener bound, and only while both settings allow it. Never affects the listener. */
+/** While Pair a device is open (an unused offer exists), nearby devices can find this host even if it is not discoverable. */
+const pairingOpen = () => devices.offers().length > 0
 function syncDiscovery() {
-  if (network.enabled && network.discoverable && remote?.listening)
+  if (network.enabled && (network.discoverable || pairingOpen()) && remote?.listening)
     void advertiser.start({ host: network.host, port: network.port, tls: Boolean(config.tls) }).catch(() => {})
   else void advertiser.stop()
 }
@@ -1291,6 +1296,7 @@ function networkStatus() {
     devices: devices.list(),
     deviceLifetime: devices.lifetime(),
     offers: devices.offers(),
+    requests: pairingRequests.list(),
   }
 }
 async function networkMethod(method: string, args: unknown[]) {
@@ -1321,11 +1327,27 @@ async function networkMethod(method: string, args: unknown[]) {
     if (role !== 'owner' && role !== 'viewer') throw new Error('Invalid device role')
     const owner = typeof args[1] === 'string' && args[1].length > 0 && args[1].length <= 80 ? args[1] : undefined
     const { code, expiresAt, offerId } = devices.createCode(Date.now(), role, owner)
+    // Advertise for as long as the offer lasts; closing or using it stops that.
+    syncDiscovery()
+    setTimeout(syncDiscovery, expiresAt - Date.now() + 1000).unref()
     return { offerId, code, expiresAt, urls: candidateUrls(network.host, network.port, Boolean(config.tls)) }
   }
   if (method === 'network.cancelOffer') {
     if (typeof args[0] !== 'string') throw new Error('Invalid offer')
-    return devices.cancelOffer(args[0])
+    const cancelled = devices.cancelOffer(args[0])
+    syncDiscovery()
+    return cancelled
+  }
+  if (method === 'network.approveRequest') {
+    if (typeof args[0] !== 'string' || typeof args[1] !== 'string') throw new Error('Invalid pairing request')
+    pairingRequests.approve(args[0], args[1])
+    syncDiscovery()
+    return networkStatus()
+  }
+  if (method === 'network.denyRequest') {
+    if (typeof args[0] !== 'string') throw new Error('Invalid pairing request')
+    pairingRequests.deny(args[0])
+    return networkStatus()
   }
   if (method === 'network.offer') {
     if (typeof args[0] !== 'string') throw new Error('Invalid offer')

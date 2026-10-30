@@ -518,6 +518,8 @@ async function main() {
   const ssh = new SshComputers(servers)
   // Browsing is started and stopped by the Connect-to-a-host panel; nothing listens otherwise.
   const nearby = new NearbyBrowser({ verifiedHost: (hostId) => computers.byHostId(hostId) })
+  /** The one request to a nearby host this computer is waiting on, if any. */
+  let pairRequest: AbortController | null = null
   const computers = new ComputerRegistry({
     servers,
     ssh,
@@ -1037,7 +1039,34 @@ async function main() {
       for (const server of previous) if (!computers.exists(server.id)) await closeComputer(server.id)
       return computers.list(self)
     }
-    // Device-local: this computer listens for nearby hosts and only lists them. Pairing still takes a code.
+    // A nearby host is asked instead of typing its code; the number to match arrives as `computers:pairCode`.
+    if (method === 'computers.pairByRequest') {
+      const [address, label] = args
+      if (typeof address !== 'string' || (label !== undefined && typeof label !== 'string'))
+        throw new Error('Enter the address')
+      pairRequest?.abort()
+      const controller = new AbortController()
+      pairRequest = controller
+      const previous = servers.list()
+      try {
+        await computers.pairByRequest(
+          address,
+          label,
+          (code) => send('computers:pairCode', { address, code }),
+          controller.signal,
+        )
+      } finally {
+        if (pairRequest === controller) pairRequest = null
+      }
+      for (const server of previous) if (!computers.exists(server.id)) await closeComputer(server.id)
+      return computers.list(self)
+    }
+    if (method === 'computers.cancelPairRequest') {
+      pairRequest?.abort()
+      pairRequest = null
+      return null
+    }
+    // Device-local: this computer listens for nearby hosts and only lists them.
     if (method === 'computers.discovery.start') return nearby.start()
     if (method === 'computers.discovery.state') return nearby.state()
     if (method === 'computers.discovery.stop') return nearby.stop()

@@ -2866,7 +2866,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "New code": "Kode baru",
   "No devices paired yet.": "Belum ada perangkat yang dipasangkan.",
   "No network address found. Connect this host to a network or VPN.": "Alamat jaringan tidak ditemukan. Sambungkan host ini ke jaringan atau VPN.",
-  "On the other device open Ramu, go to Settings → Remote access → Connect to a host, then enter one of these addresses and the code.": "Di perangkat lain, buka Ramu, masuk ke Pengaturan → Akses jarak jauh → Sambungkan ke host, lalu masukkan salah satu alamat ini dan kodenya.",
   "Open Remote access on that host, choose Pair a device, then enter what it shows. Projects live on that host, so add them there.": "Buka Akses jarak jauh di host itu, pilih Pasangkan perangkat, lalu masukkan yang tampil. Proyek ada di host itu, jadi tambahkan proyek di sana.",
   "Pair": "Pasangkan",
   "Pair a device": "Pasangkan perangkat",
@@ -3971,4 +3970,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Open in the host browser": "Buka di browser host",
   "Another of your devices has control": "Perangkat Anda yang lain sedang mengendalikan",
   "Another of your devices has control. Take control to use it here.": "Perangkat Anda yang lain sedang mengendalikan. Ambil kendali untuk memakainya di sini.",
+  "A device": "Sebuah perangkat",
+  "{0} wants to pair": "{0} ingin dipasangkan",
+  "Allow it only if it shows this number. From {0}.": "Izinkan hanya jika perangkat itu menampilkan angka ini. Dari {0}.",
+  "On the other device open Ramu and choose this host under Nearby hosts, then allow it here when both show the same number. Or enter one of these addresses and the code.": "Di perangkat lain, buka Ramu dan pilih host ini di Host terdekat, lalu izinkan di sini jika keduanya menampilkan angka yang sama. Atau masukkan salah satu alamat ini beserta kodenya.",
+  "Allow this computer on {0} if it shows this number": "Izinkan komputer ini di {0} jika menampilkan angka ini",
+  "Asking {0}…": "Meminta {0}…",
 }

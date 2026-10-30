@@ -1,4 +1,6 @@
 import { appForeground } from './chatViewport'
+import { PairRequestUnsupported, requestPairing } from '@ramu/shared/pairRequest'
+import { secureRandom } from './secureRandom'
 import { agentActivityLabel } from '@ramu/shared/chat/agentActivity'
 import './socketTransport'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
@@ -122,6 +124,17 @@ interface Store extends State {
   select(id: string): void
   setLanguage(language: Language): void
   pair(name: string, address: string, code: string, allowHttp: boolean): Promise<string>
+  /**
+   * Asks a nearby host to pair this phone; `onCode` shows the number the host must match. Rejects with
+   * `PairRequestUnsupported` when the host or this build cannot, so the person types a code instead.
+   */
+  pairByRequest(
+    name: string,
+    address: string,
+    allowHttp: boolean,
+    onCode: (code: string, expiresAt: number) => void,
+    signal: AbortSignal,
+  ): Promise<string>
   /** Moves a saved host to a new address only after that address proves it is the host this phone paired with. */
   reviewAddress(id: string, address: string, signal?: AbortSignal): Promise<ReviewAddressResult>
   probeHosts: ReachableHostProbe
@@ -980,6 +993,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const reconnectTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 
+  /** Saves a host this phone just paired with, by code or by request, and connects to it. */
+  async function savePairing(
+    name: string,
+    url: string,
+    result: { deviceId: string; token: string; hostId?: unknown },
+  ): Promise<string> {
+    // The host's own id says which computer this is, so pairing it again at a new address keeps its entry (and the
+    // drafts, unread state and queued messages keyed to it). The address decides only for a host without an id.
+    const known =
+      (typeof result.hostId === 'string' ? ref.current.computers.find((c) => c.hostId === result.hostId) : undefined) ??
+      ref.current.computers.find((c) => c.address === url)
+    const id = known?.id ?? uid()
+    await saveIssuedCredential(() => saveToken(id, result.token))
+    const computer: Computer = {
+      id,
+      name: name || (known && !known.auto ? known.name : new URL(url).hostname),
+      auto: name ? false : known ? known.auto : true,
+      address: url,
+      os: 'linux',
+      status: 'connecting',
+      lastSeen: 0,
+      deviceId: result.deviceId,
+      ...(typeof result.hostId === 'string' ? { hostId: result.hostId } : {}),
+    }
+    change((s) => ({ ...s, selected: id, computers: [...s.computers.filter((c) => c.id !== id), computer] }))
+    void connect(computer).catch(report)
+    return id
+  }
   async function reviewAddressFor(id: string, address: string, signal?: AbortSignal): Promise<ReviewAddressResult> {
     const computer = ref.current.computers.find((c) => c.id === id)
     if (!computer) throw new Error('That host is no longer saved')
@@ -1354,31 +1395,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           throw new Error('Too many pairing attempts. Wait a minute, then use a fresh code from the host.')
         if (!response.ok || !result.token || !result.deviceId)
           throw new Error(result.error || `Pairing failed (${response.status})`)
-        // The host's own id says which computer this is, so pairing it again at a new address keeps its entry (and the
-        // drafts, unread state and queued messages keyed to it). The address decides only for a host without an id.
-        const known =
-          (typeof result.hostId === 'string'
-            ? ref.current.computers.find((c) => c.hostId === result.hostId)
-            : undefined) ?? ref.current.computers.find((c) => c.address === url)
-        const id = known?.id ?? uid()
-        await saveIssuedCredential(() => saveToken(id, result.token))
-        const computer: Computer = {
-          id,
-          name: name || (known && !known.auto ? known.name : new URL(url).hostname),
-          auto: name ? false : known ? known.auto : true,
-          address: url,
-          os: 'linux',
-          status: 'connecting',
-          lastSeen: 0,
-          deviceId: result.deviceId,
-          ...(typeof result.hostId === 'string' ? { hostId: result.hostId } : {}),
-        }
-        change((s) => ({ ...s, selected: id, computers: [...s.computers.filter((c) => c.id !== id), computer] }))
-        void connect(computer).catch(report)
-        return id
+        return await savePairing(name, url, result)
       } finally {
         clearTimeout(timer)
       }
+    },
+    pairByRequest: async (name, address, allowHttp, onCode, signal) => {
+      const url = normalizeAddress(address, allowHttp)
+      const random = await secureRandom()
+      if (!random) throw new PairRequestUnsupported()
+      const result = await requestPairing({
+        post: async (path, body, aborted) => {
+          const response = await expoFetch(`${url}${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-ramu-protocol': '1' },
+            body: JSON.stringify(body),
+            signal: aborted,
+          })
+          const text = await response.text()
+          let parsed: unknown = null
+          try {
+            parsed = text ? JSON.parse(text) : null
+          } catch {}
+          return { status: response.status, body: parsed }
+        },
+        name: Device.deviceName || Device.modelName || 'Ramu phone',
+        random,
+        onCode,
+        signal,
+      })
+      return savePairing(name, url, result)
     },
     reviewAddress: reviewAddressFor,
     probeHosts: (signal, found) => {

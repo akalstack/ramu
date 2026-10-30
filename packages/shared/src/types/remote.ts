@@ -46,6 +46,11 @@ export interface NetworkStatus {
   deviceLifetime?: { days: number | 'never'; saved: boolean }
   /** Pairing offers not yet used, without their codes. Absent on older hosts. */
   offers?: { id: string; role: 'owner' | 'viewer'; expiresAt: number }[]
+  /**
+   * Nearby devices asking to pair while an offer is open, each with the six-digit code it shows. Approve only when the
+   * codes match. Absent on older hosts.
+   */
+  requests?: { id: string; name: string; address: string; code: string; expiresAt: number }[]
   /** Nearby-device discovery. Absent on hosts that predate it. */
   discovery?: {
     /** The saved choice; it advertises only while network access is also on and listening. */

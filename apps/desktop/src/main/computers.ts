@@ -321,7 +321,53 @@ export class ComputerRegistry {
   async pair(address: string, code: string, label: string | undefined): Promise<Computer> {
     const { parseRemoteUrl } = await import('@ramu/contracts')
     const url = parseRemoteUrl(address)
-    const { token, deviceId, hostId } = await this.deps.pair(url, code.trim(), this.deps.deviceName)
+    return this.savePaired(url, label, await this.deps.pair(url, code.trim(), this.deps.deviceName))
+  }
+
+  /**
+   * Asks a nearby host to pair this computer: `onCode` shows the number a person at the host must see before allowing
+   * it. Rejects with `PairRequestUnsupported` for a host that needs a typed code.
+   */
+  async pairByRequest(
+    address: string,
+    label: string | undefined,
+    onCode: (code: string) => void,
+    signal: AbortSignal,
+  ): Promise<Computer> {
+    const [{ parseRemoteUrl }, { requestPairing }, { randomBytes }] = await Promise.all([
+      import('@ramu/contracts'),
+      import('@ramu/shared/pairRequest'),
+      import('node:crypto'),
+    ])
+    const url = parseRemoteUrl(address)
+    const result = await requestPairing({
+      post: async (path, body, aborted) => {
+        const response = await fetch(new URL(path, url), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: aborted,
+        })
+        const text = await response.text()
+        let parsed: unknown = null
+        try {
+          parsed = text ? JSON.parse(text) : null
+        } catch {}
+        return { status: response.status, body: parsed }
+      },
+      name: this.deps.deviceName,
+      random: (bytes) => new Uint8Array(randomBytes(bytes)),
+      onCode,
+      signal,
+    })
+    return this.savePaired(url, label, result)
+  }
+
+  private async savePaired(
+    url: string,
+    label: string | undefined,
+    { token, deviceId, hostId }: { token: string; deviceId?: string; hostId?: string },
+  ): Promise<Computer> {
     // The code is spent once the token exists. If the first request fails, keep the credential and let the normal
     // connection retry reach the host, rather than discarding a valid grant the person cannot get again.
     const status = (await this.deps

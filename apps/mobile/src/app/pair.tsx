@@ -17,6 +17,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { needsHttpConsent } from '../runtime/transport'
 import { decodePairQr, parsePairInput } from '@ramu/contracts'
+import { PairRequestUnsupported } from '@ramu/shared/pairRequest'
 import { CameraOff, Monitor, QrCode, ShieldAlert } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
@@ -52,7 +53,11 @@ export default function Pair() {
   }, [])
   const { c } = useTheme()
   const router = useRouter()
-  const { pair, reviewAddress, computers, probeHosts, retry, select } = useStore()
+  const { pair, pairByRequest, reviewAddress, computers, probeHosts, retry, select } = useStore()
+  // A request to a nearby host: the number both screens must show, once the host has answered.
+  const [asking, setAsking] = useState<{ host: string; code: string | null } | null>(null)
+  const askAbort = useRef<AbortController | null>(null)
+  useEffect(() => () => askAbort.current?.abort(), [])
   const [moved, setMoved] = useState<ReviewAddressResult | 'checking' | null>(null)
   const params = useLocalSearchParams<{ url?: string; code?: string; exp?: string; name?: string }>()
   const [address, setAddress] = useState('')
@@ -331,17 +336,78 @@ export default function Pair() {
                       }
                       const choice = pairingFill(current, selected.url)
                       if (!choice) return
-                      setAddress(choice.address)
-                      setName((existing) => existing || choice.name)
-                      setCode('')
-                      setOfferScanned(false)
-                      setHttp(false)
-                      animateLayout()
-                      setMethod('manual')
-                      setTimeout(() => codeField.current?.focus(), 250)
+                      const typeCode = () => {
+                        setAddress(choice.address)
+                        setName((existing) => existing || choice.name)
+                        setCode('')
+                        setOfferScanned(false)
+                        setHttp(false)
+                        animateLayout()
+                        setMethod('manual')
+                        setTimeout(() => codeField.current?.focus(), 250)
+                      }
+                      // Ask the host instead of typing its code: a person there allows it when both show one number.
+                      const ask = async () => {
+                        if (pairing.current) return
+                        pairing.current = true
+                        const controller = new AbortController()
+                        askAbort.current = controller
+                        setAsking({ host: choice.name, code: null })
+                        try {
+                          await pairByRequest(
+                            choice.name,
+                            choice.address,
+                            needsHttpConsent(choice.address),
+                            (number) => {
+                              if (mounted.current) setAsking({ host: choice.name, code: number })
+                            },
+                            controller.signal,
+                          )
+                          if (!mounted.current) return
+                          if (router.canDismiss()) router.dismissAll()
+                          else router.replace('/')
+                        } catch (error) {
+                          if (!mounted.current || controller.signal.aborted) return
+                          setAsking(null)
+                          if (error instanceof PairRequestUnsupported) typeCode()
+                          else Alert.alert(t.pairFailed, error instanceof Error ? error.message : String(error))
+                        } finally {
+                          pairing.current = false
+                          if (askAbort.current === controller) askAbort.current = null
+                        }
+                      }
+                      if (!needsHttpConsent(choice.address)) return void ask()
+                      // The same consent as a typed address: this host is reached without encryption.
+                      Alert.alert(t.pairHttpAllow, t.pairHttpNotice, [
+                        { text: t.cancel, style: 'cancel' },
+                        { text: fill(t.nearbyContinue, choice.name), onPress: () => void ask() },
+                      ])
                     }}
                   />
                 </View>
+              ) : null}
+              {asking ? (
+                <Card style={{ padding: space.m, gap: space.s, alignItems: 'center' }}>
+                  {asking.code ? (
+                    <>
+                      <T tone="soft" style={{ textAlign: 'center' }}>
+                        {fill(t.pairAskConfirm, asking.host)}
+                      </T>
+                      <T weight="600" style={{ fontSize: 34, letterSpacing: 4, fontVariant: ['tabular-nums'] }}>
+                        {asking.code}
+                      </T>
+                    </>
+                  ) : (
+                    <T tone="soft">{fill(t.pairAsking, asking.host)}</T>
+                  )}
+                  <GlassButton
+                    title={t.cancel}
+                    onPress={() => {
+                      askAbort.current?.abort()
+                      setAsking(null)
+                    }}
+                  />
+                </Card>
               ) : null}
               {selected && !current ? (
                 <T size={font.control} tone="warn" accessibilityRole="alert">

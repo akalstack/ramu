@@ -216,15 +216,34 @@ export class DeviceStore {
 
   /** Spends a code and creates the device in one write, so a code cannot be redeemed twice. Null when the code is wrong, used or expired. */
   redeem(code: string, name: string | undefined, now = Date.now()): { device: DeviceInfo; token: string } | null {
-    const file = this.read(),
-      hash = sha256(normalizeCode(code))
+    const hash = sha256(normalizeCode(code))
+    const token = randomBytes(32).toString('hex')
+    const device = this.spend((p) => p.codeHash === hash, name, token, now)
+    return device ? { device, token } : null
+  }
+
+  /**
+   * Spends an unused offer for a device that paired by request, whose token both sides derived from their key exchange.
+   * The same single write as `redeem`, so a code and a request can never both use one offer.
+   */
+  redeemOffer(offerId: string, name: string | undefined, token: string, now = Date.now()): DeviceInfo | null {
+    if (!/^[0-9a-f]{64}$/.test(token)) throw new Error('Invalid device token')
+    return this.spend((p) => p.id === offerId, name, token, now)
+  }
+
+  private spend(
+    matches: (offer: PendingCode) => boolean,
+    name: string | undefined,
+    token: string,
+    now: number,
+  ): DeviceInfo | null {
+    const file = this.read()
     const live = file.pending.filter((p) => p.expiresAt > now)
-    const match = live.find((p) => p.codeHash === hash)
+    const match = live.find(matches)
     if (!match) {
       if (live.length !== file.pending.length) this.write({ ...file, pending: live })
       return null
     }
-    const token = randomBytes(32).toString('hex')
     const lifetime = this.lifetimeOf(file)
     const record: DeviceRecord = {
       id: randomUUID().slice(0, 8),
@@ -242,7 +261,7 @@ export class DeviceStore {
       pending: live.filter((p) => p !== match),
       settled: this.settle(file, [match], 'redeemed', now, record.id),
     })
-    return { device: strip(record), token }
+    return strip(record)
   }
 
   /** The device that owns this Authorization header, or null. */

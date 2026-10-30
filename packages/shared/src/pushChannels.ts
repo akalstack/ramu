@@ -48,6 +48,7 @@ export const WINDOW_PUSH_CHANNELS = [
   'computers:changed',
   'computers:navigate',
   'computers:activity',
+  'computers:pairCode',
   'device-state:changed',
 ] as const satisfies readonly (keyof PushEvents)[]
 

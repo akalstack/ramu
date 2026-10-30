@@ -22,6 +22,10 @@ Use disposable host profiles and simulated providers where possible. Paid live-p
 - [ ] Rebuild the development clients with SDK 58 / React Native 0.88 and install on both platforms. Verify scene startup, native tabs/icons, scroll-header integration, camera, sharing, notifications, widgets and WebView terminal/interactive content. Bundle exports do not validate native compilation.
 - [ ] Exercise computer-use WebRTC against a real host after rebuilding. Expo Doctor still reports react-native-webrtc as untested on the New Architecture; the local ramu-discovery and ramu-speech modules have no React Native Directory metadata. Verify their discovery, permission and dictation flows in the rebuilt clients.
 
+## Pairing by request
+
+- [ ] Rebuild the development client (it adds `expo-crypto`). With **Pair a device** open on a host, choose it under Nearby hosts on an iPhone and an Android phone: both screens show the same number, **Allow** pairs, **Deny** and a two-minute wait end the request, and an older build or host falls back to typing the code. Repeat from a second desktop and with `ramu pair` on a headless host.
+
 ## Open on this phone
 
 - [ ] From the browser viewer's ⋯ menu, open a public page and a host `localhost` dev server started with `--host 0.0.0.0`; scroll, type, go back and reload natively. Repeat with a dev server bound to `127.0.0.1` and confirm the explanation, **Try again** and **Back to the host browser**, and that the stream resumes. Confirm nothing stays signed in after closing.

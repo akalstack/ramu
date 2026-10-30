@@ -1,0 +1,187 @@
+// Pairing by request: a device near the host asks to pair, and a person at the host approves it after checking that
+// both screens show the same six-digit code. The two sides run an X25519 exchange; the device commits to its key
+// before it sees the host's, so someone relaying between them cannot choose keys that make the codes agree (a relay
+// matches with probability one in a million per attempt, and every attempt needs the person to approve). Both sides
+// derive the device token from the exchange, so the token never crosses the network.
+import { x25519 } from '@noble/curves/ed25519'
+import { hkdf } from '@noble/hashes/hkdf'
+import { hmac } from '@noble/hashes/hmac'
+import { sha256 } from '@noble/hashes/sha2'
+import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils'
+
+/** Each is a JSON `POST`, accepted only while the host has an unused pairing offer. An older host answers 404. */
+export const PAIR_REQUEST_PATH = '/pair/request'
+export const PAIR_REVEAL_PATH = '/pair/reveal'
+export const PAIR_WAIT_PATH = '/pair/wait'
+export interface PairRequestAnswer {
+  requestId: string
+  hostKey: string
+  hostId: string
+  expiresAt: number
+}
+/** `mac` binds the approved fields to this exchange. */
+export type PairWaitAnswer =
+  | { state: 'pending' | 'denied' | 'expired' }
+  | {
+      state: 'approved'
+      deviceId: string
+      role: 'owner' | 'viewer'
+      hostId: string
+      expiresAt: number | null
+      mac: string
+    }
+
+/** How long a request waits for the person at the host. */
+export const PAIR_REQUEST_TTL_MS = 2 * 60_000
+const KEY = /^[0-9a-f]{64}$/
+export const isPairKey = (value: unknown): value is string => typeof value === 'string' && KEY.test(value)
+
+export interface PairKeys {
+  secret: Uint8Array
+  publicKey: string
+}
+/** `random` must be a cryptographically secure source; there is deliberately no fallback. */
+export function pairKeys(random: (bytes: number) => Uint8Array): PairKeys {
+  const secret = random(32)
+  if (secret.length !== 32) throw new Error('Secure random bytes are unavailable')
+  return { secret, publicKey: bytesToHex(x25519.getPublicKey(secret)) }
+}
+
+export const pairCommit = (publicKey: string): string =>
+  bytesToHex(sha256(utf8ToBytes(`ramu-pair-commit:1:${publicKey}`)))
+
+/** Everything both sides saw; the code, token and result check are all bound to it. */
+export interface PairTranscript {
+  requestId: string
+  hostId: string
+  commit: string
+  deviceKey: string
+  hostKey: string
+}
+
+export interface PairSecrets {
+  /** Six digits, shown as `123 456` on both screens. */
+  code: string
+  /** The device's bearer token, in the same form as a code-paired token. */
+  token: string
+  macKey: Uint8Array
+}
+
+export function pairSecrets(secret: Uint8Array, peerKey: string, transcript: PairTranscript): PairSecrets {
+  if (!isPairKey(peerKey) || !isPairKey(transcript.deviceKey) || !isPairKey(transcript.hostKey))
+    throw new Error('Invalid pairing key')
+  let shared: Uint8Array
+  try {
+    shared = x25519.getSharedSecret(secret, hexToBytes(peerKey))
+  } catch {
+    throw new Error('Invalid pairing key')
+  }
+  // A low-order peer key yields all zeros, which would make the result independent of this side's secret.
+  if (shared.every((byte) => byte === 0)) throw new Error('Invalid pairing key')
+  const { requestId, hostId, commit, deviceKey, hostKey } = transcript
+  const info = utf8ToBytes(`ramu-pair:1:${requestId}:${hostId}:${commit}:${deviceKey}:${hostKey}`)
+  const okm = hkdf(sha256, shared, undefined, info, 4 + 32 + 32)
+  const number = new DataView(okm.buffer, okm.byteOffset, 4).getUint32(0) % 1_000_000
+  const digits = String(number).padStart(6, '0')
+  return {
+    code: `${digits.slice(0, 3)} ${digits.slice(3)}`,
+    token: bytesToHex(okm.slice(4, 36)),
+    macKey: okm.slice(36),
+  }
+}
+
+type Approved = Extract<PairWaitAnswer, { state: 'approved' }>
+export const pairResultMac = (macKey: Uint8Array, result: Omit<Approved, 'state' | 'mac'>): string =>
+  bytesToHex(
+    hmac(
+      sha256,
+      macKey,
+      utf8ToBytes(
+        `ramu-pair-result:1:${result.deviceId}:${result.role}:${result.hostId}:${result.expiresAt ?? 'never'}`,
+      ),
+    ),
+  )
+
+export interface PairByRequestResult {
+  deviceId: string
+  token: string
+  hostId: string
+  role: 'owner' | 'viewer'
+  expiresAt: number | null
+}
+
+/** One JSON POST to the host; returns the status and parsed body (null when there is none). */
+export type PairPost = (path: string, body: unknown, signal: AbortSignal) => Promise<{ status: number; body: unknown }>
+
+/** The host does not know pairing by request; the device should ask for a code instead. */
+export class PairRequestUnsupported extends Error {
+  constructor() {
+    super('This host needs a pairing code.')
+  }
+}
+
+/**
+ * The device side. `onCode` runs once the code is known, to show it; the promise settles when the person at the host
+ * answers. Rejects with `PairRequestUnsupported` for an older host and with the host's own message otherwise.
+ */
+export async function requestPairing(input: {
+  post: PairPost
+  name: string
+  random: (bytes: number) => Uint8Array
+  onCode(code: string, expiresAt: number): void
+  signal: AbortSignal
+  now?: () => number
+}): Promise<PairByRequestResult> {
+  const keys = pairKeys(input.random)
+  const commit = pairCommit(keys.publicKey)
+  const failure = (answer: { status: number; body: unknown }) => {
+    if (answer.status === 404) return new PairRequestUnsupported()
+    const message = (answer.body as { error?: unknown } | null)?.error
+    return new Error(typeof message === 'string' ? message : `The host refused the request (${answer.status}).`)
+  }
+  const begun = await input.post(PAIR_REQUEST_PATH, { name: input.name, commit }, input.signal)
+  if (begun.status !== 200) throw failure(begun)
+  const answer = begun.body as PairRequestAnswer
+  if (
+    !answer ||
+    typeof answer.requestId !== 'string' ||
+    !isPairKey(answer.hostKey) ||
+    typeof answer.hostId !== 'string'
+  )
+    throw new Error('The host sent an invalid pairing answer.')
+  const secrets = pairSecrets(keys.secret, answer.hostKey, {
+    requestId: answer.requestId,
+    hostId: answer.hostId,
+    commit,
+    deviceKey: keys.publicKey,
+    hostKey: answer.hostKey,
+  })
+  const revealed = await input.post(
+    PAIR_REVEAL_PATH,
+    { requestId: answer.requestId, key: keys.publicKey },
+    input.signal,
+  )
+  if (revealed.status !== 200) throw failure(revealed)
+  input.onCode(secrets.code, answer.expiresAt)
+  const now = input.now ?? Date.now
+  while (!input.signal.aborted) {
+    const waited = await input.post(PAIR_WAIT_PATH, { requestId: answer.requestId }, input.signal)
+    if (waited.status !== 200) throw failure(waited)
+    const result = waited.body as PairWaitAnswer
+    if (result?.state === 'approved') {
+      const fields = {
+        deviceId: result.deviceId,
+        role: result.role,
+        hostId: result.hostId,
+        expiresAt: result.expiresAt,
+      }
+      // Only the host that ran this exchange can produce the check; a tampered answer is refused.
+      if (result.hostId !== answer.hostId || result.mac !== pairResultMac(secrets.macKey, fields))
+        throw new Error('The host’s answer did not match this pairing.')
+      return { ...fields, token: secrets.token }
+    }
+    if (result?.state === 'denied') throw new Error('The host declined this device.')
+    if (result?.state === 'expired' || now() > answer.expiresAt) throw new Error('The request expired. Try again.')
+  }
+  throw new Error('Pairing was cancelled.')
+}
