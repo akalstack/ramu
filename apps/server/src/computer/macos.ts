@@ -1,3 +1,4 @@
+import type { BrowserFieldFocus } from '@ramu/shared/browserBridge'
 import { execFile } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
@@ -134,10 +135,11 @@ export function actionScript(action: ComputerAction, scale: number): string {
         `var s=$.CGEventCreateScrollWheelEvent(null,$.kCGScrollEventUnitPixel,2,${-Math.round(action.dy)},${-Math.round(action.dx)});${post('s')}`
       )
     case 'type':
-      // One Unicode event per character keeps IME, accents and emoji intact.
+      // One Unicode event per character keeps IME, accents and emoji intact. The character must be passed as a typed
+      // UniChar reference: the bridge turns a plain array or string into nothing, and key code 0 then types "a".
       return (
         head +
-        `var t=${JSON.stringify(action.text)};for(var i=0;i<t.length;i++){var c=t.charCodeAt(i);for(var d=1;d>=0;d--){var e=$.CGEventCreateKeyboardEvent(null,0,d);$.CGEventKeyboardSetUnicodeString(e,1,[c]);${post('e')}}}`
+        `var t=${JSON.stringify(action.text)};for(var i=0;i<t.length;i++){var u=Ref('unsigned short');u[0]=t.charCodeAt(i);for(var d=1;d>=0;d--){var e=$.CGEventCreateKeyboardEvent(null,0,d);$.CGEventKeyboardSetUnicodeString(e,1,u);${post('e')}}}`
       )
     case 'key': {
       const code = keyCode(action.key)
@@ -152,6 +154,23 @@ export function actionScript(action: ComputerAction, scale: number): string {
 }
 
 /** Milliseconds since the last real or synthetic HID event, from `ioreg -c IOHIDSystem` (nanoseconds). Null when unreadable. */
+/** Reads the role of the focused accessibility element; prints `role|subrole`, or nothing when none answers. */
+export const FOCUS_SCRIPT =
+  "ObjC.import('ApplicationServices');var s=$.AXUIElementCreateSystemWide(),f=Ref(),r=Ref(),u=Ref(),o='';" +
+  "if($.AXUIElementCopyAttributeValue(s,$('AXFocusedUIElement'),f)===0){$.AXUIElementCopyAttributeValue(f[0],$('AXRole'),r);" +
+  "$.AXUIElementCopyAttributeValue(f[0],$('AXSubrole'),u);o=ObjC.unwrap(ObjC.castRefToObject(r[0]))+'|'+" +
+  "(u[0]?ObjC.unwrap(ObjC.castRefToObject(u[0])):'')}o"
+
+/** What kind of keyboard the focused element wants, from its accessibility role. */
+export function focusFromRole(output: string): BrowserFieldFocus {
+  const [role = '', subrole = ''] = output.trim().split('|')
+  if (subrole === 'AXSecureTextField') return { editable: true, kind: 'password' }
+  if (subrole === 'AXSearchField') return { editable: true, kind: 'search' }
+  if (role === 'AXTextArea') return { editable: true, kind: 'multiline' }
+  if (role === 'AXTextField' || role === 'AXComboBox') return { editable: true, kind: 'text' }
+  return { editable: false }
+}
+
 export function parseHidIdleMs(registry: string): number | null {
   const match = /"HIDIdleTime"\s*=\s*(\d+)/.exec(registry)
   return match ? Number(match[1]) / 1_000_000 : null
@@ -294,6 +313,15 @@ export class MacosComputerBackend implements ComputerBackend {
    * Whether the person is using the real mouse or keyboard. The HID idle time also resets for events Ramu posts, so
    * anything within a short slack of Ramu's own last injection is ignored, and nothing is judged while one runs.
    */
+  async focusedField(): Promise<BrowserFieldFocus> {
+    if (this.platform !== 'darwin') return { editable: false }
+    try {
+      return focusFromRole(await this.exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', FOCUS_SCRIPT]))
+    } catch {
+      return { editable: false }
+    }
+  }
+
   async localInputActive(): Promise<boolean> {
     if (this.platform !== 'darwin' || this.injecting > 0) return false
     try {

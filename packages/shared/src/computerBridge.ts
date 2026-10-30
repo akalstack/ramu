@@ -1,3 +1,4 @@
+import type { BrowserFieldFocus } from './browserBridge'
 // Contract between the execution server and the computer runtime owner's native broker. The server owns policy,
 // grants and leases; the broker owns OS capture/input. Coordinates are pixels in the most recent observation.
 
@@ -71,6 +72,8 @@ export interface ComputerBackend {
    * backend without it cannot pause the agent by itself, so the person has to take control explicitly.
    */
   localInputActive?(target: ComputerTarget): Promise<boolean>
+  /** The kind of text field focused on the computer, so a phone raises its keyboard after a tap; never the value. */
+  focusedField?(target: ComputerTarget): Promise<BrowserFieldFocus>
   /** How often a watched target is worth capturing, in milliseconds. Cheap streaming backends return less than the default. */
   frameInterval?(target: ComputerTarget): number
   /** Prepares slow one-time setup (for example building a native helper) before the first capture needs it. */

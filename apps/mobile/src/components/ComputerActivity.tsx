@@ -204,12 +204,24 @@ function ComputerViewer({
       io.current.invoke(chat.computerId, 'computer.input', taskId, frame.generation, frame.capturedAt, action),
     )
   }
+  // After a tap, a focused text field on the computer raises the phone keyboard of the matching kind. A computer or
+  // app that does not report focus leaves the keyboard as it was; the keyboard button still opens it.
+  const followFocus = () =>
+    setTimeout(() => {
+      if (!writable()) return
+      void io.current
+        .invoke(chat.computerId, 'computer.focus', taskId)
+        .then((focus) => {
+          if (focus.editable && writable()) keyboard.current?.open(focus.kind)
+        })
+        .catch(() => {})
+    }, 150)
   // Typed keys wait for the one before: autocorrect sends backspaces then the replacement, which must land in order.
   const typed = useRef<Promise<void>>(Promise.resolve())
   // One surface handles every touch: tap clicks, a double tap double-clicks, a held touch right-clicks, a drag scrolls,
   // hold-then-drag drags, and two fingers pinch or move the zoomed picture. Watching, one finger moves a zoomed picture.
-  const latest = useRef({ human, surface, area, view, send })
-  latest.current = { human, surface, area, view, send }
+  const latest = useRef({ human, surface, area, view, send, followFocus })
+  latest.current = { human, surface, area, view, send, followFocus }
   type Touch = {
     start: { x: number; y: number }
     mode: 'pending' | 'hold' | 'scroll' | 'drag' | 'pan' | 'pinch'
@@ -309,7 +321,9 @@ function ComputerViewer({
           now - previous.at < DOUBLE_TAP_MS &&
           Math.hypot(previous.x - current.start.x, previous.y - current.start.y) < 24
         lastTap.current = double ? null : { at: now, ...current.start }
-        void send({ kind: 'click', ...from, ...(double ? { clickCount: 2 } : {}) })
+        void send({ kind: 'click', ...from, ...(double ? { clickCount: 2 } : {}) }).then(() =>
+          latest.current.followFocus(),
+        )
       },
       onPanResponderTerminate: () => {
         clearTimeout(touch.current?.timer)

@@ -478,6 +478,10 @@ export const registerComputerHandlers: RegisterHandlers = ({
       run: (threadId: string, generation: number, capturedAt: number, input: ComputerAction) =>
         viewer(threadId, true).humanInput(device(), generation, { capturedAt }, input),
     },
+    'computer.focus': {
+      args: z.tuple([id]),
+      run: (threadId: string) => viewer(threadId, true).focusedField(device()),
+    },
     'computer.disconnect': {
       args: z.tuple([id]),
       run: (threadId: string) => viewer(threadId, false).controllerDisconnected(device()),

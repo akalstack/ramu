@@ -238,6 +238,9 @@ export class SckDisplayBackend implements ComputerBackend {
   perform(target: ComputerTarget, action: ComputerAction): Promise<void> {
     return this.inner.perform(target, action)
   }
+  focusedField(target: ComputerTarget) {
+    return this.inner.focusedField?.(target) ?? Promise.resolve({ editable: false })
+  }
 
   releaseInput(target: ComputerTarget): void {
     this.inner.releaseInput(target)

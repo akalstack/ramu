@@ -1,8 +1,9 @@
+import { execFileSync } from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
 import type { ComputerAction, ComputerBackend, ComputerGrant } from '@ramu/shared/computerBridge'
 import { ComputerService } from '../src/computer/service'
 import { ComputerRefusal } from '../src/computer/session'
-import { actionScript, keyCode, parseSipsSize } from '../src/computer/macos'
+import { actionScript, focusFromRole, keyCode, parseSipsSize } from '../src/computer/macos'
 
 const grant: ComputerGrant = {
   target: { id: 'display:main', kind: 'display', name: 'Main' },
@@ -191,6 +192,25 @@ describe('macOS backend helpers', () => {
     expect(script).toContain(JSON.stringify('a"); evil('))
     expect(() => actionScript({ kind: 'key', key: 'Nope' }, 1)).toThrow(/Unsupported key/)
     expect(actionScript({ kind: 'click', x: 200, y: 100 }, 2)).toContain('{x:100,y:50}')
+  })
+
+  // Runs the real script with posting replaced by reading each key event's text back; nothing reaches the screen.
+  it.runIf(process.platform === 'darwin')('types the characters given, not key code 0’s "a"', () => {
+    const script = actionScript({ kind: 'type', text: 'hé!' }, 1).replace(
+      /\$\.CGEventPost\(\$\.kCGHIDEventTap, e\);/g,
+      'if(d===1){var l=Ref(),b=Ref();$.CGEventKeyboardGetUnicodeString(e,4,l,b);out.push(b[0])}',
+    )
+    const typed = execFileSync('osascript', ['-l', 'JavaScript', '-e', `var out=[];${script};out.join(',')`])
+    expect(typed.toString().trim()).toBe('104,233,33')
+  })
+
+  it('asks for the matching phone keyboard only for a focused text field', () => {
+    expect(focusFromRole('AXTextField|')).toEqual({ editable: true, kind: 'text' })
+    expect(focusFromRole('AXTextField|AXSecureTextField')).toEqual({ editable: true, kind: 'password' })
+    expect(focusFromRole('AXTextField|AXSearchField')).toEqual({ editable: true, kind: 'search' })
+    expect(focusFromRole('AXTextArea|')).toEqual({ editable: true, kind: 'multiline' })
+    for (const other of ['AXButton|', 'AXWebArea|', '', 'garbage'])
+      expect(focusFromRole(other)).toEqual({ editable: false })
   })
 
   it('reads image dimensions from sips output', () => {

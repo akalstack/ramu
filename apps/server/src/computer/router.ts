@@ -46,6 +46,11 @@ export class ComputerRouter implements ComputerBackend {
       : Promise.resolve(false)
   }
 
+  /** Both target kinds run on this computer, so the system's focused element answers for either. */
+  focusedField(target: ComputerTarget) {
+    return this.display.focusedField?.(target) ?? Promise.resolve({ editable: false })
+  }
+
   warm(): void {
     this.display.warm?.()
   }

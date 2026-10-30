@@ -273,6 +273,8 @@ export interface RamuMethods {
   'computer.rtcKeyFrame'(threadId: string, peerId: string): void
   'computer.rtcClose'(threadId: string, peerId: string): void
   'computer.input'(threadId: string, generation: number, capturedAt: number, action: ComputerAction): void
+  /** The kind of text field focused on the computer, for the controlling device's keyboard. */
+  'computer.focus'(threadId: string): import('./browserBridge').BrowserFieldFocus
   'computer.disconnect'(threadId: string): void
   'hostBrowser.status'(): {
     available: boolean

@@ -1,3 +1,4 @@
+import type { BrowserFieldFocus } from '@ramu/shared/browserBridge'
 import { createHash, randomUUID } from 'node:crypto'
 import {
   COMPUTER_FRAME_STALE_MS,
@@ -347,6 +348,14 @@ export class ComputerSession {
         `The input may or may not have run (${error instanceof Error ? error.message : 'failed'}).`,
       )
     }
+  }
+
+  /** Only the device in control learns whether a text field has focus, and only its kind. */
+  async focusedField(deviceId: string): Promise<BrowserFieldFocus> {
+    this.alive()
+    const controller = this.lease.controller
+    if (controller.kind !== 'human' || controller.deviceId !== deviceId || this.lease.paused) return { editable: false }
+    return (await this.backend.focusedField?.(this.grant.target)) ?? { editable: false }
   }
 
   /** The human controller's viewer went away: input pauses and control is not handed back. */
