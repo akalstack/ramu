@@ -23,6 +23,8 @@ export class DesktopBrowserBroker {
     private readonly send: (clientId: string, request: BrowserBridgeRequest) => boolean,
     private readonly timeoutMs = 30000,
     private readonly hosted?: HostedBrowserBackend,
+    /** Called when a desktop becomes ready or leaves, because the browser agents use may change with it. */
+    private readonly availabilityChanged: () => void = () => {},
   ) {}
 
   /** The desktop currently attached, so a caller can tell whether it is still connected. */
@@ -45,6 +47,7 @@ export class DesktopBrowserBroker {
     if (this.attachment?.clientId !== clientId || this.attachment.token !== token)
       throw new Error('The browser connection is no longer active.')
     this.attachment.ready = true
+    this.availabilityChanged()
   }
 
   async prepare(): Promise<void> {
@@ -58,7 +61,9 @@ export class DesktopBrowserBroker {
 
   detach(clientId: string) {
     if (this.attachment?.clientId !== clientId) return
+    const wasReady = this.attachment.ready
     this.attachment = null
+    if (wasReady) this.availabilityChanged()
     for (const [id, operation] of this.pending) {
       clearTimeout(operation.timer)
       operation.reject(

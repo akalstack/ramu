@@ -11,6 +11,7 @@ import { Input } from '@/components/desktop-input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { Switch } from '@/components/ui/switch'
+import { Dropdown } from '../Menu'
 
 /** Runtime preferences and profile administration stay on the owning host. */
 export function HostBrowserSettings({
@@ -113,6 +114,27 @@ export function HostBrowserSettings({
           {t('Refresh')}
         </Button>
       </div>
+      {local && status?.enabled && (
+        <div className="flex flex-col gap-1">
+          <Dropdown
+            label={t('Browser engine')}
+            value={status.engine ?? 'auto'}
+            disabled={busy}
+            options={[
+              { value: 'auto', label: t('Automatic') },
+              { value: 'chromium', label: t('Host Chromium') },
+            ]}
+            onChange={(value) =>
+              void act(() => invokeOn(hostId, 'hostBrowser.setEngine', value === 'chromium' ? 'chromium' : 'auto'))
+            }
+          />
+          <p className="text-caption text-muted-foreground">
+            {t(
+              'Automatic uses this computer’s own browser while Ramu is open, so pages run natively instead of being streamed, and falls back to Host Chromium when it is not. Host Chromium always runs the page on the host. Threads already running keep the browser they started with.',
+            )}
+          </p>
+        </div>
+      )}
       {local && status?.enabled && (
         <>
           <p className="text-caption text-muted-foreground">{t('Host browser profiles')}</p>

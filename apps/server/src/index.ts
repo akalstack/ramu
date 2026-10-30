@@ -229,7 +229,9 @@ const browserBroker = new DesktopBrowserBroker(
   },
   30000,
   hostBrowser,
+  () => hostBrowser.announce(),
 )
+hostBrowser.useNativeWhen(() => browserBroker.isReady())
 const nativeRequests = new Map<
   string,
   { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }

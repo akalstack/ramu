@@ -120,6 +120,10 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
     },
     'hostBrowser.setup': { args: z.tuple([]), run: () => admin().setup() },
     'hostBrowser.disable': { args: z.tuple([]), run: () => admin().disable() },
+    'hostBrowser.setEngine': {
+      args: z.tuple([z.enum(['auto', 'chromium'])]),
+      run: (engine: 'auto' | 'chromium') => admin().setEngine(engine),
+    },
     'hostBrowser.grants': { args: z.tuple([]), run: () => admin().grantsList() },
     'hostBrowser.grant': {
       args: z.tuple([id, id]),

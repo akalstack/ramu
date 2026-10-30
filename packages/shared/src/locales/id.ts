@@ -601,7 +601,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Proposed revision": "Revisi yang diusulkan",
   "Apply": "Terapkan",
   "Archive unused skills after": "Arsipkan skill yang tidak digunakan setelah",
-  "Automatic": "Otomatis",
   "Automatic learning": "Pembelajaran otomatis",
   "Compact large Ramu tool results before the model reads them. Full output stays available on demand.": "Ringkas hasil tool Ramu yang besar sebelum dibaca model. Hasil lengkap tetap dapat diambil saat diperlukan.",
   "Current memory": "Memori saat ini",
@@ -3958,4 +3957,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Could not load changes": "Tidak dapat memuat perubahan",
   "Check the connection to the host, then try again.": "Periksa koneksi ke host, lalu coba lagi.",
   "Delete “{name}” permanently? Its history is deleted too.": "Hapus “{name}” secara permanen? Riwayatnya juga ikut terhapus.",
+  "Browser engine": "Mesin browser",
+  "Automatic": "Otomatis",
+  "Host Chromium": "Chromium host",
+  "Automatic uses this computer’s own browser while Ramu is open, so pages run natively instead of being streamed, and falls back to Host Chromium when it is not. Host Chromium always runs the page on the host. Threads already running keep the browser they started with.": "Otomatis memakai browser bawaan komputer ini selama Ramu terbuka, sehingga halaman berjalan secara native tanpa di-stream, dan beralih ke Chromium host saat tidak terbuka. Chromium host selalu menjalankan halaman di host. Thread yang sedang berjalan tetap memakai browser yang dipakainya saat mulai.",
 }

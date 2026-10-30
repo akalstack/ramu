@@ -28,8 +28,12 @@ export interface HostedBrowserBackend {
   endRun(threadId: string, runId: string): void
 }
 /** Host-owned browser. Paired owner devices share terminal-style access; tabs remain scoped to their thread. */
+export type BrowserEngine = 'auto' | 'chromium'
 export class HostBrowser implements HostedBrowserBackend {
   private enabled = true
+  /** `auto` uses the desktop app's own native browser while it is connected; `chromium` always uses this host's. */
+  private engine: BrowserEngine = 'auto'
+  private nativeAvailable: () => boolean = () => false
   private readonly profiles: BrowserProfiles
   private factory?: HostGuestFactory
   private runtime?: BrowserRuntime
@@ -58,9 +62,28 @@ export class HostBrowser implements HostedBrowserBackend {
     try {
       this.enabled = readFileSync(join(root, 'enabled'), 'utf8') === '1'
     } catch {}
+    try {
+      this.engine = readFileSync(join(root, 'engine'), 'utf8') === 'chromium' ? 'chromium' : 'auto'
+    } catch {}
   }
+  /** Tells the host when a native desktop browser is connected, so `auto` can prefer it. */
+  useNativeWhen(available: () => boolean) {
+    this.nativeAvailable = available
+  }
+  /** Whether the browser agents and viewers use is this host's Chromium rather than the connected desktop's. */
   selected() {
-    return this.enabled
+    return this.enabled && (this.engine === 'chromium' || !this.nativeAvailable())
+  }
+  /** Re-announces which browser is in use, after a desktop connects or leaves. */
+  announce() {
+    this.changed()
+  }
+  setEngine(engine: BrowserEngine) {
+    if (engine !== 'auto' && engine !== 'chromium') throw new Error('Choose Automatic or Host Chromium.')
+    mkdirSync(this.root, { recursive: true, mode: 0o700 })
+    writeFileSync(join(this.root, 'engine'), engine, { mode: 0o600 })
+    this.engine = engine
+    this.changed()
   }
   async prepare(): Promise<void> {
     if (!this.enabled) throw new Error('The host browser is turned off. Turn it on in Browser settings.')
@@ -70,6 +93,8 @@ export class HostBrowser implements HostedBrowserBackend {
     return {
       available: !!this.runtime,
       enabled: this.enabled,
+      engine: this.engine,
+      selected: this.selected(),
       location: 'execution-host-chromium' as const,
       ...(!this.runtime ? { reason: this.reason } : {}),
     }

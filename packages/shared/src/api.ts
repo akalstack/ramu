@@ -277,6 +277,10 @@ export interface RamuMethods {
   'hostBrowser.status'(): {
     available: boolean
     enabled?: boolean
+    /** `auto` prefers the connected desktop's native browser; `chromium` always uses this host's Chromium. */
+    engine?: 'auto' | 'chromium'
+    /** Whether the browser agents use right now is this host's Chromium (false: the connected desktop's native one). */
+    selected?: boolean
     /** A paired device can see and control the browser agents use here: the host Chromium or the attached desktop's. */
     viewable?: boolean
     location?: 'execution-host-chromium'
@@ -292,6 +296,8 @@ export interface RamuMethods {
   ): { token: string; id: string; name: string; tabs: number; remove: boolean }
   'hostBrowser.profileConfirm'(token: string): void
   'hostBrowser.disable'(): void
+  /** Automatic uses the connected desktop's native browser; Host Chromium always uses this host's. */
+  'hostBrowser.setEngine'(engine: 'auto' | 'chromium'): void
   'hostBrowser.grants'(): { device: string; thread: string; expires: number }[]
   'hostBrowser.grant'(deviceId: string, taskId: string): void
   'hostBrowser.revoke'(deviceId: string, taskId: string): void
