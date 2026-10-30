@@ -5,7 +5,8 @@ import type { ComputerAction, ComputerModifier } from './computerBridge'
 export function computerControllerLabel(session: ComputerSessionSummary): string {
   if (session.interruption === 'local-input') return 'Paused: you are using this computer’s mouse or keyboard'
   if (session.paused) return 'Control paused'
-  if (session.controller.kind === 'human') return 'You are in control'
+  if (session.controller.kind === 'human')
+    return session.controlledHere === false ? 'Another of your devices has control' : 'You are in control'
   if (session.controller.kind === 'agent') return 'Agent control'
   return 'Ready'
 }

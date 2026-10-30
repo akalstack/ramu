@@ -119,6 +119,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
       interruption: session.interruption,
       handoffRequest: session.handoffRequest,
       detectsLocalInput: session.detectsLocalInput,
+      controlledHere: controller.kind === 'human' && controller.deviceId === device(),
     }
   }
   return {
@@ -393,7 +394,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
         return summary(threadId)
       },
     },
-    // A second device never takes control from the first: it asks, and the device in control answers.
+    // Older viewers ask the device in control instead of taking it; the device in control can still answer.
     'computer.requestHandoff': {
       args: z.tuple([id]),
       run: (threadId: string) => {

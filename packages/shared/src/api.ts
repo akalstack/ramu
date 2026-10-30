@@ -171,6 +171,8 @@ export interface ComputerSessionSummary {
   interruption?: 'local-input' | null
   /** The device asking the human controller for control, if any. */
   handoffRequest?: string | null
+  /** Whether the person in control is using the device that asked. False means another of their devices has it. */
+  controlledHere?: boolean
   /** False when mouse and keyboard use on the computer cannot be noticed, so the person must take control explicitly. */
   detectsLocalInput?: boolean
 }

@@ -104,7 +104,7 @@ function ComputerViewer({
     active,
   )
   const live = video.status === 'live'
-  const human = !viewOnly && current.controller.kind === 'human' && !current.paused
+  const human = !viewOnly && current.controller.kind === 'human' && current.controlledHere !== false && !current.paused
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => setActive(state === 'active'))
     return () => subscription.remove()

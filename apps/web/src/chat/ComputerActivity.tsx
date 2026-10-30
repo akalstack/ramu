@@ -109,7 +109,8 @@ function Viewer({
   const live = video.status === 'live'
   const [liveSession, setLiveSession] = useState(session)
   const current = live ? liveSession : session
-  const human = !viewOnly && current.controller.kind === 'human'
+  // Control on another of the person's devices shows that device has it; Take control moves it here.
+  const human = !viewOnly && current.controller.kind === 'human' && current.controlledHere !== false
   // With video there is no image to carry the control generation, so read it from the session once a second.
   useEffect(() => {
     if (!live) return

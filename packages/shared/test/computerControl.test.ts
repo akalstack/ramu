@@ -16,6 +16,11 @@ const base = {
 }
 
 describe('computer control copy', () => {
+  it('says when the person controls from another of their devices', () => {
+    const human = { ...base, controller: { kind: 'human' as const, deviceId: 'phone' } }
+    expect(computerControllerLabel({ ...human, controlledHere: true })).toBe('You are in control')
+    expect(computerControllerLabel({ ...human, controlledHere: false })).toBe('Another of your devices has control')
+  })
   it('explains a pause caused by local mouse or keyboard use', () => {
     expect(
       computerControllerLabel({
