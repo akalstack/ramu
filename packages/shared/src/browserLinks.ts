@@ -48,6 +48,27 @@ export function canOpenBrowserLinkOnDevice(value: string): boolean {
   }
 }
 
+const LOOPBACK = /^(localhost|.+\.localhost|127(\.\d+){3}|0\.0\.0\.0|\[::1?\])$/
+
+/**
+ * Where a phone can load a host browser page itself: the execution host's loopback address becomes the address the
+ * phone already reaches the host at, keeping port and path. Null for non-web pages, URLs with credentials, or a host the
+ * phone only reaches through its own loopback (an SSH tunnel), where the rewritten address would point at the phone.
+ */
+export function phoneBrowserUrl(page: string, hostAddress: string): string | null {
+  try {
+    const url = new URL(page)
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null
+    if (!LOOPBACK.test(url.hostname.toLowerCase())) return url.href
+    const host = new URL(hostAddress).hostname.toLowerCase()
+    if (!host || LOOPBACK.test(host)) return null
+    url.hostname = host
+    return url.href
+  } catch {
+    return null
+  }
+}
+
 /** Device-state keys for what the address box searches with when typed text is not an address. */
 export const SEARCH_ENGINE_KEY = 'ramu.browser.searchEngine'
 export const SEARCH_CUSTOM_KEY = 'ramu.browser.searchCustom'

@@ -18,6 +18,7 @@ import {
   Minus,
   RefreshCcwDot,
   SunMoon,
+  Smartphone,
   Trash2,
 } from 'lucide-react-native'
 import type {
@@ -29,6 +30,7 @@ import type {
 } from '@ramu/shared/browserBridge'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { translate } from '@ramu/shared/i18n'
+import { phoneBrowserUrl } from '@ramu/shared/browserLinks'
 import type { Chat } from '../runtime/types'
 import type { RemoteKey } from '../runtime/remoteKeyboard'
 import { useStore } from '../runtime/store'
@@ -46,6 +48,7 @@ import {
   useViewerMenu,
   type ViewerMenuItem,
 } from './ViewerChrome'
+import PhoneBrowser from './PhoneBrowser'
 import {
   CONTROL_TEXT,
   addressUrl,
@@ -111,6 +114,7 @@ export function BrowserViewer({
   const [pageText, setPageText] = useState('')
   const [observation, setObservation] = useState<BrowserPageSnapshot | null>(null)
   const [uploadPath, setUploadPath] = useState('')
+  const [phonePage, setPhonePage] = useState<string | null>(null)
   const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | 'display' | null>(null)
   const downloadsOpen = panel === 'downloads'
   const menu = useViewerMenu()
@@ -212,7 +216,8 @@ export function BrowserViewer({
     setFrameReady(false)
     setFrame('')
     setFrameError('')
-    if (viewOnly || !active || !online || !chat.taskId || !tabId || !allowed()) return
+    // The host stops capturing while the page is open in this phone's own browser.
+    if (viewOnly || !active || phonePage || !online || !chat.taskId || !tabId || !allowed()) return
     return watchBrowserFrames({
       next: (after) => io.current.invoke(chat.computerId, 'hostBrowser.nextFrame', chat.taskId!, tabId, after),
       fallback: () => io.current.invoke(chat.computerId, 'hostBrowser.frame', chat.taskId!, tabId),
@@ -228,7 +233,7 @@ export function BrowserViewer({
         if (allowed()) setFrameError(message)
       },
     })
-  }, [chat.computerId, chat.taskId, tabId, active, online, viewOnly, allowed])
+  }, [chat.computerId, chat.taskId, tabId, active, phonePage, online, viewOnly, allowed])
   useEffect(() => {
     if (!controlled || !frameReady || !tabId || generation === undefined || !chat.taskId) return
     const queue = new BrowserInputQueue(async (input) => {
@@ -381,7 +386,8 @@ export function BrowserViewer({
       },
     }),
   ).current
-  const host = store.computers.find((computer) => computer.id === chat.computerId)?.name
+  const computer = store.computers.find((entry) => entry.id === chat.computerId)
+  const host = computer?.name
   const selectTab = (id: string) => {
     setSelected(id)
     setDraft(null)
@@ -441,6 +447,7 @@ export function BrowserViewer({
       setPageText(snapshot.text)
       setObservation(snapshot)
     })
+  const phoneUrl = tab && computer ? phoneBrowserUrl(tab.url, computer.address) : null
   const fileInputs = observation?.elements.filter((element) => element.type === 'file') ?? []
   const MENU_ITEMS: Record<ReturnType<typeof browserMenu>[number], Omit<ViewerMenuItem, 'key'>> = {
     paste: {
@@ -465,6 +472,11 @@ export function BrowserViewer({
       onPress: () => setPanel('display'),
     },
     newTab: { title: t('New tab'), icon: Plus, onPress: startNewTab },
+    openOnPhone: {
+      title: t('Open on this phone'),
+      icon: Smartphone,
+      onPress: () => phoneUrl && setPhonePage(phoneUrl),
+    },
     readText: {
       title: t('Read page text'),
       icon: FileText,
@@ -492,7 +504,13 @@ export function BrowserViewer({
         }),
     },
   }
-  const menuItems = browserMenu({ hasTab: !!tab, own, hostManaged, fileInput: fileInputs.length > 0 }).map((key) => ({
+  const menuItems = browserMenu({
+    hasTab: !!tab,
+    own,
+    hostManaged,
+    fileInput: fileInputs.length > 0,
+    phonePage: !!phoneUrl,
+  }).map((key) => ({
     key,
     ...MENU_ITEMS[key],
   }))
@@ -508,6 +526,8 @@ export function BrowserViewer({
         </View>
       </View>
     )
+  if (phonePage)
+    return <PhoneBrowser url={phonePage} rewritten={phonePage !== tab?.url} onClose={() => setPhonePage(null)} />
   const editable = own || !tab || newTab
   const nextControl = state ? controlAction(state) : null
   const message = error || frameError

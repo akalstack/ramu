@@ -1,5 +1,11 @@
 import { expect, it } from 'vitest'
-import { browserFaviconFrom, canOpenBrowserLinkOnDevice, isWebLink, linkTargetFrom } from '../src/browserLinks'
+import {
+  browserFaviconFrom,
+  canOpenBrowserLinkOnDevice,
+  isWebLink,
+  linkTargetFrom,
+  phoneBrowserUrl,
+} from '../src/browserLinks'
 
 it('only an explicit choice moves links into the integrated browser', () => {
   expect(linkTargetFrom('integrated')).toBe('integrated')
@@ -38,4 +44,24 @@ it('never opens the execution host loopback, private/IP or credential-bearing ad
     'file:///tmp/a',
   ])
     expect(canOpenBrowserLinkOnDevice(url)).toBe(false)
+})
+
+it('points host loopback pages at the address the phone reaches the host on, and leaves other pages alone', () => {
+  const host = 'http://100.64.0.7:7788'
+  expect(phoneBrowserUrl('http://localhost:5173/app?x=1#top', host)).toBe('http://100.64.0.7:5173/app?x=1#top')
+  expect(phoneBrowserUrl('http://127.0.0.1:3000/', host)).toBe('http://100.64.0.7:3000/')
+  expect(phoneBrowserUrl('http://0.0.0.0:8080/', host)).toBe('http://100.64.0.7:8080/')
+  expect(phoneBrowserUrl('http://[::1]:4000/', host)).toBe('http://100.64.0.7:4000/')
+  expect(phoneBrowserUrl('http://app.localhost:3000/', 'https://studio.tail1234.ts.net')).toBe(
+    'http://studio.tail1234.ts.net:3000/',
+  )
+  expect(phoneBrowserUrl('http://localhost:3000/', 'http://[fd7a::5]:7788')).toBe('http://[fd7a::5]:3000/')
+  expect(phoneBrowserUrl('https://example.com/a', host)).toBe('https://example.com/a')
+  expect(phoneBrowserUrl('http://192.168.1.20:3000/', host)).toBe('http://192.168.1.20:3000/')
+})
+it('never offers a page the phone cannot safely load itself', () => {
+  for (const page of ['about:blank', 'chrome://settings', 'file:///etc/hosts', 'https://user:pw@example.com/', 'nope'])
+    expect(phoneBrowserUrl(page, 'http://100.64.0.7:7788')).toBeNull()
+  expect(phoneBrowserUrl('http://localhost:3000/', 'http://127.0.0.1:7788')).toBeNull()
+  expect(phoneBrowserUrl('http://localhost:3000/', 'not a url')).toBeNull()
 })

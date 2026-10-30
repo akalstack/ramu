@@ -3961,4 +3961,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Automatic": "Otomatis",
   "Host Chromium": "Chromium host",
   "Automatic uses this computer’s own browser while Ramu is open, so pages run natively instead of being streamed, and falls back to Host Chromium when it is not. Host Chromium always runs the page on the host. Threads already running keep the browser they started with.": "Otomatis memakai browser bawaan komputer ini selama Ramu terbuka, sehingga halaman berjalan secara native tanpa di-stream, dan beralih ke Chromium host saat tidak terbuka. Chromium host selalu menjalankan halaman di host. Thread yang sedang berjalan tetap memakai browser yang dipakainya saat mulai.",
+  "Open on this phone": "Buka di ponsel ini",
+  "On this phone": "Di ponsel ini",
+  "Back to the host browser": "Kembali ke browser host",
+  "Open this page in the mobile app to load it on this device.": "Buka halaman ini di aplikasi seluler untuk memuatnya di perangkat ini.",
+  "Open in browser": "Buka di browser",
+  "This page did not load on this phone.": "Halaman ini tidak termuat di ponsel ini.",
+  "It runs on the host’s localhost. Start the dev server on all addresses (for example with --host 0.0.0.0) and allow it through the host’s firewall, or go back to the host browser.": "Halaman ini berjalan di localhost host. Jalankan server pengembangan di semua alamat (misalnya dengan --host 0.0.0.0) dan izinkan melalui firewall host, atau kembali ke browser host.",
+  "Check that this phone can reach the address, or go back to the host browser.": "Pastikan ponsel ini dapat menjangkau alamat tersebut, atau kembali ke browser host.",
 }

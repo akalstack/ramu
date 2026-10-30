@@ -174,6 +174,7 @@ function load(file, os, overrides = {}, globals = {}) {
         }
       if (id === '@ramu/shared/browserLiveViewer')
         return load('../../../packages/shared/src/browserLiveViewer.ts', os, {}, globals)
+      if (id === '@ramu/shared/browserLinks') return browserLinks
       if (id === '@ramu/shared/chat/toolActivity') return toolActivity
       if (id === './sendJournal') return sendJournal
       if (id === './goalVerify') return goalVerify

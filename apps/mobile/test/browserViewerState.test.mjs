@@ -105,17 +105,20 @@ test('the control strip always offers the next step it can take', async () => {
 
 test('the overflow menu lists only actions that work for this tab and browser', async () => {
   const { browserMenu } = await import('../src/runtime/browserViewerState.ts')
-  assert.deepEqual(browserMenu({ hasTab: false, own: false, hostManaged: true, fileInput: false }), ['newTab'])
-  assert.deepEqual(browserMenu({ hasTab: true, own: false, hostManaged: false, fileInput: true }), [
+  assert.deepEqual(browserMenu({ hasTab: false, own: false, hostManaged: true, fileInput: false, phonePage: true }), [
+    'newTab',
+  ])
+  assert.deepEqual(browserMenu({ hasTab: true, own: false, hostManaged: false, fileInput: true, phonePage: false }), [
     'newTab',
     'readText',
     'closeTab',
   ])
-  assert.deepEqual(browserMenu({ hasTab: true, own: true, hostManaged: true, fileInput: true }), [
+  assert.deepEqual(browserMenu({ hasTab: true, own: true, hostManaged: true, fileInput: true, phonePage: true }), [
     'paste',
     'hardReload',
     'display',
     'newTab',
+    'openOnPhone',
     'readText',
     'upload',
     'downloads',

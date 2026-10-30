@@ -125,22 +125,25 @@ export function controlAction(state: ControlState): 'take' | 'release' | null {
 }
 
 export type BrowserMenuKey =
-  'paste' | 'hardReload' | 'display' | 'newTab' | 'readText' | 'upload' | 'downloads' | 'closeTab'
+  'paste' | 'hardReload' | 'display' | 'newTab' | 'openOnPhone' | 'readText' | 'upload' | 'downloads' | 'closeTab'
 
 /**
  * Overflow actions offered for the current tab. Only working actions appear: file transfers need the host-managed
- * browser, and pasting, reloading, display changes or uploading need the phone to hold control.
+ * browser, pasting, reloading, display changes or uploading need the phone to hold control, and opening on the phone
+ * needs a web page the phone can address.
  */
 export function browserMenu(context: {
   hasTab: boolean
   own: boolean
   hostManaged: boolean
   fileInput: boolean
+  phonePage: boolean
 }): BrowserMenuKey[] {
   const keys: BrowserMenuKey[] = []
   if (context.own) keys.push('paste', 'hardReload', 'display')
   keys.push('newTab')
   if (!context.hasTab) return keys
+  if (context.phonePage) keys.push('openOnPhone')
   keys.push('readText')
   if (context.hostManaged && context.own && context.fileInput) keys.push('upload')
   if (context.hostManaged) keys.push('downloads')
