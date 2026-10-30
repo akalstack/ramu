@@ -59,7 +59,7 @@ The desktop has one shell renderer for every paired host. `HostSelectionProvider
 
 ### Integrated browser
 
-The server's browser broker resolves a runtime per turn: host-managed Chromium (default; prepared on first use) or, when that is off, one named local desktop event stream.
+The server's browser broker resolves a runtime per turn: the attached local desktop's browser over its event stream when one is ready and the engine is Automatic, otherwise host-managed Chromium (prepared on first use). Turning the host browser off always uses the desktop.
 
 - **Isolation:** tool arguments cannot choose another thread, run or desktop. The backend and profile are frozen with the provider connection; a disconnect or run stop settles pending work without replaying a mutation. Remote execution has no implicit bridge to the viewing desktop's localhost or sign-ins.
 - **Viewing:** paired owner devices view the host browser through the existing host connection, like terminals. A private CDP compositor feed keeps only the newest bounded JPEG per tab, shared across viewers. No CDP endpoint or page JavaScript authority reaches clients, and viewer-role devices cannot control it.
