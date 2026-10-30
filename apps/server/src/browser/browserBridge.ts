@@ -122,7 +122,7 @@ async function executeViewer(
     case 'read':
       return runtime.inspectForAgent(tabId, 'viewer', owner)
     case 'take':
-      return runtime.takeControl(tabId, device, { local: false })
+      return runtime.takeControl(tabId, device)
     case 'release':
       return operation.runId
         ? runtime.giveToAgent(tabId, device, operation.runId)

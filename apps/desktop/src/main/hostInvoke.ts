@@ -54,6 +54,8 @@ export const isHostInvokeAllowed = (method: unknown): method is string =>
   typeof method === 'string' &&
   !NATIVE.has(method) &&
   ([
+    // Read-only; tells this device its own role on that host.
+    'background.status',
     'providers.status',
     'mcp.status',
     'settings.app.get',

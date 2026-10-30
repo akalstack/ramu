@@ -389,7 +389,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
     'computer.takeControl': {
       args: z.tuple([id]),
       run: (threadId: string) => {
-        viewer(threadId, true).takeControl(device(), { local: device() === 'local' })
+        viewer(threadId, true).takeControl(device())
         return summary(threadId)
       },
     },

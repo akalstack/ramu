@@ -11,7 +11,8 @@ export function profileLabel(profileId: string): string {
   return 'Named profile · shared with other tabs'
 }
 
-export type ControlState = 'offline' | 'backgrounded' | 'disconnected' | 'agent' | 'viewing' | 'yours' | 'settling'
+export type ControlState =
+  'offline' | 'backgrounded' | 'disconnected' | 'agent' | 'elsewhere' | 'viewing' | 'yours' | 'settling'
 
 /** One plain state for the controls, so they never imply control the phone does not hold. */
 export function controlState(
@@ -22,7 +23,9 @@ export function controlState(
   if (!context.active) return 'backgrounded'
   if (tab.paused) return 'disconnected'
   if (tab.controller === 'agent') return 'agent'
-  if (tab.controller !== 'human' || tab.generation !== context.ownedGeneration) return 'viewing'
+  if (tab.controller !== 'human') return 'viewing'
+  // A person's other device took the tab (or this phone never held it): taking it back is one tap.
+  if (tab.generation !== context.ownedGeneration) return 'elsewhere'
   return tab.inputReady ? 'yours' : 'settling'
 }
 
@@ -31,6 +34,7 @@ export const CONTROL_TEXT: Record<ControlState, string> = {
   backgrounded: 'Paused while Ramu is in the background',
   disconnected: 'Control disconnected. Take control again to continue.',
   agent: 'The agent is in control',
+  elsewhere: 'Another of your devices has control',
   viewing: 'Viewing only',
   yours: 'You are in control',
   settling: 'Waiting for the current browser action to finish',

@@ -73,6 +73,9 @@ export class BrowserDebugger {
         if (!this.contents.debugger.isAttached()) this.contents.debugger.attach('1.3')
         await Promise.all([
           this.contents.debugger.sendCommand('Page.enable'),
+          // A page driven from a phone or the agent is often not the focused window; without this a click there never
+          // focuses the field, so typing goes nowhere and the phone cannot tell a text field was tapped.
+          this.contents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true }),
           this.contents.debugger.sendCommand('Network.enable', {
             maxTotalBufferSize: 65536,
             maxResourceBufferSize: 8192,
@@ -247,7 +250,12 @@ export class BrowserDebugger {
    */
   async remoteInput(input: BrowserHumanInput): Promise<void> {
     await this.ensure()
-    if (input.kind === 'key') return this.key(input.key, false)
+    if (input.kind === 'key') {
+      const modifiers = (input.modifiers ?? []).map((modifier) =>
+        modifier === 'Primary' ? (process.platform === 'darwin' ? 'Meta' : 'Control') : modifier,
+      )
+      return this.key(input.key, false, modifiers)
+    }
     if (input.kind === 'text') {
       await this.contents.debugger.sendCommand('Input.insertText', { text: input.text })
       return
@@ -271,6 +279,18 @@ export class BrowserDebugger {
       button: input.button,
       clickCount: input.clickCount,
     })
+  }
+  /** A fixed layout size while the page's pane is hidden; `null` gives the page its pane's real size again. */
+  async parkedViewport(size: { width: number; height: number } | null): Promise<void> {
+    await this.ensure()
+    if (size)
+      await this.contents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
+        width: size.width,
+        height: size.height,
+        deviceScaleFactor: 0,
+        mobile: false,
+      })
+    else await this.contents.debugger.sendCommand('Emulation.clearDeviceMetricsOverride')
   }
   /** Follows the page's light or dark preference, or forces one, for this tab only. */
   async colorScheme(value: 'system' | 'light' | 'dark'): Promise<void> {

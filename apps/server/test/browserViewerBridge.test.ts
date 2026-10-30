@@ -35,7 +35,7 @@ it('answers a paired device as that device, never adopting a released tab for an
   await run(r, { op: 'frame', tabId: TAB })
   await run(r, { op: 'take', tabId: TAB })
   expect(r.adoptReleased).not.toHaveBeenCalled()
-  expect(r.takeControl).toHaveBeenCalledWith(TAB, 'phone', { local: false })
+  expect(r.takeControl).toHaveBeenCalledWith(TAB, 'phone')
 })
 
 it('requires this device to hold the tab before navigating, typing or closing', async () => {

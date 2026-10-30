@@ -1,15 +1,17 @@
 import { BrowserInputQueue, watchBrowserFrames } from '@ramu/shared/browserLiveViewer'
-import { BrowserTabButton, BrowserTabCloseButton, BrowserTabFrame } from '@/components/browser-tab-controls'
+import { BrowserTabChip, type BrowserTabActions } from './BrowserTabChip'
 import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Plus, RotateCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Plus, RotateCw, Upload } from 'lucide-react'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import type {
   BrowserDialog,
   BrowserHumanInput,
+  BrowserInputModifier,
   BrowserScreenshot,
   BrowserPageSnapshot,
 } from '@ramu/shared/browserBridge'
+import { BROWSER_INPUT_KEY } from '@ramu/shared/browserBridge'
 import type { ViewDescriptor } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
@@ -18,11 +20,16 @@ import { useHost } from '../workspace/HostProvider'
 import { useAppSettings } from '../settings/AppSettings'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
-import { addressFrom, browserFaviconFrom } from '@ramu/shared/browserLinks'
+import { addressFrom } from '@ramu/shared/browserLinks'
+import { ramu } from '../ipc'
 import { useSearchEngine } from './searchEngine'
 import { takeBrowserNavigation, onBrowserNavigation } from './browserNavigation'
 import { takeWantedTab, onWantedTab, NEW_TAB } from './browserPane'
 import { HostBrowserDownloads } from './HostBrowserDownloads'
+
+const MAC = navigator.platform.toUpperCase().includes('MAC')
+/** Shortcuts that edit the page: select all, copy, cut, undo, redo, and word or line jumps with the arrows. */
+const PAGE_SHORTCUTS = /^([acxzy]|Arrow(Up|Down|Left|Right)|Backspace|Delete|Home|End)$/
 
 /** Live compositor frames over the authenticated host connection. Native desktop tabs use BrowserView directly. */
 export function HostBrowserView({
@@ -43,16 +50,12 @@ export function HostBrowserView({
   const [image, setImage] = useState<BrowserScreenshot | null>(null)
   const [owned, setOwned] = useState<number | null>(null)
   const [address, setAddress] = useState(view.url ?? '')
-  const [text, setText] = useState('')
-  const [privateText, setPrivateText] = useState(true)
   const [dialog, setDialog] = useState<BrowserDialog | null>(null)
   const [dialogText, setDialogText] = useState('')
-  const [pageText, setPageText] = useState('')
   const [observation, setObservation] = useState<BrowserPageSnapshot | null>(null)
   const [uploadPath, setUploadPath] = useState('')
   const [uploadRef, setUploadRef] = useState('')
   useEffect(() => {
-    setPageText('')
     setImage(null)
     setDialog(null)
     setDialogText('')
@@ -77,6 +80,8 @@ export function HostBrowserView({
   const current = useRef(tab)
   current.current = tab
   const controlled = !viewOnly && !!tab && tab.controller === 'human' && tab.generation === owned && !tab.paused
+  // A person's other device holds the tab; taking it here is one click, and that device is told.
+  const elsewhere = !viewOnly && !!tab && tab.controller === 'human' && !controlled && !tab.paused
   const readyGeneration = useRef('')
   const controlKey = tab ? `${tab.id}:${tab.generation}` : ''
   if (tab?.inputReady) readyGeneration.current = controlKey
@@ -254,6 +259,31 @@ export function HostBrowserView({
       if (allowed()) setError(t(errorText(error)))
     })
   }
+  const selectTab = (entry: BrowserTabInfo) => {
+    if (!allowed()) return
+    setSelected(entry.id)
+    addressEdited.current = false
+    setAddress(entry.url)
+    setImage(null)
+    setOwned(null)
+  }
+  const closeTabs = (entries: BrowserTabInfo[]) =>
+    void act(async () => {
+      for (const entry of entries) await host.invoke('hostBrowser.close', taskId, entry.id)
+    })
+  const tabActions: BrowserTabActions = {
+    select: selectTab,
+    close: (entry) => closeTabs([entry]),
+    closeOthers: (entry) => closeTabs(tabs.filter((other) => other.id !== entry.id)),
+    closeToRight: (entry) => closeTabs(tabs.slice(tabs.findIndex((other) => other.id === entry.id) + 1)),
+    duplicate: (entry) => void open(entry.url, true),
+    reload: (entry) => {
+      if (entry.id !== tab?.id) selectTab(entry)
+      void act(() => host.invoke('hostBrowser.history', taskId, entry.id, 'reload'))
+    },
+    openExternal: (entry) => void act(() => ramu.invoke('app.openExternal', entry.url)),
+    newTab: () => void open(new URL(search.template).origin, true),
+  }
   const page = useRef<HTMLDivElement | null>(null)
   const wheelAction = useRef<(event: WheelEvent) => void>(() => {})
   wheelAction.current = (event) => {
@@ -298,46 +328,26 @@ export function HostBrowserView({
           aria-label={t('Browser tabs')}
           className="flex items-center gap-1 overflow-x-auto border-b border-(--line) p-1"
         >
-          {tabs.map((entry) => (
-            <BrowserTabFrame key={entry.id} active={entry.id === tab?.id}>
-              <BrowserTabButton
-                aria-selected={entry.id === tab?.id}
-                disabled={viewOnly}
-                onClick={() => {
-                  if (!allowed()) return
-                  setSelected(entry.id)
-                  addressEdited.current = false
-                  setAddress(entry.url)
-                  setImage(null)
-                  setOwned(null)
-                }}
-              >
-                {browserFaviconFrom(entry.url, entry.faviconUrl) && (
-                  <img
-                    alt=""
-                    aria-hidden="true"
-                    width={14}
-                    height={14}
-                    referrerPolicy="no-referrer"
-                    src={entry.faviconUrl}
-                    onError={(event) => {
-                      event.currentTarget.style.visibility = 'hidden'
-                    }}
-                  />
-                )}
-                <span className="truncate">{entry.title || entry.url}</span>
-              </BrowserTabButton>
-              {entry.id === tab?.id && (
-                <BrowserTabCloseButton
-                  aria-label={t('Close tab')}
-                  disabled={!controlled || busy}
-                  onClick={() => void act(() => host.invoke('hostBrowser.close', taskId, entry.id))}
-                >
-                  <X size={12} />
-                </BrowserTabCloseButton>
-              )}
-            </BrowserTabFrame>
+          {tabs.map((entry, index) => (
+            <BrowserTabChip
+              key={entry.id}
+              tab={entry}
+              index={index}
+              count={tabs.length}
+              active={entry.id === tab?.id}
+              disabled={viewOnly || busy}
+              actions={tabActions}
+            />
           ))}
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t('New browser tab')}
+            onClick={() => void open(new URL(search.template).origin, true)}
+          >
+            <Plus size={14} />
+          </Button>
         </div>
         <form
           className="flex items-center gap-1 border-b border-(--line) p-2"
@@ -378,15 +388,26 @@ export function HostBrowserView({
             }}
             disabled={!!tab && !own}
           />
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t('New browser tab')}
-            onClick={() => void open(new URL(search.template).origin, true)}
-          >
-            <Plus size={14} />
-          </Button>
+          {own && tab && (
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t('Upload a file')}
+              disabled={busy}
+              onClick={() =>
+                void act(async () => {
+                  const snapshot = await host.invoke('hostBrowser.read', taskId, tab.id)
+                  const field = snapshot.elements.find((element) => element.type === 'file')
+                  if (!field) throw new Error('This page has no file field.')
+                  setObservation(snapshot)
+                  setUploadRef(String(field.ref))
+                })
+              }
+            >
+              <Upload size={14} />
+            </Button>
+          )}
           <HostBrowserDownloads canAccess={allowed} taskId={taskId} tabId={tab?.id} own={own} />
           {tab && (
             <Button
@@ -409,38 +430,11 @@ export function HostBrowserView({
             </Button>
           )}
         </form>
-        <p className="m-0 px-3 py-1 text-caption text-muted-foreground">
-          {t('Browser runs on the selected execution host. Sign-ins stay there.')}
-        </p>
-        {(error || frameError) && (
+        {(error || frameError || elsewhere) && (
           <p role="status" className="m-0 px-3 py-1 text-caption">
-            {error || t(frameError)}
+            {error ||
+              (frameError ? t(frameError) : t('Another of your devices has control. Take control to use it here.'))}
           </p>
-        )}
-        {tab && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() =>
-              void act(async () => {
-                const snapshot = await host.invoke('hostBrowser.read', taskId, tab.id)
-                setPageText(snapshot.text)
-                setObservation(snapshot)
-                setUploadRef(String(snapshot.elements.find((element) => element.type === 'file')?.ref ?? ''))
-              })
-            }
-          >
-            {t('Read page text')}
-          </Button>
-        )}
-        {pageText && (
-          <div
-            role="region"
-            aria-label={t('Page text')}
-            className="max-h-40 overflow-auto whitespace-pre-wrap p-3 text-caption"
-          >
-            {pageText}
-          </div>
         )}
         {own && observation?.elements.some((element) => element.type === 'file') && (
           <form
@@ -510,22 +504,38 @@ export function HostBrowserView({
           </div>
         )}
         <div
-          className="min-h-0 flex-1 overflow-auto bg-background"
+          className="min-h-0 flex-1 overflow-auto bg-background outline-none"
           tabIndex={own ? 0 : -1}
           aria-label={t('Page')}
+          // Typing goes straight to the page, as in a browser: characters as text, editing keys and shortcuts such as
+          // ⌘A as keys (on the page's own computer's shortcut key), and pasting as text.
           onKeyDown={(event) => {
-            if (
-              !own ||
-              event.ctrlKey ||
-              event.metaKey ||
-              event.altKey ||
-              !/^(Enter|Escape|Tab|Arrow(Up|Down|Left|Right)|Backspace|Delete|Home|End|PageUp|PageDown)$/.test(
-                event.key,
-              )
-            )
+            if (!own || event.nativeEvent.isComposing) return
+            const primary = MAC ? event.metaKey : event.ctrlKey
+            const other = MAC ? event.ctrlKey : event.metaKey
+            if (other) return
+            if (event.key.length === 1 && !primary && !event.altKey) {
+              event.preventDefault()
+              input({ kind: 'text', text: event.key })
               return
+            }
+            const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
+            // ⌘V arrives as a paste event; Ramu's own shortcuts such as ⌘W stay with the app.
+            if (!BROWSER_INPUT_KEY.test(key) || (primary && !PAGE_SHORTCUTS.test(key))) return
+            if (key.length === 1 && !primary) return
+            const modifiers: BrowserInputModifier[] = [
+              ...(primary ? (['Primary'] as const) : []),
+              ...(event.shiftKey ? (['Shift'] as const) : []),
+              ...(event.altKey ? (['Alt'] as const) : []),
+            ]
             event.preventDefault()
-            input({ kind: 'key', key: event.key })
+            input({ kind: 'key', key, ...(modifiers.length ? { modifiers } : {}) })
+          }}
+          onPaste={(event) => {
+            const pasted = event.clipboardData.getData('text/plain').slice(0, 2000)
+            if (!own || !pasted) return
+            event.preventDefault()
+            input({ kind: 'text', text: pasted })
           }}
           ref={attachPage}
         >
@@ -542,7 +552,7 @@ export function HostBrowserView({
                   x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
                   y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)),
                   button: 'left',
-                  clickCount: 1,
+                  clickCount: event.detail >= 2 ? 2 : 1,
                 })
               }}
             />
@@ -552,41 +562,6 @@ export function HostBrowserView({
             </p>
           )}
         </div>
-        {own && (
-          <form
-            className="flex gap-2 border-t border-(--line) p-2"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (text && tab)
-                void act(async () => {
-                  if (!inputQueue.current) throw new Error('Take control again to continue.')
-                  await inputQueue.current.push({ kind: 'text', text })
-                  setText((current) => (current === text ? '' : current))
-                })
-            }}
-          >
-            <Input
-              type={privateText ? 'password' : 'text'}
-              autoComplete="off"
-              aria-label={t('Text for the focused website field')}
-              maxLength={2000}
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              aria-pressed={!privateText}
-              onClick={() => setPrivateText(!privateText)}
-            >
-              {privateText ? t('Show text') : t('Hide text')}
-            </Button>
-            <Button size="sm" disabled={busy || !text}>
-              {t('Type')}
-            </Button>
-          </form>
-        )}
       </div>
     </>
   )

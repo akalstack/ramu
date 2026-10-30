@@ -129,12 +129,13 @@ describe('computer session', () => {
     await session.humanInput('phone', generation, { capturedAt: 7000 }, action)
   })
 
-  it('requires an explicit handoff between devices, but a local takeover wins', () => {
+  it('lets another of the person’s devices take over, and back', () => {
     const { session } = setup()
     session.takeControl('phone')
-    expect(() => session.takeControl('desktop-b')).toThrow(/explicit handoff/)
-    session.takeControl('local', { local: true })
-    expect(session.state.controller).toEqual({ kind: 'human', deviceId: 'local' })
+    session.takeControl('desktop-b')
+    expect(session.state.controller).toEqual({ kind: 'human', deviceId: 'desktop-b' })
+    session.takeControl('phone')
+    expect(session.state.controller).toEqual({ kind: 'human', deviceId: 'phone' })
   })
 
   it('pauses on controller disconnect without handing control back, and releases held input', () => {

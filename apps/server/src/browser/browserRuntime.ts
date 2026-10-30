@@ -299,10 +299,10 @@ export class BrowserRuntime {
       initialController?.kind === 'none'
         ? null
         : initialController?.kind === 'human'
-          ? takeControl(lease, initialController.deviceId, { local: true })
+          ? takeControl(lease, initialController.deviceId)
           : owner.runId
             ? giveToAgent(lease, 'local', owner.runId)
-            : takeControl(lease, 'local', { local: true })
+            : takeControl(lease, 'local')
     if (first?.ok) lease = first.state
     const tab: Tab = {
       id,
@@ -357,7 +357,7 @@ export class BrowserRuntime {
       const opened = await this.open(from.owner, url, from.profileId, from.lease.controller)
       // A popup follows the person's takeover, rather than silently handing its new page back to the agent.
       if (from.lease.controller.kind === 'human')
-        this.takeControl(opened.tab.id, from.lease.controller.deviceId, { local: true })
+        this.takeControl(opened.tab.id, from.lease.controller.deviceId)
       else if (from.lease.controller.kind === 'none') {
         const popup = this.tab(opened.tab.id)
         if (popup.lease.controller.kind === 'agent')
@@ -627,9 +627,9 @@ export class BrowserRuntime {
     this.giveToAgent(id, 'local', runId)
   }
 
-  takeControl(id: string, deviceId: string, options: { local?: boolean } = {}): TabInfo {
+  takeControl(id: string, deviceId: string): TabInfo {
     const tab = this.tab(id)
-    const result = takeControl(tab.lease, deviceId, options)
+    const result = takeControl(tab.lease, deviceId)
     if (!result.ok) throw new BrowserError(result.refused, 'Another device controls this tab. Ask it to hand over.')
     this.downloads?.revoke(id)
     tab.lease = result.state

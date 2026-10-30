@@ -14,10 +14,10 @@ test('names the kind of profile and whether sign-ins are shared', () => {
 test('control state never implies control the phone does not hold', () => {
   assert.equal(controlState(tab(), context()), 'yours')
   assert.equal(controlState(tab({ inputReady: false }), context()), 'settling')
-  assert.equal(controlState(tab({ generation: 2 }), context()), 'viewing')
+  assert.equal(controlState(tab({ generation: 2 }), context()), 'elsewhere')
   assert.equal(controlState(tab({ controller: 'none' }), context()), 'viewing')
   assert.equal(controlState(tab({ controller: 'agent' }), context()), 'agent')
-  assert.equal(controlState(tab(), context({ ownedGeneration: null })), 'viewing')
+  assert.equal(controlState(tab(), context({ ownedGeneration: null })), 'elsewhere')
 })
 
 test('a disconnect, background or offline host takes priority and is never handed back automatically', () => {
@@ -87,6 +87,7 @@ test('the control strip always offers the next step it can take', async () => {
   const { controlAction } = await import('../src/runtime/browserViewerState.ts')
   assert.equal(controlAction('agent'), 'take')
   assert.equal(controlAction('viewing'), 'take')
+  assert.equal(controlAction('elsewhere'), 'take')
   assert.equal(controlAction('disconnected'), 'take')
   assert.equal(controlAction('yours'), 'release')
   assert.equal(controlAction('settling'), 'release')

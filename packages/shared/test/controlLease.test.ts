@@ -59,15 +59,20 @@ describe('control lease', () => {
     })
   })
 
-  it('one human controller at a time: a second device needs a handoff, a local takeover wins', () => {
+  it('one human controller at a time: another of the person’s devices takes over, and the old one is shut out', () => {
     const phone = ok(takeControl(initialLease(), 'phone'))
-    expect(takeControl(phone, 'desktop-b')).toEqual({ ok: false, refused: 'handoff-required' })
     expect(giveToAgent(phone, 'desktop-b', 'run-1')).toEqual({ ok: false, refused: 'handoff-required' })
-    const local = ok(takeControl(phone, 'local', { local: true }))
-    expect(local.controller).toEqual({ kind: 'human', deviceId: 'local' })
-    expect(admitHumanInput(local, 'phone', local.generation)).toEqual({ ok: false, refused: 'not-controller' })
-    expect(admitHumanInput(local, 'local', local.generation).ok).toBe(true)
-    expect(admitHumanInput(local, 'local', local.generation - 1)).toEqual({ ok: false, refused: 'stale-generation' })
+    const desktop = ok(takeControl(phone, 'desktop'))
+    expect(desktop.controller).toEqual({ kind: 'human', deviceId: 'desktop' })
+    expect(desktop.generation).toBe(phone.generation + 1)
+    expect(admitHumanInput(desktop, 'phone', phone.generation)).toEqual({ ok: false, refused: 'not-controller' })
+    expect(admitHumanInput(desktop, 'desktop', desktop.generation).ok).toBe(true)
+    expect(admitHumanInput(desktop, 'desktop', desktop.generation - 1)).toEqual({
+      ok: false,
+      refused: 'stale-generation',
+    })
+    // And back again.
+    expect(ok(takeControl(desktop, 'phone')).controller).toEqual({ kind: 'human', deviceId: 'phone' })
   })
 
   it('a disconnected human pauses input and never hands control to the agent', () => {

@@ -454,7 +454,7 @@ export class HostBrowser implements HostedBrowserBackend {
     const runtime = this.authorized(device, thread)
     if (!runtime.list({ hostId: HOST, threadId: thread }).some((tab) => tab.id === tabId))
       throw new Error('That tab belongs to another thread.')
-    const tab = runtime.takeControl(tabId, device, { local: device === 'local' })
+    const tab = runtime.takeControl(tabId, device)
     this.touch(device)
     return tab
   }

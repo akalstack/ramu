@@ -175,7 +175,7 @@ it('respects Stop across reconnects instead of automatically reopening another a
 it('does not replace a human-controlled target when another app is requested', async () => {
   const s = await setup(async () => true, undefined, true)
   await s.client.callTool({ name: 'computer_open', arguments: { app: 'Notes' } })
-  s.computer.session('thread')!.takeControl('local', { local: true })
+  s.computer.session('thread')!.takeControl('local')
   expect((await s.client.callTool({ name: 'computer_open', arguments: { app: 'Calculator' } })).isError).toBe(true)
   expect(s.computer.session('thread')?.target.name).toBe('Notes')
   expect(s.grant).toHaveBeenCalledTimes(1)

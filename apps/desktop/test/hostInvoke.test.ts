@@ -91,8 +91,11 @@ describe('isHostInvokeAllowed', () => {
   it('allows server-only domains and blocks native ones', () => {
     for (const method of ['tasks.list', 'agent.submit', 'git.status', 'files.read', 'term.write', 'projects.list'])
       expect(isHostInvokeAllowed(method)).toBe(true)
-    for (const method of ['repos.pick', 'term.menu', 'attachments.save', 'background.status', 'computers.list'])
+    for (const method of ['repos.pick', 'term.menu', 'attachments.save', 'background.stop', 'computers.list'])
       expect(isHostInvokeAllowed(method)).toBe(false)
+    // Settings reads this device's role on each host; stopping or restarting that host's service stays there.
+    expect(isHostInvokeAllowed('background.status')).toBe(true)
+    expect(isHostInvokeAllowed('background.restart')).toBe(false)
     expect(isHostInvokeAllowed(42)).toBe(false)
   })
 })

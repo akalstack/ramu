@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { BROWSER_ZOOM_LEVELS } from '@ramu/shared/browserBridge'
+import { BROWSER_INPUT_KEY, BROWSER_ZOOM_LEVELS } from '@ramu/shared/browserBridge'
 import type { RegisterHandlers } from '../types'
 import { id } from '../schemas'
 import { saveBrowserDownload } from '../../browser/download'
@@ -20,24 +20,19 @@ const input = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('scroll'), x: z.number().min(-2000).max(2000), y: z.number().min(-2000).max(2000) }),
   z.object({ kind: z.literal('text'), text: z.string().min(1).max(2000) }),
-  z.object({
-    kind: z.literal('key'),
-    key: z.enum([
-      'Enter',
-      'Escape',
-      'Tab',
-      'ArrowUp',
-      'ArrowDown',
-      'ArrowLeft',
-      'ArrowRight',
-      'Backspace',
-      'Delete',
-      'Home',
-      'End',
-      'PageUp',
-      'PageDown',
-    ]),
-  }),
+  z
+    .object({
+      kind: z.literal('key'),
+      key: z.string().regex(BROWSER_INPUT_KEY),
+      modifiers: z
+        .array(z.enum(['Alt', 'Control', 'Meta', 'Shift', 'Primary']))
+        .max(4)
+        .optional(),
+    })
+    .refine(
+      (input) => input.key.length > 1 || input.modifiers?.some((modifier) => modifier !== 'Shift'),
+      'A letter is typed as text; as a key it needs a shortcut modifier.',
+    ),
 ])
 export const registerHostBrowserHandlers: RegisterHandlers = ({
   hostBrowser,

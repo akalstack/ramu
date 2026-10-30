@@ -8,6 +8,8 @@ const state = vi.hoisted(() => ({
   invoke: vi.fn(),
   host: { id: 'host' },
 }))
+vi.mock('../src/ipc', () => ({ ramu: { invoke: state.invoke }, copyText: async () => {} }))
+vi.mock('../src/views/BrowserTabChip', () => ({ BrowserTabChip: 'tab' }))
 vi.mock('react', async () => ({
   ...(await vi.importActual<typeof import('react')>('react')),
   useRef: (value: unknown) => (state.slots[state.cursor++] ??= { current: value }),
@@ -191,7 +193,8 @@ it('keeps an address draft when a retained tab selection loses host access', asy
     .find((node) => node.props['aria-label'] === 'Address')!
     .props.onChange({ target: { value: 'https://kept.example' } })
   tree = nodes(RenderBrowser())
-  const select = tree.find((node) => node.props['aria-selected'] === false)!.props.onClick
+  const other = tree.find((node) => node.type === 'tab' && node.props.active === false)!
+  const select = () => other.props.actions.select(other.props.tab)
   state.viewer = true
   RenderBrowser()
   select()

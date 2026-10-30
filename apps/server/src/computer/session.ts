@@ -112,7 +112,7 @@ export class ComputerSession {
       return
     }
     if (!active || this.closed) return
-    const result = takeControl(this.lease, 'local', { local: true })
+    const result = takeControl(this.lease, 'local')
     if (!result.ok) return
     this.lease = result.state
     this.latest = null
@@ -305,9 +305,9 @@ export class ComputerSession {
   }
 
   /** A human takes control. Queued agent work is dropped and held input is released. */
-  takeControl(deviceId: string, options: { local?: boolean } = {}) {
+  takeControl(deviceId: string) {
     this.alive()
-    const result = takeControl(this.lease, deviceId, options)
+    const result = takeControl(this.lease, deviceId)
     if (!result.ok) refuse(REFUSALS[result.refused])
     else {
       this.lease = result.state

@@ -57,12 +57,12 @@ export function giveToAgent(state: LeaseState, deviceId: string, runId: string):
 }
 
 /**
- * A human takes control. The agent's queued work is dropped (in-flight count resets for the new generation) and its
- * actions are refused until release. Another human device must be handed over explicitly unless `local` takes over.
+ * A person takes control from any of their devices, including from another device that has it: the agent's queued work
+ * and the other device's input are dropped (in-flight count resets for the new generation), and the device that lost
+ * control sees the new generation and says so. The agent's actions are refused until release.
  */
-export function takeControl(state: LeaseState, deviceId: string, options: { local?: boolean } = {}): LeaseResult {
+export function takeControl(state: LeaseState, deviceId: string): LeaseResult {
   const owner = state.controller
-  if (owner.kind === 'human' && owner.deviceId !== deviceId && !options.local) return refuse('handoff-required')
   if (owner.kind === 'human' && owner.deviceId === deviceId && !state.paused) return { ok: true, state }
   return { ok: true, state: advance(state, { kind: 'human', deviceId }) }
 }

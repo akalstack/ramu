@@ -193,7 +193,7 @@ describe('ownership and agent actions', () => {
   it("a tab handed back with no run active is taken over by the thread's next run, not lost", async () => {
     const { runtime } = setup()
     const { tab } = await runtime.open(user, 'https://a.test')
-    runtime.takeControl(tab.id, 'local', { local: true })
+    runtime.takeControl(tab.id, 'local')
     const handed = runtime.releaseForNextRun(tab.id, 'local')
     expect(handed).toMatchObject({ controller: 'none', released: true })
     // Another thread's run cannot claim it.
@@ -219,7 +219,7 @@ describe('ownership and agent actions', () => {
       user,
       () => new Promise<string>((r) => (finish = r)),
     )
-    runtime.takeControl(tab.id, 'local', { local: true })
+    runtime.takeControl(tab.id, 'local')
     await expect(
       runtime.agentAction(tab.id, 'r1', released.generation, user, async () => 'late'),
     ).rejects.toMatchObject({ code: 'human-controlled' })
@@ -232,14 +232,16 @@ describe('ownership and agent actions', () => {
         throw new Error('boom')
       }),
     ).rejects.toThrow('boom')
-    expect(runtime.takeControl(tab.id, 'local', { local: true }).controller).toBe('human')
+    expect(runtime.takeControl(tab.id, 'local').controller).toBe('human')
   })
 
-  it('a second device must be handed the tab, and a disconnect pauses it', async () => {
+  it('another device takes the tab at a new generation, and a disconnect pauses it', async () => {
     const { runtime } = setup()
     const { tab } = await runtime.open({ ...user }, 'https://a.test')
-    runtime.takeControl(tab.id, 'phone', { local: true })
-    expect(() => runtime.takeControl(tab.id, 'desktop-b')).toThrow(BrowserError)
+    const phone = runtime.takeControl(tab.id, 'phone')
+    const desktop = runtime.takeControl(tab.id, 'desktop-b')
+    expect(desktop.generation).toBeGreaterThan(phone.generation)
+    runtime.takeControl(tab.id, 'phone')
     runtime.controllerDisconnected('phone')
     await expect(runtime.agentAction(tab.id, 'r1', 0, user, async () => 1)).rejects.toBeInstanceOf(BrowserError)
   })
@@ -254,7 +256,7 @@ describe('phone layout', () => {
     await expect(runtime.fitToViewer(tab.id, 'phone', { width: 390, height: 700 }, user)).rejects.toBeInstanceOf(
       BrowserError,
     )
-    runtime.takeControl(tab.id, 'phone', { local: true })
+    runtime.takeControl(tab.id, 'phone')
     expect(await runtime.fitToViewer(tab.id, 'phone', { width: 390, height: 700 }, user)).toEqual({ fitted: true })
     expect(fit).toHaveBeenLastCalledWith({ width: 390, height: 700 })
     expect(runtime.list()[0]!.fitted).toBe(true)
@@ -268,7 +270,7 @@ describe('phone layout', () => {
     const { tab } = await runtime.open({ ...user }, 'https://a.test')
     const fit = vi.fn(async () => {})
     Object.assign(created[0]!.page, { fit })
-    runtime.takeControl(tab.id, 'phone', { local: true })
+    runtime.takeControl(tab.id, 'phone')
     await runtime.fitToViewer(tab.id, 'phone', { width: 390, height: 700 }, user)
     runtime.controllerDisconnected('phone')
     expect(fit).toHaveBeenLastCalledWith(null)
@@ -279,7 +281,7 @@ describe('phone layout', () => {
     const { tab } = await runtime.open({ ...user }, 'https://a.test')
     Object.assign(created[0]!.page, { focusedField: vi.fn(async () => ({ editable: true, kind: 'email' })) })
     await expect(runtime.focusedFieldForHuman(tab.id, 'phone', user)).rejects.toBeInstanceOf(BrowserError)
-    runtime.takeControl(tab.id, 'phone', { local: true })
+    runtime.takeControl(tab.id, 'phone')
     expect(await runtime.focusedFieldForHuman(tab.id, 'phone', user)).toEqual({ editable: true, kind: 'email' })
   })
 
@@ -289,7 +291,7 @@ describe('phone layout', () => {
     const adjust = vi.fn(async () => {})
     Object.assign(created[0]!.page, { adjust })
     await expect(runtime.adjustAsHuman(tab.id, 'phone', { zoom: 1.5 }, user)).rejects.toBeInstanceOf(BrowserError)
-    runtime.takeControl(tab.id, 'phone', { local: true })
+    runtime.takeControl(tab.id, 'phone')
     expect((await runtime.adjustAsHuman(tab.id, 'phone', { zoom: 1.5 }, user)).zoom).toBe(1.5)
     expect((await runtime.adjustAsHuman(tab.id, 'phone', { colorScheme: 'dark' }, user)).colorScheme).toBe('dark')
     const reset = await runtime.adjustAsHuman(tab.id, 'phone', { colorScheme: 'system' }, user)
@@ -301,7 +303,7 @@ describe('phone layout', () => {
   it('leaves a page shown on a desktop untouched', async () => {
     const { runtime } = setup()
     const { tab } = await runtime.open({ ...user }, 'https://a.test')
-    runtime.takeControl(tab.id, 'phone', { local: true })
+    runtime.takeControl(tab.id, 'phone')
     expect(await runtime.fitToViewer(tab.id, 'phone', { width: 390, height: 700 }, user)).toEqual({ fitted: false })
   })
 })
@@ -369,7 +371,7 @@ describe('page observations and native input', () => {
       ref: 1,
       snapshot: observation.snapshot,
     })
-    expect(runtime.takeControl(tab.id, 'local', { local: true })).toMatchObject({
+    expect(runtime.takeControl(tab.id, 'local')).toMatchObject({
       controller: 'human',
       inputReady: false,
     })
@@ -407,7 +409,7 @@ describe('page observations and native input', () => {
     )
     const reading = runtime.inspectForAgent(tab.id, run.runId, user)
     await expect(runtime.inspectForAgent(tab.id, run.runId, user)).rejects.toMatchObject({ code: 'busy' })
-    runtime.takeControl(tab.id, 'local', { local: true })
+    runtime.takeControl(tab.id, 'local')
     finish(result)
     await expect(reading).rejects.toMatchObject({ code: 'stale-snapshot' })
     created[0]!.page.inspect = vi.fn(async () => result)
@@ -457,7 +459,7 @@ describe('private server browser bridge', () => {
     })
     const next = await runtime.inspectForAgent(tab.id, run.runId, user)
     const staged = runtime.beginUpload(tab.id, run.runId, user, 'empty.txt', 0)
-    runtime.takeControl(tab.id, 'person', { local: true })
+    runtime.takeControl(tab.id, 'person')
     await expect(runtime.uploadForAgent(tab.id, run.runId, user, staged.uploadId, next.snapshot, 1)).rejects.toThrow()
     expect(created[0]!.page.act).toHaveBeenCalledTimes(1)
     runtime.closeAll()
@@ -465,7 +467,7 @@ describe('private server browser bridge', () => {
   it('presents only an owned existing tab without navigating, reloading or transferring control', async () => {
     const { runtime, created } = setup()
     const { tab } = await runtime.open(run, 'https://a.test')
-    runtime.takeControl(tab.id, 'person', { local: true })
+    runtime.takeControl(tab.id, 'person')
     const request = {
       requestId: 'present',
       clientId: 'desktop',

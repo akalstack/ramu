@@ -100,7 +100,7 @@ export function browserMethod(runtime: BrowserRuntime, method: string, args: unk
         if (!activeRunId) return runtime.releaseForNextRun(tabId, 'local')
         return runtime.giveToAgent(tabId, 'local', activeRunId)
       }
-      if (method === 'browser.takeControl') return runtime.takeControl(tabId, 'local', { local: true })
+      if (method === 'browser.takeControl') return runtime.takeControl(tabId, 'local')
       return runtime[method.slice('browser.'.length) as 'back' | 'forward' | 'reload' | 'close' | 'hide'](tabId)
     }
     case 'browser.show': {

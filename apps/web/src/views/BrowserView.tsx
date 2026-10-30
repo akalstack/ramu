@@ -383,25 +383,34 @@ export function LocalBrowserView({
 
   return (
     <div ref={pane} className="browser-view flex min-h-0 min-w-0 flex-1 flex-col">
-      {threadTabs.length > 0 && (
-        <div
-          role="tablist"
-          aria-label={t('Browser tabs')}
-          className="flex flex-none items-center gap-1 overflow-x-auto border-b border-(--line) px-2 py-1"
+      <div
+        role="tablist"
+        aria-label={t('Browser tabs')}
+        className="flex flex-none items-center gap-1 overflow-x-auto border-b border-(--line) px-2 py-1"
+      >
+        {threadTabs.map((entry, index) => (
+          <BrowserTabChip
+            key={entry.id}
+            tab={entry}
+            index={index}
+            count={threadTabs.length}
+            active={entry.id === tabId}
+            disabled={busy}
+            actions={tabActions}
+          />
+        ))}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('New browser tab')}
+          title={t('New browser tab')}
+          disabled={busy}
+          onClick={() => void newTab()}
         >
-          {threadTabs.map((entry, index) => (
-            <BrowserTabChip
-              key={entry.id}
-              tab={entry}
-              index={index}
-              count={threadTabs.length}
-              active={entry.id === tabId}
-              disabled={busy}
-              actions={tabActions}
-            />
-          ))}
-        </div>
-      )}
+          <Plus size={14} />
+        </Button>
+      </div>
       {websiteDialog && (
         <div className="flex flex-none flex-col gap-2 border-b border-(--line) bg-fill p-3" role="alert">
           <strong className="text-control">{t('Website dialog')}</strong>
@@ -492,17 +501,6 @@ export function LocalBrowserView({
           onChange={(event) => setAddress(event.target.value)}
           className="min-w-0 flex-1"
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('New browser tab')}
-          title={t('New browser tab')}
-          disabled={busy}
-          onClick={() => void newTab()}
-        >
-          <Plus size={14} />
-        </Button>
         <BrowserDownloads
           key={`${host}:${taskId}`}
           host={host}

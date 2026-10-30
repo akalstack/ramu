@@ -175,7 +175,7 @@ describe('host browser control', () => {
   it('lets a device take only a tab of the thread it was granted', () => {
     browser.grant('phone', 't1')
     expect(browser.take('phone', 't1', 'tab1')).toMatchObject({ controller: 'human' })
-    expect(runtime.takeControl).toHaveBeenCalledWith('tab1', 'phone', { local: false })
+    expect(runtime.takeControl).toHaveBeenCalledWith('tab1', 'phone')
     runtime.list!.mockReturnValue([{ id: 'other' }])
     expect(() => browser.take('phone', 't1', 'tab1')).toThrow(/another thread/)
   })

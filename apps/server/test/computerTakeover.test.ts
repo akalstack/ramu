@@ -80,10 +80,9 @@ describe('local mouse and keyboard use', () => {
 })
 
 describe('handoff between devices', () => {
-  it('needs the controlling device to approve a second device', () => {
+  it('hands control to a device the controlling device approves', () => {
     const { session, backend } = setup(app)
     session.takeControl('phone')
-    expect(() => session.takeControl('desktop')).toThrow(/handoff/i)
     session.requestHandoff('desktop')
     expect(session.handoffRequest).toBe('desktop')
     const generation = session.state.generation
@@ -113,7 +112,7 @@ describe('handoff between devices', () => {
     const { session } = setup(app)
     session.takeControl('phone')
     session.requestHandoff('desktop')
-    session.takeControl('local', { local: true })
+    session.takeControl('local')
     expect(session.handoffRequest).toBeNull()
   })
 })

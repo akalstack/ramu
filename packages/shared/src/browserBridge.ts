@@ -14,11 +14,16 @@ export type BrowserHumanInput =
   | { kind: 'click'; x: number; y: number; button: BrowserMouseButton; clickCount: 1 | 2 }
   | { kind: 'scroll'; x: number; y: number }
   | { kind: 'text'; text: string }
-  | { kind: 'key'; key: string }
+  | { kind: 'key'; key: string; modifiers?: BrowserInputModifier[] }
 
 /** A named key, a single printable character, or F1–F12. */
 export type BrowserKey = string
 export type BrowserModifier = 'Alt' | 'Control' | 'Meta' | 'Shift'
+/** `Primary` is the shortcut key of the computer running the page: Command on macOS, Control elsewhere. */
+export type BrowserInputModifier = BrowserModifier | 'Primary'
+/** Keys a viewer may press as a person's input; a letter only as part of a shortcut, since text arrives as text. */
+export const BROWSER_INPUT_KEY =
+  /^(Enter|Escape|Tab|Arrow(Up|Down|Left|Right)|Backspace|Delete|Home|End|PageUp|PageDown|[a-z])$/
 export type BrowserMouseButton = 'left' | 'right' | 'middle'
 export type BrowserPageAction =
   | { kind: 'upload'; snapshot: number; ref: number; name: string; data: string }

@@ -3969,4 +3969,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "It runs on the host’s localhost. Start the dev server on all addresses (for example with --host 0.0.0.0) and allow it through the host’s firewall, or go back to the host browser.": "Halaman ini berjalan di localhost host. Jalankan server pengembangan di semua alamat (misalnya dengan --host 0.0.0.0) dan izinkan melalui firewall host, atau kembali ke browser host.",
   "Check that this phone can reach the address, or go back to the host browser.": "Pastikan ponsel ini dapat menjangkau alamat tersebut, atau kembali ke browser host.",
   "Open in the host browser": "Buka di browser host",
+  "Another of your devices has control": "Perangkat Anda yang lain sedang mengendalikan",
+  "Another of your devices has control. Take control to use it here.": "Perangkat Anda yang lain sedang mengendalikan. Ambil kendali untuk memakainya di sini.",
 }

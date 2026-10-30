@@ -175,7 +175,7 @@ export class DesktopBrowserBroker {
     if (!operation || operation.clientId !== clientId) return // A late response never resurrects a timed-out operation.
     clearTimeout(operation.timer)
     this.pending.delete(requestId)
-    if (error) operation.reject(new Error('The desktop browser refused the operation. ' + error.slice(0, 500)))
+    if (error) operation.reject(new Error(error.slice(0, 500)))
     else {
       try {
         if ((JSON.stringify(value)?.length ?? 0) > 200000)

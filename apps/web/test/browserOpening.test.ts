@@ -85,7 +85,7 @@ it('does not let another thread consume an explicit link for a shared pane', () 
   expect(takeBrowserNavigation('view', 'thread')).toBe('https://clicked.test')
 })
 
-it('offers a new tab and downloads in the address toolbar even with no tabs', async () => {
+it('offers a new tab after the tabs, as a browser does, and downloads in the toolbar, even with no tabs', async () => {
   const tree = BrowserView({ taskId: 'thread', view: { kind: 'browser', id: 'view' }, visible: true })
   const descendants = (node: unknown): ReactElement<Record<string, unknown>>[] => {
     if (!isValidElement<Record<string, unknown>>(node)) return []
@@ -94,7 +94,8 @@ it('offers a new tab and downloads in the address toolbar even with no tabs', as
   const toolbar = descendants(tree).find((node) => node.type === 'form')!
   const controls = descendants(toolbar)
   expect(controls.some((node) => node.type === BrowserDownloads)).toBe(true)
-  const add = controls.find((node) => node.props['aria-label'] === 'New browser tab')!
+  const strip = descendants(tree).find((node) => node.props.role === 'tablist')!
+  const add = descendants(strip).find((node) => node.props['aria-label'] === 'New browser tab')!
   expect(add.props.type).toBe('button')
   await (add.props.onClick as () => Promise<void>)()
   await settle()

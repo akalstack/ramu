@@ -159,6 +159,7 @@ export class ElectronGuestFactory implements GuestFactory {
       action?: Parameters<GuestPage['act']>[0],
     ) => contents.executeJavaScriptInIsolatedWorld(999, [{ code: browserGuestScript(operation, action) }]) as Promise<T>
     let attached = false
+    let shown = false
     // A page needs a real viewport and a place in the window to lay out and take pointer input, so every page stays
     // attached to the window and is parked off screen while its pane is hidden.
     const ensureAttached = () => {
@@ -204,6 +205,9 @@ export class ElectronGuestFactory implements GuestFactory {
         loaded.catch(() => {})
         await debuggerForPage().ensure()
         await loaded
+        // A page whose pane is hidden has no visible area, so it would lay out at 0×0 and taps from a phone would hit
+        // nothing. It keeps a fixed desktop-sized viewport until its pane shows it.
+        if (!shown) await debuggerForPage().parkedViewport(PARKED)
       },
       url: () => contents.getURL(),
       title: () => contents.getTitle(),
@@ -284,6 +288,8 @@ export class ElectronGuestFactory implements GuestFactory {
       show(bounds) {
         ensureAttached()
         if (!attached) return
+        if (!shown) void debuggerForPage().parkedViewport(null).catch(() => {})
+        shown = true
         view.setBounds({
           x: Math.round(bounds.x),
           y: Math.round(bounds.y),
@@ -292,6 +298,8 @@ export class ElectronGuestFactory implements GuestFactory {
         })
       },
       hide() {
+        if (shown) void debuggerForPage().parkedViewport(PARKED).catch(() => {})
+        shown = false
         if (attached) view.setBounds(PARKED)
         const win = window()
         if (win && !win.isDestroyed() && contents.isFocused()) win.webContents.focus()

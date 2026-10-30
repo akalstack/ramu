@@ -19,6 +19,7 @@ import type {
   BrowserScreenshot,
   BrowserTabAdjust,
 } from '@ramu/shared/browserBridge'
+import { BROWSER_INPUT_KEY } from '@ramu/shared/browserBridge'
 import { browserGuestScript } from '@ramu/shared/browserGuestScript'
 import { HostDownloads } from './hostDownloads'
 import { browserFaviconFrom } from '@ramu/shared/browserLinks'
@@ -424,11 +425,12 @@ export class HostGuestFactory implements GuestFactory {
         else if (input.kind === 'scroll') await page.mouse.wheel(input.x, input.y)
         else if (input.kind === 'text') await page.keyboard.insertText(input.text)
         else {
-          if (
-            !/^(Enter|Escape|Tab|Arrow(Up|Down|Left|Right)|Backspace|Delete|Home|End|PageUp|PageDown)$/.test(input.key)
-          )
+          const modifiers = input.modifiers ?? []
+          if (!BROWSER_INPUT_KEY.test(input.key) || (input.key.length === 1 && !modifiers.some((m) => m !== 'Shift')))
             throw new Error('Unsupported browser key.')
-          await page.keyboard.press(input.key)
+          // Playwright resolves ControlOrMeta to this host's shortcut key and runs macOS editing commands for it.
+          const held = [...new Set(modifiers.map((m) => (m === 'Primary' ? 'ControlOrMeta' : m)))]
+          await page.keyboard.press([...held, input.key].join('+'))
         }
       },
       nextFrame: async (after) => {
