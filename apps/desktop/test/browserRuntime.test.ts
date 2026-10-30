@@ -808,3 +808,30 @@ describe('idle tabs', () => {
     runtime.closeAll()
   })
 })
+
+it('keeps a tab ready for the person while their own input runs, and runs it in order', async () => {
+  const { runtime, created } = setup()
+  const { tab } = await runtime.open(user, 'https://a.test', undefined, { kind: 'human', deviceId: 'phone' })
+  const order: string[] = []
+  let finish!: () => void
+  created[0]!.page.input = vi.fn(async (input) => {
+    order.push(`start ${input.kind}`)
+    if (input.kind === 'click') await new Promise<void>((resolve) => (finish = resolve))
+    order.push(`end ${input.kind}`)
+  })
+  const click = runtime.inputAsHuman(tab.id, 'phone', tab.generation, user, {
+    kind: 'click',
+    x: 0.5,
+    y: 0.5,
+    button: 'left',
+    clickCount: 1,
+  })
+  await Promise.resolve()
+  expect(runtime.list(user)[0]!.inputReady).toBe(true)
+  const typing = runtime.inputAsHuman(tab.id, 'phone', tab.generation, user, { kind: 'text', text: 'hi' })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  finish()
+  await Promise.all([click, typing])
+  expect(order).toEqual(['start click', 'end click', 'start text', 'end text'])
+  expect(runtime.list(user)[0]!.inputReady).toBe(true)
+})

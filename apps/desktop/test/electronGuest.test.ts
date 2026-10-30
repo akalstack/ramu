@@ -6,6 +6,7 @@ const mock = vi.hoisted(() => ({
   execute: vi.fn(),
   permission: vi.fn(),
   check: vi.fn(),
+  userAgent: vi.fn(),
   sessionListeners: new Map<string, (...args: any[]) => void>(),
   preferences: {} as Record<string, unknown>,
 }))
@@ -14,6 +15,9 @@ vi.mock('electron', () => ({
     fromPartition: () => ({
       setPermissionRequestHandler: mock.permission,
       setPermissionCheckHandler: mock.check,
+      getUserAgent: () =>
+        'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 (KHTML, like Gecko) ramu/0.1.0 Chrome/152.0.7977.130 Electron/44.7.0 Safari/537.36',
+      setUserAgent: mock.userAgent,
       on: (event: string, listener: (...args: any[]) => void) => mock.sessionListeners.set(event, listener),
     }),
   },
@@ -61,6 +65,10 @@ it('keeps the page sandboxed without a preload and denies permissions and downlo
     webSecurity: true,
   })
   expect(mock.preferences).not.toHaveProperty('preload')
+  // Sign-in pages refuse an embedded browser that names Electron or the app.
+  expect(mock.userAgent).toHaveBeenCalledWith(
+    'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Safari/537.36',
+  )
   const answer = vi.fn()
   mock.permission.mock.calls[0]![0](null, 'camera', answer)
   expect(answer).toHaveBeenCalledWith(false)

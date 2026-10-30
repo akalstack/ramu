@@ -2,7 +2,15 @@ import { BrowserFrames } from './browserFrames'
 import { randomUUID } from 'node:crypto'
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { chromium, type Browser, type BrowserContext, type Page, type CDPSession, type Dialog } from 'playwright-core'
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type Page,
+  type CDPSession,
+  type Dialog,
+  type LaunchOptions,
+} from 'playwright-core'
 import { readdirSync, rmSync } from 'node:fs'
 import type {
   BrowserDiagnostics,
@@ -14,6 +22,7 @@ import type {
 import { browserGuestScript } from '@ramu/shared/browserGuestScript'
 import { HostDownloads } from './hostDownloads'
 import { browserFaviconFrom } from '@ramu/shared/browserLinks'
+import { browserUserAgent, browserUserAgentMetadata } from '@ramu/shared/browserIdentity'
 import {
   allowedGuestUrl,
   type GuestFactory,
@@ -21,6 +30,15 @@ import {
   type GuestPage,
   type PageSnapshot,
 } from './browserRuntime'
+
+/** Without automation markers, so websites treat the page as a person's browser rather than a bot. */
+const LAUNCH: LaunchOptions = {
+  headless: true,
+  chromiumSandbox: true,
+  timeout: 15_000,
+  ignoreDefaultArgs: ['--enable-automation'],
+  args: ['--disable-blink-features=AutomationControlled'],
+}
 
 /** Host-owned Chromium. No public debugging port, external executable arguments or page-supplied JS. */
 export class HostGuestFactory implements GuestFactory {
@@ -50,9 +68,7 @@ export class HostGuestFactory implements GuestFactory {
   private async temporary(partition: string): Promise<BrowserContext> {
     const browser = await chromium.launch({
       executablePath: this.executable,
-      headless: true,
-      chromiumSandbox: true,
-      timeout: 15_000,
+      ...LAUNCH,
     })
     try {
       const context = await browser.newContext({
@@ -70,9 +86,7 @@ export class HostGuestFactory implements GuestFactory {
   async preflight(): Promise<void> {
     const browser = await chromium.launch({
       executablePath: this.executable,
-      headless: true,
-      chromiumSandbox: true,
-      timeout: 15_000,
+      ...LAUNCH,
     })
     await browser.close()
   }
@@ -95,9 +109,7 @@ export class HostGuestFactory implements GuestFactory {
           ? await this.temporary(partition)
           : await chromium.launchPersistentContext(directory, {
               executablePath: this.executable,
-              headless: true,
-              chromiumSandbox: true,
-              timeout: 15_000,
+              ...LAUNCH,
               viewport: { width: 1024, height: 768 },
               acceptDownloads: false,
               permissions: [],
@@ -258,6 +270,11 @@ export class HostGuestFactory implements GuestFactory {
             })
         })
         cdp = await context.newCDPSession(page)
+        const agent = browserUserAgent(await page.evaluate(() => navigator.userAgent))
+        await cdp.send('Emulation.setUserAgentOverride', {
+          userAgent: agent,
+          userAgentMetadata: browserUserAgentMetadata(agent, process.platform, process.arch),
+        })
         const targetInfo = (await cdp.send('Target.getTargetInfo')).targetInfo
         targetId = targetInfo.targetId
         await this.downloadBridges.get(partition)?.enable(targetInfo.browserContextId)

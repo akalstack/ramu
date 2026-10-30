@@ -1,19 +1,21 @@
 import { useRef, useState } from 'react'
-import { ActivityIndicator, Linking, View } from 'react-native'
+import { ActivityIndicator, Linking, Platform, TextInput, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { ChevronLeft, ExternalLink, RotateCw } from 'lucide-react-native'
+import { ChevronLeft, ExternalLink, Monitor, RotateCw } from 'lucide-react-native'
 import { translate } from '@ramu/shared/i18n'
+import { addressFrom } from '@ramu/shared/browserLinks'
 import { useStore } from '../runtime/store'
-import { space, useTheme } from '../theme'
+import { font, radius, space, useTheme } from '../theme'
 import { Button, T } from './ui'
 import { ControlPill, ViewerHeader } from './ViewerChrome'
 import type { PhoneBrowserProps } from './PhoneBrowser'
 
 /**
  * Loads a host browser page in this phone's own WebView, for scrolling and typing without a stream. It is a private
- * session: nothing from the host browser's profiles reaches it, and it keeps no cookies after closing.
+ * session: nothing from the host browser's profiles reaches it, and it keeps no cookies after closing. The address field
+ * opens addresses and searches as the host browser's does.
  */
-export default function PhoneBrowser({ url, rewritten, onClose }: PhoneBrowserProps) {
+export default function PhoneBrowser({ url, rewritten, searchTemplate, onClose, onOpenOnHost }: PhoneBrowserProps) {
   const { language } = useStore()
   const t = (text: string) => translate(language, text)
   const { c } = useTheme()
@@ -22,6 +24,16 @@ export default function PhoneBrowser({ url, rewritten, onClose }: PhoneBrowserPr
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  const [target, setTarget] = useState(url)
+  const [draft, setDraft] = useState<string | null>(null)
+  const go = () => {
+    const next = addressFrom(draft ?? '', searchTemplate)
+    setDraft(null)
+    if (!next || !/^https?:\/\//i.test(next)) return
+    setFailed(false)
+    if (next === target) view.current?.reload()
+    else setTarget(next)
+  }
   const retry = () => {
     setFailed(false)
     setAttempt((value) => value + 1)
@@ -44,9 +56,44 @@ export default function PhoneBrowser({ url, rewritten, onClose }: PhoneBrowserPr
               onPress={failed ? retry : () => view.current?.reload()}
               size={44}
             />
+            {onOpenOnHost ? (
+              <ControlPill
+                icon={Monitor}
+                label={t('Open in the host browser')}
+                onPress={() => onOpenOnHost(page.url)}
+                size={44}
+              />
+            ) : null}
           </View>
         }
       />
+      <View style={{ paddingHorizontal: space.m, paddingBottom: space.s }}>
+        <TextInput
+          accessibilityLabel={t('Address')}
+          value={draft ?? page.url}
+          onChangeText={setDraft}
+          onBlur={() => setDraft(null)}
+          onSubmitEditing={go}
+          placeholder={t('Search or enter a web address')}
+          placeholderTextColor={c.placeholder}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType={Platform.OS === 'ios' ? 'web-search' : 'url'}
+          returnKeyType="go"
+          selectTextOnFocus
+          numberOfLines={1}
+          style={{
+            height: 40,
+            borderRadius: radius.full,
+            borderWidth: 1,
+            borderColor: c.lineStrong,
+            backgroundColor: c.fill,
+            paddingHorizontal: space.l,
+            color: c.text,
+            fontSize: font.control + 1,
+          }}
+        />
+      </View>
       {failed ? (
         <View style={{ padding: space.l, gap: space.m }}>
           <T weight="600">{t('This page did not load on this phone.')}</T>
@@ -70,7 +117,7 @@ export default function PhoneBrowser({ url, rewritten, onClose }: PhoneBrowserPr
           <WebView<object>
             key={attempt}
             ref={view}
-            source={{ uri: url }}
+            source={{ uri: target }}
             style={{ flex: 1, backgroundColor: c.window }}
             // Every scheme reaches the check below; the whitelist fallback would hand rejected URLs to Linking.openURL.
             originWhitelist={['*']}

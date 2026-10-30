@@ -137,6 +137,7 @@ function load(file, os, overrides = {}, globals = {}) {
     },
   }).outputText
   runInNewContext(code, {
+    URL,
     setTimeout,
     clearTimeout,
     requestAnimationFrame: (callback) => setTimeout(callback, 0),

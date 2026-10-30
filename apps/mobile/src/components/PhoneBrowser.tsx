@@ -10,7 +10,11 @@ export interface PhoneBrowserProps {
   url: string
   /** The page was on the host's localhost and now points at the host's address, so a refused load needs explaining. */
   rewritten: boolean
+  /** Where typed words are searched, as in the host browser's address field. */
+  searchTemplate: string
   onClose(): void
+  /** Moves the page into the host browser, as the person's own tab there, for example to hand it to the agent. */
+  onOpenOnHost?(url: string): void
 }
 
 /** The web companion has no embedded browser; the page opens in a browser tab instead. */

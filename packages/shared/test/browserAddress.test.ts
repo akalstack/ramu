@@ -1,6 +1,5 @@
 import { expect, it } from 'vitest'
-import { searchTemplateFrom } from '@ramu/shared/browserLinks'
-import { addressFrom } from '../src/views/browserAddress'
+import { addressFrom, searchTemplateFrom } from '../src/browserLinks'
 
 const search = 'https://duckduckgo.com/?q=%s'
 

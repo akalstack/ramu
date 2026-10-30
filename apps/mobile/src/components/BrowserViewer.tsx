@@ -1,7 +1,7 @@
 import { BrowserInputQueue, watchBrowserFrames } from '@ramu/shared/browserLiveViewer'
 import { VIEW_ONLY_BROWSER_NOTICE } from '../runtime/viewerAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppState, Image, PanResponder, Pressable, TextInput, View } from 'react-native'
+import { AppState, Image, PanResponder, Platform, Pressable, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import {
   ChevronLeft,
@@ -19,6 +19,7 @@ import {
   RefreshCcwDot,
   SunMoon,
   Smartphone,
+  Search,
   Trash2,
 } from 'lucide-react-native'
 import type {
@@ -30,7 +31,14 @@ import type {
 } from '@ramu/shared/browserBridge'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { translate } from '@ramu/shared/i18n'
-import { phoneBrowserUrl } from '@ramu/shared/browserLinks'
+import {
+  CUSTOM_SEARCH,
+  SEARCH_ENGINES,
+  addressFrom,
+  phoneBrowserUrl,
+  searchTemplateFrom,
+  validSearchTemplate,
+} from '@ramu/shared/browserLinks'
 import type { Chat } from '../runtime/types'
 import type { RemoteKey } from '../runtime/remoteKeyboard'
 import { useStore } from '../runtime/store'
@@ -51,7 +59,6 @@ import {
 import PhoneBrowser from './PhoneBrowser'
 import {
   CONTROL_TEXT,
-  addressUrl,
   browserMenu,
   controlAction,
   controlState,
@@ -66,6 +73,9 @@ import {
 
 /** This device's choice of page layout. Phone layout is the default; Desktop layout is remembered once chosen. */
 const LAYOUT_KEY = 'pref-device:browserLayout'
+/** This device's search for typed words, as the desktop's Settings → Browser → Search engine. */
+const SEARCH_KEY = 'pref-device:searchEngine'
+const SEARCH_CUSTOM_KEY = 'pref-device:searchCustom'
 
 /**
  * The phone views the owning host's browser; it never substitutes a phone WebView or copies credentials. Laid out as a
@@ -115,7 +125,7 @@ export function BrowserViewer({
   const [observation, setObservation] = useState<BrowserPageSnapshot | null>(null)
   const [uploadPath, setUploadPath] = useState('')
   const [phonePage, setPhonePage] = useState<{ url: string; rewritten: boolean } | null>(null)
-  const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | 'display' | null>(null)
+  const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | 'display' | 'search' | null>(null)
   const downloadsOpen = panel === 'downloads'
   const menu = useViewerMenu()
   const addressField = useRef<import('react-native').TextInputInstance>(null)
@@ -404,23 +414,43 @@ export function BrowserViewer({
     setDraft('')
     setTimeout(() => addressField.current?.focus(), 250)
   }
+  const searchEngine = store.drafts?.[SEARCH_KEY] || SEARCH_ENGINES[0].id
+  const searchCustom = store.drafts?.[SEARCH_CUSTOM_KEY] ?? ''
+  const searchTemplate = searchTemplateFrom(searchEngine, searchCustom)
+  /** A tab the person opens is theirs: it starts under their control, listed at once rather than after the next poll. */
+  const openHostTab = (url: string) =>
+    void act(async () => {
+      const result = await invoke(chat.computerId, 'hostBrowser.open', chat.taskId!, url)
+      setTabs((list) => [...list.filter((entry) => entry.id !== result.tab.id), result.tab])
+      setSelected(result.tab.id)
+      setOwned(result.tab.generation)
+      setNewTab(false)
+      setDraft(null)
+    })
   const submitAddress = () => {
-    const url = addressUrl(draft ?? '')
+    // A submit retained from before an access change does nothing, here as for host actions.
+    if (!allowed()) return
+    const url = addressFrom(draft ?? '', searchTemplate)
     if (!url || !chat.taskId) {
       setDraft(null)
       setNewTab(false)
       return
     }
-    void act(async () => {
-      if (tab && !newTab) await invoke(chat.computerId, 'hostBrowser.navigate', chat.taskId!, tab.id, url)
-      else {
-        const result = await invoke(chat.computerId, 'hostBrowser.open', chat.taskId!, url)
-        setSelected(result.tab.id)
-        setOwned(result.tab.generation)
-        setNewTab(false)
-      }
+    // A new page the phone can reach itself, such as a website or a search, opens in this phone's own browser. A page
+    // on the host's localhost stays on the host, where it runs.
+    const reachable = computer ? phoneBrowserUrl(url, computer.address) : null
+    if ((newTab || !tab) && reachable && new URL(reachable).host === new URL(url).host) {
+      setPhonePage({ url: reachable, rewritten: false })
+      setNewTab(false)
       setDraft(null)
-    })
+      return
+    }
+    if (tab && !newTab)
+      void act(async () => {
+        await invoke(chat.computerId, 'hostBrowser.navigate', chat.taskId!, tab.id, url)
+        setDraft(null)
+      })
+    else openHostTab(url)
   }
   const toggleControl = () =>
     tab &&
@@ -472,6 +502,7 @@ export function BrowserViewer({
       onPress: () => setPanel('display'),
     },
     newTab: { title: t('New tab'), icon: Plus, onPress: startNewTab },
+    searchEngine: { title: t('Search engine'), icon: Search, onPress: () => setPanel('search') },
     openOnPhone: {
       title: t('Open on this phone'),
       icon: Smartphone,
@@ -528,7 +559,22 @@ export function BrowserViewer({
       </View>
     )
   if (phonePage)
-    return <PhoneBrowser url={phonePage.url} rewritten={phonePage.rewritten} onClose={() => setPhonePage(null)} />
+    return (
+      <PhoneBrowser
+        url={phonePage.url}
+        rewritten={phonePage.rewritten}
+        searchTemplate={searchTemplate}
+        onClose={() => setPhonePage(null)}
+        onOpenOnHost={
+          chat.taskId
+            ? (url) => {
+                setPhonePage(null)
+                openHostTab(url)
+              }
+            : undefined
+        }
+      />
+    )
   const editable = own || !tab || newTab
   const nextControl = state ? controlAction(state) : null
   const message = error || frameError
@@ -583,7 +629,7 @@ export function BrowserViewer({
           placeholderTextColor={theme.placeholder}
           autoCapitalize="none"
           autoCorrect={false}
-          keyboardType="url"
+          keyboardType={Platform.OS === 'ios' ? 'web-search' : 'url'}
           returnKeyType="go"
           selectTextOnFocus
           numberOfLines={1}
@@ -713,6 +759,45 @@ export function BrowserViewer({
       </View>
       {own ? <RemoteKeyboard handle={keyboard} label={t('Typing into the website')} onKeys={typeKeys} /> : null}
       <ViewerMenu at={menu.at} onClose={menu.close} items={menuItems} label={t('Close menu')} />
+      <Sheet open={panel === 'search'} onClose={() => setPanel(null)} title={t('Search engine')}>
+        <SheetGroup>
+          {SEARCH_ENGINES.map((entry) => (
+            <SheetOption
+              key={entry.id}
+              icon={Search}
+              title={entry.name}
+              selected={searchEngine === entry.id}
+              onPress={() => store.setDraft(SEARCH_KEY, entry.id)}
+            />
+          ))}
+          <SheetOption
+            icon={Globe}
+            title={t('Custom address')}
+            selected={searchEngine === CUSTOM_SEARCH}
+            onPress={() => store.setDraft(SEARCH_KEY, CUSTOM_SEARCH)}
+          />
+        </SheetGroup>
+        {searchEngine === CUSTOM_SEARCH ? (
+          <View style={{ paddingHorizontal: space.l, gap: space.s }}>
+            <TextInput
+              accessibilityLabel={t('Custom search address')}
+              value={searchCustom}
+              onChangeText={(value) => store.setDraft(SEARCH_CUSTOM_KEY, value.trim())}
+              placeholder="https://example.com/search?q=%s"
+              placeholderTextColor={theme.placeholder}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              style={inputStyle}
+            />
+            <T tone="muted" size={font.caption}>
+              {validSearchTemplate(searchCustom)
+                ? t('Searches use this address.')
+                : t('Use a web address with %s where the search words go. DuckDuckGo is used until then.')}
+            </T>
+          </View>
+        ) : null}
+      </Sheet>
       <Sheet open={panel === 'tabs'} onClose={() => setPanel(null)} title={t('Tabs')}>
         {tabs.length ? (
           <SheetGroup>

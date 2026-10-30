@@ -151,6 +151,9 @@ interface Tab {
   observing: boolean
   replacing: boolean
   respondingDialog: boolean
+  /** The controlling person's own input still running. It never makes the tab look busy to that person. */
+  humanInput: Promise<unknown>
+  humanPending: number
   released?: boolean
   /** The controlling device asked for its screen size; dropped as soon as that device stops controlling the tab. */
   fit?: { deviceId: string; width: number; height: number }
@@ -313,6 +316,8 @@ export class BrowserRuntime {
       observing: false,
       replacing: false,
       respondingDialog: false,
+      humanInput: Promise.resolve(),
+      humanPending: 0,
       lastActive: this.now(),
     }
     this.tabs.set(id, tab)
@@ -676,7 +681,7 @@ export class BrowserRuntime {
     const tab = this.tab(id)
     this.assertOwner(tab, owner)
     if (tab.crashed) throw new BrowserError('crashed', 'This page stopped working. Reload it.')
-    if (tab.replacing || tab.observing || tab.lease.inFlight || tab.lease.draining)
+    if (tab.replacing || tab.observing || tab.lease.inFlight || tab.lease.draining || tab.humanPending)
       throw new BrowserError('busy', 'Wait for the current browser operation to finish, then inspect again.')
     const generation = tab.lease.generation
     const revision = tab.snapshot
@@ -802,7 +807,7 @@ export class BrowserRuntime {
     this.assertOwner(tab, owner)
     if (!tab.page.screenshot)
       throw new BrowserError('unavailable', 'Screenshots are unavailable in this browser runtime.')
-    if (tab.crashed || tab.replacing || tab.observing || tab.lease.inFlight || tab.lease.draining)
+    if (tab.crashed || tab.replacing || tab.observing || tab.lease.inFlight || tab.lease.draining || tab.humanPending)
       throw new BrowserError('busy', 'Wait for the current browser operation to finish.')
     const generation = tab.lease.generation,
       revision = tab.snapshot
@@ -1015,7 +1020,7 @@ export class BrowserRuntime {
     const admitted = admitAgentAction(tab.lease, runId, generation)
     if (!admitted.ok)
       throw new BrowserError(admitted.refused, `The agent cannot act on this tab (${admitted.refused}).`)
-    if (tab.replacing || tab.observing || tab.lease.inFlight || tab.lease.draining)
+    if (tab.replacing || tab.observing || tab.lease.inFlight || tab.lease.draining || tab.humanPending)
       throw new BrowserError('busy', 'Wait for the current browser operation to finish and inspect again.')
     tab.lease = admitted.state
     this.syncInput(tab)
@@ -1069,17 +1074,28 @@ export class BrowserRuntime {
   ): Promise<T> {
     const tab = this.tab(id)
     this.assertOwner(tab, owner)
-    const admitted = admitHumanInput(tab.lease, deviceId, generation)
-    if (!admitted.ok) throw new BrowserError(admitted.refused, 'Browser control changed. Refresh before sending input.')
-    if (!humanInputReady(tab.lease) || tab.observing || tab.replacing || tab.crashed)
-      throw new BrowserError('busy', 'Wait for the current browser action to finish.')
-    tab.lease = { ...tab.lease, inFlight: tab.lease.inFlight + 1 }
+    const admit = () => {
+      const admitted = admitHumanInput(tab.lease, deviceId, generation)
+      if (!admitted.ok)
+        throw new BrowserError(admitted.refused, 'Browser control changed. Refresh before sending input.')
+      if (!humanInputReady(tab.lease) || tab.observing || tab.replacing || tab.crashed)
+        throw new BrowserError('busy', 'Wait for the current browser action to finish.')
+    }
+    admit()
+    // The person's input runs in order, after their previous input, and is not counted as agent work: the tab stays
+    // ready for them while a click they made is still loading the next page.
+    tab.humanPending++
     this.invalidate(tab)
+    const run = tab.humanInput.then(() => {
+      admit()
+      return work(tab.page)
+    })
+    tab.humanInput = run.catch(() => {})
     try {
-      return await work(tab.page)
+      return await run
     } finally {
+      tab.humanPending--
       if (this.tabs.get(id) === tab) {
-        tab.lease = settleAgentAction(tab.lease, generation)
         this.syncInput(tab)
         this.changed()
       }

@@ -3696,7 +3696,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Upload a file": "Unggah file",
   "Use main display": "Gunakan layar utama",
   "Viewing only": "Hanya melihat",
-  "Waiting for the agent’s last action to finish…": "Menunggu tindakan terakhir agen selesai…",
   "Website sign-ins and local addresses stay on this host. Paired owner devices can view its browser through the existing connection.": "Login situs dan alamat lokal tetap di host ini. Perangkat pemilik yang dipasangkan dapat melihat browsernya melalui koneksi yang ada.",
   "Browse files": "Jelajahi berkas",
   "Open terminal": "Buka terminal",
@@ -3969,4 +3968,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   "This page did not load on this phone.": "Halaman ini tidak termuat di ponsel ini.",
   "It runs on the host’s localhost. Start the dev server on all addresses (for example with --host 0.0.0.0) and allow it through the host’s firewall, or go back to the host browser.": "Halaman ini berjalan di localhost host. Jalankan server pengembangan di semua alamat (misalnya dengan --host 0.0.0.0) dan izinkan melalui firewall host, atau kembali ke browser host.",
   "Check that this phone can reach the address, or go back to the host browser.": "Pastikan ponsel ini dapat menjangkau alamat tersebut, atau kembali ke browser host.",
+  "Open in the host browser": "Buka di browser host",
 }

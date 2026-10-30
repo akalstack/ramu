@@ -33,7 +33,7 @@ export const CONTROL_TEXT: Record<ControlState, string> = {
   agent: 'The agent is in control',
   viewing: 'Viewing only',
   yours: 'You are in control',
-  settling: 'Waiting for the agent’s last action to finish…',
+  settling: 'Waiting for the current browser action to finish',
 }
 
 /** Turns the host's refusal into the next step for the person. */
@@ -108,15 +108,6 @@ export function tabTitle(
   }
 }
 
-/** Typed addresses without a scheme open over https; an empty draft opens nothing. */
-export function addressUrl(draft: string): string | null {
-  const value = draft.trim()
-  if (!value) return null
-  if (/^https?:\/\//i.test(value)) return value
-  if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^[^:/]+:\d+/.test(value)) return null
-  return `https://${value}`
-}
-
 /** The strip's single action for each control state, so the person always sees the next step. */
 export function controlAction(state: ControlState): 'take' | 'release' | null {
   if (state === 'yours' || state === 'settling') return 'release'
@@ -125,7 +116,16 @@ export function controlAction(state: ControlState): 'take' | 'release' | null {
 }
 
 export type BrowserMenuKey =
-  'paste' | 'hardReload' | 'display' | 'newTab' | 'openOnPhone' | 'readText' | 'upload' | 'downloads' | 'closeTab'
+  | 'paste'
+  | 'hardReload'
+  | 'display'
+  | 'newTab'
+  | 'searchEngine'
+  | 'openOnPhone'
+  | 'readText'
+  | 'upload'
+  | 'downloads'
+  | 'closeTab'
 
 /**
  * Overflow actions offered for the current tab. Only working actions appear: file transfers need the host-managed
@@ -141,7 +141,7 @@ export function browserMenu(context: {
 }): BrowserMenuKey[] {
   const keys: BrowserMenuKey[] = []
   if (context.own) keys.push('paste', 'hardReload', 'display')
-  keys.push('newTab')
+  keys.push('newTab', 'searchEngine')
   if (!context.hasTab) return keys
   if (context.phonePage) keys.push('openOnPhone')
   keys.push('readText')

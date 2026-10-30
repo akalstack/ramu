@@ -83,15 +83,6 @@ test('the header names a tab by title, then host, then address', async () => {
   assert.equal(tabTitle({ title: '', url: '' }, say), 'id:New tab')
 })
 
-test('typed addresses open over https unless a web scheme is given', async () => {
-  const { addressUrl } = await import('../src/runtime/browserViewerState.ts')
-  assert.equal(addressUrl('  '), null)
-  assert.equal(addressUrl('example.com'), 'https://example.com')
-  assert.equal(addressUrl('localhost:3000/x'), 'https://localhost:3000/x')
-  assert.equal(addressUrl('HTTP://192.168.1.36:8123'), 'HTTP://192.168.1.36:8123')
-  assert.equal(addressUrl('javascript:alert(1)'), null)
-})
-
 test('the control strip always offers the next step it can take', async () => {
   const { controlAction } = await import('../src/runtime/browserViewerState.ts')
   assert.equal(controlAction('agent'), 'take')
@@ -107,9 +98,11 @@ test('the overflow menu lists only actions that work for this tab and browser', 
   const { browserMenu } = await import('../src/runtime/browserViewerState.ts')
   assert.deepEqual(browserMenu({ hasTab: false, own: false, hostManaged: true, fileInput: false, phonePage: true }), [
     'newTab',
+    'searchEngine',
   ])
   assert.deepEqual(browserMenu({ hasTab: true, own: false, hostManaged: false, fileInput: true, phonePage: false }), [
     'newTab',
+    'searchEngine',
     'readText',
     'closeTab',
   ])
@@ -118,6 +111,7 @@ test('the overflow menu lists only actions that work for this tab and browser', 
     'hardReload',
     'display',
     'newTab',
+    'searchEngine',
     'openOnPhone',
     'readText',
     'upload',

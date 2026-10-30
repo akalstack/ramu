@@ -18,12 +18,11 @@ import { useHost } from '../workspace/HostProvider'
 import { useAppSettings } from '../settings/AppSettings'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
-import { addressFrom } from './browserAddress'
+import { addressFrom, browserFaviconFrom } from '@ramu/shared/browserLinks'
 import { useSearchEngine } from './searchEngine'
 import { takeBrowserNavigation, onBrowserNavigation } from './browserNavigation'
 import { takeWantedTab, onWantedTab, NEW_TAB } from './browserPane'
 import { HostBrowserDownloads } from './HostBrowserDownloads'
-import { browserFaviconFrom } from '@ramu/shared/browserLinks'
 
 /** Live compositor frames over the authenticated host connection. Native desktop tabs use BrowserView directly. */
 export function HostBrowserView({

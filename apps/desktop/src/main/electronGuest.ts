@@ -1,4 +1,5 @@
 import { WebContentsView, session, shell, Menu, type BrowserWindow, type Session, type WebContents } from 'electron'
+import { browserUserAgent } from '@ramu/shared/browserIdentity'
 import type { GuestFactory, GuestHandlers, GuestPage, PageSnapshot } from './browserRuntime'
 import { BrowserDebugger } from './browserDebugger'
 import type {
@@ -40,6 +41,7 @@ export class ElectronGuestFactory implements GuestFactory {
     const guest = session.fromPartition(partition)
     if (ElectronGuestFactory.guarded.has(guest)) return
     ElectronGuestFactory.guarded.add(guest)
+    guest.setUserAgent(browserUserAgent(guest.getUserAgent()))
     guest.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
     guest.setPermissionCheckHandler(() => false)
     guest.on('will-download', (event, item, contents) => {

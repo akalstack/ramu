@@ -7,7 +7,7 @@ import { SettingsGroupTitle } from '@/components/settings-row'
 import { ramu } from '../ipc'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
-import { addressFrom } from '../views/browserAddress'
+import { addressFrom } from '@ramu/shared/browserLinks'
 import { BrowserImportWizard } from './BrowserImportWizard'
 
 /** Profile metadata and user-only sign-in. Site data and administration stay on this desktop. */

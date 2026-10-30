@@ -89,6 +89,8 @@ protocol.registerSchemesAsPrivileged([
 
 // Set the native runtime identity before creating menus, windows or notifications.
 app.setName('Ramu')
+// Websites read navigator.webdriver as a bot signal; the integrated browser is driven by a person or a supervised agent.
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled')
 if (process.platform === 'win32') app.setAppUserModelId('app.ramu.desktop')
 app.setAboutPanelOptions({ applicationName: 'Ramu', applicationVersion: app.getVersion() })
 
