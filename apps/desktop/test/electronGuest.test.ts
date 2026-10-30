@@ -78,17 +78,21 @@ it('keeps the page sandboxed without a preload and denies permissions and downlo
   expect(preventDefault).toHaveBeenCalled()
 })
 
-it('blocks native input until the runtime enables it and revokes it immediately', () => {
+it('takes this computer’s mouse and keyboard only while this computer controls the page, and revokes them at once', () => {
   const page = create()
   const event = { preventDefault: vi.fn() }
   for (const name of ['before-input-event', 'before-mouse-event']) mock.listeners.get(name)!(event)
   expect(event.preventDefault).toHaveBeenCalledTimes(2)
-  page.setHumanInput(true)
+  page.setHumanInput(true, true)
   mock.listeners.get('before-mouse-event')!(event)
   expect(event.preventDefault).toHaveBeenCalledTimes(2)
+  // Another of the person's devices controls it: the page takes that device's input, not this computer's.
+  page.setHumanInput(true, false)
+  mock.listeners.get('before-mouse-event')!(event)
+  expect(event.preventDefault).toHaveBeenCalledTimes(3)
   page.setHumanInput(false)
   mock.listeners.get('before-input-event')!(event)
-  expect(event.preventDefault).toHaveBeenCalledTimes(3)
+  expect(event.preventDefault).toHaveBeenCalledTimes(4)
 })
 
 it('executes fixed inspection/action code in a separate world with caller text encoded as data', async () => {

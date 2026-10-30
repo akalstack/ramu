@@ -100,7 +100,7 @@ async function executeViewer(
     runtime.controllerDisconnected(device)
     return null
   }
-  if (operation.op === 'list') return runtime.list(owner)
+  if (operation.op === 'list') return runtime.list(owner, device)
   if (operation.op === 'open')
     return runtime.open(owner, operation.url, operation.profileId, { kind: 'human', deviceId: device })
   const tabId = operation.tabId

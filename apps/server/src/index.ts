@@ -115,6 +115,7 @@ const remoteAccess = new RemoteAccess({
   devices,
   hostId,
   pairing: pairingRequests,
+  paired: () => syncDiscovery(),
   // The addresses the listener really serves, for a paired device to try when its saved one stops answering.
   routes: () =>
     network.enabled

@@ -20,11 +20,15 @@ import { useAppSettings } from '../settings/AppSettings'
 import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
 
-const controllerText = (controller: BrowserTabInfo['controller']) =>
-  controller === 'agent'
+/** A person controls the tab from this computer, rather than from another of their devices. */
+const mine = (tab: BrowserTabInfo | null | undefined) => tab?.controller === 'human' && tab.controlledHere !== false
+const controllerText = (tab: BrowserTabInfo) =>
+  tab.controller === 'agent'
     ? t('The agent is controlling this page')
-    : controller === 'human'
-      ? t('You are in control')
+    : tab.controller === 'human'
+      ? mine(tab)
+        ? t('You are in control')
+        : t('Another of your devices has control. Take control to use it here.')
       : ''
 
 /**
@@ -421,12 +425,12 @@ export function LocalBrowserView({
               aria-label={t('Website prompt answer')}
               value={dialogText}
               maxLength={20000}
-              disabled={dialogBusy || tab?.controller !== 'human'}
+              disabled={dialogBusy || !mine(tab)}
               onChange={(event) => setDialogText(event.target.value)}
             />
           )}
           <div className="flex gap-2">
-            {tab?.controller === 'human' ? (
+            {mine(tab) ? (
               <>
                 <Button
                   type="button"
@@ -506,15 +510,15 @@ export function LocalBrowserView({
           host={host}
           taskId={taskId}
           tabId={tabId}
-          human={tab?.controller === 'human' && !!tab.inputReady}
+          human={mine(tab) && !!tab?.inputReady}
         />
-        {tab && (tab.controller !== 'human' || tab.paused) && (
+        {tab && (!mine(tab) || tab.paused) && (
           <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => void take()}>
             <Hand size={14} />
             {t('Take control')}
           </Button>
         )}
-        {tab?.controller === 'human' && tab.inputReady && (
+        {mine(tab) && tab?.inputReady && (
           <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => void release()}>
             {t('Give control to agent')}
           </Button>
@@ -531,7 +535,7 @@ export function LocalBrowserView({
           </Button>
         )}
       </form>
-      {(error || listError || tab?.crashed || (tab && (tab.released || controllerText(tab.controller)))) && (
+      {(error || listError || tab?.crashed || (tab && (tab.released || controllerText(tab)))) && (
         <p
           className="m-0 px-3 py-1 text-caption text-muted-foreground"
           role={error || listError || tab?.crashed ? 'alert' : 'status'}
@@ -544,10 +548,10 @@ export function LocalBrowserView({
                 ? t('Handed back. The agent takes over on its next run.')
                 : tab?.crashed
                   ? t('This page stopped working. Reload it.')
-                  : tab?.controller === 'human' && !tab.inputReady
+                  : mine(tab) && !tab?.inputReady
                     ? t('Waiting for the current browser action to finish')
                     : tab
-                      ? controllerText(tab.controller)
+                      ? controllerText(tab)
                       : '')}
         </p>
       )}

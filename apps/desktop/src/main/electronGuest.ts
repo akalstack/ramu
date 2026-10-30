@@ -93,6 +93,8 @@ export class ElectronGuestFactory implements GuestFactory {
       consoleEntries.push({ level: details.level, message: details.message.slice(0, 500) })
     })
     let humanInput = false
+    // The person at this computer may use the page with its own mouse and keyboard only while this computer controls it.
+    let localInput = false
     contents.on('context-menu', (_event, params) => {
       if (!humanInput) return
       let url: URL
@@ -132,7 +134,7 @@ export class ElectronGuestFactory implements GuestFactory {
       host.webContents.sendInputEvent({ type: 'keyUp', keyCode: input.key, modifiers })
     })
     const inputGuard = (event: { preventDefault(): void }) => {
-      if (!humanInput) event.preventDefault()
+      if (!localInput) event.preventDefault()
     }
     contents.on('before-input-event', inputGuard)
     contents.on('before-mouse-event', inputGuard)
@@ -282,13 +284,17 @@ export class ElectronGuestFactory implements GuestFactory {
       },
       dialog: () => driver?.dialog() ?? null,
       handleDialog: (id, accept, text) => debuggerForPage().handleDialog(id, accept, text),
-      setHumanInput: (enabled) => {
+      setHumanInput: (enabled, local) => {
         humanInput = enabled
+        localInput = enabled && !!local
       },
       show(bounds) {
         ensureAttached()
         if (!attached) return
-        if (!shown) void debuggerForPage().parkedViewport(null).catch(() => {})
+        if (!shown)
+          void debuggerForPage()
+            .parkedViewport(null)
+            .catch(() => {})
         shown = true
         view.setBounds({
           x: Math.round(bounds.x),
@@ -298,7 +304,10 @@ export class ElectronGuestFactory implements GuestFactory {
         })
       },
       hide() {
-        if (shown) void debuggerForPage().parkedViewport(PARKED).catch(() => {})
+        if (shown)
+          void debuggerForPage()
+            .parkedViewport(PARKED)
+            .catch(() => {})
         shown = false
         if (attached) view.setBounds(PARKED)
         const win = window()

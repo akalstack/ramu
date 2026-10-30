@@ -16,7 +16,7 @@ export type ControlState =
 
 /** One plain state for the controls, so they never imply control the phone does not hold. */
 export function controlState(
-  tab: Pick<BrowserTabInfo, 'controller' | 'paused' | 'generation'> & { inputReady?: boolean },
+  tab: Pick<BrowserTabInfo, 'controller' | 'paused' | 'generation' | 'controlledHere'> & { inputReady?: boolean },
   context: { online: boolean; active: boolean; ownedGeneration: number | null },
 ): ControlState {
   if (!context.online) return 'offline'
@@ -25,7 +25,7 @@ export function controlState(
   if (tab.controller === 'agent') return 'agent'
   if (tab.controller !== 'human') return 'viewing'
   // A person's other device took the tab (or this phone never held it): taking it back is one tap.
-  if (tab.generation !== context.ownedGeneration) return 'elsewhere'
+  if (!(tab.controlledHere ?? tab.generation === context.ownedGeneration)) return 'elsewhere'
   return tab.inputReady ? 'yours' : 'settling'
 }
 

@@ -130,7 +130,6 @@ export async function requestPairing(input: {
   random: (bytes: number) => Uint8Array
   onCode(code: string, expiresAt: number): void
   signal: AbortSignal
-  now?: () => number
 }): Promise<PairByRequestResult> {
   const keys = pairKeys(input.random)
   const commit = pairCommit(keys.publicKey)
@@ -163,7 +162,6 @@ export async function requestPairing(input: {
   )
   if (revealed.status !== 200) throw failure(revealed)
   input.onCode(secrets.code, answer.expiresAt)
-  const now = input.now ?? Date.now
   while (!input.signal.aborted) {
     const waited = await input.post(PAIR_WAIT_PATH, { requestId: answer.requestId }, input.signal)
     if (waited.status !== 200) throw failure(waited)
@@ -181,7 +179,8 @@ export async function requestPairing(input: {
       return { ...fields, token: secrets.token }
     }
     if (result?.state === 'denied') throw new Error('The host declined this device.')
-    if (result?.state === 'expired' || now() > answer.expiresAt) throw new Error('The request expired. Try again.')
+    // The host decides expiry; this device's clock may differ from the host's.
+    if (result?.state === 'expired') throw new Error('The request expired. Try again.')
   }
   throw new Error('Pairing was cancelled.')
 }

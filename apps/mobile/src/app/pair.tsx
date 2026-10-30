@@ -369,8 +369,10 @@ export default function Pair() {
                         } catch (error) {
                           if (!mounted.current || controller.signal.aborted) return
                           setAsking(null)
-                          if (error instanceof PairRequestUnsupported) typeCode()
-                          else Alert.alert(t.pairFailed, error instanceof Error ? error.message : String(error))
+                          // Whatever stopped the request, the code form is filled in and ready as the next step.
+                          if (!(error instanceof PairRequestUnsupported))
+                            Alert.alert(t.pairFailed, error instanceof Error ? error.message : String(error))
+                          typeCode()
                         } finally {
                           pairing.current = false
                           if (askAbort.current === controller) askAbort.current = null

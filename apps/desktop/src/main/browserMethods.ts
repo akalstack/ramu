@@ -1,4 +1,4 @@
-import type { BrowserRuntime, TabInfo } from './browserRuntime'
+import { LOCAL_DEVICE, type BrowserRuntime, type TabInfo } from './browserRuntime'
 
 type Bounds = { x: number; y: number; width: number; height: number }
 
@@ -48,7 +48,7 @@ export function browserMethod(runtime: BrowserRuntime, method: string, args: unk
         threadId: text(args[1], 'thread', 200),
       })
     case 'browser.list':
-      return runtime.list({ hostId: text(args[0], 'host', 200), threadId: text(args[1], 'thread', 200) })
+      return runtime.list({ hostId: text(args[0], 'host', 200), threadId: text(args[1], 'thread', 200) }, LOCAL_DEVICE)
     case 'browser.open':
       return runtime.open(
         { hostId: text(args[0], 'host', 200), threadId: text(args[1], 'thread', 200) },
@@ -100,7 +100,7 @@ export function browserMethod(runtime: BrowserRuntime, method: string, args: unk
         if (!activeRunId) return runtime.releaseForNextRun(tabId, 'local')
         return runtime.giveToAgent(tabId, 'local', activeRunId)
       }
-      if (method === 'browser.takeControl') return runtime.takeControl(tabId, 'local')
+      if (method === 'browser.takeControl') return runtime.takeControl(tabId, LOCAL_DEVICE)
       return runtime[method.slice('browser.'.length) as 'back' | 'forward' | 'reload' | 'close' | 'hide'](tabId)
     }
     case 'browser.show': {

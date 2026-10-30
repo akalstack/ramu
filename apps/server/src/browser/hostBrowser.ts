@@ -393,7 +393,7 @@ export class HostBrowser implements HostedBrowserBackend {
   list(device: string, thread: string) {
     const runtime = this.authorized(device, thread)
     this.touch(device)
-    return runtime.list({ hostId: HOST, threadId: thread })
+    return runtime.list({ hostId: HOST, threadId: thread }, device)
   }
   read(device: string, thread: string, tabId: string) {
     return this.authorized(device, thread).inspectForAgent(tabId, 'viewer', { hostId: HOST, threadId: thread })

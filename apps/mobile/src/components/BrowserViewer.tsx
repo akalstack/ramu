@@ -156,7 +156,7 @@ export function BrowserViewer({
     !viewOnly &&
     !!tab &&
     tab.controller === 'human' &&
-    tab.generation === owned &&
+    (tab.controlledHere ?? tab.generation === owned) &&
     !tab.paused &&
     active &&
     store.isOnline(chat.computerId)

@@ -23,6 +23,8 @@ export interface BrowserTabInfo {
   /** A forced light or dark appearance; absent follows the system. */
   colorScheme?: 'light' | 'dark'
   crashed: boolean
+  /** Whether the device that asked is the one in control. Absent when the answer was not for a particular device. */
+  controlledHere?: boolean
 }
 
 /** Non-secret metadata only. Website data stays in the owning desktop's Chromium partition. */

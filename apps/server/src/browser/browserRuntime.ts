@@ -57,7 +57,11 @@ export interface GuestPage {
   /** Clicks or types into an element of the last inspection. `ok: false` says why the page refused. */
   act(action: PageAction): Promise<{ ok: boolean; reason?: string; points?: { x: number; y: number }[] }>
   /** Native input is blocked until the controlling human can safely drive the page. */
-  setHumanInput(enabled: boolean): void
+  /**
+   * Whether a person may drive the page now, and whether that person is at this computer: a native page then also
+   * takes its own mouse and keyboard, which must stay blocked while another of their devices has control.
+   */
+  setHumanInput(enabled: boolean, local?: boolean): void
   input?(input: BrowserHumanInput): Promise<void>
   nextFrame?(after: number): Promise<BrowserLiveFrame | null>
   screenshot?(): Promise<BrowserScreenshot>
@@ -138,6 +142,9 @@ export class BrowserError extends Error {
 
 const RELEASED_RUN = 'released-for-next-run'
 
+/** The device id of the person at the computer running a native page (the desktop app's own window). */
+export const LOCAL_DEVICE = 'local'
+
 interface Tab {
   id: string
   owner: BrowserOwner
@@ -194,7 +201,8 @@ export class BrowserRuntime {
     return partition
   }
 
-  private info(tab: Tab): TabInfo {
+  /** `viewer` is the device asking; the answer then says whether that device is the one in control. */
+  private info(tab: Tab, viewer?: string): TabInfo {
     const controller = tab.lease.controller
     const favicon = tab.page.favicon?.()
     return {
@@ -215,13 +223,16 @@ export class BrowserRuntime {
       ...(tab.fit ? { fitted: true } : {}),
       ...(tab.zoom && tab.zoom !== 1 ? { zoom: tab.zoom } : {}),
       ...(tab.colorScheme ? { colorScheme: tab.colorScheme } : {}),
+      ...(viewer !== undefined
+        ? { controlledHere: controller.kind === 'human' && controller.deviceId === viewer && !tab.lease.paused }
+        : {}),
     }
   }
 
-  list(owner?: Pick<BrowserOwner, 'hostId' | 'threadId'>): TabInfo[] {
+  list(owner?: Pick<BrowserOwner, 'hostId' | 'threadId'>, viewer?: string): TabInfo[] {
     return [...this.tabs.values()]
       .filter((tab) => !owner || (tab.owner.hostId === owner.hostId && tab.owner.threadId === owner.threadId))
-      .map((tab) => this.info(tab))
+      .map((tab) => this.info(tab, viewer))
   }
 
   /**
@@ -301,8 +312,8 @@ export class BrowserRuntime {
         : initialController?.kind === 'human'
           ? takeControl(lease, initialController.deviceId)
           : owner.runId
-            ? giveToAgent(lease, 'local', owner.runId)
-            : takeControl(lease, 'local')
+            ? giveToAgent(lease, LOCAL_DEVICE, owner.runId)
+            : takeControl(lease, LOCAL_DEVICE)
     if (first?.ok) lease = first.state
     const tab: Tab = {
       id,
@@ -356,8 +367,7 @@ export class BrowserRuntime {
     try {
       const opened = await this.open(from.owner, url, from.profileId, from.lease.controller)
       // A popup follows the person's takeover, rather than silently handing its new page back to the agent.
-      if (from.lease.controller.kind === 'human')
-        this.takeControl(opened.tab.id, from.lease.controller.deviceId)
+      if (from.lease.controller.kind === 'human') this.takeControl(opened.tab.id, from.lease.controller.deviceId)
       else if (from.lease.controller.kind === 'none') {
         const popup = this.tab(opened.tab.id)
         if (popup.lease.controller.kind === 'agent')
@@ -411,8 +421,9 @@ export class BrowserRuntime {
   }
 
   private syncInput(tab: Tab) {
-    tab.page.setHumanInput(!tab.crashed && !tab.replacing && !tab.respondingDialog && humanInputReady(tab.lease))
+    const ready = !tab.crashed && !tab.replacing && !tab.respondingDialog && humanInputReady(tab.lease)
     const controller = tab.lease.controller
+    tab.page.setHumanInput(ready, ready && controller.kind === 'human' && controller.deviceId === LOCAL_DEVICE)
     // The agent and other devices always get the default layout back once the fitted device stops controlling.
     if (
       tab.fit &&
@@ -624,7 +635,7 @@ export class BrowserRuntime {
     // A tab the person is controlling, or whose controller disconnected, is never taken.
     if (!tab || tab.lease.controller.kind !== 'none' || tab.lease.paused) return
     this.assertOwner(tab, owner)
-    this.giveToAgent(id, 'local', runId)
+    this.giveToAgent(id, LOCAL_DEVICE, runId)
   }
 
   takeControl(id: string, deviceId: string): TabInfo {
@@ -637,7 +648,7 @@ export class BrowserRuntime {
     this.invalidate(tab)
     this.syncInput(tab)
     this.changed()
-    return this.info(tab)
+    return this.info(tab, deviceId)
   }
 
   controllerDisconnected(deviceId: string): void {
@@ -903,7 +914,7 @@ export class BrowserRuntime {
     dialogId: string,
     accept: boolean,
     text?: string,
-    deviceId = 'local',
+    deviceId = LOCAL_DEVICE,
   ): Promise<void> {
     const tab = this.tab(id)
     if (tab.lease.controller.kind !== 'human' || tab.lease.controller.deviceId !== deviceId || tab.lease.paused)

@@ -357,7 +357,7 @@ describe('page observations and native input', () => {
     const { runtime, created } = setup()
     const { tab } = await runtime.open(run, 'https://a.test')
     const page = created[0]!.page
-    expect(page.setHumanInput).toHaveBeenLastCalledWith(false)
+    expect(page.setHumanInput).toHaveBeenLastCalledWith(false, false)
     const observation = await runtime.inspectForAgent(tab.id, run.runId, user)
     let finish!: (value: { ok: boolean }) => void
     page.act = vi.fn(
@@ -375,14 +375,14 @@ describe('page observations and native input', () => {
       controller: 'human',
       inputReady: false,
     })
-    expect(page.setHumanInput).toHaveBeenLastCalledWith(false)
+    expect(page.setHumanInput).toHaveBeenLastCalledWith(false, false)
     await expect(runtime.reload(tab.id)).rejects.toThrow('wait for the agent action')
     finish({ ok: true })
     await pending
     expect(runtime.list()[0]!.inputReady).toBe(true)
-    expect(page.setHumanInput).toHaveBeenLastCalledWith(true)
+    expect(page.setHumanInput).toHaveBeenLastCalledWith(true, true)
     runtime.controllerDisconnected('local')
-    expect(page.setHumanInput).toHaveBeenLastCalledWith(false)
+    expect(page.setHumanInput).toHaveBeenLastCalledWith(false, false)
   })
 
   it('consumes a snapshot once, even when the guest refuses the action', async () => {
@@ -530,7 +530,7 @@ describe('private server browser bridge', () => {
       }),
     ).rejects.toBeInstanceOf(BrowserError)
     expect(created[0]!.page.act).not.toHaveBeenCalled()
-    expect(created[0]!.page.setHumanInput).toHaveBeenLastCalledWith(false)
+    expect(created[0]!.page.setHumanInput).toHaveBeenLastCalledWith(false, false)
   })
 })
 
@@ -540,7 +540,7 @@ it('keeps a human-controlled popup human-controlled from its first load', async 
   runtime.takeControl(tab.id, 'local')
   created[0]!.handlers.onOpenWindow('https://login.test')
   await vi.waitFor(() => expect(created).toHaveLength(2))
-  expect(created[1]!.page.setHumanInput).toHaveBeenNthCalledWith(1, true)
+  expect(created[1]!.page.setHumanInput).toHaveBeenNthCalledWith(1, true, true)
   expect(runtime.list().find((entry) => entry.id !== tab.id)?.controller).toBe('human')
 })
 
@@ -836,4 +836,20 @@ it('keeps a tab ready for the person while their own input runs, and runs it in 
   await Promise.all([click, typing])
   expect(order).toEqual(['start click', 'end click', 'start text', 'end text'])
   expect(runtime.list(user)[0]!.inputReady).toBe(true)
+})
+
+it('tells each device whether it is the one in control, and lets this computer use the page only while it is', async () => {
+  const { runtime, created } = setup()
+  const { tab } = await runtime.open(user, 'https://a.test')
+  const page = created[0]!.page
+  expect(runtime.list(user, 'local')[0]!.controlledHere).toBe(true)
+  expect(page.setHumanInput).toHaveBeenLastCalledWith(true, true)
+  runtime.takeControl(tab.id, 'phone')
+  expect(runtime.list(user, 'local')[0]!.controlledHere).toBe(false)
+  expect(runtime.list(user, 'phone')[0]!.controlledHere).toBe(true)
+  // The phone drives the page; the mouse and keyboard at this computer do not.
+  expect(page.setHumanInput).toHaveBeenLastCalledWith(true, false)
+  expect(runtime.takeControl(tab.id, 'local').controlledHere).toBe(true)
+  expect(runtime.list(user, 'phone')[0]!.controlledHere).toBe(false)
+  expect(page.setHumanInput).toHaveBeenLastCalledWith(true, true)
 })

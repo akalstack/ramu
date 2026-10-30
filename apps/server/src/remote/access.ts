@@ -27,6 +27,8 @@ export class RemoteAccess {
       routes?: () => string[]
       /** Pairing by request from a nearby device. Absent: those endpoints do not exist and devices type a code. */
       pairing?: PairingRequests
+      /** A device paired with a typed code, so the host can stop advertising itself for pairing. */
+      paired?: () => void
       now?: () => number
     },
   ) {}
@@ -168,6 +170,7 @@ export class RemoteAccess {
         return
       }
       this.failures.delete(peer)
+      this.options.paired?.()
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(
         JSON.stringify({
           deviceId: paired.device.id,
