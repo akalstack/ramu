@@ -5095,12 +5095,12 @@ test('computer-use stop revokes only the displayed thread and refreshes the shar
       },
     }),
   )
-  assert.ok(JSON.stringify(nodes(tree).map((node) => node.props?.children)).includes('Chrome'))
-  nodes(tree)
-    .find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Open computer')
-    .props.onPress()
+  // The pill shows the target and opens the computer; its Stop control sits inside it.
+  const pill = nodes(tree).find((node) => node.props?.accessibilityLabel === 'Open computer')
+  assert.match(pill.props.label, /Chrome/)
+  pill.props.onPress()
   assert.equal(opened, 1)
-  nodes(tree)
+  nodes(pill.props.trailing)
     .find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Stop computer use')
     .props.onPress({
       stopPropagation() {

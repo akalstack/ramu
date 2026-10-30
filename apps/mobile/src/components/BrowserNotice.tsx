@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppState, Image, Pressable, View } from 'react-native'
-import { ChevronRight, Globe, X } from 'lucide-react-native'
+import { Globe, X } from 'lucide-react-native'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { translate } from '@ramu/shared/i18n'
 import { useStore } from '../runtime/store'
@@ -8,6 +8,7 @@ import type { Chat } from '../runtime/types'
 import { revealedTab, tabTitle } from '../runtime/browserViewerState'
 import { font, radius, space, useTheme } from '../theme'
 import { Glass } from './Glass'
+import { ActivityPill } from './ActivityPill'
 import { T, tap, type Icon } from './ui'
 
 /** This thread's browser tabs, metadata only. One reader feeds both the activity pill and the floating preview. */
@@ -56,7 +57,6 @@ export function useThreadBrowserTabs(chat: Chat | undefined) {
 /** Sits with the computer-use bar: shows when this thread has browser tabs and opens the live view in one tap. */
 export function BrowserNotice({ chat, tabs, onOpen }: { chat: Chat; tabs: BrowserTabInfo[]; onOpen(): void }) {
   const store = useStore()
-  const { c } = useTheme()
   const online = store.isOnline(chat.computerId)
   const tab = tabs[0]
   if (!chat.taskId || !tab) return null
@@ -64,30 +64,14 @@ export function BrowserNotice({ chat, tabs, onOpen }: { chat: Chat; tabs: Browse
   const agent = tabs.some((entry) => entry.controller === 'agent' && !entry.paused)
   const label = agent ? (id ? 'Menggunakan browser' : 'Using browser') : 'Browser'
   return (
-    <Pressable
-      accessibilityRole="button"
+    <ActivityPill
+      icon={Globe}
+      label={agent ? label : tab.title || tab.url}
       accessibilityLabel={id ? 'Buka browser' : 'Open browser'}
+      tone={!online ? 'off' : agent ? 'attention' : 'quiet'}
+      emphasis={agent}
       onPress={onOpen}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        flexShrink: 0,
-        maxWidth: 230,
-        paddingHorizontal: space.s + 2,
-        minHeight: 32,
-        borderRadius: radius.full,
-        backgroundColor: c.fill,
-      }}
-    >
-      <Globe size={14} color={agent ? c.warn : c.muted} />
-      <T size={font.caption} numberOfLines={1} style={{ flexShrink: 1, maxWidth: 170 }}>
-        {agent ? `${label} · ` : ''}
-        {tab.title || tab.url}
-        {!online ? ' · Offline' : ''}
-      </T>
-      <ChevronRight size={12} color={c.muted} />
-    </Pressable>
+    />
   )
 }
 

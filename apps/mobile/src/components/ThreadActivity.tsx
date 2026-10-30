@@ -1,12 +1,37 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Pressable, ScrollView, View } from 'react-native'
+import { ScrollView, View } from 'react-native'
 import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { mobileThreadActivity } from '../runtime/threadActivity'
 import { goalActivityLabel, type ActivityKind } from '@ramu/shared/chat/threadActivity'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
-import { font, space, useTheme } from '../theme'
+import { space } from '../theme'
 import { Button, Sheet, T, type Icon } from './ui'
+import { ActivityPill } from './ActivityPill'
+import {
+  Ellipsis,
+  Hand,
+  Hourglass,
+  ListOrdered,
+  Loader,
+  RefreshCw,
+  Sparkles,
+  Target,
+  Users,
+  WifiOff,
+} from 'lucide-react-native'
+
+const KIND_ICON: Record<ActivityKind | 'more', Icon> = {
+  connection: WifiOff,
+  input: Hand,
+  provider: Hourglass,
+  working: Loader,
+  helpers: Users,
+  advisor: Sparkles,
+  goal: Target,
+  queue: ListOrdered,
+  more: Ellipsis,
+}
 import { Helpers } from './Helpers'
 import { InputRequests } from './InputRequests'
 import { GoalQueueTray } from './Composer'
@@ -23,7 +48,6 @@ export function ThreadActivity({
   leading?: ReactNode
   actions?: { label: string; icon: Icon; onPress(): void }[]
 }) {
-  const { c } = useTheme()
   const store = useStore()
   const online = store.isOnline(chat.computerId)
   const id = store.language === 'id'
@@ -44,7 +68,7 @@ export function ThreadActivity({
   if (!primary && !actions.length && !children && !leading) return null
   const label = (kind: ActivityKind | 'more'): string =>
     ({
-      connection: id ? 'Terputus · aktivitas terakhir' : 'Offline · last-known activity',
+      connection: id ? 'Terputus' : 'Offline',
       input: activity.requests.some((r) => r.kind === 'permission')
         ? id
           ? 'Perlu persetujuan'
@@ -95,38 +119,23 @@ export function ThreadActivity({
         accessibilityLabel={id ? 'Aktivitas thread' : 'Thread activity'}
         style={{ flexGrow: 0, marginTop: space.xs }}
       >
-        {leading ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>{leading}</View> : null}
-        {actions.map(({ label, icon: I, onPress }) => (
-          <Pressable
-            key={label}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            onPress={onPress}
-            style={{ minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space.s }}
-          >
-            <I size={14} color={c.muted} />
-            <T size={font.caption} tone="muted" numberOfLines={1}>
-              {label}
-            </T>
-          </Pressable>
-        ))}
-        {children}
-        {kinds.map((kind) => (
-          <Pressable
-            key={kind}
-            accessibilityRole="button"
-            onPress={() => setOpened(kind)}
-            style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s, flexShrink: 1 }}
-          >
-            <T
-              size={font.caption}
-              weight={kind === primaryKind ? '600' : '400'}
-              tone={kind === primaryKind ? 'text' : 'muted'}
-            >
-              {label(kind)}
-            </T>
-          </Pressable>
-        ))}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+          {leading}
+          {actions.map(({ label, icon, onPress }) => (
+            <ActivityPill key={label} icon={icon} label={label} accessibilityLabel={label} onPress={onPress} />
+          ))}
+          {children}
+          {kinds.map((kind) => (
+            <ActivityPill
+              key={kind}
+              icon={KIND_ICON[kind]}
+              label={label(kind)}
+              tone={kind === 'connection' ? 'off' : kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
+              emphasis={kind === primaryKind}
+              onPress={() => setOpened(kind)}
+            />
+          ))}
+        </View>
       </ScrollView>
       <Sheet
         presentation="screen"
@@ -137,9 +146,21 @@ export function ThreadActivity({
         {opened === 'more' || opened === 'connection' || opened === 'working' ? (
           <View style={{ padding: space.m, gap: space.s }}>
             {!online ? (
-              <T tone="muted">
-                {id ? 'Data terakhir. Hubungkan kembali dari Hosts.' : 'Last-known activity. Reconnect from Hosts.'}
-              </T>
+              <>
+                <T tone="muted">
+                  {id
+                    ? 'Host ini tidak terhubung, jadi yang tampil adalah aktivitas terakhir yang diketahui.'
+                    : 'This host is not connected, so this is the last activity Ramu saw.'}
+                </T>
+                <Button
+                  icon={RefreshCw}
+                  title={id ? 'Hubungkan kembali' : 'Reconnect'}
+                  onPress={() => {
+                    store.retry(chat.computerId)
+                    setOpened(null)
+                  }}
+                />
+              </>
             ) : null}
             {(['input', 'helpers', 'advisor', 'goal', 'queue', 'provider'] as const)
               .filter((kind) =>
