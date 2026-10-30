@@ -3995,4 +3995,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Open and type into terminals on this host.": "Membuka dan mengetik di terminal pada host ini.",
   "Change this host’s settings, providers and connections.": "Mengubah pengaturan, penyedia, dan koneksi host ini.",
   "Permissions on this host": "Izin di host ini",
+  "Never (no more requests)": "Jangan pernah (tanpa permintaan lagi)",
+  "Declined by the host": "Ditolak oleh host",
 }

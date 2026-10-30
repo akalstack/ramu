@@ -42,12 +42,16 @@ export function PhonePermissions({ computerId }: { computerId: string }) {
         {DEVICE_PERMISSIONS.map((permission, index) => {
           const grant = view.permissions[permission]
           const asked = view.pending.includes(permission)
+          const declined = !grant && !!view.blocked?.includes(permission)
           return (
             <View key={permission}>
               {index ? <Divider inset={space.l} /> : null}
               <Row style={{ paddingVertical: space.m }}>
-                <RowLabel title={t(PERMISSION_LABEL[permission])} help={grantText(grant, t)} />
-                {!grant ? (
+                <RowLabel
+                  title={t(PERMISSION_LABEL[permission])}
+                  help={declined ? t('Declined by the host') : grantText(grant, t)}
+                />
+                {!grant && !declined ? (
                   <Button
                     kind="secondary"
                     title={asked ? t('Asked') : t('Request')}

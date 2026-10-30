@@ -27,7 +27,8 @@ export interface NetworkDevice {
   /** Absent on devices paired before permissions existed, which hold every permission. */
   permissions?: Partial<
     Record<import('../devicePermissions').DevicePermission, import('../devicePermissions').PermissionGrant>
-  >
+  > /** Permissions the host refused for good. */
+  blocked?: import('../devicePermissions').DevicePermission[]
 }
 /** An address this computer has, which another device may reach it on (LAN, VPN, ...). */
 export interface NetworkAddress {

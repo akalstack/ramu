@@ -675,7 +675,11 @@ async function performInvoke(
   let value: unknown
   if (method === 'device.permissions') {
     value = device
-      ? { permissions: devices.permissionsOf(device.id), pending: permissionRequests.pendingFor(device.id) }
+      ? {
+          permissions: devices.permissionsOf(device.id),
+          pending: permissionRequests.pendingFor(device.id),
+          blocked: devices.blocked(device.id),
+        }
       : {
           permissions: Object.fromEntries(DEVICE_PERMISSIONS.map((permission) => [permission, { until: null }])),
           pending: [],
@@ -684,6 +688,10 @@ async function performInvoke(
     if (!device) throw new Error('This computer already has every permission.')
     if (!isDevicePermission(args?.[0])) throw new Error('Invalid permission')
     if (devices.allows(device.id, args[0])) throw new Error('This device already has that permission.')
+    if (devices.blocked(device.id).includes(args[0]))
+      throw new Error(
+        'The host declined this permission. Ask the person there to allow it in Settings → Remote access.',
+      )
     permissionRequests.ask(device, args[0])
   } else if (method === 'browser.bridge.attach') {
     if (remote || typeof args?.[0] !== 'string' || !desktopClients.has(args[0]))
@@ -1339,13 +1347,15 @@ async function networkMethod(method: string, args: unknown[]) {
   if (method === 'network.setDevicePermission') {
     const [deviceId, permission, duration] = args
     if (typeof deviceId !== 'string' || !isDevicePermission(permission)) throw new Error('Invalid permission')
-    if (duration !== 'revoke' && !PERMISSION_DURATIONS.includes(duration as PermissionDuration))
+    if (duration !== 'revoke' && duration !== 'never' && !PERMISSION_DURATIONS.includes(duration as PermissionDuration))
       throw new Error('Invalid duration')
-    devices.setPermission(
-      deviceId,
-      permission,
-      duration === 'revoke' ? null : grantFor(duration as PermissionDuration, Date.now()),
-    )
+    if (duration === 'never') devices.block(deviceId, permission)
+    else
+      devices.setPermission(
+        deviceId,
+        permission,
+        duration === 'revoke' ? null : grantFor(duration as PermissionDuration, Date.now()),
+      )
     permissionRequests.clear(deviceId, permission)
     return networkStatus()
   }
@@ -1353,7 +1363,8 @@ async function networkMethod(method: string, args: unknown[]) {
     const [requestId, duration] = args
     const request = typeof requestId === 'string' ? permissionRequests.take(requestId) : undefined
     if (!request) throw new Error('That request was already answered or expired.')
-    if (duration !== 'deny') {
+    if (duration === 'never') devices.block(request.deviceId, request.permission)
+    else if (duration !== 'deny') {
       if (!PERMISSION_DURATIONS.includes(duration as PermissionDuration)) throw new Error('Invalid duration')
       devices.setPermission(request.deviceId, request.permission, grantFor(duration as PermissionDuration, Date.now()))
     }

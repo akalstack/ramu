@@ -72,3 +72,16 @@ it('names the permission each call needs, leaving reads open', () => {
   expect(refusedPermission(permissionRefusal('browser'))).toBe('browser')
   expect(refusedPermission('Something else')).toBeNull()
 })
+
+it('remembers a “never” until the host allows the permission itself', () => {
+  const devices = store()
+  const phone = pair(devices)
+  devices.block(phone.id, 'computer')
+  expect(devices.allows(phone.id, 'computer')).toBe(false)
+  expect(devices.blocked(phone.id)).toEqual(['computer'])
+  devices.setPermission(phone.id, 'computer', null)
+  expect(devices.blocked(phone.id)).toEqual(['computer'])
+  devices.setPermission(phone.id, 'computer', grantFor('always', Date.now()))
+  expect(devices.blocked(phone.id)).toEqual([])
+  expect(devices.allows(phone.id, 'computer')).toBe(true)
+})

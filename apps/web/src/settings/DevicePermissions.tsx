@@ -69,6 +69,13 @@ export function PermissionRequests({ status, invoke }: { status: NetworkStatus; 
             >
               {t('Deny')}
             </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void invoke('network.decidePermission', request.id, 'never')}
+            >
+              {t('Never')}
+            </Button>
           </div>
         </div>
       ))}
@@ -113,18 +120,25 @@ export function DevicePermissionList({ device, invoke }: { device: NetworkDevice
     <div className="mb-3 flex flex-wrap gap-2 pl-1">
       {DEVICE_PERMISSIONS.map((permission) => {
         const grant = held(permission)
+        const state = device.blocked?.includes(permission) ? t('Never') : grantText(grant)
         return (
           <Dropdown
             key={permission}
-            label={`${t(PERMISSION_LABEL[permission])}: ${grantText(grant)}`}
+            label={`${t(PERMISSION_LABEL[permission])}: ${state}`}
             value=""
-            placeholder={`${t(PERMISSION_LABEL[permission])} · ${grantText(grant)}`}
+            placeholder={`${t(PERMISSION_LABEL[permission])} · ${state}`}
             options={[
               ...PERMISSION_DURATIONS.map((duration) => ({ value: duration, label: t(DURATION_LABEL[duration]) })),
               { value: 'revoke', label: t('Off') },
+              { value: 'never', label: t('Never (no more requests)') },
             ]}
             onChange={(value) =>
-              void invoke('network.setDevicePermission', device.id, permission, value as PermissionDuration | 'revoke')
+              void invoke(
+                'network.setDevicePermission',
+                device.id,
+                permission,
+                value as PermissionDuration | 'revoke' | 'never',
+              )
             }
           />
         )
@@ -155,13 +169,16 @@ export function ThisDevicePermissions({ host }: { host: string }) {
       {DEVICE_PERMISSIONS.map((permission) => {
         const grant = view.permissions[permission]
         const asked = view.pending.includes(permission)
+        const declined = !grant && !!view.blocked?.includes(permission)
         return (
           <div key={permission} className="flex items-center justify-between gap-3">
             <span className="min-w-0">
               <span className="block text-body">{t(PERMISSION_LABEL[permission])}</span>
-              <span className="block text-caption text-muted-foreground">{grantText(grant)}</span>
+              <span className="block text-caption text-muted-foreground">
+                {declined ? t('Declined by the host') : grantText(grant)}
+              </span>
             </span>
-            {!grant && (
+            {!grant && !declined && (
               <Button
                 size="sm"
                 variant="secondary"

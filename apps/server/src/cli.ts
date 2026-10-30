@@ -39,6 +39,8 @@ Usage:
                                  Let a device use computer, browser, terminal or settings
   ramu devices deny <id> <permission>
                                  Take a permission away
+  ramu devices never <id> <permission>
+                                 Take it away and refuse that device's requests for it until you allow it again
   ramu devices offers            List unused pairing offers (never their codes)
   ramu devices cancel <offer>    Withdraw an unused pairing offer
   ramu token [--rotate]          Print the shared access token; --rotate revokes it and every paired device
@@ -298,14 +300,14 @@ if (command === 'start') {
     }
     if (!revoked.length) fail(`No paired device matches "${positional[2]}". Run ramu devices.`)
     for (const device of revoked) console.log(`Revoked ${device.id}  ${device.name}`)
-  } else if (positional[1] === 'allow' || positional[1] === 'deny') {
+  } else if (positional[1] === 'allow' || positional[1] === 'deny' || positional[1] === 'never') {
     // Headless hosts answer permission requests here; Settings → Remote access does the same on a desktop.
     const [, action, deviceId, permission, duration = 'always'] = positional
     if (!deviceId || !isDevicePermission(permission) || !PERMISSION_DURATIONS.includes(duration as PermissionDuration))
       fail(
         `Usage: ramu devices ${action} <id> <${DEVICE_PERMISSIONS.join('|')}>${action === 'allow' ? ' [once|hour|day|always]' : ''}`,
       )
-    const choice = action === 'deny' ? 'revoke' : duration
+    const choice = action === 'deny' ? 'revoke' : action === 'never' ? 'never' : duration
     const running = await runtimeInvoke(config.socketPath, 'network.setDevicePermission', [
       deviceId,
       permission,
@@ -314,16 +316,20 @@ if (command === 'start') {
     if (!running) {
       if (choice === 'once') fail('“once” lasts until the device disconnects, so it needs the server running.')
       try {
-        store.setPermission(
-          deviceId,
-          permission,
-          choice === 'revoke' ? null : grantFor(choice as PermissionDuration, Date.now()),
-        )
+        if (choice === 'never') store.block(deviceId, permission)
+        else
+          store.setPermission(
+            deviceId,
+            permission,
+            choice === 'revoke' ? null : grantFor(choice as PermissionDuration, Date.now()),
+          )
       } catch (error) {
         fail((error as Error).message)
       }
     }
-    console.log(`${action === 'allow' ? 'Allowed' : 'Removed'} ${PERMISSION_LABEL[permission]} for ${deviceId}.`)
+    console.log(
+      `${action === 'allow' ? 'Allowed' : action === 'never' ? 'Blocked' : 'Removed'} ${PERMISSION_LABEL[permission]} for ${deviceId}.`,
+    )
   } else if (positional[1] === 'offers') {
     const offers = store.offers()
     if (!offers.length) console.log('No unused pairing offers.')

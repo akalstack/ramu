@@ -52,9 +52,20 @@ export interface DevicePermissionsView {
   permissions: Record<DevicePermission, PermissionGrant | null>
   /** Asked and not answered yet. */
   pending: DevicePermission[]
+  /** The host said never: asking again is refused until the host allows it itself. Absent on older hosts. */
+  blocked?: DevicePermission[]
 }
 
-const SETTINGS_DOMAINS = new Set(['settings', 'mcp', 'providers', 'rules', 'codex', 'updates', 'background', 'learning'])
+const SETTINGS_DOMAINS = new Set([
+  'settings',
+  'mcp',
+  'providers',
+  'rules',
+  'codex',
+  'updates',
+  'background',
+  'learning',
+])
 const READ = /\.(status|get|list|snapshot|catalog)$/
 
 /** The permission a call needs from a paired device, or null. Reading status and settings stays open. */

@@ -30,6 +30,8 @@ export interface DeviceInfo {
   role: DeviceRole
   /** Absent on devices paired before permissions existed, which hold every permission. */
   permissions?: Partial<Record<DevicePermission, PermissionGrant>>
+  /** Permissions the host refused for good; requests for them are declined without asking again. */
+  blocked?: DevicePermission[]
 }
 /**
  * A grant whose credential never made an authenticated request is dropped after this long: the pairing response was lost
@@ -197,10 +199,32 @@ export class DeviceStore {
         (entry): entry is [string, PermissionGrant] => !!entry[1] && grantActive(entry[1], now),
       ),
     )
+    // The host allowing it itself lifts a "never".
+    const blocked = grant ? device.blocked?.filter((entry) => entry !== permission) : device.blocked
     this.write({
       ...file,
-      devices: file.devices.map((entry) => (entry.id === id ? { ...entry, permissions: next } : entry)),
+      devices: file.devices.map((entry) =>
+        entry.id === id
+          ? { ...entry, permissions: next, ...(blocked?.length ? { blocked } : { blocked: undefined }) }
+          : entry,
+      ),
     })
+  }
+
+  /** Refuses a permission for good: it is removed and further requests for it are declined without asking. */
+  block(id: string, permission: DevicePermission): void {
+    this.setPermission(id, permission, null)
+    const file = this.read()
+    this.write({
+      ...file,
+      devices: file.devices.map((entry) =>
+        entry.id === id ? { ...entry, blocked: [...new Set([...(entry.blocked ?? []), permission])] } : entry,
+      ),
+    })
+  }
+
+  blocked(id: string): DevicePermission[] {
+    return this.read().devices.find((entry) => entry.id === id)?.blocked ?? []
   }
 
   /** The device's last connection closed: what it was allowed once ends. */
@@ -477,8 +501,18 @@ export class DeviceStore {
   }
 }
 
-const strip = ({ id, name, createdAt, lastSeenAt, expiresAt, role, permissions }: DeviceRecord): DeviceInfo => ({
+const strip = ({
+  id,
+  name,
+  createdAt,
+  lastSeenAt,
+  expiresAt,
+  role,
+  permissions,
+  blocked,
+}: DeviceRecord): DeviceInfo => ({
   ...(permissions ? { permissions } : {}),
+  ...(blocked?.length ? { blocked } : {}),
   id,
   name,
   createdAt,

@@ -559,12 +559,12 @@ export interface RamuMethods {
   'network.setDevicePermission'(
     deviceId: string,
     permission: import('./devicePermissions').DevicePermission,
-    duration: import('./devicePermissions').PermissionDuration | 'revoke',
+    duration: import('./devicePermissions').PermissionDuration | 'revoke' | 'never',
   ): NetworkStatus
   /** Answers a device's request for a permission. Host-only. */
   'network.decidePermission'(
     requestId: string,
-    duration: import('./devicePermissions').PermissionDuration | 'deny',
+    duration: import('./devicePermissions').PermissionDuration | 'deny' | 'never',
   ): NetworkStatus
   /** What newly paired full-access devices hold. Host-only. */
   'network.setDefaultPermissions'(permissions: import('./devicePermissions').DevicePermission[]): NetworkStatus
