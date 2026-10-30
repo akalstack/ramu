@@ -124,7 +124,7 @@ export function BrowserViewer({
   const [pageText, setPageText] = useState('')
   const [observation, setObservation] = useState<BrowserPageSnapshot | null>(null)
   const [uploadPath, setUploadPath] = useState('')
-  const [phonePage, setPhonePage] = useState<{ url: string; rewritten: boolean } | null>(null)
+  const [phonePage, setPhonePage] = useState<{ url: string; rewritten: boolean; fromTab?: BrowserTabInfo } | null>(null)
   const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | 'display' | 'search' | null>(null)
   const downloadsOpen = panel === 'downloads'
   const menu = useViewerMenu()
@@ -507,7 +507,9 @@ export function BrowserViewer({
       title: t('Open on this phone'),
       icon: Smartphone,
       onPress: () =>
-        tab && phoneUrl && setPhonePage({ url: phoneUrl, rewritten: new URL(phoneUrl).host !== new URL(tab.url).host }),
+        tab &&
+        phoneUrl &&
+        setPhonePage({ url: phoneUrl, rewritten: new URL(phoneUrl).host !== new URL(tab.url).host, fromTab: tab }),
     },
     readText: {
       title: t('Read page text'),
@@ -568,8 +570,21 @@ export function BrowserViewer({
         onOpenOnHost={
           chat.taskId
             ? (url) => {
+                const from = phonePage.fromTab
                 setPhonePage(null)
-                openHostTab(url)
+                if (!from || !tabs.some((entry) => entry.id === from.id)) return openHostTab(url)
+                // Back to the tab it came from, as the person's tab: no new tab, and a page that moved on the phone
+                // moves there too (the host's own localhost address again, if the phone had rewritten it).
+                const address = new URL(url)
+                if (phonePage.rewritten && address.host === new URL(phonePage.url).host)
+                  address.host = new URL(from.url).host
+                selectTab(from.id)
+                void act(async () => {
+                  const taken = await invoke(chat.computerId, 'hostBrowser.take', chat.taskId!, from.id)
+                  setOwned(taken.generation)
+                  if (url !== phonePage.url)
+                    await invoke(chat.computerId, 'hostBrowser.navigate', chat.taskId!, from.id, address.href)
+                })
               }
             : undefined
         }
