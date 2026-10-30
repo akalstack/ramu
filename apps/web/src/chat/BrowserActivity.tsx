@@ -125,24 +125,3 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
     </ComposerTraySection>
   )
 }
-
-/** Opens the thread's browser from the composer, whether or not it has a tab yet. The browser exists only in the desktop shell. */
-export function OpenBrowserButton({ state }: { state: ReturnType<typeof useBrowserActivity> }) {
-  useLanguage()
-  const ws = useWorkspace()
-  if (!state.taskId || typeof window.ramu?.invoke !== 'function') return null
-  const taskId = state.taskId
-  const first = state.tabs[0]
-  return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      className="icon small-icon"
-      aria-label={t('Open browser')}
-      title={t('Open browser')}
-      onClick={() => openBrowser(ws, taskId, first)}
-    >
-      <Globe size={15} />
-    </Button>
-  )
-}

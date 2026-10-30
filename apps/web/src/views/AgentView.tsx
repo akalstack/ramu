@@ -2,7 +2,7 @@ import { useViewOnly } from '../composer/useViewOnly'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { McpStatusDialog } from './agent/components/McpStatusDialog'
 import { ComputerActivity } from '../chat/ComputerActivity'
-import { BrowserActivity, OpenBrowserButton, useBrowserActivity } from '../chat/BrowserActivity'
+import { BrowserActivity, useBrowserActivity } from '../chat/BrowserActivity'
 import { BackgroundTerminalsSection, useBackgroundTerminals } from '../chat/BackgroundTerminals'
 import { ConfirmStopDialog } from '../chat/ConfirmStopDialog'
 import { helperActive, helperGroups } from '@ramu/shared/chat/helperPresentation'
@@ -844,7 +844,6 @@ export const AgentView = memo(function AgentView({
                     void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
                   },
                 }}
-                actions={<OpenBrowserButton state={browserActivity} />}
                 value={draft}
                 allowEmpty={attached.length > 0}
                 chips={
