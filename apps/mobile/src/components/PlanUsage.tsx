@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { ProviderIcon } from './Logos'
 import { Pressable, View } from 'react-native'
 import { Gauge, Monitor, Network, Settings } from 'lucide-react-native'
 import Svg, { Circle } from 'react-native-svg'
@@ -50,58 +51,92 @@ export function PlanUsageReading({
       : `${Math.round(percent)}% ${used}`
   const lastKnown = offline || usageStale(r, now)
   const scopeHint = usageScopeHint(r, language)
+  const id = language === 'id'
+  const color = percent === null ? c.muted : tone === 'bad' ? c.bad : tone === 'warn' ? c.warn : c.primary
+  // How long until it resets reads at a glance; the exact time stays for when it is far off.
+  const until = r.resetsAt ? r.resetsAt - now : null
+  const reset =
+    until === null
+      ? id
+        ? 'Waktu reset tidak dilaporkan'
+        : 'No reset time reported'
+      : until <= 0
+        ? id
+          ? 'Menunggu reset dilaporkan'
+          : 'Awaiting the reset'
+        : until < 24 * 60 * 60_000
+          ? `${id ? 'Reset dalam' : 'Resets in'} ${duration(until)}`
+          : `${id ? 'Reset' : 'Resets'} ${new Date(r.resetsAt!).toLocaleString(id ? 'id-ID' : 'en-US', {
+              weekday: 'short',
+              hour: 'numeric',
+              minute: '2-digit',
+            })}`
   return (
     <View style={{ padding: space.m, gap: space.s }}>
       {!compact ? (
-        <T weight="600">
-          {providerNames[r.provider]} · {r.accountId ?? 'default'}
-        </T>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+          <ProviderIcon provider={r.provider} size={16} />
+          <T weight="600" style={{ flexShrink: 1 }}>
+            {providerNames[r.provider]} · {r.accountId ?? 'default'}
+          </T>
+        </View>
       ) : null}
-      <T size={font.control}>
-        {usageWindow(r, false, language)} · {value}
-        {r.plan ? ` · ${r.plan}` : ''}
-      </T>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.s }}>
+        <T weight="500" style={{ flex: 1 }} numberOfLines={1}>
+          {usageWindow(r, false, language)}
+        </T>
+        {percent === null ? (
+          <T tone="muted" size={font.caption}>
+            {value}
+          </T>
+        ) : (
+          <T weight="700" size={20} style={{ color, fontVariant: ['tabular-nums'] }}>
+            {Math.round(percent)}%
+          </T>
+        )}
+      </View>
+      {percent !== null ? (
+        <View
+          accessibilityLabel={value}
+          style={{ height: 8, borderRadius: 4, backgroundColor: c.fill, overflow: 'hidden' }}
+        >
+          <View style={{ height: 8, borderRadius: 4, width: `${Math.max(2, percent)}%`, backgroundColor: color }} />
+        </View>
+      ) : null}
       {scopeHint ? (
         <T tone="muted" size={font.caption}>
           {scopeHint}
         </T>
       ) : null}
-      {percent !== null ? (
-        <View style={{ height: 5, borderRadius: 3, backgroundColor: c.fill, overflow: 'hidden' }}>
-          <View
-            style={{
-              height: 5,
-              width: `${percent}%`,
-              backgroundColor: tone === 'bad' ? c.bad : tone === 'warn' ? c.warn : c.primary,
-            }}
-          />
-        </View>
-      ) : null}
-      {details ? (
-        <T tone="muted" size={font.caption}>
-          {lastKnown
-            ? language === 'id'
-              ? 'Terakhir dilaporkan'
-              : 'Last reported'
-            : language === 'id'
-              ? 'Diperbarui'
-              : 'Updated'}{' '}
-          {new Date(r.updatedAt).toLocaleString(language === 'id' ? 'id-ID' : 'en-US')}
-        </T>
-      ) : null}
       <T tone="muted" size={font.caption}>
-        {!r.resetsAt
-          ? language === 'id'
-            ? 'Waktu reset tidak dilaporkan'
-            : 'No reset time reported'
-          : r.resetsAt <= now
-            ? language === 'id'
-              ? 'Waktu reset lewat; menunggu pembaruan'
-              : 'Reset time passed; awaiting update'
-            : `${language === 'id' ? 'Reset' : 'Resets'} ${new Date(r.resetsAt).toLocaleString(language === 'id' ? 'id-ID' : 'en-US')}`}
+        {[
+          reset,
+          r.plan,
+          details
+            ? `${lastKnown ? (id ? 'terakhir dilaporkan' : 'last reported') : id ? 'diperbarui' : 'updated'} ${relative(r.updatedAt, id)}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       </T>
     </View>
   )
+}
+
+/** "2 h 15 min", "45 min": how long until a limit resets. */
+function duration(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000))
+  const hours = Math.floor(minutes / 60)
+  return hours ? `${hours} h${minutes % 60 ? ` ${minutes % 60} min` : ''}` : `${minutes} min`
+}
+
+function relative(at: number, id: boolean): string {
+  const minutes = Math.round((Date.now() - at) / 60_000)
+  if (minutes < 1) return id ? 'baru saja' : 'just now'
+  if (minutes < 60) return id ? `${minutes} menit lalu` : `${minutes} min ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return id ? `${hours} jam lalu` : `${hours} h ago`
+  return new Date(at).toLocaleDateString(id ? 'id-ID' : 'en-US')
 }
 
 export function PlanUsageSheet({
@@ -312,13 +347,24 @@ export function PlanUsageSheet({
                 groupUsageByProvider(rows).map((group) => (
                   <View key={`${id}:${group.provider}`}>
                     {provider ? null : (
-                      <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.m, paddingTop: space.s }}>
-                        {providerNames[group.provider]} · {group.readings.length}{' '}
-                        {store.language === 'id' ? 'jendela' : group.readings.length === 1 ? 'window' : 'windows'}
-                        {group.attention
-                          ? ` · ${group.attention} ${store.language === 'id' ? 'perlu perhatian' : 'need attention'}`
-                          : ''}
-                      </T>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: space.s,
+                          paddingHorizontal: space.m,
+                          paddingTop: space.s,
+                        }}
+                      >
+                        <ProviderIcon provider={group.provider} size={14} />
+                        <T tone="muted" size={font.caption} style={{ flexShrink: 1 }}>
+                          {providerNames[group.provider]} · {group.readings.length}{' '}
+                          {store.language === 'id' ? 'jendela' : group.readings.length === 1 ? 'window' : 'windows'}
+                          {group.attention
+                            ? ` · ${group.attention} ${store.language === 'id' ? 'perlu perhatian' : 'need attention'}`
+                            : ''}
+                        </T>
+                      </View>
                     )}
                     {Array.from(new Set(group.readings.map((reading) => reading.accountId ?? 'default'))).map(
                       (account, index) => {
@@ -336,9 +382,12 @@ export function PlanUsageSheet({
                         return (
                           <Card key={account} style={{ margin: space.m }}>
                             <View style={{ padding: space.m, gap: space.xs }}>
-                              <T weight="600">
-                                {providerNames[group.provider]} · {title}
-                              </T>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                                <ProviderIcon provider={group.provider} size={18} />
+                                <T weight="600" style={{ flexShrink: 1 }}>
+                                  {providerNames[group.provider]} · {title}
+                                </T>
+                              </View>
                               {details && title !== account ? (
                                 <T size={font.caption} tone="muted" copyable={account}>
                                   {account}
@@ -424,7 +473,13 @@ export function PlanUsageSummary({ hostIds, actionOnly = false }: { hostIds: str
           flexShrink: 1,
         }}
       >
-        {actionOnly && percent !== null ? <UsageRing percent={percent} /> : <Gauge size={16} color={c.soft} />}
+        {actionOnly && percent !== null ? (
+          <UsageRing percent={percent} />
+        ) : summary && !actionOnly ? (
+          <ProviderIcon provider={summary.reading.provider} size={16} />
+        ) : (
+          <Gauge size={16} color={c.soft} />
+        )}
         {actionOnly ? null : (
           <T size={font.caption} style={{ flexShrink: 1 }}>
             {label} · {value}
