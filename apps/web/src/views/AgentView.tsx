@@ -26,7 +26,7 @@ import { TranscriptScrollApi } from './agent/components/TranscriptScrollApi'
 import type { FileContext } from '@ramu/shared/types'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
-import { agentActivityLabel } from '@ramu/shared/chat/agentActivity'
+import { currentStep, turnStartedAt, agentActivityLabel } from '@ramu/shared/chat/agentActivity'
 import { GoalBar } from '../chat/GoalBar'
 import { goalChanges } from '@ramu/shared/chat/goalHistory'
 import { AgentControls } from '../chat/AgentControls'
@@ -96,7 +96,7 @@ import { PendingQuestionsBar } from './agent/components/PendingQuestionsBar'
 import { QueuedMessages } from './agent/components/QueuedMessages'
 import { TranscriptTurn } from './agent/components/TranscriptTurn'
 import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
-import { ChatStatus } from '../chat/ChatMotion'
+import { WorkingLine } from '../chat/WorkingLine'
 import { AsidePanel } from './agent/components/AsidePanel'
 import { AgentTaskPanel } from './agent/components/AgentTaskPanel'
 import { SelectionActions } from './agent/components/SelectionActions'
@@ -734,9 +734,6 @@ export const AgentView = memo(function AgentView({
                         <PendingSubmission submission={pendingSubmission} />
                       </MessageScrollerItem>
                     )}
-                    {activityLabel && (compacting || !statusGroup) && (
-                      <ChatStatus label={translate(activityLabel)} compacting={compacting} />
-                    )}
                   </MessageScrollerContent>
                 </MessageScrollerViewport>
                 <ScrollToLatestButton working={working} />
@@ -820,6 +817,11 @@ export const AgentView = memo(function AgentView({
                   )}
                 </ComposerTray>
               )}
+              <WorkingLine
+                running={working && !hostOffline}
+                step={compacting ? { label: 'Compacting context…' } : currentStep(session?.state, events)}
+                since={turnStartedAt(events)}
+              />
               <Composer
                 attachments={attachments}
                 onAttachmentsChange={setAttachments}

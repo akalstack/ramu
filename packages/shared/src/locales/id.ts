@@ -3997,4 +3997,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Permissions on this host": "Izin di host ini",
   "Never (no more requests)": "Jangan pernah (tanpa permintaan lagi)",
   "Declined by the host": "Ditolak oleh host",
+  "Deleting": "Menghapus",
+  "Moving": "Memindahkan",
+  "Changing mode": "Mengubah mode",
 }

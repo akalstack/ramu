@@ -193,17 +193,6 @@ export function Arrive({ animate, identity, children }: { animate: boolean; iden
   return <Animated.View style={{ opacity: progress, transform: [{ translateY }] }}>{children}</Animated.View>
 }
 
-/** A status fades on semantic changes; elapsed time and streaming tokens do not restart its animation. */
-export function ChatStatus({ label }: { label: string }) {
-  return (
-    <View accessibilityLiveRegion="polite">
-      <Arrive animate identity={label}>
-        <Shimmer>{label}</Shimmer>
-      </Arrive>
-    </View>
-  )
-}
-
 /** Height and opacity disclosure motion, shared by every expandable transcript block. */
 export function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
   const reduced = useReducedMotion()

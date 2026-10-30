@@ -124,6 +124,10 @@ export interface Chat extends Task {
   executionState?: import('@ramu/shared/types').AgentSessionState
   compacting?: boolean
   activityLabel?: string | null
+  /** When the running turn began, for its elapsed time. */
+  turnStartedAt?: number | null
+  /** What the agent is doing now, for the line above the composer. */
+  step?: import('@ramu/shared/chat/agentActivity').AgentStep | null
   taskId: string
   sessionId: string | null
   computerId: string

@@ -105,7 +105,8 @@ export function ThreadActivity({
   const secondary = activity.model.secondary.filter((kind) => kind !== 'working').slice(0, 1)
   const kinds = [
     ...new Set<ActivityKind | 'more'>([
-      ...(primary && (primary !== 'working' || chat.compacting) ? [primaryKind] : []),
+      // The working line before these pills says what the agent is doing, compaction included.
+      ...(primary && primary !== 'working' ? [primaryKind] : []),
       ...secondary,
       ...(activity.groups.length || activity.model.secondary.length > 1 ? ['more' as const] : []),
     ]),

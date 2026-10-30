@@ -6954,7 +6954,11 @@ function deliveryStoreHarness() {
     './workspaces': workspaceChoices,
     './transport': { HostError: class HostError extends Error {} },
     './transcript': mobileTranscript,
-    '@ramu/shared/chat/agentActivity': { agentActivityLabel: () => null },
+    '@ramu/shared/chat/agentActivity': {
+      agentActivityLabel: () => null,
+      currentStep: () => null,
+      turnStartedAt: () => null,
+    },
     '@ramu/shared/chat/inputSummary': { inputSummary: () => null },
     '@ramu/shared/chat/compaction': { isCompacting: () => false },
     '@ramu/shared/chat/threadStatus': { newerTaskSnapshot: (_, next) => next },

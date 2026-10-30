@@ -60,7 +60,8 @@ import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../componen
 import { PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
-import { Arrive, Presence, ChatStatus, useReducedMotion } from '../../../components/Motion'
+import { Arrive, Presence, useReducedMotion } from '../../../components/Motion'
+import { WorkingLine } from '../../../components/WorkingLine'
 import { ChatActionsSheet, confirmChatDeletion } from '../../../components/ChatActions'
 import * as Clipboard from 'expo-clipboard'
 
@@ -1002,16 +1003,6 @@ export default function ChatScreen() {
                       <PendingBubble item={o} computer={computer?.name ?? 'the host'} onEdit={editPending} />
                     </Arrive>
                   ))}
-                  {running && !offline ? (
-                    <ChatStatus
-                      label={translate(
-                        store.language,
-                        chat.compacting
-                          ? 'Compacting context…'
-                          : (chat.activityLabel ?? (chat.executionState === 'starting' ? 'Starting…' : 'Working')),
-                      )}
-                    />
-                  ) : null}
                 </View>
               }
             />
@@ -1049,6 +1040,7 @@ export default function ChatScreen() {
                         chat={chat}
                         leading={
                           <>
+                            <WorkingLine chat={chat} />
                             <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
                             <BrowserNotice chat={chat} tabs={browserTabs.tabs} onOpen={() => setTool('browser')} />
                           </>
