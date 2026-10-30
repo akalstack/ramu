@@ -35,6 +35,22 @@ it('enables fresh hosts without downloading a browser at startup', () => {
   expect(fresh.status()).toMatchObject({ enabled: true, available: false })
 })
 
+it('prefers a connected desktop browser unless Host Chromium is chosen, and remembers the choice', () => {
+  const changed = vi.fn()
+  const root = join(dir, 'engine')
+  const host = new HostBrowser(root, changed)
+  let native = false
+  host.useNativeWhen(() => native)
+  expect(host.selected()).toBe(true)
+  native = true
+  expect(host.selected()).toBe(false)
+  host.setEngine('chromium')
+  expect(host.selected()).toBe(true)
+  expect(changed).toHaveBeenCalledTimes(1)
+  expect(new HostBrowser(root, () => {}).status().engine).toBe('chromium')
+  expect(() => host.setEngine('other' as never)).toThrow('Choose')
+})
+
 it('uses the paired owner connection without a per-thread viewing grant and rechecks revoked pairing', () => {
   let paired = true
   const owner = new HostBrowser(

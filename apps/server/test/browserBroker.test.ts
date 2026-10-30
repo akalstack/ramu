@@ -134,3 +134,14 @@ it('keeps waiting live frames out of the input and agent operation budgets', asy
   await Promise.all([...frames, input, agent])
   broker.detach('desktop')
 })
+
+it('reports when the desktop browser becomes available or leaves', () => {
+  const changed = vi.fn()
+  const broker = new DesktopBrowserBroker(() => true, 1000, undefined, changed)
+  const { token } = broker.attach('desktop')
+  expect(changed).not.toHaveBeenCalled()
+  broker.ready('desktop', token)
+  expect(changed).toHaveBeenCalledTimes(1)
+  broker.detach('desktop')
+  expect(changed).toHaveBeenCalledTimes(2)
+})
