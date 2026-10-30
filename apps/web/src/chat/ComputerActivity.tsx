@@ -23,6 +23,8 @@ import { controllerLabel } from './computerLabels'
 import { useComputerVideo } from './useComputerVideo'
 import { ComputerSharing } from './ComputerSharing'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
+import { PermissionNeeded } from '../settings/DevicePermissions'
+import { refusedPermission, type DevicePermission } from '@ramu/shared/devicePermissions'
 
 const VIEW_ONLY_COMPUTER_NOTICE =
   'This device can watch screens the host owner has shared with this thread. Control requires full access.'
@@ -451,6 +453,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   const [enabled, setEnabled] = useState(false)
   const [session, setSession] = useState<ComputerSessionSummary | null>(null)
   const [error, setError] = useState('')
+  const [needed, setNeeded] = useState<DevicePermission | null>(null)
   const [viewing, setViewing] = useState(false)
   const [asked, setAsked] = useState(false)
   const [apps, setApps] = useState<string[]>([])
@@ -500,11 +503,13 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   const run = async (work: () => Promise<unknown>) => {
     if (!canWrite()) return
     setError('')
+    setNeeded(null)
     setAsked(false)
     try {
       await work()
     } catch (reason) {
       setError(t(errorText(reason)))
+      setNeeded(refusedPermission(errorText(reason)))
     }
     await load()
   }
@@ -649,10 +654,14 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
           </span>
         )}
         {session && !viewOnly && <ComputerSharing taskId={taskId} />}
-        {error && (
-          <span role="alert" className="text-caption text-destructive">
-            {error}
-          </span>
+        {needed ? (
+          <PermissionNeeded host={hostId} permission={needed} />
+        ) : (
+          error && (
+            <span role="alert" className="text-caption text-destructive">
+              {error}
+            </span>
+          )
         )}
       </div>
       {viewing && session && (

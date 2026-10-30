@@ -8,6 +8,7 @@ import { isHostTaskCommand } from '@ramu/shared/hostOverview'
  * machine (dialogs, menus, clipboard, the background service, app updates, pairing) stays out.
  */
 const DOMAINS = new Set([
+  'device',
   'hostBrowser',
   'interactive',
   'tasks',

@@ -46,7 +46,7 @@ Every tab has a primary action and a Settings button. With no host paired, or a 
 - Settings → Threads has one phone-local Steer/Queue control and one model-change warning; host choices stay the defaults until overridden.
 - English and Bahasa Indonesia, System/Light/Dark appearance, safe-area and keyboard handling, virtualized transcripts.
 
-The app suspends streams when backgrounded and rehydrates every saved host on return; agents keep running on their hosts and the app never promises background event delivery. Full-access devices can run shells and agents; the host can instead issue a viewer pairing. Device access expires after 90 days of inactivity (activity extends it). Network and device administration stay on the host.
+The app suspends streams when backgrounded and rehydrates every saved host on return; agents keep running on their hosts and the app never promises background event delivery. Full-access devices can run shells and agents; the host can instead issue a viewer pairing. Device access expires after 90 days of inactivity (activity extends it). Settings → Hosts lists what this phone may use on the selected host (computer use, browser, terminals, settings) and requests anything missing; a refusal in the browser or computer viewer offers **Request access** too. Network and device administration stay on the host.
 
 ## Notifications
 

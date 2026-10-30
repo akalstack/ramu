@@ -555,6 +555,23 @@ export interface RamuMethods {
   /** Pairs a device that asked, spending the given open offer (and its access). Host-only, like the rest of `network.*`. */
   'network.approveRequest'(requestId: string, offerId: string): NetworkStatus
   'network.denyRequest'(requestId: string): NetworkStatus
+  /** Grants a paired device a permission once, for a while or always, or revokes it. Host-only. */
+  'network.setDevicePermission'(
+    deviceId: string,
+    permission: import('./devicePermissions').DevicePermission,
+    duration: import('./devicePermissions').PermissionDuration | 'revoke',
+  ): NetworkStatus
+  /** Answers a device's request for a permission. Host-only. */
+  'network.decidePermission'(
+    requestId: string,
+    duration: import('./devicePermissions').PermissionDuration | 'deny',
+  ): NetworkStatus
+  /** What newly paired full-access devices hold. Host-only. */
+  'network.setDefaultPermissions'(permissions: import('./devicePermissions').DevicePermission[]): NetworkStatus
+  /** What the calling device holds on this host. This computer itself holds everything. */
+  'device.permissions'(): import('./devicePermissions').DevicePermissionsView
+  /** Asks the person at the host for a permission this device lacks. */
+  'device.requestPermission'(permission: import('./devicePermissions').DevicePermission): void
   'network.revoke'(deviceId: string): NetworkStatus
   /** Days an unused device stays paired (1 to 3650), `never`, or null for the server default. Host-only, like the rest of `network.*`. */
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus

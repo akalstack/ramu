@@ -24,6 +24,10 @@ export interface NetworkDevice {
   expiresAt?: number | null
   role?: 'owner' | 'viewer'
   lastSeenAt: number | null
+  /** Absent on devices paired before permissions existed, which hold every permission. */
+  permissions?: Partial<
+    Record<import('../devicePermissions').DevicePermission, import('../devicePermissions').PermissionGrant>
+  >
 }
 /** An address this computer has, which another device may reach it on (LAN, VPN, ...). */
 export interface NetworkAddress {
@@ -51,6 +55,16 @@ export interface NetworkStatus {
    * codes match. Absent on older hosts.
    */
   requests?: { id: string; name: string; address: string; code: string; expiresAt: number }[]
+  /** What a newly paired full-access device holds. Absent on older hosts. */
+  defaultPermissions?: import('../devicePermissions').DevicePermission[]
+  /** Paired devices asking for a permission, waiting for a person here. Absent on older hosts. */
+  permissionRequests?: {
+    id: string
+    deviceId: string
+    deviceName: string
+    permission: import('../devicePermissions').DevicePermission
+    at: number
+  }[]
   /** Nearby-device discovery. Absent on hosts that predate it. */
   discovery?: {
     /** The saved choice; it advertises only while network access is also on and listening. */

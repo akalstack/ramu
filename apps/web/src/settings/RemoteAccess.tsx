@@ -25,6 +25,13 @@ import { StatusDot, activityText, statusText, useComputers } from '../workspace/
 import { workspaceVisible } from '../workspace/workspaceLifetime'
 import { onPairLink, takePairLink } from '../pairLink'
 import { NearbyHosts } from './NearbyHosts'
+import {
+  DefaultPermissions,
+  DevicePermissionList,
+  PermissionRequests,
+  ThisDevicePermissions,
+  type PermissionInvoke,
+} from './DevicePermissions'
 
 const ALL_NETWORKS = '0.0.0.0'
 /** Virtual networks that Docker, VMs and macOS create. Another device almost never reaches this computer through them. */
@@ -148,6 +155,13 @@ function ThisComputer() {
       notifyError(errorText(error), t('Remote access'))
     } finally {
       setBusy(false)
+    }
+  }
+  const changePermission: PermissionInvoke = async (method, ...args) => {
+    try {
+      setStatus(await (invoke as (method: string, ...args: unknown[]) => Promise<NetworkStatus>)(method, ...args))
+    } catch (error) {
+      notifyError(errorText(error), t('Remote access'))
     }
   }
   const revoke = async (id: string) => {
@@ -280,6 +294,7 @@ function ThisComputer() {
       )}
 
       <SettingsGroupTitle className="mt-5">{t('Devices that can use this host')}</SettingsGroupTitle>
+      <PermissionRequests status={status} invoke={changePermission} />
       <SettingsRow>
         <SettingsLabel
           title={t('Pair a device')}
@@ -315,22 +330,26 @@ function ThisComputer() {
           />
         </SettingsRow>
       )}
+      <DefaultPermissions status={status} invoke={changePermission} />
       {status.devices.map((device) => (
-        <SettingsRow key={device.id}>
-          <SettingsLabel
-            title={device.name}
-            help={`${device.role === 'viewer' ? t('Viewer') : t('Full access')} · ${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t(
-              'Paired {0} · last seen {1}',
-              {
-                0: new Date(device.createdAt).toLocaleDateString(),
-                1: device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never'),
-              },
-            )}`}
-          />
-          <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setRevoking(device.id)}>
-            {t('Revoke')}
-          </Button>
-        </SettingsRow>
+        <div key={device.id}>
+          <SettingsRow>
+            <SettingsLabel
+              title={device.name}
+              help={`${device.role === 'viewer' ? t('Viewer') : t('Full access')} · ${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t(
+                'Paired {0} · last seen {1}',
+                {
+                  0: new Date(device.createdAt).toLocaleDateString(),
+                  1: device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never'),
+                },
+              )}`}
+            />
+            <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setRevoking(device.id)}>
+              {t('Revoke')}
+            </Button>
+          </SettingsRow>
+          <DevicePermissionList device={device} invoke={changePermission} />
+        </div>
       ))}
       {!status.devices.length && (
         <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">{t('No devices paired yet.')}</p>
@@ -1180,6 +1199,7 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
                 : ''}
             </p>
           </div>
+          {computer.status === 'connected' && <ThisDevicePermissions host={computer.id} />}
           <div className="flex items-center justify-between gap-4">
             <span>
               <strong className="text-body font-medium">{t('Keep connected')}</strong>

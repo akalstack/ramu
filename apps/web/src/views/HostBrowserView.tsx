@@ -26,6 +26,8 @@ import { useSearchEngine } from './searchEngine'
 import { takeBrowserNavigation, onBrowserNavigation } from './browserNavigation'
 import { takeWantedTab, onWantedTab, NEW_TAB } from './browserPane'
 import { HostBrowserDownloads } from './HostBrowserDownloads'
+import { PermissionNeeded } from '../settings/DevicePermissions'
+import { refusedPermission, type DevicePermission } from '@ramu/shared/devicePermissions'
 
 const MAC = navigator.platform.toUpperCase().includes('MAC')
 /** Shortcuts that edit the page: select all, copy, cut, undo, redo, and word or line jumps with the arrows. */
@@ -64,6 +66,7 @@ export function HostBrowserView({
     setUploadRef('')
   }, [selected])
   const [error, setError] = useState('')
+  const [needed, setNeeded] = useState<DevicePermission | null>(null)
   const [frameError, setFrameError] = useState('')
   const [frameReady, setFrameReady] = useState(false)
   const [foreground, setForeground] = useState(!document.hidden)
@@ -96,11 +99,15 @@ export function HostBrowserView({
     if (!allowed()) return undefined
     setBusy(true)
     setError('')
+    setNeeded(null)
     try {
       const result = await work()
       return allowed() ? result : undefined
     } catch (error) {
-      if (latest.current === scope) setError(t(errorText(error)))
+      if (latest.current === scope) {
+        setError(t(errorText(error)))
+        setNeeded(refusedPermission(errorText(error)))
+      }
       return undefined
     } finally {
       if (latest.current === scope) setBusy(false)
@@ -432,7 +439,12 @@ export function HostBrowserView({
             </Button>
           )}
         </form>
-        {(error || frameError || elsewhere) && (
+        {needed ? (
+          <div className="px-3 py-1">
+            <PermissionNeeded host={host.id} permission={needed} />
+          </div>
+        ) : null}
+        {!needed && (error || frameError || elsewhere) && (
           <p role="status" className="m-0 px-3 py-1 text-caption">
             {error ||
               (frameError ? t(frameError) : t('Another of your devices has control. Take control to use it here.'))}

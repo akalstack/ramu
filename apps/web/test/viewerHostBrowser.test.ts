@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
 }))
 vi.mock('../src/ipc', () => ({ ramu: { invoke: state.invoke }, copyText: async () => {} }))
 vi.mock('../src/views/BrowserTabChip', () => ({ BrowserTabChip: 'tab' }))
+vi.mock('../src/settings/DevicePermissions', () => ({ PermissionNeeded: 'permission' }))
 vi.mock('react', async () => ({
   ...(await vi.importActual<typeof import('react')>('react')),
   useRef: (value: unknown) => (state.slots[state.cursor++] ??= { current: value }),

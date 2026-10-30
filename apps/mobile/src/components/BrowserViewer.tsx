@@ -1,4 +1,5 @@
 import { BrowserInputQueue, watchBrowserFrames } from '@ramu/shared/browserLiveViewer'
+import { RequestPermission } from './DevicePermissions'
 import { VIEW_ONLY_BROWSER_NOTICE } from '../runtime/viewerAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Image, PanResponder, Platform, Pressable, TextInput, View } from 'react-native'
@@ -691,6 +692,7 @@ export function BrowserViewer({
       {message ? (
         <ViewerBanner tone="bad">
           <T size={font.control}>{t(viewerMessage(message))}</T>
+          <RequestPermission computerId={chat.computerId} message={message} />
         </ViewerBanner>
       ) : null}
       {dialog && tab ? (

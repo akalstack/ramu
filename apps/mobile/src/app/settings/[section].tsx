@@ -36,6 +36,7 @@ import { ComputerUseSettings } from '../../components/ComputerUseSettings'
 import { ThemeLibrary } from '../../components/ThemeLibrary'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import { ScopeControl } from '../../components/ScopeControl'
+import { PhonePermissions } from '../../components/DevicePermissions'
 
 function AppearancePage() {
   const say = useSay()
@@ -290,6 +291,7 @@ function Computers() {
       <Hint>Settings and new threads go to the checked computer.</Hint>
       {pc ? (
         <>
+          <PhonePermissions computerId={pc.id} />
           <SectionLabel>Connection</SectionLabel>
           <Card style={{ marginHorizontal: space.l }}>
             <Row style={{ paddingVertical: space.m }} onPress={() => retry(pc.id)}>

@@ -4,6 +4,13 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import { dirname } from 'node:path'
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { AUTH_SCHEME } from '@ramu/contracts'
+import {
+  DEVICE_PERMISSIONS,
+  grantActive,
+  isDevicePermission,
+  type DevicePermission,
+  type PermissionGrant,
+} from '@ramu/shared/devicePermissions'
 
 export const PAIRING_TTL_MS = 10 * 60_000
 const MAX_PENDING = 5
@@ -21,6 +28,8 @@ export interface DeviceInfo {
   lastSeenAt: number | null
   expiresAt: number | null
   role: DeviceRole
+  /** Absent on devices paired before permissions existed, which hold every permission. */
+  permissions?: Partial<Record<DevicePermission, PermissionGrant>>
 }
 /**
  * A grant whose credential never made an authenticated request is dropped after this long: the pairing response was lost
@@ -72,6 +81,8 @@ interface DeviceFile {
   settled?: SettledOffer[]
   /** Chosen on the host in Settings. Absent means the server default (`RAMU_DEVICE_TOKEN_DAYS`, else 90 days). */
   lifetimeDays?: number | 'never'
+  /** What a newly paired full-access device holds. Absent means every permission. */
+  defaultPermissions?: DevicePermission[]
 }
 export const MAX_LIFETIME_DAYS = 3650
 export type DeviceLifetime = number | 'never'
@@ -107,6 +118,9 @@ export class DeviceStore {
         pending: Array.isArray(parsed.pending) ? parsed.pending : [],
         ...(Array.isArray(parsed.settled) ? { settled: parsed.settled } : {}),
         ...(validLifetime(parsed.lifetimeDays) ? { lifetimeDays: parsed.lifetimeDays } : {}),
+        ...(Array.isArray(parsed.defaultPermissions)
+          ? { defaultPermissions: parsed.defaultPermissions.filter(isDevicePermission) }
+          : {}),
       }
     } catch {
       return { devices: [], pending: [] }
@@ -135,6 +149,70 @@ export class DeviceStore {
       throw new Error(`Lifetime must be 1 to ${MAX_LIFETIME_DAYS} days, or never`)
     const { lifetimeDays: _previous, ...rest } = this.read()
     this.write(days === null ? rest : { ...rest, lifetimeDays: days })
+  }
+
+  /** What a new full-access device holds when it pairs. */
+  defaultPermissions(): DevicePermission[] {
+    return this.read().defaultPermissions ?? [...DEVICE_PERMISSIONS]
+  }
+
+  setDefaultPermissions(permissions: DevicePermission[]): void {
+    if (!Array.isArray(permissions) || !permissions.every(isDevicePermission)) throw new Error('Invalid permissions')
+    this.write({ ...this.read(), defaultPermissions: [...new Set(permissions)] })
+  }
+
+  /** Whether this device may use a permission now. A viewer never may; a device from before permissions always may. */
+  allows(id: string, permission: DevicePermission, now = Date.now()): boolean {
+    const device = this.read().devices.find((entry) => entry.id === id)
+    if (!device || device.role === 'viewer') return false
+    if (!device.permissions) return true
+    return grantActive(device.permissions[permission], now)
+  }
+
+  /** What this device holds, as shown to it and in Settings. */
+  permissionsOf(id: string, now = Date.now()): Record<DevicePermission, PermissionGrant | null> {
+    const device = this.read().devices.find((entry) => entry.id === id)
+    return Object.fromEntries(
+      DEVICE_PERMISSIONS.map((permission) => {
+        if (!device || device.role === 'viewer') return [permission, null]
+        if (!device.permissions) return [permission, { until: null }]
+        const grant = device.permissions[permission]
+        return [permission, grantActive(grant, now) ? grant! : null]
+      }),
+    ) as Record<DevicePermission, PermissionGrant | null>
+  }
+
+  /** Grants for a while or for good, or revokes. Host-only, like the rest of device administration. */
+  setPermission(id: string, permission: DevicePermission, grant: PermissionGrant | null, now = Date.now()): void {
+    if (!isDevicePermission(permission)) throw new Error('Invalid permission')
+    const file = this.read()
+    const device = file.devices.find((entry) => entry.id === id)
+    if (!device) throw new Error('That device is no longer paired')
+    if (device.role === 'viewer')
+      throw new Error('A view-only device cannot hold permissions. Pair it with full access.')
+    // A device from before permissions held everything; it keeps everything else when one is changed.
+    const current = device.permissions ?? Object.fromEntries(DEVICE_PERMISSIONS.map((p) => [p, { until: null }]))
+    const next = Object.fromEntries(
+      Object.entries({ ...current, [permission]: grant }).filter(
+        (entry): entry is [string, PermissionGrant] => !!entry[1] && grantActive(entry[1], now),
+      ),
+    )
+    this.write({
+      ...file,
+      devices: file.devices.map((entry) => (entry.id === id ? { ...entry, permissions: next } : entry)),
+    })
+  }
+
+  /** The device's last connection closed: what it was allowed once ends. */
+  endSession(id: string): void {
+    const file = this.read()
+    const device = file.devices.find((entry) => entry.id === id)
+    if (!device?.permissions || !Object.values(device.permissions).some((grant) => grant?.session)) return
+    const kept = Object.fromEntries(Object.entries(device.permissions).filter(([, grant]) => !grant?.session))
+    this.write({
+      ...file,
+      devices: file.devices.map((entry) => (entry.id === id ? { ...entry, permissions: kept } : entry)),
+    })
   }
 
   private write(file: DeviceFile) {
@@ -254,6 +332,13 @@ export class DeviceStore {
       role: match.role ?? 'owner',
       tokenHash: sha256(token),
       unclaimed: true,
+      ...((match.role ?? 'owner') === 'owner'
+        ? {
+            permissions: Object.fromEntries(
+              (file.defaultPermissions ?? DEVICE_PERMISSIONS).map((permission) => [permission, { until: null }]),
+            ),
+          }
+        : {}),
     }
     this.write({
       ...file,
@@ -392,7 +477,8 @@ export class DeviceStore {
   }
 }
 
-const strip = ({ id, name, createdAt, lastSeenAt, expiresAt, role }: DeviceRecord): DeviceInfo => ({
+const strip = ({ id, name, createdAt, lastSeenAt, expiresAt, role, permissions }: DeviceRecord): DeviceInfo => ({
+  ...(permissions ? { permissions } : {}),
   id,
   name,
   createdAt,

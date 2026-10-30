@@ -1,4 +1,5 @@
 import { VIEW_ONLY_COMPUTER_NOTICE } from '../runtime/viewerAccess'
+import { RequestPermission } from './DevicePermissions'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Image, PanResponder, ScrollView, View, type GestureResponderEvent } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
@@ -455,6 +456,7 @@ function ComputerViewer({
       {error ? (
         <ViewerBanner tone="bad">
           <T size={font.control}>{error}</T>
+          <RequestPermission computerId={chat.computerId} message={error} />
         </ViewerBanner>
       ) : null}
       {!viewOnly && current.handoffRequest ? (

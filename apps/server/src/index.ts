@@ -63,6 +63,16 @@ import { loadConfig } from './config'
 import { TokenStore } from './remote/auth'
 import { DeviceStore, validLifetime, type DeviceInfo } from './remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
+import { PermissionRequests } from './remote/permissionRequests'
+import {
+  DEVICE_PERMISSIONS,
+  PERMISSION_DURATIONS,
+  grantFor,
+  isDevicePermission,
+  permissionFor,
+  permissionRefusal,
+  type PermissionDuration,
+} from '@ramu/shared/devicePermissions'
 import { PairingRequests } from './remote/pairingRequests'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
@@ -111,6 +121,7 @@ const remoteTokens = config.allowLegacyToken ? new TokenStore(config.tokenPath) 
 const devices = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
 const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
 const pairingRequests = new PairingRequests({ devices, hostId })
+const permissionRequests = new PermissionRequests()
 const remoteAccess = new RemoteAccess({
   devices,
   hostId,
@@ -658,8 +669,23 @@ async function performInvoke(
     throw new Error('Invalid operation key.')
   if (remote && !deviceMayInvoke(device, method))
     throw new InvokeRefused('This device is a viewer. This action requires full access.')
+  // Computer use, the browser, terminals and settings changes each need their own grant on this host.
+  const needed = remote && device ? permissionFor(method) : null
+  if (needed && !devices.allows(device!.id, needed)) throw new InvokeRefused(permissionRefusal(needed))
   let value: unknown
-  if (method === 'browser.bridge.attach') {
+  if (method === 'device.permissions') {
+    value = device
+      ? { permissions: devices.permissionsOf(device.id), pending: permissionRequests.pendingFor(device.id) }
+      : {
+          permissions: Object.fromEntries(DEVICE_PERMISSIONS.map((permission) => [permission, { until: null }])),
+          pending: [],
+        }
+  } else if (method === 'device.requestPermission') {
+    if (!device) throw new Error('This computer already has every permission.')
+    if (!isDevicePermission(args?.[0])) throw new Error('Invalid permission')
+    if (devices.allows(device.id, args[0])) throw new Error('This device already has that permission.')
+    permissionRequests.ask(device, args[0])
+  } else if (method === 'browser.bridge.attach') {
     if (remote || typeof args?.[0] !== 'string' || !desktopClients.has(args[0]))
       throw new Error('A local desktop event stream is required.')
     // A desktop that is gone (quit, crashed) must not keep the browser from a new one that is connected.
@@ -1178,6 +1204,7 @@ function listenRemote(server: NonNullable<typeof remote>, attempt = 0) {
 let sockets: ReturnType<typeof serveSockets> | null = null
 // The WebSocket is one more transport for the same calls and events: it registers for the same broadcast as an SSE
 // stream and runs every call through `performInvoke`, so authorization and keyed-mutation recovery are shared.
+const streamDevices = new Map<object, string>()
 const socketHost: SocketHost = {
   accept: (req, res) => remoteAccess.accept(req, res),
   invoke: async (device, request) => {
@@ -1198,10 +1225,15 @@ const socketHost: SocketHost = {
       presence.register(device.id, req.socket.remoteAddress, Number(req.headers['x-ramu-presence-port']))
     clients.add(sink)
     remoteStreams.set(sink, req.headers.authorization)
+    if (device) streamDevices.set(sink, device.id)
   },
   detach: (sink) => {
     clients.delete(sink)
     remoteStreams.delete(sink)
+    // A device's last connection closing ends what it was allowed "this time".
+    const id = streamDevices.get(sink)
+    streamDevices.delete(sink)
+    if (id && ![...streamDevices.values()].includes(id)) devices.endSession(id)
   },
 }
 // The desktop and the command line reach this service over its unix socket with the same frames a phone uses over the
@@ -1298,10 +1330,40 @@ function networkStatus() {
     deviceLifetime: devices.lifetime(),
     offers: devices.offers(),
     requests: pairingRequests.list(),
+    defaultPermissions: devices.defaultPermissions(),
+    permissionRequests: permissionRequests.list(),
   }
 }
 async function networkMethod(method: string, args: unknown[]) {
   if (method === 'network.status') return networkStatus()
+  if (method === 'network.setDevicePermission') {
+    const [deviceId, permission, duration] = args
+    if (typeof deviceId !== 'string' || !isDevicePermission(permission)) throw new Error('Invalid permission')
+    if (duration !== 'revoke' && !PERMISSION_DURATIONS.includes(duration as PermissionDuration))
+      throw new Error('Invalid duration')
+    devices.setPermission(
+      deviceId,
+      permission,
+      duration === 'revoke' ? null : grantFor(duration as PermissionDuration, Date.now()),
+    )
+    permissionRequests.clear(deviceId, permission)
+    return networkStatus()
+  }
+  if (method === 'network.decidePermission') {
+    const [requestId, duration] = args
+    const request = typeof requestId === 'string' ? permissionRequests.take(requestId) : undefined
+    if (!request) throw new Error('That request was already answered or expired.')
+    if (duration !== 'deny') {
+      if (!PERMISSION_DURATIONS.includes(duration as PermissionDuration)) throw new Error('Invalid duration')
+      devices.setPermission(request.deviceId, request.permission, grantFor(duration as PermissionDuration, Date.now()))
+    }
+    return networkStatus()
+  }
+  if (method === 'network.setDefaultPermissions') {
+    if (!Array.isArray(args[0]) || !args[0].every(isDevicePermission)) throw new Error('Invalid permissions')
+    devices.setDefaultPermissions(args[0])
+    return networkStatus()
+  }
   if (method === 'network.configure') {
     if (config.listen) throw new Error('Network access was set with --listen; change it there')
     const input = args[0] as { discoverable?: unknown } | null
