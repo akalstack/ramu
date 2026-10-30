@@ -114,7 +114,7 @@ export function BrowserViewer({
   const [pageText, setPageText] = useState('')
   const [observation, setObservation] = useState<BrowserPageSnapshot | null>(null)
   const [uploadPath, setUploadPath] = useState('')
-  const [phonePage, setPhonePage] = useState<string | null>(null)
+  const [phonePage, setPhonePage] = useState<{ url: string; rewritten: boolean } | null>(null)
   const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | 'display' | null>(null)
   const downloadsOpen = panel === 'downloads'
   const menu = useViewerMenu()
@@ -475,7 +475,8 @@ export function BrowserViewer({
     openOnPhone: {
       title: t('Open on this phone'),
       icon: Smartphone,
-      onPress: () => phoneUrl && setPhonePage(phoneUrl),
+      onPress: () =>
+        tab && phoneUrl && setPhonePage({ url: phoneUrl, rewritten: new URL(phoneUrl).host !== new URL(tab.url).host }),
     },
     readText: {
       title: t('Read page text'),
@@ -527,7 +528,7 @@ export function BrowserViewer({
       </View>
     )
   if (phonePage)
-    return <PhoneBrowser url={phonePage} rewritten={phonePage !== tab?.url} onClose={() => setPhonePage(null)} />
+    return <PhoneBrowser url={phonePage.url} rewritten={phonePage.rewritten} onClose={() => setPhonePage(null)} />
   const editable = own || !tab || newTab
   const nextControl = state ? controlAction(state) : null
   const message = error || frameError

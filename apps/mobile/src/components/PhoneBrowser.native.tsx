@@ -72,7 +72,8 @@ export default function PhoneBrowser({ url, rewritten, onClose }: PhoneBrowserPr
             ref={view}
             source={{ uri: url }}
             style={{ flex: 1, backgroundColor: c.window }}
-            originWhitelist={['http://*', 'https://*']}
+            // Every scheme reaches the check below; the whitelist fallback would hand rejected URLs to Linking.openURL.
+            originWhitelist={['*']}
             onShouldStartLoadWithRequest={(request) => /^(https?:|about:blank)/i.test(request.url)}
             incognito
             sharedCookiesEnabled={false}
