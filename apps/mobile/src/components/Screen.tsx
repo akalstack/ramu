@@ -369,9 +369,7 @@ export function Header({
             : typeof title === 'string'
               ? title
               : '',
-          // The same rule as iOS large titles: a tab's root shows a large title that shrinks once content scrolls under it.
-          headerTitleStyle:
-            large && !collapsed ? { fontSize: 24, fontWeight: '700' } : { fontSize: 17, fontWeight: '600' },
+          headerTitleStyle: { fontSize: 17, fontWeight: '600' },
           headerTitleAlign: align,
           headerBackVisible: back && !modal,
           headerLeft: modal
