@@ -26,6 +26,12 @@ Use disposable host profiles and simulated providers where possible. Paid live-p
 
 - [ ] Rebuild the development client (it adds `expo-crypto`). With **Pair a device** open on a host, choose it under Nearby hosts on an iPhone and an Android phone: both screens show the same number, **Allow** pairs, **Deny** and a two-minute wait end the request, and an older build or host falls back to typing the code. Repeat from a second desktop and with `ramu pair` on a headless host.
 
+## Device permissions and activity pills
+
+- [ ] Pair a phone with the host's default permissions turned off. Confirm the computer and browser viewers show **Request access**, that Settings → Hosts lists the four permissions with **Request**, and that allowing it on the host this time, for an hour, for a day or always takes effect without reconnecting; "This time" ends when the phone disconnects. Repeat from a second desktop's Connection settings and with `ramu devices allow` on a headless host.
+- [ ] Check the activity pills above the composer (computer, browser, terminal, working, approval, offline) on iOS and Android, including the Offline sheet's **Reconnect**, large text and screen readers.
+- [ ] Compare Android Settings and sheet options with iOS: grouped cards, chevrons and spacing.
+
 ## Open on this phone
 
 - [ ] From the browser viewer's ⋯ menu, open a public page and a host `localhost` dev server started with `--host 0.0.0.0`; scroll, type, go back and reload natively. Repeat with a dev server bound to `127.0.0.1` and confirm the explanation, **Try again** and **Back to the host browser**, and that the stream resumes. Confirm nothing stays signed in after closing.
