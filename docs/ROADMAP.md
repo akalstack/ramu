@@ -20,7 +20,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Browser and computer use:** provider capability negotiation and more session-import sources. **Open on this phone** reaches only dev servers listening beyond the host's loopback; forwarding one loopback port to one paired phone (expiring, IP-bound, shown with its port) needs a security review first. Computer use on Windows and Linux waits for native capture, permissions and signing.
 - **Provider compatibility:** compatibility rules for OpenCode's ACP runner, Cursor and Antigravity after protocol checks; entry points that bypass `validateSettings`.
 - **Git hosting:** GitLab, Bitbucket Cloud and Azure DevOps. A new forge adds an adapter beside GitHub's in `apps/server/src/workspace/forge/`.
-- **Remote security:** the phone hides browser, computer and terminal controls it lacks the permission for; the desktop's views of another host and settings changes from either still show **Request access** only after a refusal. The server allowlist and permissions are the boundary; the controls only avoid dead ends.
+- **Remote security:** settings changes from a device without **Change settings** still show **Request access** only after a refusal; browser, computer and terminal controls already give way to a request up front. The server allowlist and permissions are the boundary; the controls only avoid dead ends.
 - **Code quality:** replace `any` at the wire boundaries with validated types. About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
 ## Acceptance

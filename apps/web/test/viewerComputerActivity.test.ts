@@ -6,7 +6,7 @@ const state = vi.hoisted(() => ({
   viewer: true,
   invoke: vi.fn(),
 }))
-vi.mock('../src/settings/DevicePermissions', () => ({ PermissionNeeded: 'permission' }))
+vi.mock('../src/settings/DevicePermissions', () => ({ PermissionNeeded: 'permission', useMayUse: () => true }))
 vi.mock('react', async () => ({
   ...(await vi.importActual<typeof import('react')>('react')),
   useRef: (value: unknown) => (state.slots[state.cursor++] ??= { current: value }),

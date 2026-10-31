@@ -26,7 +26,7 @@ import { useSearchEngine } from './searchEngine'
 import { takeBrowserNavigation, onBrowserNavigation } from './browserNavigation'
 import { takeWantedTab, onWantedTab, NEW_TAB } from './browserPane'
 import { HostBrowserDownloads } from './HostBrowserDownloads'
-import { PermissionNeeded } from '../settings/DevicePermissions'
+import { PermissionNeeded, useMayUse } from '../settings/DevicePermissions'
 import { refusedPermission, type DevicePermission } from '@ramu/shared/devicePermissions'
 
 const MAC = navigator.platform.toUpperCase().includes('MAC')
@@ -67,6 +67,7 @@ export function HostBrowserView({
   }, [selected])
   const [error, setError] = useState('')
   const [needed, setNeeded] = useState<DevicePermission | null>(null)
+  const mayControl = useMayUse('browser')
   const [frameError, setFrameError] = useState('')
   const [frameReady, setFrameReady] = useState(false)
   const [foreground, setForeground] = useState(!document.hidden)
@@ -418,7 +419,7 @@ export function HostBrowserView({
             </Button>
           )}
           <HostBrowserDownloads canAccess={allowed} taskId={taskId} tabId={tab?.id} own={own} />
-          {tab && (
+          {tab && (controlled || mayControl) && (
             <Button
               type="button"
               size="sm"
@@ -439,9 +440,9 @@ export function HostBrowserView({
             </Button>
           )}
         </form>
-        {needed ? (
+        {needed || (tab && !controlled && !mayControl) ? (
           <div className="px-3 py-1">
-            <PermissionNeeded host={host.id} permission={needed} />
+            <PermissionNeeded host={host.id} permission={needed ?? 'browser'} />
           </div>
         ) : null}
         {!needed && (error || frameError || elsewhere) && (

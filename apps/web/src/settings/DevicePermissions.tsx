@@ -8,6 +8,7 @@ import {
   PERMISSION_HELP,
   PERMISSION_LABEL,
   grantActive,
+  mayUse,
   type DevicePermission,
   type PermissionDuration,
   type DevicePermissionsView,
@@ -17,6 +18,8 @@ import type { NetworkDevice, NetworkStatus } from '@ramu/shared/types'
 import { useCallback, useEffect, useState } from 'react'
 import { Dropdown } from '../Menu'
 import { invokeOn } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
+import { useHostRuntime } from '../workspace/workspace'
 import { errorText } from '../lib/errors'
 import { t } from '../i18n'
 
@@ -222,4 +225,33 @@ export function PermissionNeeded({ host, permission }: { host: string; permissio
       </Button>
     </span>
   )
+}
+
+/**
+ * Whether this computer should be offered a control that needs `permission` on the host it is viewing. The host this
+ * window runs on grants everything; another host is read and followed as it decides, and an unknown answer offers the
+ * control so the host's own refusal still explains.
+ */
+export function useMayUse(permission: DevicePermission): boolean {
+  const host = useHost()
+  const { on } = useHostRuntime()
+  const [view, setView] = useState<DevicePermissionsView | null>(null)
+  const { isLocal, id } = host
+  useEffect(() => {
+    setView(null)
+    if (isLocal) return
+    let disposed = false
+    const load = () =>
+      invokeOn(id, 'device.permissions').then(
+        (next) => !disposed && setView(next),
+        () => !disposed && setView(null),
+      )
+    void load()
+    const off = on('device:permissions', () => void load())
+    return () => {
+      disposed = true
+      off()
+    }
+  }, [id, isLocal, on])
+  return isLocal || mayUse(view, permission, Date.now())
 }

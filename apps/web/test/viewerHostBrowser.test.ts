@@ -5,12 +5,13 @@ const state = vi.hoisted(() => ({
   effects: [] as (() => void)[],
   viewer: false,
   allowed: true,
+  mayUse: true,
   invoke: vi.fn(),
   host: { id: 'host' },
 }))
 vi.mock('../src/ipc', () => ({ ramu: { invoke: state.invoke }, copyText: async () => {} }))
 vi.mock('../src/views/BrowserTabChip', () => ({ BrowserTabChip: 'tab' }))
-vi.mock('../src/settings/DevicePermissions', () => ({ PermissionNeeded: 'permission' }))
+vi.mock('../src/settings/DevicePermissions', () => ({ PermissionNeeded: 'permission', useMayUse: () => state.mayUse }))
 vi.mock('react', async () => ({
   ...(await vi.importActual<typeof import('react')>('react')),
   useRef: (value: unknown) => (state.slots[state.cursor++] ??= { current: value }),
@@ -85,6 +86,7 @@ beforeEach(() => {
   state.host = { id: 'host' }
   state.viewer = false
   state.allowed = true
+  state.mayUse = true
   state.invoke.mockReset().mockResolvedValue([])
 })
 afterEach(() => {
@@ -280,4 +282,17 @@ it('keeps wheel gestures responsive while earlier input is in flight and preserv
   ])
   finish()
   await flush()
+})
+
+it('offers a permission request instead of Take control when this computer lacks the Browser permission', async () => {
+  const tab = { id: 'tab', generation: 1, controller: 'agent', url: 'https://site.example', inputReady: true }
+  state.mayUse = false
+  state.invoke.mockImplementation(async (method: string) => (method === 'hostBrowser.list' ? [tab] : null))
+  RenderBrowser()
+  await flush()
+  RenderBrowser()
+  await flush()
+  const tree = nodes(RenderBrowser())
+  expect(tree.some((node) => node.props.children === 'Take control')).toBe(false)
+  expect(tree.find((node) => node.type === 'permission')!.props.permission).toBe('browser')
 })
