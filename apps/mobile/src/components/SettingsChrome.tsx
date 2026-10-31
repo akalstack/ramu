@@ -1,6 +1,7 @@
 import { Platform, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import {
+  Archive,
   Bell,
   Brain,
   CalendarClock,
@@ -9,9 +10,11 @@ import {
   Globe,
   GitBranch,
   Info,
+  Layers,
   MessageSquare,
   Monitor,
   MonitorCog,
+  MonitorSmartphone,
   Palette,
   Plug,
   ShieldCheck,
@@ -24,20 +27,22 @@ import type { SettingsSection } from '../runtime/settingsModel'
 import type { useHostSettings } from '../runtime/useHostSettings'
 import { Card, ConnectionDot, Row, T } from './ui'
 
+// The desktop's icons for the same sections.
 const icons: Record<SettingsSection, LucideIcon> = {
   appearance: Palette,
   git: GitBranch,
   browser: Globe,
   computer: MonitorCog,
+  archived: Archive,
   chats: MessageSquare,
   providers: Cpu,
+  models: Layers,
+  'agent-setup': Plug,
   access: ShieldCheck,
   workflows: Target,
   memory: Brain,
-  rules: ShieldCheck,
-  setup: Plug,
   system: CalendarClock,
-  computers: Monitor,
+  remote: MonitorSmartphone,
   notifications: Bell,
   about: Info,
 }

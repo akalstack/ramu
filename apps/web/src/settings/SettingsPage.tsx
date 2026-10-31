@@ -1,4 +1,5 @@
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
+import { SETTINGS_MENU, SETTINGS_MENU_GROUPS, type SettingsMenuId } from '@ramu/shared/settingsMenu'
 import { cn } from 'cn'
 import { SettingsTargetSelector, SettingsScopeContext } from './SettingsScope'
 import { t, useLanguage } from '../i18n'
@@ -33,28 +34,31 @@ import { useComputers } from '../workspace/computers'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { PermissionNeeded } from './DevicePermissions'
 
-export const SETTINGS_GROUPS = ['Workspace', 'Agents', 'System'] as const
+export const SETTINGS_GROUPS = SETTINGS_MENU_GROUPS
 
-export const SETTINGS_SECTIONS = [
-  { id: 'appearance', label: 'Appearance', Icon: Palette, group: 'Workspace' },
-  { id: 'editor', label: 'Editor & Terminal', Icon: Code, group: 'Workspace' },
-  { id: 'git', label: 'Git', Icon: GitBranch, group: 'Workspace' },
-  { id: 'browser', label: 'Browser', Icon: Globe, group: 'Workspace' },
-  { id: 'computer', label: 'Computer use', Icon: MonitorCog, group: 'Workspace' },
-  { id: 'shortcuts', label: 'Keyboard shortcuts', Icon: Keyboard, group: 'Workspace' },
-  { id: 'archived', label: 'Archived threads', Icon: Archive, group: 'Workspace' },
-  { id: 'chats', label: 'Threads', Icon: MessageSquare, group: 'Agents' },
-  { id: 'providers', label: 'Providers', Icon: Cpu, group: 'Agents' },
-  { id: 'models', label: 'Models', Icon: Layers, group: 'Agents' },
-  { id: 'environment', label: 'Environment variables', Icon: Variable, group: 'Agents' },
-  { id: 'agent-setup', label: 'Agent setup', Icon: Plug, group: 'Agents' },
-  { id: 'access', label: 'Permissions', Icon: ShieldCheck, group: 'Agents' },
-  { id: 'workflows', label: 'Goals & delegation', Icon: Target, group: 'Agents' },
-  { id: 'memory', label: 'Memory & skills', Icon: Brain, group: 'Agents' },
-  { id: 'system', label: 'Background & updates', Icon: CalendarClock, group: 'System' },
-  { id: 'remote', label: 'Remote access', Icon: MonitorSmartphone, group: 'System' },
-] as const satisfies readonly { id: string; label: string; Icon: LucideIcon; group: (typeof SETTINGS_GROUPS)[number] }[]
-export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
+const SECTION_ICONS: Record<SettingsMenuId, LucideIcon> = {
+  appearance: Palette,
+  editor: Code,
+  git: GitBranch,
+  browser: Globe,
+  computer: MonitorCog,
+  shortcuts: Keyboard,
+  archived: Archive,
+  chats: MessageSquare,
+  providers: Cpu,
+  models: Layers,
+  environment: Variable,
+  'agent-setup': Plug,
+  access: ShieldCheck,
+  workflows: Target,
+  memory: Brain,
+  system: CalendarClock,
+  remote: MonitorSmartphone,
+}
+
+/** The shared menu (`@ramu/shared/settingsMenu`), which the phone draws too, with the desktop's icons. */
+export const SETTINGS_SECTIONS = SETTINGS_MENU.map((entry) => ({ ...entry, Icon: SECTION_ICONS[entry.id] }))
+export type SettingsSection = SettingsMenuId
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [

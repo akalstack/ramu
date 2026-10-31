@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import {
   SETTINGS_ROWS,
   SETTINGS_SECTIONS,
-  pageOf,
   allowedOptions,
   applyValue,
   buildEdit,
@@ -12,6 +11,7 @@ import {
   limitChoiceState,
   patchSetting,
   searchSettings,
+  sectionById,
   setHostSetting,
   visibleGroups,
 } from '../src/runtime/settingsModel.ts'
@@ -21,7 +21,7 @@ const snapshot = (...settings) => ({ protocol: 1, settings })
 
 test('model selection offers the host-supported flow and patches only that choice', async () => {
   const field = setting('$models.defaultBarMode', 'model', { type: 'string', enum: ['model', 'effort'] })
-  const groups = visibleGroups('providers', [field])
+  const groups = visibleGroups('models', [field])
   const row = groups.flatMap((group) => group.rows).find((row) => row.path === field.path)
   assert.deepEqual(row.options, [
     { value: 'model', label: 'Steps' },
@@ -39,7 +39,7 @@ test('model selection offers the host-supported flow and patches only that choic
   )
   assert.deepEqual(calls, [{ method: 'settings.app.patch', edits: [{ ...field, before: 'model', value: 'effort' }] }])
   assert.equal(
-    visibleGroups('providers', [])
+    visibleGroups('models', [])
       .flatMap((group) => group.rows)
       .some((row) => row.path === field.path),
     false,
@@ -49,7 +49,7 @@ test('model selection offers the host-supported flow and patches only that choic
 test('every section has a page, rows only exist for known sections, and sections are unique', () => {
   const ids = SETTINGS_SECTIONS.map((section) => section.id)
   assert.equal(new Set(ids).size, ids.length)
-  for (const id of Object.keys(SETTINGS_ROWS)) assert.ok(ids.includes(pageOf(id)), id)
+  for (const id of Object.keys(SETTINGS_ROWS)) assert.ok(ids.includes(id), id)
 })
 
 test('no two rows edit the same setting, so a setting is never shown twice', () => {
@@ -166,7 +166,7 @@ test('search leaves out rows the host does not have, but keeps phone settings', 
   assert.ok(titles.includes('Haptic feedback'))
 })
 
-const limitRow = () => SETTINGS_ROWS.access.flatMap((group) => group.rows).find((row) => row.kind === 'limit')
+const limitRow = () => SETTINGS_ROWS.models.flatMap((group) => group.rows).find((row) => row.kind === 'limit')
 const readFrom = (values) => (path) => values[path]
 
 test('the limit choice replaces the single fallback toggle and edits both stored settings', () => {
@@ -207,7 +207,7 @@ test('picking an option saves both settings, and only the ones that change', () 
 })
 
 test('a host with both settings gets the limit choice; one with only the fallback setting gets the old switch instead', () => {
-  const rows = (settings) => visibleGroups('access', settings).flatMap((group) => group.rows)
+  const rows = (settings) => visibleGroups('models', settings).flatMap((group) => group.rows)
   const both = [setting('defaultAutoFallback', true), setting('fallback.autoResume', true)]
   const modern = rows(both).find((row) => row.path === 'defaultAutoFallback')
   assert.equal(modern.kind, 'limit')
@@ -222,7 +222,7 @@ test('a host with both settings gets the limit choice; one with only the fallbac
   assert.ok(!rows([]).some((row) => row.path === 'defaultAutoFallback'))
   const title = (settings) =>
     searchSettings('fallback', settings)
-      .filter((hit) => hit.section === 'providers')
+      .filter((hit) => hit.section === 'models')
       .map((hit) => hit.title)
   assert.ok(title(both).includes('When a usage limit is reached'))
   assert.ok(title([setting('defaultAutoFallback', true)]).includes('Automatic provider fallback'))
@@ -277,4 +277,19 @@ test('computer use has its own page, found by search, and sub-agent, recall and 
   assert.ok(paths('git', [setting('defaultCommitAction', 'commit')]).includes('defaultCommitAction'))
   // Older hosts without the setting simply do not show the row.
   assert.deepEqual(paths('workflows', []), [])
+})
+
+test('the phone menu is the desktop menu in its order, without host-only sections, plus this phone', async () => {
+  const { SETTINGS_MENU } = await import('../../../packages/shared/src/settingsMenu.ts')
+  const shared = SETTINGS_SECTIONS.filter((section) => section.group !== 'phone')
+  assert.deepEqual(
+    shared.map((section) => [section.id, section.label, section.group]),
+    SETTINGS_MENU.filter((entry) => entry.phone).map((entry) => [entry.id, entry.label, entry.group.toLowerCase()]),
+  )
+  for (const hidden of ['editor', 'shortcuts', 'environment']) assert.equal(sectionById(hidden), undefined)
+  assert.deepEqual(
+    SETTINGS_SECTIONS.filter((section) => section.group === 'phone').map((section) => section.id),
+    ['notifications', 'about'],
+  )
+  assert.ok(searchSettings('izin', null, (text) => (text === 'Permissions' ? 'Izin' : text)).length > 0)
 })

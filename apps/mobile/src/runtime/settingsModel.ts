@@ -6,78 +6,51 @@ import {
   limitChoicePatch,
   type LimitChoice,
 } from '@ramu/shared/chat/limitPolicy'
+import {
+  HOST_ONLY_SECTIONS,
+  SETTINGS_MENU,
+  SETTINGS_MENU_GROUPS,
+  type PhoneSettingsMenuId,
+} from '@ramu/shared/settingsMenu'
 import type { SettingEdit, SettingSchema, SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
 
-// The phone's settings menu. It follows the desktop's sections and labels, and differs where a phone is different:
-// no editor, terminal or shortcut pages, no heavy list editors, plus a group for things that live on this phone.
+// The phone's settings menu: the desktop's own menu (`@ramu/shared/settingsMenu`), in its order and wording, without
+// the sections that only matter at the host's keyboard, plus a group for things that live on this phone.
 
 export type Language = 'en' | 'id'
 export type SettingsGroup = 'workspace' | 'agents' | 'system' | 'phone'
-export type SettingsSection =
-  | 'appearance'
-  | 'git'
-  | 'browser'
-  | 'computer'
-  | 'chats'
-  | 'providers'
-  | 'access'
-  | 'workflows'
-  | 'memory'
-  | 'rules'
-  | 'setup'
-  | 'system'
-  | 'computers'
-  | 'notifications'
-  | 'about'
+export type SettingsSection = PhoneSettingsMenuId | 'notifications' | 'about'
 
-type Text = Record<Language, string>
+/** Labels are English copy keys, translated where they are drawn (as the desktop does). */
+type Text = string
+const text = (key: string): Text => key
 
 export const SETTINGS_GROUPS: { id: SettingsGroup; label: Text }[] = [
-  { id: 'workspace', label: { en: 'Workspace', id: 'Ruang kerja' } },
-  { id: 'agents', label: { en: 'Agents', id: 'Agen' } },
-  { id: 'system', label: { en: 'System', id: 'Sistem' } },
-  { id: 'phone', label: { en: 'This phone', id: 'Ponsel ini' } },
+  ...SETTINGS_MENU_GROUPS.map((group) => ({ id: group.toLowerCase() as SettingsGroup, label: text(group) })),
+  { id: 'phone', label: text('This phone') },
 ]
+
+/** Pages about this phone rather than the selected host: no host picker on them. */
+const PHONE_PAGES: readonly SettingsSection[] = ['appearance', 'archived', 'remote', 'notifications', 'about']
 
 /** `host` pages edit the selected computer's shared preferences; `phone` pages only touch this device. */
 export const SETTINGS_SECTIONS: { id: SettingsSection; group: SettingsGroup; scope: 'host' | 'phone'; label: Text }[] =
   [
-    { id: 'appearance', group: 'workspace', scope: 'phone', label: { en: 'Appearance', id: 'Tampilan' } },
-    { id: 'git', group: 'workspace', scope: 'host', label: { en: 'Git', id: 'Git' } },
-    { id: 'browser', group: 'workspace', scope: 'host', label: { en: 'Browser', id: 'Peramban' } },
-    { id: 'computer', group: 'workspace', scope: 'host', label: { en: 'Computer use', id: 'Penggunaan komputer' } },
-    { id: 'chats', group: 'agents', scope: 'host', label: { en: 'Threads', id: 'Thread' } },
-    { id: 'providers', group: 'agents', scope: 'host', label: { en: 'Models & access', id: 'Model & akses' } },
-    { id: 'workflows', group: 'agents', scope: 'host', label: { en: 'Goals & memory', id: 'Tujuan & memori' } },
-    { id: 'rules', group: 'agents', scope: 'host', label: { en: 'Rules', id: 'Aturan' } },
-    { id: 'setup', group: 'agents', scope: 'host', label: { en: 'Skills & MCP', id: 'Skill & MCP' } },
-    {
-      id: 'system',
-      group: 'system',
-      scope: 'host',
-      label: { en: 'Background & updates', id: 'Latar belakang & pembaruan' },
-    },
-    { id: 'computers', group: 'system', scope: 'phone', label: { en: 'Hosts', id: 'Host' } },
-    { id: 'notifications', group: 'phone', scope: 'phone', label: { en: 'Notifications', id: 'Notifikasi' } },
-    { id: 'about', group: 'phone', scope: 'phone', label: { en: 'About', id: 'Tentang' } },
+    ...SETTINGS_MENU.filter((entry): entry is Extract<typeof entry, { phone: true }> => entry.phone).map((entry) => ({
+      id: entry.id,
+      group: entry.group.toLowerCase() as SettingsGroup,
+      scope: PHONE_PAGES.includes(entry.id) ? ('phone' as const) : ('host' as const),
+      label: text(entry.label),
+    })),
+    { id: 'notifications', group: 'phone', scope: 'phone', label: text('Notifications') },
+    { id: 'about', group: 'phone', scope: 'phone', label: text('About') },
   ]
 
-/**
- * Pages that carry another section's rows, so a short section is not a menu entry of its own: permissions and the provider
- * fallback sit with the models, memory and skills with goals.
- */
-export const PAGE_PARTS: Partial<Record<SettingsSection, SettingsSection[]>> = {
-  providers: ['access'],
-  workflows: ['memory'],
-}
-/** The page a section's rows are drawn on. */
-export const pageOf = (section: SettingsSection): SettingsSection =>
-  (Object.entries(PAGE_PARTS).find(([, parts]) => parts.includes(section))?.[0] as SettingsSection | undefined) ??
-  section
+/** The desktop sections the phone leaves to the host, named once under the menu. */
+export const HOST_ONLY_LABELS = HOST_ONLY_SECTIONS
 
-export const sectionById = (id: string) =>
-  SETTINGS_SECTIONS.find((section) => section.id === pageOf(id as SettingsSection))
-export const sectionLabel = (id: SettingsSection, language: Language) => sectionById(id)!.label[language]
+export const sectionById = (id: string) => SETTINGS_SECTIONS.find((section) => section.id === id)
+export const sectionLabel = (id: SettingsSection) => sectionById(id)!.label
 
 type Value = string | number | boolean | null
 export interface Option {
@@ -352,7 +325,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
       ],
     },
   ],
-  providers: [
+  models: [
     {
       title: 'Model selection',
       rows: [
@@ -369,6 +342,21 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         },
       ],
     },
+    {
+      title: 'Provider fallback',
+      rows: [
+        {
+          kind: 'limit',
+          path: 'defaultAutoFallback',
+          resumePath: 'fallback.autoResume',
+          title: LIMIT_CHOICE_TITLE,
+          help: LIMIT_CHOICE_HELP,
+          words: 'provider fallback limit switch wait stop resume automatic model usage reset auto-resume',
+        },
+      ],
+    },
+  ],
+  providers: [
     {
       title: 'Usage',
       rows: [
@@ -404,19 +392,6 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
             { value: 'auto', label: 'Auto' },
             { value: 'full', label: 'Full access' },
           ],
-        },
-      ],
-    },
-    {
-      title: 'Provider fallback',
-      rows: [
-        {
-          kind: 'limit',
-          path: 'defaultAutoFallback',
-          resumePath: 'fallback.autoResume',
-          title: LIMIT_CHOICE_TITLE,
-          help: LIMIT_CHOICE_HELP,
-          words: 'provider fallback limit switch wait stop resume automatic model usage reset auto-resume',
         },
       ],
     },
@@ -683,7 +658,10 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
     title: 'Computer use',
     words: 'screen display desktop control agent app pointer accessibility screen recording share',
   },
-  { section: 'computers', title: 'Paired hosts', words: 'pair connect switch host reconnect revoke forget' },
+  { section: 'remote', title: 'Paired hosts', words: 'pair connect switch host reconnect revoke forget hosts' },
+  { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
+  { section: 'agent-setup', title: 'MCP servers', words: 'shared tools external service connection skills' },
+  { section: 'memory', title: 'Memories', words: 'remember forget saved memory archive restore' },
 ]
 
 /**
@@ -763,7 +741,8 @@ const norm = (text: string) => text.toLowerCase()
 export function searchSettings(
   query: string,
   settings: SharedSetting[] | null,
-  language: Language = 'en',
+  /** Translates a section name, so a search in the phone's language finds its page too. */
+  say: (text: string) => string = (value) => value,
 ): SearchHit[] {
   const words = norm(query).split(/\s+/).filter(Boolean)
   if (!words.length) return []
@@ -776,19 +755,24 @@ export function searchSettings(
           .filter((row) => !known || offered(row, known))
           .map((row) => (known ? forHost(row, known) : row))
           .map((row) => ({
-            section: pageOf(section as SettingsSection),
+            section: section as SettingsSection,
             title: row.title,
             words: `${group.title ?? ''} ${row.words ?? ''}`,
           })),
       ),
     ),
-    { section: 'rules', title: 'Rules', words: 'instructions guidance agent setup history revisions aturan instruksi' },
+    {
+      section: 'agent-setup',
+      title: 'Rules',
+      words: 'instructions guidance agent setup history revisions aturan instruksi',
+    },
     ...PHONE_ENTRIES,
   ]
   return candidates
     .map((entry) => {
       const title = norm(entry.title)
-      const haystack = `${title} ${norm(sectionLabel(entry.section, language))} ${norm(entry.words)}`
+      const label = sectionLabel(entry.section)
+      const haystack = `${title} ${norm(label)} ${norm(say(label))} ${norm(entry.words)}`
       if (!words.every((word) => haystack.includes(word))) return null
       return {
         entry,

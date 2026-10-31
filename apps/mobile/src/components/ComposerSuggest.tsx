@@ -136,7 +136,7 @@ export function useComposerSuggest({
               label: '/mcp',
               description: 'Show MCP servers and skills',
               kind: 'Command' as const,
-              run: go({ pathname: '/settings/[section]', params: { section: 'setup' } }),
+              run: go({ pathname: '/settings/[section]', params: { section: 'agent-setup' } }),
             },
             {
               id: 'aside',
@@ -192,7 +192,7 @@ export function useComposerSuggest({
               label: '/memory',
               description: 'Open saved memories',
               kind: 'Command' as const,
-              run: go({ pathname: '/settings/[section]', params: { section: 'workflows' } }),
+              run: go({ pathname: '/settings/[section]', params: { section: 'memory' } }),
             },
           ]),
       {

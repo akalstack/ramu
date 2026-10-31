@@ -4021,4 +4021,13 @@ export const indonesian: Readonly<Record<string, string>> = {
     "Masuk ke GitLab dengan glab auth login, atau atur GITLAB_TOKEN di host, untuk membuka merge request di sini.",
   "Merge requests, pipelines and issues use the host’s glab sign-in (glab auth login) or its GITLAB_TOKEN, for gitlab.com and self-managed servers.":
     "Merge request, pipeline, dan issue memakai login glab di host (glab auth login) atau GITLAB_TOKEN-nya, untuk gitlab.com dan server yang dikelola sendiri.",
+  "About": "Tentang",
+  "{0} are set in Ramu on the host.": "{0} diatur di Ramu pada host.",
+  "Provider executable paths and sign-in are managed in Ramu on the host.": "Lokasi program provider dan login dikelola di Ramu pada host.",
+  "Model sets and the fallback order are edited in Ramu on the host.": "Set model dan urutan cadangan diubah di Ramu pada host.",
+  "Permission rules are edited in Ramu on the host.": "Aturan izin diubah di Ramu pada host.",
+  "Sub-agent routing and the advisor are set up in Ramu on the host.": "Rute sub-agen dan penasihat diatur di Ramu pada host.",
+  "The skills library and its model choices are managed in Ramu on the host.": "Pustaka skill dan pilihan modelnya dikelola di Ramu pada host.",
+  "Browser profiles, imports and downloads are managed in Ramu on the host.": "Profil peramban, impor, dan unduhan dikelola di Ramu pada host.",
+  "The commit message model is chosen in Ramu on the host.": "Model pesan commit dipilih di Ramu pada host.",
 }

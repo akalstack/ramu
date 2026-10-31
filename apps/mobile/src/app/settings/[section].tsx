@@ -6,9 +6,10 @@ import Constants from 'expo-constants'
 import { Check, ChevronRight, Plus, RefreshCw } from 'lucide-react-native'
 import { font, space, useTheme, type Appearance, type TextSize } from '../../theme'
 import { useStore, type Language } from '../../runtime/store'
-import { PAGE_PARTS, sectionById, visibleGroups, type SettingsSection } from '../../runtime/settingsModel'
+import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
 import { sharedValue } from '@ramu/shared/sharedFields'
+import { translate } from '@ramu/shared/i18n'
 import {
   BUSY_MODE_DEVICE_KEY,
   MODEL_WARNING_DEVICE_KEY,
@@ -119,8 +120,6 @@ function AppearancePage() {
  * first, then the setting shared by all your phones on this computer, then the computer's own setting.
  */
 function BusyBehavior({ computerId }: { computerId: string }) {
-  const router = useRouter()
-  const { c } = useTheme()
   const { drafts, setDraft, appPreferences, mobileLayers } = useStore()
   const t = useT()
   const sharedBusy = sharedValue(mobileLayers[computerId], 'queueWhileBusy')
@@ -173,15 +172,53 @@ function BusyBehavior({ computerId }: { computerId: string }) {
           onPress={() => setDraft(MODEL_WARNING_DEVICE_KEY, '')}
         />
       ) : null}
+    </>
+  )
+}
+
+/** Archived threads on every paired host; one opens it, and the Threads list filters to all of them. */
+function ArchivedThreads() {
+  const { chats, computers, language } = useStore()
+  const { c } = useTheme()
+  const router = useRouter()
+  const t = useT()
+  const archived = chats.filter((chat) => chat.status === 'archived').slice(0, 200)
+  return (
+    <>
       <Card style={{ marginHorizontal: space.l }}>
-        <Row
-          accessibilityRole="button"
-          onPress={() => router.dismissTo({ pathname: '/', params: { filter: 'archived' } })}
-        >
-          <T style={{ flex: 1 }}>{t.homeArchived}</T>
-          <ChevronRight size={16} color={c.muted} />
-        </Row>
+        {archived.length ? (
+          archived.map((chat, index) => (
+            <View key={chat.id}>
+              {index ? <Divider inset={space.l} /> : null}
+              <Row
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
+              >
+                <RowLabel
+                  title={chat.title}
+                  help={computers.length > 1 ? computers.find((x) => x.id === chat.computerId)?.name : undefined}
+                />
+                <ChevronRight size={16} color={c.muted} />
+              </Row>
+            </View>
+          ))
+        ) : (
+          <Row>
+            <RowLabel title={translate(language, 'No archived threads')} />
+          </Row>
+        )}
       </Card>
+      {archived.length ? (
+        <Card style={{ marginHorizontal: space.l, marginTop: space.m }}>
+          <Row
+            accessibilityRole="button"
+            onPress={() => router.dismissTo({ pathname: '/', params: { filter: 'archived' } })}
+          >
+            <T style={{ flex: 1 }}>{t.homeArchived}</T>
+            <ChevronRight size={16} color={c.muted} />
+          </Row>
+        </Card>
+      ) : null}
     </>
   )
 }
@@ -364,10 +401,11 @@ function Usage({ computer }: { computer: string }) {
 /** What the desktop edits that the phone leaves to it, so a missing row is explained rather than puzzling. */
 const desktopOnly: Partial<Record<SettingsSection, string>> = {
   browser: 'Browser profiles, imports and downloads are managed in Ramu on the host.',
-  providers:
-    'Model sets, provider executable paths, sign-in, permission rules and the fallback order are managed in Ramu on the host.',
-  workflows:
-    'Sub-agent routing, the advisor, and the memory and skills library with its model choices are set up in Ramu on the host.',
+  providers: 'Provider executable paths and sign-in are managed in Ramu on the host.',
+  models: 'Model sets and the fallback order are edited in Ramu on the host.',
+  access: 'Permission rules are edited in Ramu on the host.',
+  workflows: 'Sub-agent routing and the advisor are set up in Ramu on the host.',
+  memory: 'The skills library and its model choices are managed in Ramu on the host.',
   git: 'The commit message model is chosen in Ramu on the host.',
 }
 
@@ -383,10 +421,9 @@ export default function SettingsSectionPage() {
   if (!section) return null
   const id = section.id
   const note = desktopOnly[id]
-  const readySettings = host.state.status === 'ready' ? host.state.settings : []
   return (
     <Screen bg="window">
-      <Header align="center" title={section.label[language]} scrollEdge scrolled={edge.scrolled} />
+      <Header align="center" title={translate(language, section.label)} scrollEdge scrolled={edge.scrolled} />
       <ScrollView
         onScroll={edge.onScroll}
         scrollEventThrottle={16}
@@ -401,26 +438,21 @@ export default function SettingsSectionPage() {
         ) : null}
         {id === 'appearance' ? <AppearancePage /> : null}
         {id === 'notifications' ? <Notifications host={host} name={name} /> : null}
-        {id === 'computers' ? <Computers /> : null}
+        {id === 'remote' ? <Computers /> : null}
+        {id === 'archived' ? <ArchivedThreads /> : null}
         {id === 'about' ? <About /> : null}
         {id === 'providers' ? <ProviderCompatibility key={selected} hostId={selected} /> : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
         {id === 'chats' ? <BusyBehavior key={selected} computerId={selected} /> : null}
         {id === 'computer' ? <ComputerUseSettings key={selected} hostId={selected} /> : null}
         {id === 'git' ? <HostingStatus key={selected} hostId={selected} /> : null}
-        {id === 'rules' ? <RulesSettings key={selected} hostId={selected} /> : null}
-        {id === 'setup' ? <AgentSetupSettings key={selected} hostId={selected} /> : null}
+        {id === 'agent-setup' ? <AgentSetupSettings key={selected} hostId={selected} /> : null}
+        {id === 'agent-setup' ? <RulesSettings key={selected} hostId={selected} /> : null}
         {section.scope === 'host' && id !== 'computer' ? (
           <HostGroups section={id} host={host} name={name} locked={locked} />
         ) : null}
-        {section.scope === 'host' && host.state.status === 'ready'
-          ? (PAGE_PARTS[id] ?? [])
-              // A part this host has nothing for is left out rather than announced in the middle of the page.
-              .filter((part) => visibleGroups(part, readySettings, host.read).length > 0)
-              .map((part) => <HostGroups key={part} section={part} host={host} name={name} locked={locked} />)
-          : null}
-        {id === 'workflows' ? <MemoryList key={selected} hostId={selected} /> : null}
-        {note ? <Hint>{note}</Hint> : null}
+        {id === 'memory' ? <MemoryList key={selected} hostId={selected} /> : null}
+        {note ? <Hint>{translate(language, note)}</Hint> : null}
       </ScrollView>
     </Screen>
   )

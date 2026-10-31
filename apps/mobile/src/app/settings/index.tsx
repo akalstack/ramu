@@ -6,6 +6,7 @@ import { ChevronRight, Search } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../theme'
 import { useStore } from '../../runtime/store'
 import {
+  HOST_ONLY_LABELS,
   SETTINGS_GROUPS,
   SETTINGS_SECTIONS,
   searchSettings,
@@ -27,7 +28,9 @@ export default function SettingsMenu() {
   const host = useHostSettings(selected)
   const [query, setQuery] = useState('')
   const q = query.trim()
-  const results = q ? searchSettings(q, host.state.status === 'ready' ? host.state.settings : null, language) : []
+  const results = q
+    ? searchSettings(q, host.state.status === 'ready' ? host.state.settings : null, (text) => translate(language, text))
+    : []
   const open = (section: SettingsSection) => router.push({ pathname: '/settings/[section]', params: { section } })
   return (
     <Screen bg="window">
@@ -100,7 +103,7 @@ export default function SettingsMenu() {
                     <View style={{ flex: 1, gap: 2 }}>
                       <T>{hit.title}</T>
                       <T size={font.caption} tone="muted">
-                        {sectionLabel(hit.section, language)}
+                        {translate(language, sectionLabel(hit.section))}
                       </T>
                     </View>
                     <ChevronRight size={16} color={c.muted} />
@@ -118,7 +121,7 @@ export default function SettingsMenu() {
             <ComputerScope host={host} />
             {SETTINGS_GROUPS.map((group) => (
               <View key={group.id}>
-                <SectionLabel>{group.label[language]}</SectionLabel>
+                <SectionLabel>{translate(language, group.label)}</SectionLabel>
                 <Card
                   style={{
                     marginHorizontal: space.l,
@@ -129,7 +132,7 @@ export default function SettingsMenu() {
                       {index ? <Divider inset={60} /> : null}
                       <Row onPress={() => open(section.id)}>
                         <SectionIcon section={section.id} />
-                        <T style={{ flex: 1 }}>{section.label[language]}</T>
+                        <T style={{ flex: 1 }}>{translate(language, section.label)}</T>
                         <ChevronRight size={16} color={c.muted} />
                       </Row>
                     </View>
@@ -137,6 +140,11 @@ export default function SettingsMenu() {
                 </Card>
               </View>
             ))}
+            <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.xl }}>
+              {translate(language, '{0} are set in Ramu on the host.', {
+                0: HOST_ONLY_LABELS.map((label) => translate(language, label)).join(', '),
+              })}
+            </T>
           </>
         )}
       </ScrollView>
