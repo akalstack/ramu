@@ -12,7 +12,7 @@ import { changedFile } from '../../../runtime/diff'
 import { GlassButton, Header, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { BottomFade, floatingChrome } from '../../../components/Glass'
 import { Button, Card, Divider, Pill, Sheet, T, tap } from '../../../components/ui'
-import { useSheetInputStyle } from '../../../components/SheetOptions'
+import { SheetGroup, SheetOption, useSheetInputStyle } from '../../../components/SheetOptions'
 import { useOpenFile } from '../../../runtime/openFile'
 import { DiffLines } from '../../../components/DiffLines'
 import { useSay } from '../../../i18n'
@@ -151,6 +151,16 @@ export default function Changes() {
   const [changes, setChanges] = useState<ChangedFile[]>([])
   const [reviews, setReviews] = useState<ChangeReview[]>([])
   const [reviewId, setReviewId] = useState(initialReview ?? '')
+  const [pickingRun, setPickingRun] = useState(false)
+  const runLabel = (index: number) => {
+    const run = reviews[index]
+    if (!run) return ''
+    const when = new Date(run.createdAt).toLocaleString(store.language === 'id' ? 'id-ID' : undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })
+    return `${translate(store.language, 'Run {0}', { 0: String(reviews.length - index) })} · ${when} · ${translate(store.language, run.state)}`
+  }
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -305,13 +315,48 @@ export default function Changes() {
       >
         {error ? <T tone="bad">{error}</T> : null}
         {!reviews.length ? <T tone="muted">No recorded changes for this thread yet.</T> : null}
-        {reviews.map((r, index) => (
-          <Pressable key={r.id} onPress={() => setReviewId(r.id)}>
-            <T tone={r.id === reviewId ? 'accent' : 'muted'}>
-              Run {reviews.length - index} · {new Date(r.createdAt).toLocaleString()} · {r.state}
+        {/* Which run's changes are shown: one row that opens the list, newest first. */}
+        {reviews.length ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={say('Choose a run')}
+            onPress={() => setPickingRun(true)}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.s,
+              minHeight: 44,
+              paddingHorizontal: space.m,
+              borderRadius: radius.m,
+              backgroundColor: pressed ? c.pressed : c.fill,
+            })}
+          >
+            <T style={{ flex: 1 }} numberOfLines={1}>
+              {runLabel(
+                Math.max(
+                  0,
+                  reviews.findIndex((r) => r.id === reviewId),
+                ),
+              )}
             </T>
+            <ChevronDown size={16} color={c.muted} />
           </Pressable>
-        ))}
+        ) : null}
+        <Sheet open={pickingRun} onClose={() => setPickingRun(false)} title={say('Runs')}>
+          <SheetGroup>
+            {reviews.map((r, index) => (
+              <SheetOption
+                key={r.id}
+                title={runLabel(index)}
+                selected={r.id === reviewId}
+                onPress={() => {
+                  setReviewId(r.id)
+                  setPickingRun(false)
+                }}
+              />
+            ))}
+          </SheetGroup>
+        </Sheet>
         <TextInput
           value={note}
           onChangeText={setNote}

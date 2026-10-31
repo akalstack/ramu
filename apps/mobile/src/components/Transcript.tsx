@@ -1,4 +1,5 @@
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
+import { FileIcon } from './FileIcon'
 import { translate } from '@ramu/shared/i18n'
 import { toolVerb } from '@ramu/shared/chat/toolStatus'
 import { DiffLines } from './DiffLines'
@@ -15,6 +16,7 @@ import {
   Copy,
   FileCode2,
   FilePen,
+  ChevronRight,
   FileDiff,
   Flag,
   Globe,
@@ -1214,35 +1216,53 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
   // The desktop's end-of-turn card: what changed, its line totals and View changes; several files are listed below.
   return (
     <Card style={{ marginVertical: space.xs }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.m }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={say('View changes')}
+        onPress={() => open()}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.s + 2,
+          paddingVertical: space.s,
+          paddingHorizontal: space.m,
+          backgroundColor: pressed ? c.pressed : undefined,
+        })}
+      >
         <View
           style={{
-            width: 36,
-            height: 36,
+            width: 28,
+            height: 28,
             borderRadius: radius.s,
             backgroundColor: c.fill,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <FileDiff size={18} color={c.muted} strokeWidth={1.6} />
-        </View>
-        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <T weight="500" numberOfLines={1}>
-            {single
-              ? say('Edited {0}', { '0': name(item.files[0]!.path) })
-              : say('Edited {0} files', { '0': item.files.length })}
-          </T>
-          {item.undone ? (
-            <T size={font.caption} tone="muted">
-              {say('Changes undone')}
-            </T>
+          {single ? (
+            <FileIcon path={item.files[0]!.path} size={15} />
           ) : (
-            stats(item.additions, item.deletions)
+            <FileDiff size={15} color={c.muted} strokeWidth={1.7} />
           )}
         </View>
-        <Button kind="secondary" title={say('View changes')} onPress={() => open()} />
-      </View>
+        <T size={font.control} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
+          {single
+            ? say('Edited {0}', { '0': name(item.files[0]!.path) })
+            : say('Edited {0} files', { '0': item.files.length })}
+        </T>
+        {item.undone ? (
+          <T size={font.caption} tone="muted">
+            {say('Changes undone')}
+          </T>
+        ) : (
+          stats(item.additions, item.deletions)
+        )}
+        <View style={{ flex: 1 }} />
+        <T size={font.caption} weight="600" tone="accent">
+          {say('View')}
+        </T>
+        <ChevronRight size={14} color={c.accent} />
+      </Pressable>
       {single
         ? null
         : visible.map((file) => (
@@ -1254,15 +1274,16 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: space.m,
-                minHeight: 36,
-                paddingHorizontal: space.m + 2,
+                gap: space.s,
+                minHeight: 32,
+                paddingHorizontal: space.m,
                 borderTopWidth: StyleSheet.hairlineWidth,
                 borderTopColor: c.line,
                 backgroundColor: pressed ? c.pressed : undefined,
               })}
             >
-              <T size={font.control} numberOfLines={1} ellipsizeMode="head" style={{ flex: 1 }}>
+              <FileIcon path={file.path} size={14} />
+              <T size={font.caption} numberOfLines={1} ellipsizeMode="head" style={{ flex: 1 }}>
                 {file.path}
               </T>
               {stats(file.additions, file.deletions)}
@@ -1277,9 +1298,9 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
             setExpanded((value) => !value)
           }}
           style={{
-            minHeight: 36,
+            minHeight: 32,
             justifyContent: 'center',
-            paddingHorizontal: space.m + 2,
+            paddingHorizontal: space.m,
             borderTopWidth: StyleSheet.hairlineWidth,
             borderTopColor: c.line,
           }}

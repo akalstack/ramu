@@ -4000,4 +4000,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Deleting": "Menghapus",
   "Moving": "Memindahkan",
   "Changing mode": "Mengubah mode",
+  "Choose a run": "Pilih proses",
+  "Runs": "Proses",
+  "Run {0}": "Proses {0}",
+  "recording": "merekam",
 }
