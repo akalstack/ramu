@@ -19,7 +19,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Thread titles and state:** a verified provider that supplies titles, title provenance (provider, generated, manual), clearer approval/stopped/turn-limit labels, and request actions that open the exact owning session.
 - **Browser and computer use:** provider capability negotiation and more session-import sources. **Open on this phone** reaches only dev servers listening beyond the host's loopback; forwarding one loopback port to one paired phone (expiring, IP-bound, shown with its port) needs a security review first. Computer use on Windows and Linux waits for native capture, permissions and signing.
 - **Provider compatibility:** compatibility rules for OpenCode's ACP runner, Cursor and Antigravity after protocol checks; entry points that bypass `validateSettings`.
-- **Threads started by agents:** agents start, follow and message threads in this project, other projects and on other paired hosts; Home's Auto splits one prompt into grouped threads across projects and hosts; host-to-host pairing ([plan](AGENT-THREADS-PLAN.md)).
+- **Threads started by agents:** Home's Auto splits one prompt into grouped threads across projects and hosts, and agents start threads on other paired hosts through host-to-host pairing ([plan](AGENT-THREADS-PLAN.md)).
 - **Git hosting:** Bitbucket Cloud and Azure DevOps adapters, and saved GitLab tokens with clone and publish in Settings. A new forge adds an adapter beside GitHub's and GitLab's in `apps/server/src/workspace/forge/` and a case in `forge/route.ts`.
 - **Code quality:** validate push payloads and RPC results on the clients (`any` remains in the phone's transport and push listeners, the desktop's host bridge and its preload). About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
@@ -27,7 +27,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 - **Physical iOS and Android devices:** everything in [apps/mobile/VERIFICATION.md](../apps/mobile/VERIFICATION.md), from pairing and permissions to the viewers, keyboards, push and Live Activities.
 - **Packaged and signed desktop builds:** upgrading real profiles, browser session import with a real keychain, computer-use permission identity, theme and system-appearance changes, background-terminal stop timing, and installation on a second Mac.
-- **Live providers and second hosts:** provider version compatibility records, Shared MCP across two providers, skill and rule delivery, project routing quality, plan-usage and limit-notice handling, GitHub with live tokens and Enterprise hosts, interactive content, title generation, multi-host load, and a matched HTTP versus WebSocket comparison. Paid calls and credentials are opt-in.
+- **Live providers and second hosts:** provider version compatibility records, Shared MCP across two providers, skill and rule delivery, project routing quality, plan-usage and limit-notice handling, GitHub with live tokens and Enterprise hosts, interactive content, agent-started threads and their reports, title generation, multi-host load, and a matched HTTP versus WebSocket comparison. Paid calls and credentials are opt-in.
 
 Representative tasks to run once the above is available:
 

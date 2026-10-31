@@ -334,6 +334,8 @@ type AgentEventBody =
   | { kind: 'theme'; theme: import('../theme').RamuTheme }
   | { kind: 'goal'; goal: ChatGoal | null }
   | { kind: 'schedule'; schedule: Schedule }
+  /** Threads this thread's agent started; each opens on its own. */
+  | { kind: 'threads-started'; threads: StartedThread[] }
   | ({ kind: 'provider-wait' } & ProviderWaitFields)
   | { kind: 'queue'; messages: QueuedMessage[]; paused?: boolean }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
@@ -501,4 +503,12 @@ export interface McpConnection {
   replaceAdvisor?: boolean
   /** Claude only: Ramu's question tools are in use, so Claude Code's own `AskUserQuestion` is turned off. */
   replaceQuestions?: boolean
+}
+
+export interface StartedThread {
+  taskId: string
+  title: string
+  projectName: string
+  /** Set when the thread exists but its agent did not start; the thread stays for a retry. */
+  error?: string
 }

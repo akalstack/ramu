@@ -104,6 +104,7 @@ import { createDispatcher } from './ipc'
 import { OperationLog, runOnce } from './ipc/operationLog'
 import { ScheduleService, scheduleSchema } from './background/schedules'
 import { PullRequestWatchService } from './background/pullRequestWatches'
+import { AgentThreadService } from './background/agentThreads'
 import { runtimeBuild, runtimeVersion } from './build'
 import { ReviewService } from './review/reviews'
 import { RecapService } from './memory/recaps'
@@ -573,6 +574,14 @@ const dispatcher = createDispatcher(
     notices: inbox,
   },
 )
+// Agent-started threads go through the same methods a person's client calls, with the host's own authority.
+const agentThreads = new AgentThreadService(
+  db,
+  workspace,
+  agents,
+  async (method, args) => await origin.run({ network: false }, () => dispatcher.invoke(method, args)),
+  changed,
+)
 const startedAt = Date.now()
 let stopping = false
 async function stop(intentional = false) {
@@ -582,6 +591,7 @@ async function stop(intentional = false) {
   clearInterval(tick)
   await schedules.stop()
   await pullRequestWatches.stop()
+  await agentThreads.stop()
   // Capture after the scheduler drains, so a chat that finished during that wait is not resumed.
   if (!intentional) agents.prepareForRestart()
   reviews.stop()
@@ -887,6 +897,7 @@ const mcpHttp = createServer(async (req, res) => {
     )
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
+  if (!review) agentThreads.register(server, source.id)
   // A chat keeps the settings it launched with, so its tools match its instructions until it relaunches. Turning a
   // setting off mid-thread keeps its tools listed, and their handlers refuse.
   const launched = agents.launchSettings(source.id)
@@ -1468,6 +1479,7 @@ const tick = setInterval(() => {
   void agents.resumeInterruptedChats().catch(console.error)
   void schedules.tick().catch(console.error)
   void pullRequestWatches.tick().catch(console.error)
+  void agentThreads.tick().catch(console.error)
   void recaps.tick().catch(console.error)
   void memory.tick().catch(console.error)
   void learning.tick().catch(console.error)

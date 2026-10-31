@@ -20,6 +20,7 @@ import type {
   McpConnection,
   SetupOmission,
   Schedule,
+  StartedThread,
 } from '@ramu/shared/types'
 import type { UsageService } from './providers/usage'
 import { loadHelperHistory, type HelperHistoryLoader } from './agent/helperHistory'
@@ -362,6 +363,11 @@ export class AgentService {
 
   scheduleSaved(sessionId: string, schedule: Schedule): void {
     this.record(sessionId, { kind: 'schedule', schedule })
+  }
+
+  /** Threads this thread's agent started appear in it as one card that opens each of them. */
+  threadsStarted(sessionId: string, threads: StartedThread[]): void {
+    this.record(sessionId, { kind: 'threads-started', threads })
   }
 
   /** Preserve a person's stop in the conversation without sending a new request or waking the agent. */

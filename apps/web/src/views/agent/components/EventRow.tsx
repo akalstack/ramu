@@ -1,3 +1,4 @@
+import { ThreadsStartedCard } from './StartedThreads'
 import { ThemeCard } from '../../../theme/ThemeCard'
 import { InteractiveContent } from '../../../interactive/InteractiveContent'
 import { t as translate, useLanguage } from '../../../i18n'
@@ -113,6 +114,8 @@ export function EventRow({
     }
     case 'schedule':
       return <ScheduleChatCard schedule={e.schedule} />
+    case 'threads-started':
+      return <ThreadsStartedCard threads={e.threads} />
     case 'settings':
       return (
         <div className={CONVERSATION_SEPARATOR_CLASS}>

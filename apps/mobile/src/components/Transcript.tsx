@@ -16,6 +16,7 @@ import {
   Copy,
   FileCode2,
   FilePen,
+  GitFork,
   ChevronRight,
   FileDiff,
   Flag,
@@ -357,6 +358,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <ImageBlock uri={item.uri} alt={item.alt} />
     case 'theme':
       return <ThemeProposal theme={item.theme} />
+    case 'threads':
+      return <StartedThreadsCard threads={item.threads} chat={chat} />
     case 'tool':
       return <ToolRow item={item} />
     case 'tools':
@@ -388,6 +391,49 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
     case 'end':
       return null
   }
+}
+
+/** Threads this thread's agent started, as on the desktop: one row each, opening that thread. */
+function StartedThreadsCard({ threads, chat }: { threads: import('@ramu/shared/types').StartedThread[]; chat: Chat }) {
+  const say = useSay()
+  const { c } = useTheme()
+  const store = useStore()
+  const router = useRouter()
+  return (
+    <Card style={{ marginVertical: space.s, padding: space.m, gap: space.s }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+        <GitFork size={16} color={c.text} />
+        <T weight="600">
+          {threads.length === 1 ? say('Started a thread') : say('Started {0} threads', { '0': threads.length })}
+        </T>
+      </View>
+      {threads.map((thread, index) => {
+        const open = thread.taskId
+          ? () => {
+              tap()
+              router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(chat.computerId, thread.taskId) } })
+            }
+          : undefined
+        return (
+          <Pressable
+            key={thread.taskId || index}
+            onPress={open}
+            disabled={!open}
+            accessibilityRole={open ? 'button' : undefined}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 36 }}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <T numberOfLines={1}>{thread.title}</T>
+              <T size={font.caption} tone={thread.error ? 'bad' : 'muted'} numberOfLines={2}>
+                {thread.error ?? thread.projectName}
+              </T>
+            </View>
+            {open && <ChevronRight size={16} color={c.muted} />}
+          </Pressable>
+        )
+      })}
+    </Card>
+  )
 }
 
 const ACCESS = { edits: 'Allow edits', auto: 'Auto', full: 'Full access' } as const

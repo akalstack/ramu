@@ -331,6 +331,21 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
       }
     }
   },
+  // Threads started by an agent or by one Home prompt: who started each one and which started together, so both sides
+  // link to each other and a report returns to the starting thread once per outcome.
+  `CREATE TABLE IF NOT EXISTS thread_links (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL,
+    source_task_id TEXT,
+    source_session_id TEXT,
+    target_task_id TEXT NOT NULL UNIQUE,
+    target_session_id TEXT,
+    depth INTEGER NOT NULL,
+    reported TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS thread_links_source ON thread_links(source_task_id);
+  CREATE INDEX IF NOT EXISTS thread_links_group ON thread_links(group_id);`,
 ]
 
 export type Db = DatabaseSync

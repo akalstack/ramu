@@ -1,12 +1,12 @@
 import { systemTimezone } from '@ramu/shared/workspace/timezone'
 import { cleanLabel, clipText } from '@ramu/shared/text'
-import { goalContinues } from '@ramu/shared/chat/goalHold'
 import { randomUUID } from 'node:crypto'
 import { DateTime } from 'luxon'
 import { z } from 'zod'
 import type { Db } from '../db'
 import type { AgentService } from '../agent'
 import type { Workspace } from '../workspace/workspace'
+import { threadOutcome } from './threadOutcome'
 import { NO_PROJECT, type Schedule, type ScheduleInput, type ScheduleRule, type ScheduleRun } from '@ramu/shared/types'
 
 export const settingsSchema = z.object({
@@ -269,46 +269,8 @@ export class ScheduleService {
       )
       .run()
   }
-  /** The latest thing that went wrong in the run's thread: a failed result, or (only when the thread failed) an error event. */
-  private lastError(sessionId: string, failed: boolean): string | null {
-    const row = this.db
-      .prepare(
-        `SELECT event FROM agent_events WHERE session_id=? AND json_extract(event,'$.kind') IN (${failed ? "'result','error'" : "'result'"}) ORDER BY seq DESC LIMIT 1`,
-      )
-      .get(sessionId) as { event: string } | undefined
-    if (!row) return null
-    const event = JSON.parse(row.event) as { kind: string; isError?: boolean; text?: string; message?: string }
-    const text = event.kind === 'error' ? event.message : event.isError ? event.text : null
-    return text?.trim() ? clipText(text.replace(/\s+/g, ' ').trim(), 300) : null
-  }
-  /**
-   * What a run in progress has come to, from the thread's final state and its last error, not from idleness alone.
-   * A thread that is idle between goal continuations, or because it waits for a usage limit to reset, is still running.
-   */
   private outcome(run: ScheduleRun): { status: ScheduleRun['status']; error: string | null } {
-    const session = this.agents.get(run.sessionId!)
-    if (this.agents.isRecoveryPending(session.id)) return { status: 'running', error: null }
-    if (session.state === 'needs-input') return { status: 'needs-input', error: null }
-    // A run held at a usage limit is not done: it continues after the reset, or, with auto-resume off, stops there.
-    // The limit's own error result must not read as a failure, so this comes before any error check.
-    if (this.agents.providerWait?.(session.id)) {
-      return this.agents.autoResumeOf(session.id)
-        ? { status: 'running', error: null }
-        : { status: 'interrupted', error: 'Usage limit reached. Auto-resume is off; open the thread to resume.' }
-    }
-    if (session.state === 'stopped') return { status: 'cancelled', error: null }
-    if (session.state === 'restored') return { status: 'interrupted', error: null }
-    if (session.state === 'failed')
-      return { status: 'failed', error: this.lastError(session.id, true) ?? 'The agent failed.' }
-    if (session.state !== 'idle') return { status: 'running', error: null }
-    const goal = this.agents.getGoal(session.id)
-    if (goalContinues(goal)) return { status: 'running', error: null }
-    if (this.agents.queued(session.id).length) return { status: 'running', error: null }
-    // The agent stopped on purpose and needs a person: a blocked goal, or one that used up its continuation turns.
-    if (goal && ['blocked', 'turn-limit'].includes(goal.status))
-      return { status: 'needs-input', error: goal.reason ? clipText(goal.reason, 300) : null }
-    const error = this.lastError(session.id, false)
-    return error ? { status: 'failed', error } : { status: 'completed', error: null }
+    return threadOutcome(this.db, this.agents, run.sessionId!)
   }
   async tick(now = Date.now()): Promise<void> {
     if (this.ticking || this.stopping) return

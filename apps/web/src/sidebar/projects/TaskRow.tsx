@@ -8,6 +8,7 @@ import {
   ArchiveRestore,
   Check,
   GitBranch,
+  GitFork,
   Pencil,
   Pin,
   PinOff,
@@ -399,6 +400,17 @@ export function TaskRow({
                 <FadeText
                   className="grow flex-1 min-w-0 text-left task-title overflow-hidden whitespace-nowrap"
                   text={task.title}
+                />
+              )}
+              {task.startedFrom && (
+                <GitFork
+                  size={12}
+                  className="flex-none text-muted-foreground"
+                  aria-label={
+                    task.startedFrom.title
+                      ? t('Started by the agent in {0}', { '0': task.startedFrom.title })
+                      : t('Started together with {0} other threads', { '0': task.startedFrom.groupSize - 1 })
+                  }
                 />
               )}
               {task.kind === 'library-review' && (

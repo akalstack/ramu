@@ -128,6 +128,19 @@ export interface Task {
   executionState?: AgentSessionState
   /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */
   kind?: 'library-review' | null
+  /**
+   * Who started this thread, when an agent or one Home prompt did: the starting thread (null for Home) and how many
+   * threads started together. Absent on older hosts and for threads a person started.
+   */
+  startedFrom?: ThreadOrigin | null
+}
+
+export interface ThreadOrigin {
+  groupId: string
+  taskId: string | null
+  title: string | null
+  /** Threads started together, this one included. */
+  groupSize: number
 }
 
 export type BindingSetupState = 'ready' | 'pending' | 'failed'

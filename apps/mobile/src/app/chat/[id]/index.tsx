@@ -14,6 +14,7 @@ import {
   CircleCheck,
   Folder,
   GitBranch,
+  GitFork,
   GitCompareArrows,
   MessageCircleQuestion,
   Gauge,
@@ -602,6 +603,22 @@ export default function ChatScreen() {
     group: 'tools' | 'info'
     symbol?: import('../../../components/Screen').HeaderMenuAction['icon']
   }[] = [
+    // A thread an agent started opens the thread that started it, as the desktop's header chip does.
+    ...(chat.startedFrom?.taskId
+      ? [
+          {
+            icon: GitFork,
+            label: tr('From {0}', { '0': chat.startedFrom.title ?? tr('another thread') }),
+            symbol: 'arrow.triangle.branch' as const,
+            group: 'info' as const,
+            onPress: () =>
+              router.push({
+                pathname: '/chat/[id]',
+                params: { id: store.resolveChat(chat.computerId, chat.startedFrom!.taskId!) },
+              }),
+          },
+        ]
+      : []),
     {
       icon: Folder,
       label: say_('Browse files'),
@@ -674,6 +691,7 @@ export default function ChatScreen() {
               accessibilityLabel={`Project ${project}${branch ? `, branch ${branch}` : ''}`}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
             >
+              {chat.startedFrom ? <GitFork size={11} color={c.muted} /> : null}
               <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
                 {project}
               </T>

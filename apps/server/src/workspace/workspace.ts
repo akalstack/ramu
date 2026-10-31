@@ -24,6 +24,7 @@ import type {
   Task,
   TaskStatus,
   TaskUiState,
+  ThreadOrigin,
   WorktreePlanEntry,
   WorktreeWorkspace,
 } from '@ramu/shared/types'
@@ -50,7 +51,16 @@ const TASK_COLUMNS = `t.id, t.project_id AS projectId, t.title, t.title_generati
       WHERE e.session_id = s.id AND json_extract(e.event, '$.kind') = 'provider-wait' ORDER BY e.seq DESC LIMIT 1) AS retryAt
     FROM agent_sessions s WHERE s.task_id = t.id AND s.parent_session_id IS NULL) w) AS waitingUntil,
   (SELECT json_extract(value, '$') FROM app_state WHERE key = 'branch-fallback:' || t.id) AS branchNamingFallback,
-  (SELECT 'library-review' FROM library_summary_chats c WHERE c.task_id = t.id) AS kind`
+  (SELECT 'library-review' FROM library_summary_chats c WHERE c.task_id = t.id) AS kind,
+  (SELECT json_object('groupId', l.group_id, 'taskId', l.source_task_id, 'title', st.title,
+      'groupSize', (SELECT COUNT(*) FROM thread_links g WHERE g.group_id = l.group_id))
+    FROM thread_links l LEFT JOIN tasks st ON st.id = l.source_task_id WHERE l.target_task_id = t.id) AS startedFrom`
+
+/** SQLite returns the origin as JSON text; a thread nobody else started has none. */
+function taskOf(row: Task & { startedFrom?: unknown }): Task {
+  const { startedFrom, ...task } = row
+  return typeof startedFrom === 'string' ? { ...task, startedFrom: JSON.parse(startedFrom) as ThreadOrigin } : task
+}
 
 export const PROJECT_PREFIX = 'project:'
 export const WORKTREE_PREFIX = 'worktree:'
@@ -292,13 +302,13 @@ export class Workspace {
   listTasks(projectId?: string): Task[] {
     const sql = `SELECT ${TASK_COLUMNS} FROM tasks t ${projectId ? 'WHERE project_id = ?' : ''} ORDER BY created_at`
     const stmt = this.db.prepare(sql)
-    return (projectId ? stmt.all(projectId) : stmt.all()) as unknown as Task[]
+    return ((projectId ? stmt.all(projectId) : stmt.all()) as unknown as Task[]).map(taskOf)
   }
 
   getTask(id: string): Task {
     const t = this.db.prepare(`SELECT ${TASK_COLUMNS} FROM tasks t WHERE id = ?`).get(id) as unknown as Task | undefined
     if (!t) throw new Error(`Unknown thread ${id}`)
-    return t
+    return taskOf(t)
   }
 
   setTaskStatus(id: string, status: TaskStatus): void {
@@ -418,6 +428,11 @@ export class Workspace {
       this.db.prepare('DELETE FROM agent_sessions WHERE task_id = ?').run(id)
       this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id)
       this.db.prepare('DELETE FROM app_state WHERE key = ?').run(`branch-fallback:${id}`)
+      // Threads it started keep their group; they only lose the link back to a thread that no longer exists.
+      this.db.prepare('DELETE FROM thread_links WHERE target_task_id = ?').run(id)
+      this.db
+        .prepare('UPDATE thread_links SET source_task_id = NULL, source_session_id = NULL WHERE source_task_id = ?')
+        .run(id)
       if (removeWorktrees && workspaceId) {
         this.db.prepare('DELETE FROM bindings WHERE task_id = ?').run(workspaceId)
         this.db.prepare('DELETE FROM workspaces WHERE id = ?').run(workspaceId)

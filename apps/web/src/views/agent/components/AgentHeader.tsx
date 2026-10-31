@@ -8,6 +8,7 @@ import { Menu } from '../../../Menu'
 import { SessionChangesButton } from '../../../Changes'
 import { SessionCheckpointButton } from '../../../chat/SessionCheckpoint'
 import { STATE_LABEL } from '../constants'
+import { ThreadOriginChip } from './StartedThreads'
 import { GHOST_TEXT_BUTTON_CLASS, ICON_BUTTON_CLASS } from '../styles'
 
 /** The toolbar above a chat: changes, checkpoint and state, then the Questions, Aside, background command and Agents chips, find and more actions. */
@@ -64,6 +65,7 @@ export function AgentHeader({
       <SessionChangesButton sessionId={sessionId} taskId={taskId} />
       {taskId && !readOnly && <CommitPushButton taskId={taskId} />}
       <SessionCheckpointButton sessionId={sessionId} />
+      <ThreadOriginChip taskId={taskId} />
       {state && STATE_LABEL[state] && (
         <span
           className={`state [&.running]:text-brand [&.starting]:text-brand [&.needs-input]:text-warn [&.failed]:text-bad [&::before]:[content:''] [&::before]:w-1.5 [&::before]:h-1.5 [&::before]:rounded-full [&::before]:[background:var(--muted)] [&.idle::before]:[background:var(--ok)] [&.running::before]:[background:var(--accent)] [&.running::before]:[animation:pulse_1.6s_ease-in-out_infinite] [&.starting::before]:[background:var(--accent)] [&.starting::before]:[animation:pulse_1.6s_ease-in-out_infinite] [&.needs-input::before]:[background:var(--warn)] [&.failed::before]:[background:var(--bad)] [&:empty]:hidden tabular-nums text-muted-foreground whitespace-nowrap inline-flex items-center gap-1.5 p-[2px_9px_2px_8px] rounded-full bg-hover text-caption ${state}`}

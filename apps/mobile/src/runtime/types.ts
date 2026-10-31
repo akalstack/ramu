@@ -56,6 +56,8 @@ export type TranscriptItem = (
   | { kind: 'image'; id: string; uri: string; alt?: string }
   /** A theme the agent drafted with `propose_theme`; the person previews it before anything changes. */
   | { kind: 'theme'; id: string; theme: import('@ramu/shared/theme').RamuTheme }
+  /** Threads this thread's agent started; each row opens one. */
+  | { kind: 'threads'; id: string; threads: import('@ramu/shared/types').StartedThread[] }
   | { kind: 'text'; id: string; text: string }
   | TranscriptTool
   | { kind: 'tools'; id: string; tools: TranscriptTool[] }

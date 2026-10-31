@@ -1,0 +1,306 @@
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentEvent, AgentSessionInfo, AgentSettings } from '@ramu/shared/types'
+import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
+import { openDb, type Db } from '../src/db'
+import { Workspace } from '../src/workspace/workspace'
+import type { AgentService } from '../src/agent'
+import { AgentThreadService, briefOf, MAX_THREADS_PER_HOUR } from '../src/background/agentThreads'
+
+type Handler = (
+  input: Record<string, unknown>,
+  extra: { signal: AbortSignal },
+) => Promise<{
+  isError?: boolean
+  content: { text: string }[]
+}>
+
+let db: Db, ws: Workspace, service: AgentThreadService
+let sessions: Map<string, AgentSessionInfo>
+let events: Map<string, AgentEvent[]>
+let approvals: boolean[], permissionDetails: string[]
+let submitted: { id: string; text: string; mode: string }[]
+let recorded: { id: string; threads: unknown[] }[]
+let calls: string[]
+let api: Project, web: Project, apiRoot: string
+
+type Project = Awaited<ReturnType<Workspace['addProjectFromFolder']>>['project']
+
+const session = (id: string, taskId: string, settings: Partial<AgentSettings> = {}): AgentSessionInfo => {
+  const info = {
+    id,
+    taskId,
+    state: 'running',
+    parentId: null,
+    settings: { ...DEFAULT_AGENT_SETTINGS, ...settings },
+    covers: [],
+  } as unknown as AgentSessionInfo
+  sessions.set(id, info)
+  events.set(id, [{ kind: 'user', text: 'Add dueDate to the API' } as AgentEvent])
+  return info
+}
+
+const tools = (sessionId: string) => {
+  const registered: Record<string, Handler> = {}
+  service.register(
+    { registerTool: (name: string, _def: unknown, handler: Handler) => (registered[name] = handler) } as never,
+    sessionId,
+  )
+  const call = async (name: string, input: Record<string, unknown>) => {
+    const out = await registered[name]!(input, { signal: new AbortController().signal })
+    if (out.isError) throw new Error(out.content[0]!.text)
+    return JSON.parse(out.content[0]!.text)
+  }
+  return { registered, call }
+}
+
+beforeEach(async () => {
+  db = openDb(':memory:')
+  ws = new Workspace(db, '/tmp/ramu-agent-threads-test')
+  sessions = new Map()
+  events = new Map()
+  approvals = []
+  permissionDetails = []
+  submitted = []
+  recorded = []
+  calls = []
+  const root = mkdtempSync(join(tmpdir(), 'ramu-agent-threads-'))
+  for (const name of ['api', 'web']) mkdirSync(join(root, name))
+  apiRoot = join(root, 'api')
+  const run = (...args: string[]) => execFileSync('git', args, { cwd: apiRoot })
+  run('init', '-q', '-b', 'main')
+  writeFileSync(join(apiRoot, 'schema.ts'), 'export const fields = []\n')
+  run('add', '.')
+  run('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'init')
+  api = (await ws.addProjectFromFolder(join(root, 'api'))).project
+  web = (await ws.addProjectFromFolder(join(root, 'web'))).project
+  let started = 0
+  const agents = {
+    get: (id: string) => {
+      const found = sessions.get(id)
+      if (!found) throw new Error(`Unknown session ${id}`)
+      return found
+    },
+    list: (taskId: string) => [...sessions.values()].filter((s) => s.taskId === taskId),
+    events: (id: string) => events.get(id) ?? [],
+    requestPermission: vi.fn(async (_id: string, _tool: string, detail: string) => {
+      permissionDetails.push(detail)
+      return approvals.shift() ?? false
+    }),
+    threadsStarted: (id: string, threads: unknown[]) => recorded.push({ id, threads }),
+    submit: vi.fn(async (id: string, text: string, mode: string) => {
+      submitted.push({ id, text, mode })
+    }),
+    analyze: vi.fn(async () => ({ message: '{"projectIds":[],"reason":""}' })),
+    isRecoveryPending: () => false,
+    providerWait: () => null,
+    autoResumeOf: () => true,
+    getGoal: () => null,
+    queued: () => [],
+  } as unknown as AgentService
+  const invoke = async (method: string, args: unknown[]) => {
+    calls.push(method)
+    if (method === 'tasks.workspaceOptions') return { defaultCheckoutMode: 'current', worktreeUnavailable: null }
+    if (method === 'tasks.create') return ws.createTask(args[0] as Parameters<Workspace['createTask']>[0])
+    if (method === 'tasks.setup') return ws.setupTask(args[0] as string)
+    if (method === 'agent.start') {
+      const [taskId, prompt, settings] = args as [string, string, AgentSettings]
+      const info = session(`started-${++started}`, taskId, settings)
+      events.set(info.id, [{ kind: 'user', text: prompt } as AgentEvent])
+      return info
+    }
+    throw new Error(`Unexpected ${method}`)
+  }
+  service = new AgentThreadService(db, ws, agents, invoke, () => {})
+})
+
+const callerIn = async (project: Project, access: AgentSettings['access'] = 'full') => {
+  const task = await ws.createTask({ projectId: project.id, title: 'Plan the dueDate field', mode: 'current' })
+  return { task, session: session('caller', task.id, { access }) }
+}
+
+describe('thread_start', () => {
+  it('starts one thread in its own project at once in Full access and links both threads', async () => {
+    const { task } = await callerIn(api)
+    const { call } = tools('caller')
+    const out = await call('thread_start', { threads: [{ prompt: 'Write the migration for dueDate' }] })
+    expect(permissionDetails).toEqual([])
+    expect(out.started).toHaveLength(1)
+    const started = ws.getTask(out.started[0].threadId)
+    expect(started.projectId).toBe(api.id)
+    expect(started.title).toBe('Write the migration for dueDate')
+    expect(started.startedFrom).toEqual({
+      groupId: expect.any(String),
+      taskId: task.id,
+      title: task.title,
+      groupSize: 1,
+    })
+    expect(ws.getTask(task.id).startedFrom).toBeUndefined()
+    expect(recorded).toEqual([{ id: 'caller', threads: [expect.objectContaining({ taskId: started.id })] }])
+  })
+
+  it('asks once before starting in another project, and starting nothing when the person declines', async () => {
+    await callerIn(api)
+    const { call } = tools('caller')
+    const declined = await call('thread_start', { threads: [{ prompt: 'Show dueDate', project: 'web' }] })
+    expect(declined).toMatchObject({ started: [], declined: true })
+    expect(permissionDetails[0]).toContain('web')
+    expect(ws.listTasks(web.id)).toEqual([])
+    approvals.push(true)
+    const out = await call('thread_start', { threads: [{ prompt: 'Show dueDate', project: 'web' }] })
+    expect(ws.getTask(out.started[0].threadId).projectId).toBe(web.id)
+  })
+
+  it('asks for any start outside Full access and for several threads at once', async () => {
+    await callerIn(api, 'auto')
+    approvals.push(true)
+    const out = await tools('caller').call('thread_start', {
+      threads: [{ prompt: 'API part' }, { prompt: 'Web part', project: web.id }],
+    })
+    expect(permissionDetails).toHaveLength(1)
+    expect(out.started).toHaveLength(2)
+    const [first, second] = out.started.map((entry: { threadId: string }) => ws.getTask(entry.threadId))
+    expect(first.startedFrom.groupId).toBe(second.startedFrom.groupId)
+    expect(first.startedFrom.groupSize).toBe(2)
+  })
+
+  it('writes the brief with the starting request and the threads that work beside it', async () => {
+    await callerIn(api)
+    approvals.push(true)
+    const out = await tools('caller').call('thread_start', {
+      threads: [
+        { prompt: 'API part', title: 'API' },
+        { prompt: 'Web part', title: 'Web', project: 'web' },
+      ],
+    })
+    const brief = (events.get(sessions.get('started-1')!.id)![0] as { text: string }).text
+    expect(brief).toContain('API part')
+    expect(brief).toContain('Plan the dueDate field')
+    expect(brief).toContain('Add dueDate to the API')
+    expect(brief).toContain('"Web"')
+    expect(out.started.map((entry: { title: string }) => entry.title)).toEqual(['API', 'Web'])
+  })
+
+  it('names an unknown project instead of guessing, and creates nothing', async () => {
+    await callerIn(api)
+    await expect(
+      tools('caller').call('thread_start', { threads: [{ prompt: 'x', project: 'mobile' }] }),
+    ).rejects.toThrow(/No project matches "mobile".*api, web/)
+    expect(calls).not.toContain('tasks.create')
+  })
+
+  it('never gives a started thread more access than the caller', async () => {
+    await callerIn(api, 'edits')
+    await expect(tools('caller').call('thread_start', { threads: [{ prompt: 'x' }], access: 'full' })).rejects.toThrow(
+      /more access/,
+    )
+    approvals.push(true)
+    await tools('caller').call('thread_start', { threads: [{ prompt: 'x' }] })
+    expect(sessions.get('started-1')!.settings.access).toBe('edits')
+  })
+
+  it('refuses a third level of agent-started threads and more than the hourly limit', async () => {
+    await callerIn(api)
+    const first = await tools('caller').call('thread_start', { threads: [{ prompt: 'Level one' }] })
+    expect(first.started[0].threadId).toBeTruthy()
+    const second = await tools('started-1').call('thread_start', { threads: [{ prompt: 'Level two' }] })
+    await expect(tools('started-2').call('thread_start', { threads: [{ prompt: 'Level three' }] })).rejects.toThrow(
+      /cannot start more/,
+    )
+    expect(second.started).toHaveLength(1)
+    const many = Array.from({ length: MAX_THREADS_PER_HOUR }, (_, i) => ({ prompt: `Part ${i}` }))
+    approvals.push(true)
+    await expect(tools('caller').call('thread_start', { threads: many })).rejects.toThrow(/last hour/)
+  })
+
+  it('brings uncommitted changes into a new worktree and leaves the starting checkout as it was', async () => {
+    await callerIn(api)
+    writeFileSync(join(apiRoot, 'schema.ts'), "export const fields = ['dueDate']\n")
+    const out = await tools('caller').call('thread_start', {
+      threads: [{ prompt: 'Finish dueDate on a branch', bringChanges: true }],
+    })
+    expect(out.started[0].error).toBeUndefined()
+    const [binding] = ws.listBindings(out.started[0].threadId)
+    expect(binding!.mode).toBe('worktree')
+    expect(binding!.cwd).not.toBe(apiRoot)
+    expect(readFileSync(join(binding!.cwd, 'schema.ts'), 'utf8')).toContain('dueDate')
+    expect(readFileSync(join(apiRoot, 'schema.ts'), 'utf8')).toContain('dueDate')
+    const brief = (events.get('started-1')![0] as { text: string }).text
+    expect(brief).toContain('uncommitted changes in api are already applied here')
+  })
+
+  it('keeps bringChanges to a new worktree of the same project', async () => {
+    await callerIn(api)
+    await expect(
+      tools('caller').call('thread_start', { threads: [{ prompt: 'x', project: 'web', bringChanges: true }] }),
+    ).rejects.toThrow(/same project/)
+  })
+})
+
+describe('related threads', () => {
+  it('lets threads started together see and message each other, but not unrelated threads', async () => {
+    await callerIn(api)
+    approvals.push(true)
+    const out = await tools('caller').call('thread_start', {
+      threads: [{ prompt: 'API part' }, { prompt: 'Web part', project: 'web' }],
+    })
+    const [apiThread, webThread] = out.started.map((entry: { threadId: string }) => entry.threadId)
+    const status = await tools('started-1').call('thread_status', {})
+    expect(status.map((entry: { threadId: string; relation: string }) => [entry.threadId, entry.relation])).toEqual([
+      [ws.getTask(apiThread).startedFrom!.taskId, 'starter'],
+      [webThread, 'sibling'],
+    ])
+    await tools('started-1').call('thread_message', {
+      threadId: webThread,
+      text: 'The field is dueDate (ISO date).',
+      mode: 'queue',
+    })
+    expect(submitted.at(-1)).toMatchObject({ id: 'started-2', mode: 'queue' })
+    expect(submitted.at(-1)!.text).toContain('The field is dueDate')
+    const other = await ws.createTask({ projectId: web.id, title: 'Unrelated', mode: 'current' })
+    await expect(tools('started-1').call('thread_message', { threadId: other.id, text: 'hi' })).rejects.toThrow(
+      /not related/,
+    )
+  })
+
+  it('reports each finished thread to the starting thread once', async () => {
+    await callerIn(api)
+    const out = await tools('caller').call('thread_start', { threads: [{ prompt: 'Write the migration' }] })
+    await service.tick()
+    expect(submitted).toEqual([])
+    const child = sessions.get('started-1')!
+    child.state = 'idle'
+    events.get(child.id)!.push({ kind: 'text', text: 'Migration written and tested.' } as AgentEvent)
+    await service.tick()
+    await service.tick()
+    expect(submitted).toHaveLength(1)
+    expect(submitted[0]).toMatchObject({ id: 'caller', mode: 'queue' })
+    expect(submitted[0]!.text).toContain(out.started[0].threadId)
+    expect(submitted[0]!.text).toContain('it finished')
+    expect(submitted[0]!.text).toContain('Migration written and tested.')
+  })
+
+  it('does not wake a starting thread the person stopped', async () => {
+    await callerIn(api)
+    await tools('caller').call('thread_start', { threads: [{ prompt: 'Write the migration' }] })
+    sessions.get('caller')!.state = 'stopped'
+    sessions.get('started-1')!.state = 'idle'
+    await service.tick()
+    expect(submitted).toEqual([])
+  })
+
+  it('keeps the started thread’s group when the starting thread is deleted', async () => {
+    const { task } = await callerIn(api)
+    const out = await tools('caller').call('thread_start', { threads: [{ prompt: 'Write the migration' }] })
+    await ws.deleteTask(task.id, false)
+    expect(ws.getTask(out.started[0].threadId).startedFrom).toMatchObject({ taskId: null, title: null, groupSize: 1 })
+  })
+})
+
+it('leaves a brief without context unchanged', () => {
+  expect(briefOf('Do it', undefined, [])).toBe('Do it')
+  expect(briefOf('Do it', 'From X', ['Y'])).toContain('Started together with: "Y"')
+})
