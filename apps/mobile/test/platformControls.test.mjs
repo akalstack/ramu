@@ -4193,6 +4193,11 @@ function chatView() {
           },
         ]
       },
+      useRef(initial) {
+        const at = cursor++
+        if (!(at in states)) states[at] = { current: initial }
+        return states[at]
+      },
       useEffect() {},
       useContext: () => () => {},
     },
@@ -4200,7 +4205,7 @@ function chatView() {
     '@ramu/shared/i18n': { translate: (_language, text) => text },
     '../i18n': { useT: () => ({}), fill: (text) => text },
     './ui': { ...components, tap() {}, T: 'T', Card: 'Card' },
-    './Motion': { Collapse: 'Collapse', Disclosure: 'Disclosure', Breathe: 'Breathe' },
+    './Motion': { Collapse: 'Collapse', Disclosure: 'Disclosure', Breathe: 'Breathe', Arrive: 'Arrive' },
   })
   const invoke = (node) => {
     states = componentStates.get(node.type) ?? []
