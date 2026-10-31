@@ -52,13 +52,17 @@ export function Shimmer({
   const sweep = useRef(new Animated.Value(-WINDOW)).current
   useEffect(() => {
     if (reduced) return
+    // Each pass rests off the end before the next, like the desktop's highlight that slides past the text.
     const loop = Animated.loop(
-      Animated.timing(sweep, {
-        toValue: 1 + WINDOW,
-        duration: TOOL_MOTION.sweepMs,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
+      Animated.sequence([
+        Animated.timing(sweep, {
+          toValue: 1 + WINDOW,
+          duration: TOOL_MOTION.sweepMs,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.delay(TOOL_MOTION.restMs),
+      ]),
     )
     loop.start()
     return () => loop.stop()
@@ -134,7 +138,8 @@ export function ActivityText({
   const opacity = progress.interpolate({ inputRange: [0, TOOL_MOTION.fadeAt, 1], outputRange: [1, 1, 0] })
   return (
     <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ minWidth: 0, overflow: 'hidden' }}>
-      <T size={size} tone="muted" numberOfLines={1}>
+      {/* While the shimmer runs it is the only copy shown; drawing both put two slightly offset labels on top of each other. */}
+      <T size={size} tone="muted" numberOfLines={1} style={active && !reduced ? { opacity: 0 } : undefined}>
         {children}
       </T>
       {active && !reduced ? (

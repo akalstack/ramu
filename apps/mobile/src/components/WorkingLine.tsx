@@ -5,7 +5,6 @@ import { elapsedText } from '@ramu/shared/chat/agentActivity'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
 import { font, radius, space, useTheme } from '../theme'
-import { Shimmer } from './Motion'
 import { T } from './ui'
 
 /**
@@ -43,9 +42,9 @@ export function WorkingLine({ chat }: { chat: Chat }) {
       }}
     >
       <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c.accent }} />
-      <Shimmer size={font.caption} singleLine>
+      <T size={font.caption} weight="500">
         {t(step.label)}
-      </Shimmer>
+      </T>
       {step.detail ? (
         <T size={font.caption} mono numberOfLines={1} style={{ flexShrink: 1 }}>
           {step.detail}

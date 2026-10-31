@@ -22,6 +22,8 @@ export const REFERENCE_APPEARANCE = {
 /** Tool labels share a left-to-right sweep; only the decorative completion highlight waits. */
 export const TOOL_MOTION = {
   sweepMs: 2200,
+  /** The pause between passes, while the highlight is off the end of the text. */
+  restMs: 700,
   settleMs: 120,
   finishMs: 360,
   fadeAt: 0.8,

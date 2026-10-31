@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { elapsedText, type AgentStep } from '@ramu/shared/chat/agentActivity'
 import { t, useLanguage } from '../i18n'
-import { WorkingText } from '../views/agent/components/WorkingText'
 
 /**
  * The turn's live status, docked above the composer so it never scrolls away: what the agent is doing (the running
@@ -32,7 +31,7 @@ export function WorkingLine({
       className="mx-auto mb-1.5 flex w-fit max-w-full items-center gap-2 rounded-full bg-fill px-3 py-1 text-caption"
     >
       <span aria-hidden className="size-1.5 flex-none animate-pulse rounded-full bg-brand" />
-      <WorkingText>{t(current.label)}</WorkingText>
+      <span className="font-medium text-foreground">{t(current.label)}</span>
       {current.detail && <code className="min-w-0 truncate text-caption text-foreground">{current.detail}</code>}
       {since ? <span className="flex-none tabular-nums text-muted-foreground">{elapsedText(now - since)}</span> : null}
     </div>
