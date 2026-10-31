@@ -123,15 +123,19 @@ export class MobileLiveActivities {
     try {
       const saved = JSON.parse(readFileSync(path, 'utf8'))
       if (Array.isArray(saved))
-        this.registrations = saved.filter((r) => this.valid(r) && typeof r.deviceId === 'string')
+        this.registrations = saved.filter(
+          (r: { deviceId?: unknown }) => this.valid(r) && typeof r.deviceId === 'string',
+        )
     } catch {}
   }
   get enabled() {
     return this.configured()
   }
-  private valid(r: MobileLiveActivityRegistration) {
+  private valid(value: unknown): value is MobileLiveActivityRegistration {
+    const r = value as Partial<MobileLiveActivityRegistration> | null
     return (
-      r &&
+      !!r &&
+      typeof r === 'object' &&
       typeof r.activityId === 'string' &&
       typeof r.token === 'string' &&
       typeof r.computerId === 'string' &&
@@ -139,8 +143,8 @@ export class MobileLiveActivities {
       /^[a-fA-F0-9]{64,256}$/.test(r.token) &&
       /^[a-zA-Z0-9_-]{1,100}$/.test(r.computerId) &&
       Number.isFinite(r.startedAt) &&
-      ['en', 'id'].includes(r.locale) &&
-      ['sandbox', 'production'].includes(r.environment)
+      (r.locale === 'en' || r.locale === 'id') &&
+      (r.environment === 'sandbox' || r.environment === 'production')
     )
   }
   private save() {
@@ -148,7 +152,8 @@ export class MobileLiveActivities {
     writeFileSync(temp, JSON.stringify(this.registrations), { mode: 0o600 })
     renameSync(temp, this.path)
   }
-  register(deviceId: string, value: MobileLiveActivityRegistration) {
+  /** `value` arrives from the phone unvalidated; it is checked here before anything is stored. */
+  register(deviceId: string, value: unknown) {
     if (!this.devices().some((d) => d.id === deviceId)) throw new Error('Live Activities require a paired phone')
     if (
       !this.valid(value) ||

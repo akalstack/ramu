@@ -30,10 +30,7 @@ export interface SocketHost {
   /** The same authentication every remote request gets. `undefined` means it already answered the upgrade. */
   accept(req: IncomingMessage, res: ServerResponse): Promise<DeviceInfo | null | undefined>
   /** Runs one call exactly as `POST /invoke` would for this device. Must not throw. */
-  invoke(
-    device: DeviceInfo | undefined,
-    request: Omit<InvokeRequest, 'args'> & { args: any },
-  ): Promise<SocketInvokeResult>
+  invoke(device: DeviceInfo | undefined, request: InvokeRequest): Promise<SocketInvokeResult>
   /** Identifies this server run, so a client that sees it change knows every cursor it held is void. */
   epoch: string
   /** Registers the client for broadcast events (and presence, revocation) until `close`. */

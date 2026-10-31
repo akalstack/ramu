@@ -633,7 +633,8 @@ async function rawBody(req: import('node:http').IncomingMessage, limit = MAX_REQ
   }
   return Buffer.concat(chunks).toString()
 }
-const body = async (req: import('node:http').IncomingMessage): Promise<any> => decodeInvoke(await rawBody(req))
+// An MCP request body as JSON; its own transport validates it.
+const body = async (req: import('node:http').IncomingMessage): Promise<unknown> => decodeInvoke(await rawBody(req))
 const capabilities = (): Capability[] => [
   CAPABILITIES.invoke,
   CAPABILITIES.events,
@@ -665,7 +666,7 @@ class InvokeRefused extends Error {}
 async function performInvoke(
   remote: boolean,
   device: DeviceInfo | undefined,
-  { method, args, operationKey }: Pick<InvokeRequest, 'method' | 'operationKey'> & { args: any },
+  { method, args, operationKey }: InvokeRequest,
 ): Promise<{ value: unknown; after?: () => void }> {
   const deviceId = device?.id
   if (operationKey !== undefined && !(typeof operationKey === 'string' && OPERATION_KEY_PATTERN.test(operationKey)))
@@ -714,13 +715,15 @@ async function performInvoke(
       !args.slice(0, 3).every((item) => typeof item === 'string' && item.length <= 100)
     )
       throw new Error('Invalid local browser response.')
-    browserBroker.reply(args[0], args[1], args[2], args[3], typeof args[4] === 'string' ? args[4] : undefined)
+    const [clientId, token, requestId] = args as [string, string, string]
+    browserBroker.reply(clientId, token, requestId, args[3], typeof args[4] === 'string' ? args[4] : undefined)
   } else if (method === 'host.reply') {
     if (remote) throw new Error('Desktop actions are only available on this host')
-    const request = nativeRequests.get(args?.[0])
+    const requestId = args[0]
+    const request = typeof requestId === 'string' ? nativeRequests.get(requestId) : undefined
     if (request) {
       clearTimeout(request.timer)
-      nativeRequests.delete(args[0])
+      nativeRequests.delete(requestId as string)
       args[2] ? request.reject(new Error(String(args[2]))) : request.resolve(args[1])
     }
   } else if (method === 'notifications.register') {
