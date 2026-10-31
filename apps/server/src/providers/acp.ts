@@ -55,6 +55,11 @@ export function acpCommand(provider: AcpProvider): { command: string; args: stri
 }
 export { ResumeUnavailable as AcpResumeUnavailable } from '../agent/agentRunner'
 import { ResumeUnavailable as AcpResumeUnavailable } from '../agent/agentRunner'
+/** Events that mean the runtime is still working after it answered the prompt. */
+const LATE_WORK = new Set<AgentEvent['kind']>(['tool-use', 'tool-result', 'text', 'thinking'])
+/** How long a runtime that kept working after its reply must stay quiet before the turn counts as done. */
+const LATE_QUIET_MS = 4000
+
 export class AcpRpc {
   private child: ChildProcessWithoutNullStreams
   private nextId = 0
@@ -361,6 +366,11 @@ class AcpSession implements AgentRunner {
   private sessionId = ''
   private connection?: McpConnection
   private active?: Promise<void>
+  /**
+   * Some runtimes answer the prompt and keep streaming tool calls and text. That work belongs to the turn, so the chat
+   * shows it running until the late tool calls finish and the runtime has been quiet for a moment.
+   */
+  private late?: { tools: Set<string>; timer?: ReturnType<typeof setTimeout> }
   private stopped = false
   /** True while a cancelled turn is being replaced by a steering message, so its end is not reported as a finished turn. */
   private steering = false
@@ -602,6 +612,7 @@ class AcpSession implements AgentRunner {
   async send(prompt: string, attachments: Attachment[] = []): Promise<void> {
     if (this.active) throw new Error('Wait for the current turn to finish, or interrupt it first.')
     if (!this.rpc || this.stopped) throw new Error('ACP session is not running')
+    this.endLateWork(false)
     this.events.beginTurn()
     this.turnText.clear()
     this.turnTools = 0
@@ -755,6 +766,27 @@ class AcpSession implements AgentRunner {
       this.resolve(id, { outcome: { outcome: 'selected', optionId: option.optionId } }, 'answered')
     }
   }
+  private lateWork(events: AgentEvent[]): void {
+    if (!this.late) {
+      this.late = { tools: new Set() }
+      this.emit({ kind: 'state', state: 'running' })
+    }
+    const late = this.late
+    for (const event of events) {
+      if (event.kind === 'tool-use') late.tools.add(event.toolUseId)
+      if (event.kind === 'tool-result' && !event.running) late.tools.delete(event.toolUseId)
+    }
+    clearTimeout(late.timer)
+    late.timer = setTimeout(() => {
+      if (this.late === late && !late.tools.size) this.endLateWork(true)
+    }, LATE_QUIET_MS)
+  }
+  private endLateWork(settle: boolean): void {
+    if (!this.late) return
+    clearTimeout(this.late.timer)
+    this.late = undefined
+    if (settle && !this.stopped) this.emit({ kind: 'state', state: 'idle' })
+  }
   private handle(m: Wire): void {
     if (this.stopped || !m.method) return
     const p = m.params ?? {}
@@ -768,7 +800,9 @@ class AcpSession implements AgentRunner {
       }
       if (this.loading && !['compaction_update', 'compaction_summary_chunk', 'usage_update'].includes(u.sessionUpdate))
         return
-      for (const event of this.events.consume(u)) {
+      const events = this.events.consume(u)
+      if (!this.active && !this.loading && events.some((event) => LATE_WORK.has(event.kind))) this.lateWork(events)
+      for (const event of events) {
         if (event.kind === 'text' && !event.agentId) this.turnText.set(event.messageId ?? '', event.text)
         if (event.kind === 'tool-use' && !event.agentId && !this.seenTools.has(event.toolUseId)) {
           this.seenTools.add(event.toolUseId)

@@ -66,6 +66,7 @@ rl.on('line',line=>{
   if(current==='limit'){send({id:m.id,error:{code:-32000,message:'quota exceeded 429'}});return;}
   if(current==='limitreply'){send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:"You've hit your usage limit. Resets at 5pm."}}}});send({id:m.id,result:{stopReason:'end_turn'}});return;}
   if(current==='long')return;
+  if(current==='late'){send({id:m.id,result:{stopReason:'end_turn'}});setTimeout(()=>send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'tool_call',toolCallId:'late1',kind:'read',title:'Read .gitignore',status:'in_progress'}}}),50);setTimeout(()=>send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'tool_call_update',toolCallId:'late1',status:'completed'}}}),150);return;}
   if(current==='elicit'){send({id:901,method:'elicitation/create',params:{mode:'form',sessionId:'session-1',message:'Pick a name',requestedSchema:{type:'object',properties:{name:{type:'string',title:'Name'}},required:['name']}}});return;}
   if(current==='compact'){
     const update=u=>send({method:'session/update',params:{sessionId:'session-1',update:u}});
@@ -705,3 +706,15 @@ it('uses auto_edit for Antigravity Auto while keeping commands in the client app
   runner!.replyPermission('900', true)
   await until(() => events.some((event) => event.kind === 'result'))
 })
+
+it('keeps a turn running while the runtime keeps working after its reply, then settles', async () => {
+  await start('late', 'antigravity')
+  const states = () => events.filter((e) => e.kind === 'state').map((e) => (e as { state: string }).state)
+  await until(() => events.some((e) => e.kind === 'result'))
+  // The reply came first; the tool call after it puts the turn back to running.
+  await until(() => states().filter((state) => state === 'running').length >= 2)
+  expect(events.some((e) => e.kind === 'tool-use')).toBe(true)
+  const started = Date.now()
+  while (!states().includes('idle') && Date.now() - started < 8000) await new Promise((r) => setTimeout(r, 50))
+  expect(states().at(-1)).toBe('idle')
+}, 15000)
