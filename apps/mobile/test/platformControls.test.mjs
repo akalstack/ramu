@@ -7842,3 +7842,23 @@ test('side-question input uses the thread dock and lifts the transcript inset wi
   assert.equal(find(tree, 'TextInput').props.value, 'draft stays here')
   hooks.dispose()
 })
+
+test('while a turn runs, quiet pills show only their icon and pills needing attention keep their words', () => {
+  let compact = false
+  const { ActivityPill } = load('components/ActivityPill.tsx', 'ios', {
+    react: { ...require('react'), useContext: () => compact },
+  })
+  const labels = (props) =>
+    nodes(ActivityPill({ icon: 'Globe', onPress() {}, ...props }))
+      .filter((node) => node.type === 'T')
+      .map((node) => node.props.children)
+  assert.deepEqual(labels({ label: 'Terminal' }), ['Terminal'])
+  compact = true
+  const quiet = ActivityPill({ icon: 'Globe', label: 'Terminal', onPress() {} })
+  assert.deepEqual(labels({ label: 'Terminal' }), [])
+  assert.equal(find(quiet, 'Pressable').props.accessibilityLabel, 'Terminal', 'screen readers still hear the name')
+  assert.ok(find(quiet, 'Pressable').props.style.minWidth >= 32)
+  assert.deepEqual(labels({ label: 'Approval needed', tone: 'attention' }), ['Approval needed'])
+  assert.deepEqual(labels({ label: 'Offline', tone: 'off' }), ['Offline'])
+  assert.deepEqual(labels({ label: 'Goal active', emphasis: true }), ['Goal active'])
+})

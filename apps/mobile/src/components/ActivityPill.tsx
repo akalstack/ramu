@@ -1,8 +1,11 @@
-import type { ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { T, tap, type Icon } from './ui'
+
+/** While a turn runs, quiet pills show only their icon so the working status and anything needing attention fit. */
+export const CompactPills = createContext(false)
 
 /**
  * One pill in the row above the composer: computer, browser, terminal and every activity look and behave alike. The
@@ -30,6 +33,7 @@ export function ActivityPill({
   trailing?: ReactNode
 }) {
   const { c } = useTheme()
+  const iconOnly = useContext(CompactPills) && tone === 'quiet' && !emphasis
   const color = tone === 'attention' ? c.warn : tone === 'off' ? c.muted : c.soft
   return (
     <View
@@ -55,21 +59,25 @@ export function ActivityPill({
           alignItems: 'center',
           gap: 6,
           minHeight: 32,
-          paddingLeft: space.s + 2,
+          minWidth: 32,
+          justifyContent: 'center',
+          paddingLeft: iconOnly ? space.s : space.s + 2,
           paddingRight: trailing ? 0 : space.s,
         }}
       >
         <I size={14} color={color} />
-        <T
-          size={font.caption}
-          weight={emphasis ? '600' : '500'}
-          tone={tone === 'off' ? 'muted' : 'text'}
-          numberOfLines={1}
-          style={{ maxWidth: 180 }}
-        >
-          {label}
-        </T>
-        {!trailing && onPress ? <ChevronRight size={12} color={c.muted} /> : null}
+        {iconOnly ? null : (
+          <T
+            size={font.caption}
+            weight={emphasis ? '600' : '500'}
+            tone={tone === 'off' ? 'muted' : 'text'}
+            numberOfLines={1}
+            style={{ maxWidth: 180 }}
+          >
+            {label}
+          </T>
+        )}
+        {!trailing && onPress && !iconOnly ? <ChevronRight size={12} color={c.muted} /> : null}
       </Pressable>
       {trailing}
     </View>
