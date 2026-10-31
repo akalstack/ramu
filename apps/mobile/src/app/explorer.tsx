@@ -7,6 +7,7 @@ import * as Clipboard from 'expo-clipboard'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Copy,
   Files,
@@ -121,13 +122,22 @@ export default function Explorer() {
   const [renameDraft, setRenameDraft] = useState<string | null>(null)
   const [actionError, setActionError] = useState('')
   const [acted, setActed] = useState(false)
-  const [moving, setMoving] = useState(false)
+  // Choosing where to move or copy the item: the folder being browsed in the sheet.
+  const [moving, setMoving] = useState<{ mode: 'move' | 'copy'; folder: string } | null>(null)
   // Whether an agent is writing in the checkout of the row whose actions are open; asked while the sheet is open.
   const [writerActive, setWriterActive] = useState(false)
+  // The folder browsed for a move or copy loads when it opens, like a folder expanded in the tree.
+  const browsing = moving && acting ? `${acting.repoId}:${moving.folder}` : null
+  useEffect(() => {
+    if (!moving || !acting) return
+    const binding = bindingsRef.current.find((entry) => entry.repoId === acting.repoId)
+    if (binding && !directories[acting.repoId]?.[moving.folder]) void loadDirectory(binding, moving.folder)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the browsed folder; loading refreshes `directories`
+  }, [browsing])
   const closeActions = () => {
     setActing(null)
     setRenameDraft(null)
-    setMoving(false)
+    setMoving(null)
     setWriterActive(false)
     setActionError('')
   }
@@ -821,39 +831,77 @@ export default function Explorer() {
               </T>
             ) : null}
             {moving ? (
-              <SheetGroup title={t.explorerMoveTitle}>
-                {Object.keys(directories[acting.repoId] ?? {})
-                  .sort()
-                  .map((folder) => ({ folder, plan: planMove(acting.entry.path, folder) }))
-                  .filter(({ plan }) => plan.ok)
-                  .map(({ folder, plan }) => (
-                    <SheetOption
-                      key={folder}
-                      icon={Folder}
-                      title={folder || t.explorerRootFolder}
-                      disabled={acted}
-                      onPress={() =>
-                        plan.ok &&
-                        void change(
-                          () =>
-                            store.invoke(
-                              scope.host,
-                              'files.rename',
-                              scope.context,
-                              acting.repoId,
-                              acting.entry.path,
-                              plan.destination,
-                            ),
-                          parentFolder(acting.entry.path),
-                          acting.repoId,
-                        ).then(() => {
-                          const binding = bindingsRef.current.find((entry) => entry.repoId === acting.repoId)
-                          if (binding) void loadDirectory(binding, folder)
-                        })
-                      }
-                    />
-                  ))}
-              </SheetGroup>
+              (() => {
+                const binding = bindingsRef.current.find((entry) => entry.repoId === acting.repoId)
+                const listed = directories[acting.repoId]?.[moving.folder]
+                const plan = planMove(acting.entry.path, moving.folder)
+                const names = (listed ?? []).map((entry) => entry.name)
+                // A copy into a folder that already has the name gets a free one; a move there would overwrite.
+                const name = acting.entry.path.slice(acting.entry.path.lastIndexOf('/') + 1)
+                const taken = names.includes(name)
+                const copyDestination = taken
+                  ? duplicateName(moving.folder ? `${moving.folder}/${name}` : name, names)
+                  : moving.folder
+                    ? `${moving.folder}/${name}`
+                    : name
+                const canMove = plan.ok && !taken
+                const canCopy = moving.mode === 'copy' && (plan.ok || plan.reason === 'unchanged')
+                return (
+                  <>
+                    <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
+                      {moving.folder || t.explorerRootFolder}
+                    </T>
+                    <SheetGroup title={t.explorerMoveTitle}>
+                      {moving.folder ? (
+                        <SheetOption
+                          icon={ChevronLeft}
+                          title={t.explorerUpFolder}
+                          onPress={() => setMoving({ ...moving, folder: parentFolder(moving.folder) })}
+                        />
+                      ) : null}
+                      {(listed ?? [])
+                        .filter(
+                          (entry) =>
+                            entry.kind === 'dir' &&
+                            entry.path !== acting.entry.path &&
+                            !entry.path.startsWith(`${acting.entry.path}/`),
+                        )
+                        .map((entry) => (
+                          <SheetOption
+                            key={entry.path}
+                            icon={Folder}
+                            title={entry.name}
+                            onPress={() => setMoving({ ...moving, folder: entry.path })}
+                          />
+                        ))}
+                      {!listed ? <ActivityIndicator color={c.accent} style={{ padding: space.m }} /> : null}
+                    </SheetGroup>
+                    <View style={{ paddingHorizontal: space.l, paddingTop: space.m }}>
+                      <Button
+                        title={moving.mode === 'move' ? t.explorerMoveHere : t.explorerCopyHere}
+                        disabled={acted || (moving.mode === 'move' ? !canMove : !canCopy)}
+                        onPress={() =>
+                          void change(
+                            () =>
+                              store.invoke(
+                                scope.host,
+                                moving.mode === 'move' ? 'files.rename' : 'files.copy',
+                                scope.context,
+                                acting.repoId,
+                                acting.entry.path,
+                                moving.mode === 'move' && plan.ok ? plan.destination : copyDestination,
+                              ),
+                            parentFolder(acting.entry.path),
+                            acting.repoId,
+                          ).then(() => {
+                            if (binding) void loadDirectory(binding, moving.folder)
+                          })
+                        }
+                      />
+                    </View>
+                  </>
+                )
+              })()
             ) : renameDraft === null ? (
               <>
                 <SheetGroup>
@@ -921,8 +969,19 @@ export default function Explorer() {
                       }
                     />
                   )}
+                  {available.includes('duplicate') && (
+                    <SheetOption
+                      icon={Copy}
+                      title={t.explorerCopyTo}
+                      onPress={() => setMoving({ mode: 'copy', folder: parentFolder(acting.entry.path) })}
+                    />
+                  )}
                   {available.includes('move') && (
-                    <SheetOption icon={FolderInput} title={t.explorerMove} onPress={() => setMoving(true)} />
+                    <SheetOption
+                      icon={FolderInput}
+                      title={t.explorerMove}
+                      onPress={() => setMoving({ mode: 'move', folder: parentFolder(acting.entry.path) })}
+                    />
                   )}
                   {available.includes('rename') && (
                     <SheetOption
