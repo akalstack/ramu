@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentActivityLabel } from '../src/chat/agentActivity'
+import { agentActivityLabel, turnSteps } from '../src/chat/agentActivity'
 import type { AgentEvent } from '../src/types'
 
 const thought: AgentEvent = { kind: 'thinking', text: 'Considering the request' }
@@ -37,5 +37,24 @@ describe('agent activity labels', () => {
     for (const state of ['idle', 'stopped', 'failed', 'needs-input', undefined] as const) {
       expect(agentActivityLabel(state, [thought])).toBeNull()
     }
+  })
+})
+
+describe('turnSteps', () => {
+  it('lists the main agent’s actions since the last message, finished or running, newest last', () => {
+    const events: AgentEvent[] = [
+      { kind: 'tool-use', toolUseId: 'old', name: 'Bash', summary: 'ls' },
+      { kind: 'user', text: 'Run the tests' },
+      { kind: 'tool-use', toolUseId: 'a', name: 'Read', summary: 'src/app.ts' },
+      { kind: 'tool-result', toolUseId: 'a', isError: false, summary: '' },
+      { kind: 'tool-use', toolUseId: 'helper', name: 'Bash', summary: 'echo', agentId: 'h1' } as AgentEvent,
+      { kind: 'tool-use', toolUseId: 'b', name: 'Bash', summary: 'pnpm test\nmore' },
+    ]
+    const steps = turnSteps(events)
+    expect(steps.map((step) => [step.done, step.detail])).toEqual([
+      [true, 'src/app.ts'],
+      [false, 'pnpm test'],
+    ])
+    expect(turnSteps(events, 1).map((step) => step.detail)).toEqual(['pnpm test'])
   })
 })

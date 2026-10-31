@@ -41,6 +41,29 @@ export function turnStartedAt(events: readonly AgentEvent[]): number | null {
   return null
 }
 
+/** One action of the running turn, for the working sheet: what it did and whether it has finished. */
+export interface TurnStep extends AgentStep {
+  done: boolean
+}
+
+/** The main agent's latest actions since the person's last message, newest last; at most `limit`. */
+export function turnSteps(events: readonly AgentEvent[], limit = 6): TurnStep[] {
+  const finished = new Set<string>()
+  const steps: TurnStep[] = []
+  for (let index = events.length - 1; index >= 0 && steps.length < limit; index--) {
+    const event = events[index]!
+    if (event.agentId) continue
+    if (event.kind === 'user') break
+    if (event.kind === 'tool-result' && !event.running) finished.add(event.toolUseId)
+    else if (event.kind === 'tool-use') {
+      const done = finished.has(event.toolUseId)
+      const detail = event.summary.trim().split('\n')[0]!.slice(0, 80)
+      steps.push({ label: toolVerb(KIND_VERB[toolKind(event)], !done), done, ...(detail ? { detail } : {}) })
+    }
+  }
+  return steps.reverse()
+}
+
 /** "12s", "1m 05s", "1h 02m": how long the turn has been working. */
 export function elapsedText(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000))

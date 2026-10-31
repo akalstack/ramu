@@ -6,15 +6,16 @@ import { goalActivityLabel, type ActivityKind } from '@ramu/shared/chat/threadAc
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { space } from '../theme'
-import { Button, Sheet, T, type Icon } from './ui'
+import { Sheet, T, type Icon } from './ui'
 import { ActivityPill } from './ActivityPill'
+import { ActivityList, ActivityRow, OfflineCard, WorkingSheet } from './ActivitySheets'
+import { WorkingLine } from './WorkingLine'
 import {
   Ellipsis,
   Hand,
   Hourglass,
   ListOrdered,
   Loader,
-  RefreshCw,
   Sparkles,
   Target,
   Users,
@@ -101,6 +102,21 @@ export function ThreadActivity({
       queue: `${chat.queue.length} ${id ? 'dalam antrean' : 'queued'}`,
       more: id ? 'Aktivitas lainnya' : 'More activity',
     })[kind]
+  /** One line under a row in the overview: what is waiting there, in the thread's own words. */
+  const detailOf = (kind: ActivityKind): string | null =>
+    kind === 'goal'
+      ? (chat.goal?.objective ?? null)
+      : kind === 'queue'
+        ? (chat.queue[0]?.text ?? null)
+        : kind === 'input'
+          ? id
+            ? 'Jawab agar agen bisa lanjut'
+            : 'Answer so the agent can continue'
+          : kind === 'provider'
+            ? id
+              ? 'Lanjut otomatis saat batas pulih'
+              : 'Resumes on its own when the limit resets'
+            : null
   const primaryKind: ActivityKind | 'more' = primary ?? 'more'
   const secondary = activity.model.secondary.filter((kind) => kind !== 'working').slice(0, 1)
   const kinds = [
@@ -123,6 +139,7 @@ export function ThreadActivity({
         style={{ flexGrow: 0, marginTop: space.xs }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+          <WorkingLine chat={chat} onPress={() => setOpened('working')} />
           {leading}
           {actions.map(({ label, icon, onPress }) => (
             <ActivityPill key={label} icon={icon} label={label} accessibilityLabel={label} iconOnly onPress={onPress} />
@@ -141,47 +158,56 @@ export function ThreadActivity({
         </View>
       </ScrollView>
       <Sheet
-        presentation="screen"
+        // Short summaries open as a sheet over the thread; long lists and answers get the full screen.
+        presentation={opened === 'helpers' || opened === 'advisor' || opened === 'input' ? 'screen' : 'sheet'}
         open={opened !== null}
         onClose={() => setOpened(null)}
-        title={opened ? label(opened) : ''}
+        title={
+          opened === 'working'
+            ? id
+              ? 'Sedang bekerja'
+              : 'Working'
+            : opened === 'connection'
+              ? id
+                ? 'Koneksi'
+                : 'Connection'
+              : opened
+                ? label(opened)
+                : ''
+        }
       >
-        {opened === 'more' || opened === 'connection' || opened === 'working' ? (
-          <View style={{ padding: space.m, gap: space.s }}>
-            {!online ? (
-              <>
-                <T tone="muted">
-                  {id
-                    ? 'Host ini tidak terhubung, jadi yang tampil adalah aktivitas terakhir yang diketahui.'
-                    : 'This host is not connected, so this is the last activity Ramu saw.'}
-                </T>
-                <Button
-                  icon={RefreshCw}
-                  title={id ? 'Hubungkan kembali' : 'Reconnect'}
-                  onPress={() => {
-                    store.retry(chat.computerId)
-                    setOpened(null)
-                  }}
-                />
-              </>
-            ) : null}
-            {(['input', 'helpers', 'advisor', 'goal', 'queue', 'provider'] as const)
-              .filter((kind) =>
-                kind === 'helpers'
-                  ? activity.helpers.length || activity.groups.length
-                  : kind === 'advisor'
-                    ? activity.advisors.length
-                    : kind === 'input'
-                      ? activity.requests.length
-                      : kind === 'goal'
-                        ? chat.goal
-                        : kind === 'queue'
-                          ? chat.queue.length
-                          : activity.model.primary === 'provider' || activity.model.secondary.includes('provider'),
-              )
-              .map((kind) => (
-                <Button key={kind} kind="ghost" title={label(kind)} onPress={() => setOpened(kind)} />
-              ))}
+        {opened === 'working' ? <WorkingSheet chat={chat} onDone={() => setOpened(null)} /> : null}
+        {(opened === 'more' || opened === 'connection') && !online ? (
+          <OfflineCard chat={chat} onDone={() => setOpened(null)} />
+        ) : null}
+        {opened === 'more' ? (
+          <View style={{ paddingTop: online ? 0 : space.m }}>
+            <ActivityList>
+              {(['input', 'provider', 'goal', 'queue', 'helpers', 'advisor'] as const)
+                .filter((kind) =>
+                  kind === 'helpers'
+                    ? activity.helpers.length || activity.groups.length
+                    : kind === 'advisor'
+                      ? activity.advisors.length
+                      : kind === 'input'
+                        ? activity.requests.length
+                        : kind === 'goal'
+                          ? chat.goal
+                          : kind === 'queue'
+                            ? chat.queue.length
+                            : activity.model.primary === 'provider' || activity.model.secondary.includes('provider'),
+                )
+                .map((kind) => (
+                  <ActivityRow
+                    key={kind}
+                    icon={KIND_ICON[kind]}
+                    tone={kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
+                    title={label(kind)}
+                    detail={detailOf(kind)}
+                    onPress={() => setOpened(kind)}
+                  />
+                ))}
+            </ActivityList>
           </View>
         ) : null}
         {opened === 'helpers' ? (
@@ -238,7 +264,7 @@ export function ThreadActivity({
           online ? (
             <LimitTray chatId={chat.id} />
           ) : (
-            <T tone="muted">
+            <T tone="muted" style={{ paddingHorizontal: space.l }}>
               {id ? 'Hubungkan kembali untuk melihat batas penyedia.' : 'Reconnect to check the provider limit.'}
             </T>
           )

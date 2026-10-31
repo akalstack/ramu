@@ -185,7 +185,7 @@ function ArchivedThreads() {
   const archived = chats.filter((chat) => chat.status === 'archived').slice(0, 200)
   return (
     <>
-      <Card style={{ marginHorizontal: space.l }}>
+      <Card style={{ marginHorizontal: space.l, marginTop: space.m }}>
         {archived.length ? (
           archived.map((chat, index) => (
             <View key={chat.id}>
@@ -430,7 +430,12 @@ export default function SettingsSectionPage() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
       >
-        {section.scope === 'host' ? <ComputerScope host={host} /> : null}
+        {/* The host card stands apart from the page's first card, as the menu's groups do. */}
+        {section.scope === 'host' ? (
+          <View style={{ marginBottom: space.m }}>
+            <ComputerScope host={host} />
+          </View>
+        ) : null}
         {section.scope === 'host' && locked && computers.find((c) => c.id === selected)?.access !== 'viewer' ? (
           <View style={{ paddingHorizontal: space.l, paddingBottom: space.m }}>
             <PermissionNeeded computerId={selected} permission="settings" />

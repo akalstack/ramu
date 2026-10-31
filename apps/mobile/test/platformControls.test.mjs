@@ -7025,6 +7025,7 @@ function deliveryStoreHarness() {
     '@ramu/shared/chat/agentActivity': {
       agentActivityLabel: () => null,
       currentStep: () => null,
+      turnSteps: () => [],
       turnStartedAt: () => null,
     },
     '@ramu/shared/chat/inputSummary': { inputSummary: () => null },

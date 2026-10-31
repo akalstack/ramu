@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react'
-import { View } from 'react-native'
+import { Pressable, View } from 'react-native'
+import { ChevronRight } from 'lucide-react-native'
 import { translate } from '@ramu/shared/i18n'
 import { elapsedText } from '@ramu/shared/chat/agentActivity'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
 import { font, radius, space, useTheme } from '../theme'
-import { T } from './ui'
+import { T, tap } from './ui'
 
 /**
  * The turn's live status, docked above the composer so it never scrolls away: what the agent is doing (the running
- * command or file), and how long the turn has run.
+ * command or file), and how long the turn has run. Tapping it opens the turn's latest steps and Stop.
  */
-export function WorkingLine({ chat }: { chat: Chat }) {
+export function WorkingLine({ chat, onPress }: { chat: Chat; onPress?(): void }) {
   const store = useStore()
   const { c } = useTheme()
   const t = (text: string) => translate(store.language, text)
@@ -27,9 +28,18 @@ export function WorkingLine({ chat }: { chat: Chat }) {
   if (!running) return null
   const step = chat.compacting ? { label: 'Compacting context…' } : (chat.step ?? { label: 'Working' })
   return (
-    <View
+    <Pressable
       accessibilityLiveRegion="polite"
-      style={{
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={[t(step.label), step.detail, since ? elapsedText(now - since) : null]
+        .filter(Boolean)
+        .join(', ')}
+      disabled={!onPress}
+      onPress={() => {
+        tap()
+        onPress?.()
+      }}
+      style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
         gap: space.s,
@@ -39,7 +49,8 @@ export function WorkingLine({ chat }: { chat: Chat }) {
         backgroundColor: c.fill,
         flexShrink: 0,
         maxWidth: 320,
-      }}
+        opacity: pressed ? 0.7 : 1,
+      })}
     >
       <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c.accent }} />
       <T size={font.caption} weight="500">
@@ -55,6 +66,7 @@ export function WorkingLine({ chat }: { chat: Chat }) {
           {elapsedText(now - since)}
         </T>
       ) : null}
-    </View>
+      {onPress ? <ChevronRight size={12} color={c.muted} /> : null}
+    </Pressable>
   )
 }

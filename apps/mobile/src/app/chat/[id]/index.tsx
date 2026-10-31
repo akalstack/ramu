@@ -61,7 +61,6 @@ import { PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
 import { Arrive, Presence, animateLayout, useReducedMotion } from '../../../components/Motion'
-import { WorkingLine } from '../../../components/WorkingLine'
 import { ChatActionsSheet, confirmChatDeletion } from '../../../components/ChatActions'
 import * as Clipboard from 'expo-clipboard'
 
@@ -1022,7 +1021,6 @@ export default function ChatScreen() {
                         chat={chat}
                         leading={
                           <>
-                            <WorkingLine chat={chat} />
                             <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
                             <BrowserNotice chat={chat} tabs={browserTabs.tabs} onOpen={() => setTool('browser')} />
                           </>

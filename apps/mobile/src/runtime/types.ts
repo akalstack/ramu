@@ -127,6 +127,8 @@ export interface Chat extends Task {
   turnStartedAt?: number | null
   /** What the agent is doing now, for the line above the composer. */
   step?: import('@ramu/shared/chat/agentActivity').AgentStep | null
+  /** The running turn's latest actions, for the working sheet. */
+  steps?: import('@ramu/shared/chat/agentActivity').TurnStep[]
   taskId: string
   sessionId: string | null
   computerId: string
