@@ -1,8 +1,10 @@
 // One short message at the bottom of the screen, with an optional button (Undo). No React Native in here.
 
 export interface Toast {
-  /** A copy key in `i18n.ts`. */
+  /** A copy key in `i18n.ts`, or already-written text such as an error from the host. */
   message: string
+  /** Something went wrong: shown with a warning mark, in the same place as every other notice. */
+  error?: boolean
   /** `label` is a copy key too. */
   action?: { label: string; run: () => void }
   /** Bumps on every `showToast`, so the same message shown twice restarts the timer. */
@@ -18,6 +20,11 @@ export const TOAST_MS = 6000
 
 export function showToast(message: string, action?: Toast['action']) {
   current = { message, action, id: ++counter }
+  emit()
+}
+/** An error, shown as a toast like every other short notice rather than a banner across the top. */
+export function showError(message: string) {
+  current = { message, error: true, id: ++counter }
   emit()
 }
 export function dismissToast(id?: number) {

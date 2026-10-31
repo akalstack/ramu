@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
+import { CircleAlert } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { font, radius, space, useTheme } from '../theme'
@@ -20,7 +21,8 @@ export function UndoToast() {
     return () => clearTimeout(timer)
   }, [id])
   if (!toast) return null
-  const word = (key: string) => t[key as keyof Strings] as string
+  // A copy key, or text that is already written (an error from the host).
+  const word = (key: string) => (t[key as keyof Strings] as string | undefined) ?? key
   return (
     <View
       pointerEvents="box-none"
@@ -31,6 +33,7 @@ export function UndoToast() {
           accessibilityLiveRegion="polite"
           style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: space.l, paddingRight: space.s }}
         >
+          {toast.error ? <CircleAlert size={16} color={c.bad} style={{ marginRight: space.s }} /> : null}
           <T size={font.control} weight="500" style={{ flex: 1, paddingVertical: space.m }}>
             {word(toast.message)}
           </T>

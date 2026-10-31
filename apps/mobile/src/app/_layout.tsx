@@ -4,6 +4,7 @@ import { StartupScreen } from '../components/StartupScreen'
 import { PushRouting } from '../components/PushRouting'
 import { NoticeBanner } from '../components/NoticeBanner'
 import { UndoToast } from '../components/UndoToast'
+import { showError } from '../runtime/toast'
 import { Overlays } from '../components/Overlays'
 import { InboxBadge } from '../components/InboxBadge'
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider } from 'expo-router'
@@ -11,8 +12,8 @@ import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ThemeProvider, useTheme } from '../theme'
 import { useEffect, useMemo } from 'react'
-import { Platform, Pressable } from 'react-native'
-import { T, setHapticsEnabled } from '../components/ui'
+import { Platform } from 'react-native'
+import { setHapticsEnabled } from '../components/ui'
 import { StoreProvider, useStore } from '../runtime/store'
 import { AutomationProvider } from '../runtime/automation'
 
@@ -32,17 +33,16 @@ function Navigator() {
       colors: { ...base.colors, primary: c.accent, background: c.window, card: c.window, text: c.text, border: c.line },
     }
   }, [scheme, c])
+  // Errors show as the standard toast at the bottom, like every other short notice, and clear themselves.
+  const error = store.error
+  useEffect(() => {
+    if (!error) return
+    showError(error)
+    store.dismissError()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shows each new error once; the store's methods are stable
+  }, [error])
   return (
     <StartupScreen ready={store.ready}>
-      {store.error ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={store.dismissError}
-          style={{ backgroundColor: c.badWash, padding: 14, paddingTop: 50 }}
-        >
-          <T tone="bad">{store.error} · tap to dismiss</T>
-        </Pressable>
-      ) : null}
       <NoticeBanner />
       <UndoToast />
       <Overlays />

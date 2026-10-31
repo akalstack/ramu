@@ -10,6 +10,11 @@ export class HostError extends Error {
     this.ambiguous = ambiguous
   }
 }
+/**
+ * The phone stopped this request on purpose: the app went to the background or the connection was replaced. Not a
+ * failure to show; the request runs again when the connection resumes (an ambiguous send is reconciled by the outbox).
+ */
+export class SuspendedError extends HostError {}
 /** A fresh key for one logical mutation: the host stores its result under it for ten minutes. */
 export function operationKey(): string {
   const part = () =>
@@ -139,7 +144,7 @@ export class HostClient {
   private untilClosed<T>(request: Promise<T>): Promise<T> {
     const signal = this.lifetime.signal
     return new Promise((resolve, reject) => {
-      const abort = () => reject(new HostError('Connection suspended. Check delivery before retrying.', 0, true))
+      const abort = () => reject(new SuspendedError('Connection suspended. Check delivery before retrying.', 0, true))
       if (signal.aborted) abort()
       else signal.addEventListener('abort', abort, { once: true })
       request.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
@@ -183,7 +188,7 @@ export class HostClient {
   }
 
   private async call(method: string, args: unknown[], operationKey?: string): Promise<any> {
-    if (this.lifetime.signal.aborted) throw new HostError('Connection suspended before sending.')
+    if (this.lifetime.signal.aborted) throw new SuspendedError('Connection suspended before sending.')
     // One socket carries every call. There is no second transport: a call waits briefly for the socket, and a refused
     // token or a host without a socket is reported as that. A call lost after it was sent has an unknown outcome.
     const socket = socketOf(this.address, this.token)
@@ -293,14 +298,14 @@ export async function checkHostConnection(
 export async function readConnectionStatus(client: HostClient, signal: AbortSignal) {
   if (signal.aborted) {
     client.close()
-    throw new HostError('Connection suspended before sending.')
+    throw new SuspendedError('Connection suspended before sending.')
   }
   let timer: ReturnType<typeof setTimeout> | undefined
   let abort: () => void = () => {}
   const deadline = new Promise<never>((_resolve, reject) => {
     abort = () => {
       client.close()
-      reject(new HostError('Connection suspended before sending.'))
+      reject(new SuspendedError('Connection suspended before sending.'))
     }
     if (signal.aborted) {
       abort()

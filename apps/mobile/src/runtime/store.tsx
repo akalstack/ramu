@@ -57,6 +57,7 @@ import { renewalDue, renewCredential } from './tokenRenewal'
 import {
   HostClient,
   HostError,
+  SuspendedError,
   normalizeAddress,
   operationKey,
   checkHostConnection,
@@ -364,8 +365,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ref.current = next
     setState(next)
   }
-  const report = (error: unknown) =>
+  const report = (error: unknown) => {
+    // A request the phone stopped on purpose (backgrounded, connection replaced) is not an error to show.
+    if (error instanceof SuspendedError) return
     change((s) => ({ ...s, error: error instanceof Error ? error.message : String(error) }))
+  }
   const clearSaveError = () => {
     if (ref.current.error?.startsWith('Could not save phone data.')) change((state) => ({ ...state, error: null }))
   }
@@ -539,7 +543,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!connection) return Promise.resolve()
     const current = () => connections.current.get(id) === connection && !connection.controller.signal.aborted
     const read = <M extends keyof RamuMethods>(method: M, ...args: Parameters<RamuMethods[M]>) => {
-      if (!current()) throw new HostError('Connection suspended during refresh')
+      if (!current()) throw new SuspendedError('Connection suspended during refresh')
       return invoke(id, method, ...args)
     }
     buffers.current.set(id, [])

@@ -3112,7 +3112,7 @@ for (const ambiguous of [false, true]) {
       },
       './newChatHost': { newChatHost },
       './workspaces': workspaceChoices,
-      './transport': { HostError },
+      './transport': { HostError, SuspendedError: class extends HostError {} },
       './threadActivity': { normalizeHelperGroups: (rows) => rows },
     })
     const render = () => hooks.render(() => StoreProvider({ children: null })).props.value
@@ -5545,7 +5545,7 @@ for (const os of ['ios', 'android']) {
         readSendJournal: () => [],
         writeSendJournal() {},
       },
-      './transport': { HostError },
+      './transport': { HostError, SuspendedError: class extends HostError {} },
       './newChatHost': { newChatHost: () => 'a' },
       './threadActivity': { normalizeHelperGroups: (rows) => rows },
     })
@@ -5625,7 +5625,7 @@ for (const os of ['ios', 'android']) {
         readSendJournal: () => [],
         writeSendJournal() {},
       },
-      './transport': { HostError },
+      './transport': { HostError, SuspendedError: class extends HostError {} },
       './threadActivity': { normalizeHelperGroups: (rows) => rows },
     })
     const store = hooks.render(() => StoreProvider({ children: null })).props.value
@@ -6957,7 +6957,10 @@ function deliveryStoreHarness() {
     './threadActivity': { normalizeHelperGroups: (rows) => rows },
     './newChatHost': { newChatHost: () => 'a' },
     './workspaces': workspaceChoices,
-    './transport': { HostError: class HostError extends Error {} },
+    './transport': (() => {
+      class HostError extends Error {}
+      return { HostError, SuspendedError: class extends HostError {} }
+    })(),
     './transcript': mobileTranscript,
     '@ramu/shared/chat/agentActivity': {
       agentActivityLabel: () => null,
