@@ -204,12 +204,9 @@ export function TranscriptTurn({
         </Marker>
       )}
       {turn.user && renderBlock(turn.user, isLast && !answer.length && !kept.length && !folded.length)}
-      {((!finished && isLast && (working || needsInput) && !folded.length) ||
-        (finished && (!turn.ended || turn.interrupted) && !folded.length)) && (
-        <div
-          className={`turn-working ${!finished && isLast ? 'transcript-arrival' : ''} text-muted-foreground tabular-nums`}
-          role="status"
-        >
+      {/* A running turn's status is the line above the composer; a stopped one keeps its duration here. */}
+      {finished && (!turn.ended || turn.interrupted) && !folded.length && (
+        <div className="turn-working text-muted-foreground tabular-nums" role="status">
           <span>
             {(elapsed ?? duration) !== null && (elapsed ?? duration) !== undefined
               ? translate('Working for {0}', { '0': formatDuration((elapsed ?? duration)!) })

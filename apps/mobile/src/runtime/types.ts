@@ -98,7 +98,6 @@ export type TranscriptItem = (
   /** Turn boundary from a provider result or a terminal state; drives the Worked-for fold and is never drawn. */
   | { kind: 'end'; id: string; ended: boolean; interrupted: boolean }
   /** Live "Working for 12s" rule above the steps of the running turn. */
-  | { kind: 'working'; id: string; since?: number }
   /** A status line between turns, as on the desktop: settings changed, continued after restart, context compacted. */
   | {
       kind: 'note'

@@ -35,13 +35,12 @@ test('a finished turn folds routine steps under "Worked for" and keeps the answe
   assert.equal(rows[2].text, 'done!')
 })
 
-test('the running turn is not folded and shows a live Working rule from the user message', () => {
+test('the running turn is not folded and shows its steps as they come', () => {
   const rows = foldTurns(transcript(finished.slice(0, 3)), true, false)
   assert.deepEqual(
     rows.map((r) => r.kind),
-    ['user', 'working', 'text', 'tool'],
+    ['user', 'text', 'tool'],
   )
-  assert.equal(rows[1].since, 1_000)
 })
 
 test('failed tools stay visible outside the fold, and stopped turns say so', () => {

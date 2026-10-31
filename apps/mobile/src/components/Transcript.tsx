@@ -34,7 +34,6 @@ import { draftChip } from '@ramu/shared/chat/referenceChip'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Sheet, T, tap, type Icon } from './ui'
-import { formatDuration } from '../runtime/turns'
 import { ActivityText, Arrive, Breathe, Collapse, Disclosure } from './Motion'
 import { InteractiveVisibility } from './InteractiveVisibility'
 import { ProviderIcon } from './Logos'
@@ -373,8 +372,6 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <ChangesCard item={item} chatId={chat.id} />
     case 'goal':
       return <GoalDone item={item} />
-    case 'working':
-      return <WorkingRule since={item.since} />
     case 'summary':
       return (
         <TurnSummary label={item.label}>
@@ -518,21 +515,6 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
       </View>
       <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.lineStrong }} />
     </View>
-  )
-}
-
-/** Live "Working for 12s" above the running turn's steps. */
-function WorkingRule({ since }: { since?: number }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    setNow(Date.now())
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-  return (
-    <T size={font.control} tone="muted" accessibilityRole="text" style={{ fontVariant: ['tabular-nums'] }}>
-      {since ? `Working for ${formatDuration(Math.max(0, now - since))}` : 'Working'}
-    </T>
   )
 }
 

@@ -38,13 +38,8 @@ export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boole
       const isLast = index === turns.length - 1
       const finished = Boolean(result) || !isLast || (!live && !waiting)
       const startedAt = user?.at ?? body.find((item) => item.at !== undefined)?.at
-      if (!finished)
-        return [
-          ...(user ? [user] : []),
-          { kind: 'working' as const, id: `working-${user?.id ?? index}`, since: startedAt },
-          ...body,
-          ...notes,
-        ]
+      // A running turn shows its steps as they come; the status line above the composer says it is working.
+      if (!finished) return [...(user ? [user] : []), ...body, ...notes]
       let start = body.length
       while (start > 0 && body[start - 1]!.kind === 'text') start--
       const work = body.slice(0, start)
