@@ -274,3 +274,16 @@ it('bounds and validates paginated catalogs through the real SDK protocol', asyn
   repeat = true
   await expect(gateway.inspect(connection.id)).rejects.toThrow('repeated')
 })
+
+it('starts a fresh upstream session after the previous one closes instead of reusing a dead client', async () => {
+  const { connection, gateway, catalog, grant, connect, clients } = await fixture()
+  grant()
+  const session = gateway()
+  await session.invoke(connection.id, catalog.catalogRevision, 'read_issue', { id: 'RAMU-1' })
+  const before = connect.mock.calls.length
+  await clients.at(-1)!.close()
+  expect(await session.invoke(connection.id, catalog.catalogRevision, 'read_issue', { id: 'RAMU-2' })).toMatchObject({
+    content: [{ type: 'text', text: 'Issue RAMU-2' }],
+  })
+  expect(connect.mock.calls.length).toBe(before + 1)
+})

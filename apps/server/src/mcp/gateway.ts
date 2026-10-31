@@ -97,6 +97,13 @@ export class ExternalMcpGateway {
       if (this.definition(connection.id).revision !== connection.revision)
         throw new Error('Connection changed during setup')
       const entry = { client, revision: connection.revision }
+      // An upstream that exits or drops its stream is forgotten, so the next call starts a fresh session instead of
+      // writing into a closed one.
+      const previous = client.onclose
+      client.onclose = () => {
+        previous?.()
+        if (this.connections.get(connection.id) === entry) this.connections.delete(connection.id)
+      }
       this.connections.set(connection.id, entry)
       return entry
     } catch (error) {

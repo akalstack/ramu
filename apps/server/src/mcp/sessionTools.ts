@@ -133,6 +133,10 @@ export class ExternalSessionTools {
       existing.timer = this.expire(key)
       return existing.gateway
     }
+    // A chat that switched login, provider or project no longer uses its earlier gateway: close it now, which also
+    // stops any local server it started, rather than leaving it running until the idle timer.
+    for (const other of [...this.gateways.keys()])
+      if (other !== key && JSON.parse(other)[0] === source.sessionId) void this.closeKey(other)
     const gateway = service.gateway(
       source.sessionId,
       this.session(source),
@@ -169,6 +173,7 @@ export class ExternalSessionTools {
     await entry.gateway.close()
   }
 
+  /** Ends every upstream session a chat holds; called when it stops, fails or is deleted. */
   async closeSession(sessionId: string) {
     await Promise.allSettled(
       [...this.gateways.keys()].filter((key) => JSON.parse(key)[0] === sessionId).map((key) => this.closeKey(key)),

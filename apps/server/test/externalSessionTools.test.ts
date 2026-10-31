@@ -129,3 +129,27 @@ describe('connectionsUsed', () => {
     expect(connectionsUsed([], [tracker.id]).size).toBe(0)
   })
 })
+
+it('closes a chat’s earlier gateway when it switches login, and every gateway when the chat ends', async () => {
+  const { service, source, tools } = fixture()
+  const created: { closed: boolean }[] = []
+  const original = service.gateway.bind(service)
+  service.gateway = (...args: Parameters<SharedMcpService['gateway']>) => {
+    const gateway = original(...args)
+    const state = { closed: false }
+    created.push(state)
+    const close = gateway.close.bind(gateway)
+    gateway.close = async () => {
+      state.closed = true
+      await close()
+    }
+    return gateway
+  }
+  await tools.list(source)
+  await tools.list({ ...source, sessionId: 'other-thread' })
+  await tools.list({ ...source, accountId: 'b' })
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(created.map((entry) => entry.closed)).toEqual([true, false, false])
+  await tools.closeSession('thread')
+  expect(created.map((entry) => entry.closed)).toEqual([true, false, true])
+})

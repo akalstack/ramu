@@ -296,6 +296,9 @@ const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {
     send('agent:event', { sessionId, event, seq, revision })
+    // A stopped or failed chat (deletion stops it first) keeps no external MCP session or local server running.
+    if (event.kind === 'state' && ['failed', 'stopped'].includes(event.state))
+      void externalTools.closeSession(sessionId)
     if (event.kind === 'state' && ['idle', 'failed', 'stopped'].includes(event.state)) {
       browserAccessEpochs.set(sessionId, (browserAccessEpochs.get(sessionId) ?? 0) + 1)
       try {
