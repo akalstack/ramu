@@ -38,13 +38,18 @@ function generatedFromCatalogs(catalogs: ProviderCatalog[]): ModelPreferences | 
     }
     if (!allocated) break
   }
-  const steps = groups.flatMap(({ choices, count, models, provider }) => {
+  const ranked = groups.flatMap(({ choices, count, models, provider }) => {
     const preferred =
       (provider === 'codex' ? choices.find((step) => step.id === 'sol-light') : undefined) ??
       choices.find((step) =>
         models.some((model) => model.isDefault && model.id === step.model && step.effort === model.defaultEffort),
       )
-    if (count === 1) return [preferred ?? choices[0]!]
+    // Where a step sits in its provider's own list, which already runs from light to capable.
+    const at = (step: ModelStep) => choices.indexOf(step) / Math.max(1, choices.length - 1)
+    if (count === 1) {
+      const only = preferred ?? choices[0]!
+      return [{ step: only, rank: rankOf(only, at(only)) }]
+    }
     // Preserve the light/default/capable range as the allocation shrinks.
     const priorities =
       count === 2 && provider !== 'codex'
@@ -54,8 +59,11 @@ function generatedFromCatalogs(catalogs: ProviderCatalog[]): ModelPreferences | 
       .filter((index) => index >= 0 && index < choices.length)
       .slice(0, count)
       .sort((a, b) => a - b)
-    return indices.map((index) => choices[index]!)
+    return indices.map((index) => ({ step: choices[index]!, rank: rankOf(choices[index]!, at(choices[index]!)) }))
   })
+  // One ladder from the cheapest choice to the most capable, across providers: lighter model classes first, then each
+  // provider's own order. Ties keep the provider order (the sort is stable).
+  const steps = ranked.sort((a, b) => a.rank - b.rank).map(({ step }) => step)
   const selected =
     steps.find((step) => step.id === 'sol-light') ??
     steps.find((step) =>
@@ -79,6 +87,15 @@ function generatedFromCatalogs(catalogs: ProviderCatalog[]): ModelPreferences | 
     defaultStepId: selected.id,
   }
 }
+
+/** Light models (mini, flash, haiku…) rank before standard ones, and those before top models (opus, max, pro…). */
+function modelClass(step: ModelStep): number {
+  const name = `${step.model} ${step.name}`.toLowerCase()
+  if (/\b(mini|nano|haiku|flash|lite|light|small|fast)\b/.test(name)) return 0
+  if (/\b(opus|max|ultra|pro)\b/.test(name)) return 2
+  return 1
+}
+const rankOf = (step: ModelStep, position: number) => modelClass(step) + position * 0.99
 
 function providerChoices(provider: AgentProvider, models: AgentModel[]): ModelStep[] {
   const familyOrder = (model: AgentModel) => {

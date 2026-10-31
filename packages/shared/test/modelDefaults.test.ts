@@ -239,6 +239,30 @@ describe('catalog refresh and mixed provider combinations', () => {
 })
 
 describe('five-step allocations', () => {
+  it('orders the set from the cheapest choice to the most capable across providers', () => {
+    const model = (provider: 'claude-code' | 'antigravity', id: string, name: string, isDefault = false) => ({
+      provider,
+      id,
+      name,
+      efforts: [],
+      defaultEffort: null,
+      isDefault,
+    })
+    const steps = recommendedSets([
+      {
+        provider: 'claude-code',
+        models: [model('claude-code', 'opus', 'Opus'), model('claude-code', 'sonnet', 'Sonnet', true)],
+      },
+      {
+        provider: 'antigravity',
+        models: [model('antigravity', 'pro', 'Gemini Pro'), model('antigravity', 'flash', 'Gemini Flash', true)],
+      },
+    ]).sets[0]!.steps.map((step) => step.model)
+    expect(steps.indexOf('flash')).toBeLessThan(steps.indexOf('sonnet'))
+    expect(steps.indexOf('sonnet')).toBeLessThan(steps.indexOf('opus'))
+    expect(steps.at(-1) === 'opus' || steps.at(-1) === 'pro').toBe(true)
+  })
+
   const codex: ProviderCatalog = {
     provider: 'codex',
     models: [
@@ -337,10 +361,11 @@ describe('five-step allocations', () => {
     const steps = recommendedSets(catalogs).sets[0]!.steps
     expect(steps.map(({ model, effort }) => [model, effort])).toEqual([
       ['gpt-6.1-sol', 'low'],
+      ['reported', 'medium'],
+      ['reported', 'medium'],
+      ['reported', 'medium'],
+      // The top model class comes last: the set runs from the cheapest choice to the most capable.
       ['opus', 'medium'],
-      ['reported', 'medium'],
-      ['reported', 'medium'],
-      ['reported', 'medium'],
     ])
   })
   it('redistributes an unfillable slot without duplicating choices', () => {
@@ -360,7 +385,7 @@ describe('five-step allocations', () => {
         ],
       },
     ])
-    expect(prefs.sets[0]!.steps.map((step) => step.provider)).toEqual(['codex', 'codex', 'codex', 'codex', 'cursor'])
+    expect(prefs.sets[0]!.steps.map((step) => step.provider)).toEqual(['codex', 'cursor', 'codex', 'codex', 'codex'])
   })
   it('recognizes only untouched automatic content as read-only', () => {
     const set = recommendedSets([codex, claude]).sets[0]!

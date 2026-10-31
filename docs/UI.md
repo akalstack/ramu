@@ -59,7 +59,7 @@ A thread at a usage limit is idle, not failed. Every surface reads **Limit reach
 ## Models
 
 - The picker hides older models behind **Show legacy models**. The host publishes optional `isLegacy` metadata; without it Ramu marks an older Codex or Claude family version only when the provider reports a newer one. Aliases and unknown families are never guessed.
-- Settings → Models → Model sets offers **Steps** and **Model then effort**. The read-only **Default** set spreads up to five distinct model/effort choices across available providers in Codex, Claude, Antigravity, Cursor, OpenCode order and regenerates when catalogs change; custom sets are never overwritten.
+- Settings → Models → Model sets offers **Steps** and **Model then effort**. The read-only **Default** set spreads up to five distinct model/effort choices across available providers, ordered from the cheapest to the most capable (light models such as Flash or Haiku first, top models such as Opus or Pro last) and regenerates when catalogs change; custom sets are never overwritten.
 - Mobile exposes the flow in Providers & models with an **Apply to** scope: all devices (the host setting), all mobile devices, or this phone. The effective source is shown, and **Use inherited setting** removes an override. Viewer phones can set only this phone.
 - The picker follows the project's configured provider and model after catalog validation and names the source file ([Configuration](CONFIGURATION.md#repository-configuration)). Choices are revalidated before a thread is created or a message queued.
 
