@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { Check, Copy, FileQuestion, FolderSearch, Pencil, X } from 'lucide-react-native'
@@ -60,6 +60,8 @@ const CodeLine = memo(function CodeLine({
 
 /** Bigger files are read-only on the phone, where one text field would be slow to scroll and type in. */
 const MAX_EDIT_CHARS = 200_000
+/** Above this the text being edited stays plain, so typing stays quick. */
+const MAX_HIGHLIGHT_EDIT = 30_000
 
 export function FileViewer({
   computerId,
@@ -140,6 +142,16 @@ export function FileViewer({
   // The text being edited, or null while only viewing.
   const [draft, setDraft] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // The text being edited is coloured like the viewer, re-highlighted as it changes. The coloured spans must spell out
+  // exactly the field's text or the cursor would jump, so anything that does not round-trip (or a long file, where
+  // highlighting every keystroke would lag) is edited plain.
+  const editingTokens = useMemo(() => {
+    if (draft === null || draft.length > MAX_HIGHLIGHT_EDIT) return null
+    const lines = highlightLines(draft, grammarFor(draft, path))
+    if (!lines) return null
+    const rebuilt = lines.map((tokens) => tokens.map((token) => token.text).join('')).join('\n')
+    return rebuilt === draft ? lines : null
+  }, [draft, path])
   useEffect(() => {
     if (target !== undefined) setPreview(false)
   }, [identity, target])
@@ -527,7 +539,6 @@ export function FileViewer({
       {draft !== null ? (
         <TextInput
           accessibilityLabel={say('Edit {0}', { 0: name })}
-          value={draft}
           onChangeText={setDraft}
           editable={!saving}
           multiline
@@ -545,7 +556,16 @@ export function FileViewer({
             fontSize: font.control,
             lineHeight: 20,
           }}
-        />
+        >
+          {editingTokens
+            ? editingTokens.map((tokens, index) => (
+                <Fragment key={index}>
+                  {index ? '\n' : null}
+                  <CodeTokens tokens={tokens} />
+                </Fragment>
+              ))
+            : draft}
+        </TextInput>
       ) : null}
       {draft !== null ? null : state.kind === 'text' && !(markdown && preview) ? (
         <PageFlatList
