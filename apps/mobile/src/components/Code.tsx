@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { Check, Copy } from 'lucide-react-native'
-import { codeLanguage } from '@ramu/shared/workspace/codeLanguage'
+import { codeBlockLabel, dedentCode } from '@ramu/shared/workspace/codeLanguage'
 import { font, radius, space, useTheme } from '../theme'
 import { grammarFor, highlightLines, type Token } from '../runtime/highlight'
 import { tap } from './ui'
+import { FileIcon } from './FileIcon'
+import { useSay } from '../i18n'
 
 export { grammarFor, highlightLines, type Token }
 
@@ -114,60 +116,104 @@ export function CodeTokens({ tokens }: { tokens: Token[] }): ReactNode {
   })
 }
 
-/** A fenced code block in chat output, like the desktop's: a language label and a copy button over coloured code. */
-export function CodeBlock({ source, hint }: { source: string; hint?: string }) {
+/** Up to this many lines wrap to the screen, so a path or a command is read whole; longer code scrolls sideways. */
+const WRAP_LINES = 4
+
+/**
+ * A fenced code block in chat output: a header naming the file, a lone path or the language with its file icon, a copy
+ * button that says what it did, and the code without the indentation it inherited from a list.
+ */
+export function CodeBlock({ source: raw, hint }: { source: string; hint?: string }) {
   const { c } = useTheme()
+  const say = useSay()
   const [copied, setCopied] = useState(false)
   useEffect(() => {
     if (!copied) return
     const timer = setTimeout(() => setCopied(false), 2000)
     return () => clearTimeout(timer)
   }, [copied])
-  const language = codeLanguage(source, hint)
+  const source = useMemo(() => dedentCode(raw), [raw])
+  const header = codeBlockLabel(source, hint)
   const lines = useMemo(() => highlightLines(source, grammarFor(source, hint)), [source, hint])
+  const wrap = source.split('\n').length <= WRAP_LINES
   const copy = () => {
     tap()
     void Clipboard.setStringAsync(source).then(() => setCopied(true))
   }
+  const code = (
+    <Text selectable style={{ fontFamily: font.mono, fontSize: font.control, lineHeight: 20, color: c.body }}>
+      {lines
+        ? lines.map((line, index) => (
+            <Text key={index}>
+              {index ? '\n' : ''}
+              <CodeTokens tokens={line} />
+            </Text>
+          ))
+        : source}
+    </Text>
+  )
   return (
-    <View style={{ borderRadius: radius.m, backgroundColor: c.code, overflow: 'hidden' }}>
+    <View
+      style={{
+        borderRadius: radius.m,
+        backgroundColor: c.code,
+        borderWidth: 0.5,
+        borderColor: c.line,
+        overflow: 'hidden',
+      }}
+    >
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingLeft: space.m + 2,
-          paddingRight: 4,
-          height: 34,
-          borderBottomWidth: 0.5,
-          borderBottomColor: c.line,
+          gap: space.s,
+          paddingLeft: space.m,
+          paddingRight: space.xs,
+          height: 36,
+          backgroundColor: c.fill,
         }}
       >
-        <Text style={{ color: c.muted, fontSize: font.caption }} numberOfLines={1}>
-          {language.includes('.') ? language : `.${language}`}
+        <FileIcon path={header.icon} size={14} />
+        <Text
+          accessibilityLabel={header.title}
+          style={{ flex: 1, color: c.soft, fontSize: font.caption, fontWeight: '500' }}
+          numberOfLines={1}
+          ellipsizeMode="middle"
+        >
+          {header.label === 'Path' || header.label === 'Text' ? say(header.label) : header.label}
         </Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={copied ? 'Copied' : 'Copy code'}
+          accessibilityLabel={say(copied ? 'Copied' : 'Copy code')}
           hitSlop={6}
           onPress={copy}
-          style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+            height: 28,
+            paddingHorizontal: space.s,
+            borderRadius: radius.full,
+            backgroundColor: pressed ? c.pressed : 'transparent',
+          })}
         >
-          {copied ? <Check size={14} color={c.ok} /> : <Copy size={14} color={c.muted} />}
+          {copied ? <Check size={13} color={c.ok} /> : <Copy size={13} color={c.muted} />}
+          <Text style={{ color: copied ? c.ok : c.muted, fontSize: font.caption }}>
+            {say(copied ? 'Copied' : 'Copy')}
+          </Text>
         </Pressable>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: space.m + 2 }}>
-        <Text style={{ fontFamily: font.mono, fontSize: font.control, lineHeight: 20, color: c.body }}>
-          {lines
-            ? lines.map((line, index) => (
-                <Text key={index}>
-                  {index ? '\n' : ''}
-                  <CodeTokens tokens={line} />
-                </Text>
-              ))
-            : source}
-        </Text>
-      </ScrollView>
+      {wrap ? (
+        <View style={{ paddingHorizontal: space.m, paddingVertical: space.m - 2 }}>{code}</View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator
+          contentContainerStyle={{ paddingHorizontal: space.m, paddingVertical: space.m - 2 }}
+        >
+          {code}
+        </ScrollView>
+      )}
     </View>
   )
 }

@@ -69,3 +69,70 @@ export function codeLanguage(source: string, hint?: string): string {
   if (/^package\s+\w+|^func\s+\w+\(/m.test(text)) return 'go'
   return 'txt'
 }
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  ts: 'TypeScript',
+  tsx: 'TSX',
+  js: 'JavaScript',
+  jsx: 'JSX',
+  mjs: 'JavaScript',
+  cjs: 'JavaScript',
+  py: 'Python',
+  sh: 'Shell',
+  bash: 'Shell',
+  zsh: 'Shell',
+  json: 'JSON',
+  jsonc: 'JSON',
+  html: 'HTML',
+  css: 'CSS',
+  scss: 'SCSS',
+  sql: 'SQL',
+  rs: 'Rust',
+  go: 'Go',
+  md: 'Markdown',
+  yaml: 'YAML',
+  yml: 'YAML',
+  toml: 'TOML',
+  txt: 'Text',
+  diff: 'Diff',
+  swift: 'Swift',
+  kt: 'Kotlin',
+  java: 'Java',
+  rb: 'Ruby',
+  c: 'C',
+  cpp: 'C++',
+  cs: 'C#',
+  php: 'PHP',
+  xml: 'XML',
+  dockerfile: 'Dockerfile',
+}
+
+/** "TypeScript" for `ts`; an unknown extension reads as itself in capitals. */
+export const languageName = (extension: string) => LANGUAGE_NAMES[extension.toLowerCase()] ?? extension.toUpperCase()
+
+const PATH = /^(?:~|\.{1,2}|[A-Za-z]:)?[\\/]?(?:[\w.@+~-]+[\\/])+[\w.@+~-]*$/
+
+/**
+ * What a code block's header says: the file it names (` ```src/app.ts `), "Path" for a lone file path, or the language.
+ * `icon` is a file name whose extension picks the file icon.
+ */
+export function codeBlockLabel(source: string, hint?: string): { label: string; icon: string; title?: string } {
+  const named = hint?.trim()
+  if (named && /[./\\]/.test(named) && /\.\w+$/.test(named)) {
+    return { label: named.split(/[\\/]/).at(-1)!, icon: named, title: named }
+  }
+  const text = source.trim()
+  if (!text.includes('\n') && !/\s/.test(text) && PATH.test(text))
+    return { label: 'Path', icon: text.split(/[\\/]/).at(-1) || 'folder' }
+  const extension = codeLanguage(source, hint)
+  return { label: languageName(extension), icon: `file.${extension}` }
+}
+
+/** Drops the indentation every line shares, and blank lines at either end, as a list item's fenced block carries. */
+export function dedentCode(source: string): string {
+  const lines = source.split('\n')
+  while (lines.length && !lines[0]!.trim()) lines.shift()
+  while (lines.length && !lines.at(-1)!.trim()) lines.pop()
+  const indent = Math.min(...lines.filter((line) => line.trim()).map((line) => line.length - line.trimStart().length))
+  return Number.isFinite(indent) && indent > 0 ? lines.map((line) => line.slice(indent)).join('\n') : lines.join('\n')
+}

@@ -4032,4 +4032,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   "The commit message model is chosen in Ramu on the host.": "Model pesan commit dipilih di Ramu pada host.",
   "Not connected. This is the last activity Ramu saw; the agent keeps working on the host.":
     "Tidak terhubung. Ini aktivitas terakhir yang dilihat Ramu; agen tetap bekerja di host.",
+  "Path": "Path",
 }
