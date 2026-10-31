@@ -174,7 +174,8 @@ export function RecapCard({
       </T>
     </Pressable>
   )
-  const background = attention ? c.warnWash : c.raised2
+  // The amber wash is translucent, so it sits over the opaque card colour; on its own, a swiped row showed its buttons through.
+  const tint = attention ? c.warnWash : undefined
   const swipe: SwipeAction[] = busy
     ? []
     : [
@@ -188,8 +189,8 @@ export function RecapCard({
       ]
   return (
     <View style={{ marginHorizontal: space.l, marginBottom: space.s, borderRadius: radius.l, overflow: 'hidden' }}>
-      <SwipeRow actions={swipe} background={background}>
-        <View style={{ padding: space.l, gap: 6, backgroundColor: background }}>
+      <SwipeRow actions={swipe} background={c.raised2}>
+        <View style={{ padding: space.l, gap: 6, backgroundColor: tint }}>
           {project ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               <Folder size={12} color={c.muted} />
