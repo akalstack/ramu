@@ -300,6 +300,48 @@ describe('related threads', () => {
   })
 })
 
+describe('threads.startGroup', () => {
+  it('starts reviewed parts of one Home prompt as a group that knows every member, without a starting thread', async () => {
+    const groupId = '7b0a1f8e-8c1d-4c3e-9a51-0e9a1d0c4b11'
+    const out = await service.startGroup(
+      {
+        groupId,
+        threads: [
+          { projectId: api.id, title: 'Store dueDate', prompt: 'API brief' },
+          { projectId: web.id, title: 'Show dueDate', prompt: 'Web brief' },
+        ],
+        together: ['Store dueDate', 'Show dueDate', 'Ship dueDate on mobile'],
+      },
+      DEFAULT_AGENT_SETTINGS,
+    )
+    expect(out.map((entry) => entry.error)).toEqual([undefined, undefined])
+    const tasks = out.map((entry) => ws.getTask(entry.taskId))
+    expect(tasks.map((task) => task.startedFrom)).toEqual([
+      { groupId, taskId: null, title: null, groupSize: 2 },
+      { groupId, taskId: null, title: null, groupSize: 2 },
+    ])
+    const brief = (events.get('started-1')![0] as { text: string }).text
+    expect(brief).toContain('"Show dueDate", "Ship dueDate on mobile"')
+    expect(brief).not.toContain('"Store dueDate"')
+    // Retrying the same group finds the same threads and starts no second agent.
+    const again = await service.startGroup(
+      {
+        groupId,
+        threads: [
+          { projectId: api.id, title: 'Store dueDate', prompt: 'API brief' },
+          { projectId: web.id, title: 'Show dueDate', prompt: 'Web brief' },
+        ],
+        together: ['Store dueDate', 'Show dueDate', 'Ship dueDate on mobile'],
+      },
+      DEFAULT_AGENT_SETTINGS,
+    )
+    expect(again.map((entry) => entry.taskId)).toEqual(out.map((entry) => entry.taskId))
+    expect(sessions.has('started-3')).toBe(false)
+    await service.tick()
+    expect(submitted).toEqual([])
+  })
+})
+
 it('leaves a brief without context unchanged', () => {
   expect(briefOf('Do it', undefined, [])).toBe('Do it')
   expect(briefOf('Do it', 'From X', ['Y'])).toContain('Started together with: "Y"')

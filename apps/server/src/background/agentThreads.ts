@@ -64,6 +64,8 @@ export interface StartOptions {
   context?: string
   groupId?: string
   depth: number
+  /** Titles of every thread in the group, on any host; defaults to the threads started here. */
+  together?: string[]
 }
 
 const thread = z.object({
@@ -219,6 +221,22 @@ export class AgentThreadService {
     )
   }
 
+  /**
+   * Starts the reviewed parts of one Home prompt as a group a person started: no starting thread, so nothing reports
+   * back, but the threads see each other. Each uses its project's default checkout.
+   */
+  async startGroup(
+    input: { groupId: string; threads: { projectId: string; title: string; prompt: string }[]; together: string[] },
+    settings: AgentSettings,
+  ): Promise<StartedThread[]> {
+    const planned = await this.plan(
+      input.threads.map((entry) => ({ prompt: entry.prompt, title: entry.title, project: entry.projectId })),
+      null,
+      settings,
+    )
+    return this.start(planned, { source: null, settings, groupId: input.groupId, depth: 0, together: input.together })
+  }
+
   /** Resolves each request to a project and checkout before anything is created, so a bad name creates nothing. */
   async plan(
     requests: ThreadRequest[],
@@ -299,7 +317,9 @@ export class AgentThreadService {
     const started: StartedThread[] = []
     for (const [index, entry] of planned.entries()) {
       const title = titles[index]!
-      const siblings = titles.filter((_, other) => other !== index)
+      const siblings = options.together
+        ? options.together.filter((other, at) => other !== title || at !== options.together!.indexOf(title))
+        : titles.filter((_, other) => other !== index)
       let task: Task
       try {
         task = (await this.invoke('tasks.create', [
@@ -315,9 +335,17 @@ export class AgentThreadService {
         started.push({ taskId: '', title, projectName: entry.projectName, error: messageOf(error) })
         continue
       }
+      // A retried start finds the same thread through its request id; its agent is not started twice.
+      const existing = this.db
+        .prepare('SELECT target_session_id FROM thread_links WHERE target_task_id = ?')
+        .get(task.id) as { target_session_id: string | null } | undefined
+      if (existing?.target_session_id) {
+        started.push({ taskId: task.id, title, projectName: entry.projectName })
+        continue
+      }
       this.db
         .prepare(
-          'INSERT INTO thread_links (id, group_id, source_task_id, source_session_id, target_task_id, depth, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT OR IGNORE INTO thread_links (id, group_id, source_task_id, source_session_id, target_task_id, depth, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           randomUUID(),

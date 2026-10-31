@@ -20,7 +20,7 @@ import {
   routingSnapshot,
 } from '../runtime/routingDraft'
 import { useEffect, useRef, useState } from 'react'
-import { Keyboard, Pressable, View } from 'react-native'
+import { Alert, Keyboard, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -48,6 +48,9 @@ import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
 import { Button, Row, Sheet, T, tap } from '../components/ui'
 import { SheetGroup, SheetOption } from '../components/SheetOptions'
+import { SplitReviewSheet } from '../components/SplitReviewSheet'
+import { correlationId } from '../runtime/correlationId'
+import { otherHostTargets, readSplitDraft, splitDraftKey, startSplit, type SplitDraft } from '../runtime/splitDraft'
 import { BranchNameControls } from '../components/BranchNameControls'
 import { WorkspaceNameSheet } from '../components/WorkspaceNameSheet'
 
@@ -118,6 +121,13 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const pending = useRef<{ text: string; attachments: unknown; context: unknown } | null>(null)
   const routeRevision = useRef(0)
   const routingStart = useRef(false)
+  // Auto also weighs projects on the other online hosts; a prompt that needs several projects is reviewed as a list,
+  // kept on the phone until it is started or cancelled.
+  const others = otherHostTargets(selected, computers, projects)
+  const splitKey = splitDraftKey(selected)
+  const split = readSplitDraft(store.drafts[splitKey])
+  const setSplit = (draft: SplitDraft | null) => store.setDraft(splitKey, draft ? JSON.stringify(draft) : '')
+  const [splitBusy, setSplitBusy] = useState(false)
   const activeScope = useRef({ host: selected, project: projectId })
   activeScope.current = { host: selected, project: projectId }
   const draftContext = params.computer === selected && params.project === projectId ? params.draftContext : undefined
@@ -231,7 +241,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const branchChoice = currentBranchChoice(choice.branch, branchTitle, namingIntent)
   const reviewKey = JSON.stringify([selected, projectId, branchTitle, namingIntent, branchPrefix, branchChoice])
   const [reviewed, setReviewed] = useState<{ key: string; plan: WorktreePlanEntry[] } | null>(null)
-  type Picker = 'project' | 'mode' | 'host' | 'choice' | null
+  type Picker = 'project' | 'mode' | 'host' | 'choice' | 'split' | null
   const [picker, setPickerState] = useState<Picker>(() =>
     opensOnComposer({ project: params.project, auto, offline, projects: list.length }) ? null : 'project',
   )
@@ -288,6 +298,101 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const project = list.find((p) => p.id === projectId)
   const rawId = (id: string) => id.slice(id.indexOf(':') + 1)
   type Send = Parameters<NonNullable<React.ComponentProps<typeof Composer>['onSend']>>
+  /** Where a routing id points: a project on this host, or one on another online host. */
+  const targetOf = (id: string) => {
+    const local = list.find((p) => rawId(p.id) === id)
+    const hostName = computers.find((x) => x.id === selected)?.name ?? selected
+    if (local)
+      return {
+        computerId: selected,
+        projectId: id,
+        name: local.name,
+        label: others.candidates.length ? `${local.name} · ${hostName}` : local.name,
+        description: local.description,
+      }
+    const remote = others.targets.get(id)
+    return remote ? { ...remote, label: `${remote.name} · ${remote.hostName}` } : null
+  }
+  /** One brief per destination, written on this host; without one, each row starts from the person's own words. */
+  const splitDraftFor = async (ids: string[], original: string, settings: AgentSettings): Promise<SplitDraft> => {
+    const targets = ids.flatMap((id) => {
+      const target = targetOf(id)
+      return target ? [{ id, ...target }] : []
+    })
+    const plan =
+      targets.length > 1
+        ? await storeRef.current
+            .invoke(
+              selected,
+              'projects.splitBriefs',
+              original,
+              targets.map((target) => ({
+                id: target.id,
+                name: target.name,
+                ...(target.computerId !== selected ? { host: target.label } : {}),
+                ...(target.description ? { description: target.description } : {}),
+              })),
+              settings,
+            )
+            .catch(() => null)
+        : null
+    const title = original.split('\n')[0]!.trim().slice(0, 60) || 'New thread'
+    return {
+      version: 1,
+      original,
+      contract: plan?.contract ?? '',
+      settings,
+      rows: targets.map((target) => {
+        const brief = plan?.briefs.find((entry) => entry.projectId === target.id)
+        return {
+          key: target.id,
+          computerId: target.computerId,
+          projectId: target.projectId,
+          label: target.label,
+          title: brief?.title ?? title,
+          brief: brief?.brief ?? original,
+        }
+      }),
+    }
+  }
+  const startReviewed = async () => {
+    if (!split || splitBusy) return
+    setSplitBusy(true)
+    try {
+      const started = await startSplit(
+        split,
+        (computerId, method, ...args) =>
+          storeRef.current.invoke(computerId, method, ...(args as Parameters<RamuMethods['threads.startGroup']>)),
+        correlationId(),
+      )
+      setSplit(null)
+      setPicker(null)
+      const drafts = storeRef.current.drafts
+      if ((drafts[composerKey] ?? '') === split.original) {
+        storeRef.current.clearComposerDraft(composerKey, {
+          text: split.original,
+          attachments: drafts[`${composerKey}:attachments`] ?? '[]',
+          context: drafts[`${composerKey}:context`] ?? '[]',
+          mentions: drafts[`${composerKey}:mentions`] ?? '[]',
+        })
+        agentDraft.consume()
+      }
+      for (const host of new Set(started.map((entry) => entry.computerId))) void storeRef.current.refresh(host, true)
+      const failed = started.filter((entry) => entry.error)
+      if (failed.length)
+        Alert.alert(
+          say('{0} of {1} threads started.', { '0': started.length - failed.length, '1': started.length }),
+          failed.map((entry) => `${entry.title}: ${entry.error}`).join('\n'),
+        )
+      const first = started.find((entry) => entry.computerId === selected && entry.taskId && !entry.error)
+      if (first)
+        router.replace({ pathname: '/chat/[id]', params: { id: storeRef.current.resolveChat(selected, first.taskId) } })
+    } catch (error) {
+      Alert.alert(say('Could not start the threads'), error instanceof Error ? error.message : String(error))
+    } finally {
+      setSplitBusy(false)
+    }
+  }
   /** Routes the first message, then starts the thread in the chosen project, or asks when no single project fits. */
   const startInAuto = async (
     text: string,
@@ -311,7 +416,13 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       if (!raw) {
         let outcome: Awaited<ReturnType<RamuMethods['projects.route']>>
         try {
-          outcome = await storeRef.current.invoke(selected, 'projects.route', text, verified)
+          outcome = await storeRef.current
+            .invoke(selected, 'projects.route', text, verified, { split: true, others: others.candidates })
+            // A host that predates splitting takes only the prompt and settings.
+            .catch((error) => {
+              if (isMethodMissing(error)) throw error
+              return storeRef.current.invoke(selected, 'projects.route', text, verified)
+            })
         } catch (error) {
           if (!isMethodMissing(error)) throw error
           setAuto(false)
@@ -320,6 +431,12 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         }
         if (revision !== routeRevision.current)
           throw new Error('The message changed while choosing a project. Send again.')
+        if (outcome.kind === 'split' || (outcome.kind === 'resolved' && others.targets.has(outcome.projectId))) {
+          const ids = outcome.kind === 'split' ? outcome.projects.map((p) => p.projectId) : [outcome.projectId]
+          setSplit(await splitDraftFor(ids, text, verified))
+          setPicker('split')
+          return false
+        }
         if (outcome.kind === 'resolved') raw = outcome.projectId
         else {
           const candidates =
@@ -731,6 +848,28 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         >
           {choices?.map((choice) => {
             const match = list.find((p) => rawId(p.id) === choice.projectId)
+            const remote = others.targets.get(choice.projectId)
+            if (!match && remote)
+              return (
+                <SheetOption
+                  key={choice.projectId}
+                  icon={Folder}
+                  title={`${remote.name} · ${remote.hostName}`}
+                  help={choice.reason || undefined}
+                  onPress={() => {
+                    const request = pending.current
+                    if (!request) return
+                    void agentDraft
+                      .verify()
+                      .then((verified) => splitDraftFor([choice.projectId], request.text, verified))
+                      .then((draft) => {
+                        setSplit(draft)
+                        setPicker('split')
+                      })
+                      .catch((error) => Alert.alert(String(error instanceof Error ? error.message : error)))
+                  }}
+                />
+              )
             if (!match) return null
             const label = choiceLabels.get(choice.projectId)
             return (
@@ -759,6 +898,25 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         </SheetGroup>
       </Sheet>
 
+      <SplitReviewSheet
+        draft={split}
+        open={picker === 'split'}
+        busy={splitBusy}
+        onChange={setSplit}
+        onStart={() => void startReviewed()}
+        onOneThread={() => {
+          const draft = split
+          setSplit(null)
+          if (!draft) return setPicker(null)
+          pending.current = { text: draft.original, attachments: [], context: [] }
+          setChoices(draft.rows.map((row) => ({ projectId: row.key, reason: '' })))
+          setPicker('choice')
+        }}
+        onCancel={() => {
+          setSplit(null)
+          setPicker(null)
+        }}
+      />
       <Sheet open={picker === 'mode'} onClose={() => setPicker(null)} title={say('Workspace')}>
         {workspaceOptions?.configSource ? <T tone="muted">{workspaceOptions.configSource}</T> : null}
         {workspaceOptions?.configError ? <T tone="bad">{workspaceOptions.configError}</T> : null}

@@ -48,6 +48,7 @@ vi.mock('../src/settings/AppSettings', () => ({
 vi.mock('../src/models/ModelSets', () => ({ useModelSets: () => ({ initialSettings: DEFAULT_AGENT_SETTINGS }) }))
 vi.mock('../src/workspace/workspace', () => ({
   useHostRuntime: () => ({ on: () => () => {} }),
+  useWorkspacesOf: () => [],
   useWorkspace: () => ({
     projects: [{ id: 'p', name: 'Project' }],
     repos: { p: [{ id: 'repo', name: 'Repo' }] },
@@ -67,6 +68,7 @@ vi.mock('../src/workspace/HostProvider', () => ({
       state.calls.push({ method, args })
       if (method === state.failMethod) throw new Error('Delivery rejected')
       if (method === 'projects.route') return state.route
+      if (method === 'projects.splitBriefs') return null
       if (method === 'tasks.workspaceOptions')
         return {
           defaultCheckoutMode: 'current',
@@ -354,6 +356,22 @@ it('Auto creates nothing and keeps the draft when the router cannot pick one pro
     expect(state.calls.map((call) => call.method)).toEqual(['projects.route'])
     expect(state.consumed).toBe(0)
   }
+})
+
+it('Auto asks for a split, and a request for several projects is written up for review without creating anything', async () => {
+  state.route = {
+    kind: 'split',
+    projects: [
+      { projectId: 'p', reason: 'x' },
+      { projectId: 'p', reason: 'x' },
+    ],
+  }
+  render(AUTO_PROJECT)
+  await state.composer!.onSubmit([])
+  const route = state.calls.find((call) => call.method === 'projects.route')
+  expect(route?.args[2]).toMatchObject({ split: true, others: [] })
+  expect(state.calls.map((call) => call.method)).toEqual(['projects.route', 'projects.splitBriefs'])
+  expect(state.consumed).toBe(0)
 })
 
 it('Auto never sends a stale or missing destination to the server', async () => {

@@ -1,3 +1,4 @@
+import { HomeGroups } from './HomeGroups'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/desktop-button'
 import { ChevronRight, Inbox } from 'lucide-react'
@@ -58,6 +59,7 @@ export function HomeFeed() {
           <AgentList items={waiting.slice(0, GLANCE)} />
         </FeedSection>
       )}
+      <HomeGroups />
       {recaps.attention.length > 0 && (
         <FeedSection title={t('Needs your attention')} count={recaps.attention.length}>
           {recaps.attention.slice(0, GLANCE).map((item) => (

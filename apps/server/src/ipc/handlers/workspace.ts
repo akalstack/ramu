@@ -17,7 +17,9 @@ import {
   type BranchChoice,
   type BranchNamingIntent,
 } from '@ramu/shared/workspaceDefaults'
-import { routeProject } from '../../workspace/projectRouter'
+import { routeProject, splitBriefs } from '../../workspace/projectRouter'
+import { SPLIT_LIMIT, type RoutingCandidate } from '@ramu/shared/workspace/projectRouting'
+import type { AgentThreadService } from '../../background/agentThreads'
 import { agentSettings, id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 import type { TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
@@ -50,6 +52,15 @@ const planSchema = z.array(
 )
 
 /** Projects, folders, repositories and chats (tasks). */
+/** A project on another of the client's hosts, as the router sees it: names and short descriptions only. */
+const routingCandidate = z.object({
+  id: z.string().min(1).max(300),
+  name: z.string().min(1).max(200),
+  host: z.string().max(200).optional(),
+  aliases: z.array(z.string().max(100)).max(8).optional(),
+  description: z.string().max(1000).optional(),
+})
+
 export const registerWorkspaceHandlers: RegisterHandlers = ({
   host,
   workspace,
@@ -63,6 +74,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   threadTitles,
   rules,
   learning,
+  agentThreads,
 }) => {
   const pendingNames = new Map<string, AbortController>()
   const projectConfiguration = (projectId: string) => {
@@ -110,19 +122,53 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   return {
     'projects.list': { args: z.tuple([]), run: () => workspace.listProjects() },
     'projects.route': {
-      args: z.tuple([z.string().min(1).max(20_000), agentSettings]),
-      run: (prompt: string, settings: AgentSettings) =>
+      args: z.tuple([
+        z.string().min(1).max(20_000),
+        agentSettings,
+        z.object({ split: z.boolean().optional(), others: z.array(routingCandidate).max(50).optional() }).optional(),
+      ]),
+      run: (prompt: string, settings: AgentSettings, options?: { split?: boolean; others?: RoutingCandidate[] }) =>
         routeProject(
           prompt,
           settings,
-          workspace.listProjects().map((project) => ({
-            id: project.id,
-            name: project.name,
-            aliases: project.aliases,
-            description: project.description,
-          })),
+          [
+            ...workspace.listProjects().map((project) => ({
+              id: project.id,
+              name: project.name,
+              aliases: project.aliases,
+              description: project.description,
+            })),
+            ...(options?.others ?? []),
+          ],
           (...args) => agents.analyze(...args),
+          undefined,
+          { split: options?.split },
         ),
+    },
+    'projects.splitBriefs': {
+      args: z.tuple([z.string().min(1).max(20_000), z.array(routingCandidate).min(2).max(SPLIT_LIMIT), agentSettings]),
+      run: (prompt: string, targets: RoutingCandidate[], settings: AgentSettings) =>
+        splitBriefs(prompt, targets, settings, (...args) => agents.analyze(...args)),
+    },
+    'threads.startGroup': {
+      args: z.tuple([
+        z.object({
+          groupId: z.string().uuid(),
+          threads: z
+            .array(
+              z.object({ projectId: id, title: z.string().min(1).max(200), prompt: z.string().min(1).max(100_000) }),
+            )
+            .min(1)
+            .max(SPLIT_LIMIT),
+          together: z.array(z.string().max(200)).max(SPLIT_LIMIT),
+        }),
+        agentSettings,
+      ]),
+      run: async (input: Parameters<AgentThreadService['startGroup']>[0], settings: AgentSettings) => {
+        if (!agentThreads) throw new Error('Starting several threads is unavailable on this host.')
+        await agents.validateSettings(settings)
+        return agentThreads.startGroup(input, settings)
+      },
     },
     'projects.create': { args: z.tuple([z.string().max(200)]), run: (name: string) => workspace.createProject(name) },
     'folders.roots': { args: z.tuple([]), run: () => hostFolders.roots() },

@@ -46,6 +46,7 @@ export interface Services {
   learning?: LearningService
   memory?: MemoryService
   summaries?: SummaryService
+  agentThreads?: import('../background/agentThreads').AgentThreadService
   rules?: RuleStore
   reviews: ReviewService
   notices?: NoticeInbox

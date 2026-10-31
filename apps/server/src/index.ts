@@ -511,6 +511,15 @@ agents.setupOmissions = (session, settings) => {
   }
   return omitted
 }
+// Agent-started threads go through the same methods a person's client calls, with the host's own authority. The
+// dispatcher is read only when a thread starts, after it exists.
+const agentThreads = new AgentThreadService(
+  db,
+  workspace,
+  agents,
+  async (method, args) => await origin.run({ network: false }, () => dispatcher.invoke(method, args)),
+  changed,
+)
 const dispatcher = createDispatcher(
   {
     userData,
@@ -572,15 +581,8 @@ const dispatcher = createDispatcher(
     summaries,
     rules,
     notices: inbox,
+    agentThreads,
   },
-)
-// Agent-started threads go through the same methods a person's client calls, with the host's own authority.
-const agentThreads = new AgentThreadService(
-  db,
-  workspace,
-  agents,
-  async (method, args) => await origin.run({ network: false }, () => dispatcher.invoke(method, args)),
-  changed,
 )
 const startedAt = Date.now()
 let stopping = false

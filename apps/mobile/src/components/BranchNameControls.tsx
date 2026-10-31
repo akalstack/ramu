@@ -8,13 +8,7 @@ import { isMethodMissing } from '../runtime/goalVerify'
 import { useT } from '../i18n'
 import { font, radius, space, useTheme } from '../theme'
 import { Button, T } from './ui'
-
-// Correlation only, never a credential. Native runtimes do not all expose crypto.randomUUID.
-const requestId = () =>
-  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (part) => {
-    const n = Math.floor(Math.random() * 16)
-    return (part === 'x' ? n : (n & 3) | 8).toString(16)
-  })
+import { correlationId } from '../runtime/correlationId'
 
 /** Optional details in the existing workspace picker. Neither action allocates a thread or worktree. */
 export function BranchNameControls({
@@ -85,7 +79,7 @@ export function BranchNameControls({
     const active = () => token === epoch.current && scope.current === key
     try {
       if (action === 'generate') {
-        const id = requestId()
+        const id = correlationId()
         pending.current = { host, id }
         const result = await latest.current.invoke(host, 'tasks.generateBranch', projectId, title, intent, id)
         if (active()) {

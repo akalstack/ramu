@@ -447,7 +447,7 @@ export function SettingsTargetSelector({ disabled }: { disabled: boolean }) {
   if (!scope) return null
   if (isCurrentEnvironmentSection(scope.section)) return null
   const options = [
-    ...(isSingleEnvironmentSection(scope.section) ? [] : [{ value: 'all', label: t('All environments') }]),
+    ...(isSingleEnvironmentSection(scope.section) ? [] : [{ value: 'all', label: t('All hosts') }]),
     ...scope.available.map((computer) => ({
       value: computer.id,
       label: `${computer.name}${computer.status !== 'connected' ? ` · ${statusText(computer.status)}` : ''}`,

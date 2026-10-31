@@ -53,6 +53,16 @@ A main-thread agent can start threads the person owns, when asked for separate w
 - **Links and reports:** the starting thread shows a card listing the threads with **Open**; each started thread shows **From ‹thread›** in its header (desktop) or thread menu (phone) and a fork mark in the sidebar. When a started thread finishes, fails, is stopped or waits for the person, one report with its latest message is queued to the starting thread, unless that thread was stopped. Threads started together can read and message each other, their starter and threads they started; nothing else. A message never reaches a thread with more access than the sender.
 - Deleting the starting thread keeps the started threads and their group; they only lose the link back.
 
+## One prompt, several threads
+
+With **Auto** as the destination (Home on the desktop, a new thread on the phone), a request that needs work in several projects becomes a reviewed set of threads instead of one.
+
+- **When it splits:** names and aliases decide first; a prompt that names several projects separately, or that no name settles, goes to one bounded, tool-free classification. It splits only when its reason quotes every project it lists, and into at most 8; otherwise Auto asks which project, as before. Projects on the other connected hosts are weighed too, sending only their names, aliases, descriptions and host names. Hosts that predate splitting route as before.
+- **Briefs:** one more bounded call on the current host writes a brief per project and a **Shared contract** (names, fields, endpoints, order of changes) from the request, adding no requirements of its own. Without an answer, each row starts from the person's words.
+- **Review:** nothing starts until the person chooses **Start all**. Each row shows its project and host, an editable title and brief, and a remove button; the contract is editable once for all. **Start as one thread** offers the projects as a choice instead, and **Cancel** leaves the message in the composer. The list survives closing Home or the app until it is started or cancelled.
+- **Starting:** each host starts its own rows (`threads.startGroup`) as one group with the project's default checkout and the reviewed model. Every thread's first message is its brief, the contract and the person's original request, and names the other threads of the group, which it can read and message (see [Threads started by agents](#threads-started-by-agents)). A host that fails reports its rows without stopping the others. An Auto request that resolves to one project on another host is reviewed the same way, as a single row.
+- **Following up:** Home's **Started together** card (desktop) and the threads list (phone) show each group across connected hosts with every thread's state and one line for the group (waiting, still working, or how it settled) until a few days after all of it settles.
+
 ## Usage limits and fallback
 
 **Settings → Models → Provider fallback** is one ordered list of provider and model pairs, best first (default: Claude Code, then Codex).

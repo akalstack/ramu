@@ -1,5 +1,5 @@
 import type { BrowserProfileCatalog, BrowserProfileInfo, BrowserTabInfo } from './types/browser'
-import type { RoutingOutcome } from './workspace/projectRouting'
+import type { RoutingCandidate, RoutingOutcome, SplitPlan } from './workspace/projectRouting'
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
 import type { ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
@@ -69,6 +69,7 @@ import type {
   ChatSearchHit,
   FolderInspection,
   AgentSessionInfo,
+  StartedThread,
   CreateTaskInput,
   DiffContents,
   DirEntry,
@@ -660,8 +661,18 @@ export interface RamuMethods {
   'folders.cancelClone'(cloneId: string): boolean
   'folders.addProject'(path: string): { project: Project; repositories: Repository[] }
   'projects.list'(): Project[]
-  /** Picks the destination project for a first prompt before any thread exists; ambiguous or unknown asks the person. */
-  'projects.route'(prompt: string, settings: AgentSettings): RoutingOutcome
+  /**
+   * Picks the destination project for a first prompt before any thread exists; ambiguous or unknown asks the person.
+   * With `split`, a request that needs work in several projects returns `split`. `others` adds projects on the client's
+   * other hosts (ids are the client's own), so one prompt can reach them.
+   */
+  'projects.route'(
+    prompt: string,
+    settings: AgentSettings,
+    options?: { split?: boolean; others?: RoutingCandidate[] },
+  ): RoutingOutcome
+  /** One brief per project of a split request, around one shared contract; null when it cannot be written. */
+  'projects.splitBriefs'(prompt: string, targets: RoutingCandidate[], settings: AgentSettings): SplitPlan | null
   'projects.setup'(projectId: string): ProjectSetup
   'projects.create'(name: string): Project
   'projects.inspect'(dir: string): FolderInspection
@@ -709,6 +720,18 @@ export interface RamuMethods {
     attachments?: string[],
     context?: FileContext[],
   ): { task: Task; session: AgentSessionInfo | null; error?: string }
+  /**
+   * Starts the reviewed threads of one split prompt on this host as one group. `together` names every thread of the
+   * group, on any host, so each brief says who works beside it.
+   */
+  'threads.startGroup'(
+    input: {
+      groupId: string
+      threads: { projectId: string; title: string; prompt: string }[]
+      together: string[]
+    },
+    settings: AgentSettings,
+  ): StartedThread[]
   'tasks.rename'(taskId: string, title: string): Task
   /** AI-written title. An automatic call leaves a title the user typed alone; `force` replaces it. */
   'tasks.generateTitle'(taskId: string, settings: AgentSettings, force?: boolean): Task

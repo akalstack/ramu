@@ -33,6 +33,9 @@ import * as workspaceChoices from '../src/runtime/workspaces.ts'
 import * as explorerScopes from '../../../packages/shared/src/workspace/explorer.ts'
 import * as explorerNavigation from '../src/runtime/explorerNavigation.ts'
 import * as routingDraft from '../src/runtime/routingDraft.ts'
+import * as splitDraft from '../src/runtime/splitDraft.ts'
+import * as correlation from '../src/runtime/correlationId.ts'
+import * as startedGroups from '../../../packages/shared/src/workspace/startedGroups.ts'
 import * as browserLinks from '../../../packages/shared/src/browserLinks.ts'
 import * as explorerDrafts from '../src/runtime/composerDrafts.ts'
 import * as routingChoices from '../src/runtime/routingChoices.ts'
@@ -200,6 +203,9 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id.endsWith('/routingChoices')) return routingChoices
       if (id.endsWith('/explorerNavigation')) return explorerNavigation
       if (id.endsWith('/routingDraft')) return routingDraft
+      if (id.endsWith('/splitDraft')) return splitDraft
+      if (id.endsWith('/correlationId')) return correlation
+      if (id === '@ramu/shared/workspace/startedGroups') return startedGroups
       if (id === '@ramu/shared/chat/fileContext') return fileContextKeys
       if (id === '@ramu/shared/chat/composerTrigger') return composerTriggers
       if (id.endsWith('/Screen'))

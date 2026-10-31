@@ -87,7 +87,7 @@ Tests cover 100 loopback sockets delivering 10,000 events (`packages/client-runt
 
 ### Editing settings on several hosts
 
-The **Apply settings to** selector in the Settings header edits **All environments** or one host. Controls show **Mixed** when hosts differ, offer values valid on every selected host, and **Use this value for all** applies the displayed value. A save patches only changed settings, checks for concurrent edits and reports failures per host; successful hosts stay saved. Provider sign-in, service management, pairing and other machine actions need a single host selected.
+The **Apply settings to** selector in the Settings header edits **All hosts** or one host. Controls show **Mixed** when hosts differ, offer values valid on every selected host, and **Use this value for all** applies the displayed value. A save patches only changed settings, checks for concurrent edits and reports failures per host; successful hosts stay saved. Provider sign-in, service management, pairing and other machine actions need a single host selected.
 
 ## Protocol
 
