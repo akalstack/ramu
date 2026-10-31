@@ -7,7 +7,7 @@ import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { space } from '../theme'
 import { Button, Sheet, T, type Icon } from './ui'
-import { ActivityPill, CompactPills } from './ActivityPill'
+import { ActivityPill } from './ActivityPill'
 import {
   Ellipsis,
   Hand,
@@ -122,25 +122,23 @@ export function ThreadActivity({
         accessibilityLabel={id ? 'Aktivitas thread' : 'Thread activity'}
         style={{ flexGrow: 0, marginTop: space.xs }}
       >
-        <CompactPills.Provider value={chat.status === 'running' && online}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-            {leading}
-            {actions.map(({ label, icon, onPress }) => (
-              <ActivityPill key={label} icon={icon} label={label} accessibilityLabel={label} onPress={onPress} />
-            ))}
-            {children}
-            {kinds.map((kind) => (
-              <ActivityPill
-                key={kind}
-                icon={KIND_ICON[kind]}
-                label={label(kind)}
-                tone={kind === 'connection' ? 'off' : kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
-                emphasis={kind === primaryKind}
-                onPress={() => setOpened(kind)}
-              />
-            ))}
-          </View>
-        </CompactPills.Provider>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+          {leading}
+          {actions.map(({ label, icon, onPress }) => (
+            <ActivityPill key={label} icon={icon} label={label} accessibilityLabel={label} iconOnly onPress={onPress} />
+          ))}
+          {children}
+          {kinds.map((kind) => (
+            <ActivityPill
+              key={kind}
+              icon={KIND_ICON[kind]}
+              label={label(kind)}
+              tone={kind === 'connection' ? 'off' : kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
+              emphasis={kind === primaryKind}
+              onPress={() => setOpened(kind)}
+            />
+          ))}
+        </View>
       </ScrollView>
       <Sheet
         presentation="screen"

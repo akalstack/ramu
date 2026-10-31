@@ -1,11 +1,8 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { T, tap, type Icon } from './ui'
-
-/** While a turn runs, quiet pills show only their icon so the working status and anything needing attention fit. */
-export const CompactPills = createContext(false)
 
 /**
  * One pill in the row above the composer: computer, browser, terminal and every activity look and behave alike. The
@@ -20,6 +17,7 @@ export function ActivityPill({
   emphasis = false,
   onPress,
   trailing,
+  iconOnly = false,
 }: {
   icon: Icon
   label: string
@@ -31,9 +29,10 @@ export function ActivityPill({
   onPress?(): void
   /** A second action inside the pill, such as Stop; replaces the chevron. */
   trailing?: ReactNode
+  /** A tool shortcut whose icon says enough; it keeps this shape so the row never jumps. Status pills keep words. */
+  iconOnly?: boolean
 }) {
   const { c } = useTheme()
-  const iconOnly = useContext(CompactPills) && tone === 'quiet' && !emphasis
   const color = tone === 'attention' ? c.warn : tone === 'off' ? c.muted : c.soft
   return (
     <View

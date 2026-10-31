@@ -5101,7 +5101,7 @@ test('computer-use stop revokes only the displayed thread and refreshes the shar
     }),
   )
   // The pill shows the target and opens the computer; its Stop control sits inside it.
-  const pill = nodes(tree).find((node) => node.props?.accessibilityLabel === 'Open computer')
+  const pill = nodes(tree).find((node) => node.props?.accessibilityLabel?.startsWith('Open computer'))
   assert.match(pill.props.label, /Chrome/)
   pill.props.onPress()
   assert.equal(opened, 1)
@@ -7843,22 +7843,16 @@ test('side-question input uses the thread dock and lifts the transcript inset wi
   hooks.dispose()
 })
 
-test('while a turn runs, quiet pills show only their icon and pills needing attention keep their words', () => {
-  let compact = false
-  const { ActivityPill } = load('components/ActivityPill.tsx', 'ios', {
-    react: { ...require('react'), useContext: () => compact },
-  })
+test('tool shortcut pills keep one icon-only shape while status pills keep their words', () => {
+  const { ActivityPill } = load('components/ActivityPill.tsx', 'ios')
   const labels = (props) =>
     nodes(ActivityPill({ icon: 'Globe', onPress() {}, ...props }))
       .filter((node) => node.type === 'T')
       .map((node) => node.props.children)
-  assert.deepEqual(labels({ label: 'Terminal' }), ['Terminal'])
-  compact = true
-  const quiet = ActivityPill({ icon: 'Globe', label: 'Terminal', onPress() {} })
-  assert.deepEqual(labels({ label: 'Terminal' }), [])
-  assert.equal(find(quiet, 'Pressable').props.accessibilityLabel, 'Terminal', 'screen readers still hear the name')
-  assert.ok(find(quiet, 'Pressable').props.style.minWidth >= 32)
+  const shortcut = ActivityPill({ icon: 'Globe', label: 'Terminal', iconOnly: true, onPress() {} })
+  assert.deepEqual(labels({ label: 'Terminal', iconOnly: true }), [])
+  assert.equal(find(shortcut, 'Pressable').props.accessibilityLabel, 'Terminal', 'screen readers still hear the name')
+  assert.ok(find(shortcut, 'Pressable').props.style.minWidth >= 32)
+  assert.deepEqual(labels({ label: '3 queued' }), ['3 queued'])
   assert.deepEqual(labels({ label: 'Approval needed', tone: 'attention' }), ['Approval needed'])
-  assert.deepEqual(labels({ label: 'Offline', tone: 'off' }), ['Offline'])
-  assert.deepEqual(labels({ label: 'Goal active', emphasis: true }), ['Goal active'])
 })
