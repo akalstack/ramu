@@ -115,6 +115,8 @@ export function ThreadActivity({
     <>
       <ScrollView
         horizontal
+        // A tap on a pill acts at once, even while the keyboard is up, instead of only closing the keyboard.
+        keyboardShouldPersistTaps="handled"
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ alignItems: 'center', paddingHorizontal: space.s }}
         accessibilityLabel={id ? 'Aktivitas thread' : 'Thread activity'}

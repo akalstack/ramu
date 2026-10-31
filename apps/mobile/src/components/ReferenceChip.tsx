@@ -1,11 +1,23 @@
-import { Text } from 'react-native'
+import { Text, View } from 'react-native'
+import { FileText, Folder, Quote, SquareTerminal, WandSparkles } from 'lucide-react-native'
 import type { ReferenceChip } from '@ramu/shared/chat/referenceChip'
 import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { useTheme } from '../theme'
+import type { Icon } from './ui'
 
-/** Native inline counterpart of desktop ReferenceChipView: accent text, no pill, inherited type and full link label. */
+/** The same icon per kind as the desktop chip. Text symbols such as ▤ are missing from some phone fonts and draw as boxes. */
+const KIND_ICON: Record<ReferenceChip['kind'], Icon> = {
+  file: FileText,
+  folder: Folder,
+  skill: WandSparkles,
+  command: SquareTerminal,
+  quote: Quote,
+}
+
+/** Native inline counterpart of desktop ReferenceChipView: accent text with its icon, no pill, and the full link label. */
 export function ReferenceBadge({ chip, onPress }: { chip: ReferenceChip; onPress?: () => void }) {
   const { c } = useTheme()
+  const I = KIND_ICON[chip.kind]
   return (
     <Text
       onPress={onPress}
@@ -14,7 +26,9 @@ export function ReferenceBadge({ chip, onPress }: { chip: ReferenceChip; onPress
       suppressHighlighting
       style={{ color: c.accent, fontWeight: REFERENCE_APPEARANCE.fontWeight }}
     >
-      {REFERENCE_APPEARANCE.glyph[chip.kind]}
+      <View style={{ paddingRight: REFERENCE_APPEARANCE.gap, transform: [{ translateY: 2 }] }}>
+        <I size={13} color={c.accent} strokeWidth={2} />
+      </View>
       {chip.label}
     </Text>
   )

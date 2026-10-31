@@ -17,7 +17,6 @@ export const REFERENCE_APPEARANCE = {
   maxWidth: 360,
   gap: 4,
   fontWeight: '400' as const,
-  glyph: { file: '▤ ', folder: '▸ ', skill: '✦ ', command: '› ', quote: '❝ ' },
 }
 
 /** Tool labels share a left-to-right sweep; only the decorative completion highlight waits. */
