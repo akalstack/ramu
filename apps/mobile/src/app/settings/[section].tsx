@@ -36,6 +36,7 @@ import { HostingStatus } from '../../components/HostingStatus'
 import { ComputerUseSettings } from '../../components/ComputerUseSettings'
 import { ThemeLibrary } from '../../components/ThemeLibrary'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
+import { PermissionNeeded } from '../../components/DevicePermissions'
 import { ScopeControl } from '../../components/ScopeControl'
 import { PhonePermissions } from '../../components/DevicePermissions'
 
@@ -374,8 +375,10 @@ export default function SettingsSectionPage() {
   const edge = useScrolledUnderBar()
   const { section: param } = useLocalSearchParams<{ section: string }>()
   const section = sectionById(String(param))
-  const { computers, selected, language } = useStore()
+  const { computers, selected, language, mayUse } = useStore()
   const host = useHostSettings(selected)
+  // Without the host's Change settings permission the rows read only, with a request instead of saves it would refuse.
+  const locked = !mayUse(selected, 'settings')
   const name = computers.find((computer) => computer.id === selected)?.name
   if (!section) return null
   const id = section.id
@@ -391,6 +394,11 @@ export default function SettingsSectionPage() {
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
       >
         {section.scope === 'host' ? <ComputerScope host={host} /> : null}
+        {section.scope === 'host' && locked && computers.find((c) => c.id === selected)?.access !== 'viewer' ? (
+          <View style={{ paddingHorizontal: space.l, paddingBottom: space.m }}>
+            <PermissionNeeded computerId={selected} permission="settings" />
+          </View>
+        ) : null}
         {id === 'appearance' ? <AppearancePage /> : null}
         {id === 'notifications' ? <Notifications host={host} name={name} /> : null}
         {id === 'computers' ? <Computers /> : null}
@@ -402,12 +410,14 @@ export default function SettingsSectionPage() {
         {id === 'git' ? <HostingStatus key={selected} hostId={selected} /> : null}
         {id === 'rules' ? <RulesSettings key={selected} hostId={selected} /> : null}
         {id === 'setup' ? <AgentSetupSettings key={selected} hostId={selected} /> : null}
-        {section.scope === 'host' && id !== 'computer' ? <HostGroups section={id} host={host} name={name} /> : null}
+        {section.scope === 'host' && id !== 'computer' ? (
+          <HostGroups section={id} host={host} name={name} locked={locked} />
+        ) : null}
         {section.scope === 'host' && host.state.status === 'ready'
           ? (PAGE_PARTS[id] ?? [])
               // A part this host has nothing for is left out rather than announced in the middle of the page.
               .filter((part) => visibleGroups(part, readySettings, host.read).length > 0)
-              .map((part) => <HostGroups key={part} section={part} host={host} name={name} />)
+              .map((part) => <HostGroups key={part} section={part} host={host} name={name} locked={locked} />)
           : null}
         {id === 'workflows' ? <MemoryList key={selected} hostId={selected} /> : null}
         {note ? <Hint>{note}</Hint> : null}

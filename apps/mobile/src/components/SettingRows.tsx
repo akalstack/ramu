@@ -240,7 +240,18 @@ export function HostNotice({ host, name, children }: { host: Host; name?: string
 }
 
 /** A section's computer-side rows in the desktop's groups. */
-export function HostGroups({ section, host, name }: { section: SettingsSection; host: Host; name?: string }) {
+export function HostGroups({
+  section,
+  host,
+  name,
+  locked = false,
+}: {
+  section: SettingsSection
+  host: Host
+  name?: string
+  /** This device may read the host's settings but not change them. */
+  locked?: boolean
+}) {
   const { language } = useStore()
   if (host.state.status !== 'ready') return <HostNotice host={host} name={name} />
   const groups = visibleGroups(section, host.state.settings, host.read)
@@ -259,7 +270,7 @@ export function HostGroups({ section, host, name }: { section: SettingsSection; 
             {group.rows.map((row, index) => (
               <View key={row.path}>
                 {index ? <Divider inset={space.l} /> : null}
-                <HostRow row={row} host={host} />
+                <HostRow row={row} host={host} disabled={locked} />
               </View>
             ))}
           </Card>

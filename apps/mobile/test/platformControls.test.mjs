@@ -6693,7 +6693,9 @@ for (const os of ['ios', 'android']) {
     const { default: Section } = load('app/settings/[section].tsx', os, {
       'expo-router': { useLocalSearchParams: () => ({ section: 'about' }) },
       '../../runtime/settingsModel': settingsModel,
-      '../../runtime/store': { useStore: () => ({ language: 'en', selected: null, computers: [] }) },
+      '../../runtime/store': {
+        useStore: () => ({ language: 'en', selected: null, computers: [], mayUse: () => true }),
+      },
       '../../runtime/useHostSettings': { useHostSettings: () => ({ state: { status: 'offline' } }) },
     })
     const header = find(Section(), 'Header')
@@ -6764,6 +6766,7 @@ for (const os of ['ios', 'android']) {
     const drafts = {},
       writes = []
     const store = {
+      mayUse: () => true,
       selected: 'host',
       language: 'en',
       computers: [],
@@ -8023,4 +8026,20 @@ test('a required MCP form answer counts only once it holds a value, and a list n
   assert.equal(elicitationAnswered(field('array'), '[]'), false)
   assert.equal(elicitationAnswered(field('array'), 'not json'), false)
   assert.equal(elicitationAnswered(field('array'), '["a"]'), true)
+})
+
+test('a device without Change settings sees a host’s settings rows read-only', () => {
+  const { HostGroups } = load('components/SettingRows.tsx', 'ios', {
+    '../runtime/store': { useStore: () => ({ language: 'en' }) },
+    '../runtime/settingsModel': {
+      ...settingsModel,
+      visibleGroups: () => [{ title: null, rows: [{ path: 'a.b', kind: 'toggle', label: 'Thing' }] }],
+    },
+  })
+  const rows = (locked) =>
+    nodes(HostGroups({ section: 'chats', host: { state: { status: 'ready', settings: [] }, read: () => {} }, locked }))
+      .filter((node) => node.props?.row)
+      .map((node) => node.props.disabled)
+  assert.deepEqual(rows(true), [true])
+  assert.deepEqual(rows(false), [false])
 })
