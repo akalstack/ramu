@@ -1151,6 +1151,8 @@ export default function ChatScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={tr('Scroll to latest')}
+                  // A small button keeps the transcript visible; the slop keeps the touch target at 44 points.
+                  hitSlop={6}
                   onPress={() => {
                     tap()
                     following.current = true
@@ -1163,17 +1165,17 @@ export default function ChatScreen() {
                     radius={radius.full}
                     interactive
                     style={{
-                      width: 44,
-                      height: 44,
+                      width: 32,
+                      height: 32,
                       alignItems: 'center',
                       justifyContent: 'center',
                       backgroundColor: floatingChrome ? undefined : c.raised,
                     }}
                   >
                     {running ? (
-                      <ActivityIndicator size="small" color={c.text} />
+                      <ActivityIndicator size="small" color={c.text} style={{ transform: [{ scale: 0.75 }] }} />
                     ) : (
-                      <ArrowDown size={18} color={c.text} strokeWidth={2} />
+                      <ArrowDown size={16} color={c.text} strokeWidth={2} />
                     )}
                   </Glass>
                 </Pressable>
