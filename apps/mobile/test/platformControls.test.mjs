@@ -7950,3 +7950,58 @@ test('a phone without the Terminals permission is offered a request, never a she
   )
   hooks.dispose()
 })
+
+test('the Skills & MCP page reads shared servers and a project’s skills without offering host administration', async () => {
+  const hooks = hookHarness(),
+    calls = []
+  const store = {
+    language: 'en',
+    isOnline: () => true,
+    projects: [{ id: 'a:p1', computerId: 'a', name: 'Site' }],
+    computers: [{ id: 'a', name: 'Host A' }],
+    subscribe: () => () => {},
+    invoke: async (...args) => {
+      calls.push(args)
+      if (args[1] === 'mcp.status')
+        return {
+          connections: [
+            {
+              connection: { id: 'c1', name: 'Issues', providers: ['codex'] },
+              status: 'sign-in-required',
+              toolCount: 3,
+            },
+          ],
+          providerManaged: [{ provider: 'claude-code', name: 'figma' }],
+        }
+      if (args[1] === 'skills.list') return [{ name: 'deploy', description: 'Ships it', path: '/x' }]
+      throw new Error(`Unexpected ${args[1]}`)
+    },
+  }
+  const { AgentSetupSettings } = load('components/AgentSetupSettings.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': { useStore: () => store },
+    './SettingRows': { RowLabel: 'RowLabel' },
+    '@ramu/shared/providers/providers': { providerName: (id) => id },
+    '@ramu/shared/listView': { matchesWords: () => true, searchWords: () => [] },
+  })
+  const render = () => hooks.render(() => AgentSetupSettings({ hostId: 'a' }))
+  render()
+  await settle()
+  const labels = nodes(render())
+    .filter((node) => node.type === 'RowLabel')
+    .map((node) => [node.props.title, node.props.help])
+  assert.deepEqual(labels, [
+    ['Issues', 'Sign-in required · 3 tools · codex'],
+    ['figma', 'Only claude-code has it, from its own settings'],
+    ['deploy', 'Ships it'],
+  ])
+  assert.deepEqual(
+    calls.find(([, method]) => method === 'skills.list'),
+    ['a', 'skills.list', 'project:p1'],
+  )
+  assert.equal(
+    calls.some(([, method]) => /^mcp\.(save|approve|signIn|setSecret|remove)/.test(method)),
+    false,
+  )
+  hooks.dispose()
+})

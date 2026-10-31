@@ -29,6 +29,7 @@ import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
 import { Button, Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
 import { ComputerScope } from '../../components/SettingsChrome'
 import { RulesSettings } from '../../components/RulesSettings'
+import { AgentSetupSettings, MemoryList } from '../../components/AgentSetupSettings'
 import { VoiceSettings } from '../../components/VoiceSettings'
 import { ProviderCompatibility } from '../../components/ProviderCompatibility'
 import { HostingStatus } from '../../components/HostingStatus'
@@ -400,6 +401,7 @@ export default function SettingsSectionPage() {
         {id === 'computer' ? <ComputerUseSettings key={selected} hostId={selected} /> : null}
         {id === 'git' ? <HostingStatus key={selected} hostId={selected} /> : null}
         {id === 'rules' ? <RulesSettings key={selected} hostId={selected} /> : null}
+        {id === 'setup' ? <AgentSetupSettings key={selected} hostId={selected} /> : null}
         {section.scope === 'host' && id !== 'computer' ? <HostGroups section={id} host={host} name={name} /> : null}
         {section.scope === 'host' && host.state.status === 'ready'
           ? (PAGE_PARTS[id] ?? [])
@@ -407,6 +409,7 @@ export default function SettingsSectionPage() {
               .filter((part) => visibleGroups(part, readySettings, host.read).length > 0)
               .map((part) => <HostGroups key={part} section={part} host={host} name={name} />)
           : null}
+        {id === 'workflows' ? <MemoryList key={selected} hostId={selected} /> : null}
         {note ? <Hint>{note}</Hint> : null}
       </ScrollView>
     </Screen>

@@ -24,6 +24,7 @@ export type SettingsSection =
   | 'workflows'
   | 'memory'
   | 'rules'
+  | 'setup'
   | 'system'
   | 'computers'
   | 'notifications'
@@ -49,6 +50,7 @@ export const SETTINGS_SECTIONS: { id: SettingsSection; group: SettingsGroup; sco
     { id: 'providers', group: 'agents', scope: 'host', label: { en: 'Models & access', id: 'Model & akses' } },
     { id: 'workflows', group: 'agents', scope: 'host', label: { en: 'Goals & memory', id: 'Tujuan & memori' } },
     { id: 'rules', group: 'agents', scope: 'host', label: { en: 'Rules', id: 'Aturan' } },
+    { id: 'setup', group: 'agents', scope: 'host', label: { en: 'Skills & MCP', id: 'Skill & MCP' } },
     {
       id: 'system',
       group: 'system',
