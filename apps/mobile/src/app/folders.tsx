@@ -1,15 +1,17 @@
 import { BottomSearch } from '../components/BottomSearch'
 import { goBackOrHome } from '../runtime/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { TextInput } from 'react-native'
+import { TextInput, View, type ViewStyle } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Folder, ChevronLeft } from 'lucide-react-native'
+import { Folder, ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { Header, Screen, GlassButton, PageScrollView as ScrollView } from '../components/Screen'
-import { Row, T } from '../components/ui'
+import { Card, Divider, Row, T } from '../components/ui'
 import { useStore } from '../runtime/store'
-import { font, space, useTheme } from '../theme'
+import { font, radius, space, useTheme } from '../theme'
 import { useT, useSay } from '../i18n'
 import type { ForgeRepositorySummary } from '@ramu/shared/types'
+const FOLDER_ROW: ViewStyle = { minHeight: 44, paddingVertical: space.s, paddingHorizontal: space.m, gap: space.s }
+
 export default function HostFolders() {
   const say = useSay()
   const store = useStore(),
@@ -57,21 +59,30 @@ export default function HostFolders() {
         contentContainerStyle={{ padding: space.l, gap: space.m }}
       >
         {error ? <T tone="bad">{error}</T> : null}
-        <T tone="muted" mono>
-          {listing?.path ?? 'Choose a browse root on the host'}
+        <T size={font.caption} tone="muted" numberOfLines={2} ellipsizeMode="head">
+          {listing?.path ?? say('Choose where to start browsing')}
         </T>
-        {listing?.parent ? (
-          <Row onPress={() => void browse(listing.parent!)}>
-            <ChevronLeft color={c.soft} size={18} />
-            <T>Parent folder</T>
-          </Row>
-        ) : null}
-        {(listing?.folders ?? roots.map((path) => ({ name: path, path }))).map((folder) => (
-          <Row key={folder.path} onPress={() => void browse(folder.path)}>
-            <Folder size={18} color={c.soft} />
-            <T style={{ flex: 1 }}>{folder.name}</T>
-          </Row>
-        ))}
+        {/* The same rows as Explorer: one card, 44-point rows, small icons and a press highlight. */}
+        <Card>
+          {listing?.parent ? (
+            <Row style={FOLDER_ROW} onPress={() => void browse(listing.parent!)}>
+              <ChevronLeft color={c.soft} size={15} />
+              <T style={{ flex: 1 }}>{say('Parent folder')}</T>
+            </Row>
+          ) : null}
+          {(listing?.folders ?? roots.map((path) => ({ name: path, path }))).map((folder, index) => (
+            <View key={folder.path}>
+              {index || listing?.parent ? <Divider inset={space.m + 15 + space.s} /> : null}
+              <Row style={FOLDER_ROW} onPress={() => void browse(folder.path)}>
+                <Folder size={15} color={c.soft} />
+                <T style={{ flex: 1 }} numberOfLines={2}>
+                  {folder.name}
+                </T>
+                <ChevronRight size={15} color={c.muted} />
+              </Row>
+            </View>
+          ))}
+        </Card>
         {listing ? (
           <>
             <GlassButton
@@ -91,7 +102,13 @@ export default function HostFolders() {
               onChangeText={setName}
               placeholder={say('New folder / clone destination name')}
               placeholderTextColor={c.muted}
-              style={{ padding: space.m, backgroundColor: c.fill, color: c.text, fontSize: font.body }}
+              style={{
+                padding: space.m,
+                borderRadius: radius.m,
+                backgroundColor: c.fill,
+                color: c.text,
+                fontSize: font.body,
+              }}
             />
             <GlassButton
               title={say('Create folder')}
@@ -136,7 +153,13 @@ export default function HostFolders() {
               autoCapitalize="none"
               autoCorrect={false}
               placeholderTextColor={c.muted}
-              style={{ padding: space.m, backgroundColor: c.fill, color: c.text, fontSize: font.body }}
+              style={{
+                padding: space.m,
+                borderRadius: radius.m,
+                backgroundColor: c.fill,
+                color: c.text,
+                fontSize: font.body,
+              }}
             />
             <GlassButton
               title={busy ? (cloneProgress ?? 'Working on host…') : 'Clone repository'}
