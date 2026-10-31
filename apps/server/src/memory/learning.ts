@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, sep } from 'node:path'
 import { z } from 'zod'
 import { toolResultLimit } from '../toolInputs'
@@ -119,6 +119,12 @@ interface ExportTarget {
   accountId: string
 }
 
+/** Where the provider skill folders holding Ramu's links are remembered across restarts. */
+const SKILL_LINKS_KEY = 'skills.links'
+const linkRecords = z
+  .record(z.string(), z.object({ target: z.object({ dir: z.string(), cwd: z.string() }), export: z.string() }))
+  .refine((records) => Object.keys(records).length <= 5000)
+
 /** Persistent review queue; model proposals never execute tools or write arbitrary paths. */
 export class LearningService {
   private running = false
@@ -146,6 +152,30 @@ export class LearningService {
   ) {
     for (const job of this.jobs()) if (job.status === 'running') this.saveJob({ ...job, status: 'queued', error: null })
     this.coalesceQueued()
+    this.restoreLinks()
+  }
+  /**
+   * Links placed before a restart are remembered, so a project removed later still has its links cleaned up. One whose
+   * export disappeared while Ramu was stopped is cleaned up now; only `ramu-` links into the export root are touched.
+   */
+  private restoreLinks() {
+    const saved = linkRecords.safeParse(this.workspace.getAppState<unknown>(SKILL_LINKS_KEY, {}))
+    if (!saved.success) return
+    const exportRoot = join(this.root, 'export')
+    for (const [dir, entry] of Object.entries(saved.data)) {
+      if (entry.target.dir !== dir || !entry.export.startsWith(`${exportRoot}${sep}`)) continue
+      if (existsSync(entry.export)) this.linked.set(dir, entry)
+      else
+        try {
+          reconcileSkillLinks(entry.target, join(entry.export, '.removed'), exportRoot)
+        } catch {
+          /* The folder is gone or unreadable; nothing of Ramu's is left to remove there. */
+        }
+    }
+    this.saveLinks()
+  }
+  private saveLinks() {
+    this.workspace.setAppState(SKILL_LINKS_KEY, Object.fromEntries(this.linked))
   }
   preferences(): IntelligencePreferences {
     return {
@@ -264,7 +294,9 @@ export class LearningService {
     }
   }
   private link(target: SkillLinkTarget, exportDir: string) {
+    const known = this.linked.get(target.dir)
     this.linked.set(target.dir, { target, export: exportDir })
+    if (known?.export !== exportDir || known.target.cwd !== target.cwd) this.saveLinks()
     reconcileSkillLinks(target, join(exportDir, 'skills'), join(this.root, 'export'))
   }
   /**
@@ -299,6 +331,7 @@ export class LearningService {
         /* The folder is gone or unreadable; nothing of Ramu's is left to remove there. */
       }
     }
+    this.saveLinks()
     rmSync(scopeDir, { recursive: true, force: true })
   }
   private syncExport({ projectId, provider, accountId, cwd }: ExportTarget & { cwd: string }): string {
@@ -362,6 +395,7 @@ export class LearningService {
           this.link(target, exportDir)
         } catch {
           this.linked.delete(dir)
+          this.saveLinks()
         }
     })
   }

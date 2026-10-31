@@ -296,3 +296,25 @@ it('carries a skill only to the providers chosen for it, in a new revision, and 
   expect(names('claude-code')).toEqual(['ramu-alpha', 'ramu-beta'])
   expect(service.skills().find((entry) => entry.id === 'a')?.providers).toBeUndefined()
 })
+
+it('cleans a removed project’s links after a restart, and links whose export vanished while stopped', async () => {
+  insert(skill('a', 'alpha', 'p'))
+  insert(skill('b', 'beta', 'q'))
+  const pWork = join(root, 'p-work'),
+    qWork = join(root, 'q-work')
+  mkdirSync(pWork)
+  mkdirSync(qWork)
+  service.exportDir('p', 'cursor', pWork)
+  const qExport = service.exportDir('q', 'cursor', qWork)!
+  mkdirSync(join(pWork, '.cursor', 'skills', 'my-own'))
+  await service.settle()
+  // q's export disappears while Ramu is stopped.
+  rmSync(qExport, { recursive: true, force: true })
+  const agents = { get: session, events: () => [], analyze: vi.fn() }
+  const memory = new MemoryService(db, workspace, { analyze: agents.analyze, list: () => [] }, () => {})
+  const restarted = new LearningService(db, workspace, agents, memory, join(root, 'skills'), () => {})
+  expect(readdirSync(join(qWork, '.cursor', 'skills'))).toEqual([])
+  restarted.removeProject('p')
+  expect(readdirSync(join(pWork, '.cursor', 'skills'))).toEqual(['my-own'])
+  await restarted.settle()
+})
