@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { Copy, FileQuestion, FolderSearch } from 'lucide-react-native'
+import { Check, Copy, FileQuestion, FolderSearch, Pencil, X } from 'lucide-react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useT, useSay } from '../i18n'
 import { useWorkspaces } from '../runtime/useWorkspaces'
@@ -58,6 +58,9 @@ const CodeLine = memo(function CodeLine({
   )
 })
 
+/** Bigger files are read-only on the phone, where one text field would be slow to scroll and type in. */
+const MAX_EDIT_CHARS = 200_000
+
 export function FileViewer({
   computerId,
   contextId: taskId,
@@ -109,7 +112,7 @@ export function FileViewer({
   type FileState =
     | { kind: 'loading' }
     | { kind: 'error'; message: string }
-    | { kind: 'text'; lines: string[]; raw: string }
+    | { kind: 'text'; lines: string[]; raw: string; hash?: string }
     | { kind: 'image'; uri: string }
     | { kind: 'unsupported'; note: string }
     | { kind: 'diff'; file: ChangedFile | null }
@@ -134,6 +137,9 @@ export function FileViewer({
   const gitAvailable = !!binding && !binding.folderOnly && !binding.notGit
   const target = line && Number.isSafeInteger(Number(line)) && Number(line) > 0 ? Number(line) : undefined
   const [preview, setPreview] = useState(target === undefined)
+  // The text being edited, or null while only viewing.
+  const [draft, setDraft] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   useEffect(() => {
     if (target !== undefined) setPreview(false)
   }, [identity, target])
@@ -203,8 +209,8 @@ export function FileViewer({
         }
       if (OTHER_MEDIA.test(path))
         return { kind: 'unsupported' as const, note: 'This kind of file can only be previewed on the host.' }
-      const { content } = await store.invoke(computerId, 'files.read', taskId, repoId, path)
-      return { kind: 'text' as const, raw: content, lines: content.split('\n') }
+      const { content, hash } = await store.invoke(computerId, 'files.read', taskId, repoId, path)
+      return { kind: 'text' as const, raw: content, lines: content.split('\n'), hash }
     }
     run().then(
       (next) => {
@@ -338,6 +344,55 @@ export function FileViewer({
     })
   }
   const markdown = MARKDOWN.test(path) && mode === 'file'
+  // Editing on the phone: the whole file in one text field, saved only if nobody changed it on the host meanwhile.
+  const viewOnly = store.computers.find((host) => host.id === computerId)?.access === 'viewer'
+  const editable =
+    state.kind === 'text' &&
+    mode === 'file' &&
+    !revision &&
+    online &&
+    !viewOnly &&
+    !!taskId &&
+    !!state.hash &&
+    state.raw.length <= MAX_EDIT_CHARS
+  const save = async (base: string | null) => {
+    if (draft === null || !computerId || !taskId || state.kind !== 'text') return
+    setSaving(true)
+    try {
+      const result = await store.invoke(computerId, 'files.write', taskId, repoId, path, draft, base)
+      if (!result.ok) {
+        Alert.alert(say('Changed on the host'), say('This file changed on the host since you opened it.'), [
+          { text: say('Cancel'), style: 'cancel' },
+          {
+            text: say('Reload'),
+            onPress: () =>
+              void store.invoke(computerId, 'files.read', taskId, repoId, path).then(({ content, hash }) => {
+                setDraft(null)
+                setFile({
+                  owner: readIdentity,
+                  value: { kind: 'text', raw: content, lines: content.split('\n'), hash },
+                })
+              }),
+          },
+          { text: say('Overwrite'), style: 'destructive', onPress: () => void save(result.diskHash) },
+        ])
+        return
+      }
+      setFile({ owner: readIdentity, value: { kind: 'text', raw: draft, lines: draft.split('\n'), hash: result.hash } })
+      setDraft(null)
+    } catch (error) {
+      Alert.alert(say('Could not save'), error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+  const stopEditing = () => {
+    if (draft === null || state.kind !== 'text' || draft === state.raw) return setDraft(null)
+    Alert.alert(say('Discard changes?'), undefined, [
+      { text: say('Keep editing'), style: 'cancel' },
+      { text: say('Discard'), style: 'destructive', onPress: () => setDraft(null) },
+    ])
+  }
   const head = (
     <View style={{ gap: space.m, paddingBottom: space.m }}>
       <T size={font.caption} mono tone="muted" numberOfLines={2}>
@@ -436,20 +491,63 @@ export function FileViewer({
           </T>
         }
         right={
-          <>
-            {revision ? null : (
-              <HeaderButton icon={FolderSearch} label={t.showInExplorer} systemIcon="folder" onPress={reveal} />
-            )}
-            <HeaderButton
-              icon={Copy}
-              label={t.copyPath}
-              systemIcon="doc.on.doc"
-              onPress={() => void Clipboard.setStringAsync(path)}
-            />
-          </>
+          draft !== null ? (
+            <>
+              <HeaderButton icon={X} label={say('Cancel')} systemIcon="xmark" onPress={stopEditing} />
+              <HeaderButton
+                icon={Check}
+                label={saving ? say('Saving…') : say('Save')}
+                systemIcon="checkmark"
+                onPress={() => state.kind === 'text' && !saving && void save(state.hash ?? null)}
+              />
+            </>
+          ) : (
+            <>
+              {editable && state.kind === 'text' ? (
+                <HeaderButton
+                  icon={Pencil}
+                  label={say('Edit')}
+                  systemIcon="pencil"
+                  onPress={() => setDraft(state.raw)}
+                />
+              ) : null}
+              {revision ? null : (
+                <HeaderButton icon={FolderSearch} label={t.showInExplorer} systemIcon="folder" onPress={reveal} />
+              )}
+              <HeaderButton
+                icon={Copy}
+                label={t.copyPath}
+                systemIcon="doc.on.doc"
+                onPress={() => void Clipboard.setStringAsync(path)}
+              />
+            </>
+          )
         }
       />
-      {state.kind === 'text' && !(markdown && preview) ? (
+      {draft !== null ? (
+        <TextInput
+          accessibilityLabel={say('Edit {0}', { 0: name })}
+          value={draft}
+          onChangeText={setDraft}
+          editable={!saving}
+          multiline
+          autoFocus
+          autoCapitalize="none"
+          autoCorrect={false}
+          spellCheck={false}
+          textAlignVertical="top"
+          style={{
+            flex: 1,
+            padding: space.l,
+            color: c.text,
+            backgroundColor: c.canvas,
+            fontFamily: font.mono,
+            fontSize: font.control,
+            lineHeight: 20,
+          }}
+        />
+      ) : null}
+      {draft !== null ? null : state.kind === 'text' && !(markdown && preview) ? (
         <PageFlatList
           ref={list}
           data={rows}

@@ -4004,4 +4004,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Runs": "Proses",
   "Run {0}": "Proses {0}",
   "recording": "merekam",
+  "Changed on the host": "Berubah di host",
+  "This file changed on the host since you opened it.": "File ini berubah di host sejak Anda membukanya.",
+  "Overwrite": "Timpa",
+  "Keep editing": "Lanjut mengedit",
 }
