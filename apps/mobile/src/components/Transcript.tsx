@@ -35,7 +35,8 @@ import { Markdown, ReferenceBadge, ReferenceContext } from './Markdown'
 import { draftChip } from '@ramu/shared/chat/referenceChip'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
-import { Button, Card, Sheet, T, tap, type Icon } from './ui'
+import { Button, Card, Chip, Sheet, T, tap, type Icon } from './ui'
+import type { ElicitationField } from '@ramu/shared/types'
 import { ActivityText, Arrive, Breathe, Collapse, Disclosure } from './Motion'
 import { InteractiveVisibility } from './InteractiveVisibility'
 import { ProviderIcon } from './Logos'
@@ -1360,7 +1361,6 @@ function GoalDone({ item }: { item: Extract<TranscriptItem, { kind: 'goal' }> })
 
 function ElicitationCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 'elicitation' }>; chatId: string }) {
   const say = useSay()
-  const { c } = useTheme()
   const { elicitation } = useStore()
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(item.request.fields.map((f) => [f.id, f.defaultValue ?? ''])),
@@ -1390,13 +1390,15 @@ function ElicitationCard({ item, chatId }: { item: Extract<TranscriptItem, { kin
             {f.label}
             {f.required ? ' *' : ''}
           </T>
-          <T size={font.caption} tone="muted">
-            {f.description || (f.options.length ? f.options.map((o) => `${o.label}: ${o.value}`).join(', ') : f.type)}
-          </T>
-          <TextInput
+          {f.description ? (
+            <T size={font.caption} tone="muted">
+              {f.description}
+            </T>
+          ) : null}
+          <ElicitationInput
+            field={f}
             value={answers[f.id] ?? ''}
-            onChangeText={(v) => setAnswers((old) => ({ ...old, [f.id]: v }))}
-            style={{ color: c.text, backgroundColor: c.fill, padding: space.m }}
+            onChange={(v) => setAnswers((old) => ({ ...old, [f.id]: v }))}
           />
         </View>
       ))}
@@ -1404,11 +1406,90 @@ function ElicitationCard({ item, chatId }: { item: Extract<TranscriptItem, { kin
         <Button kind="secondary" title={say('Decline')} onPress={() => elicitation(chatId, item.id, 'decline', {})} />
         <Button
           title={say('Submit')}
-          disabled={item.request.fields.some((f) => f.required && !answers[f.id]?.trim())}
+          disabled={item.request.fields.some((f) => f.required && !elicitationAnswered(f, answers[f.id] ?? ''))}
           onPress={() => elicitation(chatId, item.id, 'accept', answers)}
         />
       </View>
     </Card>
+  )
+}
+
+/** A required answer is present: a non-empty text or number, a yes/no, or at least one choice of a list. */
+export function elicitationAnswered(field: ElicitationField, value: string) {
+  if (field.type === 'array') return selectedChoices(value).length > 0
+  return value.trim().length > 0
+}
+
+const selectedChoices = (value: string): string[] => {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * One form field as the matching control, encoded as the desktop encodes it: a choice's value, `true`/`false`, digits
+ * on a number keyboard, or a JSON list for several choices.
+ */
+function ElicitationInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: ElicitationField
+  value: string
+  onChange(value: string): void
+}) {
+  const say = useSay()
+  const { c } = useTheme()
+  const choices =
+    field.type === 'boolean'
+      ? [
+          { value: 'true', label: say('Yes') },
+          { value: 'false', label: say('No') },
+        ]
+      : field.options
+  if (choices.length) {
+    const selected = field.type === 'array' ? selectedChoices(value) : []
+    return (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+        {choices.map((choice) => {
+          const on = field.type === 'array' ? selected.includes(choice.value) : value === choice.value
+          return (
+            <Chip
+              key={choice.value}
+              label={choice.label}
+              selected={on}
+              onPress={() =>
+                onChange(
+                  field.type === 'array'
+                    ? JSON.stringify(
+                        on ? selected.filter((entry) => entry !== choice.value) : [...selected, choice.value],
+                      )
+                    : on && !field.required
+                      ? ''
+                      : choice.value,
+                )
+              }
+            />
+          )
+        })}
+      </View>
+    )
+  }
+  const numeric = field.type === 'number' || field.type === 'integer'
+  return (
+    <TextInput
+      accessibilityLabel={field.label}
+      value={value}
+      maxLength={10000}
+      keyboardType={field.type === 'integer' ? 'number-pad' : field.type === 'number' ? 'decimal-pad' : 'default'}
+      autoCapitalize={numeric ? 'none' : 'sentences'}
+      onChangeText={(next) => onChange(field.type === 'integer' ? next.replace(/[^\d-]/g, '') : next)}
+      style={{ color: c.text, backgroundColor: c.fill, padding: space.m, borderRadius: radius.m }}
+    />
   )
 }
 

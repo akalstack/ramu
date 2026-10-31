@@ -1579,6 +1579,7 @@ test('file suggestions qualify cached catalogs by host even when scope and repos
   const hooks = hookHarness()
   const calls = []
   const store = {
+    appPreferences: {},
     isOnline: () => true,
     mayUse: () => true,
     invoke: async (host, method) => {
@@ -8004,4 +8005,22 @@ test('the Skills & MCP page reads shared servers and a project’s skills withou
     false,
   )
   hooks.dispose()
+})
+
+test('a required MCP form answer counts only once it holds a value, and a list needs at least one choice', () => {
+  const { elicitationAnswered } = load('components/Transcript.tsx', 'ios', {
+    react: { memo: (component) => component, ...require('react') },
+    '../runtime/store': { useStore: () => ({}) },
+    '@ramu/shared/i18n': { translate: (_language, text) => text },
+    '../i18n': { useT: () => ({}), fill: (text) => text },
+    './ui': { ...components, tap() {}, T: 'T', Card: 'Card' },
+    './Motion': { Collapse: 'Collapse', Disclosure: 'Disclosure', Breathe: 'Breathe', Arrive: 'Arrive' },
+  })
+  const field = (type) => ({ id: 'f', label: 'F', type, required: true, options: [] })
+  assert.equal(elicitationAnswered(field('string'), '  '), false)
+  assert.equal(elicitationAnswered(field('integer'), '3'), true)
+  assert.equal(elicitationAnswered(field('boolean'), 'false'), true)
+  assert.equal(elicitationAnswered(field('array'), '[]'), false)
+  assert.equal(elicitationAnswered(field('array'), 'not json'), false)
+  assert.equal(elicitationAnswered(field('array'), '["a"]'), true)
 })

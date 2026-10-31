@@ -125,6 +125,20 @@ export function useComposerSuggest({
               insertion: '/goal resume',
             },
             {
+              id: 'goal-clear',
+              label: '/goal clear',
+              description: 'Clear goal',
+              kind: 'Command' as const,
+              insertion: '/goal clear',
+            },
+            {
+              id: 'mcp',
+              label: '/mcp',
+              description: 'Show MCP servers and skills',
+              kind: 'Command' as const,
+              run: go({ pathname: '/settings/[section]', params: { section: 'setup' } }),
+            },
+            {
               id: 'aside',
               label: '/aside',
               description: 'Ask a side question without interrupting the thread',
@@ -147,7 +161,40 @@ export function useComposerSuggest({
         kind: 'Command',
         insertion: 'Create a schedule for: ',
       },
+      {
+        id: 'schedules',
+        label: '/schedules',
+        description: 'Open schedules and run history',
+        kind: 'Command',
+        run: go('/(tabs)/schedules'),
+      },
+      { id: 'recap', label: '/recap', description: 'Open your daily recap', kind: 'Command', run: go('/(tabs)/inbox') },
       { id: 'settings', label: '/settings', description: 'Open app settings', kind: 'Command', run: go('/settings') },
+      ...(store.appPreferences[computerId]?.memory.enabled === false
+        ? []
+        : [
+            {
+              id: 'remember',
+              label: '/remember',
+              description: 'Save something to shared memory',
+              kind: 'Command' as const,
+              insertion: 'Remember this for future threads: ',
+            },
+            {
+              id: 'forget',
+              label: '/forget',
+              description: 'Ask the agent to forget a memory',
+              kind: 'Command' as const,
+              insertion: 'Forget this memory: ',
+            },
+            {
+              id: 'memory',
+              label: '/memory',
+              description: 'Open saved memories',
+              kind: 'Command' as const,
+              run: go({ pathname: '/settings/[section]', params: { section: 'workflows' } }),
+            },
+          ]),
       {
         id: 'learn',
         label: '/learn',
