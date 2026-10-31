@@ -192,7 +192,6 @@ export const appPreferences = z.object({
   notifyAgentDone: z.boolean().default(true),
   resumeChatsOnRestart: z.boolean().default(true),
   asyncQuestions: z.boolean().default(true),
-  idleCompaction: z.boolean().default(false),
   autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60),
   providerBinaries: providerBinaries.default({}),
   providerUpdateChecks: z.boolean().default(true),

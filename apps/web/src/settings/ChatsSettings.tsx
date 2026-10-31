@@ -65,12 +65,6 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         title="Keep working while asking questions"
         description="Let the agent continue independent work while it waits for your answer. Applies when a thread starts or restarts."
       />
-      <ToggleRow
-        {...toggleProps}
-        setting="idleCompaction"
-        title="Trim long Claude threads before they go cold"
-        description="When a long Claude thread sits idle and its prompt cache is about to lapse, summarize it so the next message is cheaper to resume. Costs one summary turn."
-      />
       <SettingsGroupTitle>{t('Thread history')}</SettingsGroupTitle>
       <SettingsRow setting="recentChats">
         <SettingsLabel

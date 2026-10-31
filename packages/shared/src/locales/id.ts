@@ -1830,8 +1830,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Disconnected from Ramu. This service has no way to revoke a sign-in, so it stays valid there until it expires. Revoke it in the service’s own settings if you need it ended now.": "Terputus dari Ramu. Layanan ini tidak punya cara mencabut login, jadi login tetap berlaku di sana sampai kedaluwarsa. Cabut di pengaturan layanan itu sendiri jika perlu diakhiri sekarang.",
   "Disconnected from Ramu, but the service could not be asked to revoke the sign-in. Revoke it in the service’s own settings if you need it ended now.": "Terputus dari Ramu, tetapi layanan tidak dapat diminta mencabut login. Cabut di pengaturan layanan itu sendiri jika perlu diakhiri sekarang.",
   "Keep working while asking questions": "Tetap bekerja sambil bertanya",
-  "Trim long Claude threads before they go cold": "Ringkas thread Claude yang panjang sebelum dingin",
-  "When a long Claude thread sits idle and its prompt cache is about to lapse, summarize it so the next message is cheaper to resume. Costs one summary turn.": "Saat thread Claude yang panjang diam dan cache prompt-nya hampir habis, ringkas agar pesan berikutnya lebih murah dilanjutkan. Memakai satu giliran ringkasan.",
   "Keep working while commands run": "Tetap bekerja selagi perintah berjalan",
   "Run in background": "Jalankan di latar belakang",
   "Move long-running Claude commands to the background after this delay. Off leaves this to Run in background.": "Pindahkan perintah Claude yang berjalan lama ke background setelah jeda ini. Jika mati, gunakan Run in background.",

@@ -46,7 +46,6 @@ import { SessionStarter } from './agent/sessionStarter'
 import { RestartRecovery } from './agent/restartRecovery'
 import { ContextUsageTracker } from './agent/contextUsage'
 import type { AgentHost, Collaborators } from './agent/hosts'
-import { IdleCompactor } from './agent/idleCompactor'
 
 export type { QueryFn } from './agent/types'
 export { stripRouterLine, cleanTitle, splitBranchLine } from './agent/text'
@@ -214,8 +213,6 @@ export class AgentService {
       pendingBackground: (...a) => parts.registry.pendingBackground(...a),
       policyOf: (...a) => parts.router.policyOf(...a),
       launchSettings: (...a) => parts.process.launchSettings(...a),
-      idleStateChanged: (...a) => parts.idle.stateChanged(...a),
-      noteCredits: (...a) => parts.idle.noteCredits(...a),
       preferences: () => this.preferences?.(),
       preferencesSource: () => this.preferences,
       providerQuery: (args) => this.providerQuery(args),
@@ -319,7 +316,6 @@ export class AgentService {
     parts.starter = new SessionStarter(host, this.db)
     parts.recovery = new RestartRecovery(host, this.db)
     parts.contexts = new ContextUsageTracker(host, this.db)
-    parts.idle = new IdleCompactor(host)
     this.parts = parts
   }
 
@@ -390,7 +386,6 @@ export class AgentService {
     this.shutdown = true
     this.parts.providerWaits.clearProviderTimers()
     this.parts.goals.clearGoalTimers()
-    this.parts.idle.clear()
     this.parts.analysis.cancelAnalyses()
     const { registry, store, dispatcher, process } = this.parts
     for (const id of new Set([...registry.live.keys(), ...registry.runners.keys()])) {
