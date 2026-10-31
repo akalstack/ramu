@@ -634,6 +634,8 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
       ? `${current?.verb ?? ''} ${current?.subject ?? ''}`.trim()
       : [...counts].map(([verb, count]) => `${verb}${count > 1 ? ` ×${count}` : ''}`).join(' · ')
   const Icon = current ? toolIcons[current.tool] : Wrench
+  // Tools already here when the group appeared stay still; ones that arrive later fade in.
+  const initial = useRef(new Set(item.tools.map((tool) => tool.id))).current
   return (
     <View style={{ gap: space.xs }}>
       <Pressable
@@ -650,7 +652,10 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
           <Icon size={14} color={failed ? c.bad : running ? c.accent : c.muted} />
         </Breathe>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <ActivityText active={running > 0}>{headline}</ActivityText>
+          {/* The headline follows the current tool; each change fades instead of jumping. */}
+          <Arrive animate={false} identity={headline}>
+            <ActivityText active={running > 0}>{headline}</ActivityText>
+          </Arrive>
         </View>
         {failed > 0 ? (
           <T size={font.caption} tone="bad">
@@ -662,7 +667,9 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
       <Collapse open={open}>
         <View style={{ paddingLeft: space.s, borderLeftWidth: 1, borderLeftColor: c.line, gap: space.xs }}>
           {item.tools.map((tool) => (
-            <ToolRow key={tool.id} item={tool} />
+            <Arrive key={tool.id} animate={!initial.has(tool.id)}>
+              <ToolRow item={tool} />
+            </Arrive>
           ))}
         </View>
       </Collapse>

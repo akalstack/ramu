@@ -60,7 +60,7 @@ import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../componen
 import { PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
-import { Arrive, Presence, useReducedMotion } from '../../../components/Motion'
+import { Arrive, Presence, animateLayout, useReducedMotion } from '../../../components/Motion'
 import { WorkingLine } from '../../../components/WorkingLine'
 import { ChatActionsSheet, confirmChatDeletion } from '../../../components/ChatActions'
 import * as Clipboard from 'expo-clipboard'
@@ -394,6 +394,13 @@ export default function ChatScreen() {
     })
     return map
   }, [pageRows, store.language])
+  // New rows ease the rows around them into place instead of the list jumping.
+  const rowCount = useRef<number | null>(null)
+  const itemCount = chat?.items.length ?? 0
+  useEffect(() => {
+    if (rowCount.current !== null && itemCount > rowCount.current) animateLayout(180)
+    rowCount.current = itemCount
+  }, [itemCount])
   const renderRow = ({ item }: { item: TranscriptItem; index: number }) => {
     const fresh = !seen.current.has(item.id)
     seen.current.add(item.id)
