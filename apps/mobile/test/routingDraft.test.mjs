@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   encodeRouteChoice,
+  opensOnComposer,
   readRouteChoice,
   readRoutingSelection,
   routingSelectionKey,
@@ -52,4 +53,11 @@ test('bounds persistent routing payloads and never restores a malformed candidat
     ]),
     null,
   )
+})
+test('opens on the composer with Auto, and on the project picker when Auto cannot route', () => {
+  assert.equal(opensOnComposer({ auto: true, offline: false, projects: 2 }), true)
+  assert.equal(opensOnComposer({ project: 'a:p', auto: false, offline: true, projects: 0 }), true)
+  assert.equal(opensOnComposer({ auto: false, offline: false, projects: 2 }), false)
+  assert.equal(opensOnComposer({ auto: true, offline: true, projects: 2 }), false)
+  assert.equal(opensOnComposer({ auto: true, offline: false, projects: 0 }), false)
 })

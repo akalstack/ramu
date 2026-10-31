@@ -47,7 +47,7 @@ Today Auto routes a prompt to one project. When several fit, the outcome is `amb
 - **Review before anything starts.** Home shows the split as a short list: project, host, checkout and brief per row, each editable and removable, with **Start all**, **Start as one thread** and **Cancel**. A split always waits for this review, even in Full access, and never starts more than 8 threads. Drafts keep the list until it is started or cancelled.
 - **Across hosts without host-to-host pairing.** The routing catalog includes projects from every connected host. A person is present on Home, so the desktop or phone starts each thread on its own host over the connections it already has. Only names, aliases and descriptions reach the routing model, as today.
 - **Threads that know each other.** The threads start as a group. Each shows **Started together with ‹n› threads**, the sidebar groups them, and they can use `thread_status` and `thread_message` on their siblings, so a contract change reaches the others. Home shows one group card with each thread's state and a short combined summary when all finish or any waits for input.
-- Phone: the same review list as a sheet, and the group card in Home.
+- Phone: a new thread already opens on the composer when Auto is on, so a split follows from the first message. The review list appears as a sheet over the composer, editable row by row, and Home shows the group card.
 
 ### 3. Other hosts
 

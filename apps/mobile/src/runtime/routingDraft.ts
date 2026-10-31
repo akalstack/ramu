@@ -12,6 +12,13 @@ export interface RoutingSelection {
   auto: boolean
   projectId: string | null
 }
+/**
+ * Whether the new-thread screen opens on the composer instead of the project picker. With Auto the first message picks
+ * the project; Auto cannot route offline or with no projects, so those start on the picker.
+ */
+export const opensOnComposer = (state: { project?: string; auto: boolean; offline: boolean; projects: number }) =>
+  !!state.project || (state.auto && !state.offline && state.projects > 0)
+
 export function readRoutingSelection(
   drafts: Record<string, string>,
   host: string,

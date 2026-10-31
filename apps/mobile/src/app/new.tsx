@@ -14,6 +14,7 @@ import { routingChoiceLabels } from '../runtime/routingChoices'
 import {
   encodeRouteChoice,
   readRouteChoice,
+  opensOnComposer,
   readRoutingSelection,
   routingSelectionKey,
   routingSnapshot,
@@ -102,7 +103,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const [selected, setHost] = useState(params.computer ?? store.selected)
   const offline = !isOnline(selected)
   const list = projects.filter((p) => p.computerId === selected)
-  // A chat runs in a project's folders, so the project is chosen first rather than defaulted.
+  // A chat runs in a project's folders, so the project is chosen (by hand or by Auto) rather than defaulted.
   const initialSelection = () =>
     readRoutingSelection(
       store.drafts,
@@ -231,7 +232,9 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const reviewKey = JSON.stringify([selected, projectId, branchTitle, namingIntent, branchPrefix, branchChoice])
   const [reviewed, setReviewed] = useState<{ key: string; plan: WorktreePlanEntry[] } | null>(null)
   type Picker = 'project' | 'mode' | 'host' | 'choice' | null
-  const [picker, setPickerState] = useState<Picker>(params.project ? null : 'project')
+  const [picker, setPickerState] = useState<Picker>(() =>
+    opensOnComposer({ project: params.project, auto, offline, projects: list.length }) ? null : 'project',
+  )
   const setPicker = (next: Picker) => {
     if (next) Keyboard.dismiss()
     setPickerState(next)

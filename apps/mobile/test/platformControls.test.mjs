@@ -944,7 +944,8 @@ test('new thread switches projects and composer in one flow without losing the d
     subscribe: () => () => {},
     drafts: {},
     defaults: {},
-    appPreferences: {},
+    // Auto off: with Auto on the screen opens on the composer instead of this picker.
+    appPreferences: { a: { autoProjectSelection: false } },
     isOnline: () => true,
     mayUse: () => true,
     setDraft: (key, value) => {
