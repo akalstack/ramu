@@ -4030,4 +4030,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "The skills library and its model choices are managed in Ramu on the host.": "Pustaka skill dan pilihan modelnya dikelola di Ramu pada host.",
   "Browser profiles, imports and downloads are managed in Ramu on the host.": "Profil peramban, impor, dan unduhan dikelola di Ramu pada host.",
   "The commit message model is chosen in Ramu on the host.": "Model pesan commit dipilih di Ramu pada host.",
+  "Not connected. This is the last activity Ramu saw; the agent keeps working on the host.":
+    "Tidak terhubung. Ini aktivitas terakhir yang dilihat Ramu; agen tetap bekerja di host.",
 }
