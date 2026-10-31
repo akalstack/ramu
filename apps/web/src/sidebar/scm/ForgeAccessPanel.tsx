@@ -12,7 +12,9 @@ export const openHostingSettings = () =>
   window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git', target: 'Hosting accounts' } }))
 
 /** Why pull requests are unavailable here, with the one action that fixes it. */
-export function forgeUnavailableText(availability: ForgeAvailability): string {
+export function forgeUnavailableText(availability: ForgeAvailability, service: 'github' | 'gitlab' = 'github'): string {
+  if (service === 'gitlab')
+    return t('Sign in to GitLab with glab auth login, or set GITLAB_TOKEN on the host, to open merge requests here.')
   switch (availability) {
     case 'no-cli':
       return t(
@@ -30,10 +32,12 @@ export function ForgeAccessPanel({
   taskId,
   repoId,
   unavailable,
+  service = 'github',
 }: {
   taskId: string
   repoId: string
   unavailable?: ForgeAvailability
+  service?: 'github' | 'gitlab'
 }) {
   const { invoke } = useHost()
   const [report, setReport] = useState<ForgeAccessReport | null>(null)
@@ -107,7 +111,9 @@ export function ForgeAccessPanel({
 
   return (
     <div className="flex flex-col gap-1.5">
-      {unavailable && <p className="m-0 text-caption text-muted-foreground">{forgeUnavailableText(unavailable)}</p>}
+      {unavailable && (
+        <p className="m-0 text-caption text-muted-foreground">{forgeUnavailableText(unavailable, service)}</p>
+      )}
       <div className="flex flex-wrap gap-1.5">
         <Button
           variant="secondary"
@@ -119,9 +125,11 @@ export function ForgeAccessPanel({
         >
           {busy ? t('Checking…') : t('Check access')}
         </Button>
-        <Button variant="ghost" size="sm" className="small text-caption" onClick={openHostingSettings}>
-          {t('Open GitHub settings')}
-        </Button>
+        {service === 'github' && (
+          <Button variant="ghost" size="sm" className="small text-caption" onClick={openHostingSettings}>
+            {t('Open GitHub settings')}
+          </Button>
+        )}
       </div>
       {error && (
         <p role="alert" className="m-0 text-caption text-destructive">

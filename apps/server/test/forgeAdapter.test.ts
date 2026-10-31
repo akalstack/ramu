@@ -15,17 +15,19 @@ const OPERATIONS: (keyof ForgeAdapter)[] = [
   'searchRepositories',
 ]
 
-it('registers GitHub behind the shared boundary, with every operation the facade offers', () => {
-  const github = forgeAdapter('github')
-  expect(github.id).toBe('github')
-  for (const operation of OPERATIONS) expect(typeof github[operation]).toBe('function')
-  // The facade and the adapter are the same implementation, not two copies.
-  expect(github.pullRequestStatus).toBe(forge.pullRequestStatus)
-  expect(github.searchRepositories).toBe(forge.searchRepositories)
-  expect(forge.forgeAdapter('github')).toBe(github)
+it('registers GitHub and GitLab behind the shared boundary, with every operation the facade offers', () => {
+  for (const id of ['github', 'gitlab'] as const) {
+    const adapter = forgeAdapter(id)
+    expect(adapter.id).toBe(id)
+    for (const operation of OPERATIONS) {
+      expect(typeof adapter[operation]).toBe('function')
+      expect(typeof (forge as Record<string, unknown>)[operation]).toBe('function')
+    }
+  }
+  expect(forge.forgeAdapter('github')).toBe(forgeAdapter('github'))
 })
 
 it('refuses a second adapter for the same provider and a provider with none', () => {
   expect(() => registerForgeAdapter(forgeAdapter('github'))).toThrow('already registered')
-  expect(() => forgeAdapter('gitlab' as never)).toThrow('No forge adapter')
+  expect(() => forgeAdapter('bitbucket' as never)).toThrow('No forge adapter')
 })

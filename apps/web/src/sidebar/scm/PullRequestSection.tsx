@@ -118,7 +118,12 @@ export function PullRequestSection({
   if (availability !== 'ready')
     return (
       <div className="m-[0_2px_8px]">
-        <ForgeAccessPanel taskId={taskId} repoId={binding.repoId} unavailable={availability} />
+        <ForgeAccessPanel
+          taskId={taskId}
+          repoId={binding.repoId}
+          unavailable={availability}
+          service={query.data.service}
+        />
       </div>
     )
 

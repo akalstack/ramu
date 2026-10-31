@@ -4017,4 +4017,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Memories": "Memori",
   "Nothing archived": "Tidak ada yang diarsipkan",
   "No memories yet": "Belum ada memori",
+  "Sign in to GitLab with glab auth login, or set GITLAB_TOKEN on the host, to open merge requests here.":
+    "Masuk ke GitLab dengan glab auth login, atau atur GITLAB_TOKEN di host, untuk membuka merge request di sini.",
+  "Merge requests, pipelines and issues use the host’s glab sign-in (glab auth login) or its GITLAB_TOKEN, for gitlab.com and self-managed servers.":
+    "Merge request, pipeline, dan issue memakai login glab di host (glab auth login) atau GITLAB_TOKEN-nya, untuk gitlab.com dan server yang dikelola sendiri.",
 }

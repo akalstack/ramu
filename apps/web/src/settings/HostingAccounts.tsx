@@ -11,7 +11,7 @@ import { useSettingsInvoke } from './SettingsScope'
 import { accountDetail, connectionHeadline, savedDetail } from './hostingStatus'
 
 /** Providers shown for orientation only: no setup, no network calls, no background work until they are built. */
-const COMING_SOON = ['GitLab', 'Bitbucket Cloud', 'Azure DevOps'] as const
+const COMING_SOON = ['Bitbucket Cloud', 'Azure DevOps'] as const
 
 type Form = { replace: ForgeSavedConnection | null }
 
@@ -383,6 +383,14 @@ export function HostingAccounts() {
           </p>
         </Dialog>
       )}
+      <SettingsRow>
+        <SettingsLabel
+          title="GitLab"
+          help={t(
+            'Merge requests, pipelines and issues use the host’s glab sign-in (glab auth login) or its GITLAB_TOKEN, for gitlab.com and self-managed servers.',
+          )}
+        />
+      </SettingsRow>
       {COMING_SOON.map((name) => (
         <SettingsRow key={name}>
           <SettingsLabel title={name} />

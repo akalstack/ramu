@@ -12,7 +12,11 @@ Ramu works with GitHub through the [GitHub CLI](https://cli.github.com) (`gh`). 
 - In **Source Control**, **Check access** reports API reads, writes and Git transport separately, without a test commit or push, and links to the Settings row when something is missing. When GitHub is not usable, **Set up GitHub** opens that row.
 - **Publish to GitHub** names the account it will create the repository under. **Add project → Clone from GitHub** (on a paired host) and the mobile host folder screen search the account's repositories and clone with the host's Git credentials; a pasted Git URL still works.
 
-GitLab, Bitbucket Cloud and Azure DevOps appear as informational **Coming soon** rows with no setup.
+## GitLab
+
+Repositories whose remote is on gitlab.com, or on a self-managed server the host's `glab` is signed in to (or that `GITLAB_HOST` names), use GitLab instead: merge requests for the current branch with their pipeline jobs and approval state, opening a merge request (a draft is titled `Draft:`), handing failing jobs or unresolved review threads to an agent, and issues. Ramu reads the token `glab auth login` saved, or `GITLAB_TOKEN`; it is sent only to that server's API and never stored or shown. Publishing and cloning from the GitLab account are not offered yet.
+
+Bitbucket Cloud and Azure DevOps remotes are recognised and appear as informational **Coming soon** rows; their checkouts show no pull request controls.
 
 ## Start a thread from an issue
 

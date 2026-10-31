@@ -35,6 +35,8 @@ export interface PullRequestWatchStatus {
 
 export interface ForgeStatus {
   availability: ForgeAvailability
+  /** The hosting service, so a sign-in hint names the right one. Absent means GitHub (and on older hosts). */
+  service?: 'github' | 'gitlab'
   /** The pull request for the checked-out branch, if one exists. */
   pullRequest: PullRequestInfo | null
 }
