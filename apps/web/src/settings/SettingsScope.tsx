@@ -13,6 +13,7 @@ import {
 import { recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { invoke, invokeOn, ramu } from '../ipc'
 import { isViewOnly, VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
+import { mayUse } from '@ramu/shared/devicePermissions'
 import { useComputers, statusText } from '../workspace/computers'
 import { errorText } from '../lib/errors'
 import { readSettingsSnapshot, SettingsUpdateRequired } from './settingsAvailability'
@@ -51,6 +52,8 @@ interface Target {
   updateRequired?: boolean
   /** This device is paired view-only on that host, so a save there would be refused. Advisory; the host decides. */
   viewOnly?: boolean
+  /** This device lacks that host's Change settings permission, so a save there would be refused. Advisory too. */
+  needsPermission?: boolean
 }
 
 /** These pages configure one machine (binaries, login, service, network), so "all environments" has no meaning. */
@@ -115,7 +118,20 @@ export function useSettingsScope(section: string) {
               )
             : false
           confirmedRoles.current.set(id, viewOnly)
-          return { id, name, snapshot, ...(viewOnly ? { viewOnly } : {}) }
+          const needsPermission =
+            !!id &&
+            !viewOnly &&
+            (await invokeOn(id, 'device.permissions').then(
+              (view) => !mayUse(view, 'settings', Date.now()),
+              () => false,
+            ))
+          return {
+            id,
+            name,
+            snapshot,
+            ...(viewOnly ? { viewOnly } : {}),
+            ...(needsPermission ? { needsPermission } : {}),
+          }
         } catch (reason) {
           const updateRequired = reason instanceof SettingsUpdateRequired
           const local = available.find((computer) => computer.id === id)?.local ?? !id
@@ -189,7 +205,7 @@ export function useSettingsScope(section: string) {
     }
     return {
       schema,
-      disabled: !definition || !ready || targets.some((entry) => entry.viewOnly),
+      disabled: !definition || !ready || targets.some((entry) => entry.viewOnly || entry.needsPermission),
       mixed:
         !edited.has(path) &&
         snapshots.some((snapshot) => !sameValue(currentValue(snapshot, path), currentValue(primary!.snapshot!, path))),
@@ -226,6 +242,10 @@ export function useSettingsScope(section: string) {
     if (!ready || stale || saving) return false
     if (latestTargets.current.some((entry) => entry.viewOnly)) {
       setError(t(VIEW_ONLY_WRITE_NOTICE))
+      return false
+    }
+    if (latestTargets.current.some((entry) => entry.needsPermission)) {
+      setError(t('This device needs {0} on this host.', { 0: t('Change settings') }))
       return false
     }
     setSaving(true)
@@ -283,6 +303,8 @@ export function useSettingsScope(section: string) {
     primaryId: primary?.id,
     /** Names of the selected hosts where this device is view-only; saving there is refused, so it is not offered. */
     readOnlyHosts: targets.filter((entry) => entry.viewOnly).map((entry) => entry.name),
+    /** Selected hosts where this device may read settings but needs Change settings to save them. */
+    permissionHosts: targets.filter((entry) => entry.needsPermission && entry.id).map((entry) => entry.id!),
     loading,
     stale,
     ready,

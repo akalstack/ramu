@@ -31,6 +31,7 @@ import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { APP_AUTO_UPDATE } from '@ramu/shared/updates'
 import { useComputers } from '../workspace/computers'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
+import { PermissionNeeded } from './DevicePermissions'
 
 export const SETTINGS_GROUPS = ['Workspace', 'Agents', 'System'] as const
 
@@ -407,6 +408,9 @@ export function SettingsPage({
                           })
                         : t('Changes apply to the selected host.')))}
             </span>
+            {scope.permissionHosts.map((host) => (
+              <PermissionNeeded key={host} host={host} permission="settings" />
+            ))}
             {scope.restartTarget && (
               <Button
                 size="sm"
@@ -531,7 +535,14 @@ export function SettingsPage({
           <Button
             variant="default"
             className={PRIMARY_ACTION_CLASS}
-            disabled={busy || !hasChanges || (scope && !scope.ready) || !!scope?.readOnlyHosts.length || undefined}
+            disabled={
+              busy ||
+              !hasChanges ||
+              (scope && !scope.ready) ||
+              !!scope?.readOnlyHosts.length ||
+              !!scope?.permissionHosts.length ||
+              undefined
+            }
             onClick={onSave}
           >
             {busy ? t('Saving…') : t('Save changes')}
