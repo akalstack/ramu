@@ -3710,7 +3710,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Show keyboard": "Tampilkan keyboard",
   "Typing into the website": "Mengetik ke situs",
   "Tap to click, hold to right-click, drag to scroll, hold then drag to move, pinch to zoom": "Ketuk untuk klik, tahan untuk klik kanan, seret untuk menggulir, tahan lalu seret untuk memindahkan, cubit untuk memperbesar",
-  "Hide preview": "Sembunyikan pratinjau",
   "No settings match “{query}”.": "Tidak ada pengaturan yang cocok dengan “{query}”.",
   "Attach a file": "Lampirkan file",
   "Choose a photo": "Pilih foto",

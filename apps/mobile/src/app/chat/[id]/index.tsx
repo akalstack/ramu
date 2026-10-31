@@ -39,10 +39,10 @@ import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
 import { BrowserActivity } from '../../../components/BrowserActivity'
-import { BrowserFloat, BrowserNotice, useThreadBrowserTabs } from '../../../components/BrowserNotice'
+import { BrowserNotice, useThreadBrowserTabs } from '../../../components/BrowserNotice'
 import { useThreadToolActivity } from '../../../runtime/useThreadToolActivity'
 import { ComputerActivity } from '../../../components/ComputerActivity'
-import { ComputerFloat, ComputerUseNotice } from '../../../components/ComputerUseNotice'
+import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { translate } from '@ramu/shared/i18n'
 import { Composer } from '../../../components/Composer'
 import type { TranscriptItem } from '../../../runtime/types'
@@ -196,9 +196,6 @@ export default function ChatScreen() {
   const [sheet, setSheet] = useState(false)
   const [usageOpen, setUsageOpen] = useState(false)
   const [tool, setTool] = useState<'browser' | 'computer' | null>(null)
-  const [browserTab, setBrowserTab] = useState<string | null>(null)
-  const [floating, setFloating] = useState<'browser' | 'computer' | null>(null)
-  const [floatShown, setFloatShown] = useState({ browser: false, computer: false })
   const browserTabs = useThreadBrowserTabs(chat)
   const [backgroundFor, setBackgroundFor] = useState<string | null>(null)
   const [actions, setActions] = useState<'closed' | 'menu' | 'rename'>('closed')
@@ -1018,28 +1015,6 @@ export default function ChatScreen() {
               <BottomFade height={composerHeight * 0.75} color={c.window} />
               {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
               <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
-                {/* One preview at a time: whichever the agent started most recently. */}
-                <BrowserFloat
-                  chat={chat}
-                  tabs={browserTabs.tabs}
-                  viewable={browserTabs.viewable}
-                  hidden={tool !== null}
-                  covered={floating === 'computer' && floatShown.computer}
-                  onVisibleChange={(browser) => setFloatShown((shown) => ({ ...shown, browser }))}
-                  onReveal={() => setFloating('browser')}
-                  onOpen={(tabId) => {
-                    setBrowserTab(tabId)
-                    setTool('browser')
-                  }}
-                />
-                <ComputerFloat
-                  chat={chat}
-                  hidden={tool !== null}
-                  covered={floating === 'browser' && floatShown.browser}
-                  onVisibleChange={(computer) => setFloatShown((shown) => ({ ...shown, computer }))}
-                  onReveal={() => setFloating('computer')}
-                  onOpen={() => setTool('computer')}
-                />
                 <Composer
                   activity={
                     <>
@@ -1243,12 +1218,8 @@ export default function ChatScreen() {
       <BrowserActivity
         key={`browser:${chat.computerId}:${chat.taskId}`}
         chat={chat}
-        initialTab={browserTab}
         open={tool === 'browser'}
-        onClose={() => {
-          setTool(null)
-          setBrowserTab(null)
-        }}
+        onClose={() => setTool(null)}
       />
       <ComputerActivity
         key={`computer:${chat.computerId}:${chat.taskId}`}

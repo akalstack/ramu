@@ -86,7 +86,6 @@ export function BrowserViewer({
   chat,
   onClose,
   hostManaged,
-  initialTab,
 }: {
   chat: Chat
   onClose(): void
@@ -95,7 +94,6 @@ export function BrowserViewer({
    * because a desktop page is also on the person's screen at the computer.
    */
   hostManaged: boolean
-  initialTab?: string | null
 }) {
   const store = useStore()
   const viewOnly = store.computers?.find((host) => host.id === chat.computerId)?.access === 'viewer'
@@ -105,7 +103,7 @@ export function BrowserViewer({
   const { c: theme } = useTheme()
   const t = (text: string) => translate(store.language, text)
   const [tabs, setTabs] = useState<BrowserTabInfo[]>([])
-  const [selected, setSelected] = useState(initialTab ?? '')
+  const [selected, setSelected] = useState('')
   const [owned, setOwned] = useState<number | null>(null)
   const [frame, setFrame] = useState('')
   const [frameSize, setFrameSize] = useState({ width: 4, height: 3 })

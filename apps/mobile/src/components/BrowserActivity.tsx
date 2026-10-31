@@ -12,18 +12,7 @@ import { BrowserViewer } from './BrowserViewer'
 import { ViewerHeader, ViewerScreen } from './ViewerChrome'
 
 /** Observes the host's metadata. Opening a website here never transfers its sign-in or local address to the phone. */
-export function BrowserActivity({
-  chat,
-  open,
-  initialTab,
-  onClose,
-}: {
-  chat: Chat
-  open: boolean
-  /** The tab to show first, as when the floating preview is tapped. */
-  initialTab?: string | null
-  onClose(): void
-}) {
+export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boolean; onClose(): void }) {
   const store = useStore()
   const t = (key: string) => translate(store.language, key)
   const [hosted, setHosted] = useState(false)
@@ -83,7 +72,7 @@ export function BrowserActivity({
   return (
     <ViewerScreen open={open} onClose={onClose}>
       {open && hosted ? (
-        <BrowserViewer chat={chat} hostManaged={hostManaged} initialTab={initialTab} onClose={onClose} />
+        <BrowserViewer chat={chat} hostManaged={hostManaged} onClose={onClose} />
       ) : (
         <View style={{ flex: 1 }}>
           <ViewerHeader title={t('Browser')} subtitle={host} closeLabel={t('Close browser')} onClose={onClose} />

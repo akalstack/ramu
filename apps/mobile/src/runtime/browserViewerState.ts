@@ -171,12 +171,6 @@ export function fitSize(
   return { width, height }
 }
 
-/** The tab to preview over the chat: the newest one that appeared since the last read. Tabs already open never pop up. */
-export function revealedTab(previous: ReadonlySet<string> | null, tabs: readonly Pick<BrowserTabInfo, 'id'>[]) {
-  if (!previous) return null
-  return tabs.findLast((tab) => !previous.has(tab.id))?.id ?? null
-}
-
 /** The next page zoom step up or down, as a desktop browser's zoom buttons move; an odd value snaps onto the ladder. */
 export function zoomStep(current: number, direction: 1 | -1): number {
   const levels: readonly number[] = BROWSER_ZOOM_LEVELS

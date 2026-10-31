@@ -131,13 +131,6 @@ test('the page refits for a new width or the keyboard, never for small jitter', 
   assert.deepEqual(fitSize({ width: 320, height: 210 }, { width: 320, height: 500 }), { width: 320, height: 210 })
 })
 
-test('only a newly opened tab floats over the chat', async () => {
-  const { revealedTab } = await import('../src/runtime/browserViewerState.ts')
-  assert.equal(revealedTab(null, [{ id: 'a' }]), null)
-  assert.equal(revealedTab(new Set(['a']), [{ id: 'a' }]), null)
-  assert.equal(revealedTab(new Set(['a']), [{ id: 'a' }, { id: 'b' }, { id: 'c' }]), 'c')
-})
-
 test('zoom steps through the browser ladder and stops at its ends', async () => {
   const { zoomStep } = await import('../src/runtime/browserViewerState.ts')
   assert.equal(zoomStep(1, 1), 1.1)

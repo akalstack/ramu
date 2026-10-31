@@ -7842,38 +7842,3 @@ test('side-question input uses the thread dock and lifts the transcript inset wi
   assert.equal(find(tree, 'TextInput').props.value, 'draft stays here')
   hooks.dispose()
 })
-
-for (const os of ['ios', 'android']) {
-  test(`${os} browser preview occupies composer layout and offers separate open and hide targets`, () => {
-    let opened = 0,
-      hidden = 0
-    const { FloatPreview } = load('components/BrowserNotice.tsx', os, { './ui': { ...components, tap() {} } })
-    const tree = FloatPreview({
-      image: { uri: 'data:image/jpeg;base64,preview', aspect: 0.5 },
-      fallback: 'Globe',
-      title: 'Example page',
-      agent: true,
-      openLabel: 'Open browser',
-      hideLabel: 'Hide preview',
-      onOpen() {
-        opened++
-      },
-      onHide() {
-        hidden++
-      },
-    })
-    assert.equal(tree.props.style.position, undefined, 'preview reserves height instead of covering messages')
-    assert.equal(tree.props.style.top, undefined)
-    const image = nodes(tree).find((node) => node.props?.source?.uri?.includes('preview'))
-    assert.equal(image.props.resizeMode, 'contain', 'thumbnail preserves the entire page')
-    const close = nodes(tree).find((node) => node.props.accessibilityLabel === 'Hide preview')
-    assert.ok(close.props.style.width >= 44 && close.props.style.height >= 44)
-    close.props.onPress()
-    assert.equal(hidden, 1)
-    assert.equal(opened, 0)
-    nodes(tree)
-      .find((node) => node.props.accessibilityLabel === 'Open browser')
-      .props.onPress()
-    assert.equal(opened, 1)
-  })
-}
