@@ -3,7 +3,7 @@ import { cachedDataOn } from '../dataQueries'
 import { errorText } from '../lib/errors'
 import { visibleName } from '@ramu/shared/text'
 import { t, useLanguage, formatLocale } from '../i18n'
-import { FileIcon, fileStyle } from '../editor/FileIcon'
+import { FileIcon, fileToneClass } from '../editor/FileIcon'
 import { createPortal } from 'react-dom'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { useTabScroll } from '../lib/useTabScroll'
@@ -876,7 +876,7 @@ function ViewIcon({ kind, path }: { kind: ViewDescriptor['kind']; path?: string 
   useLanguage()
   if (kind === 'git') return <GitBranch size={13} className="kind" />
   if (kind === 'review') return <FileDiff size={13} className="kind" />
-  if (kind === 'diff') return <FileDiff size={13} className={path ? `kind file-kind ${fileStyle(path)[1]}` : 'kind'} />
+  if (kind === 'diff') return <FileDiff size={13} className={path ? `kind file-kind ${fileToneClass(path)}` : 'kind'} />
   if (kind === 'terminal') return <SquareTerminal size={13} className="kind" />
   if (kind === 'browser') return <Globe size={13} className="kind" />
   return path ? <FileIcon path={path} size={13} className="kind file-kind" /> : <FileText size={13} className="kind" />

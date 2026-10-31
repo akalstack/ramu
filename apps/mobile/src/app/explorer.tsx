@@ -1,4 +1,5 @@
 import { BottomSearch } from '../components/BottomSearch'
+import { FileIcon } from '../components/FileIcon'
 import { translate } from '@ramu/shared/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native'
@@ -8,7 +9,6 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
-  File,
   Files,
   FileText,
   Folder,
@@ -749,17 +749,21 @@ export default function Explorer() {
                     })
                     if (!directories[row.repoId]?.[row.entry.path]) void loadDirectory(binding, row.entry.path)
                   }}
-                  style={{
+                  android_ripple={{ color: c.pressed }}
+                  style={({ pressed }) => ({
                     flexDirection: 'row',
-                    backgroundColor:
-                      selected?.repoId === row.repoId && selected.path === row.entry.path ? c.accentWash : undefined,
+                    backgroundColor: pressed
+                      ? c.pressed
+                      : selected?.repoId === row.repoId && selected.path === row.entry.path
+                        ? c.accentWash
+                        : undefined,
                     alignItems: 'center',
                     gap: space.s,
                     minHeight: 44,
                     paddingVertical: space.s,
                     paddingRight: space.m,
                     paddingLeft: space.m + Math.min(row.depth, 8) * 14,
-                  }}
+                  })}
                 >
                   {/* Folder and file names line up: folders lead with a chevron, files with the same width of space. */}
                   {row.entry.kind === 'dir' ? (
@@ -771,7 +775,11 @@ export default function Explorer() {
                   ) : query.trim() ? null : (
                     <View style={{ width: 15 }} />
                   )}
-                  {row.entry.kind === 'dir' ? <Folder size={15} color={c.soft} /> : <File size={15} color={c.muted} />}
+                  {row.entry.kind === 'dir' ? (
+                    <Folder size={15} color={c.soft} />
+                  ) : (
+                    <FileIcon path={row.entry.name} size={15} />
+                  )}
                   <View style={{ flex: 1 }}>
                     <T numberOfLines={2}>{row.entry.name}</T>
                     {where ? (

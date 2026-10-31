@@ -4,6 +4,8 @@ import type { ReferenceChip } from '@ramu/shared/chat/referenceChip'
 import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { useTheme } from '../theme'
 import type { Icon } from './ui'
+import { FileIcon } from './FileIcon'
+import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 
 /** The same icon per kind as the desktop chip. Text symbols such as ▤ are missing from some phone fonts and draw as boxes. */
 const KIND_ICON: Record<ReferenceChip['kind'], Icon> = {
@@ -27,7 +29,11 @@ export function ReferenceBadge({ chip, onPress }: { chip: ReferenceChip; onPress
       style={{ color: c.accent, fontWeight: REFERENCE_APPEARANCE.fontWeight }}
     >
       <View style={{ paddingRight: REFERENCE_APPEARANCE.gap, transform: [{ translateY: 2 }] }}>
-        <I size={13} color={c.accent} strokeWidth={2} />
+        {chip.kind === 'file' ? (
+          <FileIcon path={(chip.target && localFileLink(chip.target)?.path) || chip.label} size={13} />
+        ) : (
+          <I size={13} color={c.accent} strokeWidth={2} />
+        )}
       </View>
       {chip.label}
     </Text>
