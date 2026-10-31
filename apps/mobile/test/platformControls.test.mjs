@@ -231,6 +231,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'a', name: 'Laptop' }],
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         if (args[1] === 'hostBrowser.status') return { available: false }
@@ -304,6 +305,7 @@ test('the phone opens its host browser directly inside the menu screen', async (
     language: 'en',
     computers: [{ id: 'a', name: 'Laptop' }],
     isOnline: () => true,
+    mayUse: () => true,
     invoke: async (_host, method) =>
       method === 'hostBrowser.status' ? { enabled: true, available: false } : { available: true, tabs: [] },
   }
@@ -338,6 +340,7 @@ test('a destination clarification keeps the composer draft instead of acknowledg
     appPreferences: {},
     drafts: { 'a:new:none': 'Fix login' },
     isOnline: () => true,
+    mayUse: () => true,
     setDraft: (key, value) => {
       store.drafts[key] = value
     },
@@ -392,6 +395,7 @@ for (const os of ['ios', 'android']) {
       computers: [{ id: 'remote', access: 'owner' }],
       projects: [{ id: 'remote:p', computerId: 'remote', name: 'Project' }],
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         await new Promise((resolve) => {
@@ -472,6 +476,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'remote', access: 'owner' }],
       isOnline: () => true,
+      mayUse: () => true,
       refresh: async () => {},
       invoke: async (...args) => {
         calls.push(args)
@@ -941,6 +946,7 @@ test('new thread switches projects and composer in one flow without losing the d
     defaults: {},
     appPreferences: {},
     isOnline: () => true,
+    mayUse: () => true,
     setDraft: (key, value) => {
       store.drafts[key] = value
     },
@@ -1037,6 +1043,7 @@ test('a new-thread form keeps its chosen host when the global selection changes'
       b: { worktreeBranchNaming: 'fixed' },
     },
     isOnline: () => true,
+    mayUse: () => true,
     createChat: async (input) => {
       submitted = input
       return 'a:new-chat'
@@ -1092,6 +1099,7 @@ test('helper details honor capabilities and disconnected hosts without losing th
     language: 'en',
     computers: [{ id: 'remote', status: 'online' }],
     isOnline: () => online,
+    mayUse: () => true,
     invoke: async (...args) => {
       calls.push(args)
     },
@@ -1181,6 +1189,7 @@ for (const os of ['ios', 'android']) {
       defaults: {},
       appPreferences: { a: { defaultCheckoutMode: 'current' } },
       isOnline: () => false,
+      mayUse: () => true,
       setDraft: (key, text) => {
         store.drafts[key] = text
       },
@@ -1352,6 +1361,7 @@ for (const os of ['ios', 'android']) {
       appPreferences: {},
       usage: {},
       isOnline: () => true,
+      mayUse: () => true,
       invoke: (host, method) => {
         const request = { host, method, ...deferred() }
         requests.push(request)
@@ -1444,6 +1454,7 @@ test('usage refresh explains old hosts, preserves data and opens the selected ho
     appPreferences: {},
     usage: { a: [reading] },
     isOnline: () => true,
+    mayUse: () => true,
     subscribe: () => () => {},
     select: (id) => {
       selected = id
@@ -1516,6 +1527,7 @@ for (const os of ['ios', 'android']) {
       projects: [{ id: 'remote:p', computerId: 'remote', name: 'Project' }],
       computers: [{ id: 'remote', name: 'Server' }],
       isOnline: () => true,
+      mayUse: () => true,
       subscribe: () => () => {},
       invoke: async (host, method, ...args) => {
         calls.push([host, method, ...args])
@@ -1568,6 +1580,7 @@ test('file suggestions qualify cached catalogs by host even when scope and repos
   const calls = []
   const store = {
     isOnline: () => true,
+    mayUse: () => true,
     invoke: async (host, method) => {
       calls.push([host, method])
       if (method === 'files.all') return [{ repoId: 'r', path: `${host}.ts` }]
@@ -1608,6 +1621,7 @@ for (const os of ['ios', 'android']) {
       missingMethods: {},
       appPreferences: {},
       isOnline: () => true,
+      mayUse: () => true,
       clearComposerDraft: () => true,
       setDraft: (key, value) => {
         store.drafts[key] = value
@@ -1694,6 +1708,7 @@ test('workspace catalogs discard late hosts, explain unsupported methods and cle
   let online = true
   const store = {
     isOnline: () => online,
+    mayUse: () => true,
     invoke: (host, method) => {
       const request = { host, method, ...deferred() }
       requests.push(request)
@@ -1746,6 +1761,7 @@ for (const os of ['ios', 'android']) {
     let online = true
     const store = {
       isOnline: () => online,
+      mayUse: () => true,
       invoke: (...args) => {
         calls.push(args)
         return request.promise
@@ -1813,6 +1829,7 @@ for (const os of ['ios', 'android']) {
       chats: [{ id: 'remote:chat', computerId: 'remote', taskId: 'task', projectId: 'remote:p' }],
       drafts: { 'remote:chat:task': '> Keep quote\n\nReview this', 'remote:chat:task:attachments': '[{"id":"image"}]' },
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         if (args[1] === 'files.explorerBindings') return [{ repoId: 'r', repoName: 'Repo', setupState: 'ready' }]
@@ -1872,6 +1889,7 @@ for (const os of ['ios', 'android']) {
       chats: [],
       drafts: { 'host:new:host:p': 'Urgent unrelated draft' },
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (_host, method) =>
         method === 'files.explorerBindings'
           ? [{ repoId: 'r', repoName: 'Repo', setupState: 'ready' }]
@@ -1941,6 +1959,7 @@ test('file previews discard late host reads and an absent standalone binding nev
     chats: [],
     projects: [],
     isOnline: () => true,
+    mayUse: () => true,
     invoke: async (host, method) => {
       reads.push([host, method])
       if (host === 'a') return pending.promise
@@ -1995,6 +2014,7 @@ for (const os of ['ios', 'android']) {
         { id: 'b', name: 'Server' },
       ],
       isOnline: () => true,
+      mayUse: () => true,
       subscribe: () => () => {},
       invoke: async (host, method, context, repoId, path) => {
         calls.push([host, method, context, repoId, path])
@@ -2129,6 +2149,7 @@ test('returning from Explorer updates only the mounted composer’s context and 
     appPreferences: {},
     drafts: { 'a:chat:task': 'Keep my original request', 'a:chat:task:attachments': '[{"id":"image","name":"Photo"}]' },
     isOnline: () => true,
+    mayUse: () => true,
     setDraft: (key, value) => {
       store.drafts[key] = value
     },
@@ -2216,6 +2237,7 @@ for (const [initial, path] of [
       chats: [{ id: 'a:chat', taskId: 'task', computerId: 'a', projectId: 'a:p' }],
       drafts: {},
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         if (args[1] === 'files.explorerBindings') return [{ repoId: 'r', setupState: 'ready', repoName: 'Repo' }]
@@ -2269,6 +2291,7 @@ test('a file browsed from New returns to its original composer and keeps its wor
     chats: [],
     drafts: { 'a:new:a:p': '> Preserve quote\n\nExisting work', 'a:new:a:p:workspace': '{"version":1,"mode":null}' },
     isOnline: () => true,
+    mayUse: () => true,
     invoke: async (_host, method) =>
       method === 'files.explorerBindings' ? [{ repoId: 'r', setupState: 'ready' }] : { content: 'Readme' },
     addExplorerFile(input) {
@@ -2388,6 +2411,7 @@ for (const scenario of ['unsupported', 'folder', 'line']) {
       projects: [{ id: 'a:p', computerId: 'a' }],
       chats: [],
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         if (scenario === 'unsupported') throw Error('Unknown method files.explorerBindings')
@@ -2460,6 +2484,7 @@ test('a later line link to an already-open Markdown preview switches to source a
     projects: [],
     chats: [],
     isOnline: () => true,
+    mayUse: () => true,
     invoke: async (_host, method) => {
       calls.push(method)
       return method === 'files.explorerBindings'
@@ -2528,6 +2553,7 @@ for (const scenario of ['offline', 'missing', 'old-host', 'available', 'changed-
       },
       clearComposerDraft: () => true,
       isOnline: () => scenario !== 'offline',
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         if (scenario === 'old-host') throw new Error('Unknown method attachments.status')
@@ -2665,6 +2691,7 @@ for (const os of ['ios', 'android']) {
       defaults: {},
       appPreferences: { a: { defaultCheckoutMode: 'current' } },
       isOnline: () => true,
+      mayUse: () => true,
       setDraft: (key, value) => {
         store.drafts[key] = value
       },
@@ -2845,6 +2872,7 @@ for (const os of ['ios', 'android']) {
       defaults: {},
       appPreferences: { a: { defaultCheckoutMode: 'current' } },
       isOnline: () => true,
+      mayUse: () => true,
       setDraft: (key, value) => {
         store.drafts[key] = value
       },
@@ -3228,6 +3256,7 @@ for (const os of ['ios', 'android']) {
       defaults: {},
       appPreferences: { a: { defaultCheckoutMode: 'current' } },
       isOnline: () => online,
+      mayUse: () => true,
       setDraft: (key, value) => {
         store.drafts[key] = value
       },
@@ -3393,6 +3422,7 @@ for (const os of ['ios', 'android']) {
         { id: 'b', name: 'Server' },
       ],
       isOnline: () => true,
+      mayUse: () => true,
       subscribe: () => () => {},
       invoke: async (host, method, context, repo, path, cursor) => {
         calls.push([host, method, context, repo, path, cursor])
@@ -3522,6 +3552,7 @@ test('usage refresh recovers after transient failure and reconnect without losin
     appPreferences: {},
     usage: {},
     isOnline: () => online,
+    mayUse: () => true,
     subscribe: (_host, listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
@@ -3612,6 +3643,7 @@ for (const os of ['ios', 'android']) {
     let finish
     const store = {
       isOnline: () => true,
+      mayUse: () => true,
       subscribe: () => () => {},
       invoke: async (host, method, ...args) => {
         calls.push([host, method, ...args])
@@ -3682,6 +3714,7 @@ for (const os of ['ios', 'android']) {
     let online = true
     const store = {
       isOnline: () => online,
+      mayUse: () => true,
       subscribe: (host, listener) => {
         listeners.set(host, listener)
         return () => listeners.delete(host)
@@ -3835,6 +3868,7 @@ for (const os of ['ios', 'android']) {
     const store = {
       drafts: {},
       isOnline: () => online,
+      mayUse: () => true,
       setDraft: (key, value) => {
         store.drafts[key] = value
       },
@@ -3903,6 +3937,7 @@ for (const os of ['ios', 'android']) {
     const store = {
       drafts: {},
       isOnline: () => true,
+      mayUse: () => true,
       subscribe: () => () => {},
       setDraft: (key, value) => {
         store.drafts[key] = value
@@ -3952,6 +3987,7 @@ for (const os of ['ios', 'android']) {
     const store = {
       drafts: { 'a:new:a:p:agent': '{"version":99}' },
       isOnline: () => true,
+      mayUse: () => true,
       subscribe: () => () => {},
       setDraft: (key, value) => {
         store.drafts[key] = value
@@ -4001,6 +4037,7 @@ for (const os of ['ios', 'android']) {
       defaults: { a: modelBase },
       appPreferences: { a: { defaultCheckoutMode: 'current' } },
       isOnline: () => true,
+      mayUse: () => true,
       subscribe: () => () => {},
       setDraft: (key, value) => {
         store.drafts[key] = value
@@ -4099,6 +4136,7 @@ for (const os of ['ios', 'android']) {
     const store = {
       drafts: {},
       isOnline: () => false,
+      mayUse: () => true,
       subscribe: () => () => {},
       setDraft: (key, value) => {
         store.drafts[key] = value
@@ -4141,6 +4179,7 @@ for (const os of ['ios', 'android']) {
     const store = {
       drafts: {},
       isOnline: () => true,
+      mayUse: () => true,
       setDraft() {},
       subscribe: (_host, read) => {
         listener = read
@@ -4416,6 +4455,7 @@ for (const os of ['ios', 'android']) {
       ],
       drafts: { message: 'keep this draft' },
       isOnline: () => online,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         if (options.invoke) return options.invoke(...args)
@@ -4669,6 +4709,7 @@ for (const os of ['ios', 'android']) {
     const hooks = hookHarness(),
       calls = []
     const store = {
+      mayUse: () => true,
       computers: [{ id: 'a', status: 'online', name: 'Host A' }],
       chats: [],
       projects: [],
@@ -4820,6 +4861,7 @@ for (const accepted of [true, false]) {
       appPreferences: {},
       drafts: { 'a:chat:one': 'Do the work' },
       isOnline: () => true,
+      mayUse: () => true,
       setDraft(key, value) {
         store.drafts[key] = value
       },
@@ -4963,6 +5005,7 @@ test('tool activity shortcuts follow actual tabs and sessions and ignore late re
     update
   const store = {
     isOnline: () => true,
+    mayUse: () => true,
     invoke: async (_host, method) => {
       if (method === 'hostBrowser.status') return { enabled: true }
       if (method === 'hostBrowser.list') return browser ? [{ id: 'tab' }] : []
@@ -5296,6 +5339,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'host', status: 'online', access: 'owner' }],
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
       },
@@ -5461,6 +5505,7 @@ for (const os of ['ios', 'android']) {
       computers: [{ id: 'host', status: 'online', access: 'owner' }],
       chats: [],
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         return []
@@ -5705,6 +5750,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'a', access: 'owner' }],
       isOnline: () => true,
+      mayUse: () => true,
       refresh: async () => {},
       invoke: async (...args) => calls.push(args),
     }
@@ -5770,6 +5816,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'a', access: 'owner' }],
       isOnline: () => true,
+      mayUse: () => true,
       refresh: async () => {},
       invoke: async (...args) => calls.push(args),
     }
@@ -5812,6 +5859,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'a', access: 'owner' }],
       isOnline: () => true,
+      mayUse: () => true,
       subscribe: () => () => {},
       watch: () => () => {},
       invoke: async (...args) => {
@@ -5858,6 +5906,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'a', name: 'Host', access: 'viewer' }],
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => calls.push(args),
     }
     const { BrowserActivity } = load('components/BrowserActivity.tsx', os, {
@@ -5883,6 +5932,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'a', name: 'Host', access: 'owner' }],
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         return args[1] === 'hostBrowser.list' ? listed : []
@@ -5965,6 +6015,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'a', name: 'Host', access: 'viewer' }],
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         return granted
@@ -6010,6 +6061,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'a', name: 'Host', access: 'viewer' }],
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         return args[1] === 'computer.frame'
@@ -6105,6 +6157,7 @@ function interactiveCardHarness(os, cached = true) {
   const store = {
     language: 'en',
     isOnline: () => true,
+    mayUse: () => true,
     invoke: async (...args) => {
       calls.push(args)
       return document
@@ -6351,6 +6404,7 @@ for (const os of ['ios', 'android']) {
       language: 'en',
       computers: [{ id: 'a', name: 'Host', access: 'owner' }],
       isOnline: () => true,
+      mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
         if (args[1] === 'hostBrowser.list') return [tab]
@@ -6773,6 +6827,7 @@ test('plan usage uses a full-screen settings surface and groups windows under re
       store.drafts[key] = value
     },
     isOnline: () => false,
+    mayUse: () => true,
   }
   const { PlanUsageSheet, PlanUsageReading } = load('components/PlanUsage.tsx', 'ios', {
     react: hooks.react,
@@ -6814,6 +6869,7 @@ test('combined file changes have no All tab and an empty diff explains that ther
     projects: [],
     drafts: {},
     isOnline: () => true,
+    mayUse: () => true,
     invoke: async (...args) => {
       calls.push(args)
       if (args[1] === 'files.explorerBindings') return [{ repoId: 'repo', setupState: 'ready', repoName: 'Repo' }]
@@ -7338,6 +7394,7 @@ for (const os of ['ios', 'android']) {
     let opening = 0
     const pending = deferred()
     const store = {
+      mayUse: () => true,
       computers: [{ id: 'a', status: 'online', name: 'Host' }],
       chats: [],
       projects: [],
@@ -7855,4 +7912,41 @@ test('tool shortcut pills keep one icon-only shape while status pills keep their
   assert.ok(find(shortcut, 'Pressable').props.style.minWidth >= 32)
   assert.deepEqual(labels({ label: '3 queued' }), ['3 queued'])
   assert.deepEqual(labels({ label: 'Approval needed', tone: 'attention' }), ['Approval needed'])
+})
+
+test('a phone without the Terminals permission is offered a request, never a shell the host would refuse', async () => {
+  const hooks = hookHarness(),
+    calls = []
+  const store = {
+    mayUse: (_id, permission) => permission !== 'terminal',
+    language: 'en',
+    computers: [{ id: 'a', status: 'online', name: 'Host A' }],
+    chats: [],
+    projects: [],
+    invoke: async (...args) => {
+      calls.push(args)
+      if (args[1] === 'term.list') return []
+      throw new Error(`Unexpected ${args[1]}`)
+    },
+    subscribe: () => () => {},
+    watch: () => () => {},
+  }
+  const { TerminalScreen } = load('components/TerminalScreen.tsx', 'ios', {
+    react: hooks.react,
+    'react-native': { Keyboard: { addListener: () => ({ remove() {} }) } },
+    '../runtime/store': { useStore: () => store },
+    '../runtime/terminalKeys': terminalKeys,
+    './TerminalView': { default: 'TerminalView' },
+    './DevicePermissions': { PermissionNeeded: 'PermissionNeeded' },
+  })
+  const render = () => hooks.render(() => TerminalScreen({ computerId: 'a', ctx: 'task', onBack() {} }))
+  render()
+  await settle()
+  const tree = render()
+  assert.equal(find(tree, 'PermissionNeeded').props.permission, 'terminal')
+  assert.equal(
+    calls.some(([, method]) => method === 'term.open'),
+    false,
+  )
+  hooks.dispose()
 })

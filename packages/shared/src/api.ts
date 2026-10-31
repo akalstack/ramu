@@ -1164,6 +1164,8 @@ export type PushEvents = {
   'updates:changed': AppUpdateStatus
   'providers:updates': ProviderStatus[]
   'mcp:changed': Record<string, never>
+  /** A paired device's permissions changed; each device reads its own again. */
+  'device:permissions': Record<string, never>
   'notify:inapp': {
     hostId?: string
     sessionId: string

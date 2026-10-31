@@ -1,5 +1,5 @@
 import { BrowserInputQueue, watchBrowserFrames } from '@ramu/shared/browserLiveViewer'
-import { RequestPermission } from './DevicePermissions'
+import { PermissionNeeded, RequestPermission } from './DevicePermissions'
 import { VIEW_ONLY_BROWSER_NOTICE } from '../runtime/viewerAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Image, PanResponder, Platform, Pressable, TextInput, View } from 'react-native'
@@ -591,6 +591,8 @@ export function BrowserViewer({
     )
   const editable = own || !tab || newTab
   const nextControl = state ? controlAction(state) : null
+  // A phone without the host's Browser permission is offered a request instead of a control the host would refuse.
+  const browserAllowed = store.mayUse(chat.computerId, 'browser')
   const message = error || frameError
   return (
     <View style={{ flex: 1 }}>
@@ -675,7 +677,7 @@ export function BrowserViewer({
           text={t(CONTROL_TEXT[state])}
           tone={state === 'disconnected' ? 'warn' : state === 'yours' ? 'accent' : 'muted'}
           action={
-            nextControl
+            nextControl && (nextControl === 'release' || browserAllowed)
               ? {
                   title: nextControl === 'release' ? t('Give back to agent') : t('Take control'),
                   disabled: busy || !active,
@@ -687,6 +689,11 @@ export function BrowserViewer({
       ) : (
         <View style={{ height: space.s }} />
       )}
+      {!browserAllowed && tab ? (
+        <ViewerBanner>
+          <PermissionNeeded computerId={chat.computerId} permission="browser" />
+        </ViewerBanner>
+      ) : null}
       {message ? (
         <ViewerBanner tone="bad">
           <T size={font.control}>{t(viewerMessage(message))}</T>

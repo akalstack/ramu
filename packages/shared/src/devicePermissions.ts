@@ -47,6 +47,14 @@ export function grantFor(duration: PermissionDuration, now: number): PermissionG
 export const grantActive = (grant: PermissionGrant | undefined, now: number): boolean =>
   !!grant && (grant.until === null || grant.until > now)
 
+/**
+ * Whether a device should be offered a control that needs `permission`. An unknown view (an older host, or not read
+ * yet) offers it, so the host's own refusal still explains; a known missing grant hides it behind a request instead.
+ */
+export function mayUse(view: DevicePermissionsView | null | undefined, permission: DevicePermission, now: number) {
+  return !view || grantActive(view.permissions[permission] ?? undefined, now)
+}
+
 /** What this device holds on a host, as the host reports it to the device. */
 export interface DevicePermissionsView {
   permissions: Record<DevicePermission, PermissionGrant | null>

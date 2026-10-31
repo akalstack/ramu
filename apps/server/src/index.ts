@@ -1360,6 +1360,7 @@ async function networkMethod(method: string, args: unknown[]) {
         duration === 'revoke' ? null : grantFor(duration as PermissionDuration, Date.now()),
       )
     permissionRequests.clear(deviceId, permission)
+    send('device:permissions', {})
     return networkStatus()
   }
   if (method === 'network.decidePermission') {
@@ -1371,6 +1372,7 @@ async function networkMethod(method: string, args: unknown[]) {
       if (!PERMISSION_DURATIONS.includes(duration as PermissionDuration)) throw new Error('Invalid duration')
       devices.setPermission(request.deviceId, request.permission, grantFor(duration as PermissionDuration, Date.now()))
     }
+    send('device:permissions', {})
     return networkStatus()
   }
   if (method === 'network.setDefaultPermissions') {

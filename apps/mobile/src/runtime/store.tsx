@@ -4,6 +4,7 @@ import { secureRandom } from './secureRandom'
 import { agentActivityLabel, currentStep, turnStartedAt } from '@ramu/shared/chat/agentActivity'
 import './socketTransport'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
+import { mayUse, type DevicePermission, type DevicePermissionsView } from '@ramu/shared/devicePermissions'
 import { VIEW_ONLY_WRITE_NOTICE } from './viewerAccess'
 import { saveIssuedCredential } from './saveCredential'
 import { planLayerSync } from '@ramu/shared/sharedFields'
@@ -224,6 +225,10 @@ interface Store extends State {
   defaults: Record<string, AgentSettings>
   /** Shared preferences on each paired computer, refreshed when its settings change. */
   appPreferences: Record<string, AppPreferences>
+  /** Whether this phone should be offered a control that needs a host permission; unknown counts as yes. */
+  mayUse(computerId: string, permission: DevicePermission): boolean
+  /** Reads this phone's permissions on a host again, as after asking for one. */
+  reloadPermissions(computerId: string): void
   /** The computer's model sets and steps (Settings › Models), which the step slider walks through. */
   modelPrefs: Record<string, import('@ramu/shared/types').ModelPreferences | null>
   /** The mobile layer of shared display preferences each computer keeps; null when the computer is too old to offer it. */
@@ -300,6 +305,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [inbox, setInbox] = useState<Record<string, InboxNotice[]>>({})
   const [modelPrefs, setModelPrefs] = useState<Record<string, import('@ramu/shared/types').ModelPreferences | null>>({})
   const [appPreferences, setAppPreferences] = useState<Record<string, AppPreferences>>({})
+  const [permissions, setPermissions] = useState<Record<string, DevicePermissionsView | null>>({})
+  const loadPermissions = (id: string) =>
+    void invoke(id, 'device.permissions').then(
+      (view) => setPermissions((p) => ({ ...p, [id]: view })),
+      // An older host has no permissions to read; its refusals still explain themselves.
+      () => setPermissions((p) => ({ ...p, [id]: null })),
+    )
   const [mobileLayers, setMobileLayers] = useState<
     Record<string, import('@ramu/shared/preferenceScopes').PreferenceLayer | null>
   >({})
@@ -333,6 +345,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
     )
     loadModels(id)
+    loadPermissions(id)
   }
   const loadModels = (id: string) =>
     void Promise.all([invoke(id, 'settings.models.get'), invoke(id, 'settings.app.get')]).then(
@@ -519,6 +532,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }, 120),
       )
     } else if (channel === 'settings:models' || channel === 'settings:changed') loadDefaults(id)
+    else if (channel === 'device:permissions') loadPermissions(id)
     else if (channel === 'notices:changed') setInbox((i) => ({ ...i, [id]: payload }))
     else if (channel === 'activity:changed') setActivity((a) => ({ ...a, [id]: payload }))
     else if (channel === 'usage:changed') change((s) => ({ ...s, usage: { ...s.usage, [id]: payload } }))
@@ -1346,6 +1360,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     mobileLayers,
     setMobileLayer: (id, layer) => setMobileLayers((p) => ({ ...p, [id]: layer })),
     appPreferences,
+    mayUse: (id, permission) => mayUse(permissions[id], permission, Date.now()),
+    reloadPermissions: loadPermissions,
     missingMethods,
     invoke,
     refresh,

@@ -1,5 +1,5 @@
 import { VIEW_ONLY_COMPUTER_NOTICE } from '../runtime/viewerAccess'
-import { RequestPermission } from './DevicePermissions'
+import { PermissionNeeded, RequestPermission } from './DevicePermissions'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Image, PanResponder, ScrollView, View, type GestureResponderEvent } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
@@ -443,7 +443,9 @@ function ComputerViewer({
                   title: t('Give back to agent'),
                   onPress: () => void act(() => io.current.invoke(chat.computerId, 'computer.giveToAgent', taskId)),
                 }
-              : { title: t('Take control'), disabled: asked, onPress: takeControl }
+              : store.mayUse(chat.computerId, 'computer')
+                ? { title: t('Take control'), disabled: asked, onPress: takeControl }
+                : undefined
         }
       />
       {viewOnly ? (
@@ -451,6 +453,11 @@ function ComputerViewer({
           <T tone="muted" size={font.control}>
             {VIEW_ONLY_COMPUTER_NOTICE[store.language]}
           </T>
+        </ViewerBanner>
+      ) : null}
+      {!viewOnly && !store.mayUse(chat.computerId, 'computer') ? (
+        <ViewerBanner>
+          <PermissionNeeded computerId={chat.computerId} permission="computer" />
         </ViewerBanner>
       ) : null}
       {error ? (

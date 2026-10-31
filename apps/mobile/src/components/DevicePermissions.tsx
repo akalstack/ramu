@@ -11,8 +11,8 @@ import {
   type PermissionGrant,
 } from '@ramu/shared/devicePermissions'
 import { useStore } from '../runtime/store'
-import { space } from '../theme'
-import { Button, Card, Divider, Row, SectionLabel } from './ui'
+import { font, space } from '../theme'
+import { Button, Card, Divider, Row, SectionLabel, T } from './ui'
 import { RowLabel } from './SettingRows'
 
 function grantText(grant: PermissionGrant | null, t: (text: string, values?: Record<string, string>) => string) {
@@ -70,10 +70,21 @@ export function PhonePermissions({ computerId }: { computerId: string }) {
   )
 }
 
-/** Next to a refusal for a missing permission: asks the person at the host for it in one tap. */
-export function RequestPermission({ computerId, message }: { computerId: string; message: string }) {
+/**
+ * Asks the person at the host for a missing permission in one tap: next to a refusal (`message`), or where a control is
+ * hidden because the host has not granted it (`permission`).
+ */
+export function RequestPermission({
+  computerId,
+  message,
+  permission: needed,
+}: {
+  computerId: string
+  message?: string
+  permission?: DevicePermission
+}) {
   const store = useStore()
-  const permission = refusedPermission(message)
+  const permission = needed ?? (message ? refusedPermission(message) : null)
   const [asked, setAsked] = useState<DevicePermission | null>(null)
   if (!permission) return null
   return (
@@ -92,5 +103,20 @@ export function RequestPermission({ computerId, message }: { computerId: string;
         )
       }
     />
+  )
+}
+
+/** Shown in place of a control this phone may not use on the host: what is missing, and a request for it. */
+export function PermissionNeeded({ computerId, permission }: { computerId: string; permission: DevicePermission }) {
+  const store = useStore()
+  return (
+    <View style={{ gap: space.s }}>
+      <T size={font.control} tone="muted">
+        {translate(store.language, 'This device needs {0} on this host.', {
+          0: translate(store.language, PERMISSION_LABEL[permission]),
+        })}
+      </T>
+      <RequestPermission computerId={computerId} permission={permission} />
+    </View>
   )
 }

@@ -4,6 +4,7 @@ import { Alert, Keyboard as NativeKeyboard, KeyboardAvoidingView, Platform, Pres
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FolderGit2, GitBranch, MessageCircle, RotateCcw, TerminalSquare } from 'lucide-react-native'
 import { space, useTheme } from '../theme'
+import { PermissionNeeded } from './DevicePermissions'
 import { useStore } from '../runtime/store'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -94,6 +95,8 @@ export function TerminalScreen({
   const keySequence = useRef(0)
   const terminal = tabs[active]
   const computer = store.computers.find((c) => c.id === chat?.computerId)
+  // Without the host's Terminals permission the screen offers a request instead of a shell the host would refuse.
+  const terminalAllowed = store.mayUse(computerId, 'terminal')
   const connected = computer?.status === 'online'
   const write = async (data: string) => {
     if (
@@ -161,7 +164,8 @@ export function TerminalScreen({
         auto &&
         !autoOpened.current.has(ctx) &&
         !openingRef.current &&
-        computer?.access !== 'viewer'
+        computer?.access !== 'viewer' &&
+        terminalAllowed
       ) {
         autoOpened.current.add(ctx)
         openingRef.current = true
@@ -348,11 +352,15 @@ export function TerminalScreen({
                     ? 'Open a session to run commands in this workspace.'
                     : 'Reconnect to this host to open a terminal.'}
               </T>
-              <Button
-                title={opening ? 'Opening terminal…' : 'New terminal'}
-                disabled={opening || !connected || computer?.access === 'viewer'}
-                onPress={() => void open()}
-              />
+              {computer?.access !== 'viewer' && !terminalAllowed ? (
+                <PermissionNeeded computerId={computerId} permission="terminal" />
+              ) : (
+                <Button
+                  title={opening ? 'Opening terminal…' : 'New terminal'}
+                  disabled={opening || !connected || computer?.access === 'viewer'}
+                  onPress={() => void open()}
+                />
+              )}
             </View>
           ) : (
             <TerminalView
@@ -381,7 +389,7 @@ export function TerminalScreen({
         <TerminalTabs
           tabs={tabs}
           active={active}
-          busy={opening || !connected || computer?.access === 'viewer'}
+          busy={opening || !connected || computer?.access === 'viewer' || !terminalAllowed}
           onNew={() => void open()}
           onSelect={(index) => {
             tap()
