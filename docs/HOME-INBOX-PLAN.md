@@ -14,6 +14,7 @@ Someone returning to Ramu asks one question: what needs me? Desktop answers it t
 - **Keep Inbox on desktop and phone.** With the lists gone from Home it no longer duplicates anything, and it stays the only place for Recaps, Learned and the all-hosts view. No rename or overhaul: its live state, answering in place, nothing to clear, and snooze with Undo all work.
 - **The Brief replaces the All and Waiting tabs.** They would otherwise repeat it. Tabs become **Brief**, **Running**, **Recaps**, **Learned** and **Completed**. Saved selections of All or Waiting open on Brief.
 - **The Operator stays in Inbox,** inside the Brief.
+- **Opening screens stay as they are.** Desktop opens on Home and the phone on Threads. Inbox never opens by itself, so the app starts the same way each time.
 
 Problems found on the desktop screens, fixed in this delivery:
 
@@ -35,6 +36,7 @@ Finished: migration, API tests and 3 more   See all
 
 - **Home:** remove `HomeFeed`'s lists and `HomeGroups`, and keep one summary line, hidden when nothing needs attention. Add-project prompts and the recent-work count stay only if they fit that line.
 - **Started together:** group cards move from Home to the Brief, below the rows. The phone already shows them in Threads, and keeps them there.
+- **Badge:** the Inbox badge counts what needs the person now, on desktop and phone: waiting threads, failed threads and recaps needing a decision. A failure stops counting once it is retried, opened or marked done.
 - **Live and free:** the rows, counts and order come from thread state (`hostInbox`, `operatorSnapshot`), across hosts, and update as things change. No model call is needed to show them.
 - **Order:** approvals and questions, then failures, then limits and paused goals. At most five rows, then **See all**.
 - **One tap:** rows use the Operator's action list and `runOperatorActions`, so tapping a button is the confirmation. Question rows show their choices; free-text questions and anything with details open in place. Approvals keep **Allow once** only here; saved rules stay in the full card.
@@ -56,6 +58,7 @@ Reading the Brief aloud, a second daily run, and suggested actions from recap te
 
 - Home shows the start box and one line, with no thread lists, and the line opens Inbox on the Brief.
 - With two approvals, a failed thread and five finished threads, the first screen shows all three that need the person in priority order, on desktop and phone, with no model call.
+- A failed thread raises the Inbox badge, and retrying it lowers the badge.
 - **Retry** on a failed row continues that thread on its own host, and the row leaves when it runs.
 - With recaps off, the Brief is complete.
 - A viewer sees the rows without action buttons.
