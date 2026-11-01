@@ -20,6 +20,8 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Browser and computer use:** provider capability negotiation and more session-import sources. **Open on this phone** reaches only dev servers listening beyond the host's loopback; forwarding one loopback port to one paired phone (expiring, IP-bound, shown with its port) needs a security review first. Computer use on Windows and Linux waits for native capture, permissions and signing.
 - **Provider compatibility:** compatibility rules for OpenCode's ACP runner, Cursor and Antigravity after protocol checks; entry points that bypass `validateSettings`.
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live, which needs an event channel between hosts; a thread started there with its report covers the need until then.
+- **Inbox Brief:** a live summary with one-tap actions at the top of Inbox ([plan](INBOX-BRIEF-PLAN.md)).
+- **Teammates and agent profiles:** a second model works beside the first in one thread, and a sentence creates a reusable agent ([plan](TEAMMATES-PLAN.md)).
 - **Git hosting:** Bitbucket Cloud and Azure DevOps adapters, and saved GitLab tokens with clone and publish in Settings. A new forge adds an adapter beside GitHub's and GitLab's in `apps/server/src/workspace/forge/` and a case in `forge/route.ts`.
 - **Code quality:** validate push payloads and RPC results on the clients (`any` remains in the phone's transport and push listeners, the desktop's host bridge and its preload). About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
