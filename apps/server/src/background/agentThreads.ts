@@ -106,6 +106,7 @@ const thread = z.object({
  */
 export class AgentThreadService {
   private running: Promise<void> | null = null
+  private remoteRunning: Promise<void> | null = null
   private stopping = false
   private readonly messages = new Map<string, number[]>()
 
@@ -150,7 +151,7 @@ export class AgentThreadService {
         result(async () => {
           if (host) {
             const target = this.hostNamed(host)
-            const projects = (await this.remote!.hosts.invoke(target.id, 'projects.list', [])) as {
+            const projects = (await this.remote!.hosts.invoke(target.id, 'hostThreads.projects', [])) as {
               id: string
               name: string
               aliases?: string[]
@@ -442,6 +443,17 @@ export class AgentThreadService {
       ...settings,
       access: (Object.keys(ACCESS_RANK) as AgentSettings['access'][]).find((key) => ACCESS_RANK[key] === rank)!,
     }
+  }
+
+  /** What a paired host may know about projects here to name one: names, aliases and descriptions, never paths. */
+  projectsForHost(device: DeviceInfo) {
+    if (device.kind !== 'host') throw new Error('Only a paired host can ask this way.')
+    return this.workspace.listProjects().map((project) => ({
+      id: project.id,
+      name: project.name,
+      ...(project.aliases?.length ? { aliases: project.aliases } : {}),
+      ...(project.description ? { description: project.description } : {}),
+    }))
   }
 
   /** The state of threads this pairing started here, one or all; never anything else on this host. */
@@ -751,15 +763,18 @@ export class AgentThreadService {
   }
 
   tick(): Promise<void> {
+    // Another host that is slow or offline never holds up reports of threads on this host: each loop has its own guard.
+    if (this.remote && !this.stopping && !this.remoteRunning)
+      this.remoteRunning = this.remote
+        .tick()
+        .catch((error) => console.error('Remote threads:', error))
+        .finally(() => {
+          this.remoteRunning = null
+        })
     if (this.stopping || this.running) return this.running ?? Promise.resolve()
-    this.running = Promise.all([
-      this.report(),
-      this.remote?.tick().catch((error) => console.error('Remote threads:', error)),
-    ])
-      .then(() => {})
-      .finally(() => {
-        this.running = null
-      })
+    this.running = this.report().finally(() => {
+      this.running = null
+    })
     return this.running
   }
 
@@ -808,7 +823,7 @@ export class AgentThreadService {
 
   async stop(): Promise<void> {
     this.stopping = true
-    await this.running
+    await Promise.all([this.running, this.remoteRunning])
   }
 }
 

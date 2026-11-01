@@ -61,6 +61,12 @@ const REPORTS: Record<string, string> = {
   cancelled: 'the person stopped it',
 }
 
+const REVOKED =
+  'The pairing with that host was revoked there, so this host can no longer follow the thread. It may still be running on that host.'
+/** The other host refused this host's token: the pairing was revoked or expired, which retrying cannot fix. */
+const revoked = (error: unknown) =>
+  (error as { status?: number })?.status === 401 || /rejected the access token/i.test(String((error as Error)?.message))
+
 /** A remote thread's id as agents on this host see it, distinct from any local thread id. */
 export const remoteThreadId = (id: string) => `remote:${id}`
 
@@ -146,6 +152,12 @@ export class RemoteThreads {
       return { title: answer.title, project: answer.projectName, ...(answer.error ? { error: answer.error } : {}) }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      if (revoked(error)) {
+        this.db
+          .prepare("UPDATE remote_threads SET state = 'failed', request = NULL, error = ? WHERE id = ?")
+          .run(REVOKED, row.id)
+        return { error: REVOKED }
+      }
       // A host that cannot be reached is tried again until the start expires; an answer from the host is final.
       if (isTransportFailure(error) || /not connect|timed out|unreachable|ENOTFOUND|EHOSTUNREACH/i.test(message)) {
         this.db.prepare('UPDATE remote_threads SET error = ? WHERE id = ?').run(message, row.id)
@@ -181,6 +193,7 @@ export class RemoteThreads {
       ])) as RemoteStatus[]
       return status ? { ...base, ...status, threadId: base.threadId } : { ...base, state: 'removed on that host' }
     } catch (error) {
+      if (revoked(error)) return { ...base, state: 'pairing revoked', error: REVOKED }
       return { ...base, state: 'unknown', error: error instanceof Error ? error.message : String(error) }
     }
   }
@@ -224,7 +237,12 @@ export class RemoteThreads {
       let status: RemoteStatus | undefined
       try {
         ;[status] = (await this.hosts.invoke(row.host_id, 'hostThreads.status', [row.remote_task_id])) as RemoteStatus[]
-      } catch {
+      } catch (error) {
+        // A revoked pairing is final: the starting thread hears it once and this host stops asking.
+        if (revoked(error)) {
+          this.db.prepare("UPDATE remote_threads SET state = 'failed', error = ? WHERE id = ?").run(REVOKED, row.id)
+          await this.report(row, 'interrupted', REVOKED, '')
+        }
         continue
       }
       if (!status || !SETTLED.has(status.state)) continue

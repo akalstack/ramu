@@ -150,7 +150,7 @@ beforeEach(async () => {
       if (method === 'hostThreads.start')
         return [{ taskId: 'far-1', title: (args[0] as RemoteRequest).thread.title ?? 'Remote', projectName: 'jobs' }]
       if (method === 'hostThreads.status') return [remoteStatus]
-      if (method === 'projects.list') return [{ id: 'jobs', name: 'jobs' }]
+      if (method === 'hostThreads.projects') return [{ id: 'jobs', name: 'jobs' }]
       return { sent: true }
     },
   } as unknown as AgentHostService
@@ -437,6 +437,14 @@ describe('threads another host asks for', () => {
     await expect(service.startForHost(device, request())).rejects.toThrow(/last hour/)
   })
 
+  it('names projects to a paired host without their folders', () => {
+    expect(service.projectsForHost(device)).toEqual([
+      { id: api.id, name: 'api' },
+      { id: web.id, name: 'web' },
+    ])
+    expect(() => service.projectsForHost({ id: 'p', role: 'owner' } as DeviceInfo)).toThrow(/Only a paired host/)
+  })
+
   it('starts a retried request once, and shows and messages only that pairing’s threads', async () => {
     const [first] = await service.startForHost(device, request(), 'key-1')
     const [again] = await service.startForHost(device, request(), 'key-1')
@@ -499,6 +507,35 @@ describe('threads this host’s agents start on another host', () => {
     await tools('caller').call('thread_start', { host: 'vps', threads: [{ prompt: 'Second', project: 'jobs' }] })
     await remote.tick(now + PENDING_MS + REMOTE_POLL_MS)
     expect(submitted.at(-1)!.text).toContain('could not be reached for a day')
+  })
+
+  it('tells the starting thread once when the pairing was revoked on the other host', async () => {
+    await callerIn(api)
+    approvals.push(true)
+    const out = await tools('caller').call('thread_start', {
+      host: 'vps',
+      threads: [{ prompt: 'Backfill dueDate', project: 'jobs' }],
+    })
+    hostFails = Object.assign(new Error('The server rejected the access token'), { status: 401 })
+    const now = Date.now()
+    await remote.tick(now)
+    await remote.tick(now + REMOTE_POLL_MS)
+    expect(submitted.filter((entry) => entry.text.includes('revoked'))).toHaveLength(1)
+    const status = await tools('caller').call('thread_status', { threadId: out.started[0].threadId })
+    expect(status[0]).toMatchObject({ state: 'failed' })
+    hostFails = null
+  })
+
+  it('keeps reporting local threads while another host hangs', async () => {
+    await callerIn(api)
+    await tools('caller').call('thread_start', { threads: [{ prompt: 'Write the migration' }] })
+    approvals.push(true)
+    await tools('caller').call('thread_start', { host: 'vps', threads: [{ prompt: 'Backfill', project: 'jobs' }] })
+    // The other host never answers from now on.
+    remote.tick = () => new Promise(() => {})
+    sessions.get('started-1')!.state = 'idle'
+    await service.tick()
+    expect(submitted.some((entry) => entry.id === 'caller' && entry.text.includes('it finished'))).toBe(true)
   })
 
   it('names how the person adds a host it does not know, and keeps uncommitted changes here', async () => {

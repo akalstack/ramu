@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
-import { runtimeInvoke, runtimePair, runtimeRenew } from '@ramu/client-runtime'
+import { forgetHostSocket, runtimeInvoke, runtimePair, runtimeRenew } from '@ramu/client-runtime'
 import type { AgentHostSummary } from '@ramu/shared/types'
 import { HostCredentialStore, type HostCredentialScope } from '../credentials/store'
 import type { Workspace } from '../workspace/workspace'
@@ -98,6 +98,9 @@ export class AgentHostService {
     const host = index.hosts.find((entry) => entry.id === id)
     if (!host) return
     this.workspace.setAppState(KEY, { ...index, hosts: index.hosts.filter((entry) => entry.id !== id) })
+    // Close the connection still open with its token, then drop the token itself.
+    const token = await this.credentials.read(this.scope(index, host), host.credential).catch(() => null)
+    if (token) forgetHostSocket({ kind: 'http', url: host.address, token })
     await this.credentials.remove(this.scope(index, host), host.credential).catch(() => {})
   }
 

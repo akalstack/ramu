@@ -777,6 +777,7 @@ async function performInvoke(
       value = operationKey ? await runOnce(operations, device.id, operationKey, method, args, start) : await start()
     } else if (method === 'hostThreads.status')
       value = agentThreads.statusForHost(device, z.string().max(100).nullish().parse(args?.[0]))
+    else if (method === 'hostThreads.projects') value = agentThreads.projectsForHost(device)
     else if (method === 'hostThreads.message') {
       const [taskId, text, mode] = z
         .tuple([z.string().min(1).max(100), z.string().min(1).max(20_000), z.enum(['queue', 'steer'])])

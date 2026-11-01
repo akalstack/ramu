@@ -9,13 +9,13 @@ import { PairingError, type PairingRequests } from './pairingRequests'
 
 /**
  * Everything a paired host may call here: start, check and message the threads it started, and list projects to name
- * them. Nothing that reads files, Git, terminals, settings or transcripts.
+ * them by name. Nothing that reads files, paths, Git, terminals, settings or other threads.
  */
 export const HOST_METHODS: ReadonlySet<string> = new Set([
   'hostThreads.start',
   'hostThreads.status',
   'hostThreads.message',
-  'projects.list',
+  'hostThreads.projects',
 ])
 
 export const deviceMayInvoke = (device: DeviceInfo | undefined, method: string): boolean =>

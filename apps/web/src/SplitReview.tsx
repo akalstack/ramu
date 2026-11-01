@@ -201,7 +201,7 @@ export function SplitReview({
       <div className="flex flex-wrap gap-1.5">
         <Button size="xs" disabled={busy || !ready || draft.rows.length > SPLIT_LIMIT} onClick={onStart}>
           <Plus size={13} aria-hidden="true" />
-          {draft.rows.length === 1 ? t('Start thread') : t('Start all {0}', { '0': draft.rows.length })}
+          {draft.rows.length === 1 ? t('Start thread') : t('Start {0} threads', { '0': draft.rows.length })}
         </Button>
         <Button variant="secondary" size="xs" disabled={busy} onClick={onOneThread}>
           {t('Start as one thread')}

@@ -84,7 +84,7 @@ export function SplitReviewSheet({
         ))}
         <View style={{ gap: space.s }}>
           <Button
-            title={draft.rows.length === 1 ? say('Start thread') : say('Start all {0}', { '0': draft.rows.length })}
+            title={draft.rows.length === 1 ? say('Start thread') : say('Start {0} threads', { '0': draft.rows.length })}
             disabled={busy || !ready || draft.rows.length > SPLIT_LIMIT}
             onPress={onStart}
           />

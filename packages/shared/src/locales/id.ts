@@ -1895,7 +1895,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'What every thread must agree on, such as names, fields and endpoints': 'Hal yang harus disepakati semua thread, seperti nama, field, dan endpoint',
   'Remove this thread': 'Hapus thread ini',
   'Brief for {0}': 'Arahan untuk {0}',
-  'Start all {0}': 'Mulai semua ({0})',
+  'Start {0} threads': 'Mulai {0} thread',
   'Start as one thread': 'Mulai sebagai satu thread',
   '{0} of {1} threads started. {2}': '{0} dari {1} thread dimulai. {2}',
   'Started {0} threads together.': '{0} thread dimulai bersamaan.',
