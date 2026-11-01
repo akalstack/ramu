@@ -53,12 +53,16 @@ export interface RenewResponse {
 export interface PairRequest {
   code: string
   name?: string
+  /** `host`: another Ramu host whose agents start threads here, limited to that. Absent for phones and desktops. */
+  kind?: 'host'
 }
 export interface PairResponse {
   deviceId: string
   token: string
   /** The host's durable identifier, bound at this explicit pairing and checked later through IDENTITY_PATH. */
   hostId?: string
+  /** When the token stops working unless renewed; null never. Absent on older hosts. */
+  expiresAt?: number | null
 }
 export const PROTOCOL_HEADER = 'x-ramu-protocol'
 export const MAX_REQUEST_BYTES = 16_000_000

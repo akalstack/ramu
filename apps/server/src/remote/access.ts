@@ -7,8 +7,21 @@ import type { DeviceInfo, DeviceStore } from './devices'
 import { PAIR_REQUEST_PATH, PAIR_REVEAL_PATH, PAIR_WAIT_PATH } from '@ramu/shared/pairRequest'
 import { PairingError, type PairingRequests } from './pairingRequests'
 
+/**
+ * Everything a paired host may call here: start, check and message the threads it started, and list projects to name
+ * them. Nothing that reads files, Git, terminals, settings or transcripts.
+ */
+export const HOST_METHODS: ReadonlySet<string> = new Set([
+  'hostThreads.start',
+  'hostThreads.status',
+  'hostThreads.message',
+  'projects.list',
+])
+
 export const deviceMayInvoke = (device: DeviceInfo | undefined, method: string): boolean =>
-  device?.role !== 'viewer' || viewerMayInvoke(method)
+  device?.kind === 'host'
+    ? HOST_METHODS.has(method)
+    : !method.startsWith('hostThreads.') && (device?.role !== 'viewer' || viewerMayInvoke(method))
 /** What this device is told about its own access so clients can hide actions the server would refuse. Advisory only. */
 export const accessOf = (device: DeviceInfo | undefined): 'owner' | 'viewer' =>
   device?.role === 'viewer' ? 'viewer' : 'owner'
@@ -154,7 +167,7 @@ export class RemoteAccess {
         }
         chunks.push(chunk)
       }
-      let request: { code?: unknown; name?: unknown }
+      let request: { code?: unknown; name?: unknown; kind?: unknown }
       try {
         request = JSON.parse(Buffer.concat(chunks).toString() || '{}') ?? {}
       } catch {
@@ -163,7 +176,12 @@ export class RemoteAccess {
       }
       const paired =
         typeof request.code === 'string'
-          ? this.options.devices.redeem(request.code, typeof request.name === 'string' ? request.name : undefined, now)
+          ? this.options.devices.redeem(
+              request.code,
+              typeof request.name === 'string' ? request.name : undefined,
+              now,
+              request.kind === 'host' ? 'host' : undefined,
+            )
           : null
       if (!paired) {
         rejected('That pairing code is wrong, already used or expired')

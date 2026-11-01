@@ -25,6 +25,7 @@ import { StatusDot, activityText, statusText, useComputers } from '../workspace/
 import { workspaceVisible } from '../workspace/workspaceLifetime'
 import { onPairLink, takePairLink } from '../pairLink'
 import { NearbyHosts } from './NearbyHosts'
+import { AgentHosts } from './AgentHosts'
 import {
   DefaultPermissions,
   DevicePermissionList,
@@ -336,7 +337,7 @@ function ThisComputer() {
           <SettingsRow>
             <SettingsLabel
               title={device.name}
-              help={`${device.role === 'viewer' ? t('Viewer') : t('Full access')} · ${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t(
+              help={`${device.kind === 'host' ? t('Another host’s agents: start and follow threads only') : device.role === 'viewer' ? t('Viewer') : t('Full access')} · ${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t(
                 'Paired {0} · last seen {1}',
                 {
                   0: new Date(device.createdAt).toLocaleDateString(),
@@ -348,12 +349,37 @@ function ThisComputer() {
               {t('Revoke')}
             </Button>
           </SettingsRow>
-          <DevicePermissionList device={device} invoke={changePermission} />
+          {device.kind === 'host' ? (
+            <SettingsRow>
+              <SettingsLabel
+                title={t('Most access for its threads')}
+                help={t('Threads this host’s agents start here never get more, whatever they ask for.')}
+              />
+              <Dropdown
+                label={t('Most access for its threads')}
+                value={device.maxAccess ?? 'edits'}
+                options={[
+                  { value: 'edits', label: t('Allow edits') },
+                  { value: 'auto', label: t('Auto') },
+                  { value: 'full', label: t('Full access') },
+                ]}
+                onChange={(value) =>
+                  void invoke('network.setHostAccess', device.id, value as 'edits' | 'auto' | 'full').then(
+                    setStatus,
+                    (error) => notifyError(errorText(error), t('Remote access')),
+                  )
+                }
+              />
+            </SettingsRow>
+          ) : (
+            <DevicePermissionList device={device} invoke={changePermission} />
+          )}
         </div>
       ))}
       {!status.devices.length && (
         <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">{t('No devices paired yet.')}</p>
       )}
+      <AgentHosts />
 
       {confirm && (
         <ConfirmDialog

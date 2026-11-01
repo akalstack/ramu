@@ -576,6 +576,13 @@ export interface RamuMethods {
   'network.revoke'(deviceId: string): NetworkStatus
   /** Days an unused device stays paired (1 to 3650), `never`, or null for the server default. Host-only, like the rest of `network.*`. */
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus
+  /** Hosts only: the most access threads that paired host starts here may have. */
+  'network.setHostAccess'(deviceId: string, access: 'edits' | 'auto' | 'full'): NetworkStatus
+  /** Other hosts this host's agents may start threads on. */
+  'network.agentHosts'(): import('./types').AgentHostSummary[]
+  /** Pairs this host with another as a host pairing, using a code from `ramu pair` there. */
+  'network.addAgentHost'(address: string, code: string, name?: string): import('./types').AgentHostSummary[]
+  'network.forgetAgentHost'(id: string): import('./types').AgentHostSummary[]
   /** Computers this app is connected to, all at once. Handled by the desktop app itself. */
   'computers.settings.invoke'(id: string, method: string, args: unknown[]): unknown
   'computers.settings.get'(id: string): SettingsSnapshot

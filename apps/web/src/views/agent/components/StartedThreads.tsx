@@ -11,8 +11,25 @@ export function ThreadOriginChip({ taskId }: { taskId: string | undefined }) {
   const ws = useWorkspace()
   const origin = ws.tasks.find((task) => task.id === taskId)?.startedFrom
   if (!origin) return null
+  // A thread another host's agent started cannot be opened from here: it names that host and its thread there.
+  if (origin.host)
+    return (
+      <span
+        className="inline-flex max-w-[260px] items-center gap-1 text-caption text-muted-foreground"
+        title={t('Started by an agent on {0}', { '0': origin.host })}
+      >
+        <GitFork size={13} aria-hidden="true" />
+        <span className="min-w-0 truncate">
+          {t('From {0} on {1}', { '0': origin.title ?? t('another thread'), '1': origin.host })}
+        </span>
+      </span>
+    )
   const together =
-    origin.groupSize > 1 ? t('Started together with {0} other threads', { '0': origin.groupSize - 1 }) : ''
+    origin.groupSize === 2
+      ? t('Started together with 1 other thread')
+      : origin.groupSize > 2
+        ? t('Started together with {0} other threads', { '0': origin.groupSize - 1 })
+        : ''
   if (!origin.taskId)
     return together ? (
       <span className="inline-flex items-center gap-1 text-caption text-muted-foreground">
@@ -52,10 +69,15 @@ export function ThreadsStartedCard({ threads }: { threads: StartedThread[] }) {
             <li key={thread.taskId || index} className="flex min-w-0 items-center gap-2 text-caption">
               <span className="min-w-0 flex-1 truncate">
                 {thread.title}
-                <span className="text-muted-foreground"> · {thread.projectName}</span>
+                <span className="text-muted-foreground">
+                  {' · '}
+                  {thread.projectName}
+                  {thread.host ? ` · ${t('on {0}', { '0': thread.host })}` : ''}
+                  {thread.pending ? ` · ${t('Waiting for {0}', { '0': thread.host ?? '' })}` : ''}
+                </span>
                 {thread.error && <span className="block text-bad">{thread.error}</span>}
               </span>
-              {thread.taskId && ws.tasks.some((task) => task.id === thread.taskId) && (
+              {thread.taskId && !thread.host && ws.tasks.some((task) => task.id === thread.taskId) && (
                 <Button
                   variant="ghost"
                   size="sm"

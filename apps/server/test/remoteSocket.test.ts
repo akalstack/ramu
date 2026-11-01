@@ -376,3 +376,16 @@ it('survives a reset while authenticating a cancelled connection probe and still
   await next.until(() => next.frames.some((frame) => frame.t === 'ready'))
   expect(sockets.connections()).toBe(1)
 })
+
+it('never sends events to a paired host, even when it subscribes or omits events=none', async () => {
+  const { connect, sinks } = await start({
+    accept: async () => ({ id: 'host-1', name: 'Build box', role: 'owner', kind: 'host' }) as never,
+  })
+  const host = connect()
+  await host.until(() => host.frames.some((f) => f.t === 'ready'))
+  host.ws.send(encodeSocketFrame({ t: 'subscribe', id: 1, channels: ['agent:event'] }))
+  await host.until(() => host.frames.some((f) => f.t === 'error' && f.id === 1))
+  push(sinks, 'agent:event', { sessionId: 's1', event: { kind: 'text', text: 'secret' } })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(host.frames.some((f) => f.t === 'event')).toBe(false)
+})

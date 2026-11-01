@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // `ramu` (also `ramu-server`): runs the Ramu workspace server without the desktop app and controls a running one.
 import { runtimeInvoke } from '@ramu/client-runtime'
-import type { NetworkStatus } from '@ramu/shared/types/remote'
+import type { AgentHostSummary, NetworkStatus } from '@ramu/shared/types/remote'
 import {
   DEVICE_PERMISSIONS,
   PERMISSION_DURATIONS,
@@ -13,7 +13,7 @@ import {
 import { loadConfig, parseListen } from './config'
 import { loadToken } from './remote/auth'
 import { runtimeVersion } from './build'
-import { DeviceStore, PAIRING_TTL_MS } from './remote/devices'
+import { DeviceStore, isHostAccess, PAIRING_TTL_MS } from './remote/devices'
 import { candidateUrls } from './remote/network'
 import { encodePairLink, parseRemoteUrl } from '@ramu/contracts'
 
@@ -41,8 +41,14 @@ Usage:
                                  Take a permission away
   ramu devices never <id> <permission>
                                  Take it away and refuse that device's requests for it until you allow it again
+  ramu devices access <id> <edits|auto|full>
+                                 The most access threads a paired host starts here may have (default edits)
   ramu devices offers            List unused pairing offers (never their codes)
   ramu devices cancel <offer>    Withdraw an unused pairing offer
+  ramu hosts                     List other hosts this host's agents may start threads on
+  ramu hosts add <address> <code> [--name <name>]
+                                 Add one, with a code from \`ramu pair\` there; it may only start and follow threads
+  ramu hosts forget <id|name>    Stop using a host here (revoke it on that host to end it there too)
   ramu token [--rotate]          Print the shared access token; --rotate revokes it and every paired device
 
 Options:
@@ -330,6 +336,19 @@ if (command === 'start') {
     console.log(
       `${action === 'allow' ? 'Allowed' : action === 'never' ? 'Blocked' : 'Removed'} ${PERMISSION_LABEL[permission]} for ${deviceId}.`,
     )
+  } else if (positional[1] === 'access') {
+    const [, , deviceId, access] = positional
+    if (!deviceId || !isHostAccess(access)) fail('Usage: ramu devices access <id> <edits|auto|full>')
+    const running = await runtimeInvoke(config.socketPath, 'network.setHostAccess', [deviceId, access]).catch(
+      () => null,
+    )
+    if (!running)
+      try {
+        store.setMaxAccess(deviceId, access)
+      } catch (error) {
+        fail((error as Error).message)
+      }
+    console.log(`Threads ${deviceId} starts here get at most ${access} access.`)
   } else if (positional[1] === 'offers') {
     const offers = store.offers()
     if (!offers.length) console.log('No unused pairing offers.')
@@ -351,7 +370,11 @@ if (command === 'start') {
       console.log(
         `${device.id}  ${device.name.padEnd(24)}  paired ${ago(device.createdAt)}  last seen ${ago(device.lastSeenAt)}  ${device.role}  expires ${ago(device.expiresAt)}`,
       )
-      if (device.role !== 'viewer') {
+      if (device.kind === 'host')
+        console.log(
+          `          a paired host: starts and follows threads only, at most ${device.maxAccess ?? 'edits'} access`,
+        )
+      else if (device.role !== 'viewer') {
         const held = store.permissionsOf(device.id)
         const granted = DEVICE_PERMISSIONS.filter((permission) => held[permission])
         console.log(`          can use: ${granted.length ? granted.join(', ') : 'nothing beyond threads and files'}`)
@@ -362,5 +385,36 @@ if (command === 'start') {
       console.log(
         `\n${request.deviceName} (${request.deviceId}) asks for ${request.permission}. Allow it with: ramu devices allow ${request.deviceId} ${request.permission} [once|hour|day|always]`,
       )
+  }
+} else if (command === 'hosts') {
+  // Adding a host pairs this host there and stores the token in this host's credential store, so the server does it.
+  const call = (method: string, args: unknown[] = []) =>
+    runtimeInvoke(config.socketPath, method, args).catch((error: Error) =>
+      fail(
+        /ENOENT|ECONNREFUSED/.test(String((error as { code?: string }).code))
+          ? 'ramu is not running. Start it first.'
+          : error.message,
+      ),
+    ) as Promise<AgentHostSummary[]>
+  if (positional[1] === 'add') {
+    const [, , address, code] = positional
+    if (!address || !code) fail('Usage: ramu hosts add <address> <code> [--name <name>]')
+    const hosts = await call('network.addAgentHost', [address, code, text('name')])
+    const added = hosts.at(-1)
+    console.log(`Added ${added?.name}. Agents here can now start threads there with host "${added?.name}".`)
+  } else if (positional[1] === 'forget') {
+    const named = positional[2]
+    if (!named) fail('Usage: ramu hosts forget <id|name>')
+    const host = (await call('network.agentHosts')).find((entry) => entry.id === named || entry.name === named)
+    if (!host) fail(`No added host matches "${named}". Run ramu hosts.`)
+    await call('network.forgetAgentHost', [host!.id])
+    console.log(`Forgot ${host!.name}. Revoke ${host!.deviceId} on that host to end the pairing there too.`)
+  } else if (positional[1]) fail(`unknown hosts command "${positional[1]}". Use ramu hosts, ramu hosts add or forget.`)
+  else {
+    const hosts = await call('network.agentHosts')
+    if (!hosts.length)
+      console.log('No hosts added. Run ramu pair on the other host, then ramu hosts add <address> <code>.')
+    for (const host of hosts)
+      console.log(`${host.id.slice(0, 8)}  ${host.name.padEnd(20)}  ${host.address}  device ${host.deviceId} there`)
   }
 } else fail(`unknown command "${command}". Run ramu --help.`)

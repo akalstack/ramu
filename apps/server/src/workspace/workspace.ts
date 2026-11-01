@@ -52,14 +52,16 @@ const TASK_COLUMNS = `t.id, t.project_id AS projectId, t.title, t.title_generati
     FROM agent_sessions s WHERE s.task_id = t.id AND s.parent_session_id IS NULL) w) AS waitingUntil,
   (SELECT json_extract(value, '$') FROM app_state WHERE key = 'branch-fallback:' || t.id) AS branchNamingFallback,
   (SELECT 'library-review' FROM library_summary_chats c WHERE c.task_id = t.id) AS kind,
-  (SELECT json_object('groupId', l.group_id, 'taskId', l.source_task_id, 'title', st.title,
-      'groupSize', (SELECT COUNT(*) FROM thread_links g WHERE g.group_id = l.group_id))
+  (SELECT json_object('groupId', l.group_id, 'taskId', l.source_task_id, 'title', COALESCE(st.title, l.source_title),
+      'host', l.source_host, 'groupSize', (SELECT COUNT(*) FROM thread_links g WHERE g.group_id = l.group_id))
     FROM thread_links l LEFT JOIN tasks st ON st.id = l.source_task_id WHERE l.target_task_id = t.id) AS startedFrom`
 
-/** SQLite returns the origin as JSON text; a thread nobody else started has none. */
+/** SQLite returns the origin as JSON text; a thread nobody else started has none, and a local origin names no host. */
 function taskOf(row: Task & { startedFrom?: unknown }): Task {
   const { startedFrom, ...task } = row
-  return typeof startedFrom === 'string' ? { ...task, startedFrom: JSON.parse(startedFrom) as ThreadOrigin } : task
+  if (typeof startedFrom !== 'string') return task
+  const { host, ...origin } = JSON.parse(startedFrom) as ThreadOrigin
+  return { ...task, startedFrom: host ? { ...origin, host } : origin }
 }
 
 export const PROJECT_PREFIX = 'project:'
@@ -432,6 +434,10 @@ export class Workspace {
       this.db.prepare('DELETE FROM thread_links WHERE target_task_id = ?').run(id)
       this.db
         .prepare('UPDATE thread_links SET source_task_id = NULL, source_session_id = NULL WHERE source_task_id = ?')
+        .run(id)
+      // Threads it started on other hosts keep running there; this host just stops following them.
+      this.db
+        .prepare('UPDATE remote_threads SET source_task_id = NULL, source_session_id = NULL WHERE source_task_id = ?')
         .run(id)
       if (removeWorktrees && workspaceId) {
         this.db.prepare('DELETE FROM bindings WHERE task_id = ?').run(workspaceId)

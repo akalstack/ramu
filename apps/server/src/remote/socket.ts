@@ -163,7 +163,9 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     }
     send({ t: 'ready', epoch: host.epoch })
     // A client that already has an event stream asks for calls only, so nothing is delivered twice.
-    const callsOnly = new URL(req.url ?? '/', 'http://host').searchParams.get('events') === 'none'
+    // A paired host only makes calls; it never receives this host's events, whatever it asks for.
+    const callsOnly =
+      device?.kind === 'host' || new URL(req.url ?? '/', 'http://host').searchParams.get('events') === 'none'
     // A calls-only connection is attached too, listening to nothing, so revoking its device closes it like any stream.
     if (callsOnly) filter = { channels: new Set(), keys: new Map(), skip: new Map() }
     host.attach(sink, req, device)

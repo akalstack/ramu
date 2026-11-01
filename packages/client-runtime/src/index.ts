@@ -164,7 +164,7 @@ export async function runtimeInvokeRecoverable(
 }
 
 /** Trades a pairing code for this device's own token. Save the token; it is not shown again. */
-export function runtimePair(serverUrl: string, code: string, name?: string): Promise<PairResponse> {
+export function runtimePair(serverUrl: string, code: string, name?: string, kind?: 'host'): Promise<PairResponse> {
   return new Promise((resolve, reject) => {
     const url = new URL(parseRemoteUrl(serverUrl))
     const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
@@ -194,7 +194,7 @@ export function runtimePair(serverUrl: string, code: string, name?: string): Pro
     )
     req.on('error', reject)
     req.setTimeout(15000, () => req.destroy(new Error('Pairing request timed out')))
-    req.end(JSON.stringify({ code, name }))
+    req.end(JSON.stringify({ code, name, ...(kind ? { kind } : {}) }))
   })
 }
 

@@ -346,6 +346,30 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   );
   CREATE INDEX IF NOT EXISTS thread_links_source ON thread_links(source_task_id);
   CREATE INDEX IF NOT EXISTS thread_links_group ON thread_links(group_id);`,
+  // A thread another host's agent started here names that pairing, host and thread; threads this host's agents start on
+  // another host are followed from here, including a start waiting for that host to come back.
+  (db) => {
+    const columns = new Set(
+      (db.prepare('PRAGMA table_info(thread_links)').all() as { name: string }[]).map((c) => c.name),
+    )
+    for (const name of ['source_device', 'source_host', 'source_title'])
+      if (!columns.has(name)) db.exec(`ALTER TABLE thread_links ADD COLUMN ${name} TEXT;`)
+    db.exec(`CREATE TABLE IF NOT EXISTS remote_threads (
+      id TEXT PRIMARY KEY,
+      host_id TEXT NOT NULL,
+      remote_task_id TEXT,
+      title TEXT NOT NULL,
+      source_task_id TEXT,
+      source_session_id TEXT,
+      state TEXT NOT NULL,
+      request TEXT,
+      reported TEXT,
+      error TEXT,
+      created_at INTEGER NOT NULL,
+      retry_until INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS remote_threads_source ON remote_threads(source_task_id);`)
+  },
 ]
 
 export type Db = DatabaseSync

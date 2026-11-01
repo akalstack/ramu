@@ -509,6 +509,10 @@ export interface StartedThread {
   taskId: string
   title: string
   projectName: string
+  /** The other host it runs on; its `taskId` is that host's, and it opens there. Absent for threads on this host. */
+  host?: string
+  /** Waiting for that host to come back before it starts. */
+  pending?: boolean
   /** Set when the thread exists but its agent did not start; the thread stays for a retry. */
   error?: string
 }

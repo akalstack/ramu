@@ -37,7 +37,8 @@ export function startedGroups(hosts: { hostId: string; tasks: readonly Task[] }[
   for (const { hostId, tasks } of hosts)
     for (const task of tasks) {
       const origin = task.startedFrom
-      if (!origin || origin.taskId !== null || task.status === 'archived') continue
+      // Only Home groups: a thread an agent started, here or on another host, belongs to that agent's thread.
+      if (!origin || origin.taskId !== null || origin.host || task.status === 'archived') continue
       const group = groups.get(origin.groupId) ?? {
         groupId: origin.groupId,
         members: [],

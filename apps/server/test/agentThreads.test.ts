@@ -8,7 +8,16 @@ import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
 import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import type { AgentService } from '../src/agent'
-import { AgentThreadService, briefOf, MAX_THREADS_PER_HOUR } from '../src/background/agentThreads'
+import {
+  AgentThreadService,
+  briefOf,
+  MAX_MESSAGES_PER_HOUR,
+  MAX_THREADS_PER_HOUR,
+} from '../src/background/agentThreads'
+import { PENDING_MS, REMOTE_POLL_MS, RemoteThreads, type RemoteRequest } from '../src/background/remoteThreads'
+import type { AgentHostService } from '../src/remote/agentHosts'
+import type { DeviceInfo } from '../src/remote/devices'
+import { startedGroups } from '@ramu/shared/workspace/startedGroups'
 
 type Handler = (
   input: Record<string, unknown>,
@@ -26,6 +35,10 @@ let submitted: { id: string; text: string; mode: string }[]
 let recorded: { id: string; threads: unknown[] }[]
 let calls: string[]
 let api: Project, web: Project, apiRoot: string
+let remote: RemoteThreads
+let hostCalls: { id: string; method: string; args: unknown[]; key?: string }[]
+let hostFails: Error | null
+let remoteStatus: Record<string, unknown> = { state: 'running', threadId: 'far-1', title: 'Remote', project: 'jobs' }
 
 type Project = Awaited<ReturnType<Workspace['addProjectFromFolder']>>['project']
 
@@ -95,6 +108,9 @@ beforeEach(async () => {
       submitted.push({ id, text, mode })
     }),
     analyze: vi.fn(async () => ({ message: '{"projectIds":[],"reason":""}' })),
+    validateSettings: vi.fn(async (settings: AgentSettings) => {
+      if (settings.provider === 'cursor') throw new Error('Not installed here')
+    }),
     isRecoveryPending: () => false,
     providerWait: () => null,
     autoResumeOf: () => true,
@@ -106,6 +122,14 @@ beforeEach(async () => {
     if (method === 'tasks.workspaceOptions') return { defaultCheckoutMode: 'current', worktreeUnavailable: null }
     if (method === 'tasks.create') return ws.createTask(args[0] as Parameters<Workspace['createTask']>[0])
     if (method === 'tasks.setup') return ws.setupTask(args[0] as string)
+    if (method === 'tasks.rename') return ws.renameTask(args[0] as string, args[1] as string)
+    if (method === 'settings.models.get')
+      return {
+        defaultSetId: 's',
+        defaultStepId: 'b',
+        sets: [{ id: 's', steps: [{ id: 'b', provider: 'codex', model: 'gpt-5.5', effort: 'high' }] }],
+      }
+    if (method === 'settings.app.get') return { defaultAutoFallback: true }
     if (method === 'agent.start') {
       const [taskId, prompt, settings] = args as [string, string, AgentSettings]
       const info = session(`started-${++started}`, taskId, settings)
@@ -114,7 +138,24 @@ beforeEach(async () => {
     }
     throw new Error(`Unexpected ${method}`)
   }
-  service = new AgentThreadService(db, ws, agents, invoke, () => {})
+  hostCalls = []
+  hostFails = null
+  const hosts = {
+    list: () => [{ id: 'h1', name: 'vps', address: 'http://vps', deviceId: 'd1', expiresAt: null, addedAt: 1 }],
+    find: (named: string) => (named === 'vps' ? hosts.list()[0]! : null),
+    renew: async () => {},
+    invoke: async (id: string, method: string, args: unknown[], key?: string) => {
+      hostCalls.push({ id, method, args, key })
+      if (hostFails) throw hostFails
+      if (method === 'hostThreads.start')
+        return [{ taskId: 'far-1', title: (args[0] as RemoteRequest).thread.title ?? 'Remote', projectName: 'jobs' }]
+      if (method === 'hostThreads.status') return [remoteStatus]
+      if (method === 'projects.list') return [{ id: 'jobs', name: 'jobs' }]
+      return { sent: true }
+    },
+  } as unknown as AgentHostService
+  remote = new RemoteThreads(db, agents, hosts, () => {})
+  service = new AgentThreadService(db, ws, agents, invoke, () => {}, remote)
 })
 
 const callerIn = async (project: Project, access: AgentSettings['access'] = 'full') => {
@@ -266,6 +307,17 @@ describe('related threads', () => {
     )
   })
 
+  it('stops two threads from messaging each other without end', async () => {
+    await callerIn(api)
+    const out = await tools('caller').call('thread_start', { threads: [{ prompt: 'Write the migration' }] })
+    const child = out.started[0].threadId
+    for (let i = 0; i < MAX_MESSAGES_PER_HOUR; i++)
+      await tools('caller').call('thread_message', { threadId: child, text: `ping ${i}`, mode: 'queue' })
+    await expect(
+      tools('caller').call('thread_message', { threadId: child, text: 'one more', mode: 'queue' }),
+    ).rejects.toThrow(/last hour/)
+  })
+
   it('reports each finished thread to the starting thread once', async () => {
     await callerIn(api)
     const out = await tools('caller').call('thread_start', { threads: [{ prompt: 'Write the migration' }] })
@@ -273,7 +325,12 @@ describe('related threads', () => {
     expect(submitted).toEqual([])
     const child = sessions.get('started-1')!
     child.state = 'idle'
-    events.get(child.id)!.push({ kind: 'text', text: 'Migration written and tested.' } as AgentEvent)
+    // The report reads the thread's record, as the host keeps it.
+    db.exec('PRAGMA foreign_keys = OFF')
+    db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, 1, ?)').run(
+      child.id,
+      JSON.stringify({ kind: 'text', text: 'Migration written and tested.' }),
+    )
     await service.tick()
     await service.tick()
     expect(submitted).toHaveLength(1)
@@ -339,6 +396,124 @@ describe('threads.startGroup', () => {
     expect(sessions.has('started-3')).toBe(false)
     await service.tick()
     expect(submitted).toEqual([])
+  })
+})
+
+describe('threads another host asks for', () => {
+  const device = { id: 'dev1', kind: 'host', maxAccess: 'edits', role: 'owner' } as DeviceInfo
+  const request = (extra: Partial<RemoteRequest> = {}): RemoteRequest => ({
+    thread: { prompt: 'Backfill dueDate', project: 'web' },
+    depth: 1,
+    access: 'full',
+    settings: { ...DEFAULT_AGENT_SETTINGS, access: 'full' },
+    from: { host: 'laptop', thread: 'Plan dueDate', request: 'Add dueDate everywhere' },
+    ...extra,
+  })
+
+  it('starts the thread under this host’s ceiling, names the asking host and thread, and keeps it off Home', async () => {
+    const [started] = await service.startForHost(device, request())
+    expect(started!.error).toBeUndefined()
+    const task = ws.getTask(started!.taskId)
+    expect(task.projectId).toBe(web.id)
+    expect(task.startedFrom).toMatchObject({ taskId: null, title: 'Plan dueDate', host: 'laptop' })
+    expect(sessions.get('started-1')!.settings.access).toBe('edits')
+    expect(startedGroups([{ hostId: 'h', tasks: ws.listTasks() }])).toEqual([])
+    const brief = (events.get('started-1')![0] as { text: string }).text
+    expect(brief).toContain('Started by an agent on the host "laptop"')
+  })
+
+  it('uses this host’s default model when the asking host’s is not here', async () => {
+    await service.startForHost(device, request({ settings: { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor' } }))
+    expect(sessions.get('started-1')!.settings).toMatchObject({ provider: 'codex', model: 'gpt-5.5', access: 'edits' })
+  })
+
+  it('refuses a request that is too deep, from a phone, or over the pairing’s hourly limit', async () => {
+    await expect(service.startForHost(device, request({ depth: 3 }))).rejects.toThrow(/deep/)
+    await expect(service.startForHost({ id: 'p', role: 'owner' } as DeviceInfo, request())).rejects.toThrow(
+      /Only a paired host/,
+    )
+    for (let i = 0; i < MAX_THREADS_PER_HOUR; i++)
+      await service.startForHost(device, request({ thread: { prompt: `Part ${i}`, project: 'web' } }))
+    await expect(service.startForHost(device, request())).rejects.toThrow(/last hour/)
+  })
+
+  it('starts a retried request once, and shows and messages only that pairing’s threads', async () => {
+    const [first] = await service.startForHost(device, request(), 'key-1')
+    const [again] = await service.startForHost(device, request(), 'key-1')
+    expect(again!.taskId).toBe(first!.taskId)
+    expect(sessions.has('started-2')).toBe(false)
+    expect(service.statusForHost(device).map((entry) => entry.threadId)).toEqual([first!.taskId])
+    const other = { ...device, id: 'dev2' } as DeviceInfo
+    expect(service.statusForHost(other)).toEqual([])
+    await expect(service.messageForHost(other, first!.taskId, 'hi', 'queue')).rejects.toThrow(
+      /not started by this host/,
+    )
+    await service.messageForHost(device, first!.taskId, 'The field is dueDate', 'queue')
+    expect(submitted.at(-1)).toMatchObject({ id: 'started-1', text: 'The field is dueDate' })
+  })
+})
+
+describe('threads this host’s agents start on another host', () => {
+  it('always asks first, starts there, and reports its outcome back once', async () => {
+    await callerIn(api)
+    approvals.push(true)
+    const out = await tools('caller').call('thread_start', {
+      host: 'vps',
+      threads: [{ prompt: 'Backfill dueDate', title: 'Backfill', project: 'jobs' }],
+    })
+    expect(permissionDetails[0]).toContain('jobs on vps')
+    expect(out.started[0]).toMatchObject({ host: 'vps', title: 'Backfill', projectName: 'jobs' })
+    expect(out.started[0].threadId).toMatch(/^remote:/)
+    const sent = hostCalls.find((call) => call.method === 'hostThreads.start')!
+    expect(sent.args[0]).toMatchObject({ depth: 1, access: 'full', from: { thread: 'Plan the dueDate field' } })
+    expect(sent.key).toBeTruthy()
+    const now = Date.now()
+    await remote.tick(now)
+    expect(submitted).toEqual([])
+    remoteStatus = { state: 'completed', threadId: 'far-1', title: 'Backfill', latest: 'Backfilled 120 rows.' }
+    await remote.tick(now + REMOTE_POLL_MS)
+    await remote.tick(now + 2 * REMOTE_POLL_MS)
+    expect(submitted).toHaveLength(1)
+    expect(submitted[0]!.text).toContain('on vps')
+    expect(submitted[0]!.text).toContain('Backfilled 120 rows.')
+    const status = await tools('caller').call('thread_status', { threadId: out.started[0].threadId })
+    expect(status[0]).toMatchObject({ host: 'vps', state: 'completed' })
+    remoteStatus = { state: 'running', threadId: 'far-1', title: 'Remote', project: 'jobs' }
+  })
+
+  it('keeps a start for a host that is offline, starts it when it returns, and gives up after a day', async () => {
+    await callerIn(api)
+    approvals.push(true, true)
+    hostFails = Object.assign(new Error('Cannot connect to this host.'), { code: 'ECONNREFUSED' })
+    const out = await tools('caller').call('thread_start', {
+      host: 'vps',
+      threads: [{ prompt: 'Backfill dueDate', project: 'jobs' }],
+    })
+    expect(out.started[0]).toMatchObject({ pending: true })
+    const now = Date.now()
+    hostFails = null
+    await remote.tick(now)
+    const status = await tools('caller').call('thread_status', {})
+    expect(status[0].state).toBe('running')
+    hostFails = Object.assign(new Error('Cannot connect to this host.'), { code: 'ECONNREFUSED' })
+    await tools('caller').call('thread_start', { host: 'vps', threads: [{ prompt: 'Second', project: 'jobs' }] })
+    await remote.tick(now + PENDING_MS + REMOTE_POLL_MS)
+    expect(submitted.at(-1)!.text).toContain('could not be reached for a day')
+  })
+
+  it('names how the person adds a host it does not know, and keeps uncommitted changes here', async () => {
+    await callerIn(api)
+    await expect(
+      tools('caller').call('thread_start', { host: 'mars', threads: [{ prompt: 'x', project: 'jobs' }] }),
+    ).rejects.toThrow(/ramu hosts add .* Only the person can add a host/)
+    await expect(
+      tools('caller').call('thread_start', {
+        host: 'vps',
+        threads: [{ prompt: 'x', project: 'jobs', bringChanges: true }],
+      }),
+    ).rejects.toThrow(/never leave it/)
+    const projects = await tools('caller').call('project_list', { host: 'vps' })
+    expect(projects).toEqual([{ id: 'jobs', name: 'jobs', host: 'vps' }])
   })
 })
 

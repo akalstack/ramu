@@ -604,6 +604,21 @@ export default function ChatScreen() {
     symbol?: import('../../../components/Screen').HeaderMenuAction['icon']
   }[] = [
     // A thread an agent started opens the thread that started it, as the desktop's header chip does.
+    // A thread another host's agent started cannot be opened from here; the menu says where it came from.
+    ...(chat.startedFrom?.host
+      ? [
+          {
+            icon: GitFork,
+            label: tr('From {0} on {1}', {
+              '0': chat.startedFrom.title ?? tr('another thread'),
+              '1': chat.startedFrom.host,
+            }),
+            symbol: 'arrow.triangle.branch' as const,
+            group: 'info' as const,
+            onPress: () => Alert.alert(tr('Started by an agent on {0}', { '0': chat.startedFrom!.host! })),
+          },
+        ]
+      : []),
     ...(chat.startedFrom?.taskId
       ? [
           {

@@ -141,6 +141,8 @@ export interface ThreadOrigin {
   title: string | null
   /** Threads started together, this one included. */
   groupSize: number
+  /** The other host whose agent started this thread; `title` then names its thread there. Absent for local origins. */
+  host?: string | null
 }
 
 export type BindingSetupState = 'ready' | 'pending' | 'failed'

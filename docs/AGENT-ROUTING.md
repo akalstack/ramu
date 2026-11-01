@@ -53,6 +53,14 @@ A main-thread agent can start threads the person owns, when asked for separate w
 - **Links and reports:** the starting thread shows a card listing the threads with **Open**; each started thread shows **From ‹thread›** in its header (desktop) or thread menu (phone) and a fork mark in the sidebar. When a started thread finishes, fails, is stopped or waits for the person, one report with its latest message is queued to the starting thread, unless that thread was stopped. Threads started together can read and message each other, their starter and threads they started; nothing else. A message never reaches a thread with more access than the sender.
 - Deleting the starting thread keeps the started threads and their group; they only lose the link back.
 
+### Threads on another host
+
+A person can let this host's agents start threads on another host: run `ramu pair` there (or **Pair a device** in its Settings), then add it here with `ramu hosts add <address> <code> --name vps` or **Settings → Remote access → Hosts for agents**. Agents then pass `host` to `thread_start` and `project_list`.
+
+- **Starting:** every start on another host asks the person first, even in Full access, and needs a project name there. Uncommitted changes never leave this host. The other host uses this thread's model when it has it, otherwise its own default, and never more access than its ceiling for this pairing (**Most access for its threads** on its device row, default Allow edits). Its thread shows **From ‹thread› on ‹host›** and names this host in its first message.
+- **Following:** the started card says which host each thread runs on. `thread_status` and `thread_message` reach those threads with their `remote:` ids; this host asks about unsettled ones once a minute and queues one report per outcome, as for local threads. A host that cannot be reached keeps the start (**Waiting for ‹host›**) and starts it when it returns; after a day it is reported as not started.
+- **Limits:** the other host enforces its own depth and hourly limits for this pairing and shows only the threads this pairing started. See [Security](../SECURITY.md#remote-access) for what a host pairing can and cannot do.
+
 ## One prompt, several threads
 
 With **Auto** as the destination (Home on the desktop, a new thread on the phone), a request that needs work in several projects becomes a reviewed set of threads instead of one.

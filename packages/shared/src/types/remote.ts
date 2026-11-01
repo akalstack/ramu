@@ -29,6 +29,10 @@ export interface NetworkDevice {
     Record<import('../devicePermissions').DevicePermission, import('../devicePermissions').PermissionGrant>
   > /** Permissions the host refused for good. */
   blocked?: import('../devicePermissions').DevicePermission[]
+  /** Another Ramu host whose agents start threads here, and nothing else. Absent for phones and desktops. */
+  kind?: 'host'
+  /** Hosts only: the most access their threads get here. */
+  maxAccess?: 'edits' | 'auto' | 'full'
 }
 /** An address this computer has, which another device may reach it on (LAN, VPN, ...). */
 export interface NetworkAddress {
@@ -135,4 +139,15 @@ export interface Computers {
   current: string
   /** How this device names itself when pairing. */
   deviceName: string
+}
+
+/** Another Ramu host this host's agents may start threads on, as Settings and the CLI list it. Never its token. */
+export interface AgentHostSummary {
+  id: string
+  name: string
+  address: string
+  /** This host's device id there, as that host's device list shows it. */
+  deviceId: string
+  expiresAt: number | null
+  addedAt: number
 }

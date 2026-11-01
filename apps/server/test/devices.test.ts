@@ -312,3 +312,16 @@ it('drops a grant whose token never made a request, and keeps one that did', () 
   expect(devices.authenticate(`Bearer ${lost.token}`, now + ORPHAN_GRANT_MS + 2000)).toBeNull()
   expect(devices.authenticate(`Bearer ${used.token}`, now + ORPHAN_GRANT_MS + 2000)?.id).toBe(used.device.id)
 })
+
+it('pairs a host as a limited kind with an edits ceiling and no device permissions', () => {
+  const { devices } = store()
+  const { code } = devices.createCode()
+  const paired = devices.redeem(code, 'Build box (agents)', Date.now(), 'host')!
+  expect(paired.device).toMatchObject({ kind: 'host', maxAccess: 'edits' })
+  expect(devices.allows(paired.device.id, 'terminal')).toBe(false)
+  devices.setMaxAccess(paired.device.id, 'auto')
+  expect(devices.list().find((d) => d.id === paired.device.id)?.maxAccess).toBe('auto')
+  const phone = devices.redeem(devices.createCode().code, 'Phone')!
+  expect(phone.device.kind).toBeUndefined()
+  expect(() => devices.setMaxAccess(phone.device.id, 'full')).toThrow(/Only a paired host/)
+})

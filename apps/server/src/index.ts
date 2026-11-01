@@ -61,7 +61,7 @@ import {
 } from '@ramu/contracts'
 import { loadConfig } from './config'
 import { TokenStore } from './remote/auth'
-import { DeviceStore, validLifetime, type DeviceInfo } from './remote/devices'
+import { DeviceStore, isHostAccess, validLifetime, type DeviceInfo } from './remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
 import { PermissionRequests } from './remote/permissionRequests'
 import {
@@ -104,7 +104,10 @@ import { createDispatcher } from './ipc'
 import { OperationLog, runOnce } from './ipc/operationLog'
 import { ScheduleService, scheduleSchema } from './background/schedules'
 import { PullRequestWatchService } from './background/pullRequestWatches'
-import { AgentThreadService } from './background/agentThreads'
+import { AgentThreadService, hostThreadRequest } from './background/agentThreads'
+import { describeValidationError } from './validation'
+import { RemoteThreads } from './background/remoteThreads'
+import { AgentHostService } from './remote/agentHosts'
 import { runtimeBuild, runtimeVersion } from './build'
 import { ReviewService } from './review/reviews'
 import { RecapService } from './memory/recaps'
@@ -513,12 +516,14 @@ agents.setupOmissions = (session, settings) => {
 }
 // Agent-started threads go through the same methods a person's client calls, with the host's own authority. The
 // dispatcher is read only when a thread starts, after it exists.
+const agentHosts = new AgentHostService(workspace)
 const agentThreads = new AgentThreadService(
   db,
   workspace,
   agents,
   async (method, args) => await origin.run({ network: false }, () => dispatcher.invoke(method, args)),
   changed,
+  new RemoteThreads(db, agents, agentHosts, changed),
 )
 const dispatcher = createDispatcher(
   {
@@ -684,7 +689,13 @@ async function performInvoke(
   if (operationKey !== undefined && !(typeof operationKey === 'string' && OPERATION_KEY_PATTERN.test(operationKey)))
     throw new Error('Invalid operation key.')
   if (remote && !deviceMayInvoke(device, method))
-    throw new InvokeRefused('This device is a viewer. This action requires full access.')
+    throw new InvokeRefused(
+      device?.kind === 'host'
+        ? 'A paired host may only start, check and message the threads it starts here.'
+        : method.startsWith('hostThreads.')
+          ? 'Only a paired host can make this call.'
+          : 'This device is a viewer. This action requires full access.',
+    )
   // Computer use, the browser, terminals and settings changes each need their own grant on this host.
   const needed = remote && device ? permissionFor(method) : null
   if (needed && !devices.allows(device!.id, needed)) throw new InvokeRefused(permissionRefusal(needed))
@@ -754,6 +765,24 @@ async function performInvoke(
   } else if (method === 'liveActivity.unregister') {
     if (!deviceId || typeof args?.[0] !== 'string') throw new Error('Live Activities require a paired phone')
     mobileLiveActivities.remove(deviceId, args[0])
+  } else if (method.startsWith('hostThreads.')) {
+    // A paired host's calls reach the thread service directly, with that host's own identity and limits; they never
+    // run with this host's local authority.
+    if (!remote || device?.kind !== 'host') throw new InvokeRefused('Only a paired host can make this call.')
+    if (method === 'hostThreads.start') {
+      const parsed = hostThreadRequest.safeParse(args?.[0])
+      if (!parsed.success) throw new Error(describeValidationError(parsed.error))
+      const request = parsed.data
+      const start = () => agentThreads.startForHost(device, request, operationKey)
+      value = operationKey ? await runOnce(operations, device.id, operationKey, method, args, start) : await start()
+    } else if (method === 'hostThreads.status')
+      value = agentThreads.statusForHost(device, z.string().max(100).nullish().parse(args?.[0]))
+    else if (method === 'hostThreads.message') {
+      const [taskId, text, mode] = z
+        .tuple([z.string().min(1).max(100), z.string().min(1).max(20_000), z.enum(['queue', 'steer'])])
+        .parse(args)
+      value = await agentThreads.messageForHost(device, taskId, text, mode)
+    } else throw new Error(`Unknown method ${method}`)
   } else if (method === 'background.status')
     value = {
       running: true,
@@ -1363,6 +1392,24 @@ function networkStatus() {
 }
 async function networkMethod(method: string, args: unknown[]) {
   if (method === 'network.status') return networkStatus()
+  if (method === 'network.setHostAccess') {
+    const [deviceId, access] = args
+    if (typeof deviceId !== 'string' || !isHostAccess(access)) throw new Error('Invalid access')
+    devices.setMaxAccess(deviceId, access)
+    return networkStatus()
+  }
+  if (method === 'network.agentHosts') return agentHosts.list()
+  if (method === 'network.addAgentHost') {
+    const [address, code, name] = z
+      .tuple([z.string().min(1).max(500), z.string().min(1).max(40), z.string().max(80).optional()])
+      .parse(args)
+    await agentHosts.add(address, code, name)
+    return agentHosts.list()
+  }
+  if (method === 'network.forgetAgentHost') {
+    await agentHosts.forget(z.string().max(100).parse(args[0]))
+    return agentHosts.list()
+  }
   if (method === 'network.setDevicePermission') {
     const [deviceId, permission, duration] = args
     if (typeof deviceId !== 'string' || !isDevicePermission(permission)) throw new Error('Invalid permission')

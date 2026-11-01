@@ -32,7 +32,17 @@ export interface DeviceInfo {
   permissions?: Partial<Record<DevicePermission, PermissionGrant>>
   /** Permissions the host refused for good; requests for them are declined without asking again. */
   blocked?: DevicePermission[]
+  /**
+   * Another Ramu host whose agents start threads here. It may only start, check and message the threads it started, and
+   * list projects; it receives no events. Absent for phones and desktops.
+   */
+  kind?: 'host'
+  /** The most access a thread a host pairing starts may have here, whatever it asks for. Hosts only; default edits. */
+  maxAccess?: HostAccess
 }
+export type HostAccess = 'edits' | 'auto' | 'full'
+export const isHostAccess = (value: unknown): value is HostAccess =>
+  value === 'edits' || value === 'auto' || value === 'full'
 /**
  * A grant whose credential never made an authenticated request is dropped after this long: the pairing response was lost
  * or the device could not save it, so nobody holds the token and the grant would otherwise sit in the list forever.
@@ -166,7 +176,7 @@ export class DeviceStore {
   /** Whether this device may use a permission now. A viewer never may; a device from before permissions always may. */
   allows(id: string, permission: DevicePermission, now = Date.now()): boolean {
     const device = this.read().devices.find((entry) => entry.id === id)
-    if (!device || device.role === 'viewer') return false
+    if (!device || device.role === 'viewer' || device.kind === 'host') return false
     if (!device.permissions) return true
     return grantActive(device.permissions[permission], now)
   }
@@ -182,6 +192,19 @@ export class DeviceStore {
         return [permission, grantActive(grant, now) ? grant! : null]
       }),
     ) as Record<DevicePermission, PermissionGrant | null>
+  }
+
+  /** Sets the most access threads a host pairing starts here may have. Host-only, like the rest of device administration. */
+  setMaxAccess(id: string, access: HostAccess): void {
+    if (!isHostAccess(access)) throw new Error('Invalid access')
+    const file = this.read()
+    const device = file.devices.find((entry) => entry.id === id)
+    if (!device) throw new Error('That device is no longer paired')
+    if (device.kind !== 'host') throw new Error('Only a paired host has an access ceiling.')
+    this.write({
+      ...file,
+      devices: file.devices.map((entry) => (entry.id === id ? { ...entry, maxAccess: access } : entry)),
+    })
   }
 
   /** Grants for a while or for good, or revokes. Host-only, like the rest of device administration. */
@@ -317,10 +340,15 @@ export class DeviceStore {
   }
 
   /** Spends a code and creates the device in one write, so a code cannot be redeemed twice. Null when the code is wrong, used or expired. */
-  redeem(code: string, name: string | undefined, now = Date.now()): { device: DeviceInfo; token: string } | null {
+  redeem(
+    code: string,
+    name: string | undefined,
+    now = Date.now(),
+    kind?: 'host',
+  ): { device: DeviceInfo; token: string } | null {
     const hash = sha256(normalizeCode(code))
     const token = randomBytes(32).toString('hex')
-    const device = this.spend((p) => p.codeHash === hash, name, token, now)
+    const device = this.spend((p) => p.codeHash === hash, name, token, now, kind)
     return device ? { device, token } : null
   }
 
@@ -338,6 +366,7 @@ export class DeviceStore {
     name: string | undefined,
     token: string,
     now: number,
+    kind?: 'host',
   ): DeviceInfo | null {
     const file = this.read()
     const live = file.pending.filter((p) => p.expiresAt > now)
@@ -356,7 +385,9 @@ export class DeviceStore {
       role: match.role ?? 'owner',
       tokenHash: sha256(token),
       unclaimed: true,
-      ...((match.role ?? 'owner') === 'owner'
+      // A host pairing holds no device permissions: what it may do is fixed by its kind and access ceiling.
+      ...(kind === 'host' ? { kind, maxAccess: 'edits' as const } : {}),
+      ...((match.role ?? 'owner') === 'owner' && kind !== 'host'
         ? {
             permissions: Object.fromEntries(
               (file.defaultPermissions ?? DEVICE_PERMISSIONS).map((permission) => [permission, { until: null }]),
@@ -510,9 +541,12 @@ const strip = ({
   role,
   permissions,
   blocked,
+  kind,
+  maxAccess,
 }: DeviceRecord): DeviceInfo => ({
   ...(permissions ? { permissions } : {}),
   ...(blocked?.length ? { blocked } : {}),
+  ...(kind === 'host' ? { kind, maxAccess: maxAccess ?? 'edits' } : {}),
   id,
   name,
   createdAt,

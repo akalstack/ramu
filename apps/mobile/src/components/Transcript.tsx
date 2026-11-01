@@ -408,12 +408,16 @@ function StartedThreadsCard({ threads, chat }: { threads: import('@ramu/shared/t
         </T>
       </View>
       {threads.map((thread, index) => {
-        const open = thread.taskId
-          ? () => {
-              tap()
-              router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(chat.computerId, thread.taskId) } })
-            }
-          : undefined
+        const open =
+          thread.taskId && !thread.host
+            ? () => {
+                tap()
+                router.push({
+                  pathname: '/chat/[id]',
+                  params: { id: store.resolveChat(chat.computerId, thread.taskId) },
+                })
+              }
+            : undefined
         return (
           <Pressable
             key={thread.taskId || index}
@@ -425,7 +429,14 @@ function StartedThreadsCard({ threads, chat }: { threads: import('@ramu/shared/t
             <View style={{ flex: 1, minWidth: 0 }}>
               <T numberOfLines={1}>{thread.title}</T>
               <T size={font.caption} tone={thread.error ? 'bad' : 'muted'} numberOfLines={2}>
-                {thread.error ?? thread.projectName}
+                {thread.error ??
+                  [
+                    thread.projectName,
+                    thread.host ? say('on {0}', { '0': thread.host }) : '',
+                    thread.pending ? say('Waiting for {0}', { '0': thread.host ?? '' }) : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
               </T>
             </View>
             {open && <ChevronRight size={16} color={c.muted} />}
