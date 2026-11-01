@@ -369,7 +369,11 @@ export class AgentThreadService {
       throw new Error(
         `That host started ${recent} threads here in the last hour; at most ${MAX_THREADS_PER_HOUR} are allowed.`,
       )
-    if (!request.thread.project?.trim()) throw new Error('Name the project for this thread.')
+    // A paired host names a project exactly: a vague name must not spend this host's model usage on routing.
+    const project = request.thread.project ?? ''
+    const named = project.trim().toLowerCase()
+    if (!this.workspace.listProjects().some((p) => p.id === project || p.name.toLowerCase() === named))
+      throw new Error(`No project here is named "${clipText(project, 80)}".`)
     const settings = await this.settingsForHost(request.settings, request.access, device.maxAccess ?? 'edits')
     const planned = await this.plan([{ ...request.thread, bringChanges: false }], null, settings)
     // The asking host keys each start, so a retry after a lost answer, even across a restart, finds the same thread.
@@ -401,9 +405,11 @@ export class AgentThreadService {
     access: AgentSettings['access'],
     ceiling: AgentSettings['access'],
   ): Promise<AgentSettings> {
-    let settings = requested
+    // The asking host never chooses this host's account, speed tier or resume behavior.
+    const { accountId: _account, autoResume: _resume, ...rest } = requested
+    let settings: AgentSettings = { ...rest, serviceTier: 'standard' }
     try {
-      await this.agents.validateSettings(requested)
+      await this.agents.validateSettings(settings)
     } catch {
       const [models, app] = (await Promise.all([
         this.invoke('settings.models.get', []),

@@ -422,6 +422,19 @@ describe('threads another host asks for', () => {
     expect(brief).toContain('Started by an agent on the host "laptop"')
   })
 
+  it('ignores the asking host’s account and tier, and spends nothing on a vague project name', async () => {
+    await service.startForHost(
+      device,
+      request({ settings: { ...DEFAULT_AGENT_SETTINGS, accountId: 'work', serviceTier: 'fast' } }),
+    )
+    expect(sessions.get('started-1')!.settings.accountId).toBeUndefined()
+    expect(sessions.get('started-1')!.settings.serviceTier).toBe('standard')
+    await expect(
+      service.startForHost(device, request({ thread: { prompt: 'x', project: 'the shop frontend' } })),
+    ).rejects.toThrow(/No project here/)
+    expect(vi.mocked((service as unknown as { agents: AgentService }).agents.analyze)).not.toHaveBeenCalled()
+  })
+
   it('uses this host’s default model when the asking host’s is not here', async () => {
     await service.startForHost(device, request({ settings: { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor' } }))
     expect(sessions.get('started-1')!.settings).toMatchObject({ provider: 'codex', model: 'gpt-5.5', access: 'edits' })

@@ -325,3 +325,10 @@ it('pairs a host as a limited kind with an edits ceiling and no device permissio
   expect(phone.device.kind).toBeUndefined()
   expect(() => devices.setMaxAccess(phone.device.id, 'full')).toThrow(/Only a paired host/)
 })
+
+it('refuses to turn a view-only code into a host pairing, and leaves the code usable', () => {
+  const { devices } = store()
+  const { code } = devices.createCode(Date.now(), 'viewer')
+  expect(devices.redeem(code, 'Sneaky', Date.now(), 'host')).toBeNull()
+  expect(devices.redeem(code, 'Reviewer')?.device.role).toBe('viewer')
+})

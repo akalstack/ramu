@@ -370,7 +370,8 @@ export class DeviceStore {
   ): DeviceInfo | null {
     const file = this.read()
     const live = file.pending.filter((p) => p.expiresAt > now)
-    const match = live.find(matches)
+    // A view-only code never becomes a host pairing, which can start threads.
+    const match = live.find((offer) => matches(offer) && !(kind === 'host' && offer.role === 'viewer'))
     if (!match) {
       if (live.length !== file.pending.length) this.write({ ...file, pending: live })
       return null
