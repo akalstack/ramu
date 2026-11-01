@@ -19,7 +19,8 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
       !text.includes('[questions') &&
       !text.includes('[advisor') &&
       !text.includes('[goal tool]') &&
-      !text.includes('[interactive tool]'))
+      !text.includes('[interactive tool]') &&
+      !text.includes('<tool-call>'))
   )
     return
   const client = new Client({ name: 'ramu-smoke', version: '1' })
@@ -129,6 +130,12 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
           settings: data.currentSettings,
         },
       })
+      if (result.isError) throw new Error(JSON.stringify(result.content))
+    }
+    // Any Ramu tool by name, for end-to-end checks: <tool-call>{"name":"…","arguments":{…}}</tool-call>.
+    for (const match of text.matchAll(/<tool-call>([\s\S]*?)<\/tool-call>/g)) {
+      const request = JSON.parse(match[1]!) as { name: string; arguments?: Record<string, unknown> }
+      const result = await call({ name: request.name, arguments: request.arguments ?? {} })
       if (result.isError) throw new Error(JSON.stringify(result.content))
     }
     if (text.includes('[ramu-agent')) {
