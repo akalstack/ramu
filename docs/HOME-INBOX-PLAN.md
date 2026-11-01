@@ -34,25 +34,19 @@ Good morning. 2 need you, 5 finished overnight.
 Finished: migration, API tests and 3 more   See all
 ```
 
-- **Home:** remove `HomeFeed`'s lists and `HomeGroups`, and keep one summary line, hidden when nothing needs attention. Add-project prompts and the recent-work count stay only if they fit that line.
+- **Home:** remove `HomeFeed`'s lists and `HomeGroups`, and keep one summary line, hidden when nothing needs attention. A host with no projects keeps its add-project prompt.
 - **Started together:** group cards move from Home to the Brief, below the rows. The phone already shows them in Threads, and keeps them there.
 - **Badge:** the Inbox badge counts what needs the person now, on desktop and phone: waiting threads, failed threads and recaps needing a decision. A failure stops counting once it is retried, opened or marked done.
 - **Live and free:** the rows, counts and order come from thread state (`hostInbox`, `operatorSnapshot`), across hosts, and update as things change. No model call is needed to show them.
-- **Order:** approvals and questions, then failures, then limits and paused goals. At most five rows, then **See all**.
-- **One tap:** rows use the Operator's action list and `runOperatorActions`, so tapping a button is the confirmation. Question rows show their choices; free-text questions and anything with details open in place. Approvals keep **Allow once** only here; saved rules stay in the full card.
-- **Optional wording:** with recaps on, the first line and the item text reuse the daily recap's wording. With recaps off, or before the first recap, the Brief still works from state alone.
+- **Order:** approvals and questions, then failures, then limits and paused goals, then recaps needing a decision. At most five rows, then **See all**.
+- **One tap:** failures use the Operator's retry, and questions and approvals use the existing replies, so tapping a button is the confirmation. Free-text questions and anything needing detail expand in place. Approvals offer **Allow once** here; saved rules stay in the full card. **See all** expands the list in place.
 - **Operator:** its box sits directly under the rows, when it is turned on.
-- **Waiting cards:** collapse to one line each after the first, expanding on tap.
 - **Phone:** there is no Home to simplify. The same rows open Inbox, and the daily push opens them.
 - **Recaps tab:** the empty state says one thing, and shows **Preparing your first recap** only while one is running.
 
-### Later options
-
-Reading the Brief aloud, a second daily run, and suggested actions from recap text. Automatic actions stay out: the person taps.
-
 ## Services to extend
 
-`apps/web/src/Home.tsx` and `HomeGroups.tsx` for what leaves Home, `packages/shared/src/hostInbox.ts` for order and tabs, `packages/shared/src/operator.ts` for actions, `apps/web/src/inbox/`, `apps/mobile/src/app/(tabs)/inbox/`, `apps/server/src/memory/recaps.ts` for wording.
+`apps/web/src/Home.tsx` and `HomeGroups.tsx` for what leaves Home, `packages/shared/src/hostInbox.ts` for order and tabs, `packages/shared/src/operator.ts` for actions, `apps/web/src/inbox/`, `apps/mobile/src/app/(tabs)/inbox/`.
 
 ## Acceptance
 

@@ -21,7 +21,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Provider compatibility:** compatibility rules for OpenCode's ACP runner, Cursor and Antigravity after protocol checks; entry points that bypass `validateSettings`.
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live, which needs an event channel between hosts; a thread started there with its report covers the need until then.
 - **Simple Home and Inbox Brief:** Home keeps only the start box and one summary line; Inbox gains a live summary with one-tap actions ([plan](HOME-INBOX-PLAN.md)).
-- **Teammates and agent profiles:** a second model works beside the first in one thread, and a sentence creates a reusable agent ([plan](TEAMMATES-PLAN.md)).
+- **Teammates and agent profiles:** a second model reviews or takes over in one thread, and a sentence creates a reusable agent ([plan](TEAMMATES-PLAN.md)).
 - **Git hosting:** Bitbucket Cloud and Azure DevOps adapters, and saved GitLab tokens with clone and publish in Settings. A new forge adds an adapter beside GitHub's and GitLab's in `apps/server/src/workspace/forge/` and a case in `forge/route.ts`.
 - **Code quality:** validate push payloads and RPC results on the clients (`any` remains in the phone's transport and push listeners, the desktop's host bridge and its preload). About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
