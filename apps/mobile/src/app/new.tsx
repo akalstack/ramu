@@ -245,10 +245,18 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const [picker, setPickerState] = useState<Picker>(() =>
     opensOnComposer({ project: params.project, auto, offline, projects: list.length }) ? null : 'project',
   )
+  // The picker the screen opened on is only a default until someone chooses it.
+  const pickerChosen = useRef(false)
   const setPicker = (next: Picker) => {
+    pickerChosen.current = true
     if (next) Keyboard.dismiss()
     setPickerState(next)
   }
+  // The tab mounts before its host connects, so Auto's composer becomes reachable only once the host and projects load.
+  const composerReady = opensOnComposer({ project: params.project, auto, offline, projects: list.length })
+  useEffect(() => {
+    if (composerReady && !pickerChosen.current) setPickerState((current) => (current === 'project' ? null : current))
+  }, [composerReady])
   useEffect(() => {
     if (choices?.length) {
       Keyboard.dismiss()

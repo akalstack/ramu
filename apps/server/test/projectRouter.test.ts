@@ -94,7 +94,13 @@ it('asks the model whether two named projects are one task or a split, and keeps
   const failing = vi.fn().mockRejectedValue(new Error('down'))
   expect(
     await routeProject(prompt, DEFAULT_AGENT_SETTINGS, projects, failing, undefined, { split: true }),
-  ).toMatchObject({ kind: 'ambiguous', candidates: [{ projectId: 'a' }, { projectId: 'b' }] })
+  ).toMatchObject({
+    kind: 'ambiguous',
+    candidates: [
+      { projectId: 'a', reason: 'Mentions “Storefront”' },
+      { projectId: 'b', reason: 'Mentions “Billing”' },
+    ],
+  })
 })
 
 it('writes one brief per project around a shared contract, and refuses an answer that skips or invents a project', async () => {

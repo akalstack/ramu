@@ -31,7 +31,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 - **Physical iOS and Android devices:** everything in [apps/mobile/VERIFICATION.md](../apps/mobile/VERIFICATION.md), from pairing and permissions to the viewers, keyboards, push and Live Activities.
 - **Packaged and signed desktop builds:** upgrading real profiles, browser session import with a real keychain, computer-use permission identity, theme and system-appearance changes, background-terminal stop timing, and installation on a second Mac.
-- **Live providers and second hosts:** provider version compatibility records, Shared MCP across two providers, skill and rule delivery, project routing quality, plan-usage and limit-notice handling, GitHub with live tokens and Enterprise hosts, interactive content, agent-started threads and their reports, Auto splits and their briefs, threads started on a second host (pairing, ceiling, offline wait, revoke) with the app closed and from the phone, title generation, multi-host load, and a matched HTTP versus WebSocket comparison. Paid calls and credentials are opt-in.
+- **Live providers and second hosts:** provider version compatibility records, Shared MCP across two providers, skill and rule delivery, project routing quality, plan-usage and limit-notice handling, GitHub with live tokens and Enterprise hosts, interactive content, agent-started threads and their reports, Auto splits and their briefs, threads started on a second physical host (pairing, ceiling, offline wait, revoke) and the review sheet on a physical phone, title generation, multi-host load, and a matched HTTP versus WebSocket comparison. Paid calls and credentials are opt-in.
 
 Representative tasks to run once the above is available:
 

@@ -48,7 +48,7 @@ export function SplitReviewSheet({
         {draft.rows.map((row) => (
           <View
             key={row.key}
-            style={{ gap: space.s, backgroundColor: c.raised2, borderRadius: radius.m, padding: space.m }}
+            style={{ gap: space.s, backgroundColor: c.raised, borderRadius: radius.m, padding: space.m }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
               <T size={font.caption} tone="muted" style={{ flex: 1 }} numberOfLines={1}>

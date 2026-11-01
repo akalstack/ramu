@@ -936,6 +936,50 @@ test('scroll-edge support uses the public native registry and safely falls back 
   assert.equal(screen.nativeScrollEdge, false)
 })
 
+test('new thread with Auto moves to the composer once its host connects after the tab mounted', () => {
+  const hooks = hookHarness()
+  let keyboard = 0
+  let online = false
+  let asTab = false
+  const destinations = []
+  const store = {
+    selected: 'a',
+    language: 'en',
+    computers: [{ id: 'a', name: 'Laptop', status: 'online' }],
+    projects: [{ id: 'a:ramu', name: 'ramu', computerId: 'a', root: '/work/ramu', kind: 'repository' }],
+    invoke: async () => ({}),
+    subscribe: () => () => {},
+    drafts: {},
+    defaults: {},
+    appPreferences: {},
+    isOnline: () => online,
+    mayUse: () => true,
+    setDraft: (key, value) => {
+      store.drafts[key] = value
+    },
+  }
+  const { default: NewChat } = load('app/new.tsx', 'ios', {
+    react: hooks.react,
+    'expo-router': {
+      useRouter: () => ({ replace() {}, navigate: (path) => destinations.push(path) }),
+      useLocalSearchParams: () => ({}),
+    },
+    '@ramu/shared/workspaceDefaults': workspaceDefaults,
+    '@ramu/shared/workspace/explorer': explorerScopes,
+    '../runtime/workspaces': workspaceChoices,
+    '../runtime/useWorkspaces': { useWorkspaces: () => ({ rows: [] }) },
+    '../runtime/store': { useStore: () => store },
+    '../runtime/types': { STANDALONE: 'no-project' },
+    '../i18n': { useT: () => ({ newChat: 'New thread' }) },
+    '../components/Keyboard': { useKeyboardInset: () => keyboard },
+  })
+  const render = () => hooks.render(() => NewChat({ asTab }))
+  assert.equal(find(render(), 'Header').props.title, 'Choose a project')
+  online = true
+  render()
+  assert.equal(find(render(), 'Header').props.title, 'New thread')
+})
+
 test('new thread switches projects and composer in one flow without losing the draft identity', () => {
   const hooks = hookHarness()
   let keyboard = 0

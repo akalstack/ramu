@@ -40,7 +40,13 @@ export async function routeProject(
   const several = options.split ? namedProjects(prompt, candidates) : []
   const named: RoutingOutcome =
     several.length > 1
-      ? { kind: 'ambiguous', candidates: several.map((projectId) => ({ projectId, reason: '' })) }
+      ? {
+          kind: 'ambiguous',
+          candidates: several.map((projectId) => ({
+            projectId,
+            reason: `Mentions “${candidates.find((candidate) => candidate.id === projectId)?.name}”`,
+          })),
+        }
       : byName
   // Without splitting, names that fit several projects already leave the choice to the person, as before.
   if (named.kind === 'resolved' || named.kind === 'unavailable' || (named.kind === 'ambiguous' && !options.split))
