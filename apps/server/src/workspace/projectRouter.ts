@@ -5,6 +5,7 @@ import {
   namedProjects,
   routeByName,
   routingCatalog,
+  settleCopies,
   SPLIT_CONTRACT_LIMIT,
   SPLIT_LIMIT,
   type RoutingCandidate,
@@ -38,7 +39,7 @@ export async function routeProject(
   // Several projects named separately may each need work, so with splitting on they go to the classifier; if it cannot
   // settle it, the named projects are the person's choice.
   const several = options.split ? namedProjects(prompt, candidates) : []
-  const named: RoutingOutcome =
+  const named: RoutingOutcome = settleCopies(
     several.length > 1
       ? {
           kind: 'ambiguous',
@@ -47,7 +48,10 @@ export async function routeProject(
             reason: `Mentions “${candidates.find((candidate) => candidate.id === projectId)?.name}”`,
           })),
         }
-      : byName
+      : byName,
+    prompt,
+    candidates,
+  )
   // Without splitting, names that fit several projects already leave the choice to the person, as before.
   if (named.kind === 'resolved' || named.kind === 'unavailable' || (named.kind === 'ambiguous' && !options.split))
     return named
@@ -73,7 +77,7 @@ export async function routeProject(
     if (outcome.kind === 'split' && !options.split) return { kind: 'ambiguous', candidates: outcome.projects }
     // Names already narrowed the choice; a classifier that cannot settle it leaves that choice to the person.
     if (named.kind === 'ambiguous' && outcome.kind !== 'split' && outcome.kind !== 'resolved') return named
-    return outcome
+    return settleCopies(outcome, prompt, candidates)
   } catch (error) {
     if (signal?.aborted) throw error
     return named.kind === 'ambiguous' ? named : { kind: 'unavailable', reason: 'ai-failed' }

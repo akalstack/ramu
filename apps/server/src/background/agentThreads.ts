@@ -5,6 +5,7 @@ import { clipText } from '@ramu/shared/text'
 import { routeByName } from '@ramu/shared/workspace/projectRouting'
 import {
   NO_PROJECT,
+  type AppPreferences,
   type AgentSessionInfo,
   type AgentSettings,
   type StartedThread,
@@ -30,6 +31,8 @@ export const MAX_MESSAGES_PER_HOUR = 20
 const HOUR = 60 * 60_000
 const ACCESS_RANK: Record<AgentSettings['access'], number> = { edits: 0, auto: 1, full: 2 }
 const REPORT_LIMIT = 4000
+const OFF =
+  'Starting threads from agents is turned off on this host. The person can turn on Let agents start threads in Settings → Threads.'
 
 type Invoke = (method: string, args: unknown[]) => Promise<unknown>
 
@@ -120,6 +123,10 @@ export class AgentThreadService {
     private readonly remote?: RemoteThreads,
   ) {}
 
+  private enabled(): boolean {
+    return this.workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).agentThreads !== false
+  }
+
   /** The paired host an agent named, or an error that tells the agent how the person adds one. */
   private hostNamed(named: string) {
     const hosts = this.remote?.hosts.list() ?? []
@@ -132,9 +139,11 @@ export class AgentThreadService {
 
   register(server: McpServer, sessionId: string): void {
     const session = this.agents.get(sessionId)
-    if (session.parentId) return
+    if (session.parentId || !this.enabled()) return
     const result = async (work: () => unknown) => {
       try {
+        // Turned off mid-thread: the tools stay listed until it relaunches, and refuse.
+        if (!this.enabled()) throw new Error(OFF)
         return { content: [{ type: 'text' as const, text: JSON.stringify(await work()) }] }
       } catch (e) {
         return { isError: true, content: [{ type: 'text' as const, text: e instanceof Error ? e.message : String(e) }] }
@@ -358,6 +367,7 @@ export class AgentThreadService {
    */
   async startForHost(device: DeviceInfo, request: RemoteRequest, key?: string): Promise<StartedThread[]> {
     if (device.kind !== 'host') throw new Error('Only a paired host can start threads this way.')
+    if (!this.enabled()) throw new Error(OFF)
     if (!Number.isInteger(request.depth) || request.depth < 1 || request.depth > MAX_DEPTH)
       throw new Error('Threads started by agents cannot start more threads that deep. Ask the person to start it.')
     const recent = (
@@ -481,6 +491,7 @@ export class AgentThreadService {
     mode: 'queue' | 'steer',
   ): Promise<{ sent: true }> {
     if (device.kind !== 'host') throw new Error('Only a paired host can message this way.')
+    if (!this.enabled()) throw new Error(OFF)
     const owned = this.db
       .prepare('SELECT 1 FROM thread_links WHERE source_device = ? AND target_task_id = ?')
       .get(device.id, taskId)

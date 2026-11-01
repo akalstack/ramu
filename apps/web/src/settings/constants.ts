@@ -35,6 +35,8 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
     'includeTabContext',
     'warnModelChange',
     'autoProjectSelection',
+    'autoProjectSplit',
+    'agentThreads',
     'notifyAgentDone',
     'resumeChatsOnRestart',
     'asyncQuestions',

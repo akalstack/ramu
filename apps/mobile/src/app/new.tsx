@@ -425,7 +425,11 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         let outcome: Awaited<ReturnType<RamuMethods['projects.route']>>
         try {
           outcome = await storeRef.current
-            .invoke(selected, 'projects.route', text, verified, { split: true, others: others.candidates })
+            .invoke(selected, 'projects.route', text, verified, {
+              split: store.appPreferences[selected]?.autoProjectSplit !== false,
+              others: others.candidates,
+              localHost: computers.find((x) => x.id === selected)?.name,
+            })
             // A host that predates splitting takes only the prompt and settings.
             .catch((error) => {
               if (isMethodMissing(error)) throw error
@@ -526,9 +530,15 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     }
   }
   const pc = computers.find((x) => x.id === selected)
-  const choiceLabels = routingChoiceLabels(
-    list.map((p) => ({ id: rawId(p.id), name: p.name, host: pc?.name ?? selected, root: p.root })),
-  )
+  const choiceLabels = routingChoiceLabels([
+    ...list.map((p) => ({ id: rawId(p.id), name: p.name, host: pc?.name ?? selected, root: p.root })),
+    ...[...others.targets].map(([id, target]) => ({
+      id,
+      name: target.name,
+      host: target.hostName,
+      root: null,
+    })),
+  ])
 
   const projectPicker = (
     <>
@@ -862,7 +872,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                 <SheetOption
                   key={choice.projectId}
                   icon={Folder}
-                  title={`${remote.name} · ${remote.hostName}`}
+                  title={choiceLabels.get(choice.projectId)?.label ?? remote.name}
                   help={choice.reason || undefined}
                   onPress={() => {
                     const request = pending.current

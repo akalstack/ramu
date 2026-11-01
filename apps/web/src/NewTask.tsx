@@ -532,8 +532,9 @@ export function NewTask({
           let outcome: RoutingOutcome
           try {
             outcome = await host.invoke('projects.route', routed, sendSettings, {
-              split: true,
+              split: preferences.autoProjectSplit !== false,
               others: otherHosts.candidates,
+              localHost: currentHostName,
             })
           } catch {
             // A host that predates splitting takes only the prompt and settings.
@@ -699,7 +700,10 @@ export function NewTask({
     { value: NO_PROJECT, label: t('No project') },
     ...ws.projects.map((p) => ({ value: p.id, label: p.name })),
   ]
-  const choiceLabels = routingLabels(ws.projects.map((p) => ({ id: p.id, name: p.name })))
+  const choiceLabels = routingLabels([
+    ...ws.projects.map((p) => ({ id: p.id, name: p.name, host: currentHostName })),
+    ...otherHosts.candidates,
+  ])
   const computers = useComputers()
   const { activeHost, select } = useHostSelection()
   useEffect(() => {

@@ -42,11 +42,23 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
       />
       <ToggleRow
         {...toggleProps}
+        setting="autoProjectSplit"
+        title="Split requests across projects"
+        description="When a request needs work in several projects or hosts, Auto writes one thread for each and you review them before they start. Turn off to always start one thread."
+      />
+      <ToggleRow
+        {...toggleProps}
         setting="includeTabContext"
         title="Include open tabs as context"
         description="Send the active file or selection with each message, plus the paths of other open tabs. Unsaved edits are included."
       />
       <SettingsGroupTitle>{t('While agents work')}</SettingsGroupTitle>
+      <ToggleRow
+        {...toggleProps}
+        setting="agentThreads"
+        title="Let agents start threads"
+        description="Agents can start threads in this project, other projects and hosts added for agents, and a paired host's agents can start threads here. Sub-agents are not affected. Turn off to start threads only yourself."
+      />
       <ToggleRow
         {...toggleProps}
         setting="notifyAgentDone"

@@ -281,6 +281,33 @@ describe('thread_start', () => {
   })
 })
 
+describe('Let agents start threads', () => {
+  const off = () => ws.setAppState('app-preferences', { agentThreads: false })
+
+  it('offers no tools to a thread that launches with it off', async () => {
+    await callerIn(api)
+    off()
+    expect(Object.keys(tools('caller').registered)).toEqual([])
+  })
+
+  it('refuses in a running thread once it is turned off, and refuses a paired host', async () => {
+    await callerIn(api)
+    const { call } = tools('caller')
+    off()
+    await expect(call('thread_start', { threads: [{ prompt: 'x' }] })).rejects.toThrow(/turned off/)
+    await expect(
+      service.startForHost({ id: 'd', kind: 'host', maxAccess: 'edits', role: 'owner' } as DeviceInfo, {
+        thread: { prompt: 'x', project: 'web' },
+        depth: 1,
+        access: 'edits',
+        settings: DEFAULT_AGENT_SETTINGS,
+        from: { host: 'laptop', thread: 'Plan', request: '' },
+      }),
+    ).rejects.toThrow(/turned off/)
+    expect(calls).not.toContain('tasks.create')
+  })
+})
+
 describe('related threads', () => {
   it('lets threads started together see and message each other, but not unrelated threads', async () => {
     await callerIn(api)

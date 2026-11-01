@@ -257,6 +257,20 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           help: 'Home picks the project from your first message and asks when more than one fits. Turn off to always choose the project yourself.',
           words: 'project auto routing home',
         },
+        {
+          kind: 'toggle',
+          path: 'autoProjectSplit',
+          title: 'Split requests across projects',
+          help: 'When a request needs work in several projects or hosts, Auto writes one thread for each and you review them before they start. Turn off to always start one thread.',
+          words: 'project auto split several threads hosts',
+        },
+        {
+          kind: 'toggle',
+          path: 'agentThreads',
+          title: 'Let agents start threads',
+          help: "Agents can start threads in this project, other projects and hosts added for agents, and a paired host's agents can start threads here. Sub-agents are not affected. Turn off to start threads only yourself.",
+          words: 'agent thread start delegate host',
+        },
       ],
     },
     {

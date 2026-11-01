@@ -671,12 +671,13 @@ export interface RamuMethods {
   /**
    * Picks the destination project for a first prompt before any thread exists; ambiguous or unknown asks the person.
    * With `split`, a request that needs work in several projects returns `split`. `others` adds projects on the client's
-   * other hosts (ids are the client's own), so one prompt can reach them.
+   * other hosts (ids are the client's own), so one prompt can reach them; `localHost` is this host's name as the client
+   * shows it, so a prompt can tell copies of a project apart.
    */
   'projects.route'(
     prompt: string,
     settings: AgentSettings,
-    options?: { split?: boolean; others?: RoutingCandidate[] },
+    options?: { split?: boolean; others?: RoutingCandidate[]; localHost?: string },
   ): RoutingOutcome
   /** One brief per project of a split request, around one shared contract; null when it cannot be written. */
   'projects.splitBriefs'(prompt: string, targets: RoutingCandidate[], settings: AgentSettings): SplitPlan | null

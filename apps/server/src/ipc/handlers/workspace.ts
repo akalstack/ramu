@@ -125,9 +125,19 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       args: z.tuple([
         z.string().min(1).max(20_000),
         agentSettings,
-        z.object({ split: z.boolean().optional(), others: z.array(routingCandidate).max(50).optional() }).optional(),
+        z
+          .object({
+            split: z.boolean().optional(),
+            others: z.array(routingCandidate).max(50).optional(),
+            localHost: z.string().max(200).optional(),
+          })
+          .optional(),
       ]),
-      run: (prompt: string, settings: AgentSettings, options?: { split?: boolean; others?: RoutingCandidate[] }) =>
+      run: (
+        prompt: string,
+        settings: AgentSettings,
+        options?: { split?: boolean; others?: RoutingCandidate[]; localHost?: string },
+      ) =>
         routeProject(
           prompt,
           settings,
@@ -135,6 +145,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
             ...workspace.listProjects().map((project) => ({
               id: project.id,
               name: project.name,
+              ...(options?.localHost ? { host: options.localHost } : {}),
               aliases: project.aliases,
               description: project.description,
             })),

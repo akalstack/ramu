@@ -165,6 +165,50 @@ export function routingLabels(candidates: readonly RoutingCandidate[]): Map<stri
   )
 }
 
+/**
+ * The same project on several hosts is one piece of work, so a name alone never reaches every copy. Copies are narrowed
+ * to the hosts the prompt names; a prompt that names none leaves the choice to the person, and only a prompt that names
+ * every copy's host keeps them all.
+ */
+export function settleCopies(
+  outcome: RoutingOutcome,
+  promptText: string,
+  candidates: readonly RoutingCandidate[],
+): RoutingOutcome {
+  if (outcome.kind !== 'split' && outcome.kind !== 'ambiguous') return outcome
+  const listed = outcome.kind === 'split' ? outcome.projects : outcome.candidates
+  const prompt = normalize(promptText)
+  const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]))
+  const copies = new Map<string, RoutingCandidate[]>()
+  for (const { projectId } of listed) {
+    const candidate = byId.get(projectId)
+    if (!candidate) continue
+    const key = normalize(candidate.name)
+    copies.set(key, [...(copies.get(key) ?? []), candidate])
+  }
+  const dropped = new Set<string>()
+  let unclear = false
+  for (const group of copies.values()) {
+    if (group.length < 2) continue
+    const named = group.filter((candidate) => candidate.host && mentions(prompt, candidate.host))
+    if (!named.length) unclear = true
+    else for (const candidate of group) if (!named.includes(candidate)) dropped.add(candidate.id)
+  }
+  if (unclear) return { kind: 'ambiguous', candidates: listed }
+  if (!dropped.size) return outcome
+  const kept = listed.filter((entry) => !dropped.has(entry.projectId))
+  if (kept.length === 1) {
+    const chosen = byId.get(kept[0]!.projectId)!
+    return {
+      kind: 'resolved',
+      projectId: chosen.id,
+      reason: `Mentions “${chosen.name}” on ${chosen.host}`,
+      via: 'name',
+    }
+  }
+  return outcome.kind === 'split' ? { kind: 'split', projects: kept } : { kind: 'ambiguous', candidates: kept }
+}
+
 /** One project's part of a split request, as written for the person to review. */
 export interface SplitBrief {
   projectId: string

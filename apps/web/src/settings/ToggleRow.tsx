@@ -11,6 +11,8 @@ export type ToggleKey =
   | 'includeTabContext'
   | 'warnModelChange'
   | 'autoProjectSelection'
+  | 'autoProjectSplit'
+  | 'agentThreads'
   | 'recapsEnabled'
   | 'notifyAgentDone'
   | 'resumeChatsOnRestart'

@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
 import { routeProject, splitBriefs } from '../src/workspace/projectRouter'
 import { splitThreadPrompt } from '@ramu/shared/workspace/projectRouting'
@@ -132,4 +132,41 @@ it('builds each thread’s first message from its brief, the contract and the pe
     "Show dueDate.\n\nShared contract (the same in every thread started from this request):\nField dueDate\n\nThe person's original request:\nAdd a due date everywhere",
   )
   expect(splitThreadPrompt('Show it.', '', 'Do it')).not.toContain('Shared contract')
+})
+
+describe('the same project on two hosts', () => {
+  const copies = [
+    { id: 'here', name: 'Ramu', host: 'laptop' },
+    { id: 'far', name: 'Ramu', host: 'vps' },
+  ]
+  const split = reply({ projectIds: ['here', 'far'], split: true, reason: 'Ramu fits and Ramu fits' })
+  const route = (prompt: string, analyze = split) =>
+    routeProject(prompt, DEFAULT_AGENT_SETTINGS, copies, analyze, undefined, { split: true })
+
+  it('never splits between copies on a name alone', async () => {
+    expect(await route('Fix the login in Ramu')).toMatchObject({
+      kind: 'ambiguous',
+      candidates: [{ projectId: 'here' }, { projectId: 'far' }],
+    })
+  })
+
+  it('uses the copy on the host the prompt names, without asking the model', async () => {
+    const analyze = reply({})
+    expect(await route('Fix the login in Ramu on vps', analyze)).toMatchObject({ kind: 'resolved', projectId: 'far' })
+    expect(analyze).not.toHaveBeenCalled()
+  })
+
+  it('keeps both copies only when the prompt names both hosts', async () => {
+    expect(await route('Update Ramu on laptop and on vps')).toMatchObject({ kind: 'split' })
+  })
+
+  it('leaves different projects that split as they are', async () => {
+    const mixed = [...copies, { id: 'web', name: 'Web', host: 'laptop' }]
+    const analyze = reply({ projectIds: ['far', 'web'], split: true, reason: 'Ramu and Web both change' })
+    expect(
+      await routeProject('Change Web and Ramu on vps', DEFAULT_AGENT_SETTINGS, mixed, analyze, undefined, {
+        split: true,
+      }),
+    ).toMatchObject({ kind: 'split' })
+  })
 })
