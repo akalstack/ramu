@@ -679,6 +679,11 @@ export interface RamuMethods {
     settings: AgentSettings,
     options?: { split?: boolean; others?: RoutingCandidate[]; localHost?: string },
   ): RoutingOutcome
+  /** Proposes actions for one sentence from the client's snapshot; nothing runs here. Null when no proposal came back. */
+  'operator.plan'(
+    request: string,
+    snapshot: import('./operator').OperatorSnapshot,
+  ): import('./operator').OperatorPlan | null
   /** One brief per project of a split request, around one shared contract; null when it cannot be written. */
   'projects.splitBriefs'(prompt: string, targets: RoutingCandidate[], settings: AgentSettings): SplitPlan | null
   'projects.setup'(projectId: string): ProjectSetup

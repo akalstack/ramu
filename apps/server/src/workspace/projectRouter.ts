@@ -1,4 +1,5 @@
 import type { AgentSettings } from '@ramu/shared/types'
+import { interpretOperatorPlan, operatorPrompt, type OperatorPlan, type OperatorSnapshot } from '@ramu/shared/operator'
 import {
   interpretAiRouting,
   interpretSplitPlan,
@@ -81,6 +82,29 @@ export async function routeProject(
   } catch (error) {
     if (signal?.aborted) throw error
     return named.kind === 'ambiguous' ? named : { kind: 'unavailable', reason: 'ai-failed' }
+  }
+}
+
+/**
+ * Proposes actions for one sentence in a single bounded, tool-free call on the host's default model. Only refs, titles,
+ * project and host names and states leave this process, and nothing here acts; the person confirms on the client.
+ */
+export async function planOperator(
+  request: string,
+  snapshot: OperatorSnapshot,
+  settings: AgentSettings,
+  analyze: Analyze,
+): Promise<OperatorPlan | null> {
+  try {
+    const result = await analyze(
+      operatorPrompt(request, snapshot),
+      { ...settings, autoFallback: false, autoResume: false },
+      4000,
+      { timeoutMs: 45_000 },
+    )
+    return interpretOperatorPlan(JSON.parse(result.message.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')), snapshot)
+  } catch {
+    return null
   }
 }
 

@@ -81,6 +81,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   autoProjectSplit: boolean
   /** Agents may start threads the person owns, here and on other hosts, and a paired host's agents may start them here. */
   agentThreads: boolean
+  /** Inbox offers one box that proposes actions across threads and schedules. Off until someone wants it. */
+  operator: boolean
   /** Opt-in until integrated runtime/provider acceptance passes; website identities stay on the runtime's desktop. */
   agentBrowser?: import('../browser').AgentBrowserPreferences
   /** Dragged width of the sidebar, in px. */
@@ -173,6 +175,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   autoProjectSelection: true,
   autoProjectSplit: true,
   agentThreads: true,
+  operator: false,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
   busyMessageAction: 'steer',
   messageBehaviorVersion: 4,

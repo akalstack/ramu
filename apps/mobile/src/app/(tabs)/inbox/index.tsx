@@ -15,6 +15,7 @@ import {
 import type { LibrarySummary } from '@ramu/shared/types'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
+import { OperatorSheet } from '../../../components/OperatorSheet'
 import { useAutomation } from '../../../runtime/automation'
 import {
   blockerTally,
@@ -32,7 +33,7 @@ import { TopFade } from '../../../components/Glass'
 import { InboxThread } from '../../../components/InputRequests'
 import { Chips, Group, Nothing, RecapCard, Section } from '../../../components/InboxParts'
 import { useTabActions } from '../../../components/Overlays'
-import { Row, T, tap } from '../../../components/ui'
+import { Button, Row, T, tap } from '../../../components/ui'
 
 const PREVIEW = 5
 const PREVIEW_SMALL = 3
@@ -56,6 +57,7 @@ export default function InboxScreen() {
   const t = useT()
   const router = useRouter()
   const store = useStore()
+  const [operatorOpen, setOperatorOpen] = useState(false)
   const auto = useAutomation()
   const [hostFilter, setHostFilter] = useState<string | null>(null)
   const host = store.computers.some((pc) => pc.id === hostFilter) ? hostFilter : null
@@ -419,6 +421,11 @@ export default function InboxScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={c.muted} />}
       >
         <LargeTitle>{t.inbox}</LargeTitle>
+        {store.appPreferences[store.selected]?.operator ? (
+          <View style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
+            <Button kind="secondary" title={say('Ask the Operator')} onPress={() => setOperatorOpen(true)} />
+          </View>
+        ) : null}
         {multi ? (
           <Chips
             value={host ?? ''}
@@ -436,6 +443,7 @@ export default function InboxScreen() {
         {body}
       </PageScrollView>
       {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}
+      <OperatorSheet open={operatorOpen} onClose={() => setOperatorOpen(false)} />
     </Screen>
   )
 }

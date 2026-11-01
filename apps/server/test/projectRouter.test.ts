@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
-import { routeProject, splitBriefs } from '../src/workspace/projectRouter'
+import { planOperator, routeProject, splitBriefs } from '../src/workspace/projectRouter'
 import { splitThreadPrompt } from '@ramu/shared/workspace/projectRouting'
 
 const projects = [
@@ -169,4 +169,20 @@ describe('the same project on two hosts', () => {
       }),
     ).toMatchObject({ kind: 'split' })
   })
+})
+
+it('turns a reply into a checked proposal, and returns nothing for an unusable one', async () => {
+  const snapshot = {
+    threads: [
+      { ref: 't1', hostId: 'h', host: 'H', taskId: 'a', title: 'Build', project: 'p', state: 'running' as const },
+    ],
+    schedules: [],
+  }
+  const good = reply({ summary: 'Stopping Build.', actions: [{ type: 'stop', ref: 't1', reason: 'asked' }] })
+  expect(await planOperator('stop build', snapshot, DEFAULT_AGENT_SETTINGS, good)).toMatchObject({
+    actions: [{ type: 'stop', ref: 't1' }],
+  })
+  expect(good.mock.calls[0]![1]).toMatchObject({ autoFallback: false, autoResume: false })
+  const junk = vi.fn().mockResolvedValue({ message: 'sure' })
+  expect(await planOperator('stop build', snapshot, DEFAULT_AGENT_SETTINGS, junk)).toBeNull()
 })

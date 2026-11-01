@@ -75,6 +75,14 @@ With **Auto** as the destination (Home on the desktop, a new thread on the phone
 - **Starting:** each host starts its own rows (`threads.startGroup`) as one group with the project's default checkout and the reviewed model. Every thread's first message is its brief, the contract and the person's original request, and names the other threads of the group, which it can read and message (see [Threads started by agents](#threads-started-by-agents)). A host that fails reports its rows without stopping the others. An Auto request that resolves to one project on another host is reviewed the same way, as a single row.
 - **Following up:** Home's **Started together** card (desktop) and the threads list (phone) show each group across connected hosts with every thread's state and one line for the group (waiting, still working, or how it settled) until a few days after all of it settles.
 
+## Operator
+
+**Operator** (Settings → Threads, off by default) adds a box to Inbox, and a button on the phone, that turns one sentence into proposed actions across connected hosts: "stop everything on vps", "retry what failed", "what is blocked?".
+
+- **What it is:** not an agent. One bounded, tool-free call on the host's default model reads refs, titles, project and host names and states (at most 100 threads and 30 schedules, those needing you first). It reads no transcript or file, and costs nothing when unused.
+- **What it can do:** stop, retry or message a thread; archive it or mark it done; pause, resume or run a schedule. Actions that do not fit a thread's state, or name anything unlisted, are dropped. It cannot delete anything, approve requests, or reach files, Git or terminals.
+- **Confirming:** each proposed action has a checkbox and nothing runs until **Do these**. Each runs as the ordinary method on its own host with this device's permissions, and failures are listed per action. An unclear request gets a question instead of actions.
+
 ## Usage limits and fallback
 
 **Settings → Models → Provider fallback** is one ordered list of provider and model pairs, best first (default: Claude Code, then Codex).

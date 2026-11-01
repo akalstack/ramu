@@ -1,4 +1,6 @@
 import { RowButton } from '@/components/row-button'
+import { OperatorBox } from './OperatorBox'
+import { useAppSettings } from '../settings/AppSettings'
 import { useState, useEffect } from 'react'
 import {
   blockerTally,
@@ -35,6 +37,7 @@ import { errorText } from '../lib/errors'
 export function HostsInbox() {
   useLanguage()
   const computers = useComputers()
+  const { preferences } = useAppSettings()
   const { select } = useHostSelection()
   const host = computers?.scope ?? null
   const hosts = useHostOverviews(computers?.computers.map((c) => c.id) ?? [])
@@ -213,6 +216,7 @@ export function HostsInbox() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-auto">
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-5 px-6 pt-6 pb-10">
+        {preferences.operator && <OperatorBox />}
         <Tabs value={tab} onValueChange={(value) => choose(value as InboxTab)} className="flex-col gap-5">
           <TabsList variant="line" className="h-auto flex-wrap justify-start gap-3">
             {INBOX_TABS.map((id) => (

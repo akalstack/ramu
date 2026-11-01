@@ -1,3 +1,5 @@
+import { OperatorBox } from './OperatorBox'
+import { useAppSettings } from '../settings/AppSettings'
 import { useHost } from '../workspace/HostProvider'
 import { useComputers } from '../workspace/computers'
 import { HostsInbox } from './HostsInbox'
@@ -101,6 +103,7 @@ export function InboxPage() {
 function CurrentHostInbox() {
   useLanguage()
   const { groups, error } = useAgentOverview()
+  const { preferences } = useAppSettings()
   const recaps = useRecaps()
   const { snapshot } = useSummaries()
   const [tab, setTab] = useState<InboxTab>(savedInboxTab)
@@ -150,6 +153,7 @@ function CurrentHostInbox() {
             {String(error)}
           </p>
         )}
+        {preferences.operator && <OperatorBox />}
         <Tabs value={tab} onValueChange={(value) => choose(value as InboxTab)} className="flex-col gap-5">
           <TabsList variant="line" className="h-9! w-full justify-start gap-4 border-b border-(--line) p-0">
             {tabs.map((entry) => (

@@ -17,7 +17,8 @@ import {
   type BranchChoice,
   type BranchNamingIntent,
 } from '@ramu/shared/workspaceDefaults'
-import { routeProject, splitBriefs } from '../../workspace/projectRouter'
+import { planOperator, routeProject, splitBriefs } from '../../workspace/projectRouter'
+import { OPERATOR_SCHEDULE_LIMIT, OPERATOR_THREAD_LIMIT, type OperatorSnapshot } from '@ramu/shared/operator'
 import { SPLIT_LIMIT, type RoutingCandidate } from '@ramu/shared/workspace/projectRouting'
 import type { AgentThreadService } from '../../background/agentThreads'
 import { agentSettings, id } from '../schemas'
@@ -52,6 +53,34 @@ const planSchema = z.array(
 )
 
 /** Projects, folders, repositories and chats (tasks). */
+const operatorSnapshotSchema = z.object({
+  threads: z
+    .array(
+      z.object({
+        ref: z.string().max(10),
+        hostId: z.string().max(300),
+        host: z.string().max(200),
+        taskId: z.string().max(100),
+        title: z.string().max(200),
+        project: z.string().max(200),
+        state: z.enum(['running', 'waiting', 'failed', 'finished', 'stopped']),
+      }),
+    )
+    .max(OPERATOR_THREAD_LIMIT),
+  schedules: z
+    .array(
+      z.object({
+        ref: z.string().max(10),
+        hostId: z.string().max(300),
+        host: z.string().max(200),
+        scheduleId: z.string().max(100),
+        name: z.string().max(200),
+        state: z.enum(['active', 'paused', 'completed']),
+      }),
+    )
+    .max(OPERATOR_SCHEDULE_LIMIT),
+})
+
 /** A project on another of the client's hosts, as the router sees it: names and short descriptions only. */
 const routingCandidate = z.object({
   id: z.string().min(1).max(300),
@@ -155,6 +184,24 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           undefined,
           { split: options?.split },
         ),
+    },
+    'operator.plan': {
+      args: z.tuple([z.string().min(1).max(2000), operatorSnapshotSchema]),
+      run: async (request: string, snapshot: OperatorSnapshot) => {
+        if (!loadPreferences().operator) throw new Error('Turn on the Operator in Settings → Threads first.')
+        const models = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
+        const set = models?.sets.find((entry) => entry.id === models.defaultSetId) ?? models?.sets[0]
+        const step = set?.steps.find((entry) => entry.id === models?.defaultStepId) ?? set?.steps[0]
+        return planOperator(
+          request,
+          snapshot,
+          {
+            ...DEFAULT_AGENT_SETTINGS,
+            ...(step ? { provider: step.provider, model: step.model, effort: step.effort ?? null } : {}),
+          },
+          (...args) => agents.analyze(...args),
+        )
+      },
     },
     'projects.splitBriefs': {
       args: z.tuple([z.string().min(1).max(20_000), z.array(routingCandidate).min(2).max(SPLIT_LIMIT), agentSettings]),

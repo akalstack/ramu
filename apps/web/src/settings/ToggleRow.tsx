@@ -13,6 +13,7 @@ export type ToggleKey =
   | 'autoProjectSelection'
   | 'autoProjectSplit'
   | 'agentThreads'
+  | 'operator'
   | 'recapsEnabled'
   | 'notifyAgentDone'
   | 'resumeChatsOnRestart'

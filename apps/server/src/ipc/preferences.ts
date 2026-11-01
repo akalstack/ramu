@@ -178,6 +178,7 @@ export const appPreferences = z.object({
   autoProjectSelection: z.boolean().default(true),
   autoProjectSplit: z.boolean().default(true),
   agentThreads: z.boolean().default(true),
+  operator: z.boolean().default(false),
   agentBrowser: z
     .object({
       agentBrowser: z.enum(['integrated', 'provider']),

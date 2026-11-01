@@ -55,6 +55,12 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
       <SettingsGroupTitle>{t('While agents work')}</SettingsGroupTitle>
       <ToggleRow
         {...toggleProps}
+        setting="operator"
+        title="Operator"
+        description="Inbox gets a box where one sentence proposes actions across threads and schedules on connected hosts. Nothing runs until you confirm. Each request uses one short model call; it costs nothing otherwise."
+      />
+      <ToggleRow
+        {...toggleProps}
         setting="agentThreads"
         title="Let agents start threads"
         description="Agents can start threads in this project, other projects and hosts added for agents, and a paired host's agents can start threads here. Sub-agents are not affected. Turn off to start threads only yourself."

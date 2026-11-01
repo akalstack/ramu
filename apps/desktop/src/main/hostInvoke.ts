@@ -39,6 +39,7 @@ const DOMAINS = new Set([
   'attachments',
   'advisor',
   'threads',
+  'operator',
 ])
 /** Methods inside an allowed domain that still open a native dialog or menu on this machine. */
 const NATIVE = new Set([
