@@ -2,7 +2,7 @@
 
 A checklist for a person reviewing host-to-host pairing. Delete this file when the review is finished and its findings are fixed or recorded. Behavior is described in [Security](../SECURITY.md#remote-access) and [Agents and routing](AGENT-ROUTING.md#threads-on-another-host).
 
-Host A's agents start threads on host B. A pairs with B using a one-time code from B and becomes a `host` device there.
+Host A's agents start threads on host B. A pairs with B using a one-time code from B and becomes a `host` device there. With a desktop pairing to B, a person at B grants that device **Agents** instead and A pairs itself with a code the grant allows.
 
 ## What changed in the trust model
 

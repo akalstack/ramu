@@ -18,7 +18,7 @@ The package also installs `ramu` and `ramu-server`.
 | `ramu stop` / `ramu restart` | Stop (threads are not resumed) or restart (unfinished threads resume). |
 | `ramu pair [--url <address>] [--role viewer]` | Print a one-time pairing code and the addresses another device can use. |
 | `ramu devices` / `ramu devices revoke <id\|all>` | List paired devices or revoke one (or all) immediately. |
-| `ramu devices allow <id> <permission> [once\|hour\|day\|always]` / `deny` / `never` | Grant or remove computer, browser, terminal or settings for one device; `ramu devices` lists what each holds and pending requests. |
+| `ramu devices allow <id> <permission> [once\|hour\|day\|always]` / `deny` / `never` | Grant or remove computer, browser, terminal, settings or agents for one device; `ramu devices` lists what each holds and pending requests. |
 | `ramu hosts` / `ramu hosts add <address> <code> [--name <name>]` / `ramu hosts forget <id\|name>` | Hosts this host's agents may start threads on; adding one pairs this host there as a limited host device ([Agents and routing](AGENT-ROUTING.md#threads-on-another-host)). |
 | `ramu devices access <id> <edits\|auto\|full>` | The most access threads a paired host starts here may have (default edits). |
 | `ramu token [--rotate]` | Print the legacy shared token; `--rotate` revokes it and every paired device. |

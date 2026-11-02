@@ -140,7 +140,12 @@ export class DeviceStore {
         ...(Array.isArray(parsed.settled) ? { settled: parsed.settled } : {}),
         ...(validLifetime(parsed.lifetimeDays) ? { lifetimeDays: parsed.lifetimeDays } : {}),
         ...(Array.isArray(parsed.defaultPermissions)
-          ? { defaultPermissions: parsed.defaultPermissions.filter(isDevicePermission) }
+          ? {
+              defaultPermissions: (parsed.defaultPermissions as unknown[]).filter(
+                (permission): permission is DevicePermission =>
+                  isDevicePermission(permission) && AUTOMATIC_PERMISSIONS.includes(permission),
+              ),
+            }
           : {}),
       }
     } catch {
@@ -179,7 +184,10 @@ export class DeviceStore {
 
   setDefaultPermissions(permissions: DevicePermission[]): void {
     if (!Array.isArray(permissions) || !permissions.every(isDevicePermission)) throw new Error('Invalid permissions')
-    this.write({ ...this.read(), defaultPermissions: [...new Set(permissions)] })
+    this.write({
+      ...this.read(),
+      defaultPermissions: [...new Set(permissions)].filter((permission) => AUTOMATIC_PERMISSIONS.includes(permission)),
+    })
   }
 
   /** Whether this device may use a permission now. A viewer never may; a device from before permissions always may. */
@@ -196,7 +204,8 @@ export class DeviceStore {
    */
   hostPairingActive(device: DeviceInfo, now = Date.now()): boolean {
     const record = this.read().devices.find((entry) => entry.id === device.id)
-    return !record?.agentsOf || this.allows(record.agentsOf, 'agents', now)
+    if (!record) return false
+    return !record.agentsOf || this.allows(record.agentsOf, 'agents', now)
   }
 
   /**
@@ -594,7 +603,7 @@ export class DeviceStore {
     for (const device of file.devices) if (device.agentsOf && ids.has(device.agentsOf)) ids.add(device.id)
     if (ids.size) this.write({ ...file, devices: file.devices.filter((d) => !ids.has(d.id)) })
     for (const id of ids) this.seen.delete(id)
-    return matches.map(strip)
+    return file.devices.filter((device) => ids.has(device.id)).map(strip)
   }
 }
 

@@ -716,6 +716,8 @@ async function performInvoke(
   } else if (method === 'device.agentPairing') {
     if (!device) throw new Error('This computer’s agents are already here.')
     value = { code: devices.agentPairingCode(device.id) }
+    // The earlier agent pairing it replaced must not keep an open connection.
+    dropRevoked()
   } else if (method === 'device.requestPermission') {
     if (!device) throw new Error('This computer already has every permission.')
     if (!isDevicePermission(args?.[0])) throw new Error('Invalid permission')

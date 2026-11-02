@@ -130,6 +130,8 @@ export function DevicePermissionList({ device, invoke }: { device: NetworkDevice
   return (
     <div className="mt-1 flex flex-col gap-0.5 border-t border-border pt-1.5">
       {DEVICE_PERMISSIONS.map((permission) => {
+        // Phones have no agents to send, so Agents appears once a computer has asked and been answered.
+        if (permission === 'agents' && !device.permissions?.agents && !device.blocked?.includes(permission)) return null
         const grant = held(permission)
         const state = device.blocked?.includes(permission) ? t('Never') : grantText(grant)
         return (
@@ -235,12 +237,12 @@ function AgentsPermission({
     if (!linked) void connect()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the grant arrives; `connect` reads the current render
   }, [wanted, held, hosts])
-  const state = declined ? t('Declined by the host') : !held ? t('Off') : linked ? t('On') : t('Allowed')
+  const state = linked ? t('On') : declined ? t('Declined by the host') : held ? t('Allowed') : t('Off')
   return (
     <div className={SETTINGS_CARD_LINE}>
       <span className="min-w-0 flex-1 truncate text-control">{t(PERMISSION_LABEL.agents)}</span>
       <span className="flex-none text-caption text-muted-foreground">{state}</span>
-      {held ? (
+      {held || linked ? (
         <Button
           size="sm"
           variant="secondary"

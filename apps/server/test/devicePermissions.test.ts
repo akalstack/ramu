@@ -100,6 +100,13 @@ it('never gives Agents without a person choosing it', () => {
   expect(devices.permissionsOf(device.id).agents).toBeNull()
 })
 
+it('refuses to make Agents a default for new devices', () => {
+  const devices = store()
+  devices.setDefaultPermissions(['terminal', 'agents'])
+  expect(devices.defaultPermissions()).toEqual(['terminal'])
+  expect(devices.allows(pair(devices).id, 'agents')).toBe(false)
+})
+
 it('asks for the Agents permission before a device can pair its agents', () => {
   expect(permissionFor('device.agentPairing')).toBe('agents')
   expect(refusedPermission(permissionRefusal('agents'))).toBe('agents')
@@ -134,8 +141,9 @@ it('keeps an agent code to one host pairing that follows the grant and leaves wi
       .map((entry) => entry.id),
   ).toEqual([again.device.id])
 
-  devices.revoke(device.id)
+  expect(devices.revoke(device.id).map((entry) => entry.id)).toEqual([device.id, again.device.id])
   expect(devices.list()).toEqual([])
+  expect(devices.hostPairingActive(again.device)).toBe(false)
 })
 
 it('refuses an agent code for a view-only device', () => {

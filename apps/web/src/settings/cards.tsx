@@ -60,9 +60,12 @@ export function SettingsSectionHead({
   )
 }
 
-/** A settings line inside a card: its label, then a control of fixed width so labels are never squeezed. */
+/**
+ * A settings line inside a card: its label, then a control of fixed width so labels are never squeezed. The cap is a
+ * max-width because a global rule stretches every select trigger and outranks a width utility.
+ */
 export const SETTINGS_CARD_LINE =
-  'flex min-h-8 items-center justify-between gap-3 [&_.dropdown-trigger]:w-[150px] [&_.dropdown-trigger]:flex-none'
+  'flex min-h-8 items-center justify-between gap-3 [&_.dropdown-trigger]:max-w-[150px] [&_.dropdown-trigger]:flex-none'
 
 /** Cards stacked tightly, as one list. */
 export function SettingsCardList({ children }: { children: ReactNode }) {
