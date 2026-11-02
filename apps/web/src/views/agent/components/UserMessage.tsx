@@ -27,6 +27,9 @@ import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
 import { MessageActions } from './MessageActions'
 import { CARET_CLASS, ICON_BUTTON_CLASS, MSG_CLASS } from '../styles'
 
+/** Soft line breaks stay as typed; the spacing around blocks comes from Markdown instead of the bubble's pre-wrap. */
+const USER_MARKDOWN_CLASS = `${MSG_CLASS} assistant whitespace-normal [&_p]:whitespace-pre-wrap`
+
 /** Review comments that went out with a message, as small cards under it. */
 function SentComments({ comments }: { comments: ReturnType<typeof sentComments> }) {
   return (
@@ -215,11 +218,15 @@ export function UserMessage({
     >
       {relay ? (
         <UserBubble>
-          <ReferenceText text={relay.body} taskId={taskId} />
+          <div className={USER_MARKDOWN_CLASS}>
+            <ReferenceText text={relay.body} taskId={taskId} />
+          </div>
         </UserBubble>
       ) : text ? (
         <UserBubble>
-          <ReferenceText text={text} taskId={taskId} />
+          <div className={USER_MARKDOWN_CLASS}>
+            <ReferenceText text={text} taskId={taskId} />
+          </div>
         </UserBubble>
       ) : null}
       {comments.length > 0 && <SentComments comments={comments} />}

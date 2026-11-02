@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { FileIcon } from '../editor/FileIcon'
 import { REFERENCE_CHIP_CLASS } from '../chat/ReferenceChipView'
 import { composerDraft, deleteDraftAtom, type DraftChip } from '@ramu/shared/chat/composerDraft'
+import { markdownRuns } from '@ramu/shared/chat/markdownRuns'
 
 export interface ComposerInputHandle {
   focus(): void
@@ -54,6 +55,9 @@ export function selectComposerInput(root: HTMLElement, start: number, end = star
       const length = composerInputText(child).length
       if (offset <= consumed + length) {
         if (child.nodeType === Node.TEXT_NODE) return [child, Math.max(0, Math.min(length, offset - consumed))]
+        // Styled Markdown is ordinary text inside a span; only chips are stepped over as one character block.
+        if (child instanceof HTMLElement && child.dataset.md !== undefined && child.firstChild)
+          return [child.firstChild, Math.max(0, Math.min(length, offset - consumed))]
         const index = Array.from(root.childNodes).indexOf(child)
         return [root, index + (offset > consumed ? 1 : 0)]
       }
@@ -172,8 +176,18 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
     const nodes: Node[] = [],
       chips: { node: HTMLElement; chip: DraftChip }[] = []
     for (const segment of composerDraft(value).segments) {
-      if (segment.kind === 'text') nodes.push(document.createTextNode(segment.source))
-      else {
+      if (segment.kind === 'text') {
+        for (const run of markdownRuns(segment.source)) {
+          if (!run.marks.length) {
+            nodes.push(document.createTextNode(run.text))
+            continue
+          }
+          const node = document.createElement('span')
+          node.dataset.md = run.marks.join(' ')
+          node.textContent = run.text
+          nodes.push(node)
+        }
+      } else {
         const node = document.createElement('span')
         node.contentEditable = 'false'
         node.dataset.source = segment.source

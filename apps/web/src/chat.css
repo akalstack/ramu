@@ -554,3 +554,30 @@ button.chat-activity-row:hover {
     animation: none;
   }
 }
+
+/* Markdown as it is typed: the characters stay, so sizes never change and the caret never jumps. */
+[data-composer-input] [data-md~='marker'] {
+  color: var(--muted);
+}
+[data-composer-input] [data-md~='strong'],
+[data-composer-input] [data-md~='heading'] {
+  font-weight: 600;
+}
+[data-composer-input] [data-md~='emphasis'] {
+  font-style: italic;
+}
+[data-composer-input] [data-md~='strike'] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+[data-composer-input] [data-md~='quote'] {
+  color: var(--soft, var(--muted));
+}
+[data-composer-input] [data-md~='link'] {
+  color: var(--accent);
+}
+[data-composer-input] [data-md~='code'] {
+  background: var(--fill);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.92em;
+}

@@ -49,6 +49,10 @@ The renderer uses shadcn/ui on Base UI, Tailwind 4 and shared theme tokens. `com
 
 ## Usage limits
 
+The composer shows Markdown as it is typed (bold, italic, code, headings, lists, links) and keeps every character, so what is sent is exactly what was written. Sent messages render as Markdown with their file and skill references still chips; on mobile a message with inline references stays plain text. The mobile composer is plain text.
+
+Session checkpoints are Markdown sections (Objective, Done, Verified, Open, Next). One saved as a single paragraph is split into those sections when shown.
+
 The model picker is search, a strip of All, Sets and each provider that reports models, then one compact list: Favorites, then a heading per provider carrying its remaining usage. **Choose models** opens Settings → Providers, where each provider has **Models** to pick what pickers and dropdowns list, on desktop and mobile. Providers list everything until narrowed, and a narrowed list keeps new models out. Models left out don't appear in search either; a favorite or the model in use still shows.
 
 Marking threads done or archiving them (one, a project's, or a selection) shows an **Undo** toast on desktop and mobile. Pin, Reopen and Unarchive have none: the thread stays where the person is looking and one click reverses them.

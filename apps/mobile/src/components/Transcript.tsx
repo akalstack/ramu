@@ -639,6 +639,14 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
     ),
   )
   const hasText = rest.some((part) => part.kind !== 'text' || part.source.trim())
+  // Markdown lays out blocks, so a message with inline badges stays one line of text and keeps them in place.
+  const plain =
+    hasText && rest.every((part) => part.kind === 'text')
+      ? rest
+          .map((part) => part.source)
+          .join('')
+          .trim()
+      : null
   return (
     <View style={{ alignSelf: 'flex-end', maxWidth: '86%', gap: space.s, alignItems: 'flex-end' }}>
       {attachments?.length ? (
@@ -666,7 +674,9 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
               </T>
             </View>
           ))}
-          {hasText ? (
+          {plain !== null ? (
+            <Markdown text={plain} />
+          ) : hasText ? (
             <T tone="text" style={{ lineHeight: 21 }}>
               {body}
             </T>

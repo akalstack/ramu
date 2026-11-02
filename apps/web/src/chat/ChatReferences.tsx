@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react'
+import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { chatMarkdownComponents } from './ChatMarkdown'
 import { ReferenceChipView } from './ReferenceChipView'
 import { draftChip, fileChip, skillChip } from '@ramu/shared/chat/referenceChip'
 import { parseThreadReference, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
@@ -119,28 +122,46 @@ export function ChatLink({ href, children, taskId }: { href?: string; children: 
   )
 }
 
-/** User messages stay plain text, with explicit references rendered inline. */
+const CHIP_LINK = 'ramu-chip:'
+
+/**
+ * A sent message as Markdown, with its references still chips. Each chip goes through Markdown as a link to its place in
+ * the message, so a reference inside a list or heading lands where it was written.
+ */
 export function ReferenceText({ text, taskId }: { text: string; taskId?: string }) {
   const segments = composerDraft(text + ' ').segments
-  return (
-    <>
-      {segments.map((part, index) =>
-        part.kind === 'text' ? (
-          index === segments.length - 1 ? (
-            part.source.slice(0, -1)
-          ) : (
-            part.source
-          )
-        ) : part.kind === 'skill' ? (
-          <SkillReference key={index} name={part.target!} />
-        ) : part.kind === 'file' ? (
-          <ChatLink key={index} href={part.target} taskId={taskId}>
+  const source = segments
+    .map((part, index) => (part.kind === 'text' ? part.source : `[chip](${CHIP_LINK}${index})`))
+    .join('')
+    .slice(0, -1)
+  const components: Components = {
+    ...chatMarkdownComponents,
+    a: ({ href, children }) => {
+      if (!href?.startsWith(CHIP_LINK))
+        return (
+          <ChatLink href={href} taskId={taskId}>
+            {children}
+          </ChatLink>
+        )
+      const part = segments[Number(href.slice(CHIP_LINK.length))]
+      if (!part || part.kind === 'text') return null
+      if (part.kind === 'skill') return <SkillReference name={part.target!} />
+      if (part.kind === 'file')
+        return (
+          <ChatLink href={part.target} taskId={taskId}>
             {part.label}
           </ChatLink>
-        ) : (
-          <ReferenceChipView key={index} chip={draftChip(part)} />
-        ),
-      )}
-    </>
+        )
+      return <ReferenceChipView chip={draftChip(part)} />
+    },
+  }
+  return (
+    <Markdown
+      remarkPlugins={[remarkGfm]}
+      components={components}
+      urlTransform={(url) => (url.startsWith(CHIP_LINK) ? url : defaultUrlTransform(url))}
+    >
+      {source}
+    </Markdown>
   )
 }

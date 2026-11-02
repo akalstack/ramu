@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { BookmarkCheck } from 'lucide-react'
+import { checkpointMarkdown } from '@ramu/shared/chat/checkpointMarkdown'
+import { chatMarkdownComponents } from './ChatMarkdown'
 import { Button } from '@/components/desktop-button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ipcQueryKeyOn } from '../dataQueries'
@@ -70,7 +72,7 @@ export function SessionCheckpointButton({ sessionId }: { sessionId: string }) {
         {t('Checkpoint')}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[min(640px,calc(100vh-48px))] w-[min(600px,calc(100vw-48px))] sm:max-w-none flex-col gap-0 p-0">
+        <DialogContent className="flex max-h-[min(640px,calc(100vh-48px))] w-[min(680px,calc(100vw-48px))] sm:max-w-none flex-col gap-0 p-0">
           <DialogHeader className="flex-none gap-1.5 px-5 pt-5 pb-3.5 pr-12 [border-bottom:1px_solid_var(--line)]">
             <DialogTitle className="flex items-center gap-2 text-heading font-semibold">
               <BookmarkCheck size={15} className="text-brand" />
@@ -82,8 +84,12 @@ export function SessionCheckpointButton({ sessionId }: { sessionId: string }) {
               {t('This thread only. Newer messages and the current files win over this summary.')}
             </DialogDescription>
           </DialogHeader>
-          <div className={`${MSG_CLASS} assistant min-h-0 flex-1 overflow-auto px-5 py-4 text-control`}>
-            <Markdown remarkPlugins={[remarkGfm]}>{checkpoint.summary}</Markdown>
+          <div
+            className={`${MSG_CLASS} assistant min-h-0 flex-1 overflow-auto px-5 py-4 text-control [&_h2]:mb-1.5 [&_h2]:mt-5 [&_h2]:text-control [&_h2]:font-semibold [&_h2]:text-foreground [&_h2:first-child]:mt-0 [&_li]:my-1`}
+          >
+            <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
+              {checkpointMarkdown(checkpoint.summary)}
+            </Markdown>
           </div>
           <div className="flex flex-none items-center gap-2 px-4 py-2.5 [border-top:1px_solid_var(--line)]">
             <span className="flex-1 text-caption text-muted-foreground">{t('Copy to reuse it in another thread')}</span>
