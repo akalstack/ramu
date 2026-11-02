@@ -76,7 +76,6 @@ const taskUiSchema = z.object({
   activeViewId: id.nullable(),
   activeAgentViewId: id.nullable().optional(),
   dockWidth: z.number().int().min(280).max(2000).optional(),
-  dockHidden: z.boolean().optional(),
   activeTerminalId: id.nullable().optional(),
   terminalReturnViewId: id.nullable().optional(),
   terminalOpen: z.boolean().optional(),

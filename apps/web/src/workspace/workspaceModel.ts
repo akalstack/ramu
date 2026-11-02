@@ -113,7 +113,6 @@ export function effectiveTaskUi(
       activeViewId:
         shared.activeViewId ?? own.activeAgentViewId ?? own.views.find((view) => view.kind === 'agent')?.id ?? null,
       dockWidth: shared.dockWidth,
-      dockHidden: shared.dockHidden,
       views: [...own.views.filter((v) => v.kind === 'agent'), ...shared.views.filter((v) => v.kind !== 'agent')],
       activeTerminalId: shared.activeTerminalId,
       terminalReturnViewId: shared.terminalReturnViewId,

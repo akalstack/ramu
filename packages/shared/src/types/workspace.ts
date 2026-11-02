@@ -6,7 +6,7 @@ export type CheckoutMode = 'current' | 'worktree'
 export interface Project {
   id: string
   name: string
-  /** Workspace folder the project was added from; agents run here. Null for legacy projects. */
+  /** Workspace folder the project was added from; agents run here.  */
   root: string | null
   createdAt: number
   /** Other names people use for the project; Auto matches them as whole words. */
@@ -74,7 +74,7 @@ export interface WorktreeWorkspace {
   createdAt: number
 }
 
-/** A project-level chat. The legacy Task name remains for stored-profile compatibility. */
+/** A project-level chat. */
 /** What a list needs of a goal: its state and objective, not its evidence or transcript. */
 export interface TaskGoalSummary {
   status: Exclude<ChatGoal['status'], 'completed'>
@@ -109,13 +109,13 @@ export interface Task {
   /** Naming failed during this thread's initial workspace creation. */
   branchNamingFallback?: boolean | null
   /**
-   * The thread's unfinished goal, for list views.; null
+   * The thread's unfinished goal, for list views. Null
    * means there is none (or it is complete).
    */
   goalState?: TaskGoalSummary | null
   /** Unresolved requests from main sessions, including forwarded helper input. Older hosts omit this. */
   inputSummary?: ThreadInputSummary | null
-  /** Independent helper work after the parent goes idle.; null means none. */
+  /** Independent helper work after the parent goes idle. Null means none. */
   helperSummary?: ThreadHelperSummary | null
   /** Settled advisor consultations nobody has opened yet; absent when none. */
   unreadAdvice?: number
@@ -128,7 +128,7 @@ export interface Task {
   executionState?: AgentSessionState
   /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */
   kind?: 'library-review' | null
-  /** The schedule whose run created this thread.; null for every other thread. */
+  /** The schedule whose run created this thread. Null for every other thread. */
   scheduleId?: string | null
   /**
    * Who started this thread, when an agent or one Home prompt did: the starting thread (null for Home) and how many

@@ -13,7 +13,7 @@ import type {
 } from '@ramu/shared/types'
 import { toInfo, TITLE_SQL, type SessionRow } from './sessionRow'
 import { excerpt } from './text'
-import { LEGACY_ACCOUNT_PROVIDERS } from './settings'
+import { RECORDED_ACCOUNT_PROVIDERS } from './settings'
 import type { Db } from '../db'
 import { readInputSummaries } from './inputSummaries'
 import { readSessionHelperSummary } from './helperSummaries'
@@ -147,18 +147,6 @@ export class SessionStore {
 
   emit(id: string, event: AgentEvent, seq?: number) {
     this.host.onEvent(id, event, seq, ++this.eventRevision)
-  }
-
-  snapshot(id: string): { revision: number; events: { seq: number; event: AgentEvent }[] } {
-    this.get(id)
-    const rows = this.db.prepare('SELECT seq, event FROM agent_events WHERE session_id = ? ORDER BY seq').all(id) as {
-      seq: number
-      event: string
-    }[]
-    return {
-      revision: this.eventRevision,
-      events: rows.map((row) => ({ seq: row.seq, event: JSON.parse(row.event) as AgentEvent })),
-    }
   }
 
   /**
@@ -318,7 +306,7 @@ export class SessionStore {
     const accountId = settings.accountId ?? providerAccountId(settings.provider)
     if (
       supportsProviderAccounts(settings.provider) &&
-      (LEGACY_ACCOUNT_PROVIDERS.has(settings.provider) || accountId !== 'default')
+      (RECORDED_ACCOUNT_PROVIDERS.has(settings.provider) || accountId !== 'default')
     )
       settings = { ...settings, accountId }
     const row: SessionRow = {

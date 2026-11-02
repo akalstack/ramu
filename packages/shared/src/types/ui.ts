@@ -66,8 +66,6 @@ export interface TaskUiState {
   restoreTerminal?: boolean
   /** Dock width in px when files are open beside the conversation. */
   dockWidth?: number
-  /** Legacy sidebar visibility, retained for saved profiles; main chat is always visible. */
-  dockHidden?: boolean
   activeTerminalId?: string | null
   /** Workspace selection to restore when a terminal leaves the shared tab area. */
   terminalReturnViewId?: string | null

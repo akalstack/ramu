@@ -1,7 +1,7 @@
 import type { AgentProvider, AgentSettings } from '@ramu/shared/types'
 
-/** Providers whose chats have always recorded their account; the others record it only when it is not the default login. */
-export const LEGACY_ACCOUNT_PROVIDERS: ReadonlySet<AgentProvider> = new Set(['codex', 'opencode'])
+/** Providers whose chats always record their account; the others record it only when it is not the default login. */
+export const RECORDED_ACCOUNT_PROVIDERS: ReadonlySet<AgentProvider> = new Set(['codex', 'opencode'])
 
 /** Claude's permission mode for a chat's access setting, outside plan mode. */
 export function baseMode(settings: AgentSettings): 'bypassPermissions' | 'acceptEdits' | 'auto' {

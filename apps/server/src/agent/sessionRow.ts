@@ -1,6 +1,6 @@
 import type { AgentEvent, AgentSessionInfo, AgentSessionState, AgentProvider } from '@ramu/shared/types'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
-import { LEGACY_ACCOUNT_PROVIDERS } from './settings'
+import { RECORDED_ACCOUNT_PROVIDERS } from './settings'
 import { truncate } from './text'
 
 /** A joined agent_sessions row as stored in the database. */
@@ -28,11 +28,10 @@ export function toInfo(r: SessionRow): AgentSessionInfo {
   return {
     id: r.id,
     taskId: r.task_id,
-    repoId: r.repo_id,
     provider: r.provider,
     settings: {
       ...DEFAULT_AGENT_SETTINGS,
-      ...(LEGACY_ACCOUNT_PROVIDERS.has(r.provider) ? { accountId: 'default' } : {}),
+      ...(RECORDED_ACCOUNT_PROVIDERS.has(r.provider) ? { accountId: 'default' } : {}),
       ...JSON.parse(r.settings),
       provider: r.provider,
     },

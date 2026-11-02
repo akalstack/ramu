@@ -31,7 +31,7 @@ export function parseWorkspaceChoice(value: unknown): WorkspaceChoice | null {
   }
 }
 
-/** Additive versioned sidecar; callers retain legacy text and attachment drafts independently. */
+/** Versioned sidecar; callers keep text and attachment drafts independently. */
 export function readWorkspaceChoice(text?: string): WorkspaceChoice {
   try {
     return parseWorkspaceChoice(JSON.parse(text ?? 'null')) ?? { mode: null }

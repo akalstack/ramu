@@ -3,7 +3,7 @@ import { viewerMayInvoke } from '../src/viewerAccess'
 
 it.each([
   'background.status',
-  'agent.snapshot',
+  'agent.changes',
   'agent.replyPermission',
   'agent.replyQuestion',
   'agent.replyElicitation',

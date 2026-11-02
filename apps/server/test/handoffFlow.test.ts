@@ -515,7 +515,9 @@ describe('a returning provider', () => {
     const svc = make()
     const s = await roundTrip(svc)
     await svc.stopAndWait(s.id)
-    const user = svc.snapshot(s.id).events.find((e) => e.event.kind === 'user' && e.event.text.startsWith('BRAVO'))!
+    const user = svc
+      .changes(s.id, 0, 0)
+      .events.find((e) => e.event.kind === 'user' && e.event.text.startsWith('BRAVO'))!
     await svc.rewind(s.id, user.seq)
     expect(db.prepare('SELECT COUNT(*) AS n FROM session_provider_sessions WHERE session_id = ?').get(s.id)).toEqual({
       n: 0,

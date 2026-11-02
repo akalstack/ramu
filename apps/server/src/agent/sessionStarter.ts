@@ -11,7 +11,7 @@ import {
 import { stepKey } from '@ramu/shared/providers/routing'
 import { goalInstructions, goalState } from './goals'
 import { WRITING_STATES } from './constants'
-import { LEGACY_ACCOUNT_PROVIDERS } from './settings'
+import { RECORDED_ACCOUNT_PROVIDERS } from './settings'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
 import type { SessionProcess } from './sessionProcess'
@@ -82,7 +82,7 @@ export class SessionStarter {
     if (
       supportsProviderAccounts(settings.provider) &&
       settings.accountId === undefined &&
-      (LEGACY_ACCOUNT_PROVIDERS.has(settings.provider) || providerAccountId(settings.provider) !== 'default')
+      (RECORDED_ACCOUNT_PROVIDERS.has(settings.provider) || providerAccountId(settings.provider) !== 'default')
     )
       settings = { ...settings, accountId: providerAccountId(settings.provider) }
     // Keep the requested model unless its usage requires falling back.

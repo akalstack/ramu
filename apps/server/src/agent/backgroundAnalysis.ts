@@ -23,7 +23,7 @@ import { continuationRequest, titlePrompt } from './prompts'
 import { claudeReplyText } from './claudeReply'
 import { answerOnFork } from './aside'
 import { transcriptOf } from './handoff'
-import { LEGACY_ACCOUNT_PROVIDERS } from './settings'
+import { RECORDED_ACCOUNT_PROVIDERS } from './settings'
 import { classifyLimit } from '../providers/limitClassifier'
 import { ProviderLimitError } from './usageLimit'
 import type { CatalogService } from './catalogService'
@@ -158,7 +158,7 @@ export class BackgroundAnalysis {
     if (
       supportsProviderAccounts(settings.provider) &&
       settings.accountId === undefined &&
-      (LEGACY_ACCOUNT_PROVIDERS.has(settings.provider) || providerAccountId(settings.provider) !== 'default')
+      (RECORDED_ACCOUNT_PROVIDERS.has(settings.provider) || providerAccountId(settings.provider) !== 'default')
     )
       settings = { ...settings, accountId: providerAccountId(settings.provider) }
     if (signal?.aborted) throw new Error('Background analysis stopped')

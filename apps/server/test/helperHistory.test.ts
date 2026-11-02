@@ -23,7 +23,6 @@ const message = (type: SessionMessage['type'], uuid: string, content: unknown): 
 const session: AgentSessionInfo = {
   id: 'root',
   taskId: 't',
-  repoId: null,
   provider: 'claude-code',
   settings: DEFAULT_AGENT_SETTINGS,
   state: 'restored',

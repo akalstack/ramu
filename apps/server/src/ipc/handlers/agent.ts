@@ -41,7 +41,6 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.string().max(2000).nullable()]),
       run: (s: string, command: string | null) => agents.setVerify(s, command),
     },
-    'agent.snapshot': { args: z.tuple([id]), run: (sessionId: string) => agents.snapshot(sessionId) },
     'agent.changes': {
       args: z.tuple([id, z.number().int().min(0), z.number().int().min(0)]),
       run: (sessionId: string, cursor: number, knownLastSeq: number) => agents.changes(sessionId, cursor, knownLastSeq),

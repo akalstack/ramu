@@ -142,7 +142,6 @@ describe('Codex app-server wire adapter', () => {
         ...scope,
         id: 'ramu-root',
         taskId: 't',
-        repoId: null,
         provider: 'codex',
         settings,
         state: 'restored',

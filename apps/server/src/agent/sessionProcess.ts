@@ -467,7 +467,7 @@ export class SessionProcess {
         })
         if (connection) runner.setTools?.(connection)
         if (runner.setTerminals && providerAdapter(s.provider).native?.terminals) {
-          const terminals = acpTerminalHostFor({ taskId: s.taskId, repoId: s.repoId, cwd: s.cwd })
+          const terminals = acpTerminalHostFor({ taskId: s.taskId, repoId: null, cwd: s.cwd })
           if (terminals) runner.setTerminals(terminals)
         }
         this.launchServers.set(id, this.serversNow(s, connection))

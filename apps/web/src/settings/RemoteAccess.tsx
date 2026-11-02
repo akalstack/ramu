@@ -1374,7 +1374,7 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
   )
 }
 
-/** The usual choices, plus the current value when it is something else (set from the command line or an older release). */
+/** The usual choices, plus the current value when it is something else (set from the command line). */
 function lifetimeOptions(current: number | 'never', saved: boolean) {
   const days = [30, 90, 180, 365]
   const options = days.map((value) => ({ value: String(value), label: t('{0} days', { 0: value }) }))

@@ -24,7 +24,6 @@ async function setup(
   const source = {
     id: 'session',
     taskId: 'thread',
-    repoId: null,
     cwd: tmpdir(),
     settings: { access },
   } as AgentSessionInfo

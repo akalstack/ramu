@@ -3,7 +3,7 @@ export interface BackgroundStatus {
   platform?: string
   protocol?: number
   capabilities?: string[]
-  /** The asking device's own role. Absent on older hosts, which means full access. Hiding actions supplements server checks. */
+  /** The asking device's own role. Absent means full access. Hiding actions supplements server checks. */
   access?: 'owner' | 'viewer'
   running: boolean
   pid: number
@@ -53,18 +53,18 @@ export interface NetworkStatus {
   error: string | null
   addresses: NetworkAddress[]
   devices: NetworkDevice[]
-  /** How long an unused paired device stays paired. `saved` is false while the server default applies. Absent on older hosts. */
+  /** How long an unused paired device stays paired. `saved` is false while the server default applies. */
   deviceLifetime?: { days: number | 'never'; saved: boolean }
-  /** Pairing offers not yet used, without their codes. Absent on older hosts. */
+  /** Pairing offers not yet used, without their codes. */
   offers?: { id: string; role: 'owner' | 'viewer'; expiresAt: number }[]
   /**
    * Nearby devices asking to pair while an offer is open, each with the six-digit code it shows. Approve only when the
-   * codes match. Absent on older hosts.
+   * codes match.
    */
   requests?: { id: string; name: string; address: string; code: string; expiresAt: number }[]
-  /** What a newly paired full-access device holds. Absent on older hosts. */
+  /** What a newly paired full-access device holds. */
   defaultPermissions?: import('../devicePermissions').DevicePermission[]
-  /** Paired devices asking for a permission, waiting for a person here. Absent on older hosts. */
+  /** Paired devices asking for a permission, waiting for a person here. */
   permissionRequests?: {
     id: string
     deviceId: string
@@ -72,7 +72,7 @@ export interface NetworkStatus {
     permission: import('../devicePermissions').DevicePermission
     at: number
   }[]
-  /** Nearby-device discovery. Absent on hosts that predate it. */
+  /** Nearby-device discovery. */
   discovery?: {
     /** The saved choice; it advertises only while network access is also on and listening. */
     discoverable: boolean
@@ -101,7 +101,7 @@ export interface NetworkSettingsInput {
   discoverable?: boolean
 }
 export interface PairingOffer {
-  /** Non-secret handle for cancelling this offer or asking what became of it. Absent on older hosts. */
+  /** Non-secret handle for cancelling this offer or asking what became of it. */
   offerId?: string
   code: string
   expiresAt: number

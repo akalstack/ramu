@@ -405,7 +405,7 @@ describe('AgentService', () => {
     await svc.send(chat.id, 'now say banana')
     await until(() => starts.length === 2 && svc.get(chat.id).state === 'idle')
     const second = svc
-      .snapshot(chat.id)
+      .changes(chat.id, 0, 0)
       .events.find((e) => e.event.kind === 'user' && e.event.text === 'now say banana')!
     await svc.rewind(chat.id, second.seq)
     expect(rewound).toEqual([second.seq])

@@ -1027,8 +1027,6 @@ export interface RamuMethods {
    */
   'agent.goal.verify'(sessionId: string, command: string | null): ChatGoal
   'agent.events'(sessionId: string): AgentEvent[]
-  /** Sequenced persisted events for race-free remote hydration. */
-  'agent.snapshot'(sessionId: string): { revision: number; events: { seq: number; event: AgentEvent }[] }
   /** The end of a transcript, bounded and starting at a turn where one fits, to show a long thread while the rest loads. */
   'agent.tail'(sessionId: string): { complete: boolean; events: { seq: number; event: AgentEvent }[] }
   /** Only the transcript rows that changed since `cursor` (a prior `cursor` from this call or a snapshot's revision counter); `reset` means a full snapshot. */

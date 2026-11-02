@@ -61,7 +61,6 @@ const session: AgentSessionInfo = {
   taskId: 'thread',
   state: 'idle',
   settings: DEFAULT_AGENT_SETTINGS,
-  repoId: null,
   provider: 'claude-code',
   cwd: '/project',
   additionalDirs: [],

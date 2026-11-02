@@ -183,8 +183,6 @@ export interface AgentSessionInfo {
   nativeTask?: AgentTask
   id: string
   taskId: string
-  /** Set only for legacy single-repository sessions. */
-  repoId: string | null
   provider: AgentProvider
   settings: AgentSettings
   cwd: string

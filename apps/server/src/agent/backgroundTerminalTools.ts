@@ -47,13 +47,7 @@ export function registerBackgroundTerminalTools(
           throw new Error('Access changed while waiting. Request the command again.')
       }
       return result(
-        terminals.launchBackground(
-          session.taskId,
-          session.repoId,
-          session.cwd,
-          command,
-          source.parentId ? 'helper' : undefined,
-        ),
+        terminals.launchBackground(session.taskId, null, session.cwd, command, source.parentId ? 'helper' : undefined),
       )
     },
   )

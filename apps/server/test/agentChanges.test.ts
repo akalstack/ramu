@@ -44,7 +44,7 @@ describe('agent.changes', () => {
     const first = svc.changes(id, 0, 0)
     expect(first.reset).toBe(true)
     expect(first.events.length).toBeGreaterThan(0)
-    expect(first.events.map((row) => row.seq)).toEqual(svc.snapshot(id).events.map((row) => row.seq))
+    expect(first.events.map((row) => row.seq)).toEqual(svc.changes(id, 0, 0).events.map((row) => row.seq))
 
     // Nothing changed: an empty, non-reset answer.
     const quiet = svc.changes(id, first.cursor, first.lastSeq)
@@ -144,7 +144,7 @@ describe('agent.changes', () => {
     expect(tail.complete).toBe(false)
     expect(tail.events[0]!.event.kind).toBe('user')
     expect(tail.events.length).toBeLessThanOrEqual(30)
-    expect(tail.events.at(-1)!.seq).toBe(Math.max(...svc.snapshot(id).events.map((row) => row.seq)))
+    expect(tail.events.at(-1)!.seq).toBe(Math.max(...svc.changes(id, 0, 0).events.map((row) => row.seq)))
     expect(svc.tail(id, 300, 1).events.length).toBeLessThanOrEqual(1)
   })
 })

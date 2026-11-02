@@ -32,7 +32,7 @@ export class RemoteAccess {
     private options: {
       devices: DeviceStore
       browserOrigins: string[]
-      /** The host's durable id, proved to a paired device on request.  */
+      /** The host's durable id, proved to a paired device on request. */
       hostId?: string
       /** This host's own addresses, named in the identity answer so a paired device can find it when its address changes. */
       routes?: () => string[]

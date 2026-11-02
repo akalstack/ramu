@@ -622,10 +622,6 @@ export class AgentService {
     return this.parts.store.searchMessages(...args)
   }
 
-  snapshot(...args: Parameters<SessionStore['snapshot']>) {
-    return this.parts.store.snapshot(...args)
-  }
-
   tail(...args: Parameters<SessionStore['tail']>) {
     return this.parts.store.tail(...args)
   }

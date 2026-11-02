@@ -5611,18 +5611,11 @@ for (const os of ['ios', 'android']) {
       'agent.replyQuestion',
       'agent.replyElicitation',
       'agent.dismissQuestion',
-      'agent.snapshot',
     ])
       await retained.invoke('a', method)
     assert.deepEqual(
       calls.map(([method]) => method),
-      [
-        'agent.replyPermission',
-        'agent.replyQuestion',
-        'agent.replyElicitation',
-        'agent.dismissQuestion',
-        'agent.snapshot',
-      ],
+      ['agent.replyPermission', 'agent.replyQuestion', 'agent.replyElicitation', 'agent.dismissQuestion'],
     )
     current.current.computers[0].access = 'owner'
     await retained.invoke('a', 'tasks.rename', 'task', 'New title')
