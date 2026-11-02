@@ -12,6 +12,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 ## Implementation
 
+- **Ramu Link:** reach a host from anywhere without a VPN: connection modes in Remote access, managed Cloudflare Tunnel, Google and GitHub sign-in with Better Auth, and an end-to-end encrypted relay on Cloudflare Workers. See [the plan](plans/ramu-link.md).
 - **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; mutations that cannot be retried report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
 - **Background terminals:** native command handles for Claude, Codex, OpenCode and Cursor need verified owner-lifecycle contracts. The ACP client-terminal boundary is written but enabled for no provider until one is verified against a live runtime.
 - **Agent setup:** skill source and ownership details, and per-adapter rule delivery (path-matched activation only where a runtime supports it).
@@ -42,8 +43,8 @@ Representative tasks to run once the above is available:
 ## Decisions and deferred scope
 
 - **Certificate pinning:** not built. It needs a native transport replacement that cannot be verified without device builds. Reopen with a concrete threat that HTTPS pairing and host-identity checks do not cover.
-- **Preference sync:** hosts talk to each other only through host pairings for agent-started threads, and no account system exists, so settings do not follow a person across hosts. Credentials and workspace state stay out of any future sync.
+- **Preference sync:** hosts talk to each other only through host pairings for agent-started threads, so settings do not follow a person across hosts. [Ramu Link](plans/ramu-link.md) accounts find hosts but do not sync settings; credentials and workspace state stay out of any future sync.
 - **Remote administration:** network access, pairing and device permissions are managed only at the host. A device's **Change settings** permission covers settings, not this; widening it needs reviewable changes and recovery first.
-- **Relay:** no relay or tunnel service. Design it separately from direct-host push.
+- **Relay:** planned as [Ramu Link](plans/ramu-link.md); push wake-ups through it stay a later option, designed with direct-host push.
 - **Deferred:** a full mobile editor, dedicated mobile provider sign-in, chunked large-file upload, marketplaces for MCP, themes or skills, arbitrary plugin or hook execution, automatic provider-file or credential synchronization, AI conflict resolution, local grounding models and VMs for computer use, and vector retrieval for learning.
 - **Evidence rule:** claim an improvement over another application only with matched-task evidence, not source inspection or one demo.
