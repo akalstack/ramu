@@ -218,7 +218,7 @@ export interface RamuMethods {
     keepAwake: boolean
     /** Whether app drags may use the real pointer (window moves, text selection). */
     globalPointer: boolean
-    /** The pinned Open Computer Use release this host runs; absent on hosts from before it was reported. */
+    /** The pinned Open Computer Use release this host runs. */
     appVersion?: string
     /** Runtime permission snapshot; null when it cannot be checked. */
     appPermissions?: { allGranted: boolean; accessibilityTrusted: boolean; screenCaptureGranted: boolean } | null

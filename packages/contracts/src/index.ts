@@ -61,7 +61,7 @@ export interface PairResponse {
   token: string
   /** The host's durable identifier, bound at this explicit pairing and checked later through IDENTITY_PATH. */
   hostId?: string
-  /** When the token stops working unless renewed; null never. Absent on older hosts. */
+  /** When the token stops working unless renewed; null never. */
   expiresAt?: number | null
 }
 export const PROTOCOL_HEADER = 'x-ramu-protocol'
@@ -106,7 +106,7 @@ export type SocketClientFrame =
        */
       skip?: Record<string, string[]>
       flow?: boolean
-      /** Every channel, whatever `channels` lists. A host that predates this keeps to the list. */
+      /** Every channel, whatever `channels` lists. */
       everything?: boolean
     }
   /** Output of terminal `id` the client has processed, in the characters of its `term:data` chunks. */

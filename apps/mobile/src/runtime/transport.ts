@@ -72,7 +72,7 @@ const socketOf = (address: string, token: string): HostSocket => {
   if (!socketProvider) throw new HostError('This build cannot connect to a host. Update Ramu and try again.')
   return socketProvider(address, token)
 }
-/** Waiting for the socket fails the way an HTTP answer would have: a refused token or a host that predates sockets. */
+/** Waiting for the socket fails the way an HTTP answer would have: a refused token or a host without a socket. */
 function connectionError(error: unknown): HostError {
   const failure = error as { status?: number; message?: string }
   if (failure?.status === 401 || failure?.status === 426)

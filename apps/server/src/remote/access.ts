@@ -2,7 +2,6 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { CHALLENGE_PATTERN, IDENTITY_PATH, PAIR_PATH, PROTOCOL_VERSION, RENEW_PATH } from '@ramu/contracts'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
 import { hostProof } from '@ramu/shared/hostProof'
-import { authorized } from './auth'
 import type { DeviceInfo, DeviceStore } from './devices'
 import { PAIR_REQUEST_PATH, PAIR_REVEAL_PATH, PAIR_WAIT_PATH } from '@ramu/shared/pairRequest'
 import { PairingError, type PairingRequests } from './pairingRequests'
@@ -32,9 +31,8 @@ export class RemoteAccess {
   constructor(
     private options: {
       devices: DeviceStore
-      legacyToken?: () => string
       browserOrigins: string[]
-      /** The host's durable id, proved to a paired device on request. Absent: the endpoint does not exist (older hosts). */
+      /** The host's durable id, proved to a paired device on request.  */
       hostId?: string
       /** This host's own addresses, named in the identity answer so a paired device can find it when its address changes. */
       routes?: () => string[]
@@ -47,13 +45,10 @@ export class RemoteAccess {
   ) {}
 
   authorized(header: string | undefined): boolean {
-    return (
-      this.options.devices.authenticate(header) !== null ||
-      Boolean(this.options.legacyToken && authorized(header, this.options.legacyToken()))
-    )
+    return this.options.devices.authenticate(header) !== null
   }
 
-  /** undefined means this response has already been sent; null is a legacy authenticated client. */
+  /** undefined means this response has already been sent. */
   async accept(req: IncomingMessage, res: ServerResponse): Promise<DeviceInfo | null | undefined> {
     const origin = req.headers.origin
     if (origin) {
@@ -213,7 +208,7 @@ export class RemoteAccess {
       return
     }
     const device = this.options.devices.authenticate(req.headers.authorization, now)
-    if (!device && !(this.options.legacyToken && authorized(req.headers.authorization, this.options.legacyToken()))) {
+    if (!device) {
       rejected()
       return
     }

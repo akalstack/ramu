@@ -20,7 +20,7 @@ const chat = (computerId: string, taskId = 'same'): InboxChat => ({
 })
 
 it('keeps unfinished goals out of Completed between turns and offers held goals in Needs you', () => {
-  const states = ['active', 'waiting-provider', 'paused', 'blocked', 'turn-limit', 'completed'] as const
+  const states = ['active', 'paused', 'blocked', 'turn-limit', 'completed'] as const
   const chats: InboxChat[] = states.map((status) => ({
     ...chat('host', status),
     status: 'ready-for-review' as const,
@@ -32,7 +32,7 @@ it('keeps unfinished goals out of Completed between turns and offers held goals 
     goalState: { status: 'paused', pausedBy: 'provider-limit' },
   })
   const result = buildInbox({ chats, recaps: [], summaries: [], now })
-  expect(result.running.map((item) => item.taskId)).toEqual(['active', 'waiting-provider', 'limit'])
+  expect(result.running.map((item) => item.taskId)).toEqual(['active', 'limit'])
   expect(result.waiting.map((item) => item.taskId)).toEqual(['paused', 'blocked', 'turn-limit'])
   expect(result.completed.map((item) => item.taskId)).toEqual(['completed'])
 })

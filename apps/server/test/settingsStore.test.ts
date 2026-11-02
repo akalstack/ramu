@@ -29,7 +29,8 @@ function fixture(preferences: unknown = {}, models: unknown = null) {
   workspace.setAppState('app-preferences', preferences)
   workspace.setAppState('model-preferences', models)
   const warn = vi.fn()
-  const store = new SettingsStore(directory, { preferences, models }, warn)
+  writeFileSync(join(directory, 'settings.json'), JSON.stringify({ ...(preferences as object), models }))
+  const store = new SettingsStore(directory, warn)
   workspace.settingsStore = store
   cleanup.push(() => store.close())
   return { directory, db, workspace, store, warn }
@@ -49,7 +50,6 @@ const models = {
 }
 watched('defaults new browser installs to integrated and preserves legacy and explicit provider choices', () => {
   expect(fixture().store.preferences().agentBrowser?.agentBrowser).toBe('integrated')
-  expect(fixture({ accent: 'teal' }).store.preferences().agentBrowser?.agentBrowser).toBe('provider')
   expect(
     fixture({
       agentBrowser: {
@@ -71,7 +71,7 @@ watched('migrates real SQLite preferences and models once, preserving the legacy
   const archive = f.db.prepare("SELECT value FROM app_state WHERE key = 'app-preferences'").get() as { value: string }
   expect(JSON.parse(archive.value)).toMatchObject({ accent: 'teal' })
   f.store.close()
-  const restarted = new SettingsStore(f.directory, { preferences: { accent: 'blue' }, models: null })
+  const restarted = new SettingsStore(f.directory)
   cleanup.push(() => restarted.close())
   expect(restarted.preferences().accent).toBe('violet')
   expect(restarted.models()).toEqual(models)
@@ -105,7 +105,7 @@ watched('keeps last good settings on malformed or invalid edits and refuses to o
   }
   expect(f.warn).toHaveBeenCalled()
   f.store.close()
-  const restarted = new SettingsStore(f.directory, { preferences: { accent: 'teal' }, models: null }, f.warn)
+  const restarted = new SettingsStore(f.directory, f.warn)
   cleanup.push(() => restarted.close())
   expect(restarted.preferences()).toEqual(DEFAULT_APP_PREFERENCES)
   expect(readFileSync(restarted.path, 'utf8')).toBe('{"models":{"sets":[]}}')
@@ -131,7 +131,7 @@ watched('ignores abandoned temporary writes on restart', () => {
   const f = fixture({ accent: 'teal' })
   f.store.close()
   writeFileSync(`${f.store.path}.tmp.interrupted`, '{"accent":')
-  const restarted = new SettingsStore(f.directory, { preferences: {}, models: null })
+  const restarted = new SettingsStore(f.directory)
   cleanup.push(() => restarted.close())
   expect(restarted.preferences().accent).toBe('teal')
 })

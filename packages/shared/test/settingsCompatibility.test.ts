@@ -44,13 +44,12 @@ it('ignores defaults and key order while retaining validation constraints', () =
     commonSettings([snapshot({ type: 'string', default: 'a' }), snapshot({ type: 'string', default: 'b' })]),
   ).toHaveLength(1)
 })
-it('advertises provider configuration and complex lists while excluding migration markers', () => {
+it('advertises provider configuration and complex lists ', () => {
   const schema: SettingSchema = {
     properties: {
       accent: { type: 'string' },
       memory: { type: 'object', properties: { enabled: { type: 'boolean' } } },
       providerBinaries: { type: 'object', properties: { binary: { type: 'string' } } },
-      messageBehaviorVersion: { type: 'number' },
       favoriteModels: { type: 'array', items: { type: 'string' } },
       steps: { type: 'array', items: { type: 'object' } },
     },
@@ -60,7 +59,6 @@ it('advertises provider configuration and complex lists while excluding migratio
       accent: 'blue',
       memory: { enabled: true },
       providerBinaries: { binary: '/secret' },
-      messageBehaviorVersion: 4,
       favoriteModels: [],
       steps: [],
     }).map((field) => field.path),

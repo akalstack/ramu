@@ -58,7 +58,7 @@ export const grantActive = (grant: PermissionGrant | undefined, now: number): bo
   !!grant && (grant.until === null || grant.until > now)
 
 /**
- * Whether a device should be offered a control that needs `permission`. An unknown view (an older host, or not read
+ * Whether a device should be offered a control that needs `permission`. An unknown view (not read
  * yet) offers it, so the host's own refusal still explains; a known missing grant hides it behind a request instead.
  */
 export function mayUse(view: DevicePermissionsView | null | undefined, permission: DevicePermission, now: number) {
@@ -70,7 +70,7 @@ export interface DevicePermissionsView {
   permissions: Record<DevicePermission, PermissionGrant | null>
   /** Asked and not answered yet. */
   pending: DevicePermission[]
-  /** The host said never: asking again is refused until the host allows it itself. Absent on older hosts. */
+  /** The host said never: asking again is refused until the host allows it itself. */
   blocked?: DevicePermission[]
 }
 

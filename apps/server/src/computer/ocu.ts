@@ -153,13 +153,11 @@ function versionOf(path: string): string | null {
 export function ocuExecutable(): string | null {
   const configured = process.env.RAMU_OCU_PATH
   const pinned = findExecutable(join(ocuToolsDir(), `ocu-${OCU_VERSION}`, 'node_modules/.bin/ocu'))
-  const legacy = findExecutable(join(ocuToolsDir(), 'node_modules/.bin/ocu'))
   if (configured) {
     const path = findExecutable(configured)
     return path && versionOf(path) === OCU_VERSION ? path : null
   }
   if (pinned && versionOf(pinned) === OCU_VERSION) return pinned
-  if (legacy && versionOf(legacy) === OCU_VERSION) return legacy
   const others = [
     findExecutable('ocu'),
     findExecutable('open-computer-use'),

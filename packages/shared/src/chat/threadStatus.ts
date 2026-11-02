@@ -68,7 +68,7 @@ export function threadStatus(
 }
 
 /**
- * The newer of two reads of the same task from one host. A read without a `snapshotAt` (an older host) always replaces,
+ * The newer of two reads of the same task from one host. A read without a `snapshotAt` always replaces,
  * since nothing can order it; a late, older read never brings back work that has since stopped or finished.
  */
 export function newerTaskSnapshot<T extends Pick<Task, 'snapshotAt'>>(current: T | undefined, incoming: T): T {

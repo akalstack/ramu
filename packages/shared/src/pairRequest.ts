@@ -9,7 +9,7 @@ import { hmac } from '@noble/hashes/hmac'
 import { sha256 } from '@noble/hashes/sha2'
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils'
 
-/** Each is a JSON `POST`, accepted only while the host has an unused pairing offer. An older host answers 404. */
+/** Each is a JSON `POST`, accepted only while the host has an unused pairing offer. */
 export const PAIR_REQUEST_PATH = '/pair/request'
 export const PAIR_REVEAL_PATH = '/pair/reveal'
 export const PAIR_WAIT_PATH = '/pair/wait'
@@ -122,7 +122,7 @@ export class PairRequestUnsupported extends Error {
 
 /**
  * The device side. `onCode` runs once the code is known, to show it; the promise settles when the person at the host
- * answers. Rejects with `PairRequestUnsupported` for an older host and with the host's own message otherwise.
+ * answers. Rejects with `PairRequestUnsupported` when the host refuses the request and with the host's own message otherwise.
  */
 export async function requestPairing(input: {
   post: PairPost

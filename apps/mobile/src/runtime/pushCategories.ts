@@ -35,7 +35,7 @@ export function withCategory(text: string | undefined, category: PushCategory, o
 
 /**
  * The extra argument for `notifications.register`: the categories that are on, or nothing while every choice is at its
- * default, so a host that learns a new category later still sends it. Hosts that predate the switches ignore the argument.
+ * default, so a host that learns a new category later still sends it.
  */
 export function registerCategories(text: string | undefined): [PushCategory[]] | [] {
   return parseSwitched(text).length ? [PUSH_CATEGORIES.filter((category) => isCategoryOn(text, category))] : []

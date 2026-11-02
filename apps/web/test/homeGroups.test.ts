@@ -20,7 +20,6 @@ describe('Home groups', () => {
   it('still puts a waiting request and a usage limit first', () => {
     expect(groupOf(session({ state: 'needs-input' }), task('active'))).toBe('Waiting for your input')
     expect(groupOf(session({ waitingUntil: 5 } as never), task('active'))).toBe('Limit reached')
-    expect(groupOf(session(), task('waiting-provider'))).toBe('Limit reached')
     expect(
       groupOf(session(), {
         ...task('paused'),
