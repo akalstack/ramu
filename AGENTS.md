@@ -39,3 +39,5 @@ Remove completed items and delete finished plans. Put lasting behavior in featur
 ## Shared working tree
 
 Preserve other sessions' edits. Stage files by path, never `git add -A`, and inspect `git diff --cached --stat` before committing.
+
+Do not copy your agent tool's built-in skills (such as `run-workflow`) into this repository; the root `skills/` folder is ignored.
