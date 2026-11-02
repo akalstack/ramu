@@ -21,7 +21,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Provider compatibility:** compatibility rules for OpenCode's ACP runner, Cursor and Antigravity after protocol checks; entry points that bypass `validateSettings`.
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live, which needs an event channel between hosts; a thread started there with its report covers the need until then.
 - **Simple Home and Inbox Brief:** Home keeps only the start box and one summary line; Inbox gains a live summary with one-tap actions ([plan](HOME-INBOX-PLAN.md)).
-- **Teammates, then custom agents:** a second model reviews or takes over in one thread; later, a sentence creates a reusable agent ([plan](TEAMMATES-PLAN.md)).
+- **Teammates, then custom agents:** a second model reviews or takes over in one thread; then a sentence creates a reusable agent ([plan](TEAMMATES-PLAN.md)).
 - **Resources:** Inbox shows what each thread uses on every host, with Stop one tap away and a warning when a host runs low on memory ([plan](RESOURCES-PLAN.md)).
 - **Work across hosts:** continue a thread on another connected host, with the project set up there and the threads linked; then choose hosts, schedule on them, merge totals and reach threads from a terminal ([plan](CROSS-HOST-PLAN.md)).
 - **Test devices and live views:** a floating view of Browser, Computer or a test device that stays beside other work; agents run and check apps on iOS Simulators and Android emulators; system picture-in-picture on the phone ([plan](LIVE-VIEWS-PLAN.md)).

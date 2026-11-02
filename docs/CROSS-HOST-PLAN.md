@@ -45,7 +45,7 @@ Each stage is useful alone. Stage 1 ships first, and later stages start from wha
 ### Stage 2: Choosing hosts
 
 - **Several hosts at once:** the sheet can target up to 4 hosts, each with its own rows and outcome, and one failing does not stop the others. Each host gets a new branch from the same commit, so agents never share one.
-- **Host suggested for the work:** each host reports its OS and architecture, and may carry a short description the person writes (`GPU box`, `office network`). Ramu does not detect capabilities. The sheet lists hosts with the project and the thread's model first, and marks a platform or description the thread's latest request names with a plain text match and no model call. `hostThreads.projects` adds the same host facts, so `project_list` lets an agent recommend a host in its reply.
+- **Host suggested for the work:** each host reports its OS and architecture, and may carry a short description the person writes (`GPU box`, `office network`). Ramu does not detect capabilities. The sheet lists hosts with the project and the thread's model first, and marks a platform or description the thread's latest request names with a plain text match and no model call. Among equal hosts, one with more memory free comes first, and a host in the [Resources](RESOURCES-PLAN.md) low-memory state shows **Low memory**, as a reading rather than a capability. The person still chooses. `hostThreads.projects` adds the same host facts, so `project_list` lets an agent recommend a host in its reply.
 - **Scheduled work on a chosen host:** the Automation editor gains **Runs on**, saving through `schedules.save` on that host, and lists schedules from every connected host with a host label. Schedules already live on their host, so it fires them, follows its own **Missed** setting and never runs twice. Moving a schedule saves it on the new host, then removes it from the old one after confirmation. Project and model are checked against the new host in the editor.
 
 ### Stage 3: Outside the app
@@ -57,7 +57,7 @@ Each stage is useful alone. Stage 1 ships first, and later stages start from wha
 
 - **Stage 1:** add two owner-only methods, one that prepares the package on the original host and one that starts on the other, both validated with `zod`, bounded and off the viewer allowlist. Extend `buildHandoff` in `apps/server/src/agent/handoff.ts` for portable output, reuse the path behind `agent.continuationPrompt` and `useContinueInNewChat.ts`, and apply `redactSecrets` from `apps/server/src/memory/secrets.ts`, since handoffs do not redact today. Reuse `apps/server/src/remote/hostFolders.ts` for cloning, and extend `ThreadOrigin` with the host and thread ids.
 - **Check before building:** `branch` in `agentThreads.ts` creates a new branch, so starting a worktree on an existing remote branch needs adding. Project matching needs each repository's remote URL.
-- **Stage 2:** `hostThreads.projects` and `projectsForHost`, the host status that already reports `process.platform`, `apps/server/src/background/schedules.ts`, and `apps/web/src/Automation.tsx` with its phone equivalent. Add the new host facts to the [host pairing review](HOST-PAIRING-REVIEW.md).
+- **Stage 2:** `hostThreads.projects` and `projectsForHost`, the host status that already reports `process.platform`, the free-memory figure and low-memory state each host sends through inbox state ([Resources](RESOURCES-PLAN.md)), `apps/server/src/background/schedules.ts`, and `apps/web/src/Automation.tsx` with its phone equivalent. Add the new host facts to the [host pairing review](HOST-PAIRING-REVIEW.md).
 - **Stage 3:** `usage.accounts` and the `costUsd` values in result events, for which a stored daily summary is new; `apps/server/src/cli.ts`, reusing `agentThreads` start and status logic. Check whether `accountId` matches across hosts before relying on it.
 
 Every string goes through `t()` with an Indonesian translation, and the phone gets the same sheet, labels and actions. Update [Agents and routing](AGENT-ROUTING.md), [Security](../SECURITY.md) and [Automation](AUTOMATION.md) as each stage lands.
@@ -78,6 +78,7 @@ Every string goes through `t()` with an Indonesian translation, and the phone ge
 
 - Continuing on two hosts starts two threads on separate branches, and one failing leaves the other running.
 - A suggestion never starts anything, and a host that reports nothing is not suggested.
+- With two otherwise equal hosts, the one with more memory free is listed first, a low-memory host shows **Low memory** and can still be chosen, and a host with no memory reading is listed unmarked.
 - A schedule set for another host runs there once, follows its **Missed** setting after that host sleeps, and does not run on the first host. A moved schedule exists on one host only.
 
 ### Stage 3

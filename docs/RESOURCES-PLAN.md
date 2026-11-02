@@ -14,8 +14,10 @@ Several agents on one host can exhaust its memory; a single coding agent can rea
 - **No new navigation.** Figures live in Inbox's **Running** tab, which already lists this work on desktop and phone and across hosts. There is no status bar, panel or page to learn.
 - **Ramu's work only.** It is not a system monitor: there are no per-process lists of other applications, and no killing of anything Ramu did not start.
 - **Threads are the unit.** Rows are threads, not process trees. A helper or command counts toward the thread that started it.
-- **Current values only.** No history, charts or stored samples.
-- **Ramu never stops work by itself.** It only suggests. Automatic limits are a later option.
+- **Current values only.** No history, charts or stored samples, for CPU as well as memory.
+- **Ramu never stops work by itself.** It only suggests, with no automatic limits per thread, because a limit that fires can stop the work the person cares about most.
+- **Resident memory, not exact footprints.** Figures stay approximate, because exact macOS footprints need a slow per-process read and would not change which thread to stop.
+- **Nothing on Home.** Home has no lists, and the low-memory row in the Brief already reaches the person.
 - **Sampling is cheap and on demand.** Per-process figures are read only while someone is looking.
 
 Orca's resource manager is the reference for the need, and for separating host memory from per-process totals. Ramu leaves out its charts, per-repository buckets and status-bar panel.
@@ -50,7 +52,7 @@ Ramu (service, browser)             1.3 GB
 - Per-process figures come from one bounded `ps` run with `execFile`, building a parent map once. Each known root collects its descendants. A process counted under a thread is not counted again under Ramu.
 - Figures are resident memory, shown as approximate, because resident sizes can repeat shared pages.
 - Concurrent callers share one in-flight read, and a short cache stops many viewers multiplying `ps` runs. Clients poll every 5 seconds only while Running is visible.
-- The low-memory check runs from host figures once a minute, without `ps`, and reaches clients through the existing inbox state.
+- The low-memory check runs from host figures once a minute, without `ps`, and reaches clients with the free-memory figure through the existing inbox state.
 - Roots come from what the service already started: `pty.ts` entries already carry `taskId` and lead their own process group, and Codex, OpenCode and ACP sessions own their child process. The Claude SDK does not expose a process id to Ramu today; capture it where `agent.ts` starts the query, or attribute it from its session's descendants. Check this first, because it decides whether the largest figure is accurate.
 - Ramu's total includes unattributed descendants, so nothing it started goes missing.
 
@@ -70,7 +72,3 @@ Ramu (service, browser)             1.3 GB
 - With Running closed, no `ps` runs. A host with hundreds of processes keeps its snapshot bounded and quick.
 - macOS and Linux report host memory close to Activity Monitor and `free`. An unsupported or failed reading hides figures rather than showing zero.
 - Strings have Indonesian translations and rows stay accessible by keyboard and screen reader.
-
-## Later options
-
-Decide these from use: automatic memory limits per thread, CPU history, exact macOS footprint figures, a Resources entry on Home, and choosing a less loaded host when a thread starts.

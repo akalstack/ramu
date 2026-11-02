@@ -30,6 +30,8 @@ Pills and headers show the device's own name (**iPhone 17 · iOS 26**), so **Tes
 - **A live view adds no authority.** It follows the same control, approval and viewer-role rules. It watches; taking control still happens through the existing control.
 - **Stop is always visible.** Stop and Close never auto-hide, including when the connection drops.
 - **Cost follows viewers.** A closed view stops its stream. Each view has one stream, a reopened view replaces the old one, and frames fit the view instead of the device's native resolution.
+- **Simulators and emulators only.** Physical phones hold personal data and would need separate consent, and computer use already covers macOS apps. Windows is unsupported.
+- **Platform readiness only.** Hosts report which platforms are ready, with no wider capability detection.
 
 ## Delivery
 
@@ -97,7 +99,3 @@ Validate every input with `zod` and bound paths, logs and gestures. Keep new met
 
 - Picture-in-picture shows Browser, Computer and Test device on physical iOS and Android devices, and ends cleanly on revoke or disconnect.
 - A failed video connection falls back to the in-app live view, with Stop reachable.
-
-## Not in this plan
-
-Physical phones as test devices, which hold personal data and need separate consent; automatic capability detection beyond platform readiness; and macOS or Windows app testing, which computer use covers or the project does not support.

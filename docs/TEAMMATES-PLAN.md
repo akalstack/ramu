@@ -52,9 +52,9 @@ Teammate is not a sub-agent: the difference is who starts it and how long it sta
 - **Limits:** one teammate per thread. Usage limits and fallback apply per teammate, and a limited teammate waits without stopping the lead.
 - **Phone:** the same chips, labels and Stop.
 
-### 2. Custom agents (after Teammates)
+### 2. Custom agents
 
-A separate step that starts only once Teammates has been used and a model picker proves not to be enough. Teammates must not depend on it.
+Ships after Teammates, which must not depend on it: until then, **Add teammate** lists models only.
 
 - **What one is:** a name, a description of when to use it, instructions, a model, and a read-only switch. They live on the host, in Settings → Custom agents, and are read, never executed.
 - **Describe to create:** Settings → Custom agents → **New agent**, or `/agent new`, takes one sentence ("a strict reviewer for security and missing tests"). One bounded, tool-free call drafts the name, description, instructions and suggested model. The person edits it before saving; nothing saves itself.
