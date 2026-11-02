@@ -1,3 +1,4 @@
+import { ContinuedCard } from './ContinueOnHost'
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
 import { FileIcon } from './FileIcon'
 import { translate } from '@ramu/shared/i18n'
@@ -489,6 +490,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <ThemeProposal theme={item.theme} />
     case 'threads':
       return <StartedThreadsCard threads={item.threads} chat={chat} />
+    case 'continued':
+      return <ContinuedCard event={item.event} chat={chat} />
     case 'tool':
       return <ToolRow item={item} />
     case 'tools':

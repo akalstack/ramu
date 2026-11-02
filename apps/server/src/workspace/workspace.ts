@@ -518,6 +518,7 @@ export class Workspace {
     repoIds: string[],
     prefix = 'ramu/',
     choice?: BranchChoice,
+    baseBranch?: string,
   ): Promise<WorktreePlanEntry[]> {
     if (choice && (!validBranchName(choice.name) || choice.name.length > 160))
       throw new Error('Invalid Git branch name')
@@ -533,8 +534,9 @@ export class Workspace {
         throw new Error(
           `${repo.name} is not a Git repository. Initialize it in Source Control to use isolated worktrees.`,
         )
-      const baseOid = await gitCli.headOid(repo.root)
-      const baseRef = (await gitCli.currentBranch(repo.root)) ?? baseOid
+      const base = baseBranch ? await gitCli.fetchedBranch(repo.root, baseBranch) : null
+      const baseOid = base?.oid ?? (await gitCli.headOid(repo.root))
+      const baseRef = base?.ref ?? (await gitCli.currentBranch(repo.root)) ?? baseOid
       if (!baseRef || !baseOid) throw new Error(`${repo.name} has no commits to branch from`)
       const stem = choice ? choice.name : `${branchForTitle(title, prefix)}${suffix}`
       const reserved = (
@@ -672,6 +674,7 @@ export class Workspace {
         repos.map((r) => r.id),
         input.branchPrefix,
         choice,
+        input.baseBranch,
       )
       if (expected) {
         if (expected.length !== repos.length || !repos.every((r) => expected.some((p) => p.repoId === r.id)))

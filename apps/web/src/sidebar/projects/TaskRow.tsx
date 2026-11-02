@@ -1,3 +1,4 @@
+import { continuedFrom } from '@ramu/shared/continuation'
 import { animateThreadListChange } from '../../workspace/threadListMotion'
 import { useComputers } from '../../workspace/computers'
 import { useHost } from '../../workspace/HostProvider'
@@ -428,13 +429,18 @@ export function TaskRow({
                   size={12}
                   className="flex-none text-muted-foreground"
                   aria-label={
-                    task.startedFrom.host
-                      ? t('Started by an agent on {0}', { '0': task.startedFrom.host })
-                      : task.startedFrom.title
-                        ? t('Started by the agent in {0}', { '0': task.startedFrom.title })
-                        : task.startedFrom.groupSize === 2
-                          ? t('Started together with 1 other thread')
-                          : t('Started together with {0} other threads', { '0': task.startedFrom.groupSize - 1 })
+                    continuedFrom(task.startedFrom) && task.startedFrom.host
+                      ? t('Continued from {0} on {1}', {
+                          '0': task.startedFrom.title ?? '',
+                          '1': task.startedFrom.host,
+                        })
+                      : task.startedFrom.host
+                        ? t('Started by an agent on {0}', { '0': task.startedFrom.host })
+                        : task.startedFrom.title
+                          ? t('Started by the agent in {0}', { '0': task.startedFrom.title })
+                          : task.startedFrom.groupSize === 2
+                            ? t('Started together with 1 other thread')
+                            : t('Started together with {0} other threads', { '0': task.startedFrom.groupSize - 1 })
                   }
                 />
               )}

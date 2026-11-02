@@ -384,6 +384,15 @@ export class AgentService {
     }
   }
 
+  /** Labels a thread's latest session; the original stays as it is and links to the thread on the other host. */
+  recordContinued(taskId: string, event: Omit<Extract<AgentEvent, { kind: 'continued' }>, 'kind'>): void {
+    const session = this.all()
+      .filter((entry) => entry.taskId === taskId && !entry.parentId)
+      .at(-1)
+    if (!session) throw new Error('That thread has no agent.')
+    this.record(session.id, { kind: 'continued', ...event })
+  }
+
   recordFileRestore(id: string, userSeq: number, fileCount: number): void {
     this.record(id, { kind: 'file-restore', userSeq, fileCount })
   }

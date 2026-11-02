@@ -183,6 +183,8 @@ export interface CreateTaskInput {
   branchPrefix?: string
   branchNaming?: BranchNamingIntent
   branchChoice?: BranchChoice
+  /** Start from this branch on the remote, fetched first, instead of the repository's current branch. */
+  baseBranch?: string
 
   /** Reuse an isolated workspace instead of creating new worktrees. */
   workspaceId?: string

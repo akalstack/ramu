@@ -682,6 +682,16 @@ export interface RamuMethods {
   'summaries.run'(): import('./types').SummaryRunResult
   /** Starts a review chat seeded with the summary and links it back. */
   'summaries.discuss'(id: string, text: string, settings?: AgentSettings): { taskId: string; sessionId: string }
+  /** What Continue on another host shows and sends, read on the thread's own host. */
+  'threads.continuationPackage'(taskId: string): import('./continuation').ContinuationPackage
+  /** What this host would do with a continued thread: its project, the model it would run, where a clone would go. */
+  'threads.prepareContinuation'(
+    repo: Pick<import('./continuation').ContinuationRepo, 'remoteUrl' | 'repoName'>,
+    settings: AgentSettings,
+  ): { match: import('./continuation').ContinuationMatch | null; settings: AgentSettings; parent: string }
+  'threads.continueHere'(start: import('./continuation').ContinuationStart): StartedThread
+  /** Labels the original thread once its continuation has started. */
+  'threads.noteContinued'(taskId: string, event: import('./continuation').ContinuedEvent): void
   'folders.roots'(): string[]
   'folders.list'(path: string): { path: string; parent: string | null; folders: { name: string; path: string }[] }
   'folders.create'(parent: string, name: string): string

@@ -409,6 +409,30 @@ export function ambiguousRemoteMessage(remotes: string[]): string {
   return `This repository has several remotes (${remotes.join(', ')}) and none is named origin. Choose one when you publish, or set git config remote.pushDefault <name>.`
 }
 
+/** Fetches one branch and names where it landed, so a new worktree can start there without touching this checkout. */
+export async function fetchedBranch(cwd: string, branch: string): Promise<{ ref: string; oid: string }> {
+  const { remote } = await publishRemote(cwd, branch)
+  if (!remote) throw new Error('This repository has no remote to fetch that branch from.')
+  await git(cwd, ['fetch', '--no-tags', remote, `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`])
+  const ref = `refs/remotes/${remote}/${branch}`
+  return { ref, oid: (await git(cwd, ['rev-parse', '--verify', ref])).trim() }
+}
+
+/** The facts Continue on another host shows: what travels as a commit, and what stays behind. */
+export async function continuationFacts(cwd: string) {
+  const branch = (await currentBranch(cwd)) ?? ''
+  const { remote } = await publishRemote(cwd, branch)
+  const remoteUrl = remote ? (await git(cwd, ['remote', 'get-url', remote])).trim() : ''
+  const local = (await git(cwd, ['rev-parse', 'HEAD'])).trim()
+  const dirtyFiles = (await git(cwd, ['status', '--porcelain'])).split('\n').filter(Boolean).length
+  const tracking = remote && branch ? `refs/remotes/${remote}/${branch}` : ''
+  const pushedAt = tracking ? await git(cwd, ['rev-parse', '--verify', tracking]).catch(() => '') : ''
+  const unpushed = pushedAt.trim()
+    ? Number((await git(cwd, ['rev-list', '--count', `${tracking}..HEAD`])).trim())
+    : Number((await git(cwd, ['rev-list', '--count', 'HEAD'])).trim())
+  return { branch, remoteUrl, commit: pushedAt.trim() || local, dirtyFiles, unpushed, pushed: !!pushedAt.trim() }
+}
+
 /** Prefer the remote's recorded HEAD; common names cover repositories without one. No network request. */
 export async function commitBranchInfo(cwd: string): Promise<{ branch: string | null; defaultBranch: string | null }> {
   const branch = await currentBranch(cwd)

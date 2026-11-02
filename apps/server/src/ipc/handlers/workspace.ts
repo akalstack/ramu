@@ -22,6 +22,7 @@ import { planOperator, routeProject, splitBriefs } from '../../workspace/project
 import { OPERATOR_SCHEDULE_LIMIT, OPERATOR_THREAD_LIMIT, type OperatorSnapshot } from '@ramu/shared/operator'
 import { SPLIT_LIMIT, type RoutingCandidate } from '@ramu/shared/workspace/projectRouting'
 import type { AgentThreadService } from '../../background/agentThreads'
+import type { ContinuationRepo, ContinuationStart, ContinuedEvent } from '@ramu/shared/continuation'
 import { agentSettings, id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 import type { TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
@@ -106,6 +107,10 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   learning,
   agentThreads,
 }) => {
+  const continuations = () => {
+    if (!agentThreads) throw new Error('Continuing threads is unavailable on this host.')
+    return agentThreads
+  }
   const pendingNames = new Map<string, AbortController>()
   const projectConfiguration = (projectId: string) => {
     const result = workspace.projectConfiguration(projectId)
@@ -228,6 +233,49 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         await agents.validateSettings(settings)
         return agentThreads.startGroup(input, settings)
       },
+    },
+    'threads.continuationPackage': {
+      args: z.tuple([id]),
+      run: (taskId: string) => continuations().continuationPackage(taskId),
+    },
+    'threads.prepareContinuation': {
+      args: z.tuple([
+        z.object({ remoteUrl: z.string().min(1).max(2000), repoName: z.string().min(1).max(200) }),
+        agentSettings,
+      ]),
+      run: (repo: Pick<ContinuationRepo, 'remoteUrl' | 'repoName'>, settings: AgentSettings) =>
+        continuations().prepareContinuation(repo, settings),
+    },
+    'threads.continueHere': {
+      args: z.tuple([
+        z.object({
+          key: z.string().uuid(),
+          from: z.object({
+            hostId: z.string().min(1).max(200),
+            hostName: z.string().min(1).max(200),
+            taskId: id,
+            title: z.string().max(200),
+          }),
+          projectId: id,
+          branch: z.string().max(250),
+          prompt: z.string().min(1).max(100_000),
+          note: z.string().max(4000).optional(),
+          settings: agentSettings,
+        }),
+      ]),
+      run: (start: ContinuationStart) => continuations().continueHere(start),
+    },
+    'threads.noteContinued': {
+      args: z.tuple([
+        id,
+        z.object({
+          hostId: z.string().min(1).max(200),
+          host: z.string().max(200),
+          taskId: id,
+          title: z.string().max(200),
+        }),
+      ]),
+      run: (taskId: string, event: ContinuedEvent) => agents.recordContinued(taskId, event),
     },
     'projects.create': { args: z.tuple([z.string().max(200)]), run: (name: string) => workspace.createProject(name) },
     'folders.roots': { args: z.tuple([]), run: () => hostFolders.roots() },
@@ -403,6 +451,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           branchPrefix: z.string().max(120).refine(validBranchPrefix).optional(),
           branchNaming: namingIntent.optional(),
           branchChoice: branchChoice.optional(),
+          baseBranch: z.string().min(1).max(250).refine(validBranchName).optional(),
           projectId: id,
           title: z.string().max(200),
           mode: z.enum(['current', 'worktree']),

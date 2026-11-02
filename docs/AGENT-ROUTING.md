@@ -63,6 +63,12 @@ A person can let this host's agents start threads on another host from its row i
 - **Following:** the started card says which host each thread runs on. `thread_status` and `thread_message` reach those threads with their `remote:` ids; this host asks about unsettled ones once a minute and queues one report per outcome, as for local threads. A host that cannot be reached keeps the start (**Waiting for ‹host›**) and starts it when it returns; after a day it is reported as not started.
 - **Limits:** the other host enforces its own depth and hourly limits for this pairing and shows only the threads this pairing started. See [Security](../SECURITY.md#remote-access) for what a host pairing can and cannot do.
 
+### Continue on another host
+
+**Continue on ‹host›** in a thread's menu (desktop and phone, hidden from viewer devices) copies the thread to another host this device is connected to. A sheet shows the branch and commit the other host starts from, what stays behind (uncommitted files, unpushed commits, queued messages), the project there, the model that will run with **Allow edits**, and an optional note. The project is matched by Git remote; a project with only the same name must be chosen. When none matches, the sheet clones the remote on that host with its own credentials and adds the project. Only single-repository projects can be set up this way, and a running thread must be stopped first.
+
+The conversation travels as a redacted handoff bounded to 100,000 characters; files never leave the host, and the other host works in a new worktree from the pushed branch. The device calls each host directly, so paired hosts never clone or read transcripts. The new thread shows **Continued from ‹thread› on ‹host›**; the original shows **Continued on ‹host›** with **Open**, **Bring back result** (queues the latest reply there, labelled with its host) and **Archive** with Undo. A retried start finds the same thread.
+
 ## One prompt, several threads
 
 With **Auto** as the destination (Home on the desktop, a new thread on the phone), a request that needs work in several projects becomes a reviewed set of threads instead of one.

@@ -48,6 +48,7 @@ import { ComputerActivity } from '../../../components/ComputerActivity'
 import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { translate } from '@ramu/shared/i18n'
 import { Composer } from '../../../components/Composer'
+import { ContinueOnHostSheet } from '../../../components/ContinueOnHost'
 import type { TranscriptItem } from '../../../runtime/types'
 import type { AgentSettings } from '@ramu/shared/types'
 import {
@@ -79,6 +80,7 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const chat = useChat(id)
   const { seeFailure } = useAutomation()
+  const [continueHost, setContinueHost] = useState<string | null>(null)
   const failedAt = chat?.status === 'failed' ? chat.lastActiveAt : null
   useFocusEffect(
     useCallback(() => {
@@ -615,6 +617,15 @@ export default function ChatScreen() {
     group: 'tools' | 'info'
     symbol?: import('../../../components/Screen').HeaderMenuAction['icon']
   }[] = [
+    ...store.computers
+      .filter((pc) => pc.id !== chat.computerId && pc.status === 'online' && computer?.access !== 'viewer')
+      .map((pc) => ({
+        icon: GitFork,
+        label: tr('Continue on {0}', { 0: pc.name }),
+        symbol: 'arrow.triangle.branch' as const,
+        group: 'tools' as const,
+        onPress: () => setContinueHost(pc.id),
+      })),
     // A thread an agent started opens the thread that started it, as the desktop's header chip does.
     // A thread another host's agent started cannot be opened from here; the menu says where it came from.
     ...(chat.startedFrom?.host
@@ -1340,6 +1351,7 @@ export default function ChatScreen() {
           </SheetGroup>
         ))}
       </Sheet>
+      <ContinueOnHostSheet chat={chat} targetId={continueHost} onClose={() => setContinueHost(null)} />
     </Screen>
   )
 }

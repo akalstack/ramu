@@ -340,6 +340,8 @@ type AgentEventBody =
   | { kind: 'queue'; messages: QueuedMessage[]; paused?: boolean }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
+  /** This thread continues on another host. The original stays and links to it. */
+  | { kind: 'continued'; hostId: string; host: string; taskId: string; title: string }
   | { kind: 'background-terminal-stop'; terminalId: string; command: string }
   | {
       kind: 'init'

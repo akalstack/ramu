@@ -1,7 +1,16 @@
 import { randomUUID } from 'node:crypto'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { dirname } from 'node:path'
+import { homedir } from 'node:os'
 import { clipText } from '@ramu/shared/text'
+import {
+  continuationGroup,
+  matchProject,
+  type ContinuationPackage,
+  type ContinuationRepo,
+  type ContinuationStart,
+} from '@ramu/shared/continuation'
 import { routeByName } from '@ramu/shared/workspace/projectRouting'
 import {
   NO_PROJECT,
@@ -15,7 +24,7 @@ import type { Db } from '../db'
 import type { AgentService } from '../agent'
 import type { Workspace } from '../workspace/workspace'
 import { routeProject } from '../workspace/projectRouter'
-import { git } from '../workspace/git'
+import { continuationFacts, git } from '../workspace/git'
 import { redactSecrets } from '../memory/secrets'
 import { threadOutcome, type ThreadOutcome } from './threadOutcome'
 import { remoteThreadId, type RemoteRequest, type RemoteStatus, type RemoteThreads } from './remoteThreads'
@@ -28,6 +37,8 @@ export const MAX_THREADS_PER_HOUR = 8
 /** A person's thread is depth 0; threads it starts are 1 and may start threads at depth 2, which may not. */
 export const MAX_DEPTH = 2
 export const MAX_MESSAGES_PER_HOUR = 20
+/** What a thread start accepts, so a continued conversation always fits. */
+const CONTINUATION_PROMPT_LIMIT = 100_000
 const HOUR = 60 * 60_000
 const ACCESS_RANK: Record<AgentSettings['access'], number> = { edits: 0, auto: 1, full: 2 }
 const REPORT_LIMIT = 4000
@@ -59,6 +70,8 @@ export interface ThreadRequest {
 }
 
 interface Planned extends ThreadRequest {
+  /** Start from this branch on the remote; a taken name gets a suffix rather than failing. */
+  baseBranch?: string
   projectId: string
   projectName: string
   mode: 'current' | 'worktree'
@@ -521,6 +534,93 @@ export class AgentThreadService {
     return this.start(planned, { source: null, settings, groupId: input.groupId, depth: 0, together: input.together })
   }
 
+  /** Everything Continue on another host shows and sends, read on the thread's own host. Files never leave it. */
+  async continuationPackage(taskId: string): Promise<ContinuationPackage> {
+    const task = this.workspace.getTask(taskId)
+    const session = this.agents
+      .all()
+      .filter((entry) => entry.taskId === taskId && !entry.parentId)
+      .at(-1)
+    const base = { title: task.title, queued: session ? this.agents.queued(session.id).length : 0 }
+    if (!session)
+      return { ...base, running: false, prompt: '', settings: {} as AgentSettings, repo: null, problem: 'no-agent' }
+    const prompt = clipText(
+      redactSecrets(this.agents.continuationPrompt(session.id))
+        // Those event numbers exist only on this host.
+        .split('\n')
+        .filter((line) => !line.includes('session_recall'))
+        .join('\n'),
+      CONTINUATION_PROMPT_LIMIT,
+    )
+    const running = ['starting', 'running', 'needs-input'].includes(session.state)
+    const shared = { ...base, running, prompt, settings: session.settings }
+    const bindings = this.workspace.listBindings(taskId)
+    if (bindings.length !== 1) {
+      const problem = bindings.length ? 'several-repositories' : 'no-remote'
+      return { ...shared, repo: null, problem }
+    }
+    const binding = bindings[0]!
+    const facts = await continuationFacts(binding.cwd).catch(() => null)
+    if (!facts?.remoteUrl) return { ...shared, repo: null, problem: 'no-remote' }
+    return { ...shared, repo: { ...facts, repoName: binding.repoName }, problem: null }
+  }
+
+  /** What this host would do with a continued thread: the project it matches, the model it would run, where to clone. */
+  async prepareContinuation(repo: Pick<ContinuationRepo, 'remoteUrl' | 'repoName'>, requested: AgentSettings) {
+    const projects = await Promise.all(
+      this.workspace.listProjects().map(async (project) => {
+        const repositories = this.workspace.listRepositories(project.id)
+        const remotes =
+          repositories.length === 1
+            ? await git(repositories[0]!.root, ['remote', 'get-url', 'origin']).then(
+                (url) => [url.trim()],
+                () => [],
+              )
+            : []
+        return { id: project.id, name: project.name, remotes }
+      }),
+    )
+    const known = this.workspace
+      .listProjects()
+      .flatMap((project) => this.workspace.listRepositories(project.id))
+      .find((entry) => dirname(entry.root).startsWith(homedir()))
+    return {
+      match: matchProject(repo, projects),
+      settings: await this.settingsForHost(requested, 'edits', 'edits'),
+      parent: known ? dirname(known.root) : homedir(),
+    }
+  }
+
+  /** Starts a thread a person sent here from another host. The start carries a key, so a lost reply finds the same one. */
+  async continueHere(start: ContinuationStart): Promise<StartedThread> {
+    const settings = await this.settingsForHost(start.settings, 'edits', 'edits')
+    const project = this.workspace.listProjects().find((entry) => entry.id === start.projectId)
+    if (!project) throw new Error('That project is not on this host.')
+    const brief = start.note ? `${start.prompt}\n\nThe person added: ${start.note}` : start.prompt
+    const [started] = await this.start(
+      [
+        {
+          prompt: brief,
+          title: start.from.title,
+          projectId: project.id,
+          projectName: project.name,
+          mode: 'worktree',
+          ...(start.branch ? { branch: start.branch, baseBranch: start.branch } : {}),
+        },
+      ],
+      {
+        source: null,
+        groupId: continuationGroup(start.from.hostId, start.from.taskId, start.key),
+        sourceHost: { deviceId: '', name: clipText(start.from.hostName, 80), thread: clipText(start.from.title, 200) },
+        settings,
+        depth: 0,
+        together: [],
+      },
+    )
+    if (!started) throw new Error('That host could not start the thread.')
+    return started
+  }
+
   /** Resolves each request to a project and checkout before anything is created, so a bad name creates nothing. */
   async plan(
     requests: ThreadRequest[],
@@ -612,7 +712,10 @@ export class AgentThreadService {
             projectId: entry.projectId,
             title,
             mode: entry.mode,
-            ...(entry.branch ? { branchChoice: { name: entry.branch, source: 'manual' } } : {}),
+            ...(entry.baseBranch ? { baseBranch: entry.baseBranch } : {}),
+            ...(entry.branch
+              ? { branchChoice: { name: entry.branch, source: entry.baseBranch ? 'generated' : 'manual' } }
+              : {}),
           },
         ])) as Task
       } catch (error) {

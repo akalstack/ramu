@@ -1,6 +1,18 @@
+import { useComputers } from '../../../workspace/computers'
+import { useHost } from '../../../workspace/HostProvider'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { Bot, GitFork, LoaderCircle, MessageCircle, MoreHorizontal, Search, ShieldQuestion, Square } from 'lucide-react'
+import {
+  Bot,
+  ArrowUpRight,
+  GitFork,
+  LoaderCircle,
+  MessageCircle,
+  MoreHorizontal,
+  Search,
+  ShieldQuestion,
+  Square,
+} from 'lucide-react'
 import type { AgentSessionState, AgentTask } from '@ramu/shared/types'
 import { formatKeys } from '../../../commands'
 import { CommitPushButton } from '../../../git/CommitPushButton'
@@ -34,6 +46,7 @@ export function AgentHeader({
   canContinue,
   continuing,
   onContinue,
+  onContinueOnHost,
 }: {
   history?: React.ReactNode
   sessionId: string
@@ -57,8 +70,14 @@ export function AgentHeader({
   canContinue: boolean
   continuing: boolean
   onContinue: () => void
+  onContinueOnHost: (hostId: string) => void
 }) {
   useLanguage()
+  const host = useHost()
+  const computers = useComputers()
+  const otherHosts = (computers?.computers ?? []).filter(
+    (computer) => computer.id !== host.id && computer.status === 'connected',
+  )
   return (
     <div className="agent-header [&_.path]:flex-1 [&:not(:has(>_:not(.grow)))]:hidden [&_.grow]:hidden [&_.state]:mr-auto [&_.small]:gap-1.5 [&_.small]:text-soft [&_>_*]:flex-none [&_>_*]:whitespace-nowrap flex items-center flex-none text-control min-w-0 justify-end h-auto min-h-[36px] p-[4px_10px_0] gap-1.5 flex-wrap gap-y-1 pb-1">
       {history}
@@ -182,6 +201,16 @@ export function AgentHeader({
               ),
               onSelect: onContinue,
             },
+            ...otherHosts.map((computer) => ({
+              key: `continue:${computer.id}`,
+              disabled: readOnly,
+              label: (
+                <>
+                  <ArrowUpRight size={13} /> {translate('Continue on {0}', { 0: computer.name })}
+                </>
+              ),
+              onSelect: () => onContinueOnHost(computer.id),
+            })),
           ]}
         />
       )}

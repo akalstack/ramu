@@ -23,24 +23,7 @@ Some work only runs on one machine: a Linux-only failure, a GPU box, a server in
 
 ## Delivery
 
-Each stage is useful alone. Stage 1 ships first, and later stages start from what it shows.
-
-### Stage 1: Continue on another host
-
-- **Starting:** **Continue on ‹host›** in the thread menu on desktop and phone, listing hosts this device is connected to, or **Continue on another host…** for several. It sits beside **Continue in new chat** and is hidden from viewer devices.
-- **Sheet:** built from the same review pattern as `SplitReview`. It shows host and platform, the project there, branch and commit, what is left behind, the model that will run, access, and an optional note. Each row states a problem with its fix, and nothing starts until all are settled.
-- **Project match:** by normalized Git remote URL on the other host, not by name, because names differ between machines. A match by name alone is offered but needs a choice.
-- **Set up on ‹host›:** when no project matches, the sheet offers a clone of the same remote, with a folder prefilled from where that host keeps its projects. It reuses `folders.clone` with its progress and cancel, and adds the project. The other host uses its own credentials. If the clone fails, the sheet shows why, removes the partial folder and starts nothing. Only single-repository projects can be set up this way; a multi-repository workspace must already exist there, and the sheet says so.
-- **Work left behind:**
-  - Uncommitted or unpushed work offers the existing **Commit and push** flow, or continuing from the last pushed commit with the difference listed.
-  - A project with no remote cannot continue, and the sheet explains why.
-  - The other host checks out the pushed branch in a new worktree, so its own checkout and changes are untouched.
-- **What travels:** a thread handoff with `redactSecrets` applied, bounded to fit `thread_start`'s 100,000-character prompt, plus the note. Provider-private reasoning, attachments and queued messages stay, and the sheet lists any queued messages. A goal travels as context and is not started there. References to `session_recall` are removed, because those event numbers exist only on the original host.
-- **Model:** the thread's provider and model when the other host has them, otherwise its default, shown before starting. Fallback and limits follow that host's settings.
-- **Linking:** the new thread records the original's host and thread, and shows **Continued from ‹thread› on ‹host›**. The original records the new thread and shows **Continued on ‹host›** with **Open**. If recording on the original fails, the started thread still stands and the label is retried. Connected clients nest the new thread under its original; when the original's host is not connected, it stays a labelled row.
-- **Bring back:** when the new thread settles, the original offers **Bring back result**, which queues its latest reply there, labelled with its host. Nothing is carried automatically. The usual notification names the host and opens the thread.
-- **Archive the original:** the same banner offers **Archive**, with Undo. It is never archived by itself.
-- **Retries:** the start carries a key, so a lost reply finds the same thread instead of starting a second one. A host that drops before starting leaves the sheet open with its contents and starts nothing.
+Stage 1, **Continue on ‹host›**, has shipped ([Agents and routing](AGENT-ROUTING.md#continue-on-another-host)). Each remaining stage is useful alone.
 
 ### Stage 2: Choosing hosts
 
@@ -55,24 +38,12 @@ Each stage is useful alone. Stage 1 ships first, and later stages start from wha
 
 ## Services to extend
 
-- **Stage 1:** add two owner-only methods, one that prepares the package on the original host and one that starts on the other, both validated with `zod`, bounded and off the viewer allowlist. Extend `buildHandoff` in `apps/server/src/agent/handoff.ts` for portable output, reuse the path behind `agent.continuationPrompt` and `useContinueInNewChat.ts`, and apply `redactSecrets` from `apps/server/src/memory/secrets.ts`, since handoffs do not redact today. Reuse `apps/server/src/remote/hostFolders.ts` for cloning, and extend `ThreadOrigin` with the host and thread ids.
-- **Check before building:** `branch` in `agentThreads.ts` creates a new branch, so starting a worktree on an existing remote branch needs adding. Project matching needs each repository's remote URL.
 - **Stage 2:** `hostThreads.projects` and `projectsForHost`, the host status that already reports `process.platform`, the free-memory figure and low-memory state each host sends through inbox state (Resources), `apps/server/src/background/schedules.ts`, and `apps/web/src/Automation.tsx` with its phone equivalent. Add the new host facts to the [host pairing review](HOST-PAIRING-REVIEW.md).
 - **Stage 3:** `usage.accounts` and the `costUsd` values in result events, for which a stored daily summary is new; `apps/server/src/cli.ts`, reusing `agentThreads` start and status logic. Check whether `accountId` matches across hosts before relying on it.
 
 Every string goes through `t()` with an Indonesian translation, and the phone gets the same sheet, labels and actions. Update [Agents and routing](AGENT-ROUTING.md), [Security](../SECURITY.md) and [Automation](AUTOMATION.md) as each stage lands.
 
 ## Acceptance
-
-### Stage 1
-
-- **Representative task:** from a thread on a Mac, a person continues a Linux-only failure on a Linux host where the project is missing. They confirm once, with no pasted context or manual clone, then read the result and bring it back. Repeat from a phone.
-- No uncommitted file reaches the other host, its existing checkout is unchanged, and a secret planted in a thread does not appear in what is sent.
-- A viewer device is refused on both hosts, and a paired host cannot reach clone, package or start methods.
-- A refused, offline or failing host leaves the original unchanged, with no partial clone and no half-started thread. A retried start creates one thread.
-- A running thread cannot be continued until it is stopped, and a project with no remote explains why.
-- A provider or model missing on the other host is shown before starting.
-- Archiving needs a tap and Undo restores it.
 
 ### Stage 2
 

@@ -1,4 +1,5 @@
 import { ThreadsStartedCard } from './StartedThreads'
+import { ContinuedCard } from './ContinuedCard'
 import { ThemeCard } from '../../../theme/ThemeCard'
 import { InteractiveContent } from '../../../interactive/InteractiveContent'
 import { t as translate, useLanguage } from '../../../i18n'
@@ -264,6 +265,8 @@ export function EventRow({
           {translate('You requested a stop for {0}', { 0: e.command })}
         </div>
       )
+    case 'continued':
+      return <ContinuedCard event={e} sessionId={sessionId} taskId={taskId} />
     case 'file-restore':
       return (
         <div className={TURN_END_CLASS} role="status">
