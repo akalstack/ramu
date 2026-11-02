@@ -341,6 +341,8 @@ export class LearningService {
       scopeDir,
       `${provider}-${accountId === 'default' ? 'default' : createHash('sha256').update(accountId).digest('hex').slice(0, 12)}`,
     )
+    // The export used to be one folder per scope; links into it are moved to the new folder below.
+    for (const legacy of ['skills', '.claude-plugin']) rmSync(join(scopeDir, legacy), { recursive: true, force: true })
     const skillsDir = join(dir, 'skills'),
       manifest = join(dir, '.claude-plugin', 'plugin.json'),
       info = `${JSON.stringify({ name: 'ramu-managed', description: 'Skills managed by Ramu', version: '1.0.0' })}\n`

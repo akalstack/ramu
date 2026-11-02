@@ -109,30 +109,30 @@ export interface Task {
   /** Naming failed during this thread's initial workspace creation. */
   branchNamingFallback?: boolean | null
   /**
-   * The thread's unfinished goal, for list views.; null
+   * The thread's unfinished goal, for list views. Absent from older hosts, which means unknown, not "no goal"; null
    * means there is none (or it is complete).
    */
   goalState?: TaskGoalSummary | null
   /** Unresolved requests from main sessions, including forwarded helper input. Older hosts omit this. */
   inputSummary?: ThreadInputSummary | null
-  /** Independent helper work after the parent goes idle.; null means none. */
+  /** Independent helper work after the parent goes idle. Absent from older hosts (unknown); null means none. */
   helperSummary?: ThreadHelperSummary | null
-  /** Settled advisor consultations nobody has opened yet; absent when none. */
+  /** Settled advisor consultations nobody has opened yet; absent when none or on an older host. */
   unreadAdvice?: number
   /**
    * When the host read this task, never moving backwards. A client keeps the newer of two reads of the same task, so a
-   * late response cannot bring back stopped or completed work..
+   * late response cannot bring back stopped or completed work. Absent from older hosts.
    */
   snapshotAt?: number
-  /** Latest root execution outcome. */
+  /** Latest root execution outcome; absent when an older host cannot supply it. */
   executionState?: AgentSessionState
   /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */
   kind?: 'library-review' | null
-  /** The schedule whose run created this thread.; null for every other thread. */
+  /** The schedule whose run created this thread. Absent on older hosts; null for every other thread. */
   scheduleId?: string | null
   /**
    * Who started this thread, when an agent or one Home prompt did: the starting thread (null for Home) and how many
-   * threads started together. Absent for threads a person started.
+   * threads started together. Absent on older hosts and for threads a person started.
    */
   startedFrom?: ThreadOrigin | null
 }

@@ -1,6 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { canEditVerify, outcomeKey, verifyDraft, verifyView, VERIFY_LIMIT } from '../src/runtime/goalVerify.ts'
+import {
+  canEditVerify,
+  GOAL_VERIFY_METHOD,
+  outcomeKey,
+  verifyDraft,
+  verifyView,
+  VERIFY_LIMIT,
+} from '../src/runtime/goalVerify.ts'
 
 const goal = (extra = {}) => ({ objective: 'Ship it', status: 'active', reason: '', turns: 1, ...extra })
 

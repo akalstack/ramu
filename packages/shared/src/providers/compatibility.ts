@@ -9,7 +9,13 @@ export type CompatibilityStatus = 'supported' | 'limited' | 'incompatible' | 'un
 export type RuntimeKind = 'cli' | 'sdk' | 'app-server' | 'acp' | 'http'
 
 export type CompatibilityReason =
-  'in-range' | 'limited-range' | 'incompatible-range' | 'no-rule' | 'version-unknown' | 'version-unparsed'
+  | 'in-range'
+  | 'limited-range'
+  | 'incompatible-range'
+  | 'no-rule'
+  | 'newer-than-tested'
+  | 'version-unknown'
+  | 'version-unparsed'
 
 export interface CompatibilityRule {
   id: string
@@ -42,6 +48,8 @@ export interface CompatibilityResult {
   affects?: string[]
   recommend?: string
   evidence?: string
+  /** The newest supported release, when the observed one is newer. Providers update faster than Ramu can test them. */
+  testedVersion?: string
   /** When the runtime was observed, so a stale result stays visibly stale. */
   checkedAt?: string
 }
@@ -101,7 +109,31 @@ export function evaluateCompatibility(
     }
   }
   // Outside every rule, or a version style the rules cannot order: advisory only, normal protocol validation applies.
-  return { ...base, status: 'unverified', reason: unordered ? 'version-unparsed' : 'no-rule' }
+  if (unordered) return { ...base, status: 'unverified', reason: 'version-unparsed' }
+  const tested = newestSupported(rules)
+  return tested && order(version, tested) === 1
+    ? { ...base, status: 'unverified', reason: 'newer-than-tested', testedVersion: tested }
+    : { ...base, status: 'unverified', reason: 'no-rule' }
+}
+
+function newestSupported(rules: CompatibilityRule[]): string | undefined {
+  let newest: string | undefined
+  for (const rule of rules)
+    if (rule.status === 'supported' && rule.min && (!newest || order(rule.min, newest) === 1)) newest = rule.min
+  return newest
+}
+
+/** The one line a provider card shows, as a translation key and its values. */
+export function compatibilitySummary(result: CompatibilityResult): { key: string; values?: Record<string, string> } {
+  if (result.status === 'supported') return { key: 'Compatible with this Ramu release.' }
+  if (result.status === 'limited') return { key: 'Limited: some features are unavailable with this version.' }
+  if (result.status === 'incompatible') return { key: 'Incompatible with this Ramu release.' }
+  return result.reason === 'newer-than-tested' && result.testedVersion
+    ? {
+        key: 'Newer than the last version tested with this Ramu ({0}). It can still be used.',
+        values: { '0': result.testedVersion },
+      }
+    : { key: 'Unverified: no compatibility rule covers this version. It can still be used.' }
 }
 
 /** Problems that make a policy unsafe to ship: bad ranges, overlapping rules, and recommendations it would itself reject. */

@@ -30,9 +30,12 @@ export type GoalPausedBy = 'user' | 'provider-limit'
 export interface ChatGoal {
   id: string
   objective: string
-  /** `paused` covers both holds; `pausedBy` tells them apart. */
-  status: 'active' | 'completed' | 'blocked' | 'paused' | 'turn-limit'
-  /** Only meaningful while `status` is `paused`. Absent means the user paused it. */
+  /**
+   * `paused` covers both holds; `pausedBy` tells them apart. `waiting-provider` is the retired status for a limit hold:
+   * hosts and caches from before the merge still send it, so readers accept it (see `goalHold`), and Ramu never writes it.
+   */
+  status: 'active' | 'completed' | 'blocked' | 'paused' | 'turn-limit' | 'waiting-provider'
+  /** Only meaningful while `status` is `paused`. Absent means the user paused it, which is what every older paused goal was. */
   pausedBy?: GoalPausedBy
   turns: number
   reason: string

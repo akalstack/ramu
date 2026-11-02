@@ -47,6 +47,17 @@ describe('deviceStorage with the desktop bridge', () => {
     expect(b.setDeviceState).not.toHaveBeenCalled()
   })
 
+  it('adopts a value this window stored locally before it was shared, once', () => {
+    const legacy = memory({ 'ramu.layout.tools-rail': '340' })
+    const b = bridge()
+    const storage = createDeviceStorage(b, legacy)
+    expect(storage.getItem('ramu.layout.tools-rail')).toBe('340')
+    expect(b.setDeviceState).toHaveBeenCalledWith('ramu.layout.tools-rail', '340')
+    expect(legacy.getItem('ramu.layout.tools-rail')).toBeNull()
+    expect(storage.getItem('ramu.layout.tools-rail')).toBe('340')
+    expect(b.setDeviceState).toHaveBeenCalledTimes(1)
+  })
+
   it("prefers the value another window already shared over this window's old one", () => {
     const storage = createDeviceStorage(bridge({ 'ramu.search-view': 'tree' }), memory({ 'ramu.search-view': 'list' }))
     expect(storage.getItem('ramu.search-view')).toBe('tree')
@@ -67,9 +78,15 @@ describe('deviceStorage with the desktop bridge', () => {
     expect(seen).toHaveLength(2)
   })
 
-  it('lists keys by prefix', () => {
-    const storage = createDeviceStorage(bridge({ 'ramu.layout.tools-rail': '1', 'ramu.search-view': 'list' }), null)
-    expect(storage.keys('ramu.layout.')).toEqual(['ramu.layout.tools-rail'])
+  it('lists keys by prefix across shared and old local values', () => {
+    const storage = createDeviceStorage(
+      bridge({ 'ramu.layout.tools-rail': '1', 'ramu.search-view': 'list' }),
+      memory({ 'ramu.layout.react-resizable-panels:scm': '{}' }),
+    )
+    expect(storage.keys('ramu.layout.').sort()).toEqual([
+      'ramu.layout.react-resizable-panels:scm',
+      'ramu.layout.tools-rail',
+    ])
   })
 })
 

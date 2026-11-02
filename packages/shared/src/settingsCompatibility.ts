@@ -58,7 +58,7 @@ export function portableSettings(
   prefix = '',
 ): SharedSetting[] {
   return Object.entries(schema.properties ?? {}).flatMap(([key, field]) => {
-    if (['__proto__', 'constructor', 'prototype'].includes(key)) return []
+    if (['messageBehaviorVersion', '__proto__', 'constructor', 'prototype'].includes(key)) return []
     const path = prefix ? `${prefix}.${key}` : key
     const value = preferences[key]
     if (field.type === 'object' && field.properties)

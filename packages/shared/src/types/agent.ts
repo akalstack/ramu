@@ -168,14 +168,14 @@ export interface ThreadHelperSummary {
 export interface ThreadInputSummary {
   count: number
   approvals: number
-  /** Connector requests among `count`. */
+  /** Connector requests among `count`; absent from older hosts, where non-approvals cannot be told apart. */
   connectors?: number
   /** At most three requests, approvals first. Open the thread to review all requests. */
   requests: ThreadInputRequest[]
 }
 
 export interface AgentSessionInfo {
-  /**; null means no unresolved request. */
+  /** Absent on older hosts; null means no unresolved request. */
   inputSummary?: ThreadInputSummary | null
   /** Overview-only fields; native helpers remain owned by their parent provider session. */
   pendingInput?: boolean

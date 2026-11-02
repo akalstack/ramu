@@ -26,6 +26,7 @@ import {
 import { DeviceState } from './deviceState'
 import { DesktopVoice } from './voice'
 import { voiceErrorMessage } from '@ramu/shared/voice/bridge'
+import { partitionHostEntries } from './partitionStorage'
 import { newerVersion } from '@ramu/shared/version'
 import { DesktopUpdater } from './desktopUpdater'
 import { runtimeBuild } from '@ramu/server/build'
@@ -53,6 +54,7 @@ import {
   powerMonitor,
   nativeTheme,
   net,
+  WebContentsView,
   type Session,
   type WebContents,
 } from 'electron'
@@ -556,6 +558,7 @@ async function main() {
     const endpoint = computers.endpoint(id)
     return readHostOverview((operation) => runtimeInvoke(endpoint, operation, [], { timeoutMs: 10000 }))
   })
+  const rendererUrl = () => process.env.ELECTRON_RENDERER_URL
   /** Opens a host in the existing shell, preserving its store and tabs. */
   const openComputer = (id: string, destination: HostDestination = { kind: 'host' }) => {
     if (!computers.exists(id)) throw new Error(t('That host is no longer saved'))
@@ -1254,6 +1257,56 @@ async function main() {
     if (key === 'appearance') applyAppearance()
   })
 
+  const legacyStorage: Record<string, Record<string, string>> = {}
+  for (const saved of servers.list()) {
+    if (deviceState.snapshot()[`ramu.storage-migrated.${saved.id}`]) continue
+    const migration = new WebContentsView({
+      webPreferences: {
+        preload: join(import.meta.dirname, '../preload/index.cjs'),
+        additionalArguments: ['--ramu-storage-migration'],
+        session: session.fromPartition(`persist:ramu-computer-${saved.id}`),
+        contextIsolation: true,
+        sandbox: true,
+        nodeIntegration: false,
+      },
+    })
+    secure(migration.webContents.session)
+    try {
+      const devUrl = rendererUrl()
+      if (devUrl) {
+        const url = new URL(devUrl)
+        url.searchParams.set('ramu-storage-migration', '1')
+        await migration.webContents.loadURL(url.toString())
+      } else
+        await migration.webContents.loadFile(join(import.meta.dirname, '../renderer/index.html'), {
+          query: { 'ramu-storage-migration': '1' },
+        })
+      const entries = (await migration.webContents.executeJavaScript(
+        'Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)]))',
+      )) as Record<string, string>
+      legacyStorage[saved.id] = partitionHostEntries(saved.id, entries)
+    } catch (error) {
+      console.warn(`Could not migrate storage for ${saved.id}`, error)
+    } finally {
+      migration.webContents.close()
+    }
+  }
+  ipcMain.on('ramu:legacy-storage', (event) => {
+    event.returnValue =
+      event.sender === win.webContents && event.senderFrame === event.sender.mainFrame ? legacyStorage : {}
+  })
+  ipcMain.on('ramu:legacy-storage:imported', (event, host: unknown) => {
+    if (
+      event.sender !== win.webContents ||
+      event.senderFrame !== event.sender.mainFrame ||
+      typeof host !== 'string' ||
+      !legacyStorage[host]
+    )
+      return
+    deviceState.set(`ramu.storage-migrated.${host}`, '1')
+    delete legacyStorage[host]
+  })
+
   if (process.env.ELECTRON_RENDERER_URL) {
     // The dev server versions its pre-bundled packages (`?v=<hash>`) and answers a stale one with 504 "Outdated Optimize
     // Dep". Modules kept from earlier runs in this profile's HTTP cache hold old hashes, so start every dev run clean.
@@ -1287,6 +1340,8 @@ async function main() {
   // Keep the bridge available until windows have closed; renderers can still invoke it during before-quit.
   app.on('will-quit', () => {
     ipcMain.removeHandler('ramu:invoke')
+    ipcMain.removeAllListeners('ramu:legacy-storage')
+    ipcMain.removeAllListeners('ramu:legacy-storage:imported')
     ipcMain.removeAllListeners('ramu:device-state')
     ipcMain.removeAllListeners('ramu:device-state:set')
   })

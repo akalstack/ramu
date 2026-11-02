@@ -66,6 +66,7 @@ export class ProjectActions {
   }
 
   private write(projectId: string, state: SavedActions) {
+    // One durable replacement also migrates legacy local actions without deleting their archive.
     this.workspace.setAppState(`project-action-settings:${projectId}`, savedActions.parse(state))
   }
 
@@ -76,7 +77,7 @@ export class ProjectActions {
     const hidden = new Set(state.hidden)
     const local = uniqueActions.parse([
       ...actions.filter((action) => !action.source),
-      // Callers see only visible actions, so a save must not delete hidden work.
+      // An older client only sees visible actions. Its save must not delete hidden work.
       ...state.local.filter((action) => hidden.has(action.id) && !supplied.has(action.id)),
     ])
     this.write(projectId, { ...state, local })

@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm'
 import { createRequire } from 'node:module'
 import ts from 'typescript'
 import { learnedRoutes } from '@ramu/shared/hostProof'
+import { hostOfUrl, networkName } from '@ramu/shared/networkLabel'
 const require = createRequire(import.meta.url)
 const computer = {
   id: 'mac',
@@ -14,8 +15,6 @@ const computer = {
   routes: ['http://100.99.224.30:7788'],
 }
 const copy = {
-  hostChangeAddress: 'Change address',
-  hostAddressHelp: 'Choose a saved address or enter another.',
   pairAddress: 'Server address',
   nearbyChecking: 'Checking…',
   nearbyUseAddress: 'Use this address for {0}',
@@ -60,8 +59,10 @@ function harness(os, reviewAddress) {
     'react/jsx-runtime': require('react/jsx-runtime'),
     'react-native': { Platform: { OS: os }, View: 'View', TextInput: 'TextInput', Pressable: 'Pressable' },
     '@ramu/shared/hostProof': { learnedRoutes },
+    '@ramu/shared/networkLabel': { hostOfUrl, networkName },
+    'lucide-react-native': { Check: 'Check' },
     '../runtime/store': { useStore: () => ({ reviewAddress, retry: (id) => retries.push(id) }) },
-    '../i18n': { useT: () => copy, fill: (text, value) => text.replace('{0}', value) },
+    '../i18n': { useT: () => copy, useSay: () => (text) => text, fill: (text, value) => text.replace('{0}', value) },
     '../theme': {
       useTheme: () => ({ c: {} }),
       font: { caption: 12, body: 15 },
@@ -103,7 +104,7 @@ const find = (tree, type, check = () => true) => nodes(tree).find((node) => node
 const settle = () => new Promise((resolve) => setImmediate(resolve))
 
 for (const os of ['ios', 'android']) {
-  test(`${os}: Change address offers saved LAN/VPN routes and applies a verified choice without pairing`, async () => {
+  test(`${os}: Switch network offers saved LAN/VPN routes and applies a verified choice in one tap without pairing`, async () => {
     const calls = []
     let finish
     const h = harness(os, (...args) => {
@@ -113,14 +114,15 @@ for (const os of ['ios', 'android']) {
       })
     })
     let tree = h.render()
-    const vpn = find(tree, 'Pressable', (props) => props.children.props.children === computer.routes[0])
+    const route = new URL(computer.routes[0]).hostname
+    const vpn = find(tree, 'Pressable', (props) =>
+      nodes(props.children[0]).some((node) => node.props?.children === route),
+    )
     assert.ok(vpn)
+    vpn.props.onPress()
     vpn.props.onPress()
     tree = h.render()
     assert.equal(find(tree, 'TextInput').props.value, computer.routes[0])
-    const apply = find(tree, 'Button')
-    apply.props.onPress()
-    apply.props.onPress()
     assert.equal(calls.length, 1)
     assert.equal(calls[0][0], computer.id)
     assert.equal(calls[0][1], computer.routes[0])

@@ -23,6 +23,7 @@ import { SqliteBackgroundTerminalHistory } from './workspace/backgroundTerminalH
 import { ToolRegistry } from './agent/toolRegistry'
 import { ExternalSkills } from './memory/externalSkills'
 import { crossedSwitchAt, LearningService } from './memory/learning'
+import { migrateLearningDefault } from './memory/learningDefault'
 import { SettingsStore } from './settings/settingsStore'
 import { SharedMcpStorage } from './mcp/storage'
 import { SharedMcpService } from './mcp/service'
@@ -59,6 +60,7 @@ import {
   type InvokeRequest,
 } from '@ramu/contracts'
 import { loadConfig } from './config'
+import { TokenStore } from './remote/auth'
 import { DeviceStore, isHostAccess, validLifetime, type DeviceInfo } from './remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
 import { PermissionRequests } from './remote/permissionRequests'
@@ -119,6 +121,7 @@ const config = loadConfig()
 const { userData, socketPath } = config
 mkdirSync(userData, { recursive: true })
 // Network clients present either their own device token (see `ramu pair`) or the older shared token.
+const remoteTokens = config.allowLegacyToken ? new TokenStore(config.tokenPath) : null
 const devices = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
 const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
 const pairingRequests = new PairingRequests({ devices, hostId })
@@ -139,6 +142,7 @@ const remoteAccess = new RemoteAccess({
         )
       : [],
   browserOrigins: config.browserOrigins,
+  ...(remoteTokens ? { legacyToken: () => remoteTokens.current() } : {}),
 })
 const presence = new HostPresence(join(userData, 'presence.json'), (id) => devices.presenceKey(id))
 const stopPresenceNetwork = runtimeNetwork.subscribe(() => {
@@ -267,7 +271,11 @@ const root = process.env.RAMU_WORKTREES ?? join(homedir(), '.ramu', 'worktrees')
 mkdirSync(root, { recursive: true })
 const workspace = new Workspace(db, root)
 configureMcpSharing(() => workspace.getAppState<McpSharing>(MCP_SHARING_KEY, {}))
-workspace.settingsStore = new SettingsStore(userData)
+migrateLearningDefault(workspace)
+workspace.settingsStore = new SettingsStore(userData, {
+  preferences: workspace.getAppState('app-preferences', {}),
+  models: workspace.getAppState('model-preferences', null),
+})
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./providers/fakeAgent') : null
 const browserAccessEpochs = new Map<string, number>()
 let reviews!: ReviewService
@@ -1446,7 +1454,7 @@ async function networkMethod(method: string, args: unknown[]) {
   if (method === 'network.configure') {
     if (config.listen) throw new Error('Network access was set with --listen; change it there')
     const input = args[0] as { discoverable?: unknown } | null
-    // A request that leaves the choice out keeps the saved one rather than switching it off.
+    // A client that predates discovery leaves the choice out; that keeps the saved one rather than switching it off.
     const next = validateNetworkSetting(
       input && typeof input === 'object' && input.discoverable === undefined
         ? { ...input, discoverable: network.discoverable }

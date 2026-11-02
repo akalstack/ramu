@@ -4,7 +4,7 @@ import type { Store } from './hostStorage'
 /**
  * Device-wide UI state: panel widths, split or inline diffs, search view mode and the like. Every host has its own
  * window and its own web storage, so these values are kept by the desktop shell and shared with all windows; the page
- * only sees them through this object. Without that bridge (tests, a plain browser) it uses `local`.
+ * only sees them through this object. Without that bridge (tests, a plain browser) it falls back to `legacy`.
  */
 export interface DeviceStorage {
   getItem(key: string): string | null
@@ -18,14 +18,14 @@ export interface DeviceStorage {
 
 type Bridge = Pick<RamuBridge, 'deviceState' | 'setDeviceState' | 'on'>
 
-export function createDeviceStorage(bridge: Bridge | undefined, local: Store | null): DeviceStorage {
+export function createDeviceStorage(bridge: Bridge | undefined, legacy: Store | null): DeviceStorage {
   const listeners = new Set<(key: string) => void>()
   const notify = (key: string) => listeners.forEach((listener) => listener(key))
   const shared = bridge && typeof bridge.setDeviceState === 'function' ? bridge : undefined
   const values = new Map(Object.entries(shared?.deviceState ?? {}))
-  const localKeys = () =>
-    local
-      ? Array.from({ length: local.length }, (_, index) => local.key(index)).filter((key): key is string => !!key)
+  const legacyKeys = () =>
+    legacy
+      ? Array.from({ length: legacy.length }, (_, index) => legacy.key(index)).filter((key): key is string => !!key)
       : []
   const safely = <T>(fn: () => T, fallback: T): T => {
     try {
@@ -47,27 +47,38 @@ export function createDeviceStorage(bridge: Bridge | undefined, local: Store | n
   listen()
   return {
     getItem(key) {
-      if (!shared) return safely(() => local?.getItem(key) ?? null, null)
-      return values.get(key) ?? null
+      if (!shared) return safely(() => legacy?.getItem(key) ?? null, null)
+      const current = values.get(key)
+      if (current !== undefined) return current
+      // First sight of a value this window wrote before it was shared: adopt it, so nothing resets on upgrade.
+      const old = safely(() => legacy?.getItem(key) ?? null, null)
+      if (old === null) return null
+      values.set(key, old)
+      shared.setDeviceState(key, old)
+      safely(() => legacy?.removeItem(key), undefined)
+      return old
     },
     setItem(key, value) {
       if (shared) {
         if (values.get(key) === value) return
         values.set(key, value)
         shared.setDeviceState(key, value)
-      } else safely(() => local?.setItem(key, value), undefined)
+        safely(() => legacy?.removeItem(key), undefined)
+      } else safely(() => legacy?.setItem(key, value), undefined)
       notify(key)
     },
     removeItem(key) {
       if (shared) {
         values.delete(key)
         shared.setDeviceState(key, null)
-      } else safely(() => local?.removeItem(key), undefined)
+      }
+      safely(() => legacy?.removeItem(key), undefined)
       notify(key)
     },
     keys(prefix) {
-      const found = shared ? [...values.keys()] : localKeys()
-      return found.filter((key) => key.startsWith(prefix))
+      const found = new Set<string>(shared ? values.keys() : [])
+      for (const key of legacyKeys()) found.add(key)
+      return [...found].filter((key) => key.startsWith(prefix))
     },
     subscribe(listener) {
       listeners.add(listener)

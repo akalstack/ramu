@@ -154,6 +154,7 @@ export class RemoteBackend implements ComputerBackend {
     void this.hub.send(this.deviceId, { kind: 'release', target }).catch(() => {})
   }
 
+  /** An owner on an older desktop answers nothing, which reads as no detection. */
   async localInputActive(target: ComputerTarget): Promise<boolean> {
     try {
       return (await this.hub.send<unknown>(this.deviceId, { kind: 'localInput', target })) === true

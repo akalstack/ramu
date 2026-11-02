@@ -225,6 +225,11 @@ describe('saved reviews and live workspaces', () => {
     expect(service.get(id)).toEqual(saved)
     git('checkout', '--detach')
     expect((await service.branches(id))[0]?.currentBranch).toMatch(/^HEAD \([a-f0-9]{8}\)$/)
+    // Old reviews still resolve a target without rewriting their saved data.
+    const legacy = JSON.parse(JSON.stringify(saved))
+    delete legacy.roots[0].targetBranch
+    db.prepare('UPDATE change_reviews SET data=? WHERE id=?').run(JSON.stringify(legacy), id)
+    expect((await service.branches(id))[0]?.targetBranch).toBe('main')
   })
   it('preserves the worktree target from capture even if its binding changes', async () => {
     const binding = { ...ws.fileBindings(review.taskId)[0]!, baseRef: 'release' }

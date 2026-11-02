@@ -434,6 +434,25 @@ describe('Ramu goals', () => {
       }[]
     ).map((row) => JSON.parse(row.event).goal?.status)
     expect(statuses).toContain('paused')
+    expect(statuses).not.toContain('waiting-provider')
+  })
+
+  it('reads a goal an older host or release saved as waiting-provider as a limit hold', async () => {
+    service.setGoal(id, 'Login')
+    const goal = service.getGoal(id)!
+    // What a release before the merge would have written for a goal at a limit.
+    db.prepare(
+      'INSERT INTO agent_events (session_id, seq, event) VALUES (?, (SELECT MAX(seq) + 1 FROM agent_events WHERE session_id = ?), ?)',
+    ).run(
+      id,
+      id,
+      JSON.stringify({ kind: 'goal', goal: { ...goal, status: 'waiting-provider', retryAt: Date.now() + 60_000 } }),
+    )
+    const raw = db
+      .prepare("SELECT event FROM agent_events WHERE json_extract(event, '$.kind') = 'goal' ORDER BY seq DESC LIMIT 1")
+      .get() as { event: string }
+    expect(JSON.parse(raw.event).goal.status).toBe('waiting-provider')
+    expect(service.getGoal(id)).toMatchObject({ status: 'paused', pausedBy: 'provider-limit' })
   })
 
   it('registers provider-neutral goal tools and reports tool errors without throwing', async () => {

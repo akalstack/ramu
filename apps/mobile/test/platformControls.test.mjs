@@ -2663,7 +2663,7 @@ for (const scenario of ['offline', 'missing', 'available', 'changed-owner']) {
 }
 
 for (const os of ['ios', 'android']) {
-  test(`${os} native profile saves commit and Forget removes recovery copies`, async () => {
+  test(`${os} native profile migration and Forget remove legacy and recovery copies only after committing`, async () => {
     const files = new Map()
     class File {
       constructor(...parts) {
@@ -2691,10 +2691,14 @@ for (const os of ['ios', 'android']) {
       }
     }
     const previous = { drafts: { 'a:new:p': 'Original draft' }, computers: [{ id: 'a' }] }
+    files.set('document/ramu.mobile.v1.json', JSON.stringify(previous))
+    // Interrupted first migration leaves its original legacy source intact.
+    files.set('document/ramu.mobile.v1.0.json', '{interrupted')
     const storage = load('storage/index.ts', os, {
       'expo-file-system': { File, Paths: { document: 'document' } },
       './localCommit': localCommitStorage,
     })
+    assert.deepEqual(JSON.parse(JSON.stringify(storage.readLocal({}))), previous)
     storage.saveAppearance('dark')
     assert.equal(storage.readAppearance(), 'dark')
     storage.saveTextSize('larger')
@@ -2704,6 +2708,7 @@ for (const os of ['ios', 'android']) {
     storage.contentStorage.setItem('test.states', 'state')
     assert.equal(storage.contentStorage.getItem('test.states'), 'state')
     await storage.writeLocal(previous)
+    assert.equal(files.has('document/ramu.mobile.v1.json'), false)
     const saved = { ...previous, drafts: { ...previous.drafts, 'a:saved-messages': 'Saved library' } }
     await storage.writeLocal(saved)
     assert.deepEqual(JSON.parse(JSON.stringify(storage.readLocal({}))), saved)
@@ -3298,6 +3303,7 @@ for (const os of ['ios', 'android']) {
         branchPrefix: 'team/',
         branchNaming: 'semantic',
         branchInstructions: '',
+        branchNameControls: true,
         worktreeUnavailable: null,
       }),
       createChat: async (input) => {

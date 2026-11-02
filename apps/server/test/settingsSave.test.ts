@@ -15,7 +15,7 @@ it('reuses discovered models across ordinary saves and refreshes them for UI and
   vi.stubEnv('RAMU_FAKE_AGENT', '0')
   const discovery = vi.spyOn(catalog, 'discoverCatalogs').mockResolvedValue(catalog.fakeCatalogs())
   const directory = mkdtempSync(join(tmpdir(), 'ramu-settings-save-'))
-  const store = new SettingsStore(directory)
+  const store = new SettingsStore(directory, { preferences: {}, models: null })
   const catalogs: CatalogService = new CatalogService({
     preferences: () => store.preferences(),
     catalog: () => catalogs.discoverCatalog(false),
@@ -47,7 +47,7 @@ it('reuses discovered models across ordinary saves and refreshes them for UI and
   try {
     let saved = await snapshot()
     expect(discovery).toHaveBeenCalledTimes(1)
-    store.set(undefined, recommendedSets(catalog.fakeCatalogs().slice(0, 1)))
+    store.set(undefined, recommendedSets([]))
     const generated = (await dispatcher.invoke('settings.models.get', [])) as ModelPreferences
     expect(generated.sets[0]!.generated).toBeDefined()
     expect(store.models()).toEqual(generated)

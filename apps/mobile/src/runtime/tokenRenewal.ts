@@ -17,7 +17,7 @@ export interface RenewalClient {
 /**
  * Asks the host for a fresh token, saves it durably, and only then starts using it: the host retires the old token
  * after the new one's first use, so a crash or a failed save leaves the old one working. Returns whether it rotated.
- * An offline host or a refused request simply leaves the current token in place.
+ * A host that predates renewal, an offline host or a refused request simply leaves the current token in place.
  */
 export async function renewCredential(
   client: RenewalClient,

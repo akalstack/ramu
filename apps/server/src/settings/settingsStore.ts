@@ -20,7 +20,7 @@ import { appPreferences, modelPreferences } from '../ipc/preferences'
 type Document = Record<string, unknown> & { models?: ModelPreferences | null }
 const MAX_BYTES = 2 * 1024 * 1024
 
-/** Host-owned user configuration. Runtime state stays in SQLite. */
+/** Host-owned user configuration. Runtime state and the migration archive stay in SQLite. */
 export class SettingsStore {
   private document: Document = {}
   private watcher?: FSWatcher
@@ -30,13 +30,20 @@ export class SettingsStore {
 
   constructor(
     directory: string,
+    legacy: { preferences: unknown; models: unknown },
     private warn = () => console.warn('Invalid settings.json; keeping the last valid settings.'),
   ) {
     this.path = join(directory, 'settings.json')
     this.document = this.validate({})
     mkdirSync(directory, { recursive: true })
-    if (!existsSync(this.path)) this.write(this.document)
-    else {
+    if (!existsSync(this.path)) {
+      try {
+        this.document = this.validate({ ...((legacy.preferences as object) ?? {}), models: legacy.models ?? null })
+      } catch {
+        this.warn()
+      }
+      this.write(this.document)
+    } else {
       try {
         this.document = this.read()
       } catch {
@@ -56,9 +63,17 @@ export class SettingsStore {
   private validate(value: unknown): Document {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid settings document')
     const raw = value as Document
+    // Existing provider setups may live in external CLI configuration. Preserve them conservatively; new empty
+    // installations get the integrated default. An explicit saved choice always wins.
+    const legacyBrowser =
+      raw.agentBrowser === undefined && Object.keys(raw).some((key) => key !== 'models')
+        ? { agentBrowser: { agentBrowser: 'provider', providerOverrides: {}, defaultProfileId: 'default' } }
+        : {}
     const preferences = appPreferences.parse({
       ...DEFAULT_APP_PREFERENCES,
       ...raw,
+      ...legacyBrowser,
+      ...(raw.messageBehaviorVersion === 4 ? {} : { busyMessageAction: 'steer', messageBehaviorVersion: 4 }),
     })
     const models = raw.models == null ? null : modelPreferences.parse(raw.models)
     return {

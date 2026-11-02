@@ -35,7 +35,7 @@ export interface PullRequestWatchStatus {
 
 export interface ForgeStatus {
   availability: ForgeAvailability
-  /** The hosting service, so a sign-in hint names the right one. Absent means GitHub. */
+  /** The hosting service, so a sign-in hint names the right one. Absent means GitHub (and on older hosts). */
   service?: 'github' | 'gitlab'
   /** The pull request for the checked-out branch, if one exists. */
   pullRequest: PullRequestInfo | null
@@ -152,7 +152,7 @@ export interface ForgeConnectionSummary {
   cli: 'no-cli' | 'signed-out' | 'signed-in'
   accounts: ForgeCliAccount[]
   checkedAt: number
-  /** Saved credentials. */
+  /** Saved credentials; absent from hosts that predate them. */
   saved?: ForgeSavedConnection[]
   /** `unavailable` means a locked or missing OS credential store: saving is blocked, existing CLI use is unaffected. */
   credentialStore?: 'not-checked' | 'available' | 'unavailable'

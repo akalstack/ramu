@@ -39,7 +39,7 @@ export interface SavedServer {
   enabled: boolean
   retryMode: 'events' | 'periodic'
   ssh?: SshRoute
-  /** The host's durable id, bound at pairing. */
+  /** The host's durable id, bound at pairing; absent when the host predates it. */
   hostId?: string
 }
 export interface PairedIdentity {

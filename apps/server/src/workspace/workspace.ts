@@ -89,7 +89,7 @@ export function slugify(s: string): string {
 
 type ProjectRow = Omit<Project, 'aliases' | 'description'> & { aliases: string; description: string }
 
-/** Aliases are stored as JSON; empty routing fields are left out. */
+/** Aliases are stored as JSON; omit empty routing fields so older clients see the original shape. */
 function projectOf(row: ProjectRow): Project {
   let aliases: string[] = []
   try {

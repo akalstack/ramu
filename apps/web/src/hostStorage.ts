@@ -3,7 +3,37 @@ import { ownHostId } from './hosts'
 /** What the layout and draft code needs from a storage area. `localStorage` and a host-scoped view both fit. */
 export type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'>
 
+/**
+ * Per-host state: anything keyed by an id that only means something on one host (chats, projects, workspaces) or that
+ * describes a host's own content (unread marks, drafts, the outbox, per-workspace layout). Device-wide choices such as
+ * panel widths live in `deviceStorage` instead; they are the same whichever host is shown.
+ */
+const PER_HOST_EXACT = new Set([
+  'ramu.unread',
+  'ramu.workspace.resume',
+  'ramu.outbox',
+  'ramu.saved-drafts', // Retain the old library storage when importing legacy host data.
+  'ramu.navigation-locations',
+  'ramu.last-project',
+])
+const PER_HOST_PREFIXES = [
+  'ramu.draft.',
+  'ramu.new-thread-workspace:',
+  'ramu.new-thread-agent:',
+  'ramu.last-action:',
+  'ramu.review-viewed:',
+  'ramu.layout.',
+]
+/** `ramu.layout.*` keys that are device-wide even though they share the prefix. */
+const DEVICE_LAYOUT = ['ramu.layout.tools-rail', 'ramu.layout.react-resizable-panels:']
+
+/** Whether a key written before hosts were namespaced belongs to the host that wrote it. */
+export const isPerHostKey = (key: string) =>
+  !DEVICE_LAYOUT.some((prefix) => key.startsWith(prefix)) &&
+  (PER_HOST_EXACT.has(key) || PER_HOST_PREFIXES.some((prefix) => key.startsWith(prefix)))
+
 const NAMESPACE = 'host:'
+const MARKER = 'ramu.host-storage'
 
 const allKeys = (store: Store) =>
   Array.from({ length: store.length }, (_, index) => store.key(index)).filter((key): key is string => key !== null)
@@ -23,14 +53,42 @@ export function hostStore(base: Store, host: string): Store {
   }
 }
 
+/**
+ * One-time move of keys written before namespacing. A window only ever stored its own host's state (each host has its
+ * own storage partition), so the keys go to that window's host, not necessarily the local one. Runs once per storage
+ * area, never overwrites a namespaced key, and leaves device-wide keys where they are.
+ */
+export function migrateLegacyHostKeys(base: Store, host: string): number {
+  if (base.getItem(MARKER) !== null) return 0
+  let moved = 0
+  const prefix = `${NAMESPACE}${host}:`
+  for (const key of allKeys(base)) {
+    if (key.startsWith(NAMESPACE) || !isPerHostKey(key)) continue
+    const value = base.getItem(key)
+    if (value !== null && base.getItem(prefix + key) === null) {
+      base.setItem(prefix + key, value)
+      moved++
+    }
+    base.removeItem(key)
+  }
+  base.setItem(MARKER, host)
+  return moved
+}
+
 let own: Store | null | undefined
-/** Storage for this window's host. */
+/** Storage for this window's host. Migrates old keys on first use, before anything reads them. */
 export function ownHostStore(): Store | null {
   if (own !== undefined) return own
   try {
     const base = globalThis.localStorage ?? null
     if (!base) return (own = null)
-    own = hostStore(base, ownHostId())
+    const host = ownHostId()
+    try {
+      migrateLegacyHostKeys(base, host)
+    } catch {
+      // A full or locked store keeps working under the new keys; old values are simply not carried over.
+    }
+    own = hostStore(base, host)
   } catch {
     own = null
   }
@@ -38,7 +96,10 @@ export function ownHostStore(): Store | null {
 }
 
 const others = new Map<string, Store>()
-/** Storage for any host: a namespaced view of this window's storage. */
+/**
+ * Storage for any host. The window's own host is `ownHostStore()` (with its migration); another host gets a namespaced
+ * view of this window's storage. Legacy partition content is imported by the shell preload before these keys are read.
+ */
 export function storeForHost(host: string): Store | null {
   if (host === ownHostId()) return ownHostStore()
   const cached = others.get(host)

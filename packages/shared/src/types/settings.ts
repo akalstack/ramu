@@ -87,6 +87,7 @@ export interface AppPreferences extends WorkspaceDefaults {
   agentBrowser?: import('../browser').AgentBrowserPreferences
   /** Dragged width of the sidebar, in px. */
   sidebarWidth: number
+  messageBehaviorVersion: 4
   /** Starred models, as `provider:model-id`; they get their own tab and ⌘1–⌘9 shortcuts in the model picker. */
   favoriteModels: string[]
   /** Models listed per provider in pickers and dropdowns; a provider with no entry lists all of its models. */
@@ -180,4 +181,5 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   operator: false,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
   busyMessageAction: 'steer',
+  messageBehaviorVersion: 4,
 }

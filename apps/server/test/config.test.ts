@@ -1,5 +1,20 @@
-import { expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { authorized, loadToken, TokenStore } from '../src/remote/auth'
 import { defaultUserData, loadConfig, parseListen } from '../src/config'
+
+const dirs: string[] = []
+afterEach(() => {
+  dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true }))
+  dirs.length = 0
+})
+const tmp = () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu server '))
+  dirs.push(dir)
+  return dir
+}
 
 it('parses listen addresses and binds loopback by default', () => {
   expect(parseListen('7788')).toEqual({ host: '127.0.0.1', port: 7788 })
@@ -34,16 +49,40 @@ it('uses the desktop profile directory by default', () => {
   expect(defaultUserData('linux', { XDG_CONFIG_HOME: '/x' })).toBe('/x/Ramu')
 })
 
-it('requires explicit browser access, and validates credential lifetimes', () => {
+it('creates a private token, accepts only that token, and revokes on rotation', () => {
+  const path = join(tmp(), 'remote-token')
+  const token = loadToken(path)
+  expect(token).toMatch(/^[a-f0-9]{64}$/)
+  expect(statSync(path).mode & 0o777).toBe(0o600)
+  expect(loadToken(path)).toBe(token)
+  expect(authorized(`Bearer ${token}`, token)).toBe(true)
+  expect(authorized(`Bearer ${'0'.repeat(64)}`, token)).toBe(false)
+  expect(authorized(undefined, token)).toBe(false)
+  expect(authorized(token, token)).toBe(false)
+  const store = new TokenStore(path)
+  expect(store.current()).toBe(token)
+  const rotated = loadToken(path, true)
+  expect(rotated).not.toBe(token)
+  expect(store.current()).toBe(rotated)
+})
+
+it('replaces a malformed token file', () => {
+  const path = join(tmp(), 'remote-token')
+  writeFileSync(path, 'not-a-token')
+  expect(loadToken(path)).toMatch(/^[a-f0-9]{64}$/)
+})
+
+it('requires explicit legacy and browser access, and validates credential lifetimes', () => {
   const base = { RAMU_USER_DATA: '/tmp/ramu-profile' }
   expect(loadConfig(base)).toMatchObject({
+    allowLegacyToken: false,
     browserOrigins: [],
     deviceLifetimeMs: 90 * 86400000,
   })
   expect(loadConfig({ ...base, RAMU_DEVICE_TOKEN_DAYS: 'never' }).deviceLifetimeMs).toBeNull()
-  expect(loadConfig({ ...base, RAMU_BROWSER_ORIGINS: 'https://app.example' })).toMatchObject({
-    browserOrigins: ['https://app.example'],
-  })
+  expect(
+    loadConfig({ ...base, RAMU_ALLOW_LEGACY_TOKEN: '1', RAMU_BROWSER_ORIGINS: 'https://app.example' }),
+  ).toMatchObject({ allowLegacyToken: true, browserOrigins: ['https://app.example'] })
   for (const days of ['0', '-1', 'garbage', 'Infinity'])
     expect(() => loadConfig({ ...base, RAMU_DEVICE_TOKEN_DAYS: days })).toThrow()
   for (const origin of ['*', 'null', 'https://app.example/path', 'file:///tmp'])

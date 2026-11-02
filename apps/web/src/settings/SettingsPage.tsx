@@ -270,6 +270,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
     title: 'Discoverable on this network',
     words: 'nearby discovery bonjour mdns advertise visible host name find automatic lan',
   },
+  { section: 'remote', title: 'Network', words: 'choose select wifi lan vpn tailscale address interface listen' },
   { section: 'remote', title: 'Pair a device', words: 'pairing code link phone another host connect add' },
   { section: 'remote', title: 'Paired devices', words: 'revoke remove devices access token' },
   {

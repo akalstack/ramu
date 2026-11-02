@@ -95,7 +95,7 @@ export interface SharedMcpManagement {
     reason?: string
     toolCount?: number
   }[]
-  /** One entry per provider login set up for shared approvals. */
+  /** One entry per provider login set up for shared approvals. Absent on hosts that predate readiness. */
   readiness?: SharedMcpAccountReadiness[]
   uncertainCalls: number
   /** Servers a provider reported in an earlier thread that Ramu does not manage; only that provider has them. */

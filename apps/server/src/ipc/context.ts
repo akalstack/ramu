@@ -100,6 +100,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     return appPreferences.parse({
       ...DEFAULT_APP_PREFERENCES,
       ...saved,
+      ...(saved.messageBehaviorVersion === 4 ? {} : { busyMessageAction: 'steer', messageBehaviorVersion: 4 }),
     })
   }
   const savePreferences = (preferences: AppPreferences, models?: ModelPreferences) => {

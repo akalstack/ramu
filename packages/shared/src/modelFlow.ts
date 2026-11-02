@@ -11,7 +11,7 @@ import {
 } from './preferenceScopes'
 
 // Model selection flow across scopes. The execution host's own setting (`$models.defaultBarMode`) is the all-device
-// baseline, so the desktop keeps working unchanged. A host-stored mobile layer and a phone-local device layer
+// baseline, so desktop and older hosts keep working unchanged. A host-stored mobile layer and a phone-local device layer
 // override it, resolved by the shared preference resolver.
 
 export type ModelFlow = 'model' | 'effort'
@@ -38,7 +38,7 @@ export function applyLayerEdit(
   return { layer: { ...layer, fields: { ...layer.fields, [id]: incoming } }, applied: true }
 }
 
-/** What a host answers for the shared mobile layer. */
+/** What a host answers for the shared mobile layer; absent on older hosts. */
 export interface PreferenceLayersSnapshot {
   protocol: 1
   mobile: PreferenceLayer

@@ -38,6 +38,24 @@ const call = (method: string, args: unknown[], host?: string): Promise<any> =>
     )
   })
 
+// Import before application modules can read drafts or unread state. Existing shell values always win.
+if (!process.argv.includes('--ramu-storage-migration')) {
+  try {
+    const hosts = ipcRenderer.sendSync('ramu:legacy-storage') as Record<string, Record<string, string>>
+    for (const [host, entries] of Object.entries(hosts ?? {})) {
+      try {
+        for (const [key, value] of Object.entries(entries))
+          if (localStorage.getItem(key) === null) localStorage.setItem(key, value)
+        ipcRenderer.send('ramu:legacy-storage:imported', host)
+      } catch {
+        /* Retry this host on the next launch if storage is full or unavailable. */
+      }
+    }
+  } catch {
+    /* Older main processes have no partition migration. */
+  }
+}
+
 const bridge: RamuBridge = {
   hostId: 'local',
   invoke: (method, ...args) => call(method, args),

@@ -473,7 +473,13 @@ export class DeviceStore {
     // The first request that carries the token proves the device saved it.
     const claimed = record.unclaimed === true
     if (claimed) delete record.unclaimed
-    const expiry = record.expiresAt
+    // Older records get a bounded migration window based on their last use, never an immortal grant.
+    const expiry =
+      record.expiresAt === undefined
+        ? lifetime === null
+          ? null
+          : (record.lastSeenAt ?? record.createdAt) + lifetime
+        : record.expiresAt
     if (expiry !== null && expiry <= now) return null
     // The first request with a renewed token proves the client saved it: the old token stops after a short overlap.
     const promote = record.nextTokenHash === hash

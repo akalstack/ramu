@@ -25,7 +25,7 @@ it('keeps only the turning points of a goal', () => {
   const events = [
     event(goal()),
     event(goal({ turns: 1 })),
-    event(goal({ status: 'paused', pausedBy: 'provider-limit' })),
+    event(goal({ status: 'waiting-provider' })),
     event(goal({ status: 'active' })),
     event(goal({ status: 'paused' })),
     event(goal({ status: 'active' })),
@@ -92,10 +92,7 @@ it('tells a stall block from a block the agent asked for, and keeps usage limits
   const types = (...goals: ChatGoal[]) => [...goalChanges(goals.map(event)).values()].map((change) => change.type)
   expect(types(goal(), stalled)).toEqual(['set', 'stalled'])
   expect(types(goal(), asked)).toEqual(['set', 'blocked'])
-  expect(types(goal(), goal({ status: 'paused', pausedBy: 'provider-limit' }), goal({ status: 'paused' }))).toEqual([
-    'set',
-    'paused',
-  ])
+  expect(types(goal(), goal({ status: 'waiting-provider' }), goal({ status: 'paused' }))).toEqual(['set', 'paused'])
 })
 
 it('keeps a limit hold out of the history in its merged shape, and still shows a user pause that follows it', () => {
@@ -108,7 +105,7 @@ it('keeps a limit hold out of the history in its merged shape, and still shows a
   // The user resuming their own pause is shown; a user pause with no reason (an older event) still counts.
   expect(types(goal(), goal({ status: 'paused' }), goal())).toEqual(['set', 'paused', 'resumed'])
   // A goal from an older host moves into the merged shape without a row either way.
-  expect(types(goal(), goal({ status: 'paused', pausedBy: 'provider-limit' }), hold)).toEqual(['set'])
+  expect(types(goal(), goal({ status: 'waiting-provider' }), hold)).toEqual(['set'])
 })
 
 it('describes how a check ended and trims its output to the tail', () => {

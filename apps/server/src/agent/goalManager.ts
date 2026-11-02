@@ -9,7 +9,7 @@ import {
 } from '@ramu/shared/types'
 import { isOver, peakFor } from '@ramu/shared/providers/routing'
 import { STALL_REASON } from '@ramu/shared/chat/goalHistory'
-import { goalContinues, isLimitHold } from '@ramu/shared/chat/goalHold'
+import { goalContinues, isLimitHold, normalizeGoal } from '@ramu/shared/chat/goalHold'
 import { goalContinuation } from './goals'
 import { changedSince, evidenceProblem, fingerprintOf, turnActivity } from './goalEvidence'
 import type { GoalProbes, WorkspaceSnapshot } from './goalProbes'
@@ -85,7 +85,8 @@ export class GoalManager {
         "SELECT event FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'goal' ORDER BY seq DESC LIMIT 1",
       )
       .get(id) as { event: string } | undefined
-    return row ? (JSON.parse(row.event) as Extract<AgentEvent, { kind: 'goal' }>).goal : null
+    // Events saved before the status merge still say `waiting-provider`; they read as a limit hold.
+    return row ? normalizeGoal((JSON.parse(row.event) as Extract<AgentEvent, { kind: 'goal' }>).goal) : null
   }
 
   goalPreferences() {

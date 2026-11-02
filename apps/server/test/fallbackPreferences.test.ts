@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { createDispatcher, type Services } from '../src/ipc'
+import { createDispatcher, migrateChains, type Services } from '../src/ipc'
 import { configureProviderBinaries } from '../src/providers/providerBinaries'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 
@@ -30,4 +30,22 @@ it('defaults fallback to only at the limit and preserves saved thresholds', () =
     dispatcher.close()
     configureProviderBinaries({})
   }
+})
+
+it('turns lists saved per provider into one order led by Claude Code', () => {
+  const codex = { id: 'c', provider: 'codex', model: 'gpt', effort: null }
+  expect(
+    migrateChains({
+      switchAt: 90,
+      returnAfterReset: true,
+      chains: { codex: [{ ...codex, provider: 'claude-code', model: 'opus' }], 'claude-code': [codex] },
+    }),
+  ).toEqual({
+    switchAt: 90,
+    returnAfterReset: true,
+    order: [{ id: 'migrated-claude-code', provider: 'claude-code', model: '', effort: null }, codex],
+  })
+  expect(migrateChains({ switchAt: null, chains: {} })).toEqual({ switchAt: null })
+  const current = { switchAt: null, order: [codex] }
+  expect(migrateChains(current)).toBe(current)
 })

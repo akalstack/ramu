@@ -14,7 +14,7 @@ export function summarizeInputs(requests: ThreadInputRequest[]): ThreadInputSumm
 }
 
 /**
- * Per-kind pending counts; requests of no known kind are `other`
+ * Per-kind pending counts. An older host reports only approvals and a total, so its remaining requests are `other`
  * rather than guessed to be questions.
  */
 export function describeInputCounts(summary: ThreadInputSummary): {

@@ -12,10 +12,12 @@ export interface ListenAddress {
 export interface ServerConfig {
   userData: string
   deviceLifetimeMs: number | null
+  allowLegacyToken: boolean
   browserOrigins: string[]
   socketPath: string
   /** Optional authenticated TCP listener for clients on other machines. */
   listen: ListenAddress | null
+  tokenPath: string
   /** Paired devices (per-device tokens and pending pairing codes). */
   devicesPath: string
   /** `--discoverable` / RAMU_DISCOVERABLE=1: advertise a command-line `--listen` to nearby devices. */
@@ -69,10 +71,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   return {
     userData,
     deviceLifetimeMs,
+    allowLegacyToken: env.RAMU_ALLOW_LEGACY_TOKEN === '1',
     browserOrigins,
     socketPath: env.RAMU_SOCKET || runtimeSocket(userData),
     listen,
     tls,
+    tokenPath: env.RAMU_TOKEN_FILE || join(userData, 'remote-token'),
     devicesPath: env.RAMU_DEVICES_FILE || join(userData, 'remote-devices.json'),
     networkPath: join(userData, 'network.json'),
     discoverable: env.RAMU_DISCOVERABLE === '1',

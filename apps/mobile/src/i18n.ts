@@ -44,9 +44,6 @@ const en = {
   pairAsking: 'Asking {0}…',
   pairAskConfirm: 'Allow this phone on {0} if it shows this number',
   nearbyReconnect: 'Connect to {0}',
-  hostChangeAddress: 'Change address',
-  hostAddressHelp:
-    'Choose a saved address or enter another. Ramu checks the host before switching. Your pairing and drafts stay saved.',
   nearbyChanged: 'Its address changed. Review the new one before continuing.',
   nearbyGone: 'That host is no longer visible. Pick another one or enter its address.',
   nearbyPlain: 'Not encrypted',
@@ -557,9 +554,6 @@ const id: typeof en = {
   pairAsking: 'Meminta {0}…',
   pairAskConfirm: 'Izinkan ponsel ini di {0} jika menampilkan angka ini',
   nearbyReconnect: 'Hubungkan ke {0}',
-  hostChangeAddress: 'Ubah alamat',
-  hostAddressHelp:
-    'Pilih alamat tersimpan atau masukkan alamat lain. Ramu memeriksa host sebelum beralih. Pairing dan draf Anda tetap tersimpan.',
   nearbyChanged: 'Alamatnya berubah. Periksa alamat barunya sebelum melanjutkan.',
   nearbyGone: 'Host itu tidak terlihat lagi. Pilih yang lain atau masukkan alamatnya.',
   nearbyPlain: 'Tidak terenkripsi',

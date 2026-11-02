@@ -119,6 +119,8 @@ export interface Computer {
   name: string
   local: boolean
   url: string | null
+  /** Other addresses this host proved it answers on, to switch networks. Saved on this device. */
+  routes?: string[]
   /** The SSH target when this computer is reached through a tunnel. */
   ssh?: string
   status: ComputerStatus

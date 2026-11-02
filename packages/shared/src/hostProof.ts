@@ -25,7 +25,7 @@ export type HostVerification =
   | { state: 'verified'; hostId: string; routes: string[] }
   /** The address answered, but not as the host this device paired with: do not send it the credential. */
   | { state: 'mismatch' }
-  /** Continuity cannot be proven, so pairing again is explicit. */
+  /** An older host that has no identity endpoint: continuity cannot be proven, so pairing again is explicit. */
   | { state: 'unsupported' }
   | { state: 'unreachable' }
 

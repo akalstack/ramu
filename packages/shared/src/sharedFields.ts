@@ -1,6 +1,6 @@
 // The preference fields the host's shared mobile layer can carry, each with the check an incoming or stored value must
 // pass. The host refuses any other field or value, and a client ignores an unreadable stored one, so a newer client can
-// add a field without a host or phone misreading it.
+// add a field without an older host or phone misreading it.
 import type { PreferenceEntry, PreferenceLayer, PreferenceValue } from './preferenceScopes'
 
 export const SHARED_MOBILE_FIELDS = {

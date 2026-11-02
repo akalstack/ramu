@@ -341,7 +341,7 @@ describe('run outcomes', () => {
     goal = { status: 'active', reason: '' }
     await service.tick(at('2026-10-12T00:00:00Z'))
     expect(service.runs(s.id)[0]?.status).toBe('running')
-    goal = { status: 'paused', pausedBy: 'provider-limit', reason: '' }
+    goal = { status: 'waiting-provider', reason: '' }
     await service.tick(at('2026-10-12T00:00:00Z'))
     expect(service.runs(s.id)[0]?.status).toBe('running')
     // The merged shape of the same hold: paused by a usage limit still runs; paused by the user does not.

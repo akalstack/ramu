@@ -235,13 +235,35 @@ export function migrateModelDefaults(value: ModelPreferences, defaults: ModelPre
   const old = value.sets.find((set) => set.id === 'recommended')
   const next = defaults.sets.find((set) => set.id === 'recommended')
   if (!old || !next) return value
-  const proven = old.generated ? old.generated.fingerprint === fingerprint(old) : fingerprint(old) === fingerprint(next)
+  const legacy = recommendedSets([]).sets[0]!
+  const oldNames = ['Light', 'Balanced', 'Deep', 'Advanced', 'Maximum']
+  const oldIds = ['light', 'balanced', 'deep', 'advanced', 'maximum']
+  const shortNames = ['Luna High', 'Sol Light', 'Sol Medium', 'Astra Light', 'Astra Medium']
+  const legacyMatch =
+    old.name === legacy.name &&
+    old.steps.length === legacy.steps.length &&
+    old.steps.every((step, index) => {
+      const expected = legacy.steps[index]!
+      return (
+        step.provider === expected.provider &&
+        step.model === expected.model &&
+        step.effort === expected.effort &&
+        ((step.id === expected.id &&
+          [expected.name, expected.name.replace(/ Low$/, ' Light'), shortNames[index]].includes(step.name)) ||
+          (step.id === oldIds[index] && step.name === oldNames[index]))
+      )
+    })
+  const proven = old.generated
+    ? old.generated.fingerprint === fingerprint(old)
+    : legacyMatch || fingerprint(old) === fingerprint(next)
   if (!proven) return value
   // An empty/offline catalog is not evidence that previously available providers disappeared.
   if (old.generated && !next.generated) return value
   const selectedHere = value.defaultSetId === old.id
   const selectedExists = next.steps.some((step) => step.id === value.defaultStepId)
-  const defaultStepId = selectedHere && !selectedExists ? defaults.defaultStepId : value.defaultStepId
+  const earlierDefault = !old.generated && value.defaultStepId === 'sol-medium'
+  const defaultStepId =
+    selectedHere && (!selectedExists || earlierDefault) ? defaults.defaultStepId : value.defaultStepId
   if (
     fingerprint(old) === fingerprint(next) &&
     JSON.stringify(old.generated) === JSON.stringify(next.generated) &&

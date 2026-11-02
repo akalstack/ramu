@@ -98,7 +98,7 @@ export default function Computers() {
                     style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s }}
                     onPress={() => setEditing(pc.id)}
                   >
-                    <T tone="accent">{t.hostChangeAddress}</T>
+                    <T tone="accent">{say('Switch network')}</T>
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"

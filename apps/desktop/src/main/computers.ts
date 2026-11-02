@@ -39,7 +39,7 @@ export interface ComputerDeps {
     options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<any>
   pair(url: string, code: string, deviceName: string): Promise<{ token: string; deviceId?: string; hostId?: string }>
-  /** Swaps a computer's token for a fresh one; null when it declines (no longer paired). */
+  /** Swaps a computer's token for a fresh one; null when it declines (an older host, or no longer paired). */
   renew(url: string, token: string): Promise<{ token: string } | null>
   /** Computers reached over SSH keep a tunnel; the registry asks for it before connecting. */
   ssh: Pick<SshComputers, 'ensure' | 'connect' | 'close' | 'closeAll'>
@@ -194,7 +194,7 @@ export class ComputerRegistry {
       const renewed = await this.deps.renew(endpoint.url, endpoint.token)
       if (renewed && !this.stopped && this.deps.servers.get(id)) this.deps.servers.rotate(id, renewed.token, now)
     } catch {
-      // Offline: keep the current token.
+      // Offline or an older host: keep the current token.
     }
   }
 

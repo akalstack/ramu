@@ -20,7 +20,7 @@ export function removalError(error: unknown): string {
     : message
 }
 
-/** Connection errors cannot. */
+/** An older host without managed commands can keep its existing deletion flow; connection errors cannot. */
 export async function readRemovalCommands(
   invoke: (method: 'term.background.list', taskId: string) => Promise<BackgroundTerminalInfo[]>,
   taskId: string,
