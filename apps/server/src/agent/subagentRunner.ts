@@ -1,4 +1,5 @@
 import type { TeammateMode } from '@ramu/shared/types'
+import type { CustomAgent } from '@ramu/shared/customAgents'
 import { redactSecrets } from '../memory/secrets'
 import { selectSubagentSettings } from './subagentSelection'
 import type { BackgroundAnalysis } from './backgroundAnalysis'
@@ -69,6 +70,10 @@ function teammatePreamble(mode: TeammateMode): string {
   return mode === 'review'
     ? "You are a teammate the person added to this thread, working beside its main agent (the lead). You are read-only: read the files and the lead's latest changes and reply with concrete findings, most important first. Do not edit files. When you have nothing to add, say so briefly."
     : 'You are a teammate the person added to this thread, taking over from its main agent (the lead), which waits while you work. Make the change asked for in this checkout, then hand back with a short summary of what you changed and what is left, so the lead can continue without re-reading everything.'
+}
+
+function customPreamble(agent: CustomAgent): string {
+  return `You are the custom agent "${agent.name}": ${agent.description}\n${agent.instructions}${agent.readOnly ? '\nYou are read-only: read and report, never edit files.' : ''}`
 }
 
 export class SubagentRunner {
@@ -316,6 +321,8 @@ export class SubagentRunner {
       // The note is informational; a helper still starts without it.
     }
     if (input.teammate) this.host.record(child.id, { kind: 'teammate', mode: input.teammate, name })
+    if (input.custom)
+      this.host.record(child.id, { kind: 'custom-agent', name: input.custom.name, readOnly: input.custom.readOnly })
     const run: ChildRun = {
       parentId,
       name,
@@ -338,6 +345,7 @@ export class SubagentRunner {
       name,
       agentType: input.type,
       taskType: 'ramu_agent',
+      ...(input.custom ? { agentType: `custom: ${input.custom.name}` } : {}),
       ...(input.teammate ? { teammate: input.teammate } : {}),
       childSessionId: child.id,
       status: 'running',
@@ -370,7 +378,7 @@ export class SubagentRunner {
       child.id,
       input.teammate
         ? `${teammatePreamble(input.teammate)}\n\n${context}${input.prompt}`
-        : `${SUBAGENT_PREAMBLE}\n\n${context}Task: ${input.description.trim()}\n\n${input.prompt}`,
+        : `${SUBAGENT_PREAMBLE}\n\n${input.custom ? `${customPreamble(input.custom)}\n\n` : ''}${context}Task: ${input.description.trim()}\n\n${input.prompt}`,
       null,
       true,
       [],

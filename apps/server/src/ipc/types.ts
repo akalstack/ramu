@@ -40,6 +40,7 @@ export interface Services {
   workspace: Workspace
   terminals: TerminalService
   resources?: import('../background/resources').ResourceService
+  customAgents?: import('../agent/customAgents').CustomAgentStore
   agents: AgentService
   schedules: ScheduleService
   pullRequestWatches?: PullRequestWatchService

@@ -50,6 +50,10 @@ Sub-agent cards show progress and transcripts; open one to inspect it, message i
 
 Each report reaches the lead as a message. After 4 reports without the person writing, the exchange pauses and says so; a message to either one continues it. A teammate idle between requests costs nothing, wakes when messaged, survives restarts, and stops with the thread or from the bar above the composer.
 
+## Custom agents
+
+**Settings → Workflows → Custom agents** keeps reusable agents on the host: a name, when to use it, instructions, an optional model and a read-only switch. **New agent** turns one sentence into a draft with a single bounded, tool-free call; nothing saves until the person saves it. The thread's agent sees each name and description in `ramu_agent` and passes the name as its type when a task fits; the helper card shows **custom: ‹name›**. A custom agent wins over a sub-agent type rule or a provider's own agent of the same name. Read-only narrows the thread's access and never widens it, and instructions reach the helper in its prompt, never by writing provider files. **Add teammate** can also start from a custom agent.
+
 ## Threads started by agents
 
 A main-thread agent can start threads the person owns, when asked for separate work: a follow-up in this project, the matching change in another project, or several parts in parallel. Unlike a helper, a started thread appears in the sidebar, keeps working on its own and does not stop with the thread that started it (`background/agentThreads.ts`).

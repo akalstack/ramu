@@ -14,6 +14,7 @@ const viewerMethods = new Set([
   'agent.searchMessages',
   'agent.scope',
   'agent.catalog',
+  'customAgents.list',
   'agent.providerHold',
   'agent.nextRoute',
   'agent.mcpStatus',

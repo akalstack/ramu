@@ -1190,6 +1190,16 @@ export interface RamuMethods {
   'agent.stopTask'(sessionId: string, agentId: string): void
   /** Sends a message to a sub-agent through the main agent (Claude SendMessage, Codex send_input). */
   'agent.messageTask'(sessionId: string, agentId: string, text: string): void
+  'customAgents.list'(): import('./customAgents').CustomAgent[]
+  'customAgents.save'(
+    input: Omit<import('./customAgents').CustomAgent, 'id' | 'updatedAt'> & { id?: string },
+  ): import('./customAgents').CustomAgent
+  'customAgents.delete'(id: string): void
+  /** Drafts a custom agent from one sentence; nothing is saved until the person saves it. */
+  'customAgents.draft'(
+    sentence: string,
+    settings: AgentSettings,
+  ): Omit<import('./customAgents').CustomAgent, 'id' | 'updatedAt' | 'model'>
   /** Adds a teammate: a second model the person chose, working in this thread. One per thread. */
   'agent.addTeammate'(
     sessionId: string,

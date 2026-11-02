@@ -347,6 +347,8 @@ type AgentEventBody =
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
   /** Recorded on a teammate's own session: how it works beside the lead. Review is read-only whatever the thread allows. */
   | { kind: 'teammate'; mode: TeammateMode; name: string }
+  /** Recorded on a helper's session when it runs a custom agent, so its read-only choice holds across restarts. */
+  | { kind: 'custom-agent'; name: string; readOnly: boolean }
   /** This thread continues on another host. The original stays and links to it. */
   | { kind: 'continued'; hostId: string; host: string; taskId: string; title: string }
   | { kind: 'background-terminal-stop'; terminalId: string; command: string }

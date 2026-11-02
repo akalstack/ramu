@@ -1,4 +1,6 @@
 import { terminalThreadRequest } from './background/agentThreads'
+import { CustomAgentStore } from './agent/customAgents'
+import { customAgentList } from '@ramu/shared/customAgents'
 import { ResourceService } from './background/resources'
 import { processRoots } from './agent/processOwners'
 import { writeEvent } from './remote/eventStream'
@@ -348,6 +350,8 @@ const terminals = new TerminalService(
   new SqliteBackgroundTerminalHistory(db),
 )
 setAcpTerminalService(terminals)
+const customAgents = new CustomAgentStore(workspace)
+agents.customAgents = () => customAgents.list()
 const resources = new ResourceService({
   roots: () => {
     const sessions = new Map(agents.all().map((session) => [session.id, session]))
@@ -598,6 +602,7 @@ const dispatcher = createDispatcher(
     computerVideo,
     terminals,
     resources,
+    customAgents,
     agents,
     threadTitles,
     interactive,
@@ -1075,8 +1080,7 @@ const mcpHttp = createServer(async (req, res) => {
     server.registerTool(
       'ramu_agent',
       {
-        description:
-          "Start a sub-agent through Ramu, which may run it on a different provider or model than you. Use it when told to, or when the Agent tool is refused. It takes a description, a prompt and optionally a type, a name and background. Without background it waits and returns the sub-agent's report; with background it returns at once and the report arrives later as a message.",
+        description: `Start a sub-agent through Ramu, which may run it on a different provider or model than you. Use it when told to, or when the Agent tool is refused. It takes a description, a prompt and optionally a type, a name and background. Without background it waits and returns the sub-agent's report; with background it returns at once and the report arrives later as a message.${customAgentList(customAgents.list())}`,
         inputSchema: {
           description: z.string().min(1).max(200),
           prompt: z.string().min(1).max(100000),

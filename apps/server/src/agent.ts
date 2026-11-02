@@ -3,6 +3,7 @@
 import { mcpRequest, mcpServerDetails } from './agent/mcpStatus'
 import { latestTasks } from '@ramu/shared/chat/agentTasks'
 import { clipText } from '@ramu/shared/text'
+import { customAgentFor, type CustomAgent } from '@ramu/shared/customAgents'
 import { PermissionApprovals } from './agent/permissionApprovals'
 import { providerBinary } from './providers/providerBinaries'
 import { DEFAULT_RUNNERS, sameRunnerForAll } from './providers/runners'
@@ -856,7 +857,29 @@ export class AgentService {
     this.parts.subagents.resetTeammateRounds(sessionId)
   }
 
+  /** Custom agents the lead may use; set by the host, so tests and a bare service run without any. */
+  customAgents: () => readonly CustomAgent[] = () => []
+
   spawnSubagent(...args: Parameters<SubagentRunner['spawnSubagent']>) {
+    const [parentId, input, ...rest] = args
+    const custom = input.custom ?? customAgentFor(this.customAgents(), input.type)
+    if (custom && !input.custom) {
+      const parent = this.get(parentId)
+      // A custom agent wins over a sub-agent type rule or a provider's own agent of the same name.
+      return this.parts.subagents.spawnSubagent(
+        parentId,
+        {
+          ...input,
+          type: undefined,
+          name: input.name || custom.name,
+          custom,
+          ...(custom.model
+            ? { settings: { ...parent.settings, ...custom.model, effort: custom.model.effort ?? null } }
+            : {}),
+        },
+        ...rest,
+      )
+    }
     return this.parts.subagents.spawnSubagent(...args)
   }
 

@@ -2494,6 +2494,29 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
+  it('runs a custom agent named as the type, on its model, read-only, and shows which ran', async () => {
+    const svc = routed()
+    svc.customAgents = () => [
+      {
+        id: 'r',
+        name: 'Explore',
+        description: 'Strict review',
+        instructions: 'Check for missing tests.',
+        model: { provider: 'codex', model: 'codex-test', effort: 'low' },
+        readOnly: true,
+        updatedAt: 0,
+      },
+    ]
+    const parent = await parentOf(svc)
+    const result = await svc.spawnSubagent(parent.id, { description: 'Look', prompt: 'Look around', type: 'Explore' })
+    expect(svc.events(result.agentId).find((event) => event.kind === 'custom-agent')).toMatchObject({
+      name: 'Explore',
+      readOnly: true,
+    })
+    expect(svc.task(parent.id, result.agentId)).toMatchObject({ agentType: 'custom: Explore', model: 'codex-test' })
+    svc.stopAll()
+  })
+
   it('selects effort on the destination provider and records the capped result', async () => {
     const svc = routed({ autoSelect: 'effort-only', maxEffort: 'medium' })
     const parent = await parentOf(svc)

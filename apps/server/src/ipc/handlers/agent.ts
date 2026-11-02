@@ -2,6 +2,7 @@ import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
 import type { AgentSettings, FileContext, PermissionScope, TeammateMode } from '@ramu/shared/types'
 import { MAX_ATTACHMENT_BYTES } from '../../attachments'
+import { draftPrompt, interpretDraft, type CustomAgent } from '@ramu/shared/customAgents'
 import {
   chooseDuplicate,
   DUPLICATE_CHOICE_KEY,
@@ -284,6 +285,43 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
           agents.resetTeammateRounds(s)
           return agents.messageTask(s, agentId, text)
         }),
+    },
+    'customAgents.list': { args: z.tuple([]), run: () => ctx.customAgents?.list() ?? [] },
+    'customAgents.save': {
+      args: z.tuple([
+        z.object({
+          id: z.string().uuid().optional(),
+          name: z.string().trim().min(1).max(60),
+          description: z.string().trim().min(1).max(300),
+          instructions: z.string().trim().min(1).max(8000),
+          model: z
+            .object({
+              provider: agentSettings.shape.provider,
+              model: z.string().max(200),
+              effort: agentSettings.shape.effort,
+            })
+            .nullable(),
+          readOnly: z.boolean(),
+        }),
+      ]),
+      run: (input: Omit<CustomAgent, 'id' | 'updatedAt'> & { id?: string }) => {
+        if (!ctx.customAgents) throw new Error('Custom agents are unavailable on this host.')
+        return ctx.customAgents.save(input)
+      },
+    },
+    'customAgents.delete': {
+      args: z.tuple([z.string().uuid()]),
+      run: (agentId: string) => ctx.customAgents?.remove(agentId),
+    },
+    'customAgents.draft': {
+      args: z.tuple([z.string().trim().min(3).max(2000), agentSettings]),
+      run: async (sentence: string, settings: AgentSettings) => {
+        // One bounded, tool-free call drafts it; the person edits before anything is saved.
+        const { message } = await agents.analyze(draftPrompt(sentence), settings, 12_000, { timeoutMs: 60_000 })
+        const draft = interpretDraft(message)
+        if (!draft) throw new Error('That did not produce a usable draft. Try describing it another way.')
+        return draft
+      },
     },
     'agent.addTeammate': {
       args: z.tuple([id, agentSettings, z.enum(['review', 'take-over']), z.string().max(20_000)]),

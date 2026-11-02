@@ -431,8 +431,9 @@ export class SessionProcess {
     const actualPrompt = `${rulesUpdate ?? ''}${carried ? `${carried.built.prompt}\n\nNext request: ${request}` : request}`
     const deltaResume = carried?.built.info.mode === 'delta' && !!carried.resume
     // A Review teammate never writes, whatever the thread allows; its session records that it is one.
-    const reviewOnly = this.host.events(id).findLast((event) => event.kind === 'teammate')
-    const readOnly = reviewOnly?.kind === 'teammate' && reviewOnly.mode === 'review'
+    const marker = this.host.events(id).findLast((event) => event.kind === 'teammate' || event.kind === 'custom-agent')
+    const readOnly =
+      (marker?.kind === 'teammate' && marker.mode === 'review') || (marker?.kind === 'custom-agent' && marker.readOnly)
     if (this.host.usesRunner(s.provider)) {
       let runner: AgentRunner
       try {

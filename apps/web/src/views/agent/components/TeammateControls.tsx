@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Square, Users } from 'lucide-react'
 import type { AgentSettings, AgentTask, TeammateMode } from '@ramu/shared/types'
+import type { CustomAgent } from '@ramu/shared/customAgents'
+import { Dropdown } from '../../../Menu'
 import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -34,11 +36,26 @@ export function AddTeammateDialog({
   const [request, setRequest] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [custom, setCustom] = useState<CustomAgent[]>([])
+  const [chosen, setChosen] = useState('')
+  useEffect(() => {
+    void invoke('customAgents.list').then(setCustom, () => {})
+  }, [invoke])
+  // A custom agent is a recipe: its model, its read-only choice and its instructions become this teammate's.
+  const chooseCustom = (id: string) => {
+    setChosen(id)
+    const agent = custom.find((entry) => entry.id === id)
+    if (!agent) return
+    if (agent.model) setSettings((current) => ({ ...current, ...agent.model, effort: agent.model?.effort ?? null }))
+    setMode(agent.readOnly ? 'review' : 'take-over')
+  }
   const add = async () => {
     setBusy(true)
     setError(null)
     try {
-      await invoke('agent.addTeammate', sessionId, settings, mode, request)
+      const agent = custom.find((entry) => entry.id === chosen)
+      const brief = agent ? `${agent.instructions}\n\n${request}`.trim() : request
+      await invoke('agent.addTeammate', sessionId, settings, mode, brief)
       onClose()
     } catch (cause) {
       setError(errorText(cause))
@@ -55,6 +72,17 @@ export function AddTeammateDialog({
             {t('A second model joins this thread with the conversation so far, and keeps its own session.')}
           </DialogDescription>
         </DialogHeader>
+        {custom.length > 0 && (
+          <Dropdown
+            label={t('Custom agent')}
+            value={chosen}
+            onChange={chooseCustom}
+            options={[
+              { value: '', label: t('A model') },
+              ...custom.map((agent) => ({ value: agent.id, label: agent.name })),
+            ]}
+          />
+        )}
         <AgentControls settings={settings} onChange={setSettings} disabled={busy} />
         <div className="flex gap-1.5" role="radiogroup" aria-label={t('How it works')}>
           {(['review', 'take-over'] as const).map((value) => (

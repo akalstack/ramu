@@ -16,6 +16,7 @@ import { GoalSettings } from './GoalSettings'
 import { MemoryBrowser, MemorySettings } from './MemorySettings'
 import { SummarySettings } from '../summaries/SummarySettings'
 import { AdvisorSettings, SubagentSettings } from './FallbackSettings'
+import { CustomAgentSettings } from './CustomAgents'
 import { RemoteAccessSettings } from './RemoteAccess'
 import { modelStepName, recommendedSets, useModelSets, ModelSetsOverride } from '../models/ModelSets'
 import { useAppSettings, AppSettingsOverride } from './AppSettings'
@@ -241,6 +242,7 @@ export function SettingsPanel({
                 <>
                   <GoalSettings value={appDraft.goals} onChange={(goals) => setAppDraft({ ...appDraft, goals })} />
                   <SubagentSettings value={appDraft} onChange={setAppDraft} busy={busy} />
+                  <CustomAgentSettings />
                   <AdvisorSettings value={appDraft} onChange={setAppDraft} busy={busy} />
                 </>
               )}
