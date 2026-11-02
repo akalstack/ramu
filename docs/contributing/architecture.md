@@ -1,6 +1,6 @@
 # Architecture
 
-Ramu is a pnpm workspace. The desktop app is a thin Electron shell around a workspace **server** that owns every agent, terminal, Git operation, and database. The same server runs headless; see [headless server](HEADLESS-SERVER.md).
+Ramu is a pnpm workspace. The desktop app is a thin Electron shell around a workspace **server** that owns every agent, terminal, Git operation, and database. The same server runs headless; see [headless server](../guide/remote-hosts.md).
 
 ```
 apps/web (React UI) ──► apps/desktop (Electron main + preload) ──► @ramu/client-runtime ──► apps/server
@@ -59,6 +59,12 @@ A thread without held rows shows `agent.tail` (its last turns, bounded in rows a
 
 A follow-up waits for the review capture alone. That capture also starts the next run's snapshot, and the comparison and line stats finish after the message is sent.
 
+## Discovery and protocol
+
+- **Discovery:** a discoverable host advertises its name, a random identifier, protocol version and port over mDNS (`_ramu._tcp`), nothing else; finding a host grants nothing. The desktop also gives hosts a UDP port for short signed "reconnect" announcements when their network changes.
+- **Protocol:** `packages/contracts` defines the wire format. `GET /socket` upgrades to the one WebSocket for calls and events, authenticated by the `Authorization` header. Frames: `invoke` (with an optional `operationKey` so a retried mutation runs once), `subscribe`, `ack` and `ping`; the host answers `ready`, `result`, `error` and `event`. HTTP stays for `POST /pair`, `POST /renew`, `GET /health` and `GET /session`.
+- **Limits:** the desktop starts at most eight handshakes and runs sixteen remote calls at once, keeps up to four remote views warm, and releases idle hidden views after ten minutes unless they hold unsaved work.
+
 ## Hosts and windows
 
 The desktop has one shell renderer for every paired host. `HostSelectionProvider` selects a host and destination; `WorkspaceProvider` lazily mounts a `HostWorkspace` store per connected host. Sidebar rows read those stores, and `useWorkspace()` returns the store on screen. The main process owns connection lifecycle and delivers host-tagged events; `workspace/hostEvents.ts` routes them to listeners and coalesces work for hidden stores. Terminal output uses bounded, cursor-aware buffers.
@@ -73,7 +79,7 @@ The server's browser broker resolves a runtime per turn: the attached local desk
 - **Viewing:** paired owner devices view the host browser through the existing host connection, like terminals. A private CDP compositor feed keeps only the newest bounded JPEG per tab, shared across viewers. No CDP endpoint or page JavaScript authority reaches clients, and viewer-role devices cannot control it.
 - **Desktop browser:** Electron owns sandboxed, context-isolated guest contents, the non-secret profile catalog, partitions, native input and sign-in windows. Fixed isolated-world scripts read the DOM and act on elements; there is no general evaluation or debugging endpoint. Website data never enters host preferences.
 
-User-facing behavior is in [UI](UI.md#integrated-browser).
+User-facing behavior is in [UI](../guide/browser-and-computer.md#browser).
 
 ## Server layout (`apps/server/src`)
 
@@ -85,9 +91,10 @@ User-facing behavior is in [UI](UI.md#integrated-browser).
 | `review/` | Recorded diffs, review state and stats, undo and restore with conflict checks. |
 | `memory/` | Shared memory notes, memory files, learning, recaps. |
 | `remote/` | Pairing, devices, network listener and socket, presence announcements, mobile push, host folder browsing. |
-| `background/` | Schedules, activity, keep-awake, app update checks, notices. |
+| `background/` | Schedules, activity, keep-awake, app update checks, notices, Resources, and threads started by agents, people and terminals. |
 | `browser/` | Host browser broker and scoped provider tools; no Electron imports. |
 | `computer/` | Computer-use sessions and control leases. |
+| `testDevice/` | iOS Simulators and Android emulators as computer-use backends, with their lifecycle and agent tools. |
 | `interactive/` | Agent-generated interactive documents: compile, bundle, store. |
 | `mcp/` | Shared MCP: management, policy, external gateway, SQLite metadata, isolated HTTP/stdio clients. |
 | `credentials/` | OS-backed credential storage shared by integrations; only opaque references go in ordinary storage. |
@@ -96,7 +103,7 @@ User-facing behavior is in [UI](UI.md#integrated-browser).
 
 `index.ts` is the service entry point, `cli.ts` the CLI, `db.ts` the database, and `build.ts` the build fingerprint that detects a stale running service.
 
-Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`; SQLite keeps operational state. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or widening permissions. See [Configuration files](CONFIGURATION.md). The schema is one script in `db.ts`, stamped with a version; a new profile runs it, and a profile at another version is refused untouched.
+Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`; SQLite keeps operational state. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or widening permissions. See [Configuration files](../guide/configuration.md). The schema is one script in `db.ts`, stamped with a version; a new profile runs it, and a profile at another version is refused untouched.
 
 ### Shared MCP
 
@@ -124,16 +131,17 @@ Host preferences and model sets live in `userData/settings.json` through `settin
 | `changes/` | The review tab for a thread's recorded changes. |
 | `workspace/` | Layout, panes, terminals, project switching, paired hosts. |
 | `sidebar/` | Projects, Explorer, Source Control and Search panels, each in its own subfolder. |
-| `inbox/` | The Inbox page (Waiting, Running, Recaps, Learned, Completed), recap actions, and the cross-host Inbox. |
+| `inbox/` | The Inbox page (Brief, Running with Resources, Recaps, Learned, Completed), recap actions, and the cross-host Inbox. |
+| `liveView/` | Float: the live view card and the window above other apps. |
 | `summaries/` | The "What Ramu learned" card, host and notice. |
-| `palette/` | The command palette and its sources (see [UI development](UI.md#command-palette)). |
+| `palette/` | The command palette and its sources (see [UI development](ui.md#command-palette)). |
 | `editor/` | Monaco setup and editor buffers. |
 | `lib/` | Small framework-free helpers and hooks. |
 | `components/` | Shared UI primitives (`components/ui` is shadcn-based). |
 
 ## Providers
 
-Threads run through provider adapters selected per thread (`AgentSettings.provider`). Provider-specific setup behavior (executable and `RAMU_*_BIN` variable, account profiles, sign-in detection, login and update) is a `ProviderAdapter` in `apps/server/src/providers/adapters/`; `providers.ts` and `providerBinaries.ts` keep the shared spawning, caching and parsing. To add a provider, add an adapter, register it in `adapters/index.ts`, and add its id to `AgentProvider` in `packages/shared`. How it chats is an `AgentRunner` (`agent/agentRunner.ts`) listed in `providers/runners.ts`; use the provider's own SDK where it has one, or `createAcpRunner` for an ACP runtime. Features the provider has natively (`NativeFeatures` on the adapter) replace Ramu's own where they can serve Ramu's flow. An adapter may also define `skillsLaunch`, which points the provider at Ramu's per-scope managed-skill export for one thread (a Claude plugin, a Codex skill root, an OpenCode `skills` entry, or `linkDirs` for Cursor and Antigravity, which scan a fixed folder in the thread's working directory and get git-excluded symlinks from `memory/skillLinks.ts`; see [learning](LEARNING.md)). `providers/fakeAgent.ts` implements the same events, permission requests and transcript paths without model usage; the desktop smoke test uses it.
+Threads run through provider adapters selected per thread (`AgentSettings.provider`). Provider-specific setup behavior (executable and `RAMU_*_BIN` variable, account profiles, sign-in detection, login and update) is a `ProviderAdapter` in `apps/server/src/providers/adapters/`; `providers.ts` and `providerBinaries.ts` keep the shared spawning, caching and parsing. To add a provider, add an adapter, register it in `adapters/index.ts`, and add its id to `AgentProvider` in `packages/shared`. How it chats is an `AgentRunner` (`agent/agentRunner.ts`) listed in `providers/runners.ts`; use the provider's own SDK where it has one, or `createAcpRunner` for an ACP runtime. Features the provider has natively (`NativeFeatures` on the adapter) replace Ramu's own where they can serve Ramu's flow. An adapter may also define `skillsLaunch`, which points the provider at Ramu's per-scope managed-skill export for one thread (a Claude plugin, a Codex skill root, an OpenCode `skills` entry, or `linkDirs` for Cursor and Antigravity, which scan a fixed folder in the thread's working directory and get git-excluded symlinks from `memory/skillLinks.ts`; see [learning](../guide/memory-and-learning.md)). `providers/fakeAgent.ts` implements the same events, permission requests and transcript paths without model usage; the desktop smoke test uses it.
 
 Accounts: every enabled account of a provider is tried in order (selected account, the default login, then the others) when a thread reaches a usage limit, before Ramu falls back to another model. Turn an account off in Settings to remove it from the rotation.
 
@@ -145,6 +153,6 @@ Accounts: every enabled account of a provider is tried in order (selected accoun
 
 ## Code quality
 
-`pnpm check` runs Prettier, ESLint (`eslint.config.mjs`: typescript-eslint and the React hooks rules) and [knip](https://knip.dev) (`knip.json`) for unused files, exports and dependencies. `knip.json` ignores runtime packages that bundled code loads by name (provider SDKs, interactive-content libraries). Conventions are in [Code conventions](CODE-STYLE.md).
+`pnpm check` runs Prettier, ESLint (`eslint.config.mjs`: typescript-eslint and the React hooks rules) and [knip](https://knip.dev) (`knip.json`) for unused files, exports and dependencies. `knip.json` ignores runtime packages that bundled code loads by name (provider SDKs, interactive-content libraries). Conventions are in [Code conventions](code-style.md).
 
 Provider install, login and update flows run only against live providers; validate changes there with the real CLIs.

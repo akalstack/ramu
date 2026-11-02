@@ -37,8 +37,8 @@ pnpm workspace; each package has its own `src`, `test`, and `typecheck`/`test` s
 | `scripts/smoke` | One desktop startup smoke test |
 | `scripts/release` | Packaging and release tooling |
 
-Read the [architecture overview](docs/ARCHITECTURE.md) before a large change; it explains how a call travels from the UI to the server and where new code belongs. Import shared code as `@ramu/shared/<module>`. Server code must not import Electron or `apps/desktop`; desktop reaches the server through `@ramu/client-runtime`. See [headless server](docs/HEADLESS-SERVER.md).
+Read the [architecture overview](docs/contributing/architecture.md) before a large change; it explains how a call travels from the UI to the server and where new code belongs. Import shared code as `@ramu/shared/<module>`. Server code must not import Electron or `apps/desktop`; desktop reaches the server through `@ramu/client-runtime`. See [headless server](docs/guide/remote-hosts.md).
 
-Follow the [code conventions](docs/CODE-STYLE.md), keep changes focused, and test behavior. See also [UI development](docs/UI.md), [localization](docs/LOCALIZATION.md), [the roadmap](docs/ROADMAP.md) and [release maintenance](docs/RELEASING.md).
+Follow the [code conventions](docs/contributing/code-style.md), keep changes focused, and test behavior. See also [UI development](docs/contributing/ui.md), [localization](docs/contributing/localization.md), [the roadmap](docs/roadmap.md) and [release maintenance](docs/contributing/releasing.md).
 
 Contributions use the [MIT license](LICENSE). Follow the [Code of Conduct](CODE_OF_CONDUCT.md). For vulnerabilities, follow [SECURITY.md](SECURITY.md).

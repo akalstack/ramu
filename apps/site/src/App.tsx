@@ -488,7 +488,7 @@ function Download() {
         <p className="download-fine">
           Installers and SHA-256 checksums are on GitHub Releases. macOS builds are unsigned and not notarized; install
           alpha updates manually. Linux GUI validation is pending. Windows is experimental, with no release downloads.
-          See the <a href={`${REPO}/blob/main/docs/PROVIDERS.md`}>provider setup guide</a>.
+          See the <a href={`${REPO}/blob/main/docs/guide/providers.md`}>provider setup guide</a>.
         </p>
       </div>
     </section>

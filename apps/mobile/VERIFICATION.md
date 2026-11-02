@@ -1,6 +1,6 @@
 # Outstanding mobile acceptance
 
-Only checks that still need a physical phone, an account or a live provider. Tests, simulators and the web preview do not close them. Use disposable host profiles; paid provider calls are opt-in. Remove a check when it passes and move any lasting setup into the [README](README.md); unfinished work is in the [roadmap](../../docs/ROADMAP.md).
+Only checks that still need a physical phone, an account or a live provider. Tests, simulators and the web preview do not close them. Use disposable host profiles; paid provider calls are opt-in. Remove a check when it passes and move any lasting setup into the [README](README.md); unfinished work is in the [roadmap](../../docs/roadmap.md).
 
 ## Builds and distribution
 

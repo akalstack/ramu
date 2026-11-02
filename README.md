@@ -30,7 +30,7 @@ On top of the workspace, Ramu adds orchestration that works without setup:
 - **Carry knowledge forward.** Share project memory and preferences across providers. Turn completed work into reusable skills and lessons, with editable notes and revision history. A periodic "What Ramu learned" summary says what was saved, merged or archived, and a review thread can fix it.
 - **Recall past work.** Ask agents to find decisions and fixes in earlier threads across providers, with links to the original messages. Skills can declare required tools and fallback procedures so agents can select instructions that fit their current tools.
 - **Work across repositories.** Add a parent folder and Ramu detects the child Git repositories and groups them into one workspace, with no multi-root file to write. Each repository gets its own branches, staging, stashes, sync, and diffs, and agents see the whole workspace.
-- **Give agents useful tools.** Use the integrated browser, grant an agent access to a specific app or screen, and connect external MCP tools with per-thread approvals and host-managed credentials. See [browser](docs/UI.md#integrated-browser), [computer use](docs/UI.md#computer-use), and [MCP security and setup](docs/ARCHITECTURE.md#shared-mcp).
+- **Give agents useful tools.** Use the integrated browser, grant an agent access to a specific app or screen, and connect external MCP tools with per-thread approvals and host-managed credentials. See [browser](docs/guide/browser-and-computer.md#browser), [computer use](docs/guide/browser-and-computer.md#computer-use), and [MCP security and setup](docs/contributing/architecture.md#shared-mcp).
 - **Continue from your phone.** Pair the iOS or Android app with your host to chat, review changes, manage Git, use terminals, and respond to agent requests.
 
 ## Features
@@ -39,7 +39,7 @@ On top of the workspace, Ramu adds orchestration that works without setup:
 - Recorded diffs, inline review comments, and selective undo with conflict checks.
 - GitHub pull requests and issues: start a thread from an issue, open a pull request that closes it, and hand failing checks or review comments back to an agent.
 - File attachments, saved drafts, configurable fonts and colors, and English/Bahasa Indonesia.
-- A standalone workspace server for [headless use](docs/HEADLESS-SERVER.md) and mobile access.
+- A standalone workspace server for [headless use](docs/guide/remote-hosts.md) and mobile access.
 
 Provider capabilities vary. Agents run on your host, which must stay awake; mobile access also requires a reachable connection.
 
@@ -49,7 +49,7 @@ Download installers and SHA-256 checksums from [GitHub Releases](https://github.
 
 Ramu is in alpha. Release targets are **macOS arm64/x64** and **Linux x64**; Linux packaged GUI validation is pending. Windows is not supported yet. CI macOS builds are unsigned and not notarized. Install alpha updates manually; automatic installation requires a signed macOS app and excludes prereleases.
 
-Install and sign in to an agent provider, select it in **Settings → Providers**, then add a repository or start a thread. See [provider setup](docs/PROVIDERS.md). For iOS and Android setup and pairing, see the [mobile guide](apps/mobile/README.md).
+Install and sign in to an agent provider, select it in **Settings → Providers**, then add a repository or start a thread. See [provider setup](docs/guide/providers.md). For iOS and Android setup and pairing, see the [mobile guide](apps/mobile/README.md).
 
 ### Run from source
 
@@ -65,7 +65,7 @@ pnpm dev
 
 ## Development
 
-Built with Electron, React, React Native, and TypeScript. See the [architecture](docs/ARCHITECTURE.md) for the desktop, mobile, and server layout.
+Built with Electron, React, React Native, and TypeScript. See the [architecture](docs/contributing/architecture.md) for the desktop, mobile, and server layout.
 
 | Command | Purpose |
 | --- | --- |
@@ -77,11 +77,9 @@ Built with Electron, React, React Native, and TypeScript. See the [architecture]
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and validation requirements. [Report bugs or request features](https://github.com/ahxar/ramu/issues/new/choose); report vulnerabilities through [SECURITY.md](SECURITY.md).
 
-## Guides
+## Docs
 
-[Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENT-ROUTING.md) · [Goals](docs/GOALS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Pull requests and issues](docs/PULL-REQUESTS.md) · [Memory](docs/MEMORY.md) · [Learning](docs/LEARNING.md) · [Mobile](apps/mobile/README.md) · [Editor](docs/EDITOR.md) · [Themes](docs/THEMES.md) · [Configuration](docs/CONFIGURATION.md) · [Headless server](docs/HEADLESS-SERVER.md)
-
-Unfinished work is in [the roadmap](docs/ROADMAP.md); contributors should read the [code conventions](docs/CODE-STYLE.md).
+The [guide](docs/README.md#guide) covers using Ramu, and [contributing](docs/README.md#contributing) covers working on it. Unfinished work is in [the roadmap](docs/roadmap.md).
 
 ## Acknowledgments
 

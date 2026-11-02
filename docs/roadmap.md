@@ -6,13 +6,13 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 ## Release
 
-- macOS signing and notarization in CI, and signed auto-update (`APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` stays `false` until builds are signed). See [Releasing](RELEASING.md).
+- macOS signing and notarization in CI, and signed auto-update (`APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` stays `false` until builds are signed). See [Releasing](contributing/releasing.md).
 - A clean Linux x64 GUI run of the packaged app. Windows stays unsupported until macOS signing works.
 - Mobile distribution: Apple and Google accounts, APNs/FCM credentials, TestFlight and Android internal builds.
 
 ## Implementation
 
-- **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; mutations that cannot be retried report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](ARCHITECTURE.md#transport)).
+- **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; mutations that cannot be retried report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
 - **Background terminals:** native command handles for Claude, Codex, OpenCode and Cursor need verified owner-lifecycle contracts. The ACP client-terminal boundary is written but enabled for no provider until one is verified against a live runtime.
 - **Agent setup:** skill source and ownership details, and per-adapter rule delivery (path-matched activation only where a runtime supports it).
 - **Mobile:** IME composition checks on a device, and terminal customization. Add a phone entry for a desktop setting only when it clearly helps someone away from the laptop.

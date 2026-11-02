@@ -78,7 +78,7 @@ export class FallbackRouter {
     private readonly db: Db,
   ) {}
 
-  // Set from the composer's provider chip. The pre-emptive switch (see docs/AGENT-ROUTING.md) must honour it; 'message' clears after one send.
+  // Set from the composer's provider chip. The pre-emptive switch (see docs/guide/agents.md) must honour it; 'message' clears after one send.
   private readonly holds = new Map<string, 'message' | 'chat'>()
 
   /** Steps (`provider:model`) a chat has already been through while falling back. */

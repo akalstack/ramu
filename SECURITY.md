@@ -27,7 +27,7 @@ A **viewer** can read conversations and answer approval and question requests. A
 - **Browsers:** cross-origin browser access is off. `RAMU_BROWSER_ORIGINS` takes a comma-separated list of exact trusted HTTP(S) origins; origin checks supplement bearer authentication.
 - **Network:** expose the server only on a trusted LAN or VPN, or behind authenticated HTTPS. Ramu has no relay and no end-to-end encryption; plain HTTP sends bearer tokens and workspace data unencrypted. The mobile app does not pin certificates, so use a trusted HTTPS certificate or your own authenticated VPN.
 
-See [Headless server](docs/HEADLESS-SERVER.md) for running a host.
+See [Headless server](docs/guide/remote-hosts.md) for running a host.
 
 Continue on another host is a person's action from an owner device: the device calls both hosts directly, viewer devices are refused, and paired hosts cannot reach the package, clone or start methods. The redacted conversation leaves the host, and can quote code and uncommitted content; files do not.
 
@@ -50,4 +50,4 @@ Test devices give agents fixed operations on simulators and emulators, not a she
 ## Isolated content
 
 - **Theme preview:** the Code/Diff preview in the theme editor runs bundled Monaco code on its own `ramu-theme:` origin. It serves only the preview entry and bundled assets, cannot read workspace files, call the native bridge or reach the parent window, and accepts only validated palette and view messages.
-- **Interactive content:** agent-generated documents run in a separate `ramu-content:` origin with a restrictive content policy and cannot use the theme origin or any host API. See [Interactive content](docs/INTERACTIVE-CONTENT.md).
+- **Interactive content:** agent-generated documents run in a separate `ramu-content:` origin with a restrictive content policy and cannot use the theme origin or any host API. See [Interactive content](docs/guide/interactive-content.md).

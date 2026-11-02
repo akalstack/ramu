@@ -37,7 +37,7 @@ function readRecent(): string[] {
 /**
  * One box for everything. No prefix: files in the task's repositories, projects, chats and text inside
  * the files. ">" runs commands, "#" searches file contents only. Anything else can go to the agent.
- * Results come from {@link PaletteSource}s; see docs/UI.md to add one.
+ * Results come from {@link PaletteSource}s; see docs/contributing/ui.md to add one.
  */
 export function Palette({
   ws,
