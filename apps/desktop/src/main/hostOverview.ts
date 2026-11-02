@@ -27,6 +27,8 @@ export async function readHostOverview(invoke: (method: string) => Promise<unkno
       }
     }),
   )
+  // Owner-only, so a viewer's refusal is expected and is not a host problem.
+  result.resources = await (invoke('resources.host') as Promise<HostOverview['resources']>).catch(() => null)
   return result
 }
 

@@ -11,6 +11,7 @@ import type {
   ScheduleRun,
   SummariesSnapshot,
 } from '@ramu/shared/types'
+import type { HostResources } from '@ramu/shared/resources'
 import { readFailuresSeen, readLastVisit, saveFailuresSeen, saveLastVisit } from '../storage'
 import { useStore } from './store'
 import { buildInbox, type InboxModel } from './inbox'
@@ -22,16 +23,26 @@ import { showToast } from './toast'
 // at once (Inbox shows what needs you on all of them) and refreshed when the computer says automation changed.
 
 const FAILURES_KEPT = 300
+const RESOURCES_MS = 60_000
 
 export interface Automation {
   recaps: RecapSnapshot | null
   summaries: SummariesSnapshot | null
   schedules: Schedule[]
   runs: ScheduleRun[]
+  resources: HostResources | null
   loaded: boolean
   error: string | null
 }
-const empty: Automation = { recaps: null, summaries: null, schedules: [], runs: [], loaded: false, error: null }
+const empty: Automation = {
+  recaps: null,
+  summaries: null,
+  schedules: [],
+  runs: [],
+  resources: null,
+  loaded: false,
+  error: null,
+}
 
 interface AutomationStore {
   of(computerId: string): Automation
@@ -138,6 +149,14 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
     const ids = online ? online.split(',') : []
     const offs = ids.map((id) => {
       void load(id)
+      const readResources = () =>
+        void storeRef.current
+          .invoke(id, 'resources.host')
+          .then((resources) => patch(id, { resources }))
+          // A view-only pairing is refused this, and has no low-memory row to show.
+          .catch(() => patch(id, { resources: null }))
+      readResources()
+      const resourceTimer = setInterval(readResources, RESOURCES_MS)
       let timer: ReturnType<typeof setTimeout> | undefined
       // Bursts of changes (a run starting, then each recap) are read once.
       const soon = (what: Parameters<typeof load>[1]) => {
@@ -150,11 +169,12 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
       })
       return () => {
         clearTimeout(timer)
+        clearInterval(resourceTimer)
         off()
       }
     })
     return () => offs.forEach((off) => off())
-  }, [online, load])
+  }, [online, load, patch])
 
   // Recaps are fetched only when turned on; read them when the preference arrives or flips.
   const recapKey = store.computers.map((c) => `${c.id}:${recapsOn(c.id)}`).join(',')
@@ -191,6 +211,10 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
         ),
         recapsEnabled: recapsOn,
         failureSeen,
+        lowMemory: store.computers.flatMap((c) => {
+          const low = state[c.id]?.resources?.low
+          return low ? [{ computerId: c.id, low }] : []
+        }),
         visit,
       }),
       reload: (id) => load(id),

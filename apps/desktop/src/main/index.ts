@@ -1006,6 +1006,9 @@ async function main() {
         throw new Error('That host is not connected')
       return overviewReads.read(id)
     }
+    if (method === 'computers.appMemory') {
+      return app.getAppMetrics().reduce((sum, metric) => sum + metric.memory.workingSetSize * 1024, 0)
+    }
     if (method === 'computers.navigate') {
       const [id, destination] = args
       if (typeof id !== 'string' || !isHostDestination(destination)) throw new Error('Invalid host destination')

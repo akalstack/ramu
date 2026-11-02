@@ -13,6 +13,7 @@ import { ago, useSay, useT, type Strings } from '../../../i18n'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { TopFade } from '../../../components/Glass'
 import { InboxBrief } from '../../../components/InboxBrief'
+import { InboxResources } from '../../../components/InboxResources'
 import { InboxThread } from '../../../components/InputRequests'
 import { Chips, Group, Nothing, RecapCard, Section } from '../../../components/InboxParts'
 import { useTabActions } from '../../../components/Overlays'
@@ -51,6 +52,7 @@ export default function InboxScreen() {
     ),
     recapsEnabled: (id) => store.appPreferences[id]?.recapsEnabled !== false,
     failureSeen: auto.failureSeen as (chat: InboxChat) => boolean,
+    lowMemory: auto.inbox.lowMemory,
     visit: auto.visit,
   })
   const params = useLocalSearchParams<{ tab?: string }>()
@@ -232,6 +234,7 @@ export default function InboxScreen() {
     ),
     running: (
       <>
+        <InboxResources host={host} />
         {inbox.running.length ? (
           rows(inbox.running)
         ) : !background.length ? (

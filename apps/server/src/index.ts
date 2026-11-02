@@ -1,3 +1,5 @@
+import { ResourceService } from './background/resources'
+import { processRoots } from './agent/processOwners'
 import { writeEvent } from './remote/eventStream'
 import { DEFAULT_AGENT_BROWSER_PREFERENCES } from '@ramu/shared/browser'
 import { providerAdapter } from './providers/adapters'
@@ -345,6 +347,36 @@ const terminals = new TerminalService(
   new SqliteBackgroundTerminalHistory(db),
 )
 setAcpTerminalService(terminals)
+const resources = new ResourceService({
+  roots: () => {
+    const sessions = new Map(agents.all().map((session) => [session.id, session]))
+    return [
+      ...terminals.processes().map(({ pid, taskId, id, kind, name }) => ({ pid, taskId, item: { kind, id, name } })),
+      ...[...processRoots()].flatMap(([pid, sessionId]) => {
+        const session = sessions.get(sessionId)
+        return session
+          ? [
+              {
+                pid,
+                taskId: session.taskId,
+                item: { kind: 'agent' as const, id: sessionId, name: session.title || session.provider },
+              },
+            ]
+          : []
+      }),
+    ]
+  },
+  idleThreads: () => {
+    const sessions = agents.all()
+    const busy = new Set(
+      sessions
+        .filter(({ state }) => ['starting', 'running', 'needs-input'].includes(state))
+        .map(({ taskId }) => taskId),
+    )
+    return new Set(sessions.map(({ taskId }) => taskId).filter((taskId) => !busy.has(taskId)))
+  },
+})
+resources.start()
 const inbox = new NoticeInbox(
   (items) => send('notices:changed', items),
   (taskId) => {
@@ -564,6 +596,7 @@ const dispatcher = createDispatcher(
     computerBroker,
     computerVideo,
     terminals,
+    resources,
     agents,
     threadTitles,
     interactive,

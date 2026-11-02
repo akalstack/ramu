@@ -1,3 +1,4 @@
+import { trackProcess } from '../agent/processOwners'
 import { permissionKey } from '../agent/permissionApprovals'
 // OpenCode 2 chats through its HTTP API (`@opencode/client`). Each chat runs its own `opencode serve`, so the
 // account's config directories and the per-chat config (Ramu's tool server, skills, sub-agent switch) stay separate.
@@ -190,11 +191,13 @@ async function startServer(
   env: NodeJS.ProcessEnv,
 ): Promise<{ child: ChildProcess; url: string; password?: string }> {
   const port = await freePort()
-  const child = spawn(providerBinary('opencode'), ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
-    cwd,
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  const child = trackProcess(
+    spawn(providerBinary('opencode'), ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
+      cwd,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }),
+  )
   child.stderr!.resume()
   return new Promise((resolve, reject) => {
     let url = '',

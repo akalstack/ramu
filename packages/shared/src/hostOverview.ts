@@ -8,6 +8,8 @@ export interface HostOverview {
   recaps: RecapItem[]
   summaries: LibrarySummary[]
   errors: string[]
+  /** Null when the host refuses or lacks the reading; a viewer device never has it. */
+  resources?: import('./resources').HostResources | null
 }
 
 export type HostDestination =
@@ -78,6 +80,10 @@ export function hostInboxInput(hosts: { id: string; data?: HostOverview }[]) {
     ),
     recaps: hosts.flatMap(({ id, data }) => (data?.recaps ?? []).map((item) => ({ computerId: id, item }))),
     summaries: hosts.flatMap(({ id, data }) => (data?.summaries ?? []).map((summary) => ({ computerId: id, summary }))),
+    lowMemory: hosts.flatMap(({ id, data }) => {
+      const low = data?.resources?.low
+      return low ? [{ computerId: id, low }] : []
+    }),
   }
 }
 

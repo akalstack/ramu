@@ -1,3 +1,4 @@
+import { trackProcess } from '../agent/processOwners'
 import { modelLegacyMetadata } from './modelLifecycle'
 import { modelContextWindow } from './modelContext'
 // Native OpenCode, Cursor and Google Antigravity ACP runtimes; JSON-RPC 2.0, newline framing.
@@ -79,11 +80,13 @@ export class AcpRpc {
     extraEnv: Record<string, string> = {},
   ) {
     const { command, args } = acpCommand(provider)
-    this.child = spawn(command, args, {
-      cwd,
-      stdio: 'pipe',
-      env: { ...providerEnvironment(provider, undefined, accountId), ...extraEnv },
-    })
+    this.child = trackProcess(
+      spawn(command, args, {
+        cwd,
+        stdio: 'pipe',
+        env: { ...providerEnvironment(provider, undefined, accountId), ...extraEnv },
+      }),
+    )
     this.child.stderr.resume()
     this.child.stdin.on('error', () => {})
     const lines = createInterface({ input: this.child.stdout })

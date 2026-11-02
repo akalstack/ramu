@@ -535,6 +535,10 @@ export interface RamuMethods {
   'reviews.chatUndoPreview'(sessionId: string, userSeq: number): UndoPreview
   'reviews.chatUndoApply'(token: string, fileIds: string[]): void
   'activity.status'(): BackgroundActivity[]
+  /** What Ramu's work uses on this host. Owner devices only: it names running work. */
+  'resources.snapshot'(): import('./resources').ResourceSnapshot
+  /** Host memory and the low-memory state, without reading the process table. */
+  'resources.host'(): import('./resources').HostResources
   'activity.cancel'(id: string): void
   'updates.status'(): Promise<AppUpdateStatus>
   'updates.check'(): Promise<AppUpdateStatus>
@@ -614,6 +618,8 @@ export interface RamuMethods {
   /** Runs an allow-listed method on one host's server, whichever window asks. Same as `RamuBridge.invokeOn`. */
   'computers.invoke'(id: string, method: string, args: unknown[]): unknown
   'computers.overview'(id: string): HostOverview
+  /** Memory the desktop app's own windows and browser tabs use, in bytes. */
+  'computers.appMemory'(): number
   /** The threads this window shows from a host: only they stream in full, and the host's other threads arrive in brief. */
   'computers.threads'(id: string, sessionIds: string[]): void
   'computers.navigate'(id: string, destination: HostDestination): void

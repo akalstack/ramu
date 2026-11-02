@@ -1,3 +1,4 @@
+import { asProcessOwner, claudeSpawn } from './processOwners'
 import { createHash } from 'node:crypto'
 import { serversDigest, sessionMcpServers } from '../providers/discoveredMcp'
 import { ruleDelivery } from '@ramu/shared/rules'
@@ -490,12 +491,14 @@ export class SessionProcess {
           if (launchCompatibility.applies(s.provider) && process.env.RAMU_FAKE_AGENT !== '1')
             await launchCompatibility.assertLaunchable(s.provider)
           if (this.host.runners.get(id) === runner)
-            await runner.start(
-              s.provider === 'codex' || s.provider === 'claude-code' || !connection?.instructions
-                ? actualPrompt
-                : `<ramu-session-guidance>\n${connection.instructions}\n</ramu-session-guidance>\n\n${actualPrompt}`,
-              resume,
-              attachments,
+            await asProcessOwner(id, () =>
+              runner!.start(
+                s.provider === 'codex' || s.provider === 'claude-code' || !connection?.instructions
+                  ? actualPrompt
+                  : `<ramu-session-guidance>\n${connection.instructions}\n</ramu-session-guidance>\n\n${actualPrompt}`,
+                resume,
+                attachments,
+              ),
             )
         })().catch(async (e) => {
           if (this.host.runners.get(id) !== runner) return
@@ -542,16 +545,19 @@ export class SessionProcess {
     })
     const query = this.host.providerQuery({
       prompt: input,
-      options: claudeLaunchOptions({
-        session: s,
-        connection,
-        advisorModel: this.host.claudeAdvisorModel(id),
-        abort,
-        canUseTool,
-        resume,
-        preferences: this.host.preferencesSource(),
-        hooks: !s.parentId && this.host.preferencesSource() ? this.host.subagentHooks(id) : undefined,
-      }),
+      options: {
+        ...claudeLaunchOptions({
+          session: s,
+          connection,
+          advisorModel: this.host.claudeAdvisorModel(id),
+          abort,
+          canUseTool,
+          resume,
+          preferences: this.host.preferencesSource(),
+          hooks: !s.parentId && this.host.preferencesSource() ? this.host.subagentHooks(id) : undefined,
+        }),
+        spawnClaudeCodeProcess: claudeSpawn(id),
+      },
     })
     this.host.live.set(id, { query, input, abort, pending })
     if (recordUser) this.host.record(id, { kind: 'user', text: prompt, ...(attachments.length ? { attachments } : {}) })

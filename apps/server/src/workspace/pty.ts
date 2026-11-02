@@ -1,3 +1,4 @@
+import { basename } from 'node:path'
 // PTY-backed terminals. Each terminal is started in a binding's cwd and keeps that reference.
 import { randomUUID } from 'node:crypto'
 import * as nodePty from 'node-pty'
@@ -28,6 +29,14 @@ interface Entry extends TerminalInfo {
 }
 
 const MAX_COMMAND = 4000
+
+/** A command's leading words, without arguments that may carry paths or secrets: `pnpm dev`, not its flags. */
+function commandName(command: string): string {
+  const words = command.trim().split(/\s+/)
+  const program = basename(words[0] ?? '')
+  const task = words[1]
+  return task && /^[a-z][a-z:_-]*$/i.test(task) ? `${program} ${task}` : program
+}
 
 /** `resume` says how `output` relates to what the viewer shows: nothing missed, the missed tail, or all held output again. */
 export type TerminalSnapshot = {
@@ -168,6 +177,19 @@ export class TerminalService {
   }
 
   /** The thread's persistent commands, running first then newest first. */
+  /** Live terminals and commands by process, for Resources. Named as the thread names them; arguments never leave here. */
+  processes(): { pid: number; taskId: string; id: string; kind: 'terminal' | 'command'; name: string }[] {
+    return [...this.terms.values()]
+      .filter((entry) => !entry.exited && entry.taskId !== 'provider-setup')
+      .map((entry) => ({
+        pid: entry.pty.pid,
+        taskId: entry.taskId,
+        id: entry.id,
+        kind: entry.bg ? ('command' as const) : ('terminal' as const),
+        name: entry.bg ? commandName(entry.bg.command) : basename(entry.shell),
+      }))
+  }
+
   listBackground(taskId: string): BackgroundTerminalInfo[] {
     const records = new Map(
       [...this.history.values()].filter((record) => record.taskId === taskId).map((record) => [record.id, record]),

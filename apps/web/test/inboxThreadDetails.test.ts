@@ -32,6 +32,9 @@ vi.mock('../src/Menu', () => ({ timeAgo: () => 'now' }))
 vi.mock('../src/ipc', () => ({ ramu: {} }))
 vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: {} }) }))
 vi.mock('../src/inbox/Brief', () => ({ Brief: () => null, blockerLabel: () => '' }))
+vi.mock('../src/inbox/Resources', () => ({
+  RunningTab: ({ children }: { children: (listed: Set<string>) => unknown }) => children(new Set()),
+}))
 vi.mock('../src/inbox/failureSeen', () => ({ useFailureSeen: () => () => false }))
 vi.mock('../src/inbox/recaps', () => ({ SnoozeMenu: () => null, notifyRecapAction: vi.fn() }))
 vi.mock('../src/chat/Notifications', () => ({ notifyError: vi.fn() }))
@@ -39,7 +42,12 @@ vi.mock('../src/inbox/navigation', () => ({ savedInboxTab: () => 'running', save
 
 const elements = (node: ReactNode): ReactElement<Record<string, unknown>>[] => {
   if (!isValidElement<Record<string, unknown>>(node)) return []
-  return [node, ...[node.props.children].flat(Infinity).flatMap((child) => elements(child as ReactNode))]
+  return [
+    node,
+    ...[node.props.children]
+      .flat(Infinity)
+      .flatMap((child) => elements((typeof child === 'function' ? child(new Set()) : child) as ReactNode)),
+  ]
 }
 const rows = () => elements(HostsInbox()).filter((node) => node.type === HostProvider)
 beforeEach(() => {

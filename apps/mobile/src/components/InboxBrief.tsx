@@ -6,13 +6,15 @@ import {
   blockerTally,
   blockerTallyLine,
   BRIEF_ROWS,
+  briefRowHost,
   briefRows,
   finishedSince,
   TALLY_MIN_THREADS,
   type BriefRow,
   type InboxModel,
 } from '@ramu/shared/hostInbox'
-import { retryThread } from '@ramu/shared/operator'
+import { retryThread, stopIdleThreads } from '@ramu/shared/operator'
+import { gigabytes } from '@ramu/shared/resources'
 import { useSay } from '../i18n'
 import { useAutomation } from '../runtime/automation'
 import { inboxBlockerText } from '../runtime/inboxBlockerText'
@@ -34,8 +36,8 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState(false)
   const [error, setError] = useState('')
-  const hostId = row.kind === 'recap' ? row.recap.computerId : row.chat.computerId
-  const taskId = row.kind === 'recap' ? row.recap.item.taskId : row.chat.taskId
+  const hostId = briefRowHost(row)
+  const taskId = row.kind === 'recap' ? row.recap.item.taskId : row.kind === 'low-memory' ? '' : row.chat.taskId
   const chat = store.chats.find((entry) => entry.computerId === hostId && entry.taskId === taskId)
   const computer = store.computers.find((entry) => entry.id === hostId)
   const viewOnly = computer?.access === 'viewer'
@@ -56,13 +58,25 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
       ? row.chat.inputSummary?.requests[0]
       : undefined
   const off = busy || !online
-  const title = row.kind === 'recap' ? row.recap.item.title : (chat?.title ?? '')
+  const title =
+    row.kind === 'recap'
+      ? row.recap.item.title
+      : row.kind === 'low-memory'
+        ? say('{0} is low on memory', { 0: computer?.name ?? '' })
+        : (chat?.title ?? '')
   const detail =
     row.kind === 'recap'
       ? row.recap.item.detail
-      : row.kind === 'failure'
-        ? say('Failed')
-        : request?.title || inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
+      : row.kind === 'low-memory'
+        ? row.memory.low.idleThreads.length
+          ? say('{0} idle threads use {1} GB', {
+              0: row.memory.low.idleThreads.length,
+              1: gigabytes(row.memory.low.idleBytes),
+            })
+          : say('{0} GB free', { 0: gigabytes(row.memory.low.availableBytes) })
+        : row.kind === 'failure'
+          ? say('Failed')
+          : request?.title || inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
   return (
     <View
       style={{
@@ -100,6 +114,14 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
               onPress={() => run(() => invoke(hostId, 'tasks.done', taskId, true).then(() => store.refresh(hostId)))}
             />
           </>
+        ) : row.kind === 'low-memory' ? (
+          row.memory.low.idleThreads.length ? (
+            <Button
+              title={say('Stop idle')}
+              disabled={off}
+              onPress={() => run(() => stopIdleThreads(invoke, hostId, row.memory.low.idleThreads))}
+            />
+          ) : null
         ) : row.kind === 'recap' ? (
           <Button
             kind="secondary"
@@ -141,7 +163,7 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
             onPress={() => setOpen((value) => !value)}
           />
         ) : null}
-        <Button kind="ghost" title={say('Open')} disabled={!chat} onPress={go} />
+        {chat ? <Button kind="ghost" title={say('Open')} onPress={go} /> : null}
       </View>
       {open && chat ? <InputRequests chat={chat} /> : null}
     </View>
@@ -185,8 +207,8 @@ export function InboxBrief({ inbox, where }: { inbox: InboxModel; where: (chat: 
           <BriefRowView
             key={JSON.stringify([
               row.kind,
-              row.kind === 'recap' ? row.recap.computerId : row.chat.computerId,
-              row.kind === 'recap' ? row.recap.item.id : row.chat.taskId,
+              briefRowHost(row),
+              row.kind === 'recap' ? row.recap.item.id : row.kind === 'low-memory' ? '' : row.chat.taskId,
             ])}
             row={row}
             divider={index > 0}

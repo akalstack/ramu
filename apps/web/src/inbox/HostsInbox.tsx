@@ -1,5 +1,6 @@
 import { RowButton } from '@/components/row-button'
 import { Brief, blockerLabel } from './Brief'
+import { RunningTab } from './Resources'
 import { useInboxModel } from './useBrief'
 import { useState, useEffect } from 'react'
 import { inboxBlocker, INBOX_TABS, type InboxChat, type InboxTab } from '@ramu/shared/hostInbox'
@@ -216,7 +217,16 @@ export function HostsInbox() {
               </p>
             )}
             {tab === 'brief' && <Brief />}
-            {section('running', t('Running in the background'), model.running.length, chats(model.running))}
+            {tab === 'running' && (
+              <RunningTab>
+                {(listed) => {
+                  const rest = model.running.filter(
+                    (chat) => !listed.has(JSON.stringify([chat.computerId, chat.taskId])),
+                  )
+                  return section('running', t('Running in the background'), rest.length, chats(rest))
+                }}
+              </RunningTab>
+            )}
             {section('recaps', t('Since your last visit'), model.sinceVisit.length, recaps(model.sinceVisit))}
             {tab === 'recaps' && section('recaps', t('Earlier'), model.earlier.length, recaps(model.earlier))}
             {section(

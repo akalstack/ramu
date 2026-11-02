@@ -12,7 +12,16 @@ export const registerBackgroundHandlers: RegisterHandlers = ({
   learning,
   recaps,
   notices,
+  resources,
 }) => ({
+  'resources.snapshot': {
+    args: z.tuple([]),
+    run: () => {
+      if (!resources) throw new Error('Resources are not available on this host.')
+      return resources.snapshot()
+    },
+  },
+  'resources.host': { args: z.tuple([]), run: () => resources?.host() ?? { memory: null, low: null } },
   'background.keepAwake': { args: z.tuple([]), run: () => awake.status() },
   'activity.status': {
     args: z.tuple([]),

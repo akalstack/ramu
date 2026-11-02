@@ -1,5 +1,6 @@
 import type { ChatGoal, LibrarySummary, RecapItem, TaskStatus, ThreadInputSummary } from './types'
 import { goalContinues } from '@ramu/shared/chat/goalHold'
+import type { LowMemory } from './resources'
 
 // Shared desktop/mobile inbox: what needs you, what is running, recaps, learning, and finished work.
 // Keep derivation independent of rendering and apply host scope before limits or counts.
@@ -190,6 +191,7 @@ export function buildInbox(input: {
   recapsEnabled?: (computerId: string) => boolean
   /** A failure the person already opened on this device no longer asks for them. */
   failureSeen?: (chat: InboxChat) => boolean
+  lowMemory?: InboxLowMemory[]
   visit?: number
   now?: number
 }) {
@@ -225,6 +227,7 @@ export function buildInbox(input: {
   const failed = live
     .filter((chat) => chat.status === 'failed' && !needsInput(chat) && !helpersRunning(chat) && !failureSeen(chat))
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  const lowMemory = (input.lowMemory ?? []).filter((entry) => inScope(entry.computerId))
   const enabled = input.recapsEnabled ?? (() => true)
   const recaps = splitRecaps(
     input.recaps.filter((r) => inScope(r.computerId) && enabled(r.computerId)),
@@ -263,17 +266,19 @@ export function buildInbox(input: {
   return {
     waiting,
     failed,
+    lowMemory,
     running,
     ...recaps,
     summaries,
     unreadSummaries: summaries.filter((s) => s.summary.status === 'unread').length,
     completed,
     days,
-    /** What the badge counts: threads waiting on you, failures not yet looked at and recaps that need a decision. */
-    needsYou: waiting.length + failed.length + recaps.attention.length,
+    /** What the badge counts: waiting threads, failures not yet looked at, low hosts and recaps that need a decision. */
+    needsYou: waiting.length + failed.length + lowMemory.length + recaps.attention.length,
     empty:
       !waiting.length &&
       !failed.length &&
+      !lowMemory.length &&
       !running.length &&
       !recaps.attention.length &&
       !recaps.sinceVisit.length &&
@@ -283,9 +288,15 @@ export function buildInbox(input: {
 }
 export type InboxModel = ReturnType<typeof buildInbox>
 
+export interface InboxLowMemory {
+  computerId: string
+  low: LowMemory
+}
+
 export type BriefRow =
   | { kind: 'failure'; chat: InboxChat }
   | { kind: 'blocker'; chat: InboxChat; blocker: InboxBlocker }
+  | { kind: 'low-memory'; memory: InboxLowMemory }
   | { kind: 'recap'; recap: InboxRecap }
 
 /** Rows the Brief shows before **See all**, so the first screen always holds what matters most. */
@@ -294,21 +305,31 @@ export const BRIEF_ROWS = 5
 const blockerRank = (kind: InboxBlockerKind) =>
   kind === 'approval' || kind === 'connector' || kind === 'question' ? 0 : 2
 const briefRank = (row: BriefRow) =>
-  row.kind === 'blocker' ? blockerRank(row.blocker.kind) : row.kind === 'failure' ? 1 : 4
+  row.kind === 'blocker'
+    ? blockerRank(row.blocker.kind)
+    : row.kind === 'failure'
+      ? 1
+      : row.kind === 'low-memory'
+        ? 3
+        : 4
 
 /** What needs the person now: requests, then failures, then limits and paused goals, then recaps needing a decision. */
-export function briefRows(model: Pick<InboxModel, 'waiting' | 'failed' | 'attention'>): BriefRow[] {
+export function briefRows(model: Pick<InboxModel, 'waiting' | 'failed' | 'attention' | 'lowMemory'>): BriefRow[] {
   const rows: BriefRow[] = [
     ...model.waiting.flatMap((chat): BriefRow[] => {
       const blocker = inboxBlocker(chat)
       return blocker ? [{ kind: 'blocker', chat, blocker }] : []
     }),
     ...model.failed.map((chat): BriefRow => ({ kind: 'failure', chat })),
+    ...model.lowMemory.map((memory): BriefRow => ({ kind: 'low-memory', memory })),
     ...model.attention.map((recap): BriefRow => ({ kind: 'recap', recap })),
   ]
   // Array sorting is stable, so each kind keeps its newest-first order.
   return rows.sort((a, b) => briefRank(a) - briefRank(b))
 }
+
+export const briefRowHost = (row: BriefRow) =>
+  row.kind === 'recap' ? row.recap.computerId : row.kind === 'low-memory' ? row.memory.computerId : row.chat.computerId
 
 /** Threads finished since the last visit, for Home's and the Brief's one summary line. */
 export const finishedSince = (model: Pick<InboxModel, 'completed'>, visit: number) =>

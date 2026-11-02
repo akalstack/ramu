@@ -39,6 +39,7 @@ export interface Services {
   externalSkills?: import('../memory/externalSkills').ExternalSkills
   workspace: Workspace
   terminals: TerminalService
+  resources?: import('../background/resources').ResourceService
   agents: AgentService
   schedules: ScheduleService
   pullRequestWatches?: PullRequestWatchService

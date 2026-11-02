@@ -4,13 +4,15 @@ import {
   blockerTally,
   blockerTallyLine,
   BRIEF_ROWS,
+  briefRowHost,
   briefRows,
   finishedSince,
   TALLY_MIN_THREADS,
   type BriefRow,
   type InboxBlocker,
 } from '@ramu/shared/hostInbox'
-import { retryThread } from '@ramu/shared/operator'
+import { retryThread, stopIdleThreads } from '@ramu/shared/operator'
+import { gigabytes } from '@ramu/shared/resources'
 import { Button } from '@/components/desktop-button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { notifyError } from '../chat/Notifications'
@@ -23,6 +25,7 @@ import { HostProvider, useHost } from '../workspace/HostProvider'
 import { useHostSelection } from '../workspace/HostSelection'
 import { invokeOn } from '../ipc'
 import { OperatorBox } from './OperatorBox'
+import { showInboxTab } from './navigation'
 import { StartedTogether } from './StartedTogether'
 import { useInboxModel } from './useBrief'
 
@@ -49,7 +52,7 @@ export function blockerLabel(blocker: InboxBlocker): string {
 }
 
 interface RowContent {
-  taskId: string
+  taskId?: string
   sessionId?: string | null
   title: string
   detail: string
@@ -82,11 +85,13 @@ function BriefRowView({
       .finally(() => setBusy(false))
   }
   const open = () =>
-    select(hostId, {
-      kind: 'task',
-      taskId: content.taskId,
-      ...(content.sessionId ? { sessionId: content.sessionId } : {}),
-    })
+    content.taskId
+      ? select(hostId, {
+          kind: 'task',
+          taskId: content.taskId,
+          ...(content.sessionId ? { sessionId: content.sessionId } : {}),
+        })
+      : showInboxTab('running')
   const request =
     row.kind === 'blocker' && (row.blocker.kind === 'approval' || row.blocker.kind === 'question')
       ? row.chat.inputSummary?.requests[0]
@@ -110,6 +115,16 @@ function BriefRowView({
         {t('Mark done')}
       </Button>
     </>
+  ) : row.kind === 'low-memory' ? (
+    row.memory.low.idleThreads.length > 0 && (
+      <Button
+        size="xs"
+        disabled={disabled}
+        onClick={() => run(() => stopIdleThreads(invokeOn as unknown as Invoke, hostId, row.memory.low.idleThreads))}
+      >
+        {t('Stop idle')}
+      </Button>
+    )
   ) : row.kind === 'recap' ? (
     <Button
       variant="ghost"
@@ -194,6 +209,17 @@ export function Brief() {
     return [project?.name, (computers?.computers.length ?? 0) > 1 ? pc(hostId)?.name : ''].filter(Boolean).join(' · ')
   }
   const content = (row: BriefRow): RowContent => {
+    if (row.kind === 'low-memory') {
+      const { computerId, low } = row.memory
+      const host = pc(computerId)?.name ?? ''
+      return {
+        title: t('{0} is low on memory', { 0: host }),
+        detail: low.idleThreads.length
+          ? t('{0} idle threads use {1} GB', { 0: low.idleThreads.length, 1: gigabytes(low.idleBytes) })
+          : t('{0} GB free', { 0: gigabytes(low.availableBytes) }),
+        tone: 'warn',
+      }
+    }
     if (row.kind === 'recap') {
       const { item } = row.recap
       return { taskId: item.taskId, sessionId: item.sessionId, title: item.title, detail: item.detail }
@@ -205,9 +231,12 @@ export function Brief() {
     return { ...base, detail: request?.title || blockerLabel(row.blocker), tone: 'warn' }
   }
   const refetch = (hostId: string) => () => void hosts.find((entry) => entry.id === hostId)?.refetch()
-  const hostOf = (row: BriefRow) => (row.kind === 'recap' ? row.recap.computerId : row.chat.computerId)
   const keyOf = (row: BriefRow) =>
-    JSON.stringify([hostOf(row), row.kind, row.kind === 'recap' ? row.recap.item.id : row.chat.taskId])
+    JSON.stringify([
+      briefRowHost(row),
+      row.kind,
+      row.kind === 'recap' ? row.recap.item.id : row.kind === 'low-memory' ? '' : row.chat.taskId,
+    ])
   return (
     <div className="flex flex-col gap-5">
       {rows.length > 0 ? (
@@ -222,13 +251,17 @@ export function Brief() {
           )}
           <div className="flex flex-col divide-y divide-(--line)">
             {shown.map((row) => {
-              const hostId = hostOf(row)
+              const hostId = briefRowHost(row)
               return (
                 <HostProvider key={keyOf(row)} hostId={hostId}>
                   <BriefRowView
                     row={row}
                     content={content(row)}
-                    where={row.kind === 'recap' ? where(hostId, row.recap.item.taskId) : where(hostId, row.chat.taskId)}
+                    where={
+                      row.kind === 'low-memory'
+                        ? ''
+                        : where(hostId, row.kind === 'recap' ? row.recap.item.taskId : row.chat.taskId)
+                    }
                     online={pc(hostId)?.status === 'connected'}
                     onDone={refetch(hostId)}
                   />

@@ -1,3 +1,4 @@
+import { trackProcess } from '../agent/processOwners'
 import { modelLegacyMetadata } from './modelLifecycle'
 import { modelContextWindow } from './modelContext'
 import { permissionKey } from '../agent/permissionApprovals'
@@ -44,31 +45,33 @@ export class CodexRpc {
   readonly exited: Promise<void>
 
   constructor(connection?: McpConnection, extraConfig: string[] = [], accountId?: string) {
-    this.process = spawn(
-      providerBinary('codex'),
-      [
-        'app-server',
-        '--stdio',
-        ...extraConfig.flatMap((entry) => ['-c', entry]),
-        ...(connection
-          ? [
-              '-c',
-              `mcp_servers.ramu.url=${JSON.stringify(connection.url)}`,
-              '-c',
-              'mcp_servers.ramu.bearer_token_env_var="RAMU_MCP_TOKEN"',
-              '-c',
-              'mcp_servers.ramu.tool_timeout_sec=3600',
-              ...(connection.nativeSubagents === false ? ['-c', 'features.multi_agent=false'] : []),
-            ]
-          : []),
-      ],
-      {
-        stdio: 'pipe',
-        env: {
-          ...providerEnvironment('codex', undefined, accountId),
-          ...(connection ? { RAMU_MCP_TOKEN: connection.token } : {}),
+    this.process = trackProcess(
+      spawn(
+        providerBinary('codex'),
+        [
+          'app-server',
+          '--stdio',
+          ...extraConfig.flatMap((entry) => ['-c', entry]),
+          ...(connection
+            ? [
+                '-c',
+                `mcp_servers.ramu.url=${JSON.stringify(connection.url)}`,
+                '-c',
+                'mcp_servers.ramu.bearer_token_env_var="RAMU_MCP_TOKEN"',
+                '-c',
+                'mcp_servers.ramu.tool_timeout_sec=3600',
+                ...(connection.nativeSubagents === false ? ['-c', 'features.multi_agent=false'] : []),
+              ]
+            : []),
+        ],
+        {
+          stdio: 'pipe',
+          env: {
+            ...providerEnvironment('codex', undefined, accountId),
+            ...(connection ? { RAMU_MCP_TOKEN: connection.token } : {}),
+          },
         },
-      },
+      ),
     )
     this.process.stderr.resume()
     const lines = createInterface({ input: this.process.stdout })

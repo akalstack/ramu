@@ -1,4 +1,5 @@
 import { Brief } from './Brief'
+import { RunningTab } from './Resources'
 import { useInboxModel } from './useBrief'
 import { useHost } from '../workspace/HostProvider'
 import { useComputers } from '../workspace/computers'
@@ -94,6 +95,7 @@ function CurrentHostInbox() {
   useLanguage()
   const { groups, error } = useAgentOverview()
   const { model } = useInboxModel()
+  const host = useHost()
   const recaps = useRecaps()
   const { snapshot } = useSummaries()
   const [tab, setTab] = useState<InboxTab>(savedInboxTab)
@@ -157,17 +159,20 @@ function CurrentHostInbox() {
 
           <TabsContent value="running" className="flex flex-col gap-6">
             {tab === 'running' && (
-              <>
-                {running.length > 0 ? (
-                  <AgentList items={running} />
-                ) : (
-                  <Nothing
-                    icon={<Loader />}
-                    title={t('No agents running')}
-                    detail={t('Threads and sub-agents that are working, or waiting for a usage limit, show up here.')}
-                  />
-                )}
-              </>
+              <RunningTab>
+                {(listed) => {
+                  const rest = running.filter((item) => !listed.has(JSON.stringify([host.id, item.session.taskId])))
+                  return rest.length > 0 ? (
+                    <AgentList items={rest} />
+                  ) : listed.size ? null : (
+                    <Nothing
+                      icon={<Loader />}
+                      title={t('No agents running')}
+                      detail={t('Threads and sub-agents that are working, or waiting for a usage limit, show up here.')}
+                    />
+                  )
+                }}
+              </RunningTab>
             )}
           </TabsContent>
 

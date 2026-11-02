@@ -248,3 +248,11 @@ export function operatorActionLabel(type: OperatorActionType): string {
     'run-schedule': 'Run schedule now',
   }[type]
 }
+
+/** Stops the agents of threads with no turn in progress; each keeps its transcript and continues on the next message. */
+export async function stopIdleThreads(invoke: Invoke, hostId: string, taskIds: readonly string[]) {
+  for (const taskId of taskIds) {
+    const session = await latestSession(invoke, { hostId, taskId }).catch(() => null)
+    if (session) await invoke(hostId, 'agent.stop', session.id)
+  }
+}
