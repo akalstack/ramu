@@ -3,7 +3,6 @@ import { CircleAlert, RotateCcw } from 'lucide-react'
 import { agentErrorView } from '@ramu/shared/chat/agentErrorView'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../../../i18n'
-import { openModelList } from '../../../models/modelPickerRequest'
 import { CopyButton } from './CopyButton'
 
 const LONG = 240
@@ -30,7 +29,8 @@ export function ErrorNote({
   const providers = () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'providers' } }))
   const chooseModel = () => {
     const trigger = card.current?.closest('.agent-view')?.querySelector<HTMLElement>('.model-bar-trigger')
-    if (trigger) openModelList(trigger)
+    // The model bar opens on its model list.
+    if (trigger) trigger.click()
     else providers()
   }
   return (

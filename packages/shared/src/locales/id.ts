@@ -3348,6 +3348,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Answering a sub-agent': 'Menjawab sub-agen',
   Used: 'Memakai',
   Details: 'Detail',
+  LAN: 'LAN',
+  Tunnel: 'Tunnel',
+  Internet: 'Internet',
+  'via {0}': 'lewat {0}',
   'Generated text': 'Teks yang dibuat',
   'Writing model': 'Model penulis',
   'Writes commit messages and pull request titles and descriptions. Default uses your default model.':

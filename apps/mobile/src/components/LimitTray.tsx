@@ -69,49 +69,31 @@ export function LimitTray({ chatId }: { chatId: string }) {
       if (result && !result.resumed) setStill(true)
     })
   }
+  const prefs = store.appPreferences[chat.computerId]
+  const offline = !store.isOnline(chat.computerId)
   return (
     <View
+      accessibilityRole="summary"
       style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.s,
         paddingHorizontal: space.m,
-        paddingVertical: 4,
+        paddingVertical: space.s,
         borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: c.lineStrong,
-        gap: 2,
       }}
     >
-      <View
-        accessibilityRole="summary"
-        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
-      >
-        <Clock3 size={14} color={c.muted} strokeWidth={1.8} />
-        <T size={font.control} numberOfLines={2} style={{ flex: 1 }}>
-          <T size={font.control} weight="600">
-            {t[model.title]}
-          </T>
-          <T size={font.control} tone="muted">{` · ${detail}`}</T>
+      <Clock3 size={15} color={c.warn} strokeWidth={1.9} />
+      {/* What happened, when it continues, and this thread's own Auto-resume choice, stacked so none of it wraps oddly. */}
+      <View style={{ flex: 1, gap: 1 }}>
+        <T size={font.control} weight="600" numberOfLines={1}>
+          {t[model.title]}
         </T>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={button}
-          disabled={trying || !store.isOnline(chat.computerId)}
-          hitSlop={6}
-          onPress={tryNow}
-          style={{
-            height: 28,
-            paddingHorizontal: space.m,
-            justifyContent: 'center',
-            borderRadius: radius.full,
-            backgroundColor: model.primary ? c.primary : c.fill,
-            opacity: trying || !store.isOnline(chat.computerId) ? 0.5 : 1,
-          }}
-        >
-          <T size={font.caption} weight="600" style={{ color: model.primary ? c.primaryInk : c.soft }}>
-            {button}
-          </T>
-        </Pressable>
-      </View>
-      {store.appPreferences[chat.computerId] ? (
-        <>
+        <T size={font.caption} tone="muted" numberOfLines={2}>
+          {detail.charAt(0).toUpperCase() + detail.slice(1)}
+        </T>
+        {prefs ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={state}
@@ -120,17 +102,38 @@ export function LimitTray({ chatId }: { chatId: string }) {
               setOpen(true)
             }}
             hitSlop={6}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-end', height: 26 }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', paddingTop: 2 }}
           >
-            <T size={font.caption} tone="muted">
+            <T size={font.caption} tone="soft">
               {state}
             </T>
             <ChevronDown size={12} color={c.muted} />
           </Pressable>
-          <Sheet open={open} onClose={() => setOpen(false)} title={t.autoResume}>
-            <AutoResumeRows chatId={chat.id} onPicked={() => setOpen(false)} />
-          </Sheet>
-        </>
+        ) : null}
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={button}
+        disabled={trying || offline}
+        hitSlop={8}
+        onPress={tryNow}
+        style={({ pressed }) => ({
+          height: 30,
+          paddingHorizontal: space.m,
+          justifyContent: 'center',
+          borderRadius: radius.full,
+          backgroundColor: model.primary ? c.primary : pressed ? c.pressed : c.fill,
+          opacity: trying || offline ? 0.5 : 1,
+        })}
+      >
+        <T size={font.caption} weight="600" style={{ color: model.primary ? c.primaryInk : c.text }}>
+          {button}
+        </T>
+      </Pressable>
+      {prefs ? (
+        <Sheet open={open} onClose={() => setOpen(false)} title={t.autoResume}>
+          <AutoResumeRows chatId={chat.id} onPicked={() => setOpen(false)} />
+        </Sheet>
       ) : null}
     </View>
   )

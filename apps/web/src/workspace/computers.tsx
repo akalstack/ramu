@@ -2,6 +2,8 @@ import { ChevronsUpDown, Network, Settings2 } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import type { Computer, ComputerStatus, Computers } from '@ramu/shared/types'
 import { Menu, type MenuEntry } from '../Menu'
+import { Switch } from '@/components/ui/switch'
+import { routeName } from '@ramu/shared/networkLabel'
 import { invoke, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
@@ -83,6 +85,13 @@ export function activityText(computer: Pick<Computer, 'status' | 'running' | 'ne
   return parts.filter(Boolean).join(' · ')
 }
 
+/** How this device reaches a host right now, as "via LAN", "via Ramu Link" and so on; empty for this computer. */
+export function hostRoute(computer: Pick<Computer, 'local' | 'url' | 'ssh' | 'status'>): string {
+  if (computer.local || computer.status !== 'connected') return ''
+  const route = routeName(computer.url, computer.ssh)
+  return route ? t('via {0}', { 0: t(route) }) : ''
+}
+
 /** The shared browsing filter is independent of the computer running the active chat. */
 export function ComputerSwitcher() {
   useLanguage()
@@ -112,12 +121,32 @@ export function ComputerSwitcher() {
       title: computer.url ?? undefined,
       onSelect: () => select(computer.id),
       label: (
-        <span className="flex min-w-0 grow items-center gap-2">
+        <span className="flex w-full min-w-0 items-center gap-2">
           <StatusDot status={computer.status} />
           <span className="min-w-0 grow truncate">{computer.name}</span>
-          <span className="ml-auto flex-none pl-3 text-caption text-muted-foreground tabular-nums">
-            {activityText(computer)}
+          <span className="ml-auto flex-none pl-3 text-right text-caption text-muted-foreground tabular-nums">
+            {[activityText(computer), hostRoute(computer)].filter(Boolean).join(' · ')}
           </span>
+          {!computer.local && computer.status !== 'rejected' && (
+            // Turns the connection off and on from here; the click must not also pick this host.
+            <span
+              className="flex flex-none items-center"
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <Switch
+                size="sm"
+                aria-label={t('Keep {0} connected', { 0: computer.name })}
+                checked={computer.status !== 'paused'}
+                onCheckedChange={(on) =>
+                  void invoke('computers.update', computer.id, { enabled: on })
+                    .then(publishComputers)
+                    .catch((error) => notifyError(errorText(error), t('Hosts')))
+                }
+              />
+            </span>
+          )}
         </span>
       ),
     })),

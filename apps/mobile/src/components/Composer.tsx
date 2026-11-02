@@ -97,6 +97,11 @@ export function modelLabel(m: ModelChoice) {
 
 /** Rows an iOS model list draws at a time; the native sheet scrolls them. */
 const MODEL_PAGE = 60
+/** Models each provider shows on the picker's first page before "All N models". */
+const MODELS_PER_PROVIDER = 4
+/** An effort level as people read it. */
+const effortWord = (effort: string) =>
+  effort === 'xhigh' ? 'Extra high' : effort ? effort[0]!.toUpperCase() + effort.slice(1) : ''
 
 type ModelRow = {
   provider: AgentProvider
@@ -363,25 +368,53 @@ export function ModelChip({
                 close()
               }}
             />
-            {providers.map((p) => (
-              <Row
-                key={p.provider}
-                onPress={() => {
-                  tap()
-                  setProvider(p.provider)
-                  setQuery('')
-                }}
-              >
-                <ProviderIcon provider={p.provider} size={18} />
-                <T style={{ flex: 1 }} weight={p.provider === value.provider ? '600' : '400'}>
-                  {providerNames[p.provider]}
-                </T>
-                <T size={font.caption} tone="muted">
-                  {p.count}
-                </T>
-                <ChevronRight size={15} color={c.placeholder} />
-              </Row>
-            ))}
+            {/* Models straight away, as on the desktop: each provider's first few, with the rest one tap further. */}
+            {providers.map((p) => {
+              const own = models.filter((m) => m.provider === p.provider)
+              const first = [
+                ...own.filter((m) => m.provider === current?.provider && m.model === current.model),
+                ...own.filter((m) => !(m.provider === current?.provider && m.model === current.model)),
+              ].slice(0, MODELS_PER_PROVIDER)
+              return (
+                <View key={p.provider}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: space.s,
+                      paddingHorizontal: space.l,
+                      paddingTop: space.m,
+                      paddingBottom: 2,
+                    }}
+                  >
+                    <ProviderIcon provider={p.provider} size={14} />
+                    <T
+                      size={font.caption}
+                      weight="600"
+                      tone="muted"
+                      style={{ textTransform: 'uppercase', letterSpacing: 0.3 }}
+                    >
+                      {providerNames[p.provider]}
+                    </T>
+                  </View>
+                  {first.map(modelRow)}
+                  {own.length > first.length ? (
+                    <Row
+                      onPress={() => {
+                        tap()
+                        setProvider(p.provider)
+                        setQuery('')
+                      }}
+                    >
+                      <T tone="accent" weight="500" style={{ flex: 1 }}>
+                        {`All ${own.length} ${providerNames[p.provider]} models`}
+                      </T>
+                      <ChevronRight size={15} color={c.placeholder} />
+                    </Row>
+                  ) : null}
+                </View>
+              )
+            })}
             {!providers.length ? (
               <T tone="muted" style={{ padding: space.l }}>
                 {offline ? 'Reconnect this host to choose a model.' : 'No models reported by this host yet.'}
@@ -1531,7 +1564,7 @@ function QuickSteps({
   const items =
     mode === 'model'
       ? steps.map((step) => ({
-          label: `${row(step.provider, step.model)?.label ?? step.model} ${step.effort ?? ''}`.trim(),
+          label: `${row(step.provider, step.model)?.label ?? step.model} ${effortWord(step.effort ?? '')}`.trim(),
           pick: { provider: step.provider, model: step.model, effort: step.effort ?? '' },
         }))
       : efforts.map((e) => ({
@@ -1549,12 +1582,17 @@ function QuickSteps({
       : efforts.indexOf(effortNow)
   if (items.length < 2) return null
   const shown = items[index]
-  const cap = (s: string) => s.replace(/\b\w/g, (ch) => ch.toUpperCase())
+  const cap = (s: string) => (s === 'xhigh' ? 'Extra high' : s.replace(/\b\w/g, (ch) => ch.toUpperCase()))
+  // Effort mode keeps the model in view: the levels below belong to it.
+  const heading =
+    mode === 'effort'
+      ? `${current?.label ?? value.model ?? ''}${shown ? ` · ${cap(shown.label)}` : ''}`
+      : (shown?.label ?? 'Custom')
   return (
     <View style={{ paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: space.m, gap: space.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
         <T size={font.control} weight="600" style={{ flex: 1 }} numberOfLines={1}>
-          {shown ? cap(shown.label) : 'Custom'}
+          {heading}
         </T>
         <Segmented
           value={mode}
@@ -1580,7 +1618,7 @@ function QuickSteps({
               }}
             >
               <T style={{ flex: 1 }} weight={i === index ? '600' : '400'} numberOfLines={1}>
-                {cap(item.label)}
+                {item.label}
               </T>
               {i === index ? <Check size={17} color={c.accent} /> : null}
             </Row>

@@ -67,7 +67,8 @@ export function LimitTrayRow({
       <Button
         variant={view.primary ? 'default' : 'ghost'}
         size="xs"
-        className={view.primary ? 'flex-none' : 'flex-none text-muted-foreground'}
+        // The bar is caption-sized; the app button would otherwise draw body text at full control height.
+        className={`h-6 min-h-6 flex-none px-2 py-0 text-caption ${view.primary ? '' : 'text-muted-foreground'}`}
         disabled={busy || readOnly}
         onClick={onTry}
       >

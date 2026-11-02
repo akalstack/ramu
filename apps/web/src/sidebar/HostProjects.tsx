@@ -105,8 +105,13 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
     >
       {grouped && (
         <div className="group/host sticky top-0 z-[6] flex min-h-8 items-center gap-0.5 bg-(--sidebar) px-1">
+          {/* The whole row highlights, under the actions too. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 inset-x-1 rounded-(--radius-s) group-hover/host:bg-accent"
+          />
           <SidebarDisclosureButton
-            className="flex-1 text-foreground"
+            className="relative flex-1 text-foreground hover:bg-transparent"
             title={computer.name}
             aria-expanded={open}
             onClick={() => tree.setExpanded('host', !open)}
@@ -118,7 +123,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             <span className="min-w-0 flex-1 truncate font-medium">{computer.name}</span>
             {available && computer.needsInput > 0 && (
               <span
-                className="inline-flex flex-none items-center gap-1 text-caption tabular-nums text-foreground"
+                className="inline-flex flex-none items-center gap-1 text-caption tabular-nums text-foreground group-hover/host:opacity-0"
                 title={t('{0} waiting', { 0: computer.needsInput })}
               >
                 <span className="size-1.5 rounded-full bg-warn" />
@@ -127,7 +132,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             )}
             {available && working > 0 && (
               <span
-                className="inline-flex flex-none items-center gap-1 text-caption tabular-nums text-muted-foreground"
+                className="inline-flex flex-none items-center gap-1 text-caption tabular-nums text-muted-foreground group-hover/host:opacity-0"
                 title={t('{0} working', { 0: working })}
               >
                 <SteadyLoader />
@@ -136,7 +141,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             )}
           </SidebarDisclosureButton>
           {/* Overlays the row's end, so counts sit flush right until the actions are wanted. */}
-          <div className="absolute inset-y-0 right-1 flex items-center gap-0.5 bg-(--sidebar) opacity-0 group-hover/host:opacity-100 focus-within:opacity-100">
+          <div className="absolute inset-y-0 right-1 flex items-center gap-0.5 bg-(--sidebar) opacity-0 group-hover/host:bg-transparent group-hover/host:opacity-100 focus-within:opacity-100">
             <Button
               variant="ghost"
               size="icon-xs"
