@@ -1,0 +1,498 @@
+import { useEffect, useState, type ReactNode } from 'react'
+import { Check, ExternalLink, FolderGit2, Globe, Layers, LogIn, SlidersHorizontal, Wifi } from 'lucide-react'
+import { cn } from 'cn'
+import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
+import type { AgentProvider, ModelPreferences, NetworkStatus, Project } from '@ramu/shared/types'
+import { Button } from '@/components/desktop-button'
+import { RowButton } from '@/components/row-button'
+import { StepSlider } from '@/components/step-slider'
+import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import { Dropdown } from '../Menu'
+import { invoke, ramu } from '../ipc'
+import { t } from '../i18n'
+import { errorText } from '../lib/errors'
+import { effortDisplayName, modelDisplayName, modelStepName, useModelSets } from '../models/ModelSets'
+import { ProviderIcon } from '../models/ProviderIcon'
+import { runProviderCommand } from '../models/ProviderSetupTerminal'
+import { FEWEST_TOKENS, TOKEN_FEATURES, sameChoices, type TokenChoices } from './tokenChoices'
+
+/** A rounded group of rows on the raised fill, like a Settings card. */
+function Group({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn('overflow-hidden rounded-(--radius-m) bg-fill [&>*+*]:border-t [&>*+*]:border-(--line)', className)}
+    >
+      {children}
+    </div>
+  )
+}
+
+function Row({ title, help, children }: { title: ReactNode; help?: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="flex items-center gap-4 px-4 py-3">
+      <span className="min-w-0 flex-1">
+        <strong className="flex items-center gap-2 font-medium">{title}</strong>
+        {help && <span className="mt-0.5 block text-caption leading-[18px] text-muted-foreground">{help}</span>}
+      </span>
+      {children}
+    </div>
+  )
+}
+
+export function AgentsStep({
+  statuses,
+  provider,
+  onProvider,
+  onRefresh,
+  onError,
+}: {
+  statuses: ProviderStatus[] | null
+  provider: AgentProvider
+  onProvider(provider: AgentProvider): void
+  onRefresh(): Promise<void>
+  onError(message: string): void
+}) {
+  const [checking, setChecking] = useState(false)
+  const installed = statuses?.filter((status) => status.installed) ?? []
+  const signIn = async (status: ProviderStatus) => {
+    onError('')
+    try {
+      const command = await invoke('providers.loginCommand', status.provider)
+      if (command) runProviderCommand(`${providerName(status.provider)} · ${t('Sign in')}`, command)
+      else await invoke('providers.signIn', status.provider)
+    } catch (e) {
+      onError(errorText(e))
+    }
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {statuses === null ? (
+        <p className="m-0 text-caption text-muted-foreground" role="status">
+          {t('Looking for installed agents…')}
+        </p>
+      ) : (
+        <Group>
+          {statuses.map((status) => (
+            <Row
+              key={status.provider}
+              title={
+                <>
+                  <ProviderIcon provider={status.provider} size={15} />
+                  {providerName(status.provider)}
+                </>
+              }
+              help={
+                status.installed
+                  ? status.signIn?.default?.signedIn
+                    ? t('Signed in')
+                    : t('Installed')
+                  : t('Not installed')
+              }
+            >
+              {status.installed ? (
+                status.signIn?.default?.signedIn ? (
+                  <Check size={16} className="text-brand" aria-label={t('Signed in')} />
+                ) : (
+                  <Button variant="secondary" onClick={() => void signIn(status)}>
+                    {t('Sign in')}
+                  </Button>
+                )
+              ) : (
+                <Button
+                  variant="ghost"
+                  onClick={() => void ramu.invoke('app.openExternal', status.docsUrl).catch(() => {})}
+                >
+                  {t('Setup instructions')}
+                  <ExternalLink size={13} />
+                </Button>
+              )}
+            </Row>
+          ))}
+        </Group>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        {installed.length > 1 && (
+          <Dropdown
+            label={t('Default provider')}
+            value={provider}
+            options={installed.map((status) => ({ value: status.provider, label: providerName(status.provider) }))}
+            onChange={(value) => onProvider(value as AgentProvider)}
+          />
+        )}
+        <Button
+          variant="ghost"
+          disabled={checking}
+          onClick={() => {
+            setChecking(true)
+            void onRefresh().finally(() => setChecking(false))
+          }}
+        >
+          {checking ? t('Checking…') : t('Check again')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+type Mode = NonNullable<ModelPreferences['defaultBarMode']>
+
+/** A selectable card with a live example of the control it chooses. */
+function ModeCard({
+  selected,
+  icon,
+  title,
+  help,
+  onSelect,
+  children,
+}: {
+  selected: boolean
+  icon: ReactNode
+  title: string
+  help: string
+  onSelect(): void
+  children: ReactNode
+}) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 ring-1 transition-shadow',
+        selected ? 'ring-primary' : 'ring-transparent hover:ring-(--edge)',
+      )}
+    >
+      <RowButton
+        role="radio"
+        aria-checked={selected}
+        onClick={onSelect}
+        className="items-start gap-3 p-0 text-foreground hover:bg-transparent"
+      >
+        <span className="mt-0.5 text-muted-foreground">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <strong className="block font-medium">{title}</strong>
+          <span className="mt-0.5 block text-caption leading-[18px] text-muted-foreground">{help}</span>
+        </span>
+        <span
+          aria-hidden
+          className={cn(
+            'mt-0.5 flex size-4 flex-none items-center justify-center rounded-full border',
+            selected ? 'border-primary bg-primary text-primary-foreground' : 'border-(--edge)',
+          )}
+        >
+          {selected && <Check size={11} strokeWidth={3} />}
+        </span>
+      </RowButton>
+      {children}
+    </div>
+  )
+}
+
+/** A working slider over example stops, so the person feels the control before choosing it. */
+function Example({ label, stops, caption }: { label: string; stops: string[]; caption?: string }) {
+  const [index, setIndex] = useState(Math.floor((stops.length - 1) / 2))
+  return (
+    <div className="rounded-(--radius-s) bg-(--float-bg) px-3 py-2.5">
+      <div className="mb-2 flex items-baseline justify-between gap-2 text-caption">
+        <span className="text-muted-foreground">{t('Example')}</span>
+        <span className="truncate font-medium text-foreground">
+          {caption ? `${caption} · ${stops[index]}` : stops[index]}
+        </span>
+      </div>
+      <StepSlider
+        min={0}
+        max={Math.max(1, stops.length - 1)}
+        step={1}
+        value={index}
+        thumbLabel={label}
+        valueText={stops[index]}
+        onValueChange={(value) => setIndex(value as number)}
+      />
+      <div className="mt-1.5 flex justify-between gap-2 text-[11px] text-muted-foreground">
+        <span className="truncate">{stops[0]}</span>
+        <span className="truncate text-right">{stops[stops.length - 1]}</span>
+      </div>
+    </div>
+  )
+}
+
+export function ModelsStep({
+  mode,
+  onMode,
+  provider,
+}: {
+  mode: Mode
+  onMode(mode: Mode): void
+  provider: AgentProvider
+}) {
+  const { preferences, catalogs } = useModelSets()
+  const set = preferences.sets.find((entry) => entry.id === preferences.defaultSetId) ?? preferences.sets[0]
+  const stepNames = set && set.steps.length > 1 ? set.steps.map((step) => modelStepName(step, catalogs)) : null
+  const model =
+    catalogs.find((catalog) => catalog.provider === provider)?.models.find((entry) => entry.isDefault) ??
+    catalogs.flatMap((catalog) => catalog.models).find((entry) => entry.isDefault)
+  const efforts = model && model.efforts.length > 1 ? model.efforts : null
+  return (
+    <div role="radiogroup" aria-label={t('Model selection')} className="flex flex-col gap-3">
+      <ModeCard
+        selected={mode === 'model'}
+        icon={<Layers size={16} />}
+        title={t('Steps')}
+        help={t(
+          'One slider moves through saved steps, from a quick, cheap model to a slower, thorough one. Best when you switch models often.',
+        )}
+        onSelect={() => onMode('model')}
+      >
+        <Example
+          label={t('Example step')}
+          stops={stepNames ?? [t('Fast model · Low'), t('Balanced model · Medium'), t('Strongest model · High')]}
+        />
+      </ModeCard>
+      <ModeCard
+        selected={mode === 'effort'}
+        icon={<SlidersHorizontal size={16} />}
+        title={t('Model then effort')}
+        help={t(
+          'Pick one model, then slide how hard it thinks. Best when you stay on one model and only change the effort.',
+        )}
+        onSelect={() => onMode('effort')}
+      >
+        <Example
+          label={t('Example effort')}
+          caption={model ? modelDisplayName(model.name) : undefined}
+          stops={
+            efforts
+              ? efforts.map((effort) => effortDisplayName(effort, model!.provider))
+              : [t('Low'), t('Medium'), t('High')]
+          }
+        />
+      </ModeCard>
+      <p className="m-0 text-caption text-muted-foreground">
+        {t('Higher steps and effort give better answers on hard work but use more tokens and take longer.')}
+      </p>
+    </div>
+  )
+}
+
+export function TokensStep({ choices, onChoices }: { choices: TokenChoices; onChoices(choices: TokenChoices): void }) {
+  const fewest = sameChoices(choices, FEWEST_TOKENS)
+  return (
+    <div className="flex flex-col gap-3">
+      <Group>
+        {TOKEN_FEATURES.map((feature) => (
+          <Row
+            key={feature.key}
+            title={
+              <>
+                {t(feature.title)}
+                <Badge variant={feature.cost === 'saves' ? 'secondary' : 'outline'} className="font-normal">
+                  {feature.cost === 'saves' ? t('Saves tokens') : t('Uses more tokens')}
+                </Badge>
+              </>
+            }
+            help={t(feature.help)}
+          >
+            <Switch
+              aria-label={t(feature.title)}
+              checked={choices[feature.key]}
+              onCheckedChange={(checked) => onChoices({ ...choices, [feature.key]: checked })}
+            />
+          </Row>
+        ))}
+      </Group>
+      <div>
+        <Button variant="ghost" disabled={fewest} onClick={() => onChoices(FEWEST_TOKENS)}>
+          {fewest ? t('Using the fewest tokens') : t('Use the fewest tokens')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+const LOOPBACK = /^(127\.|::1$|localhost$)/
+
+/** The three routes to this host from elsewhere: Ramu Link (Google or GitHub), the local network or VPN, and a Cloudflare Tunnel. */
+export function ReachStep({ onError }: { onError(message: string): void }) {
+  const [status, setStatus] = useState<NetworkStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    let live = true
+    const load = () =>
+      void invoke('network.status').then(
+        (next) => live && setStatus(next),
+        () => {},
+      )
+    load()
+    // Sign-in finishes in the browser and the tunnel takes a moment to start; follow both.
+    const timer = window.setInterval(load, 2500)
+    return () => {
+      live = false
+      window.clearInterval(timer)
+    }
+  }, [])
+  const run = async (work: () => Promise<NetworkStatus>) => {
+    setBusy(true)
+    onError('')
+    try {
+      setStatus(await work())
+    } catch (e) {
+      onError(errorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const open = (url: string) => void ramu.invoke('app.openExternal', url).catch(() => {})
+  if (!status)
+    return (
+      <p className="m-0 text-caption text-muted-foreground" role="status">
+        {t('Checking this host…')}
+      </p>
+    )
+  const { link, tunnel } = status
+  const managed = status.source === 'command-line'
+  const network = status.enabled && !LOOPBACK.test(status.host)
+  return (
+    <div className="flex flex-col gap-3">
+      <Group>
+        <Row
+          title={
+            <>
+              <LogIn size={15} className="text-muted-foreground" />
+              {t('Sign in with Google or GitHub')}
+              <Badge variant="secondary" className="font-normal">
+                {t('Recommended')}
+              </Badge>
+            </>
+          }
+          help={
+            link.account
+              ? t('Signed in as {0}. Devices on the same account find this host from anywhere.', {
+                  0: link.account.email,
+                })
+              : link.signIn
+                ? t('Confirm code {0} on the page that opened, then approve.', { 0: link.signIn.userCode })
+                : link.service
+                  ? t(
+                      'Ramu Link connects your devices through your account, end-to-end encrypted. No VPN or open ports.',
+                    )
+                  : t('Set the Ramu Link service address in Settings › Remote access first.')
+          }
+        >
+          {link.account ? (
+            <Check size={16} className="text-brand" aria-label={t('Signed in')} />
+          ) : link.signIn ? (
+            <span className="flex gap-1">
+              <Button variant="secondary" onClick={() => open(link.signIn!.url)}>
+                {t('Open page')}
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void run(() => invoke('network.linkCancelSignIn'))}
+              >
+                {t('Cancel')}
+              </Button>
+            </span>
+          ) : (
+            <Button
+              variant="secondary"
+              disabled={busy || !link.service}
+              onClick={() =>
+                void run(async () => {
+                  const next = await invoke('network.linkSignIn')
+                  if (next.link.signIn) open(next.link.signIn.url)
+                  return next
+                })
+              }
+            >
+              {t('Sign in…')}
+            </Button>
+          )}
+        </Row>
+        <Row
+          title={
+            <>
+              <Wifi size={15} className="text-muted-foreground" />
+              {t('Same network or VPN')}
+            </>
+          }
+          help={
+            managed
+              ? t('Set when Ramu was started with --listen. Change it there.')
+              : t(
+                  'Devices on this Wi-Fi or your VPN (such as Tailscale) connect directly after pairing. Not encrypted by Ramu, so use a network you trust.',
+                )
+          }
+        >
+          <Switch
+            aria-label={t('Same network or VPN')}
+            checked={network}
+            disabled={busy || managed}
+            onCheckedChange={(checked) =>
+              void run(() =>
+                invoke('network.configure', {
+                  enabled: checked,
+                  host: checked && LOOPBACK.test(status.host) ? '0.0.0.0' : status.host,
+                  port: status.port,
+                  acceptUnencrypted: true,
+                }),
+              )
+            }
+          />
+        </Row>
+        <Row
+          title={
+            <>
+              <Globe size={15} className="text-muted-foreground" />
+              {t('Cloudflare Tunnel')}
+            </>
+          }
+          help={
+            tunnel.state === 'running' && tunnel.url
+              ? t('Reachable at {0}', { 0: tunnel.url })
+              : tunnel.mode !== 'off' && tunnel.state === 'error'
+                ? t('The tunnel stopped: {0}. Ramu tries again.', { 0: tunnel.error ?? '' })
+                : t('A public HTTPS address without an account or open ports. Devices still pair before they connect.')
+          }
+        >
+          <Switch
+            aria-label={t('Cloudflare Tunnel')}
+            checked={tunnel.mode !== 'off'}
+            disabled={busy}
+            onCheckedChange={(checked) =>
+              void run(() => invoke('network.tunnelConfigure', { mode: checked ? 'quick' : 'off' }))
+            }
+          />
+        </Row>
+      </Group>
+      <p className="m-0 text-caption text-muted-foreground">
+        {t('Pair a phone or another computer from Settings › Remote access whenever you are ready.')}
+      </p>
+    </div>
+  )
+}
+
+export function ProjectStep({ projects, busy, onAdd }: { projects: Project[]; busy: boolean; onAdd(): void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      {projects.length > 0 && (
+        <Group>
+          {projects.map((project) => (
+            <Row
+              key={project.id}
+              title={
+                <>
+                  <FolderGit2 size={15} className="text-muted-foreground" />
+                  {project.name}
+                </>
+              }
+            />
+          ))}
+        </Group>
+      )}
+      <div>
+        <Button variant="secondary" disabled={busy} onClick={onAdd}>
+          {projects.length ? t('Add another repository') : t('Choose repository')}
+        </Button>
+      </div>
+    </div>
+  )
+}
