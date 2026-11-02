@@ -1,4 +1,6 @@
+import { rankHosts } from '@ramu/shared/continuation'
 import { useComputers } from '../../../workspace/computers'
+import { useHostOverviews } from '../../../workspace/hostOverview'
 import { useHost } from '../../../workspace/HostProvider'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
@@ -47,6 +49,7 @@ export function AgentHeader({
   continuing,
   onContinue,
   onContinueOnHost,
+  latestRequest,
 }: {
   history?: React.ReactNode
   sessionId: string
@@ -71,12 +74,19 @@ export function AgentHeader({
   continuing: boolean
   onContinue: () => void
   onContinueOnHost: (hostId: string) => void
+  /** The person's latest message, for suggesting a host whose platform it names. */
+  latestRequest?: string
 }) {
   useLanguage()
   const host = useHost()
   const computers = useComputers()
-  const otherHosts = (computers?.computers ?? []).filter(
+  const connected = (computers?.computers ?? []).filter(
     (computer) => computer.id !== host.id && computer.status === 'connected',
+  )
+  const overviews = useHostOverviews(connected.map((computer) => computer.id))
+  const otherHosts = rankHosts(
+    connected.map((computer, index) => ({ ...computer, resources: overviews[index]?.data?.resources })),
+    latestRequest ?? '',
   )
   return (
     <div className="agent-header [&_.path]:flex-1 [&:not(:has(>_:not(.grow)))]:hidden [&_.grow]:hidden [&_.state]:mr-auto [&_.small]:gap-1.5 [&_.small]:text-soft [&_>_*]:flex-none [&_>_*]:whitespace-nowrap flex items-center flex-none text-control min-w-0 justify-end h-auto min-h-[36px] p-[4px_10px_0] gap-1.5 flex-wrap gap-y-1 pb-1">
@@ -201,12 +211,17 @@ export function AgentHeader({
               ),
               onSelect: onContinue,
             },
-            ...otherHosts.map((computer) => ({
+            ...otherHosts.map(({ host: computer, suggested, low }) => ({
               key: `continue:${computer.id}`,
               disabled: readOnly,
               label: (
                 <>
                   <ArrowUpRight size={13} /> {translate('Continue on {0}', { 0: computer.name })}
+                  {computer.resources?.platform && (
+                    <span className="text-muted-foreground"> · {computer.resources.platform}</span>
+                  )}
+                  {suggested && <span className="text-muted-foreground"> · {translate('Suggested')}</span>}
+                  {low && <span className="text-warn"> · {translate('Low memory')}</span>}
                 </>
               ),
               onSelect: () => onContinueOnHost(computer.id),

@@ -49,7 +49,7 @@ export class ResourceService {
   private cached: { at: number; value: ResourceSnapshot } | null = null
   private reading: Promise<ResourceSnapshot> | null = null
   private lowChecks = 0
-  private latest: HostResources = { memory: null, low: null }
+  private latest: HostResources = { memory: null, low: null, platform: process.platform, arch: process.arch }
   private timer?: NodeJS.Timeout
 
   constructor(
@@ -94,7 +94,7 @@ export class ResourceService {
         idleBytes: idleThreads.reduce((sum, thread) => sum + thread.rssBytes, 0),
       }
     }
-    this.latest = { memory, low }
+    this.latest = { memory, low, platform: process.platform, arch: process.arch }
   }
 
   private async read(): Promise<ResourceSnapshot> {

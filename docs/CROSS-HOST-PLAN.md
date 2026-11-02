@@ -27,8 +27,7 @@ Stage 1, **Continue on ‹host›**, has shipped ([Agents and routing](AGENT-ROU
 
 ### Stage 2: Choosing hosts
 
-- **Several hosts at once:** the sheet can target up to 4 hosts, each with its own rows and outcome, and one failing does not stop the others. Each host gets a new branch from the same commit, so agents never share one.
-- **Host suggested for the work:** each host reports its OS and architecture, and may carry a short description the person writes (`GPU box`, `office network`). Ramu does not detect capabilities. The sheet lists hosts with the project and the thread's model first, and marks a platform or description the thread's latest request names with a plain text match and no model call. Among equal hosts, one with more memory free comes first, and a host in the Resources low-memory state shows **Low memory**, as a reading rather than a capability. The person still chooses. `hostThreads.projects` adds the same host facts, so `project_list` lets an agent recommend a host in its reply.
+- **Host descriptions:** hosts already report platform and architecture, and the Continue menu suggests one whose platform the request names. A short description the person writes (`GPU box`, `office network`) would be matched the same way, and `hostThreads.projects` would add these facts so `project_list` lets an agent recommend a host.
 - **Scheduled work on a chosen host:** the Automation editor gains **Runs on**, saving through `schedules.save` on that host, and lists schedules from every connected host with a host label. Schedules already live on their host, so it fires them, follows its own **Missed** setting and never runs twice. Moving a schedule saves it on the new host, then removes it from the old one after confirmation. Project and model are checked against the new host in the editor.
 
 ### Stage 3: Outside the app
@@ -46,9 +45,7 @@ Every string goes through `t()` with an Indonesian translation, and the phone ge
 
 ### Stage 2
 
-- Continuing on two hosts starts two threads on separate branches, and one failing leaves the other running.
-- A suggestion never starts anything, and a host that reports nothing is not suggested.
-- With two otherwise equal hosts, the one with more memory free is listed first, a low-memory host shows **Low memory** and can still be chosen, and a host with no memory reading is listed unmarked.
+- A description match never starts anything, and a host with no description is not suggested by one.
 - A schedule set for another host runs there once, follows its **Missed** setting after that host sleeps, and does not run on the first host. A moved schedule exists on one host only.
 
 ### Stage 3

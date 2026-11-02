@@ -6,6 +6,8 @@ import {
   continueOnHost,
   latestReply,
   matchProject,
+  rankHosts,
+  startTargets,
   remoteKey,
 } from '../src/continuation'
 
@@ -66,4 +68,50 @@ it('reports a refused start and labels nothing', async () => {
   const invoke = vi.fn(async () => ({ taskId: '', error: 'No model' }))
   await expect(continueOnHost(invoke, { id: 'b', name: 'vps' }, start)).rejects.toThrow('No model')
   expect(invoke).toHaveBeenCalledTimes(1)
+})
+
+it('suggests a host whose platform the request names, then more memory free, and never one that reports nothing', () => {
+  const host = (id: string, platform?: string, free = 0, low = false) => ({
+    id,
+    name: id,
+    resources: platform
+      ? { platform, memory: { totalBytes: 10, availableBytes: free }, low: low ? ({} as never) : null }
+      : null,
+  })
+  const order = rankHosts(
+    [host('mac', 'darwin', 9), host('vps', 'linux', 1, true), host('quiet')],
+    'fails on Linux only',
+  )
+  expect(order.map((entry) => [entry.host.id, entry.suggested, entry.low])).toEqual([
+    ['vps', true, true],
+    ['mac', false, false],
+    ['quiet', false, false],
+  ])
+})
+
+it('starts on several hosts, and one failing leaves the others running', async () => {
+  const invoke = vi.fn(async (hostId: string, method: string, ..._args: unknown[]) => {
+    if (method === 'threads.continueHere' && hostId === 'bad') throw new Error('offline')
+    return { taskId: `${hostId}-thread` }
+  })
+  const plan = { match: { projectId: 'p', name: 'app', by: 'remote' as const }, settings: {} as never, parent: '/' }
+  const pack = {
+    title: 'Fix',
+    running: false,
+    prompt: 'go',
+    settings: {} as never,
+    queued: 0,
+    repo: { remoteUrl: 'u', repoName: 'app', branch: 'fix', commit: 'abc', dirtyFiles: 0, unpushed: 0, pushed: true },
+    problem: null,
+  }
+  const target = (id: string) => ({ id, name: id, plan, useNamed: false, key: `${id}-key`, cloneId: `${id}-clone` })
+  const outcomes = await startTargets(invoke, {
+    pack,
+    from: start.from,
+    targets: [target('good'), target('bad')],
+    note: '',
+  })
+  expect(outcomes).toEqual({ good: null, bad: 'offline' })
+  const starts = invoke.mock.calls.filter(([, method]) => method === 'threads.continueHere')
+  expect(starts.map(([, , input]) => (input as { key: string }).key)).toEqual(['good-key', 'bad-key'])
 })

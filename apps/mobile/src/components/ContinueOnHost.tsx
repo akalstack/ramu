@@ -4,14 +4,15 @@ import { useRouter } from 'expo-router'
 import { ArrowUpRight } from 'lucide-react-native'
 import {
   broughtBack,
-  cloneForContinuation,
-  continueOnHost,
+  CONTINUE_HOSTS,
   latestReply,
-  type ContinuationMatch,
+  prepareTargets,
+  startTargets,
   type ContinuationPackage,
   type ContinuedEvent,
+  type TargetPlan,
 } from '@ramu/shared/continuation'
-import type { AgentEvent, AgentSessionInfo, AgentSettings } from '@ramu/shared/types'
+import type { AgentEvent, AgentSessionInfo } from '@ramu/shared/types'
 import { correlationId } from '../runtime/correlationId'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
@@ -22,14 +23,7 @@ import { Button, Sheet, T } from './ui'
 
 type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<unknown>
 
-interface Prepared {
-  pack: ContinuationPackage
-  match: ContinuationMatch | null
-  settings: AgentSettings
-  parent: string
-}
-
-/** The phone's Continue on another host: the same rows and one confirmation as the desktop. */
+/** The phone's Continue on another host: the same rows, hosts and one confirmation as the desktop. */
 export function ContinueOnHostSheet({
   chat,
   targetId,
@@ -42,79 +36,90 @@ export function ContinueOnHostSheet({
   const say = useSay()
   const store = useStore()
   const invoke = store.invoke as unknown as Invoke
-  const target = store.computers.find((pc) => pc.id === targetId)
   const here = store.computers.find((pc) => pc.id === chat.computerId)
-  const [prepared, setPrepared] = useState<Prepared | null>(null)
+  const available = store.computers.filter((pc) => pc.id !== chat.computerId && pc.status === 'online')
+  const [targets, setTargets] = useState<string[]>([])
+  const [pack, setPack] = useState<ContinuationPackage | null>(null)
+  const [plans, setPlans] = useState<Record<string, TargetPlan | { error: string }>>({})
+  const [named, setNamed] = useState<Record<string, boolean>>({})
+  const [outcomes, setOutcomes] = useState<Record<string, string | null>>({})
+  const [keys] = useState(() => new Map<string, { key: string; cloneId: string }>())
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
-  const [useNamed, setUseNamed] = useState(false)
-  const [key] = useState(correlationId)
+  if (targetId && !targets.length) setTargets([targetId])
+  const key = targets.join(',')
   useEffect(() => {
-    if (!targetId) return
+    if (!key) return
     let live = true
-    setPrepared(null)
     setError('')
-    void (async () => {
-      const pack = (await invoke(chat.computerId, 'threads.continuationPackage', chat.taskId)) as ContinuationPackage
-      const remote = pack.repo
-        ? ((await invoke(targetId, 'threads.prepareContinuation', pack.repo, pack.settings)) as Omit<Prepared, 'pack'>)
-        : { match: null, settings: pack.settings, parent: '' }
-      if (live) setPrepared({ pack, ...remote })
-    })().catch((cause: unknown) => live && setError(cause instanceof Error ? cause.message : String(cause)))
+    void prepareTargets(invoke, { hostId: chat.computerId, taskId: chat.taskId }, key.split(',')).then(
+      (result) => {
+        if (!live) return
+        setPack(result.pack)
+        setPlans(result.plans)
+      },
+      (cause: unknown) => live && setError(cause instanceof Error ? cause.message : String(cause)),
+    )
     return () => {
       live = false
     }
-  }, [targetId, chat.computerId, chat.taskId]) // eslint-disable-line react-hooks/exhaustive-deps -- `invoke` is stable per store
-  const pack = prepared?.pack
+  }, [key, chat.computerId, chat.taskId]) // eslint-disable-line react-hooks/exhaustive-deps -- `invoke` is stable per store
+  const close = () => {
+    setTargets([])
+    setPack(null)
+    setPlans({})
+    setOutcomes({})
+    onClose()
+  }
+  const name = (id: string) => available.find((pc) => pc.id === id)?.name ?? ''
   const repo = pack?.repo
-  const match = prepared?.match
+  const pending = targets.filter((id) => outcomes[id] !== null)
+  const ready = pending.every((id) => {
+    const plan = plans[id]
+    return plan && !('error' in plan) && (plan.match?.by !== 'name' || named[id])
+  })
   const start = async () => {
-    if (!prepared || !repo || !target || !here) return
+    if (!pack || !here) return
     setBusy(true)
     setError('')
     try {
-      const existing = match && (match.by === 'remote' || useNamed) ? match.projectId : null
-      const projectId =
-        existing ?? (await cloneForContinuation(invoke, target.id, repo, prepared.parent, correlationId())).id
-      await continueOnHost(
-        invoke,
-        { id: target.id, name: target.name },
-        {
-          key,
-          from: { hostId: here.id, hostName: here.name, taskId: chat.taskId, title: prepared.pack.title },
-          projectId,
-          branch: repo.pushed ? repo.branch : '',
-          prompt: prepared.pack.prompt,
-          ...(note.trim() ? { note: note.trim() } : {}),
-          settings: prepared.settings,
-        },
-      )
-      onClose()
+      const result = await startTargets(invoke, {
+        pack,
+        from: { hostId: here.id, hostName: here.name, taskId: chat.taskId, title: pack.title },
+        note,
+        targets: pending.map((id) => {
+          if (!keys.has(id)) keys.set(id, { key: correlationId(), cloneId: correlationId() })
+          return { id, name: name(id), plan: plans[id] as TargetPlan, useNamed: !!named[id], ...keys.get(id)! }
+        }),
+      })
+      const next = { ...outcomes, ...result }
+      setOutcomes(next)
+      if (targets.every((id) => next[id] === null)) close()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setBusy(false)
     }
   }
-  const line = (text: string, tone?: 'bad' | 'warn') => (
+  const line = (text: string, tone?: 'bad' | 'warn' | 'muted') => (
     <T key={text} size={font.control} tone={tone}>
       {text}
     </T>
   )
+  const title =
+    targets.length > 1
+      ? say('Continue on {0} hosts', { 0: targets.length })
+      : say('Continue on {0}', { 0: name(targets[0] ?? '') })
   return (
-    <Sheet
-      open={!!targetId}
-      onClose={() => !busy && onClose()}
-      title={say('Continue on {0}', { 0: target?.name ?? '' })}
-    >
+    <Sheet open={!!targetId} onClose={() => !busy && close()} title={title}>
       <View style={{ padding: space.l, gap: space.s }}>
         <T size={font.caption} tone="muted">
           {say(
             'The conversation travels with secrets removed, and can quote code and uncommitted content. Files stay here, and that host may use a different provider account.',
           )}
         </T>
-        {!prepared && !error ? line(say('Loading…')) : null}
+        {!pack && !error ? line(say('Loading…')) : null}
         {pack?.problem === 'no-remote'
           ? line(
               say(
@@ -148,33 +153,77 @@ export function ContinueOnHostSheet({
             )
           : null}
         {pack?.queued ? line(say('{0} queued messages stay here', { 0: pack.queued })) : null}
-        {repo && match && (match.by === 'remote' || useNamed) ? line(say('Project: {0}', { 0: match.name })) : null}
-        {repo && match?.by === 'name' && !useNamed ? (
-          <>
-            {line(say('{0} has the same name but a different remote.', { 0: match.name }))}
-            <Button kind="secondary" title={say('Use {0}', { 0: match.name })} onPress={() => setUseNamed(true)} />
-          </>
+        {repo
+          ? targets.map((id) => {
+              const plan = plans[id]
+              const outcome = outcomes[id]
+              return (
+                <View key={id} style={{ gap: space.xs, paddingTop: space.s }}>
+                  <T weight="600">{name(id)}</T>
+                  {outcome === null ? (
+                    line(say('Started'), 'muted')
+                  ) : !plan ? (
+                    line(say('Loading…'), 'muted')
+                  ) : 'error' in plan ? (
+                    line(plan.error, 'bad')
+                  ) : (
+                    <>
+                      {plan.match?.by === 'name' && !named[id] ? (
+                        <>
+                          {line(say('{0} has the same name but a different remote.', { 0: plan.match.name }))}
+                          <Button
+                            kind="secondary"
+                            title={say('Use {0}', { 0: plan.match.name })}
+                            onPress={() => setNamed({ ...named, [id]: true })}
+                          />
+                        </>
+                      ) : plan.match ? (
+                        line(say('Project: {0}', { 0: plan.match.name }))
+                      ) : (
+                        line(
+                          say('Set up on {0}: clones {1} into {2}', { 0: name(id), 1: repo.repoName, 2: plan.parent }),
+                        )
+                      )}
+                      {line(
+                        say('Runs {0} with Allow edits', { 0: plan.settings.model || plan.settings.provider }),
+                        'muted',
+                      )}
+                      {outcome ? line(outcome, 'bad') : null}
+                    </>
+                  )}
+                </View>
+              )
+            })
+          : null}
+        {available.length > 1 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, alignItems: 'center' }}>
+            <T size={font.caption} tone="muted">
+              {say('Also on')}
+            </T>
+            {available
+              .filter((pc) => pc.id !== targetId)
+              .map((pc) => {
+                const on = targets.includes(pc.id)
+                return (
+                  <Button
+                    key={pc.id}
+                    kind={on ? 'secondary' : 'ghost'}
+                    title={pc.name}
+                    disabled={busy || (!on && targets.length >= CONTINUE_HOSTS)}
+                    onPress={() => setTargets(on ? targets.filter((other) => other !== pc.id) : [...targets, pc.id])}
+                  />
+                )
+              })}
+          </View>
         ) : null}
-        {repo && !match
-          ? line(
-              say('Set up on {0}: clones {1} into {2}', {
-                0: target?.name ?? '',
-                1: repo.repoName,
-                2: prepared?.parent ?? '',
-              }),
-            )
-          : null}
-        {prepared
-          ? line(say('Runs {0} with Allow edits', { 0: prepared.settings.model || prepared.settings.provider }))
-          : null}
         <TextField placeholder={say('Add a note')} value={note} onChangeText={setNote} />
         {error ? line(error, 'bad') : null}
         <Button
-          title={busy ? say('Starting…') : say('Continue on {0}', { 0: target?.name ?? '' })}
-          disabled={!pack || !!pack.problem || pack.running || busy || (match?.by === 'name' && !useNamed)}
+          title={busy ? say('Starting…') : title}
+          disabled={!pack || !!pack.problem || pack.running || !ready || !pending.length || busy}
           onPress={() => void start()}
         />
-        <Button kind="ghost" title={say('Cancel')} disabled={busy} onPress={onClose} />
+        <Button kind="ghost" title={say('Cancel')} disabled={busy} onPress={close} />
       </View>
     </Sheet>
   )

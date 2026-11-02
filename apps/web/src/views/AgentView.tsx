@@ -626,6 +626,11 @@ export const AgentView = memo(function AgentView({
         continuing={continuing}
         onContinue={() => setConfirmContinue(true)}
         onContinueOnHost={setContinueHost}
+        latestRequest={
+          events.findLast(
+            (event): event is Extract<typeof event, { kind: 'user' }> => event.kind === 'user' && !event.agentId,
+          )?.text
+        }
       />
       <div className="agent-split [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex flex-1 min-h-0 min-w-0 [container:agent-split_/_inline-size]">
         <div className="agent-main relative flex flex-col [flex:1_1_0] min-w-0 min-h-0">

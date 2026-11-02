@@ -135,3 +135,100 @@ export async function cloneForContinuation(
   const { project } = (await invoke(hostId, 'folders.addProject', path)) as { project: Project }
   return project
 }
+
+const PLATFORM_WORDS: Record<string, string[]> = {
+  linux: ['linux', 'ubuntu', 'debian', 'fedora'],
+  darwin: ['mac', 'macos', 'darwin', 'osx'],
+  win32: ['windows'],
+}
+
+export interface HostChoice {
+  id: string
+  name: string
+  resources?: import('./resources').HostResources | null
+}
+
+/**
+ * Hosts in the order a person would pick them: one whose platform the latest request names is suggested, then more
+ * memory free first. A plain word match, no model call; a host that reports nothing is never suggested.
+ */
+export function rankHosts<T extends HostChoice>(hosts: readonly T[], request: string) {
+  const words = new Set(request.toLowerCase().match(/[a-z]+/g) ?? [])
+  const ranked = hosts.map((host) => {
+    const platform = host.resources?.platform
+    const suggested = !!platform && (PLATFORM_WORDS[platform] ?? []).some((word) => words.has(word))
+    const low = !!host.resources?.low
+    return { host, suggested, low, free: host.resources?.memory?.availableBytes ?? -1 }
+  })
+  return ranked.sort((a, b) => Number(b.suggested) - Number(a.suggested) || b.free - a.free)
+}
+
+/** Hosts one continuation may target; each gets its own thread and branch, and one failing never stops the others. */
+export const CONTINUE_HOSTS = 4
+
+export interface TargetPlan {
+  match: ContinuationMatch | null
+  settings: AgentSettings
+  parent: string
+}
+
+/** Reads the package once, then asks every target what it would do. A target that cannot answer says why. */
+export async function prepareTargets(
+  invoke: Invoke,
+  from: { hostId: string; taskId: string },
+  targets: readonly string[],
+) {
+  const pack = (await invoke(from.hostId, 'threads.continuationPackage', from.taskId)) as ContinuationPackage
+  const plans = await Promise.all(
+    targets.map(async (id): Promise<[string, TargetPlan | { error: string }]> => {
+      if (!pack.repo) return [id, { match: null, settings: pack.settings, parent: '' }]
+      try {
+        return [id, (await invoke(id, 'threads.prepareContinuation', pack.repo, pack.settings)) as TargetPlan]
+      } catch (error) {
+        return [id, { error: error instanceof Error ? error.message : String(error) }]
+      }
+    }),
+  )
+  return { pack, plans: Object.fromEntries(plans) }
+}
+
+/** Starts on each chosen host in parallel, with a key per host so a retry finds the same thread there. */
+export async function startTargets(
+  invoke: Invoke,
+  input: {
+    pack: ContinuationPackage
+    from: ContinuationStart['from']
+    targets: readonly { id: string; name: string; plan: TargetPlan; useNamed: boolean; key: string; cloneId: string }[]
+    note: string
+  },
+): Promise<Record<string, string | null>> {
+  const repo = input.pack.repo
+  if (!repo) throw new Error('This thread has nothing another host can start from.')
+  const outcomes = await Promise.all(
+    input.targets.map(async (target): Promise<[string, string | null]> => {
+      try {
+        const match = target.plan.match
+        const existing = match && (match.by === 'remote' || target.useNamed) ? match.projectId : null
+        const projectId =
+          existing ?? (await cloneForContinuation(invoke, target.id, repo, target.plan.parent, target.cloneId)).id
+        await continueOnHost(
+          invoke,
+          { id: target.id, name: target.name },
+          {
+            key: target.key,
+            from: input.from,
+            projectId,
+            branch: repo.pushed ? repo.branch : '',
+            prompt: input.pack.prompt,
+            ...(input.note.trim() ? { note: input.note.trim() } : {}),
+            settings: target.plan.settings,
+          },
+        )
+        return [target.id, null]
+      } catch (error) {
+        return [target.id, error instanceof Error ? error.message : String(error)]
+      }
+    }),
+  )
+  return Object.fromEntries(outcomes)
+}

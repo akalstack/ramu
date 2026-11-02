@@ -38,6 +38,9 @@ export interface LowMemory {
 export interface HostResources {
   memory: HostMemory | null
   low: LowMemory | null
+  /** `process.platform` and `process.arch`, reported as facts; Ramu detects no other capability. */
+  platform?: string
+  arch?: string
 }
 
 export interface ProcessRow {
