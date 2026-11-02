@@ -73,3 +73,7 @@ export function groupSummary(group: StartedGroup): { text: string; values: Recor
     }
   return { text: 'All {0} finished', values: { '0': size } }
 }
+
+/** A thread `ramu thread start` placed here; its origin names whoever ran it. */
+export const startedFromTerminal = (origin: Pick<import('../types').ThreadOrigin, 'groupId'> | null | undefined) =>
+  !!origin?.groupId.startsWith('terminal:')

@@ -34,12 +34,11 @@ Stage 1, **Continue on ‹host›**, has shipped ([Agents and routing](AGENT-ROU
 ### Stage 3: Outside the app
 
 - **Totals across hosts:** Plan usage shows each login once, because a login's percentage is the same quota seen from every host and percentages never add up. Readings for one login use the newest; logins that cannot be matched across hosts are listed by host. A new per-day activity summary (tokens, and cost where the provider reports it) is added by the device across connected hosts, with a per-host breakdown. An offline host, or a provider that reports no cost, is marked and never counted as zero.
-- **Terminal agents and scripts:** `ramu thread start|status|message|list` reaches this host's threads, so Claude Code, Codex or a script can place work where the person will see it. Commands print JSON with `--json`, and `status --wait` blocks until the thread settles. Threads use **Allow edits** unless the host's defaults narrow them, show **Started from a terminal** with the name given by `--as`, and stop working when **Let agents start threads** is off. Other hosts stay out of reach of these commands.
 
 ## Services to extend
 
 - **Stage 2:** `hostThreads.projects` and `projectsForHost`, the host status that already reports `process.platform`, the free-memory figure and low-memory state each host sends through inbox state (Resources), `apps/server/src/background/schedules.ts`, and `apps/web/src/Automation.tsx` with its phone equivalent. Add the new host facts to the [host pairing review](HOST-PAIRING-REVIEW.md).
-- **Stage 3:** `usage.accounts` and the `costUsd` values in result events, for which a stored daily summary is new; `apps/server/src/cli.ts`, reusing `agentThreads` start and status logic. Check whether `accountId` matches across hosts before relying on it.
+- **Stage 3:** `usage.accounts` and the `costUsd` values in result events, for which a stored daily summary is new; Check whether `accountId` matches across hosts before relying on it.
 
 Every string goes through `t()` with an Indonesian translation, and the phone gets the same sheet, labels and actions. Update [Agents and routing](AGENT-ROUTING.md), [Security](../SECURITY.md) and [Automation](AUTOMATION.md) as each stage lands.
 
@@ -55,6 +54,5 @@ Every string goes through `t()` with an Indonesian translation, and the phone ge
 ### Stage 3
 
 - A login used on two hosts is shown once. Activity totals match each host's own figures, and missing figures are marked.
-- `ramu thread` works from a terminal agent on a live run, and stops when **Let agents start threads** is off. Its threads are labelled, and it cannot reach another host.
 
 All stages run on two physical hosts before closing, including a phone.

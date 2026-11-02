@@ -20,7 +20,9 @@ export const HOST_METHODS: ReadonlySet<string> = new Set([
 export const deviceMayInvoke = (device: DeviceInfo | undefined, method: string): boolean =>
   device?.kind === 'host'
     ? HOST_METHODS.has(method)
-    : !method.startsWith('hostThreads.') && (device?.role !== 'viewer' || viewerMayInvoke(method))
+    : !method.startsWith('hostThreads.') &&
+      !method.startsWith('terminalThreads.') &&
+      (device?.role !== 'viewer' || viewerMayInvoke(method))
 /** What this device is told about its own access so clients can hide actions the server would refuse. Advisory only. */
 export const accessOf = (device: DeviceInfo | undefined): 'owner' | 'viewer' =>
   device?.role === 'viewer' ? 'viewer' : 'owner'

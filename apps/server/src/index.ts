@@ -1,3 +1,4 @@
+import { terminalThreadRequest } from './background/agentThreads'
 import { ResourceService } from './background/resources'
 import { processRoots } from './agent/processOwners'
 import { writeEvent } from './remote/eventStream'
@@ -797,6 +798,17 @@ async function performInvoke(
   } else if (method === 'liveActivity.unregister') {
     if (!deviceId || typeof args?.[0] !== 'string') throw new Error('Live Activities require a paired phone')
     mobileLiveActivities.remove(deviceId, args[0])
+  } else if (method.startsWith('terminalThreads.')) {
+    // Any process of this OS user can reach the local socket and is trusted like the person; nothing else can.
+    if (remote) throw new InvokeRefused('Only a terminal on this host can make this call.')
+    if (method === 'terminalThreads.start')
+      value = await agentThreads.startForTerminal(terminalThreadRequest.parse(args?.[0]))
+    else if (method === 'terminalThreads.status')
+      value = agentThreads.statusForTerminal(z.string().max(100).nullish().parse(args?.[0]))
+    else if (method === 'terminalThreads.message') {
+      const [taskId, text] = z.tuple([z.string().min(1).max(100), z.string().min(1).max(20_000)]).parse(args)
+      value = await agentThreads.messageForTerminal(taskId, text)
+    } else throw new Error(`Unknown method ${method}`)
   } else if (method.startsWith('hostThreads.')) {
     // A paired host's calls reach the thread service directly, with that host's own identity and limits; they never
     // run with this host's local authority.

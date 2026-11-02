@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { ResourceService } from '../src/background/resources'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
-import { HOST_METHODS } from '../src/remote/access'
+import { deviceMayInvoke, HOST_METHODS } from '../src/remote/access'
 
 const gb = 1024 ** 3
 const sources = (idle: string[] = []) => ({ roots: () => [], idleThreads: () => new Set(idle) })
@@ -36,4 +36,13 @@ it('keeps process figures from viewers and paired hosts', () => {
   expect(viewerMayInvoke('resources.snapshot')).toBe(false)
   expect(viewerMayInvoke('resources.host')).toBe(false)
   expect(HOST_METHODS.has('resources.snapshot')).toBe(false)
+})
+
+it('keeps terminal thread methods to this host’s own socket', () => {
+  const owner = { id: 'phone', kind: 'device', role: 'owner' } as never
+  const host = { id: 'vps', kind: 'host' } as never
+  expect(deviceMayInvoke(owner, 'terminalThreads.start')).toBe(false)
+  expect(deviceMayInvoke(host, 'terminalThreads.start')).toBe(false)
+  expect(deviceMayInvoke(owner, 'threads.continueHere')).toBe(true)
+  expect(deviceMayInvoke(host, 'threads.continueHere')).toBe(false)
 })

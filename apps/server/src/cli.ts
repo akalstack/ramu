@@ -44,6 +44,13 @@ Usage:
                                  The most access threads a paired host starts here may have (default edits)
   ramu devices offers            List unused pairing offers (never their codes)
   ramu devices cancel <offer>    Withdraw an unused pairing offer
+  ramu thread start --project <name> [--title <t>] [--as <name>] <prompt>
+                                 Start a thread here at Allow edits, labelled Started from a terminal by <name>
+  ramu thread status [<id>] [--wait] [--json]
+                                 Threads terminals started here; --wait blocks until that thread settles
+  ramu thread message <id> <text>
+                                 Queue a message for a thread a terminal started
+  ramu thread list [--json]      Same as status with no id
   ramu hosts                     List other hosts this host's agents may start threads on
   ramu hosts add <address> <code> [--name <name>]
                                  Add one, with a code from \`ramu pair\` there; it may only start and follow threads
@@ -117,6 +124,7 @@ function fail(message: string): never {
 
 const booleans = new Set([
   'json',
+  'wait',
   'rotate',
   'help',
   'version',
@@ -377,6 +385,59 @@ if (command === 'start') {
         `\n${request.deviceName} (${request.deviceId}) asks for ${request.permission}. Allow it with: ramu devices allow ${request.deviceId} ${request.permission} [once|hour|day|always]`,
       )
   }
+} else if (command === 'thread') {
+  const call = <T>(method: string, args: unknown[] = []) =>
+    runtimeInvoke(config.socketPath, method, args).catch((error: Error) =>
+      fail(
+        /ENOENT|ECONNREFUSED/.test(String((error as { code?: string }).code))
+          ? 'ramu is not running. Start it first.'
+          : error.message,
+      ),
+    ) as Promise<T>
+  type Status = {
+    threadId: string
+    title: string
+    project: string | null
+    state: string
+    error?: string
+    latest?: string
+  }
+  const print = (value: unknown, lines: () => void) =>
+    flags.has('json') ? console.log(JSON.stringify(value, null, 2)) : lines()
+  const [, action, ...rest] = positional
+  if (action === 'start') {
+    const prompt = rest.join(' ').trim()
+    const project = text('project')
+    if (!prompt || !project) fail('Usage: ramu thread start --project <name> [--title <t>] [--as <name>] <prompt>')
+    const started = await call<{ taskId: string; title: string; error?: string }>('terminalThreads.start', [
+      {
+        prompt,
+        project,
+        ...(text('title') ? { title: text('title') } : {}),
+        ...(text('as') ? { as: text('as') } : {}),
+      },
+    ])
+    if (started.error) fail(started.error)
+    print(started, () => console.log(`${started.taskId}  ${started.title}`))
+  } else if (action === 'message') {
+    const [id, ...words] = rest
+    if (!id || !words.length) fail('Usage: ramu thread message <id> <text>')
+    print(await call('terminalThreads.message', [id, words.join(' ')]), () => console.log('queued'))
+  } else if (action === 'status' || action === 'list' || !action) {
+    const id = action === 'status' ? rest[0] : undefined
+    const settled = (state: string) => !['running', 'starting', 'needs-input', 'not started'].includes(state)
+    let rows = await call<Status[]>('terminalThreads.status', [id ?? null])
+    if (id && !rows.length) fail(`No thread a terminal started matches "${id}".`)
+    while (flags.has('wait') && id && !settled(rows[0]!.state)) {
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      rows = await call<Status[]>('terminalThreads.status', [id])
+    }
+    print(id ? rows[0] : rows, () => {
+      for (const row of rows)
+        console.log(`${row.threadId}  ${row.state.padEnd(12)}  ${row.title}${row.error ? `  (${row.error})` : ''}`)
+      if (id && rows[0]?.latest) console.log(`\n${rows[0].latest}`)
+    })
+  } else fail(`unknown thread command "${action}". Use start, status, message or list.`)
 } else if (command === 'hosts') {
   // Adding a host pairs this host there and stores the token in this host's credential store, so the server does it.
   const call = (method: string, args: unknown[] = []) =>

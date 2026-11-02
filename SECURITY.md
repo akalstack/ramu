@@ -31,6 +31,8 @@ See [Headless server](docs/HEADLESS-SERVER.md) for running a host.
 
 Continue on another host is a person's action from an owner device: the device calls both hosts directly, viewer devices are refused, and paired hosts cannot reach the package, clone or start methods. The redacted conversation leaves the host, and can quote code and uncommitted content; files do not.
 
+Any process running as your OS user can reach the host's local socket with owner access, and Ramu cannot tell which tool called it. `ramu thread` commands are therefore trusted like you: they are labelled with the name given by `--as` and default to **Allow edits**, but are not a security boundary.
+
 ## Isolated content
 
 - **Theme preview:** the Code/Diff preview in the theme editor runs bundled Monaco code on its own `ramu-theme:` origin. It serves only the preview entry and bundled assets, cannot read workspace files, call the native bridge or reach the parent window, and accepts only validated palette and view messages.

@@ -90,6 +90,19 @@ Tests cover 100 loopback sockets delivering 10,000 events (`packages/client-runt
 
 The **Apply settings to** selector in the Settings header edits **All hosts** or one host. Controls show **Mixed** when hosts differ, offer values valid on every selected host, and **Use this value for all** applies the displayed value. A save patches only changed settings, checks for concurrent edits and reports failures per host; successful hosts stay saved. Provider sign-in, service management, pairing and other machine actions need a single host selected.
 
+## Threads from a terminal
+
+Claude Code, Codex or a script on the host can place work where the person will see it:
+
+```sh
+ramu thread start --project api --as codex "Fix the failing date test"
+ramu thread status <id> --wait --json
+ramu thread message <id> "Also update the changelog"
+ramu thread list
+```
+
+Threads run at **Allow edits** with the host's default model, show **Started from a terminal by ‹name›**, and stop starting when **Let agents start threads** is off. These commands reach only this host's own threads, through its local socket; network devices and paired hosts are refused.
+
 ## Protocol
 
 `packages/contracts` defines the wire format. `GET /socket` upgrades to the one WebSocket that carries every call and event; a network host authenticates the upgrade by its `Authorization` header (never the URL), and the local service accepts the same socket on its Unix socket. Frames: `invoke` (optional `operationKey` so a retried mutation runs once), `subscribe`, `ack` (terminal flow control) and `ping`; the host answers `ready`, `result`, `error` and `event`. HTTP remains for `POST /pair`, `POST /renew`, `GET /health`, `GET /session` (does this token work, and as which role) and host-proof checks. `background.status` returns `protocol` and `capabilities` so independently updated clients can check compatibility. `RuntimeSocket` in `packages/client-runtime` is the client used by the desktop, the CLI and the phone; a failed connection is reported as what it is (refused token, no socket on the host, nothing listening) rather than retried over another transport.

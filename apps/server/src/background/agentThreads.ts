@@ -37,6 +37,17 @@ export const MAX_THREADS_PER_HOUR = 8
 /** A person's thread is depth 0; threads it starts are 1 and may start threads at depth 2, which may not. */
 export const MAX_DEPTH = 2
 export const MAX_MESSAGES_PER_HOUR = 20
+const TERMINAL_DEVICE = 'terminal'
+const TERMINAL_GROUP = 'terminal:'
+
+/** What `ramu thread start` may send. */
+export const terminalThreadRequest = z.object({
+  prompt: z.string().min(1).max(100_000),
+  project: z.string().min(1).max(200),
+  title: z.string().max(200).optional(),
+  as: z.string().max(80).optional(),
+})
+
 /** What a thread start accepts, so a continued conversation always fits. */
 const CONTINUATION_PROMPT_LIMIT = 100_000
 const HOUR = 60 * 60_000
@@ -532,6 +543,47 @@ export class AgentThreadService {
       settings,
     )
     return this.start(planned, { source: null, settings, groupId: input.groupId, depth: 0, together: input.together })
+  }
+
+  /** A thread a terminal agent or script started here, labelled with the name it gave, at Allow edits. */
+  async startForTerminal(request: z.infer<typeof terminalThreadRequest>): Promise<StartedThread> {
+    if (!this.enabled()) throw new Error(OFF)
+    const settings = await this.settingsForHost({} as AgentSettings, 'edits', 'edits')
+    const planned = await this.plan(
+      [{ prompt: request.prompt, title: request.title, project: request.project }],
+      null,
+      settings,
+    )
+    const name = clipText(request.as?.trim() || 'a terminal', 80)
+    const [started] = await this.start(planned, {
+      source: null,
+      groupId: `${TERMINAL_GROUP}${randomUUID()}`,
+      sourceHost: { deviceId: TERMINAL_DEVICE, name, thread: '' },
+      settings,
+      depth: 0,
+      together: [],
+      context: `Started from a terminal by ${JSON.stringify(name)}.`,
+    })
+    if (!started) throw new Error('The thread did not start.')
+    return started
+  }
+
+  /** Threads terminals started here, or one of them. */
+  statusForTerminal(taskId?: string | null) {
+    const rows = this.db
+      .prepare('SELECT target_task_id FROM thread_links WHERE source_device = ? ORDER BY created_at')
+      .all(TERMINAL_DEVICE) as { target_task_id: string }[]
+    return rows
+      .filter((row) => !taskId || row.target_task_id === taskId)
+      .map((row) => this.status(row.target_task_id, 'started'))
+  }
+
+  async messageForTerminal(taskId: string, text: string): Promise<{ sent: true }> {
+    if (!this.enabled()) throw new Error(OFF)
+    const target = this.latestSession(taskId)
+    if (!target) throw new Error('That thread has no agent yet.')
+    await this.agents.submit(target.id, clipText(text, 20_000), 'queue')
+    return { sent: true }
   }
 
   /** Everything Continue on another host shows and sends, read on the thread's own host. Files never leave it. */
