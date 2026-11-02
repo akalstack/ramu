@@ -2765,7 +2765,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Summarize recent threads and unfinished work on Home. Uses model tokens.':
     'Ringkas thread terbaru dan pekerjaan yang belum selesai di Home. Menggunakan token model.',
   'Show provider usage in the sidebar or status bar.': 'Tampilkan penggunaan provider di sidebar atau status bar.',
-  'Earlier turns ({0} more)': 'Giliran sebelumnya ({0} lagi)',
   'Include open tabs as context': 'Sertakan tab terbuka sebagai konteks',
   'Warn before changing model': 'Peringatkan sebelum mengganti model',
   "A new model can't reuse the cache of a conversation in progress, so the first message after switching uses more of your usage.":
@@ -3348,6 +3347,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Answering a sub-agent': 'Menjawab sub-agen',
   Used: 'Memakai',
   Details: 'Detail',
+  'Show 1 earlier turn': 'Tampilkan 1 giliran sebelumnya',
+  'Show {0} earlier turns': 'Tampilkan {0} giliran sebelumnya',
   LAN: 'LAN',
   Tunnel: 'Tunnel',
   Internet: 'Internet',

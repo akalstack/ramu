@@ -739,7 +739,9 @@ export const AgentView = memo(function AgentView({
                       className="mx-auto mb-2 flex text-muted-foreground"
                       onClick={showEarlierTurns}
                     >
-                      {translate('Earlier turns ({0} more)', { '0': hiddenTurns })}
+                      {hiddenTurns === 1
+                        ? translate('Show 1 earlier turn')
+                        : translate('Show {0} earlier turns', { '0': hiddenTurns })}
                     </Button>
                   )}
                   <MessageScrollerContent
