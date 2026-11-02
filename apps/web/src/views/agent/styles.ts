@@ -32,7 +32,7 @@ export const TOOL_CARD_CLASS =
 
 /** The user's bubble (a shadcn Bubble `secondary` supplies the fill); `msg user` keeps selection and quoting working. */
 export const USER_BUBBLE_CLASS =
-  'msg user whitespace-pre-wrap rounded-(--radius-l) px-4 py-2.5 text-chat leading-[1.55] tracking-[-0.006em]'
+  'msg user whitespace-pre-wrap rounded-[calc(var(--radius-l)_-_2px)] rounded-br-(--radius-xs) bg-(--bubble)! px-3.5 py-2.5 text-chat leading-[1.55] tracking-[-0.006em] text-(--text-body)!'
 
 /** Message bubble base: add `user`, `assistant` or `error text-bad`. */
 export const MSG_CLASS =

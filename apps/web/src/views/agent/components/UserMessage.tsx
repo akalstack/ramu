@@ -98,7 +98,7 @@ function UserShell({
 }: React.ComponentProps<typeof Message> & { header?: React.ReactNode; attachments?: Attachment[] }) {
   return (
     <Message align="end" className="mt-3.5" {...props}>
-      <MessageContent className="max-w-[82%] items-end gap-1.5">
+      <MessageContent className="max-w-[86%] items-end gap-2">
         {header && <MessageHeader className="gap-1 px-0">{header}</MessageHeader>}
         {attachments?.length ? <Attachments files={attachments} names className="justify-end" /> : null}
         {children}
