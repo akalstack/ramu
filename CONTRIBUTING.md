@@ -41,4 +41,4 @@ Read the [architecture overview](docs/ARCHITECTURE.md) before a large change; it
 
 Follow the [code conventions](docs/CODE-STYLE.md), keep changes focused, and test behavior. See also [UI development](docs/UI.md), [localization](docs/LOCALIZATION.md), [the roadmap](docs/ROADMAP.md) and [release maintenance](docs/RELEASING.md).
 
-Contributions use the [MIT license](LICENSE). Be respectful in issues and reviews. For vulnerabilities, follow [SECURITY.md](SECURITY.md).
+Contributions use the [MIT license](LICENSE). Follow the [Code of Conduct](CODE_OF_CONDUCT.md). For vulnerabilities, follow [SECURITY.md](SECURITY.md).

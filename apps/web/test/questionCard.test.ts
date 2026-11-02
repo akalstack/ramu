@@ -79,10 +79,10 @@ it('marks each selected option in a multiple-choice answer', () => {
 
 it('retains offered options for a typed answer without marking any as chosen', () => {
   state.expanded = true
-  const html = render('Use GENESIS-25293 directly')
+  const html = render('Use PROJ-25293 directly')
   expect(html).toContain('Create under a Story')
   expect(html).toContain('Create a new Epic')
-  expect(html).toMatch(/font-semibold text-foreground[^>]*>Use GENESIS-25293 directly<\/p>/)
+  expect(html).toMatch(/font-semibold text-foreground[^>]*>Use PROJ-25293 directly<\/p>/)
   expect(html).not.toContain('checked=""')
 })
 
@@ -103,8 +103,8 @@ it('starts collapsed with the question and submitted answer visible and an acces
 })
 
 it('keeps a custom answer visible while the offered options are collapsed', () => {
-  const html = render('Use GENESIS-25293 directly')
-  expect(html).toContain('Use GENESIS-25293 directly')
+  const html = render('Use PROJ-25293 directly')
+  expect(html).toContain('Use PROJ-25293 directly')
   expect(html).not.toContain('Create under a Story')
   expect(html).not.toContain('Create a new Epic')
 })

@@ -1,4 +1,4 @@
-/** Long-lived branches that teams usually protect, besides the repository's default branch. Whole names only: `GENESIS-1-DEV` is a feature branch. */
+/** Long-lived branches that teams usually protect, besides the repository's default branch. Whole names only: `PROJ-1-DEV` is a feature branch. */
 const PROTECTED_NAMES = new Set([
   'main',
   'master',

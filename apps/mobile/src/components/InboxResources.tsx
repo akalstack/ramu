@@ -105,11 +105,7 @@ function ThreadRow({ hostId, thread, divider }: { hostId: string; thread: Thread
             onPress={() => (activity === 'working' ? setConfirming(true) : stop())}
           />
         )}
-        <Button
-          kind="ghost"
-          title={open ? say('Hide') : say('Details')}
-          onPress={() => setOpen((value) => !value)}
-        />
+        <Button kind="ghost" title={open ? say('Hide') : say('Details')} onPress={() => setOpen((value) => !value)} />
       </View>
       {open ? thread.items.map((item) => <ItemRow key={item.id} hostId={hostId} thread={thread} item={item} />) : null}
     </View>

@@ -19,7 +19,7 @@ it('protects the default branch and common environment branches by whole name', 
 })
 
 it('leaves feature branches alone, even when they mention an environment', () => {
-  for (const name of ['GENESIS-20602-DEV', 'epic/GENESIS-20605', 'safar/test', 'feature/prod-fix'])
+  for (const name of ['PROJ-20602-DEV', 'epic/PROJ-20605', 'alex/test', 'feature/prod-fix'])
     expect(isProtectedBranch(name, 'main')).toBe(false)
   expect(isProtectedBranch(null)).toBe(false)
 })
