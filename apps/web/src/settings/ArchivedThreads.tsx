@@ -35,14 +35,16 @@ export function ArchivedThreads() {
       <SettingsGroupTitle>
         {t('Archived threads')} · {archivedChats.length}
       </SettingsGroupTitle>
-      <ListToolbar view={view} label={t('Search archived threads')} />
-      <ListCount view={view} />
-      <ListEmpty view={view} none="No archived threads" filtered="No archived threads match your search." />
-      <div className="task-list flex flex-col gap-0.5">
-        {view.paged.shown.map((task) => (
-          <TaskRow key={task.id} task={task} projectName={projectName(task.projectId)} />
-        ))}
-        {view.paged.more}
+      <div className="flex flex-col gap-3">
+        <ListToolbar view={view} label={t('Search archived threads')} />
+        <ListCount view={view} />
+        <ListEmpty view={view} none="No archived threads" filtered="No archived threads match your search." />
+        <div className="task-list flex flex-col gap-0.5">
+          {view.paged.shown.map((task) => (
+            <TaskRow key={task.id} task={task} projectName={projectName(task.projectId)} />
+          ))}
+          {view.paged.more}
+        </div>
       </div>
       {archivedChats.length > 0 && !viewOnly && (
         <Button

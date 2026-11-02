@@ -311,102 +311,104 @@ export function RulesSettings() {
           </ul>
         </div>
       )}
-      <ListToolbar
-        view={view}
-        label={t('Search rules')}
-        filters={[
-          {
-            key: 'kind',
-            label: t('Show'),
-            value: kind,
-            options: [
-              { value: 'all', label: t('All rules') },
-              { value: 'always', label: t('Always') },
-              { value: 'manual', label: t('Manual') },
-              { value: 'off', label: t('Off') },
-            ],
-            onChange: setKind,
-          },
-        ]}
-      />
-      <ListCount view={view} />
-      {rules.data && view.total > 0 && (
-        <ListEmpty
+      <div className="flex flex-col gap-3">
+        <ListToolbar
           view={view}
-          none="No rules yet."
-          filtered="No rules match your search."
-          onReset={() => setKind('all')}
+          label={t('Search rules')}
+          filters={[
+            {
+              key: 'kind',
+              label: t('Show'),
+              value: kind,
+              options: [
+                { value: 'all', label: t('All rules') },
+                { value: 'always', label: t('Always') },
+                { value: 'manual', label: t('Manual') },
+                { value: 'off', label: t('Off') },
+              ],
+              onChange: setKind,
+            },
+          ]}
         />
-      )}
-      <SettingsCardList>
-        {view.paged.shown.map((rule) => (
-          <SettingsCard
-            key={rule.id}
-            title={rule.name}
-            meta={[
-              projectName(rule.projectId),
-              ruleReach(rule),
-              rule.activation === 'manual' ? t('Manual') : t('Always'),
-              rule.enabled ? null : t('Off'),
-              ruleTokens(ruleCharacters(rule)),
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-            actions={
-              <>
-                <Switch
-                  aria-label={t('{0} enabled', { '0': rule.name })}
-                  checked={rule.enabled}
-                  disabled={viewOnly}
-                  onCheckedChange={(enabled) =>
-                    void act(() =>
-                      invoke('rules.save', {
-                        id: rule.id,
-                        baseRevision: rule.revision,
-                        name: rule.name,
-                        body: rule.body,
-                        projectId: rule.projectId,
-                        providers: rule.providers,
-                        activation: rule.activation,
-                        enabled,
-                      }),
-                    )
-                  }
-                />
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  disabled={viewOnly}
-                  onClick={() => {
-                    if (allowed()) setEditing(rule)
-                  }}
-                >
-                  {t('Edit')}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  disabled={viewOnly}
-                  onClick={() => {
-                    if (!allowed()) return
-                    if (confirm(t('Delete “{name}”?', { name: rule.name })))
-                      void act(() => invoke('rules.remove', rule.id))
-                  }}
-                >
-                  {t('Delete')}
-                </Button>
-              </>
-            }
-          >
-            {duplicates.has(rule.id) && (
-              <p role="note" className="m-0 text-caption text-foreground">
-                {duplicateNote(duplicates.get(rule.id)!, list)}
-              </p>
-            )}
-          </SettingsCard>
-        ))}
-        {view.paged.more}
-      </SettingsCardList>
+        <ListCount view={view} />
+        {rules.data && view.total > 0 && (
+          <ListEmpty
+            view={view}
+            none="No rules yet."
+            filtered="No rules match your search."
+            onReset={() => setKind('all')}
+          />
+        )}
+        <SettingsCardList>
+          {view.paged.shown.map((rule) => (
+            <SettingsCard
+              key={rule.id}
+              title={rule.name}
+              meta={[
+                projectName(rule.projectId),
+                ruleReach(rule),
+                rule.activation === 'manual' ? t('Manual') : t('Always'),
+                rule.enabled ? null : t('Off'),
+                ruleTokens(ruleCharacters(rule)),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              actions={
+                <>
+                  <Switch
+                    aria-label={t('{0} enabled', { '0': rule.name })}
+                    checked={rule.enabled}
+                    disabled={viewOnly}
+                    onCheckedChange={(enabled) =>
+                      void act(() =>
+                        invoke('rules.save', {
+                          id: rule.id,
+                          baseRevision: rule.revision,
+                          name: rule.name,
+                          body: rule.body,
+                          projectId: rule.projectId,
+                          providers: rule.providers,
+                          activation: rule.activation,
+                          enabled,
+                        }),
+                      )
+                    }
+                  />
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    disabled={viewOnly}
+                    onClick={() => {
+                      if (allowed()) setEditing(rule)
+                    }}
+                  >
+                    {t('Edit')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    disabled={viewOnly}
+                    onClick={() => {
+                      if (!allowed()) return
+                      if (confirm(t('Delete “{name}”?', { name: rule.name })))
+                        void act(() => invoke('rules.remove', rule.id))
+                    }}
+                  >
+                    {t('Delete')}
+                  </Button>
+                </>
+              }
+            >
+              {duplicates.has(rule.id) && (
+                <p role="note" className="m-0 text-caption text-foreground">
+                  {duplicateNote(duplicates.get(rule.id)!, list)}
+                </p>
+              )}
+            </SettingsCard>
+          ))}
+          {view.paged.more}
+        </SettingsCardList>
+      </div>
       {rules.data?.length === 0 && <p className={CAPTION}>{t('No rules yet.')}</p>}
       <div className="mt-3">
         <Button
