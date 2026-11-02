@@ -7,7 +7,8 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Every commit on main gets its own result; branches keep only their latest run.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   check:
     name: Check (${{ matrix.os }})
