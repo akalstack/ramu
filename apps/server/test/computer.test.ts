@@ -259,7 +259,7 @@ describe('open computer use backend', () => {
     ])
   })
 
-  it('names the app on every call and reports a missing install', async () => {
+  it.runIf(process.platform === 'darwin')('names the app on every call and reports a missing install', async () => {
     const { OcuBackend, parseApps } = await import('../src/computer/ocu')
     const { calls, client } = fakeClient()
     const backend = new OcuBackend(
@@ -277,19 +277,22 @@ describe('open computer use backend', () => {
 })
 
 describe('open computer use install', () => {
-  it('installs the pinned release into Ramu’s tools folder and verifies its version', async () => {
-    const { installOcu, OCU_VERSION } = await import('../src/computer/ocu')
-    const calls: string[][] = []
-    const version = await installOcu(async (file, args) => {
-      calls.push([file, ...args])
-      return args[0] === '--version' ? `${OCU_VERSION}\n` : ''
-    }, '/usr/bin/npm')
-    expect(version).toBe(OCU_VERSION)
-    expect(calls[0]).toEqual(expect.arrayContaining(['install', '--prefix', `open-computer-use@${OCU_VERSION}`]))
-    expect(calls[0]).not.toContain('-g')
-    await expect(installOcu(async () => '9.9.9\n', '/usr/bin/npm')).rejects.toThrow(/expected/)
-    await expect(installOcu(async () => '', null)).rejects.toThrow(/npm/)
-  })
+  it.runIf(process.platform === 'darwin')(
+    'installs the pinned release into Ramu’s tools folder and verifies its version',
+    async () => {
+      const { installOcu, OCU_VERSION } = await import('../src/computer/ocu')
+      const calls: string[][] = []
+      const version = await installOcu(async (file, args) => {
+        calls.push([file, ...args])
+        return args[0] === '--version' ? `${OCU_VERSION}\n` : ''
+      }, '/usr/bin/npm')
+      expect(version).toBe(OCU_VERSION)
+      expect(calls[0]).toEqual(expect.arrayContaining(['install', '--prefix', `open-computer-use@${OCU_VERSION}`]))
+      expect(calls[0]).not.toContain('-g')
+      await expect(installOcu(async () => '9.9.9\n', '/usr/bin/npm')).rejects.toThrow(/expected/)
+      await expect(installOcu(async () => '', null)).rejects.toThrow(/npm/)
+    },
+  )
 })
 
 describe('screen stream', () => {
@@ -500,40 +503,43 @@ describe('h264 packetizing', () => {
 })
 
 describe('locked use', () => {
-  it('reads Open Computer Use’s status and starts the installer without waiting for it', async () => {
-    const { LockedUse, parseLockedUse } = await import('../src/computer/lockedUse')
-    const status = JSON.stringify({
-      enabled: false,
-      available: false,
-      stage: 'not-installed',
-      clientApproved: false,
-      session: { state: 'unlocked' },
-      blockers: ['Run ocu locked-use enable'],
-    })
-    expect(parseLockedUse(status)).toMatchObject({
-      installed: true,
-      enabled: false,
-      session: 'unlocked',
-      blockers: ['Run ocu locked-use enable'],
-    })
-    const started: string[][] = []
-    const lock = new LockedUse(
-      () => '/bin/ocu',
-      async () => status,
-      (file, args) => started.push([file, ...args]),
-    )
-    expect((await lock.enable()).stage).toBe('not-installed')
-    expect(started).toEqual([['/bin/ocu', 'locked-use', 'enable']])
-    expect(await new LockedUse(() => null).status()).toMatchObject({ installed: false })
-    await expect(new LockedUse(() => null).enable()).rejects.toThrow(/Install Open Computer Use/)
-    const broken = new LockedUse(
-      () => '/bin/ocu',
-      async () => {
-        throw new Error('boom')
-      },
-    )
-    expect(await broken.status()).toMatchObject({ installed: true, available: false, blockers: ['boom'] })
-  })
+  it.runIf(process.platform === 'darwin')(
+    'reads Open Computer Use’s status and starts the installer without waiting for it',
+    async () => {
+      const { LockedUse, parseLockedUse } = await import('../src/computer/lockedUse')
+      const status = JSON.stringify({
+        enabled: false,
+        available: false,
+        stage: 'not-installed',
+        clientApproved: false,
+        session: { state: 'unlocked' },
+        blockers: ['Run ocu locked-use enable'],
+      })
+      expect(parseLockedUse(status)).toMatchObject({
+        installed: true,
+        enabled: false,
+        session: 'unlocked',
+        blockers: ['Run ocu locked-use enable'],
+      })
+      const started: string[][] = []
+      const lock = new LockedUse(
+        () => '/bin/ocu',
+        async () => status,
+        (file, args) => started.push([file, ...args]),
+      )
+      expect((await lock.enable()).stage).toBe('not-installed')
+      expect(started).toEqual([['/bin/ocu', 'locked-use', 'enable']])
+      expect(await new LockedUse(() => null).status()).toMatchObject({ installed: false })
+      await expect(new LockedUse(() => null).enable()).rejects.toThrow(/Install Open Computer Use/)
+      const broken = new LockedUse(
+        () => '/bin/ocu',
+        async () => {
+          throw new Error('boom')
+        },
+      )
+      expect(await broken.status()).toMatchObject({ installed: true, available: false, blockers: ['boom'] })
+    },
+  )
 })
 
 describe('locked screen through a session', () => {

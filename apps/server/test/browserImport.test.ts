@@ -138,7 +138,7 @@ describe('browser import', () => {
   })
 
   it('reads a Chromium profile after the keychain allows it, and reports a refusal', async () => {
-    const root = sourceRoot('chrome', home)
+    const root = sourceRoot('chrome', home, 'darwin')
     mkdirSync(join(root, 'Default'), { recursive: true })
     writeFileSync(
       join(root, 'Local State'),
@@ -167,10 +167,11 @@ describe('browser import', () => {
       0,
     )
     db.close()
-    const ok = make({ keychainPassword: async () => 'pw' })
+    const ok = make({ platform: 'darwin', keychainPassword: async () => 'pw' })
     const { domains } = await ok.importer.inspect('chrome', 'Default')
     expect(domains).toEqual([{ domain: 'example.com', cookies: 1 }])
     const refused = make({
+      platform: 'darwin',
       keychainPassword: async () => {
         throw new Error('The keychain did not allow access.')
       },

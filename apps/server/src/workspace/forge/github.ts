@@ -67,7 +67,7 @@ function ghExecutable(): string | null {
 
 /** Maps gh's error output to the reason forge features are unavailable, when it is one of those. */
 export function availabilityFromError(stderr: string): ForgeAvailability | null {
-  if (/gh auth login|not logged in|authentication required|HTTP 401/i.test(stderr)) return 'signed-out'
+  if (/gh auth login|not logged in|authentication required|HTTP 401|set the GH_TOKEN/i.test(stderr)) return 'signed-out'
   if (/none of the git remotes|not a github|unable to determine|no git remotes/i.test(stderr)) return 'not-github'
   return null
 }
