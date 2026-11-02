@@ -14,6 +14,7 @@ import { useComputers } from '../workspace/computers'
 import { useHostOverviews } from '../workspace/hostOverview'
 import { HostProvider, useHost } from '../workspace/HostProvider'
 import { useHostSelection } from '../workspace/HostSelection'
+import { useAppSettings } from '../settings/AppSettings'
 import { closeLiveView, moveLiveView, pinLiveSurface, setLiveWindow, useLiveViewPin } from './liveViewStore'
 
 const FRAME_MS = 1000
@@ -257,6 +258,7 @@ function Body({
 /** One small view of a thread's Browser or Computer that stays in a corner while the person works elsewhere in Ramu. */
 export function LiveView() {
   const pin = useLiveViewPin()
+  const { preferences } = useAppSettings()
   const { select } = useHostSelection()
   useEffect(() => {
     const offClosed = ramu.on('live:closed', () => setLiveWindow(false))
@@ -266,7 +268,7 @@ export function LiveView() {
       offOpen()
     }
   }, [select])
-  if (!pin || pin.window) return null
+  if (!pin || pin.window || !preferences.liveViewDesktop) return null
   return (
     <aside
       className={`fixed z-50 w-[320px] max-w-[calc(100vw-32px)] rounded-(--radius-m) border border-edge bg-card text-foreground shadow-(--shadow-float) ${CORNER_CLASS[pin.corner]}`}

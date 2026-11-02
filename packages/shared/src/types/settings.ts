@@ -85,6 +85,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   operator: boolean
   /** A few words the person writes about this host (`GPU box`, `office network`), matched when suggesting one. */
   hostDescription: string
+  /** Float, the small live view of a thread's Browser, Computer or test device on the desktop. */
+  liveViewDesktop: boolean
   /** Opt-in until integrated runtime/provider acceptance passes; website identities stay on the runtime's desktop. */
   agentBrowser?: import('../browser').AgentBrowserPreferences
   /** Dragged width of the sidebar, in px. */
@@ -181,6 +183,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   agentThreads: true,
   operator: false,
   hostDescription: '',
+  liveViewDesktop: true,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
   busyMessageAction: 'steer',
 }

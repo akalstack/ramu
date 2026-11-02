@@ -47,7 +47,7 @@ Test signed installers on another machine. Simulated checks do not verify live p
 
 `pnpm make` writes installers to `dist/make`. On the matching build machine, `pnpm release:assets darwin arm64` (or `darwin x64` / `linux x64`) collects installers and checksums in `dist/release`. Clear old collected artifacts before rebuilding.
 
-For packaged macOS checks, run `RAMU_PACKAGED_EXECUTABLE=/path/to/Ramu pnpm test:desktop-smoke`. The [release skill](../.agents/skills/ramu-release/SKILL.md) documents the repository's optional agent-assisted workflow.
+For packaged macOS checks, run `RAMU_PACKAGED_EXECUTABLE=/path/to/Ramu pnpm test:desktop-smoke`.
 
 ## Updates and the background service
 

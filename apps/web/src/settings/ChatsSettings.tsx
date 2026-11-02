@@ -82,6 +82,12 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
       />
       <ToggleRow
         {...toggleProps}
+        setting="liveViewDesktop"
+        title="Float on desktop"
+        description="Browser, Computer and test device trays get Float: a small live view in a corner, or a window above other apps, with Stop always in reach."
+      />
+      <ToggleRow
+        {...toggleProps}
         setting="notifyAgentDone"
         title="Agent notifications"
         description="Notify when an agent finishes, needs input, or fails."

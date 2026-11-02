@@ -45,6 +45,8 @@ vi.mock('../src/chat/useComputerVideo', () => ({ useComputerVideo: () => ({ stat
 vi.mock('../src/chat/ComputerSharing', () => ({ ComputerSharing: 'ComputerSharing' }))
 vi.mock('../src/composer/ComposerTraySection', () => ({ ComposerTraySection: 'section' }))
 vi.mock('../src/i18n', () => ({ t: (text: string) => text, useLanguage() {} }))
+vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: { liveViewDesktop: true } }) }))
+vi.mock('../src/liveView/liveViewStore', () => ({ floatLiveView: vi.fn() }))
 vi.mock('../src/Menu', () => ({ Dropdown: 'Dropdown', Menu: 'Menu' }))
 vi.mock('@/components/desktop-button', () => ({ Button: 'Button' }))
 vi.mock('@/components/desktop-input', () => ({ Input: 'Input' }))

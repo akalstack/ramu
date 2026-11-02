@@ -39,6 +39,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
     'agentThreads',
     'operator',
     'hostDescription',
+    'liveViewDesktop',
     'notifyAgentDone',
     'resumeChatsOnRestart',
     'asyncQuestions',

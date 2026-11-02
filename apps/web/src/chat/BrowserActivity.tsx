@@ -11,6 +11,7 @@ import { Button } from '@/components/desktop-button'
 import { openBrowser } from '../views/browserPane'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
 import { floatLiveView } from '../liveView/liveViewStore'
+import { useAppSettings } from '../settings/AppSettings'
 
 /** Native tabs remain discoverable after an agent turn, without activating background threads or hosts. */
 export function useBrowserActivity(taskId: string | undefined, visible: boolean) {
@@ -77,6 +78,7 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
   useLanguage()
   const ws = useWorkspace()
   const { id: host } = useHost()
+  const liveView = useAppSettings().preferences.liveViewDesktop
   if (!state.taskId || !state.tabs.length) return null
   const taskId = state.taskId
   return (
@@ -93,16 +95,18 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
           <span className="text-muted-foreground text-caption">{t('Last-known activity')}</span>
         ) : (
           <>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="icon small-icon"
-              aria-label={t('Float')}
-              title={t('Float: keep a live view in the corner')}
-              onClick={() => floatLiveView(host, taskId)}
-            >
-              <PictureInPicture2 size={14} />
-            </Button>
+            {liveView && (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="icon small-icon"
+                aria-label={t('Float')}
+                title={t('Float: keep a live view in the corner')}
+                onClick={() => floatLiveView(host, taskId)}
+              >
+                <PictureInPicture2 size={14} />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon-xs"

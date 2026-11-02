@@ -10,6 +10,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open providers': 'Buka provider',
   'Favorites': 'Favorit',
   'Brief': 'Ringkas',
+  'Float on desktop': 'Mengambang di desktop',
+  'Browser, Computer and test device trays get Float: a small live view in a corner, or a window above other apps, with Stop always in reach.': 'Baki Browser, Computer, dan perangkat uji mendapat Mengambang: tampilan langsung kecil di sudut, atau jendela di atas aplikasi lain, dengan Hentikan selalu terjangkau.',
   'Test devices': 'Perangkat uji',
   'Let agents use test devices': 'Izinkan agent memakai perangkat uji',
   'Agents boot iOS Simulators and Android emulators on this host, install the app they built and check it like computer use. Xcode and the Android SDK stay your install.': 'Agent menyalakan iOS Simulator dan emulator Android di host ini, memasang aplikasi yang dibuatnya, dan memeriksanya seperti penggunaan komputer. Xcode dan Android SDK tetap Anda pasang sendiri.',

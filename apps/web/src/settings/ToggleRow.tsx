@@ -14,6 +14,7 @@ export type ToggleKey =
   | 'autoProjectSplit'
   | 'agentThreads'
   | 'operator'
+  | 'liveViewDesktop'
   | 'recapsEnabled'
   | 'notifyAgentDone'
   | 'resumeChatsOnRestart'

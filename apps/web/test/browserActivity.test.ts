@@ -11,6 +11,8 @@ const fixture = vi.hoisted(() => ({
   existing: null as { id: string; kind: 'browser'; tabId: string } | null,
 }))
 vi.mock('../src/ipc', () => ({ ramu: {} }))
+vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: { liveViewDesktop: true } }) }))
+vi.mock('../src/liveView/liveViewStore', () => ({ floatLiveView: vi.fn() }))
 vi.mock('../src/i18n', () => ({
   useLanguage() {},
   t: (text: string, values: Record<string, string | number> = {}) =>

@@ -160,6 +160,7 @@ export const appPreferences = z.object({
   agentThreads: z.boolean().default(true),
   operator: z.boolean().default(false),
   hostDescription: z.string().trim().max(80).default(''),
+  liveViewDesktop: z.boolean().default(true),
   agentBrowser: z
     .object({
       agentBrowser: z.enum(['integrated', 'provider']),

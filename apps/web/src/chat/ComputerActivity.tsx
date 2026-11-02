@@ -2,6 +2,7 @@ import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Ellipsis, Keyboard, Monitor, PictureInPicture2 } from 'lucide-react'
 import { floatLiveView } from '../liveView/liveViewStore'
+import { useAppSettings } from '../settings/AppSettings'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
 import { COMPUTER_FRAME_STALE_MS, type ComputerAction } from '@ramu/shared/computerBridge'
 import {
@@ -446,6 +447,7 @@ function ScreenThumbnail({
 /** Shows only when computer use is on for this host. The grant is per thread and explicit. */
 export function ComputerActivity({ taskId, visible }: { taskId: string | undefined; visible: boolean }) {
   useLanguage()
+  const liveView = useAppSettings().preferences.liveViewDesktop
   const { invoke, id: hostId } = useHost()
   const { viewOnly, canWrite } = useHostWriteAccess()
   const scope = `${hostId}:${taskId}`
@@ -522,7 +524,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
       title={t('Computer')}
       icon={<Monitor />}
       actions={
-        session ? (
+        session && liveView ? (
           <Button
             variant="ghost"
             size="icon-xs"
