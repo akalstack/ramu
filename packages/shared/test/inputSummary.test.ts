@@ -82,18 +82,7 @@ it('splits pending counts by kind, and leaves non-approvals unclassified for an 
     approvals: 1,
     questions: 2,
     connectors: 1,
-    other: 0,
   })
-  expect(describeInputCounts({ count: 3, approvals: 1, requests: [] })).toEqual({
-    approvals: 1,
-    questions: 0,
-    connectors: 0,
-    other: 2,
-  })
-  const old = { count: 1, approvals: 0, requests: [] }
-  expect(
-    mergeInputSummaries([old, { count: 1, approvals: 0, connectors: 1, requests: [] }])?.connectors,
-  ).toBeUndefined()
 })
 
 it('records which connector an elicitation is for, bounded, so the Inbox can group sign-ins', () => {

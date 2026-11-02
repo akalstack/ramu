@@ -54,18 +54,18 @@ export interface NetworkStatus {
   addresses: NetworkAddress[]
   devices: NetworkDevice[]
   /** How long an unused paired device stays paired. `saved` is false while the server default applies. */
-  deviceLifetime?: { days: number | 'never'; saved: boolean }
+  deviceLifetime: { days: number | 'never'; saved: boolean }
   /** Pairing offers not yet used, without their codes. */
-  offers?: { id: string; role: 'owner' | 'viewer'; expiresAt: number }[]
+  offers: { id: string; role: 'owner' | 'viewer'; expiresAt: number }[]
   /**
    * Nearby devices asking to pair while an offer is open, each with the six-digit code it shows. Approve only when the
    * codes match.
    */
-  requests?: { id: string; name: string; address: string; code: string; expiresAt: number }[]
+  requests: { id: string; name: string; address: string; code: string; expiresAt: number }[]
   /** What a newly paired full-access device holds. */
-  defaultPermissions?: import('../devicePermissions').DevicePermission[]
+  defaultPermissions: import('../devicePermissions').DevicePermission[]
   /** Paired devices asking for a permission, waiting for a person here. */
-  permissionRequests?: {
+  permissionRequests: {
     id: string
     deviceId: string
     deviceName: string
@@ -73,7 +73,7 @@ export interface NetworkStatus {
     at: number
   }[]
   /** Nearby-device discovery. */
-  discovery?: {
+  discovery: {
     /** The saved choice; it advertises only while network access is also on and listening. */
     discoverable: boolean
     state: 'off' | 'advertising' | 'unavailable'
@@ -102,7 +102,7 @@ export interface NetworkSettingsInput {
 }
 export interface PairingOffer {
   /** Non-secret handle for cancelling this offer or asking what became of it. */
-  offerId?: string
+  offerId: string
   code: string
   expiresAt: number
   urls: { url: string; interface: string }[]

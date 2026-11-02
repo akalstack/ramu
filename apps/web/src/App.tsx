@@ -988,8 +988,8 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
         if (await invoke('git.refreshRemote', taskId, binding.repoId, mayPull))
           window.dispatchEvent(new Event('ramu:git-updated'))
       })
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [taskId, binding?.repoId, binding?.setupState, invoke] by design; the values it reads beyond these are current as of that run
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [taskId, binding?.repoId, binding?.setupState, invoke] by design; the values it reads beyond these are current as of that run
     [taskId, binding?.repoId, binding?.setupState, invoke],
   )
   useAutoFetch(binding?.setupState === 'ready' ? autoFetch : null)

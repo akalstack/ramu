@@ -92,7 +92,6 @@ function inputCountText(summary: NonNullable<Task['inputSummary']>): string {
     counts.approvals && t('Approvals {0}', { 0: counts.approvals }),
     counts.questions && t('Questions {0}', { 0: counts.questions }),
     counts.connectors && t('Connector requests {0}', { 0: counts.connectors }),
-    counts.other && t('Other requests {0}', { 0: counts.other }),
   ]
     .filter(Boolean)
     .join(' · ')

@@ -6,6 +6,7 @@ const document: InteractiveDocument = {
     id: 'c',
     version: 1,
     sessionId: 's',
+    network: { resources: [], connect: [] },
     title: 'Title',
     summary: '',
     digest: 'hash',

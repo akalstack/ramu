@@ -25,6 +25,7 @@ const snapshot: SharedMcpManagement = {
   hostId: 'host',
   credentialStore: 'not-checked',
   accounts: [],
+  readiness: [],
   uncertainCalls: 0,
   connections: [
     {

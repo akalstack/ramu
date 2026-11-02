@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import type { InteractiveCheck, InteractivePreview, InteractiveNetwork } from '@ramu/shared/interactive'
-import { interactiveHtml, interactiveCsp } from '@ramu/shared/interactive'
+import { interactiveHtml, interactiveCsp, OFFLINE_NETWORK } from '@ramu/shared/interactive'
 
 import { Agent, fetch } from 'undici'
 import { isIP } from 'node:net'
@@ -14,7 +14,7 @@ export async function previewInteractive(
   html: string,
   checks: InteractiveCheck[],
   signal?: AbortSignal,
-  network?: InteractiveNetwork,
+  network: InteractiveNetwork = OFFLINE_NETWORK,
 ): Promise<Omit<InteractivePreview, 'id' | 'digest' | 'createdAt'>> {
   if (signal?.aborted) throw new Error('Preview cancelled')
   if (running >= 2) throw new Error('Two previews are already running. Try again shortly.')
@@ -59,8 +59,8 @@ export async function previewInteractive(
         const url = new URL(request.url())
         const address = url.hostname.replace(/^\[|\]$/g, '')
         const origins = ['fetch', 'xhr', 'eventsource'].includes(request.resourceType())
-          ? network?.connect
-          : network?.resources
+          ? network.connect
+          : network.resources
         if (
           url.protocol !== 'https:' ||
           url.username ||

@@ -62,7 +62,7 @@ export interface PairResponse {
   /** The host's durable identifier, bound at this explicit pairing and checked later through IDENTITY_PATH. */
   hostId?: string
   /** When the token stops working unless renewed; null never. */
-  expiresAt?: number | null
+  expiresAt: number | null
 }
 export const PROTOCOL_HEADER = 'x-ramu-protocol'
 export const MAX_REQUEST_BYTES = 16_000_000

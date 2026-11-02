@@ -198,7 +198,7 @@ it('only accepts supported host thread commands with the required arguments', as
 })
 
 it('puts async questions and approvals in Waiting even when execution continues, and keeps them out of Completed', () => {
-  const summary = { count: 1, approvals: 1, requests: [] }
+  const summary = { count: 1, approvals: 1, connectors: 0, requests: [] }
   const chats: InboxChat[] = [
     {
       id: 'live',

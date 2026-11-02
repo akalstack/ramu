@@ -107,7 +107,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             <span className="min-w-0 flex-1 truncate font-medium">{computer.name}</span>
             {available && computer.needsInput > 0 && (
               <span
-                className="inline-flex flex-none items-center gap-1 rounded-full bg-fill px-1.5 text-caption tabular-nums text-foreground"
+                className="inline-flex flex-none items-center gap-1 text-caption tabular-nums text-foreground"
                 title={t('{0} waiting', { 0: computer.needsInput })}
               >
                 <span className="size-1.5 rounded-full bg-warn" />
@@ -116,36 +116,39 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             )}
             {available && computer.running > 0 && (
               <span
-                className="inline-flex flex-none items-center gap-1 rounded-full bg-fill px-1.5 text-caption tabular-nums text-muted-foreground"
+                className="inline-flex flex-none items-center gap-1 text-caption tabular-nums text-muted-foreground"
                 title={t('{0} working', { 0: computer.running })}
               >
-                <span className="size-2 animate-spin rounded-full border border-current border-t-transparent" />
+                <LoaderCircle size={12} className="animate-spin" aria-hidden />
                 {computer.running}
               </span>
             )}
           </SidebarDisclosureButton>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={`${ICON_BUTTON_CLASS} opacity-0 group-hover/host:opacity-100 group-focus-within/host:opacity-100`}
-            aria-label={`${t('Add project')} · ${computer.name}`}
-            title={t('Add project…')}
-            disabled={!available || addProject.busy}
-            onClick={() => void addProject.add()}
-          >
-            <FolderPlus size={14} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={`${ICON_BUTTON_CLASS} opacity-0 group-hover/host:opacity-100 group-focus-within/host:opacity-100`}
-            disabled={!available}
-            aria-label={`${t('New thread')} · ${computer.name}`}
-            title={t('New thread')}
-            onClick={() => select(computer.id, { kind: 'new' })}
-          >
-            <Plus size={14} />
-          </Button>
+          {/* Overlays the row's end, so counts sit flush right until the actions are wanted. */}
+          <div className="absolute inset-y-0 right-1 flex items-center gap-0.5 bg-(--sidebar) opacity-0 group-hover/host:opacity-100 focus-within:opacity-100">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={ICON_BUTTON_CLASS}
+              aria-label={`${t('Add project')} · ${computer.name}`}
+              title={t('Add project…')}
+              disabled={!available || addProject.busy}
+              onClick={() => void addProject.add()}
+            >
+              <FolderPlus size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={ICON_BUTTON_CLASS}
+              disabled={!available}
+              aria-label={`${t('New thread')} · ${computer.name}`}
+              title={t('New thread')}
+              onClick={() => select(computer.id, { kind: 'new' })}
+            >
+              <Plus size={14} />
+            </Button>
+          </div>
         </div>
       )}
       {open &&

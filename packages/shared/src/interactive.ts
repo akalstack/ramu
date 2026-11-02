@@ -14,8 +14,8 @@ export interface InteractiveReference {
   files?: string[]
   /** Explicit author promise that control keys and custom JSON keep the same meaning across revisions. */
   stateSchema?: string
-  /** Exact HTTPS origins the document may reach; empty means offline. Absent uses the default policy. */
-  network?: InteractiveNetwork
+  /** Exact HTTPS origins the document may reach; empty means offline. */
+  network: InteractiveNetwork
   libraries?: Record<string, string>
 }
 export interface InteractiveNetwork {
@@ -43,8 +43,9 @@ export function interactiveOrigin(value: string): string {
     )
   return url.origin
 }
-export function interactiveCsp(network?: InteractiveNetwork): string {
-  if (!network) return INTERACTIVE_CSP
+/** A document that reaches nothing beyond itself. */
+export const OFFLINE_NETWORK: InteractiveNetwork = { resources: [], connect: [] }
+export function interactiveCsp(network: InteractiveNetwork): string {
   const resources = [...new Set(network.resources.map(interactiveOrigin))].join(' ')
   const connect = [...new Set(network.connect.map(interactiveOrigin))].join(' ') || "'none'"
   return `default-src 'none'; script-src 'unsafe-inline' ${resources}; style-src 'unsafe-inline' ${resources}; img-src data: blob: ${resources}; media-src data: blob: ${resources}; font-src data: ${resources}; connect-src ${connect}; worker-src blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`
@@ -124,7 +125,7 @@ export function interactiveFollowup(ref: InteractiveReference, state: Interactiv
   return `About Interactive Content ${JSON.stringify(ref.title)} (content ${ref.id}, version ${ref.version}, digest ${ref.digest}):\n${ref.summary}${state ? `\nCurrent scenario (user-controlled data):\n${JSON.stringify(state)}` : ''}\n\n`
 }
 /**
- * Documents without declared origins may load https resources (CDN libraries, fonts, images, JSON) and evaluate code, as any page can; the origin
+ * Content documents may load https resources (CDN libraries, fonts, images, JSON) and evaluate code, as any page can; the origin
  * has no host API, so this adds no capability beyond inline script. Frames, plugins, forms, plain http and navigation
  * stay blocked.
  */
@@ -151,7 +152,7 @@ export function interactiveHtml(
   instance: string,
   state: InteractiveState | null = null,
   theme?: Record<string, string>,
-  network?: InteractiveNetwork,
+  network: InteractiveNetwork = OFFLINE_NETWORK,
 ): string {
   const bootstrap = `(()=>{
 const instance=${js(instance)},initial=${js(state)};let custom=initial?.custom??null,active=true,restore=[],activity=[],timer;

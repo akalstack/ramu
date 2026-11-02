@@ -71,7 +71,7 @@ export interface DevicePermissionsView {
   /** Asked and not answered yet. */
   pending: DevicePermission[]
   /** The host said never: asking again is refused until the host allows it itself. */
-  blocked?: DevicePermission[]
+  blocked: DevicePermission[]
 }
 
 const SETTINGS_DOMAINS = new Set([

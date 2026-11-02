@@ -169,7 +169,7 @@ export interface ThreadInputSummary {
   count: number
   approvals: number
   /** Connector requests among `count`. */
-  connectors?: number
+  connectors: number
   /** At most three requests, approvals first. Open the thread to review all requests. */
   requests: ThreadInputRequest[]
 }

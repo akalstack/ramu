@@ -16,7 +16,6 @@ import { isViewOnly, VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { mayUse } from '@ramu/shared/devicePermissions'
 import { useComputers, statusText } from '../workspace/computers'
 import { errorText } from '../lib/errors'
-import { readSettingsSnapshot, SettingsUpdateRequired } from './settingsAvailability'
 import { Dropdown } from '../Menu'
 import { t } from '../i18n'
 
@@ -49,7 +48,6 @@ interface Target {
   name: string
   snapshot?: SettingsSnapshot
   error?: string
-  updateRequired?: boolean
   /** This device is paired view-only on that host, so a save there would be refused. Advisory; the host decides. */
   viewOnly?: boolean
   /** This device lacks that host's Change settings permission, so a save there would be refused. Advisory too. */
@@ -80,7 +78,6 @@ export function useSettingsScope(section: string) {
   const [revision, setRevision] = useState(0)
   const [edited, setEdited] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
-  const [restarting, setRestarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const dirty = useRef(false)
@@ -108,7 +105,7 @@ export function useSettingsScope(section: string) {
         if (available.find((computer) => computer.id === id)?.status !== 'connected')
           return { id, name, error: t('This host is offline.') }
         try {
-          const snapshot = await readSettingsSnapshot(() => read(id))
+          const snapshot = await read(id)
           // This computer's own role is always full access; another host may have paired this device view-only.
           const viewOnly = id
             ? await invokeOn(id, 'background.status').then(
@@ -133,18 +130,7 @@ export function useSettingsScope(section: string) {
             ...(needsPermission ? { needsPermission } : {}),
           }
         } catch (reason) {
-          const updateRequired = reason instanceof SettingsUpdateRequired
-          const local = available.find((computer) => computer.id === id)?.local ?? !id
-          return {
-            id,
-            name,
-            updateRequired,
-            error: updateRequired
-              ? local
-                ? t('The background service is from an older version. Restart it to load settings.')
-                : t('Update Ramu and restart the background service on this host, then reload settings.')
-              : errorText(reason),
-          }
+          return { id, name, error: errorText(reason) }
         }
       }),
     ).then((next) => {
@@ -220,24 +206,6 @@ export function useSettingsScope(section: string) {
     setEdited(new Set())
     setRevision((current) => current + 1)
   }
-  const restartTarget = targets.find(
-    (entry) => entry.updateRequired && (available.find((computer) => computer.id === entry.id)?.local ?? !entry.id),
-  )
-  const restart = async () => {
-    if (!restartTarget || restarting) return
-    setRestarting(true)
-    setError(null)
-    try {
-      // Bypass settings readiness; the native restart confirmation remains available even when snapshots fail.
-      if (restartTarget.id) await invoke('computers.settings.invoke', restartTarget.id, 'background.restart', [])
-      else await invoke('background.restart')
-      reload()
-    } catch (reason) {
-      setError(errorText(reason))
-    } finally {
-      setRestarting(false)
-    }
-  }
   const save = async (draft: AppPreferences, modelDraft: ModelPreferences, paths: string[]) => {
     if (!ready || stale || saving) return false
     if (latestTargets.current.some((entry) => entry.viewOnly)) {
@@ -309,9 +277,6 @@ export function useSettingsScope(section: string) {
     stale,
     ready,
     saving,
-    restarting,
-    restartTarget,
-    restart,
     error,
     message,
     field,

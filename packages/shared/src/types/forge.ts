@@ -152,7 +152,7 @@ export interface ForgeConnectionSummary {
   cli: 'no-cli' | 'signed-out' | 'signed-in'
   accounts: ForgeCliAccount[]
   checkedAt: number
-  /** Saved credentials. */
+  /** Saved credentials, on a host with a credential store. */
   saved?: ForgeSavedConnection[]
   /** `unavailable` means a locked or missing OS credential store: saving is blocked, existing CLI use is unaffected. */
   credentialStore?: 'not-checked' | 'available' | 'unavailable'

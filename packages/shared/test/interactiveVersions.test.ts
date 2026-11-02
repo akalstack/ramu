@@ -5,6 +5,7 @@ it('groups only this content/session, orders revisions, and keeps the historical
   const original: InteractiveReference = {
     id: 'c',
     sessionId: 's',
+    network: { resources: [], connect: [] },
     version: 1,
     title: 'Original',
     summary: '',
@@ -30,6 +31,7 @@ it('copies between revisions only with an explicit identical state schema and id
   const from: InteractiveReference = {
     id: 'c',
     sessionId: 's',
+    network: { resources: [], connect: [] },
     version: 1,
     title: 'Original',
     summary: '',

@@ -59,6 +59,7 @@ const task: Task = {
   inputSummary: {
     count: 4,
     approvals: 1,
+    connectors: 0,
     requests: [
       {
         sessionId: 'main',

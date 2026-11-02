@@ -3444,11 +3444,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Settings saved on {0} hosts.': 'Pengaturan tersimpan di {0} host.',
   'Save or discard changes before changing hosts.': 'Simpan atau buang perubahan sebelum mengganti host.',
   'Reload settings': 'Muat ulang pengaturan',
-  'The background service is from an older version. Restart it to load settings.':
-    'Layanan latar belakang masih menggunakan versi lama. Mulai ulang untuk memuat pengaturan.',
-  'Update Ramu and restart the background service on this host, then reload settings.':
-    'Perbarui Ramu dan mulai ulang layanan latar belakang di host ini, lalu muat ulang pengaturan.',
-  'Restart background service': 'Mulai ulang layanan latar belakang',
   'Restarting…': 'Memulai ulang…',
   'Close background activity': 'Tutup aktivitas latar belakang',
   'Stop {0}': 'Hentikan {0}',
@@ -3592,7 +3587,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Approvals {0}': 'Persetujuan {0}',
   'Questions {0}': 'Pertanyaan {0}',
   'Connector requests {0}': 'Permintaan konektor {0}',
-  'Other requests {0}': 'Permintaan lain {0}',
   '{0} active agents': '{0} agen aktif',
   'Waiting for limit reset': 'Menunggu reset batas',
   'Advisor reviewing': 'Penasihat meninjau',

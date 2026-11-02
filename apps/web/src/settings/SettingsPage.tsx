@@ -411,20 +411,11 @@ export function SettingsPage({
             {scope.permissionHosts.map((host) => (
               <PermissionNeeded key={host} host={host} permission="settings" />
             ))}
-            {scope.restartTarget && (
-              <Button
-                size="sm"
-                disabled={busy || scope.loading || scope.restarting}
-                onClick={() => void scope.restart()}
-              >
-                {scope.restarting ? t('Restarting…') : t('Restart background service')}
-              </Button>
-            )}
             <Button
               variant="ghost"
               size="sm"
               className="flex-none whitespace-nowrap"
-              disabled={busy || scope.loading || scope.restarting}
+              disabled={busy || scope.loading}
               onClick={() => scope.reload()}
             >
               {hasChanges ? t('Discard changes and reload') : t('Reload settings')}

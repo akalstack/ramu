@@ -44,6 +44,7 @@ it('keeps scenarios separate by version/host and bounds the offline document cac
     id: 'content',
     version: 1,
     sessionId: 's',
+    network: { resources: [], connect: [] },
     title: 'Capacity',
     summary: 'Adjust people',
     digest: 'hash',
@@ -136,6 +137,7 @@ it('stages only explicitly selected captured values with their exact source refe
     id: 'c',
     version: 2,
     sessionId: 's',
+    network: { resources: [], connect: [] },
     title: 'Capacity',
     summary: 'Explore',
     digest: 'hash',
@@ -186,9 +188,8 @@ it('round-trips attached Interactive Content so a sent message can show what it 
   expect(sentInteractiveAttachments('<interactive-content id="x" version="1" title=not-json>')).toEqual([])
 })
 
-it('uses exact versioned network origins without weakening the legacy policy', async () => {
-  const { interactiveCsp, interactiveOrigin, INTERACTIVE_CSP } = await import('../src/interactive')
-  expect(interactiveCsp()).toBe(INTERACTIVE_CSP)
+it('uses exact versioned network origins', async () => {
+  const { interactiveCsp, interactiveOrigin } = await import('../src/interactive')
   const offline = interactiveCsp({ resources: [], connect: [] })
   expect(offline).toContain("connect-src 'none'")
   expect(offline).not.toContain('https:')

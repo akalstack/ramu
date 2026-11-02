@@ -4,6 +4,7 @@ import { mayUse, type DevicePermissionsView } from '../src/devicePermissions'
 const view = (permissions: Partial<DevicePermissionsView['permissions']>): DevicePermissionsView => ({
   permissions: { computer: null, browser: null, terminal: null, settings: null, agents: null, ...permissions },
   pending: [],
+  blocked: [],
 })
 
 it('offers a control only while its grant is active, and never hides one on a host that cannot say', () => {

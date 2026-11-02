@@ -2,7 +2,12 @@ import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { Db } from '../db'
 import type { InteractiveDocument, InteractivePreview, InteractiveReference } from '@ramu/shared/interactive'
-import { INTERACTIVE_MAX_FILES, INTERACTIVE_MAX_HTML, interactiveOrigin } from '@ramu/shared/interactive'
+import {
+  INTERACTIVE_MAX_FILES,
+  INTERACTIVE_MAX_HTML,
+  interactiveOrigin,
+  OFFLINE_NETWORK,
+} from '@ramu/shared/interactive'
 import { previewInteractive } from './preview'
 import { bundleInteractive } from './bundle'
 import { resolveInteractiveKit } from './kit'
@@ -121,7 +126,7 @@ export class InteractiveStore {
   }
   async preview(session: string, value: InteractiveInput, signal?: AbortSignal): Promise<InteractivePreview> {
     this.session(session)
-    const input = interactiveInput.parse({ ...value, network: value.network ?? { resources: [], connect: [] } })
+    const input = interactiveInput.parse({ ...value, network: value.network ?? OFFLINE_NETWORK })
     if (signal?.aborted) throw new Error('Preview cancelled')
     if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
     if (
@@ -217,7 +222,7 @@ export class InteractiveStore {
       digest: preview.digest,
       createdAt: Date.now(),
       checked: preview.checks.length > 0,
-      ...(input.network ? { network: input.network } : {}),
+      network: input.network ?? OFFLINE_NETWORK,
       ...(input.files
         ? { libraries: { react: '19.3.0', 'react-dom': '19.3.0', 'chart.js': '4.6.1', '@dagrejs/dagre': '2.0.4' } }
         : {}),
