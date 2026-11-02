@@ -24,6 +24,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Teammates, then custom agents:** a second model reviews or takes over in one thread; later, a sentence creates a reusable agent ([plan](TEAMMATES-PLAN.md)).
 - **Resources:** Inbox shows what each thread uses on every host, with Stop one tap away and a warning when a host runs low on memory ([plan](RESOURCES-PLAN.md)).
 - **Work across hosts:** continue a thread on another connected host, with the project set up there and the threads linked; then choose hosts, schedule on them, merge totals and reach threads from a terminal ([plan](CROSS-HOST-PLAN.md)).
+- **Test devices and live views:** a floating view of Browser, Computer or a test device that stays beside other work; agents run and check apps on iOS Simulators and Android emulators; system picture-in-picture on the phone ([plan](LIVE-VIEWS-PLAN.md)).
 - **Git hosting:** Bitbucket Cloud and Azure DevOps adapters, and saved GitLab tokens with clone and publish in Settings. A new forge adds an adapter beside GitHub's and GitLab's in `apps/server/src/workspace/forge/` and a case in `forge/route.ts`.
 - **Code quality:** validate push payloads and RPC results on the clients (`any` remains in the phone's transport and push listeners, the desktop's host bridge and its preload). About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
