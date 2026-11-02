@@ -1,3 +1,4 @@
+import { RowButton } from '@/components/row-button'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
@@ -86,7 +87,7 @@ export function SummarySettings({ value, onChange, hasChanges }: Props) {
           </SettingsRow>
         </>
       )}
-      <div className="mb-3 mt-1 flex flex-wrap items-center gap-3">
+      <div className="mb-4 mt-1 flex flex-wrap items-center gap-3">
         <Button
           variant="secondary"
           className="bg-fill hover:bg-fill-hover"
@@ -107,31 +108,40 @@ export function SummarySettings({ value, onChange, hasChanges }: Props) {
                   : '')}
         </span>
       </div>
-      {paged.shown.map((summary) => (
-        <Button
-          key={summary.id}
-          variant="secondary"
-          className="bg-card hover:bg-card-hover mb-2 h-auto w-full flex-col items-start gap-0.5 rounded-(--radius-m) p-3 text-left font-normal whitespace-normal"
-          onClick={() => select(scope?.primaryId ?? ownHostId(), { kind: 'summary', summaryId: summary.id })}
-        >
-          <span className="flex w-full items-center gap-2 text-caption text-muted-foreground">
-            <span>
-              {formatDate(summary.periodStart)} – {formatDate(summary.periodEnd)}
-            </span>
-            {summary.status === 'dismissed' && <span>· {t('Dismissed')}</span>}
-            {summary.chatIds.length > 0 && <span>· {t('Discussed in thread')}</span>}
-            <span className="grow" />
-            {summary.status === 'unread' && (
-              <span
-                role="img"
-                aria-label={t('Unread')}
-                className="inline-block size-2 rounded-full bg-[var(--accent)]"
-              />
-            )}
-          </span>
-          <span className="text-body text-foreground">{summary.headline}</span>
-        </Button>
-      ))}
+      {paged.shown.length > 0 && (
+        <ul className="m-0 mb-3 flex list-none flex-col gap-2 p-0" aria-label={t('Summaries')}>
+          {paged.shown.map((summary) => (
+            <li key={summary.id}>
+              <RowButton
+                size="lg"
+                stacked
+                className="gap-1 rounded-(--radius-m) bg-fill px-4 py-3 hover:bg-fill-hover"
+                onClick={() => select(scope?.primaryId ?? ownHostId(), { kind: 'summary', summaryId: summary.id })}
+              >
+                <span className="flex w-full items-center gap-2 text-caption text-muted-foreground">
+                  <span className="min-w-0 flex-1 truncate">
+                    {[
+                      `${formatDate(summary.periodStart)} – ${formatDate(summary.periodEnd)}`,
+                      summary.status === 'dismissed' ? t('Dismissed') : null,
+                      summary.chatIds.length > 0 ? t('Discussed in thread') : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  {summary.status === 'unread' && (
+                    <span
+                      role="img"
+                      aria-label={t('Unread')}
+                      className="inline-block size-2 flex-none rounded-full bg-[var(--accent)]"
+                    />
+                  )}
+                </span>
+                <span className="text-body text-foreground">{summary.headline}</span>
+              </RowButton>
+            </li>
+          ))}
+        </ul>
+      )}
       {paged.more}
       {snapshot && !snapshot.summaries.length && (
         <p className="muted text-muted-foreground small text-caption py-3">

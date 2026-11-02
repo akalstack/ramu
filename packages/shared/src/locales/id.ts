@@ -3321,6 +3321,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Answering a sub-agent': 'Menjawab sub-agen',
   Used: 'Memakai',
   Details: 'Detail',
+  Summaries: 'Ringkasan',
   'Google account': 'Akun Google',
   'Sign in with Google in your browser.': 'Masuk dengan Google di browser Anda.',
   'Gemini Enterprise': 'Gemini Enterprise',
