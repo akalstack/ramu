@@ -25,7 +25,7 @@ import {
 import { createWorkspaceTask, workspaceCreation } from './workspaces'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState, NativeModules } from 'react-native'
-import { fetch as expoFetch } from 'expo/fetch'
+import { hostFetch as expoFetch, pinLinkKey } from './link'
 import * as Device from 'expo-device'
 import Constants from 'expo-constants'
 import type { PushEvents, RamuMethods, ReviewAddressResult } from '@ramu/shared/api'
@@ -1185,6 +1185,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }),
           usable: (address, signal) =>
             checkHostConnection(address, token, expoFetch as typeof globalThis.fetch, signal),
+          pinLinkKey,
         })
         if (!current()) return
         if (!route) throw new HostError('Host unreachable. Checking saved addresses again shortly.')
@@ -1496,6 +1497,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         onCode,
         signal,
       })
+      pinLinkKey(result.hostId, result.linkKey)
       return savePairing(name, url, result)
     },
     reviewAddress: reviewAddressFor,

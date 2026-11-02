@@ -137,3 +137,26 @@ describe('host proof with a Link key', () => {
     expect(result).not.toHaveProperty('linkKey')
   })
 })
+
+describe('Link client without a pinned key', () => {
+  it('refuses to send a credential and to open a socket', async () => {
+    const { linkFetch, linkSocketFactory } = await import('../src/link/client')
+    const client = { account: () => ({ service: 'https://link.example', token: 't' }), pinned: () => null, random }
+    const address = `https://${HOST}.link.invalid`
+    await expect(
+      linkFetch(client, fetch)(`${address}/session`, { headers: { Authorization: 'Bearer x' } }),
+    ).rejects.toThrow('learns its Link key')
+    const closed = await new Promise((resolve) =>
+      linkSocketFactory(client, () => ({ send() {}, close() {} }))(
+        `wss://${HOST}.link.invalid/socket`,
+        {},
+        {
+          onopen() {},
+          onmessage() {},
+          onclose: resolve,
+        },
+      ),
+    )
+    expect(closed).toEqual({ code: 'ELINKPIN' })
+  })
+})

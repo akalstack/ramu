@@ -1,6 +1,7 @@
 import { RuntimeSocket, type SocketFactory } from '@ramu/client-runtime/socket'
 import { hostSubscription, type Interest } from './hostSubscription'
 import { registerSocketProvider, type HostSocket } from './transport'
+import { linkAware } from './link'
 
 /**
  * React Native's WebSocket accepts request headers as a third argument (a React Native extension), which the host's
@@ -62,7 +63,7 @@ export function socketFor(address: string, token: string): HostSocket {
     const socket = new RuntimeSocket({
       url: address,
       token,
-      factory: nativeSocketFactory,
+      factory: linkAware(nativeSocketFactory),
       // A phone changes networks frequently; detect a silent old route within about 30 seconds.
       heartbeatMs: 10_000,
       onEvent: (channel, payload) => {
@@ -115,7 +116,7 @@ registerSocketProvider(
     const socket = new RuntimeSocket({
       url: address,
       token,
-      factory: nativeSocketFactory,
+      factory: linkAware(nativeSocketFactory),
       events: false,
       connectTimeoutMs: 3000,
       onEvent() {},

@@ -4958,4 +4958,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Offline, last seen {0}': 'Offline, terakhir terlihat {0}',
   'Sign in with the Google or GitHub account your hosts use for Ramu Link. They appear here and connect from anywhere, end-to-end encrypted.': 'Masuk dengan akun Google atau GitHub yang dipakai host Anda untuk Ramu Link. Host akan tampil di sini dan terhubung dari mana saja, terenkripsi ujung ke ujung.',
   'Signed in as {0}': 'Masuk sebagai {0}',
+  'Allow this phone on {0} if it shows this number': 'Izinkan ponsel ini di {0} jika menampilkan angka ini',
 }

@@ -3,8 +3,8 @@
 import { parseAdvert, MAX_DISCOVERY_HOSTS } from '@ramu/shared/discovery/contract'
 import type { Sighting, NearbyHost } from '@ramu/shared/discovery/tracker'
 
-/** The order the pairing screen offers its methods in: discovery first, QR second, typing last. */
-export const PAIR_METHODS = ['nearby', 'qr', 'manual'] as const
+/** The order the pairing screen offers its methods in: discovery, your Ramu Link account, QR, then typing. */
+export const PAIR_METHODS = ['nearby', 'link', 'qr', 'manual'] as const
 export type PairMethod = (typeof PAIR_METHODS)[number]
 
 /** One resolved service as the native module reports it. Every field is untrusted input. */

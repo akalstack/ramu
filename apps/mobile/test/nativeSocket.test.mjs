@@ -17,6 +17,7 @@ test('native connections suppress synthesized browser origins and retain device 
       if (name === '@ramu/client-runtime/socket') return { RuntimeSocket: class {} }
       if (name === './hostSubscription') return {}
       if (name === './transport') return { registerSocketProvider() {} }
+      if (name === './link') return { linkAware: (factory) => factory }
       throw new Error(name)
     },
     WebSocket: class {

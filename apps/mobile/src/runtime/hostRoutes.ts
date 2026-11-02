@@ -39,6 +39,8 @@ export async function findHostRoute(input: {
   verify: (address: string, signal: AbortSignal) => Promise<HostVerification>
   /** After proof, confirm the route also carries the app's WebSocket, before changing the saved address. */
   usable?: (address: string, signal: AbortSignal) => Promise<boolean>
+  /** Keeps the Ramu Link key a proven answer vouched for. */
+  pinLinkKey?: (hostId: string, linkKey: string | undefined) => void
 }): Promise<{ address: string; hostId: string; routes: string[] } | null> {
   const candidates = learnedRoutes(input.routes).filter((address) => {
     try {
@@ -117,6 +119,7 @@ export async function chooseHostRoute(input: Parameters<typeof findHostRoute>[0]
     if (result.state === 'verified') {
       if (expectedHost && result.hostId !== expectedHost) return { state: 'mismatch' }
       expectedHost = result.hostId
+      input.pinLinkKey?.(result.hostId, result.linkKey)
       learned = learnedRoutes([...learned, ...result.routes])
     }
     return result

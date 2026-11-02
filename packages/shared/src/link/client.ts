@@ -54,6 +54,8 @@ const closeMessage = (code: number) =>
         ? 'Too many connections to this host through Ramu Link.'
         : 'The Ramu Link connection closed.'
 
+const UNPINNED = 'Connect to this host once over Ramu Link or its network so this device learns its Link key.'
+
 interface LinkStream {
   hostKey: string
   send(message: Uint8Array): void
@@ -179,13 +181,18 @@ export function linkFetch(options: LinkClientOptions, fallback: typeof fetch): t
     if (method !== 'GET' && method !== 'POST') throw new LinkError('Ramu Link carries only GET and POST requests.')
     if (init?.body !== undefined && init.body !== null && typeof init.body !== 'string')
       throw new LinkError('Ramu Link requests carry text bodies only.')
+    const headers = headersOf(init)
+    // A credential goes only to the key this device pinned when it paired; before that, only pairing and identity
+    // checks (which carry none) may use an unpinned stream.
+    if (!options.pinned(hostId) && Object.keys(headers).some((key) => key.toLowerCase() === 'authorization'))
+      throw new LinkError(UNPINNED)
     const stream = await openLinkStream(options, hostId, init?.signal ?? undefined)
     try {
       const answer = await exchange(stream, {
         kind: 'http',
         method,
         path: `${url.pathname}${url.search}`,
-        headers: headersOf(init),
+        headers,
         ...(typeof init?.body === 'string' ? { body: init.body } : {}),
       })
       const empty = answer.status === 204 || answer.status === 304
@@ -217,6 +224,10 @@ export function linkSocketFactory<S extends { send(text: string): void; close():
     const parsed = new URL(url)
     const hostId = linkHostOf(`https://${parsed.host}`)
     if (!hostId) return fallback(url, headers, handlers)
+    if (!options.pinned(hostId)) {
+      queueMicrotask(() => handlers.onclose({ code: 'ELINKPIN' }))
+      return { send() {}, close() {} }
+    }
     const controller = new AbortController()
     let stream: LinkStream | null = null
     let open = false

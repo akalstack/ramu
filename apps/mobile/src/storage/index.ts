@@ -207,3 +207,7 @@ export const contentStorage = {
       )
   },
 }
+const linkKey = 'ramu.link.v1'
+/** Ramu Link on this phone: the service, the account it is signed in to and each paired host's pinned key. */
+export const readLinkStateText = () => readSmall(linkKey)
+export const saveLinkStateText = (text: string) => writeSmall(linkKey, text)
