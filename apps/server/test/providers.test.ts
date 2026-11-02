@@ -107,7 +107,8 @@ it('custom executable paths override environment and are shared by runners', asy
     .split('\n')
     .map((line) => JSON.parse(line))
   expect(wire.filter((c) => c.args.includes('--version'))).toHaveLength(4)
-  expect(wire.find((c) => !c.args.includes('--version')).helper).toBe(join(dir, 'helper'))
+  // Every provider shares the fake binary and probes in parallel; only Antigravity's calls carry its helper.
+  expect(wire.some((c) => c.helper === join(dir, 'helper'))).toBe(true)
   expect(statuses.find((s) => s.provider === 'codex')!.setupCommand).toContain(bin)
 })
 it('Claude uses the user CLI by default, never the SDK package runtime', () => {
