@@ -11,6 +11,7 @@ import { heldTranscript, holdTranscript, lastSeqOf } from '../lib/heldTranscript
 
 /** Longest a streamed event waits to be shown: a burst rebuilds the transcript once, not once per event. */
 const STREAM_FRAME_MS = 33
+const STREAMED_KINDS = new Set<AgentEvent['kind']>(['text', 'thinking', 'tool-use', 'tool-result'])
 
 const eventsOf = (rows: ReadonlyMap<number, { event: AgentEvent }>) =>
   [...rows].sort(([a], [b]) => a - b).map(([, item]) => item.event)
@@ -178,7 +179,9 @@ export function useAgentStream(sessionId: string) {
             : undefined
         stored.set(sameMessage ?? lastSeqOf(stored) + 1, { event, revision })
       }
-      refreshSoon()
+      // Only what streams is coalesced: a sent message must replace its pending bubble in the same frame.
+      if (STREAMED_KINDS.has(event.kind)) refreshSoon()
+      else refreshEvents()
       if (event.kind === 'settings')
         setSession((s) => (s ? { ...s, provider: event.settings.provider, settings: event.settings } : s))
     })

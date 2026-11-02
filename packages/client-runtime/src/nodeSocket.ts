@@ -4,7 +4,13 @@ import type { SocketFactory } from './socket'
 
 /** The Node WebSocket, which can send the Authorization header and reports why an upgrade was refused. */
 export const nodeSocketFactory: SocketFactory = (url, headers, handlers) => {
-  const ws = new WebSocket(url, { headers, maxPayload: MAX_REQUEST_BYTES, handshakeTimeout: 10_000 })
+  const ws = new WebSocket(url, {
+    headers,
+    maxPayload: MAX_REQUEST_BYTES,
+    handshakeTimeout: 10_000,
+    // Nothing is saved by compressing on this machine's own Unix socket.
+    perMessageDeflate: !url.startsWith('ws+unix:'),
+  })
   let status: number | undefined
   let code: string | undefined
   ws.on('open', () => {

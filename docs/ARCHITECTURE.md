@@ -51,7 +51,7 @@ A paired remote host is reached over one authenticated WebSocket per host (`Runt
 
 A warm HTTP call and a socket call cost the same; the socket's benefit is one connection and one authenticated channel per host for calls and events, not speed.
 
-Frames over 4 KB are deflated, so a transcript or list costs a phone or tunnel far less; streamed tokens are sent as they are.
+Frames over 4 KB are deflated for clients that negotiate it, except on the local Unix socket; streamed tokens are sent as they are.
 
 Clients keep each transcript with its `agent.changes` cursor and read only what changed: the desktop for its 24 most recent threads, the phone for every thread it holds. Opening a thread on another host applies at once when that host's store holds it, and the lists refresh behind it; only a thread the store has not seen waits for a read. Each task pane mounts the first time it is shown.
 
