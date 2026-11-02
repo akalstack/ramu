@@ -166,32 +166,23 @@ export default function HostFolders() {
               disabled={busy || !url.trim() || !name.trim()}
               onPress={() =>
                 void run(async () => {
-                  // Only a host that answers the progress call also understands the clone id.
-                  const supported = await store.invoke(computerId, 'folders.cloneProgress', 'probe-unused-id').then(
-                    () => true,
-                    () => false,
-                  )
                   const id = `clone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-                  activeClone.current = supported ? id : null
-                  setCancellable(supported)
-                  const timer = supported
-                    ? setInterval(
-                        () =>
-                          void store.invoke(computerId, 'folders.cloneProgress', id).then(
-                            (next) =>
-                              activeClone.current === id &&
-                              setCloneProgress(
-                                next ? `${next.phase}${next.percent === null ? '' : ` ${next.percent}%`}` : null,
-                              ),
-                            () => {},
+                  activeClone.current = id
+                  setCancellable(true)
+                  const timer = setInterval(
+                    () =>
+                      void store.invoke(computerId, 'folders.cloneProgress', id).then(
+                        (next) =>
+                          activeClone.current === id &&
+                          setCloneProgress(
+                            next ? `${next.phase}${next.percent === null ? '' : ` ${next.percent}%`}` : null,
                           ),
-                        800,
-                      )
-                    : undefined
+                        () => {},
+                      ),
+                    800,
+                  )
                   try {
-                    const path = supported
-                      ? await store.invoke(computerId, 'folders.clone', listing.path, name, url, id)
-                      : await store.invoke(computerId, 'folders.clone', listing.path, name, url)
+                    const path = await store.invoke(computerId, 'folders.clone', listing.path, name, url, id)
                     setListing(await store.invoke(computerId, 'folders.list', path))
                     setName('')
                     setUrl('')

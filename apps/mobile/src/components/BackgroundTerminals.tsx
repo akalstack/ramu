@@ -5,12 +5,11 @@ import { translate } from '@ramu/shared/i18n'
 import { TerminalOutputBuffer, unseenOutput, type TerminalChunk } from '@ramu/shared/workspace/terminalOutput'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
-import { isMethodMissing } from '../runtime/goalVerify'
 import { font, space } from '../theme'
 import { Button, Card, Divider, Row, Sheet, T } from './ui'
 import TerminalView from './TerminalView'
 
-type Status = 'loading' | 'ready' | 'offline' | 'unsupported' | 'error'
+type Status = 'loading' | 'ready' | 'offline' | 'error'
 type Inspection = BackgroundTerminalInfo & { output: string }
 const MAX_OUTPUT = 64_000
 const live = (command: BackgroundTerminalInfo) => command.state === 'running' || command.state === 'stopping'
@@ -85,7 +84,7 @@ export function BackgroundTerminals({
           setList({
             scope,
             rows: previous,
-            status: isMethodMissing(error) ? 'unsupported' : 'error',
+            status: 'error',
             error: error instanceof Error ? error.message : String(error),
           })
       }
@@ -147,7 +146,7 @@ export function BackgroundTerminals({
           setDetail({
             key: detailKey,
             record,
-            status: isMethodMissing(error) ? 'unsupported' : 'error',
+            status: 'error',
             error: error instanceof Error ? error.message : String(error),
           })
       }
@@ -202,14 +201,7 @@ export function BackgroundTerminals({
       if (!force && fresh.state === 'stopping') return
       await io.current.invoke(hostId, 'term.background.stop', taskId, command.id, force)
     } catch (error) {
-      if (valid(scope, epoch))
-        setActionError(
-          isMethodMissing(error)
-            ? 'Update Ramu on this host to manage background commands.'
-            : error instanceof Error
-              ? error.message
-              : String(error),
-        )
+      if (valid(scope, epoch)) setActionError(error instanceof Error ? error.message : String(error))
     } finally {
       if (valid(scope, epoch)) {
         acting.current = false
@@ -278,9 +270,6 @@ export function BackgroundTerminals({
           </T>
           {!online && <T tone="muted">{t('Offline · last-known activity')}</T>}
           {status === 'loading' && <ActivityIndicator accessibilityLabel={t('Loading background commands…')} />}
-          {status === 'unsupported' && (
-            <T tone="muted">{t('Update Ramu on this host to manage background commands.')}</T>
-          )}
           {status === 'error' && (
             <T tone="bad">{t((selected ? detail.error : list.error) ?? 'Could not load background commands.')}</T>
           )}

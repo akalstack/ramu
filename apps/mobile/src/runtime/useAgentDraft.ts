@@ -9,7 +9,6 @@ import {
   type ProjectAgentDefaults,
 } from '@ramu/shared/workspace/agentDefaults'
 import { useStore } from './store'
-import { isMethodMissing } from './goalVerify'
 import { useT } from '../i18n'
 
 /** Active model intent stays device/host/scope qualified; queued settings are frozen by createChat. */
@@ -37,16 +36,14 @@ export function useAgentDraft(
   const invalid = !choice
   choice ??= { version: 1 }
   // Results stay keyed by host/project/provider so switching back reuses the last known default.
-  const [entries, setEntries] = useState<
-    Record<string, { value?: ProjectAgentDefaults; error?: string; unsupported?: boolean }>
-  >({})
+  const [entries, setEntries] = useState<Record<string, { value?: ProjectAgentDefaults; error?: string }>>({})
   const current = entries[key] ?? {}
   const setData = useCallback(
     (entryKey: string, entry: (typeof entries)[string]) =>
       setEntries((previous) => ({ ...previous, [entryKey]: entry })),
     [setEntries],
   )
-  const settings = agentSettingsForDraft(base, current.unsupported ? undefined : current.value, choice)
+  const settings = agentSettingsForDraft(base, current.value, choice)
   const fingerprint = JSON.stringify([key, storedKey, base, baselineAvailable, choice])
   const active = useRef(fingerprint)
   active.current = fingerprint
@@ -81,7 +78,6 @@ export function useAgentDraft(
             [key]: {
               ...previous[key],
               error: error instanceof Error ? error.message : String(error),
-              unsupported: isMethodMissing(error),
             },
           }))
       }
@@ -106,7 +102,6 @@ export function useAgentDraft(
     (!choice.selection &&
       (!baselineAvailable ||
         (!general &&
-          !current.unsupported &&
           (!current.value ||
             current.value.status === 'unavailable' ||
             current.value.status === 'invalid' ||
@@ -118,7 +113,7 @@ export function useAgentDraft(
   }
   const verify = async () => {
     if (blocked) throw new Error(t.projectModelChoose)
-    if (choice.selection || general || current.unsupported || !online) return settings
+    if (choice.selection || general || !online) return settings
     const version = lifecycle.version
     const request = ++lifecycle.sequence
     const value = await store.invoke(
@@ -145,7 +140,6 @@ export function useAgentDraft(
     invalid,
     defaults: current.value,
     error: current.error,
-    unsupported: current.unsupported,
     blocked,
     loading: !general && !current.value && !current.error,
     change: (next: AgentSettings) => {

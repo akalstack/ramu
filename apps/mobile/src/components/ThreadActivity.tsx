@@ -10,17 +10,7 @@ import { Sheet, T, type Icon } from './ui'
 import { ActivityPill } from './ActivityPill'
 import { ActivityList, ActivityRow, OfflineCard, WorkingSheet } from './ActivitySheets'
 import { WorkingLine } from './WorkingLine'
-import {
-  Ellipsis,
-  Hand,
-  Hourglass,
-  ListOrdered,
-  Loader,
-  Sparkles,
-  Target,
-  Users,
-  WifiOff,
-} from 'lucide-react-native'
+import { Ellipsis, Hand, Hourglass, ListOrdered, Loader, Sparkles, Target, Users, WifiOff } from 'lucide-react-native'
 
 const KIND_ICON: Record<ActivityKind | 'more', Icon> = {
   connection: WifiOff,

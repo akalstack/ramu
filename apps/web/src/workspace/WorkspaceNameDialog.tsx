@@ -40,12 +40,7 @@ export function WorkspaceNameDialog({
       await onSave(name.trim(), before)
       if (live.current) onClose()
     } catch (reason) {
-      if (live.current)
-        setError(
-          /unknown method/i.test(errorText(reason))
-            ? t('Update this host to rename workspace labels.')
-            : t(errorText(reason)),
-        )
+      if (live.current) setError(t(errorText(reason)))
     } finally {
       pending.current = false
       if (live.current) setBusy(false)

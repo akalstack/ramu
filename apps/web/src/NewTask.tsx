@@ -34,7 +34,6 @@ import { ownHostId } from './hosts'
 import { Combobox, Menu } from './Menu'
 import { AnimatedMark } from './Brand'
 import { errorText } from './workspace/TaskPane'
-import { orWhenUnknown } from './lib/errors'
 import { useHostRuntime, useWorkspace } from './workspace/workspace'
 import { HomeFeed } from './Home'
 import { hostStorageFor } from './hostStorage'
@@ -286,17 +285,15 @@ export function NewTask({
       ? t('The saved model choice could not be restored. Choose a model again.')
       : agentDraft.loading
         ? t('Loading project model defaults…')
-        : agentDraft.unsupported
-          ? t('This host uses host model defaults. Update it for repository preferences.')
-          : agentDraft.defaults?.status === 'invalid'
-            ? t('Project configuration is invalid. Choose a model or correct the file.')
-            : agentDraft.defaults?.reason === 'provider'
-              ? t("The project's preferred provider is unavailable on this host.")
-              : agentDraft.defaults?.reason === 'model'
-                ? t("The project's preferred model is not in this host's catalog.")
-                : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
-                  ? t("Could not load the project's model catalog.")
-                  : t('Project model default')
+        : agentDraft.defaults?.status === 'invalid'
+          ? t('Project configuration is invalid. Choose a model or correct the file.')
+          : agentDraft.defaults?.reason === 'provider'
+            ? t("The project's preferred provider is unavailable on this host.")
+            : agentDraft.defaults?.reason === 'model'
+              ? t("The project's preferred model is not in this host's catalog.")
+              : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
+                ? t("Could not load the project's model catalog.")
+                : t('Project model default')
   const workspaceDraft = useWorkspaceDraft(host.id, scopeProject, general ? null : ws.composingWorkspace)
   const workspaceId = general ? null : (workspaceDraft.choice.workspaceId ?? null)
   const manualMode = general ? null : workspaceDraft.choice.mode
@@ -306,8 +303,7 @@ export function NewTask({
     queryKey: optionsKey,
     enabled: !general,
     retry: false,
-    // A host without workspace options starts in the current checkout, as before they existed.
-    queryFn: () => orWhenUnknown(() => host.invoke('tasks.workspaceOptions', projectId), null),
+    queryFn: () => host.invoke('tasks.workspaceOptions', projectId),
   })
   useEffect(() => {
     const refresh = () => {
@@ -529,17 +525,11 @@ export function NewTask({
         let destination = chosen
         if (!destination) {
           const routed = prompt || messageTitle
-          let outcome: RoutingOutcome
-          try {
-            outcome = await host.invoke('projects.route', routed, sendSettings, {
-              split: preferences.autoProjectSplit !== false,
-              others: otherHosts.candidates,
-              localHost: currentHostName,
-            })
-          } catch {
-            // A host that predates splitting takes only the prompt and settings.
-            outcome = await host.invoke('projects.route', routed, sendSettings)
-          }
+          const outcome: RoutingOutcome = await host.invoke('projects.route', routed, sendSettings, {
+            split: preferences.autoProjectSplit !== false,
+            others: otherHosts.candidates,
+            localHost: currentHostName,
+          })
           if (revision !== routeRevision.current)
             throw new Error(t('The message changed while choosing a project. Send again.'))
           const remote = (id: string) => otherHosts.targets.get(id)
@@ -579,10 +569,7 @@ export function NewTask({
         // The destination's repository model defaults apply as if the project had been picked by hand.
         const destinationDefaults = agentDraft.choice.selection
           ? undefined
-          : await host.invoke('tasks.agentDefaults', destination, initialSettings.provider).catch((error) => {
-              if (/Unknown method tasks\.agentDefaults/.test(errorText(error))) return undefined
-              throw error
-            })
+          : await host.invoke('tasks.agentDefaults', destination, initialSettings.provider)
         const routedSettings = routedAgentSettings(initialSettings, destinationDefaults, agentDraft.choice)
         if (!routedSettings) {
           // Stay in Auto so the draft remains visible; a model chosen here then wins over the project default.
@@ -594,8 +581,7 @@ export function NewTask({
           )
         }
         sendSettings = routedSettings
-        const destinationOptions: Partial<NonNullable<typeof options.data>> =
-          (await orWhenUnknown(() => host.invoke('tasks.workspaceOptions', destination), null)) ?? {}
+        const destinationOptions = await host.invoke('tasks.workspaceOptions', destination)
         const checkout = resolveCheckoutMode({
           defaultMode: destinationOptions.defaultCheckoutMode ?? 'current',
           manual: null,
@@ -773,7 +759,7 @@ export function NewTask({
         )}
       </div>
       <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
-        {(agentDraft.defaults?.requested || agentDraft.blocked || agentDraft.unsupported || agentDraft.problem) && (
+        {(agentDraft.defaults?.requested || agentDraft.blocked || agentDraft.problem) && (
           <div className="flex flex-wrap items-center gap-2 px-2 text-caption text-muted-foreground" role="status">
             <span>{modelNotice}</span>
             {agentDraft.defaults?.requested && (

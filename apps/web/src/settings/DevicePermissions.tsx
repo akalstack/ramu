@@ -337,9 +337,9 @@ export function ThisDevicePermissions({ computer, agents }: { computer: Computer
   return (
     <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
       {DEVICE_PERMISSIONS.map((permission) => {
-        // An older host has no such permission; an SSH address is a tunnel only this window can reach.
+        // An SSH address is a tunnel only this window can reach.
         if (permission === 'agents') {
-          if (!(permission in view.permissions) || computer.ssh || !url) return null
+          if (computer.ssh || !url) return null
           return (
             <AgentsPermission
               key={permission}

@@ -136,7 +136,7 @@ export function HostingAccounts() {
       },
       () => {
         if (mine !== request.current) return
-        // An older host has no such method: say nothing is known rather than that nothing is connected.
+        // Say nothing is known rather than that nothing is connected.
         setFailed(true)
         setBusy(false)
       },

@@ -7,7 +7,6 @@ import type { GitCommitFile } from '@ramu/shared/types'
 import { font, space, useTheme } from '../../../theme'
 import { ago, useSay } from '../../../i18n'
 import { useChat, useStore } from '../../../runtime/store'
-import { isMethodMissing } from '../../../runtime/goalVerify'
 import {
   filesMethod,
   readRevision,
@@ -52,15 +51,7 @@ export default function Revision() {
     setError('')
     store.invoke(chat.computerId, filesMethod(revision), chat.taskId, params.repoId, revision.oid).then(
       (list) => alive && setFiles(list),
-      (reason) =>
-        alive &&
-        setError(
-          isMethodMissing(reason)
-            ? say('This computer is too old to list the files in a commit. Update Ramu on it.')
-            : reason instanceof Error
-              ? reason.message
-              : String(reason),
-        ),
+      (reason) => alive && setError(reason instanceof Error ? reason.message : String(reason)),
     )
     return () => {
       alive = false

@@ -3,7 +3,7 @@ import { ScrollView, TextInput, View } from 'react-native'
 import type { ChatGoal } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import { fill, useT } from '../i18n'
-import { isMethodMissing, outcomeKey, verifyDraft, verifyView, VERIFY_LIMIT } from '../runtime/goalVerify'
+import { outcomeKey, verifyDraft, verifyView, VERIFY_LIMIT } from '../runtime/goalVerify'
 import { Button, Sheet, SheetScrollView, T } from './ui'
 
 /**
@@ -48,7 +48,7 @@ export function GoalVerifySheet({
       await onSave(view.command)
       onClose()
     } catch (e) {
-      setError(isMethodMissing(e) ? t.verifyOutdated : e instanceof Error ? e.message : String(e))
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSaving(false)
     }

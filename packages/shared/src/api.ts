@@ -724,7 +724,6 @@ export interface RamuMethods {
     branchPrefix: string
     branchNaming: BranchNamingStrategy
     branchInstructions: string
-    branchNameControls?: boolean
     configSource?: 'ramu.json' | '.ramu/config.json'
     configError?: string
     worktreeUnavailable: string | null

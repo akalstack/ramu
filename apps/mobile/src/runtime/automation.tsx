@@ -44,7 +44,6 @@ interface AutomationStore {
    */
   actRecap(computerId: string, item: RecapItem, action: RecapAction, until?: number): Promise<void>
   /** Whether this host takes a chosen snooze time. An older one snoozes for a day whatever is asked, so the menu is not offered. */
-  snoozeChoices(computerId: string): boolean
   readSummary(computerId: string, id: string): Promise<LibrarySummary>
   dismissSummary(computerId: string, id: string): Promise<void>
   runSummaries(computerId: string): Promise<void>
@@ -68,8 +67,6 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
   )
   const storeRef = useRef(store)
   storeRef.current = store
-  // Computers found to ignore a chosen snooze time (older hosts); they get the plain one-day Snooze.
-  const [dayOnly, setDayOnly] = useState<ReadonlySet<string>>(new Set())
 
   // "Since your last visit" means since you last left the app, not since this screen last mounted: the marker moves
   // forward only after the app was in the background for a while, so recaps don't vanish on the next tap.
@@ -189,7 +186,6 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
           throw error
         }
       },
-      snoozeChoices: (id) => !dayOnly.has(id),
       actRecap: async (id, item, action, until) => {
         // Gone at once; the computer confirms (or the reload below puts it back).
         setState((all) => {
@@ -204,13 +200,12 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
           }
         })
         try {
-          const outcome = await actOnHost(
+          await actOnHost(
             (...args) => call(id, (invoke) => looseInvoke(invoke)(id, 'recaps.act', ...args)),
             item.id,
             action,
             until,
           )
-          if (!outcome.exactTime) setDayOnly((old) => new Set(old).add(id))
           if (action !== 'open')
             showToast(RECAP_TOAST[action], {
               label: 'undo',
@@ -260,7 +255,7 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
     }
     return api
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, store.chats, store.computers, store.appPreferences, visit, load, patch, dayOnly])
+  }, [state, store.chats, store.computers, store.appPreferences, visit, load, patch])
   return <Context.Provider value={value}>{children}</Context.Provider>
 }
 

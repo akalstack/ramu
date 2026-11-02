@@ -3,8 +3,6 @@ import assert from 'node:assert/strict'
 import {
   canEditVerify,
   GOAL_VERIFY_METHOD,
-  isMethodMissing,
-  offersVerify,
   outcomeKey,
   verifyDraft,
   verifyView,
@@ -36,16 +34,6 @@ test('only an unfinished goal can be edited', () => {
   assert.equal(canEditVerify(goal({ status: 'paused' })), true)
   assert.equal(canEditVerify(goal({ status: 'blocked' })), true)
   assert.equal(canEditVerify(goal({ status: 'completed' })), false)
-})
-test('the editor is hidden on a host that answered "Unknown method"', () => {
-  assert.equal(isMethodMissing(new Error('Unknown method agent.goal.verify')), true)
-  assert.equal(isMethodMissing(new Error('There is no goal to verify.')), false)
-  assert.equal(isMethodMissing(undefined), false)
-  assert.equal(offersVerify(goal(), undefined), true)
-  assert.equal(offersVerify(goal(), ['settings.app.snapshot']), true)
-  assert.equal(offersVerify(goal(), [GOAL_VERIFY_METHOD]), false)
-  assert.equal(offersVerify(null, []), false)
-  assert.equal(offersVerify(goal({ status: 'completed' }), []), false)
 })
 test('the view carries the command and the last check, with output only for a failure', () => {
   assert.deepEqual(verifyView(goal()), {})

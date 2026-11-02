@@ -87,9 +87,7 @@ export function ComputerScope({ host }: { host: ReturnType<typeof useHostSetting
                 ? 'Loading settings…'
                 : host.state.status === 'offline'
                   ? 'Offline: host settings are unavailable'
-                  : host.state.status === 'outdated'
-                    ? 'Needs a newer Ramu'
-                    : 'Could not load settings'}
+                  : 'Could not load settings'}
           </T>
         </View>
         <ConnectionDot status={pc.status} />

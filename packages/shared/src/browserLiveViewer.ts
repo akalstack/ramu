@@ -36,9 +36,9 @@ export function watchBrowserFrames(options: {
     } catch (error) {
       if (stopped) return
       const message = error instanceof Error ? error.message : String(error)
-      // Older hosts and runtimes without a compositor feed retain their existing screenshot viewer.
+      // A runtime without a compositor feed keeps the screenshot viewer.
       if (
-        /Unknown method.*hostBrowser.nextFrame|Live browser frames are unavailable|live browser frame is unavailable|startScreencast.*(wasn't found|not found|not supported)/i.test(
+        /Live browser frames are unavailable|live browser frame is unavailable|startScreencast.*(wasn't found|not found|not supported)/i.test(
           message,
         )
       ) {

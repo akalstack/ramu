@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { TextInput, View } from 'react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useT } from '../i18n'
-import { isMethodMissing } from '../runtime/goalVerify'
 import { Button, Sheet, T } from './ui'
 
 export function WorkspaceNameSheet({
@@ -42,13 +41,7 @@ export function WorkspaceNameSheet({
     } catch (reason) {
       if (live.current) {
         const message = reason instanceof Error ? reason.message : String(reason)
-        setError(
-          isMethodMissing(reason)
-            ? t.workspaceRenameOutdated
-            : /Workspace name changed elsewhere/.test(message)
-              ? t.workspaceRenameConflict
-              : message,
-        )
+        setError(/Workspace name changed elsewhere/.test(message) ? t.workspaceRenameConflict : message)
       }
     } finally {
       pending.current = false

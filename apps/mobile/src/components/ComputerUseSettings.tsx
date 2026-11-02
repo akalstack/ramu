@@ -5,7 +5,6 @@ import { appControlHelp, runtimeHelp } from '@ramu/shared/computerStatus'
 import { space } from '../theme'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
-import { isMethodMissing } from '../runtime/goalVerify'
 import { Hint, ToggleRow } from './SettingRows'
 import { Card, Divider, SectionLabel, T } from './ui'
 
@@ -43,14 +42,7 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
       const shared = next.enabled ? await store.invoke(hostId, 'computer.runtimeDevices').catch(() => []) : []
       if (live.current) setDevices(shared)
     } catch (reason) {
-      if (live.current)
-        setError(
-          isMethodMissing(reason)
-            ? say('This computer is too old to show Computer use here. Update Ramu on it.')
-            : reason instanceof Error
-              ? reason.message
-              : String(reason),
-        )
+      if (live.current) setError(reason instanceof Error ? reason.message : String(reason))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [hostId, store.invoke] by design; the values it reads beyond these are current as of that run
   }, [hostId, store.invoke])

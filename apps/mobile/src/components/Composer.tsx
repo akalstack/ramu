@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useFocusEffect } from 'expo-router'
 import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
-import { isMethodMissing } from '../runtime/goalVerify'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
 import { StepSlider } from './StepSlider'
 import { SuggestionList, useComposerSuggest } from './ComposerSuggest'
@@ -62,8 +61,7 @@ const ACCESS_MODES = [
 import { ProviderIcon } from './Logos'
 import { Glass } from './Glass'
 import { AutoResumeRows, LimitTray } from './LimitTray'
-import { hostHasAutoResume } from '../runtime/limitTray'
-import { offersVerify } from '../runtime/goalVerify'
+import { canEditVerify } from '../runtime/goalVerify'
 import { isUserPaused } from '@ramu/shared/chat/goalHold'
 import { GoalVerifySheet } from './GoalVerifySheet'
 import { DictationStatus, MicButton } from './DictationControls'
@@ -852,17 +850,11 @@ export function Composer({
       if (merged.length > 30) throw new Error(t.fileReferenceLimit)
       if (draftKey && store.drafts[`${draftKey}:restored-attachments`] === 'yes' && attachments.length) {
         if (!store.isOnline(pc)) throw new Error(t.savedAttachmentOffline)
-        let status: { id: string; available: boolean }[]
-        try {
-          status = await store.invoke(
-            pc,
-            'attachments.status',
-            attachments.map((file) => file.id),
-          )
-        } catch (error) {
-          if (isMethodMissing(error)) throw new Error(t.savedAttachmentOldHost, { cause: error })
-          throw error
-        }
+        const status = await store.invoke(
+          pc,
+          'attachments.status',
+          attachments.map((file) => file.id),
+        )
         if (attachments.some((file) => !status.some((entry) => entry.id === file.id && entry.available)))
           throw new Error(t.savedAttachmentMissing)
         if (origin.current !== submittedOwner) return
@@ -927,7 +919,7 @@ export function Composer({
           onToggleGoal={onToggleGoal}
           onClearGoal={onClearGoal}
           onVerifyGoal={onVerifyGoal}
-          verifyOffered={offersVerify(goal, computerId ? store.missingMethods[computerId] : undefined)}
+          verifyOffered={canEditVerify(goal)}
           onRemove={onRemoveQueued}
         />
       )}
@@ -1346,7 +1338,7 @@ export function Composer({
             }
           />
         </SheetGroup>
-        {limitChat?.sessionId && hostHasAutoResume(store.appPreferences[limitChat.computerId]?.fallback) ? (
+        {limitChat?.sessionId && !!store.appPreferences[limitChat.computerId] ? (
           <AutoResumeRows chatId={limitChat.id} />
         ) : null}
       </Sheet>

@@ -91,10 +91,3 @@ export function limitPlaceholderKey(model: Pick<LimitTrayModel, 'autoResume' | '
   if (!model.autoResume.value) return 'limitPlaceholderManual' as const
   return model.resetAt !== undefined ? ('limitPlaceholderAtReset' as const) : ('limitPlaceholderClears' as const)
 }
-
-/**
- * Whether the host knows per-thread auto-resume. A host that predates it has no `fallback.autoResume` in its preferences
- * and refuses `agent.setAutoResume`, so the control is not offered there (the thread still waits and resumes by itself).
- */
-export const hostHasAutoResume = (fallback: Partial<AppPreferences['fallback']> | undefined) =>
-  typeof fallback?.autoResume === 'boolean'

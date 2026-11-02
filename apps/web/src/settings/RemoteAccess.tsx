@@ -423,7 +423,6 @@ function ThisComputer() {
       )}
       {pairing && (
         <PairDialog
-          known={status.devices.map((device) => device.id)}
           onClose={() => {
             setPairing(false)
             void reload()
@@ -434,7 +433,7 @@ function ThisComputer() {
   )
 }
 
-function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }) {
+function PairDialog({ onClose }: { onClose: () => void }) {
   const invoke = useSettingsInvoke()
   const [offer, setOffer] = useState<PairingOffer | null>(null),
     [now, setNow] = useState(Date.now()),
@@ -492,12 +491,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
   }, [])
-  // A host that knows offer ids reports exactly this offer's outcome; an older one falls back to any new device.
   const offerId = offer?.offerId
-  const arrived = offerId ? undefined : status?.devices.find((device) => !known.includes(device.id))
-  useEffect(() => {
-    if (arrived) setJoined({ name: arrived.name, role: arrived.role ?? 'owner' })
-  }, [arrived])
   useEffect(() => {
     if (!offerId || joined) return
     let live = true

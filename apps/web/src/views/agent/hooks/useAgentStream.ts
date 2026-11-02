@@ -111,38 +111,21 @@ export function useAgentStream(sessionId: string, visible = true) {
     const refreshSoon = () => {
       frame ??= setTimeout(refreshEvents, STREAM_FRAME_MS)
     }
-    let changesSupported = true
     const read = async (requestedAt: number) => {
-      if (changesSupported) {
-        try {
-          const result = await invoke('agent.changes', sessionId, cursor, lastSeqOf(stored))
-          if (cancelled) return false
-          if (result.reset) {
-            const kept = new Set(result.events.map((row) => row.seq))
-            for (const [seq, item] of [...stored])
-              if (!kept.has(seq) && item.revision <= requestedAt) stored.delete(seq)
-          }
-          for (const row of result.events)
-            // The same row keeps its object, so the turns already on screen do not render again.
-            if (tailShown && JSON.stringify(stored.get(row.seq)?.event) === JSON.stringify(row.event)) continue
-            else if ((stored.get(row.seq)?.revision ?? -1) <= requestedAt)
-              stored.set(row.seq, { event: row.event, revision: requestedAt })
-          cursor = result.cursor
-          tailShown = false
-          return result.reset || result.events.length > 0
-        } catch (e) {
-          // A host from before agent.changes reads the whole transcript every time.
-          if (/unknown method/i.test(errorText(e))) changesSupported = false
-          else throw e
-        }
-      }
-      const evs = await invoke('agent.events', sessionId)
+      const result = await invoke('agent.changes', sessionId, cursor, lastSeqOf(stored))
       if (cancelled) return false
-      evs.forEach((event, index) => {
-        if ((stored.get(index + 1)?.revision ?? -1) <= requestedAt)
-          stored.set(index + 1, { event, revision: requestedAt })
-      })
-      return true
+      if (result.reset) {
+        const kept = new Set(result.events.map((row) => row.seq))
+        for (const [seq, item] of [...stored]) if (!kept.has(seq) && item.revision <= requestedAt) stored.delete(seq)
+      }
+      for (const row of result.events)
+        // The same row keeps its object, so the turns already on screen do not render again.
+        if (tailShown && JSON.stringify(stored.get(row.seq)?.event) === JSON.stringify(row.event)) continue
+        else if ((stored.get(row.seq)?.revision ?? -1) <= requestedAt)
+          stored.set(row.seq, { event: row.event, revision: requestedAt })
+      cursor = result.cursor
+      tailShown = false
+      return result.reset || result.events.length > 0
     }
     // A long thread shows its last turns first; the full read below completes it and carries the cursor.
     let tailShown = false

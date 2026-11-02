@@ -59,7 +59,7 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
         if (!active) return
         setTabs([])
         const message = reason instanceof Error ? reason.message : String(reason)
-        setStatus(/unknown method/i.test(message) ? 'Update this host to view browser activity.' : message)
+        setStatus(message)
       },
     )
     return () => {

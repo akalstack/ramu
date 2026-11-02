@@ -364,7 +364,7 @@ test('a destination clarification keeps the composer draft instead of acknowledg
     },
     '../runtime/store': { useStore: () => store },
     '../i18n': { useT: () => ({}) },
-    '../runtime/goalVerify': { offersVerify: () => false },
+    '../runtime/goalVerify': { canEditVerify: () => false },
     './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
   })
   const render = () =>
@@ -1400,7 +1400,6 @@ for (const os of ['ios', 'android']) {
   test(`${os} usage details follow account events and discard responses after host changes or dismissal`, async () => {
     const presentation = await import('../../../packages/shared/src/usage/presentation.ts')
     const providers = await import('../../../packages/shared/src/providers/providers.ts')
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
     const hooks = hookHarness()
     const listeners = new Map()
     const requests = []
@@ -1429,7 +1428,6 @@ for (const os of ['ios', 'android']) {
       react: hooks.react,
       '@ramu/shared/usage/presentation': presentation,
       '@ramu/shared/providers/providers': providers,
-      '../runtime/goalVerify': { isMethodMissing },
       '../runtime/store': { useStore: () => store },
       '../runtime/types': { providerNames: { 'claude-code': 'Claude' } },
     })
@@ -1490,10 +1488,9 @@ for (const os of ['ios', 'android']) {
   })
 }
 
-test('usage refresh explains old hosts, preserves data and opens the selected host settings', async () => {
+test('usage refresh explains a failure, preserves data and opens the selected host settings', async () => {
   const presentation = await import('../../../packages/shared/src/usage/presentation.ts')
   const providers = await import('../../../packages/shared/src/providers/providers.ts')
-  const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
   const hooks = hookHarness()
   const calls = [],
     destinations = []
@@ -1513,7 +1510,7 @@ test('usage refresh explains old hosts, preserves data and opens the selected ho
     },
     invoke: async (host, method) => {
       calls.push([host, method])
-      if (method === 'usage.refresh') throw Error('Unknown method usage.refresh')
+      if (method === 'usage.refresh') throw Error('Refresh refused')
       return [reading]
     },
   }
@@ -1523,7 +1520,6 @@ test('usage refresh explains old hosts, preserves data and opens the selected ho
     'expo-router': { useRouter: () => ({ push: (path) => destinations.push(path) }) },
     '@ramu/shared/usage/presentation': presentation,
     '@ramu/shared/providers/providers': providers,
-    '../runtime/goalVerify': { isMethodMissing },
     '../runtime/store': { useStore: () => store },
     '../runtime/types': { providerNames: { 'claude-code': 'Claude' } },
   })
@@ -1549,7 +1545,6 @@ test('usage refresh explains old hosts, preserves data and opens the selected ho
     ['a', 'usage.accounts'],
     ['a', 'usage.refresh'],
   ])
-  assert.equal(action(tree, 'Refresh Claude usage').props.onPress, undefined)
   assert.ok(
     nodes(tree).some(
       (node) => typeof node.props?.children === 'string' && node.props.children.includes('Refresh unavailable'),
@@ -1697,7 +1692,7 @@ for (const os of ['ios', 'android']) {
         },
         '../runtime/store': { useStore: () => store },
         '../i18n': { useT: () => ({}) },
-        '../runtime/goalVerify': { offersVerify: () => false },
+        '../runtime/goalVerify': { canEditVerify: () => false },
         './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
       },
       // The menu's next step waits for the sheet to close; run it at once here.
@@ -1753,8 +1748,7 @@ for (const os of ['ios', 'android']) {
   })
 }
 
-test('workspace catalogs discard late hosts, explain unsupported methods and clear disconnected scope', async () => {
-  const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+test('workspace catalogs discard late hosts, explain failures and clear disconnected scope', async () => {
   const hooks = hookHarness()
   const requests = [],
     listeners = new Map()
@@ -1775,7 +1769,6 @@ test('workspace catalogs discard late hosts, explain unsupported methods and cle
   const { useWorkspaces } = load('runtime/useWorkspaces.ts', 'ios', {
     react: hooks.react,
     './store': { useStore: () => store },
-    './goalVerify': { isMethodMissing },
   })
   let host = 'a'
   const render = () => hooks.render(() => useWorkspaces(host))
@@ -1785,9 +1778,9 @@ test('workspace catalogs discard late hosts, explain unsupported methods and cle
   requests[0].resolve([{ id: 'w', projectId: 'p', name: 'Wrong host' }])
   await settle()
   assert.equal(render().rows.length, 0)
-  requests[1].reject(Error('Unknown method workspaces.list'))
+  requests[1].reject(Error('Could not list workspaces'))
   await settle()
-  assert.equal(render().unsupported, true)
+  assert.match(render().error, /Could not list workspaces/)
   render().refresh()
   render()
   requests[2].resolve([{ id: 'w', projectId: 'p', name: 'Correct host' }])
@@ -2226,7 +2219,7 @@ test('returning from Explorer updates only the mounted composer’s context and 
     },
     '../runtime/store': { useStore: () => store },
     '../i18n': { useT: () => ({}) },
-    '../runtime/goalVerify': { offersVerify: () => false },
+    '../runtime/goalVerify': { canEditVerify: () => false },
     './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
   })
   const props = {
@@ -2424,7 +2417,7 @@ test('a combined mention/context budget failure leaves every reference editable 
     },
     '../runtime/store': { useStore: () => store },
     '../i18n': { useT: () => ({ fileReferenceLimit: 'Remove a reference before sending' }) },
-    '../runtime/goalVerify': { offersVerify: () => false },
+    '../runtime/goalVerify': { canEditVerify: () => false },
     './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
   })
   const render = () =>
@@ -2458,7 +2451,6 @@ for (const scenario of ['unsupported', 'folder', 'line']) {
     const calls = [],
       timers = new Map()
     let timerId = 0
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
     const store = {
       computers: [{ id: 'a', status: 'online' }],
       projects: [{ id: 'a:p', computerId: 'a' }],
@@ -2467,7 +2459,7 @@ for (const scenario of ['unsupported', 'folder', 'line']) {
       mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
-        if (scenario === 'unsupported') throw Error('Unknown method files.explorerBindings')
+        if (scenario === 'unsupported') throw Error('Bindings refused')
         if (args[1] === 'files.explorerBindings')
           return [{ repoId: 'r', setupState: 'ready', folderOnly: scenario === 'folder' }]
         return { content: '# Title\nSecond line' }
@@ -2479,8 +2471,7 @@ for (const scenario of ['unsupported', 'folder', 'line']) {
       {
         react: hooks.react,
         '../runtime/store': { useStore: () => store },
-        '../i18n': { useT: () => ({ fileScopeUnsupported: 'Update the host', fileNoGit: 'No Git in this folder' }) },
-        '../runtime/goalVerify': { isMethodMissing },
+        '../i18n': { useT: () => ({ fileNoGit: 'No Git in this folder' }) },
         '../runtime/useWorkspaces': { useWorkspaces: () => ({ host: 'a', rows: [] }) },
         '../components/Code': { highlightLines: () => null, grammarFor: () => '' },
       },
@@ -2509,7 +2500,7 @@ for (const scenario of ['unsupported', 'folder', 'line']) {
     const tree = render()
     if (scenario === 'unsupported') {
       assert.equal(calls.length, 1)
-      assert.ok(nodes(tree).some((node) => node.props?.children === 'Update the host'))
+      assert.ok(nodes(tree).some((node) => String(node.props?.children).includes('Bindings refused')))
     } else if (scenario === 'folder') {
       assert.ok(calls.every((call) => call[1] !== 'git.diff'))
       assert.ok(nodes(tree).some((node) => node.props?.children === 'No Git in this folder'))
@@ -2581,7 +2572,7 @@ test('a later line link to an already-open Markdown preview switches to source a
   hooks.dispose()
 })
 
-for (const scenario of ['offline', 'missing', 'old-host', 'available', 'changed-owner']) {
+for (const scenario of ['offline', 'missing', 'available', 'changed-owner']) {
   test(`restored attachments ${scenario} are checked on their owning host before any message delivery`, async () => {
     const hooks = hookHarness()
     const request = deferred(),
@@ -2609,7 +2600,6 @@ for (const scenario of ['offline', 'missing', 'old-host', 'available', 'changed-
       mayUse: () => true,
       invoke: async (...args) => {
         calls.push(args)
-        if (scenario === 'old-host') throw new Error('Unknown method attachments.status')
         if (scenario === 'changed-owner') return request.promise
         return [{ id: 'image', available: scenario === 'available' }]
       },
@@ -2623,11 +2613,10 @@ for (const scenario of ['offline', 'missing', 'old-host', 'available', 'changed-
       'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
       '../runtime/store': { useStore: () => store },
       '../runtime/goalVerify': {
-        offersVerify: () => false,
-        isMethodMissing: (error) => error.message.includes('Unknown method'),
+        canEditVerify: () => false,
       },
       '../i18n': { useT: () => new Proxy({}, { get: (_, key) => String(key) }) },
-      '../runtime/limitTray': { describeLimitTray: () => ({}), hostHasAutoResume: () => false },
+      '../runtime/limitTray': { describeLimitTray: () => ({}) },
       '../runtime/threadActivity': { needsGoalTray: () => false },
       './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
     })
@@ -2666,7 +2655,6 @@ for (const scenario of ['offline', 'missing', 'old-host', 'available', 'changed-
     if (scenario === 'offline') assert.equal(calls.length, 0)
     else assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), ['a', 'attachments.status', ['image']])
     if (scenario === 'missing') assert.equal(alerts.at(-1)[1], 'savedAttachmentMissing')
-    if (scenario === 'old-host') assert.equal(alerts.at(-1)[1], 'savedAttachmentOldHost')
     if (scenario === 'offline') assert.equal(alerts.at(-1)[1], 'savedAttachmentOffline')
     if (scenario === 'changed-owner') assert.equal(store.drafts['b:chat:task'], 'New host request')
     if (scenario !== 'available') assert.equal(store.drafts[key], 'Review the image')
@@ -2840,7 +2828,6 @@ for (const os of ['ios', 'android']) {
       renameWorkspace: 'Rename workspace',
       workspaceName: 'Workspace name',
       workspaceNameHint: 'Shared label',
-      workspaceRenameOutdated: 'Update host',
       workspaceRenameOffline: 'Connect host',
       workspaceRenameConflict: 'Name changed elsewhere',
       save: 'Save',
@@ -2849,7 +2836,6 @@ for (const os of ['ios', 'android']) {
     const { WorkspaceNameSheet } = load('components/WorkspaceNameSheet.tsx', os, {
       react: hooks.react,
       '../i18n': { useT: () => labels },
-      '../runtime/goalVerify': { isMethodMissing: (error) => /unknown method/i.test(String(error)) },
     })
     let online = true
     let workspace = { id: 'w', name: 'Original' }
@@ -2896,10 +2882,10 @@ for (const os of ['ios', 'android']) {
     nodes(tree)
       .find((node) => node.type === 'Button' && node.props.title === 'Save')
       .props.onPress()
-    requests[1].reject(new Error('Unknown method workspaces.rename'))
+    requests[1].reject(new Error('Rename refused'))
     await settle()
     tree = render()
-    assert.ok(nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Update host'))
+    assert.ok(nodes(tree).some((node) => node.type === 'T' && String(node.props.children).includes('Rename refused')))
     nodes(tree)
       .find((node) => node.type === 'Button' && node.props.title === 'Save')
       .props.onPress()
@@ -3007,7 +2993,6 @@ for (const os of ['ios', 'android']) {
       react: hooks.react,
       '@ramu/shared/workspaceDefaults': workspaceDefaults,
       '../runtime/store': { useStore: () => store },
-      '../runtime/goalVerify': { isMethodMissing: (error) => /unknown method/i.test(String(error)) },
       '../i18n': { useT: () => components },
     })
     let props = {
@@ -3059,7 +3044,7 @@ for (const os of ['ios', 'android']) {
     assert.equal(props.choice.name, 'mine/login')
   })
 
-  test(`${os} branch previews use frozen naming inputs, reject invalid edits and surface old-host failures`, async () => {
+  test(`${os} branch previews use frozen naming inputs, reject invalid edits and surface failures`, async () => {
     const hooks = hookHarness()
     const requests = []
     const { BranchNameControls } = load('components/BranchNameControls.tsx', os, {
@@ -3074,7 +3059,6 @@ for (const os of ['ios', 'android']) {
           },
         }),
       },
-      '../runtime/goalVerify': { isMethodMissing: (error) => /unknown method/i.test(String(error)) },
       '../i18n': { useT: () => components },
     })
     let props = {
@@ -3129,10 +3113,10 @@ for (const os of ['ios', 'android']) {
     tree = render()
     assert.ok(!nodes(tree).some((node) => node.props?.children === 'branchNameProvisional'))
     button(tree, 'branchNamePreview').props.onPress()
-    requests.at(-1).reject(new Error('Unknown method tasks.plan'))
+    requests.at(-1).reject(new Error('Plan refused'))
     await settle()
     tree = render()
-    assert.ok(nodes(tree).some((node) => node.props?.children === 'branchNameOutdated'))
+    assert.ok(nodes(tree).some((node) => String(node.props?.children).includes('Plan refused')))
     props = { ...props, online: false }
     tree = render()
     assert.equal(button(tree, 'branchNamePreview').props.disabled, true)
@@ -3591,7 +3575,6 @@ for (const os of ['ios', 'android']) {
 test('usage refresh recovers after transient failure and reconnect without losing last-known account data', async () => {
   const presentation = await import('../../../packages/shared/src/usage/presentation.ts')
   const providers = await import('../../../packages/shared/src/providers/providers.ts')
-  const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
   const hooks = hookHarness()
   const listeners = new Set()
   let online = true,
@@ -3628,7 +3611,6 @@ test('usage refresh recovers after transient failure and reconnect without losin
     'expo-router': { useRouter: () => ({ push() {} }) },
     '@ramu/shared/usage/presentation': presentation,
     '@ramu/shared/providers/providers': providers,
-    '../runtime/goalVerify': { isMethodMissing },
     '../runtime/store': { useStore: () => store },
   })
   const render = () => hooks.render(() => PlanUsageSheet({ hosts: ['a'], open: true, onClose() {} }))
@@ -3680,14 +3662,12 @@ const actionSettingsCopy = {
   hideProjectAction: 'Hide action',
   showProjectAction: 'Show action',
   useRepositoryOrder: 'Use repository order',
-  actionSettingsUnsupported: 'Update host',
   actionSettingsOffline: 'Connect to change actions',
   hiddenAction: 'Hidden',
   hiddenActionsHint: 'Hidden actions do not appear in menus or shortcuts.',
 }
 for (const os of ['ios', 'android']) {
   test(`${os} project action management reorders IDs and hides/restores on the owning host without executing commands`, async () => {
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
     const hooks = hookHarness()
     const calls = []
     const a = { id: 'test', name: 'Test', command: 'echo test', source: 'ramu.json' }
@@ -3721,7 +3701,6 @@ for (const os of ['ios', 'android']) {
     const { ProjectCommandSettings } = load('components/ProjectCommandSettings.tsx', os, {
       react: hooks.react,
       '../runtime/store': { useStore: () => store },
-      '../runtime/goalVerify': { isMethodMissing },
       '../i18n': { useT: () => actionSettingsCopy },
     })
     const render = () =>
@@ -3758,8 +3737,7 @@ for (const os of ['ios', 'android']) {
     hooks.dispose()
   })
 
-  test(`${os} project action management fences stale hosts, unsupported methods, offline controls and dismissed reads`, async () => {
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+  test(`${os} project action management fences stale hosts, failures, offline controls and dismissed reads`, async () => {
     const hooks = hookHarness()
     const requests = [],
       listeners = new Map()
@@ -3781,7 +3759,6 @@ for (const os of ['ios', 'android']) {
     const { ProjectCommandSettings } = load('components/ProjectCommandSettings.tsx', os, {
       react: hooks.react,
       '../runtime/store': { useStore: () => store },
-      '../runtime/goalVerify': { isMethodMissing },
       '../i18n': { useT: () => actionSettingsCopy },
     })
     const render = () => hooks.render(() => ProjectCommandSettings(props))
@@ -3801,11 +3778,10 @@ for (const os of ['ios', 'android']) {
     const late = requests[1]
     props = { ...props, hostId: 'b' }
     render()
-    requests[2].reject(Error('Unknown method projects.actionSettings'))
+    requests[2].reject(Error('Actions refused'))
     late.resolve(settings('Late A'))
     await settle()
-    assert.equal(has('Update host'), true)
-    assert.equal(nodes(render()).filter((node) => node.type === 'Button').length, 0)
+    assert.ok(nodes(render()).some((node) => String(node.props?.children).includes('Actions refused')))
     online = false
     render()
     assert.equal(has('Connect to change actions'), true)
@@ -3889,7 +3865,6 @@ const projectModelCopy = {
   projectModelManual: 'Draft model',
   projectModelLoading: 'Loading project model',
   projectModelDefault: 'Project model default',
-  projectModelUnsupported: 'Update host for project defaults',
   projectModelUseDefault: 'Use project default',
   projectModelUseHost: 'Use host default',
 }
@@ -3911,7 +3886,6 @@ const modelRepository = {
 
 for (const os of ['ios', 'android']) {
   test(`${os} explicit new-thread models survive default changes and stay isolated by host and composer scope`, async () => {
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
     const hooks = hookHarness(),
       listeners = new Set(),
       calls = []
@@ -3937,7 +3911,6 @@ for (const os of ['ios', 'android']) {
     const { useAgentDraft } = load('runtime/useAgentDraft.ts', os, {
       react: hooks.react,
       './store': { useStore: () => store },
-      './goalVerify': { isMethodMissing },
       '@ramu/shared/workspace/agentDefaults': agentDraftModel,
       '../i18n': { useT: () => projectModelCopy },
     })
@@ -3981,7 +3954,6 @@ for (const os of ['ios', 'android']) {
   })
 
   test(`${os} model preflight rejects changed or late host results and preserves newer choices after enqueue`, async () => {
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
     const hooks = hookHarness(),
       calls = []
     let props = { host: 'a', project: 'a:p', key: 'a:new:a:p' },
@@ -4003,7 +3975,6 @@ for (const os of ['ios', 'android']) {
     const { useAgentDraft } = load('runtime/useAgentDraft.ts', os, {
       react: hooks.react,
       './store': { useStore: () => store },
-      './goalVerify': { isMethodMissing },
       '@ramu/shared/workspace/agentDefaults': agentDraftModel,
       '../i18n': { useT: () => projectModelCopy },
     })
@@ -4034,8 +4005,7 @@ for (const os of ['ios', 'android']) {
     hooks.dispose()
   })
 
-  test(`${os} unknown saved model formats require an explicit model and old hosts keep their displayed host default`, async () => {
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+  test(`${os} unknown saved model formats require an explicit model`, async () => {
     const hooks = hookHarness()
     const store = {
       drafts: { 'a:new:a:p:agent': '{"version":99}' },
@@ -4046,13 +4016,12 @@ for (const os of ['ios', 'android']) {
         store.drafts[key] = value
       },
       invoke: async () => {
-        throw Error('Unknown method tasks.agentDefaults')
+        throw Error('Defaults refused')
       },
     }
     const { useAgentDraft } = load('runtime/useAgentDraft.ts', os, {
       react: hooks.react,
       './store': { useStore: () => store },
-      './goalVerify': { isMethodMissing },
       '@ramu/shared/workspace/agentDefaults': agentDraftModel,
       '../i18n': { useT: () => projectModelCopy },
     })
@@ -4065,17 +4034,12 @@ for (const os of ['ios', 'android']) {
     render().useHostDefault()
     assert.equal(render().blocked, false)
     assert.equal((await render().verify()).model, 'host-model')
-    store.drafts = {}
-    assert.equal(render().unsupported, true)
-    assert.equal(render().blocked, false)
-    assert.equal((await render().verify()).model, 'host-model')
     hooks.dispose()
   })
 }
 
 for (const os of ['ios', 'android']) {
   test(`${os} New thread queues the reviewed repository model and preserves its draft when the preference changes before send`, async () => {
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
     const hooks = hookHarness(),
       submitted = [],
       destinations = [],
@@ -4116,7 +4080,6 @@ for (const os of ['ios', 'android']) {
     const agentHook = load('runtime/useAgentDraft.ts', os, {
       react: hooks.react,
       './store': { useStore: () => store },
-      './goalVerify': { isMethodMissing },
       '@ramu/shared/workspace/agentDefaults': agentDraftModel,
       '../i18n': { useT: () => copy },
     })
@@ -4184,7 +4147,6 @@ for (const os of ['ios', 'android']) {
 
 for (const os of ['ios', 'android']) {
   test(`${os} unhydrated hosts never present an invented host default and restored manual drafts retain their reviewed access policy`, async () => {
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
     const hooks = hookHarness()
     const store = {
       drafts: {},
@@ -4201,7 +4163,6 @@ for (const os of ['ios', 'android']) {
     const { useAgentDraft } = load('runtime/useAgentDraft.ts', os, {
       react: hooks.react,
       './store': { useStore: () => store },
-      './goalVerify': { isMethodMissing },
       '@ramu/shared/workspace/agentDefaults': agentDraftModel,
       '../i18n': { useT: () => projectModelCopy },
     })
@@ -4225,7 +4186,6 @@ for (const os of ['ios', 'android']) {
 
 for (const os of ['ios', 'android']) {
   test(`${os} a configuration refresh supersedes an older model preflight without overwriting the newer selection`, async () => {
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
     const hooks = hookHarness(),
       requests = []
     let listener
@@ -4247,7 +4207,6 @@ for (const os of ['ios', 'android']) {
     const { useAgentDraft } = load('runtime/useAgentDraft.ts', os, {
       react: hooks.react,
       './store': { useStore: () => store },
-      './goalVerify': { isMethodMissing },
       '@ramu/shared/workspace/agentDefaults': agentDraftModel,
       '../i18n': { useT: () => projectModelCopy },
     })
@@ -4531,7 +4490,6 @@ for (const os of ['ios', 'android']) {
       react: hooks.react,
       'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
       '../runtime/store': { useStore: () => store },
-      '../runtime/goalVerify': { isMethodMissing: (error) => /unknown method/i.test(String(error)) },
       '@ramu/shared/workspace/terminalOutput': terminalOutput,
       './TerminalView': { default: 'TerminalView' },
     })
@@ -4733,28 +4691,6 @@ for (const os of ['ios', 'android']) {
     )
     stopping.hooks.dispose()
   })
-  test(`${os} explains an older host without creating a terminal`, async () => {
-    const f = managedFixture({
-      invoke: async () => {
-        throw new Error('Unknown method term.background.list')
-      },
-    })
-    f.render()
-    await settle()
-    const tree = f.render()
-    assert.ok(
-      nodes(tree).some(
-        (node) =>
-          node.type === 'T' && node.props.children === 'Update Ramu on this host to manage background commands.',
-      ),
-    )
-    assert.equal(find(tree, 'TerminalView'), undefined)
-    assert.deepEqual(
-      f.calls.map(([, method]) => method),
-      ['term.background.list'],
-    )
-    f.hooks.dispose()
-  })
 }
 
 for (const os of ['ios', 'android']) {
@@ -4931,7 +4867,7 @@ for (const accepted of [true, false]) {
       },
       '../runtime/store': { useStore: () => store },
       '../i18n': { useT: () => ({ queue: 'Queue', steer: 'Steer' }) },
-      '../runtime/goalVerify': { offersVerify: () => false },
+      '../runtime/goalVerify': { canEditVerify: () => false },
       './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
     })
     const render = () =>
@@ -5907,7 +5843,6 @@ for (const os of ['ios', 'android']) {
   })
 
   test(`${os} project command management keeps cached commands read-only and blocks retained mutations`, async () => {
-    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
     const hooks = hookHarness(),
       calls = []
     const settings = {
@@ -5931,7 +5866,6 @@ for (const os of ['ios', 'android']) {
       react: hooks.react,
       '../runtime/store': { useStore: () => store },
       '../i18n': { useT: () => actionSettingsCopy },
-      '../runtime/goalVerify': { isMethodMissing },
     })
     const render = () =>
       hooks.render(() => ProjectCommandSettings({ hostId: 'a', projectId: 'p', open: true, onClose() {} }))
@@ -7043,7 +6977,7 @@ function deliveryStoreHarness() {
     if (method === 'tasks.list') return [{ id: 'task', projectId: 'no-project', status: 'ready-for-review' }]
     if (method === 'agent.all') return [{ id: 'session', taskId: 'task', createdAt: 1, state: 'idle', settings: {} }]
     if (method === 'agent.changes') return snapshot
-    if (method === 'agent.tail') throw new Error('Unknown method: agent.tail')
+    if (method === 'agent.tail') return { complete: true, events: snapshot.events }
     if (method === 'tasks.bindings') return holdBindings ? bindingRead.promise : []
     if (method === 'agent.goal' || method === 'settings.models.get') return null
     if (method === 'preferences.layers.get') return { mobile: null }
@@ -7183,22 +7117,6 @@ test('a thread whose start failed on the host is kept, so the retry starts it in
   h.dispose()
 })
 
-test('a host that predates thread.start gets the same steps one call at a time', async () => {
-  const h = deliveryStoreHarness()
-  h.attach()
-  h.threadStart.current = () => {
-    throw new Error('Unknown method thread.start')
-  }
-  await h.render().createChat(newThread)
-  await settle()
-  const steps = h.calls
-    .map(([method]) => method)
-    .filter((m) => /^(thread\.start|tasks\.(create|setup)|agent\.start)$/.test(m))
-  assert.deepEqual(steps, ['thread.start', 'tasks.create', 'agent.start'])
-  assert.equal(h.state.current.chats.find((c) => c.taskId === 'new-task').sessionId, 'new-session')
-  h.dispose()
-})
-
 test('a refresh interrupted mid-stream recovers all missed text on the next connection', async () => {
   const h = deliveryStoreHarness()
   const old = h.attach()
@@ -7217,8 +7135,8 @@ test('a refresh interrupted mid-stream recovers all missed text on the next conn
   assert.equal(h.state.current.chats[0].executionState, 'idle')
   assert.deepEqual(
     h.calls.filter(([method]) => method === 'agent.changes').map((call) => call[2]),
-    [0, 0],
-    'the interrupted read must not consume the catch-up cursor',
+    [],
+    'a thread nobody has open reads its tail, with no catch-up cursor to consume',
   )
   h.dispose()
 })

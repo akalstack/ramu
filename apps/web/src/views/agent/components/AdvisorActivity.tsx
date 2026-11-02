@@ -44,7 +44,7 @@ export function AdvisorActivity({
       key,
       setTimeout(() => {
         marking.delete(key)
-        // A view-only device is refused and an older host has no such method; neither needs saying.
+        // A view-only device is refused, which needs no saying.
         void Promise.resolve(invoke('agent.markAdviceRead', sessionId)).catch(() => {})
       }, 600),
     )

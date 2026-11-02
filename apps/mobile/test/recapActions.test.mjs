@@ -43,7 +43,7 @@ test('every action but undo has a toast message', () => {
 test('a chosen snooze time is sent as the third argument, other actions as two', async () => {
   const calls = []
   const call = async (...args) => void calls.push(args)
-  assert.deepEqual(await actOnHost(call, 'a', 'snoozed', 99), { exactTime: true })
+  await actOnHost(call, 'a', 'snoozed', 99)
   await actOnHost(call, 'a', 'done')
   await actOnHost(call, 'a', 'open')
   await actOnHost(call, 'a', 'snoozed')
@@ -51,19 +51,6 @@ test('a chosen snooze time is sent as the third argument, other actions as two',
     ['a', 'snoozed', 99],
     ['a', 'done'],
     ['a', 'open'],
-    ['a', 'snoozed'],
-  ])
-})
-
-test('an older host that refuses the time still snoozes, for its default day, and the outcome says so', async () => {
-  const calls = []
-  const call = async (...args) => {
-    calls.push(args)
-    if (args.length === 3) throw new Error('Invalid arguments: too big')
-  }
-  assert.deepEqual(await actOnHost(call, 'a', 'snoozed', 99), { exactTime: false })
-  assert.deepEqual(calls, [
-    ['a', 'snoozed', 99],
     ['a', 'snoozed'],
   ])
 })

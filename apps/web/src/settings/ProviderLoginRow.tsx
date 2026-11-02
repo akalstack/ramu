@@ -59,7 +59,7 @@ export function ProviderLoginRow({
   onRemove: () => void
   /** Shared MCP state for this login; absent hides it. Sharing itself is one switch for the provider. */
   mcpSharing?: {
-    /** Whether the login can use the shared connections now; absent on hosts that predate readiness. */
+    /** Whether the login can use the shared connections now, once known. */
     readiness?: SharedMcpAccountReadiness
     rechecking?: boolean
     onRecheck?: () => void

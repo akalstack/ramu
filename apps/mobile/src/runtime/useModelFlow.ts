@@ -27,7 +27,7 @@ export interface ModelFlowControl {
   effective: ResolvedModelFlow
   /** The computer's own setting, used when neither this phone nor the shared mobile layer overrides it. */
   host: ModelFlow
-  /** False when the computer cannot hold a shared mobile setting (older version). */
+  /** False until the computer's shared mobile setting has loaded. */
   sharedAvailable: boolean
   /** Which narrower scopes hold their own value, even when a narrower one currently hides it. */
   overridden: { mobile: boolean; device: boolean }

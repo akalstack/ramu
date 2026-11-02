@@ -47,12 +47,7 @@ export function ProjectRoutingDialog({
       await onSave(list, description.trim())
       if (live.current) onClose()
     } catch (reason) {
-      if (live.current)
-        setError(
-          /unknown method/i.test(errorText(reason))
-            ? t('Update this host to name projects for Auto.')
-            : t(errorText(reason)),
-        )
+      if (live.current) setError(t(errorText(reason)))
     } finally {
       pending.current = false
       if (live.current) setBusy(false)

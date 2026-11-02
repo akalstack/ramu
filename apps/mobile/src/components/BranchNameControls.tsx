@@ -4,7 +4,6 @@ import type { RamuMethods } from '@ramu/shared/api'
 import type { WorktreePlanEntry } from '@ramu/shared/types'
 import { validBranchName, type BranchChoice, type BranchNamingIntent } from '@ramu/shared/workspaceDefaults'
 import { useStore } from '../runtime/store'
-import { isMethodMissing } from '../runtime/goalVerify'
 import { useT } from '../i18n'
 import { font, radius, space, useTheme } from '../theme'
 import { Button, T } from './ui'
@@ -100,10 +99,7 @@ export function BranchNameControls({
         if (active()) setPreview({ key, rows: result })
       }
     } catch (reason) {
-      if (active())
-        setError(
-          isMethodMissing(reason) ? t.branchNameOutdated : reason instanceof Error ? reason.message : String(reason),
-        )
+      if (active()) setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       if (active()) {
         pending.current = null

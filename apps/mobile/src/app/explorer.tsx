@@ -560,7 +560,7 @@ export default function Explorer() {
                 {catalog.loading ? <ActivityIndicator color={c.accent} /> : null}
                 {catalog.error ? (
                   <Row onPress={catalog.refresh}>
-                    <T tone="muted">{catalog.unsupported ? t.workspacesUnsupported : t.workspacesLoadFailed}</T>
+                    <T tone="muted">{t.workspacesLoadFailed}</T>
                   </Row>
                 ) : null}
                 {workspaces.map((workspace) => (

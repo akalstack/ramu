@@ -137,7 +137,7 @@ export default function InboxScreen() {
         onOpen={() => {
           if (chat) router.push({ pathname: '/chat/[id]', params: { id: chat.id } })
         }}
-        choices={auto.snoozeChoices(r.computerId)}
+        choices
         onAct={(action, until) => auto.actRecap(r.computerId, r.item, action, until)}
       />
     )

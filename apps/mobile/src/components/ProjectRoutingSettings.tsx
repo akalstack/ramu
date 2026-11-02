@@ -54,7 +54,7 @@ export function ProjectRoutingSettings({ project, onClose }: { project: MobilePr
     } catch (reason) {
       if (live.current) {
         const message = reason instanceof Error ? reason.message : String(reason)
-        setError(/unknown method/i.test(message) ? t('Update this host to name projects for Auto.') : message)
+        setError(message)
       }
     } finally {
       pending.current = false

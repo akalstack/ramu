@@ -110,7 +110,6 @@ const en = {
   voiceStatusLanguage: 'Language not supported offline',
   voiceDownloadModel: 'Download speech model',
   projectModelChoose: 'Choose a model or use the host default before starting.',
-  projectModelUnsupported: 'This host uses host model defaults. Update it for repository preferences.',
   projectModelUseDefault: 'Use project default',
   projectModelUseHost: 'Use host default',
   projectModelInvalid: 'The saved model choice is invalid. Choose a model again.',
@@ -122,7 +121,6 @@ const en = {
   manageProjectActions: 'Manage actions',
   retryProjectActions: 'Retry',
   noProjectActions: 'No actions yet. Add commands on desktop or in ramu.json.',
-  actionSettingsUnsupported: 'Update this host to manage action order and visibility.',
   actionSettingsOffline: 'Connect to this host to change actions.',
   hiddenAction: 'Hidden',
   localAction: 'Saved on this host',
@@ -146,7 +144,6 @@ const en = {
   branchNameInvalid: 'Enter a valid Git branch name.',
   branchNameGenerate: 'Generate name',
   branchNamePreview: 'Preview worktrees',
-  branchNameOutdated: 'Update this host to use branch naming controls.',
   branchNameFallback: 'Generation used a fallback name. You can edit it.',
   branchNameOffline: 'Connect to generate a name or preview worktrees. Manual edits stay on this device.',
   branchNameProvisional:
@@ -155,7 +152,6 @@ const en = {
   renameWorkspace: 'Rename workspace',
   workspaceName: 'Workspace name',
   workspaceNameHint: 'Used by every thread sharing this workspace.',
-  workspaceRenameOutdated: 'Update this host to rename workspace labels.',
   workspaceRenameOffline: 'Connect to this host to rename the workspace.',
   workspaceRenameConflict: 'Workspace name changed elsewhere. Reopen the name editor to review it.',
   savedContextPreviewTruncated: 'Preview shows the first 4000 characters. Restore keeps the full captured context.',
@@ -169,7 +165,6 @@ const en = {
     'Reconnect this host to check restored attachments before sending. You can still edit and save the draft.',
   savedAttachmentMissing:
     'An attachment is missing or changed on this host. Attach it again or remove it before sending.',
-  savedAttachmentOldHost: 'Update this host to check restored attachments, or remove them before sending.',
 
   namingThread: 'Naming thread',
   retryTitleGeneration: 'Retry title generation',
@@ -178,13 +173,10 @@ const en = {
   branchNamingFallback: 'Used default branch name',
   workspaceSettingsFailed:
     'Could not load workspace settings. Choose Current checkout explicitly, or reconnect and try again.',
-  workspaceSettingsUnsupported:
-    'This host cannot report workspace defaults. Choose Current checkout explicitly or update the host.',
   currentCheckout: 'Current checkout',
   isolatedWorktree: 'New isolated worktree',
   existingWorkspace: 'Existing isolated workspace',
   loadingWorkspaces: 'Loading workspaces…',
-  workspacesUnsupported: 'Update this host to list existing workspaces.',
   workspacesLoadFailed: 'Could not load workspaces. Try again when the host is available.',
   workspaceUnavailable: 'This workspace is unavailable. Choose a workspace again; your draft is kept.',
   worktreeNeedsProject: 'Worktrees need a project folder. Standalone chats use the current folder.',
@@ -261,7 +253,6 @@ const en = {
   fileDraftFull: 'This draft already has 30 file references. Remove a reference in the composer, then try again.',
   fileDraftFailed:
     'Could not add the file. Your draft is kept; check the host and available device storage, then try again.',
-  fileScopeUnsupported: 'Update this host to browse files without creating a working folder.',
   fileScopeUnavailable: 'This file or checkout is unavailable. Return to Explorer and refresh.',
   explorerRevealMissing:
     'The selected file is missing or outside the loaded folder entries. Refresh or use file search.',
@@ -497,7 +488,6 @@ const en = {
   verifyCurrent: 'Current command',
   verifyLastCheck: 'Last check',
   verifyRemove: 'Remove',
-  verifyOutdated: 'Update Ramu on this host to set a verify command.',
   verifyPassed: 'Passed',
   verifyTimedOut: 'Timed out',
   verifyUnrunnable: 'Could not run',
@@ -635,7 +625,6 @@ const id: typeof en = {
   voiceStatusLanguage: 'Bahasa tidak didukung secara offline',
   voiceDownloadModel: 'Unduh model suara',
   projectModelChoose: 'Pilih model atau gunakan bawaan host sebelum memulai.',
-  projectModelUnsupported: 'Host ini memakai model bawaan host. Perbarui untuk preferensi repositori.',
   projectModelUseDefault: 'Gunakan bawaan proyek',
   projectModelUseHost: 'Gunakan bawaan host',
   projectModelInvalid: 'Pilihan model tersimpan tidak valid. Pilih model lagi.',
@@ -647,7 +636,6 @@ const id: typeof en = {
   manageProjectActions: 'Kelola aksi',
   retryProjectActions: 'Coba lagi',
   noProjectActions: 'Belum ada aksi. Tambahkan perintah di desktop atau ramu.json.',
-  actionSettingsUnsupported: 'Perbarui host ini untuk mengatur urutan dan visibilitas aksi.',
   actionSettingsOffline: 'Hubungkan ke host ini untuk mengubah aksi.',
   hiddenAction: 'Disembunyikan',
   localAction: 'Disimpan di host ini',
@@ -672,7 +660,6 @@ const id: typeof en = {
   branchNameInvalid: 'Masukkan nama branch Git yang valid.',
   branchNameGenerate: 'Buat nama',
   branchNamePreview: 'Pratinjau worktree',
-  branchNameOutdated: 'Perbarui host ini untuk memakai kontrol penamaan branch.',
   branchNameFallback: 'Pembuatan nama memakai nama cadangan. Anda dapat mengeditnya.',
   branchNameOffline:
     'Hubungkan untuk membuat nama atau melihat pratinjau worktree. Edit manual tetap di perangkat ini.',
@@ -682,7 +669,6 @@ const id: typeof en = {
   renameWorkspace: 'Ubah nama workspace',
   workspaceName: 'Nama workspace',
   workspaceNameHint: 'Dipakai oleh setiap thread yang berbagi workspace ini.',
-  workspaceRenameOutdated: 'Perbarui host ini untuk mengubah label workspace.',
   workspaceRenameOffline: 'Hubungkan ke host ini untuk mengubah nama workspace.',
   workspaceRenameConflict: 'Nama workspace diubah dari tempat lain. Buka kembali editor nama untuk meninjaunya.',
   savedContextPreviewTruncated:
@@ -697,8 +683,6 @@ const id: typeof en = {
   savedAttachmentOffline:
     'Hubungkan kembali host ini untuk memeriksa lampiran yang dipulihkan sebelum mengirim. Anda tetap dapat mengedit dan menyimpan draf.',
   savedAttachmentMissing: 'Lampiran hilang atau berubah di host ini. Lampirkan kembali atau hapus sebelum mengirim.',
-  savedAttachmentOldHost:
-    'Perbarui host ini untuk memeriksa lampiran yang dipulihkan, atau hapus lampiran sebelum mengirim.',
 
   branchNamingFallback: 'Menggunakan nama branch bawaan',
   namingThread: 'Menyiapkan judul thread',
@@ -707,13 +691,10 @@ const id: typeof en = {
   newChat: 'Thread baru',
   workspaceSettingsFailed:
     'Tidak dapat memuat pengaturan ruang kerja. Pilih Checkout saat ini, atau hubungkan kembali dan coba lagi.',
-  workspaceSettingsUnsupported:
-    'Host ini tidak dapat melaporkan default ruang kerja. Pilih Checkout saat ini atau perbarui host.',
   currentCheckout: 'Checkout saat ini',
   isolatedWorktree: 'Worktree terisolasi baru',
   existingWorkspace: 'Ruang kerja terisolasi yang ada',
   loadingWorkspaces: 'Memuat ruang kerja…',
-  workspacesUnsupported: 'Perbarui host ini untuk melihat ruang kerja yang ada.',
   workspacesLoadFailed: 'Tidak dapat memuat ruang kerja. Coba lagi saat host tersedia.',
   workspaceUnavailable: 'Ruang kerja ini tidak tersedia. Pilih kembali ruang kerja; draf Anda tetap disimpan.',
   worktreeNeedsProject: 'Worktree memerlukan folder proyek. Chat mandiri memakai folder saat ini.',
@@ -791,7 +772,6 @@ const id: typeof en = {
   fileDraftFull: 'Draf ini sudah memiliki 30 referensi berkas. Hapus satu referensi di kotak pesan, lalu coba lagi.',
   fileDraftFailed:
     'Tidak dapat menambahkan berkas. Draf Anda tetap disimpan; periksa host dan ruang penyimpanan perangkat, lalu coba lagi.',
-  fileScopeUnsupported: 'Perbarui host ini untuk menjelajahi berkas tanpa membuat folder kerja.',
   fileScopeUnavailable: 'Berkas atau checkout ini tidak tersedia. Kembali ke Explorer dan muat ulang.',
   explorerRevealMissing:
     'Berkas yang dipilih tidak ada atau berada di luar entri folder yang dimuat. Muat ulang atau gunakan pencarian berkas.',
@@ -1029,7 +1009,6 @@ const id: typeof en = {
   verifyCurrent: 'Perintah saat ini',
   verifyLastCheck: 'Pengecekan terakhir',
   verifyRemove: 'Hapus',
-  verifyOutdated: 'Perbarui Ramu di host ini untuk mengatur perintah verifikasi.',
   verifyPassed: 'Lolos',
   verifyTimedOut: 'Waktu habis',
   verifyUnrunnable: 'Tidak bisa dijalankan',

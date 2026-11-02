@@ -230,9 +230,7 @@ export function HostNotice({ host, name, children }: { host: Host; name?: string
           ? `Loading settings from ${name ?? 'this computer'}…`
           : state.status === 'offline'
             ? `${name ?? 'This computer'} is not reachable, so its settings can't be shown. Phone settings still work.`
-            : state.status === 'outdated'
-              ? `Update Ramu on ${name ?? 'this computer'} to change its settings from your phone.`
-              : state.message}
+            : state.message}
       </T>
       {state.status === 'error' ? <Button title={say('Try again')} onPress={host.reload} /> : null}
     </View>

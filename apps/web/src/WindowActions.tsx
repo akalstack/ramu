@@ -598,9 +598,7 @@ function ManageDialog({
         )}
         {settings.error && (
           <p role="status" className="text-caption text-muted-foreground">
-            {/^Unknown method\b/.test(settings.error)
-              ? t('Update this host to manage action order and visibility.')
-              : settings.error}
+            {settings.error}
           </p>
         )}
         {error && (

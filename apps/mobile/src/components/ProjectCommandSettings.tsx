@@ -4,7 +4,6 @@ import { ArrowDown, ArrowUp, Eye, EyeOff } from 'lucide-react-native'
 import type { ProjectActionSettings } from '@ramu/shared/types'
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { useStore } from '../runtime/store'
-import { isMethodMissing } from '../runtime/goalVerify'
 import { useT } from '../i18n'
 import { font, space, useTheme } from '../theme'
 import { Button, Sheet, T } from './ui'
@@ -30,15 +29,14 @@ export function ProjectCommandSettings({
   const active = useRef(key)
   active.current = key
   const lifecycle = useRef({ version: 0 }).current
-  const runtime = useRef({ store, unsupported: t.actionSettingsUnsupported })
-  runtime.current = { store, unsupported: t.actionSettingsUnsupported }
+  const runtime = useRef({ store })
+  runtime.current = { store }
   const sequence = useRef(0)
   const pending = useRef<number | null>(null)
   const [data, setData] = useState<{
     key: string
     settings?: ProjectActionSettings
     error?: string
-    unsupported?: boolean
   }>({ key })
   const [busy, setBusy] = useState(false)
   const online = store.isOnline(hostId)
@@ -65,12 +63,7 @@ export function ProjectCommandSettings({
           setData((previous) => ({
             ...(previous.key === key ? previous : { key }),
             key,
-            error: isMethodMissing(reason)
-              ? runtime.current.unsupported
-              : reason instanceof Error
-                ? reason.message
-                : String(reason),
-            unsupported: isMethodMissing(reason),
+            error: reason instanceof Error ? reason.message : String(reason),
           }))
       }
     },
@@ -90,7 +83,7 @@ export function ProjectCommandSettings({
       off()
     }
   }, [lifecycle, hostId, open, online, viewOnly, read])
-  const disabled = Boolean(viewOnly || busy || !online || !settings || data.unsupported)
+  const disabled = Boolean(viewOnly || busy || !online || !settings)
   const mutate = async (operation: () => Promise<unknown>) => {
     if (
       viewerNow() ||
@@ -138,7 +131,7 @@ export function ProjectCommandSettings({
         {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[store.language]}</T> : null}
         {!online ? <T tone="muted">{t.actionSettingsOffline}</T> : null}
         {data.key === key && data.error ? <T tone="bad">{data.error}</T> : null}
-        {data.key === key && data.error && !data.unsupported ? (
+        {data.key === key && data.error ? (
           <Button
             title={t.retryProjectActions}
             kind="secondary"

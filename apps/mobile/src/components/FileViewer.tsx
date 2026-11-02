@@ -6,7 +6,6 @@ import { Check, Copy, FileQuestion, FolderSearch, Pencil, X } from 'lucide-react
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useT, useSay } from '../i18n'
 import { useWorkspaces } from '../runtime/useWorkspaces'
-import { isMethodMissing } from '../runtime/goalVerify'
 import { ExplorerDraftError, type NewComposerOrigin } from '../runtime/composerDrafts'
 import type { RepositoryBinding } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
@@ -182,11 +181,7 @@ export function FileViewer({
               owner: identity,
               bindings: [],
               loading: false,
-              error: isMethodMissing(error)
-                ? t.fileScopeUnsupported
-                : error instanceof Error
-                  ? error.message
-                  : String(error),
+              error: error instanceof Error ? error.message : String(error),
             })
         },
       )
@@ -239,11 +234,7 @@ export function FileViewer({
             owner: readIdentity,
             value: {
               kind: 'error',
-              message: isMethodMissing(error)
-                ? say('This computer is too old to show a commit’s file. Update Ramu on it.')
-                : error instanceof Error
-                  ? error.message
-                  : String(error),
+              message: error instanceof Error ? error.message : String(error),
             },
           })
       },
@@ -435,9 +426,7 @@ export function FileViewer({
       {!online ? <T tone="muted">{t.explorerOffline}</T> : null}
       {scope.owner === identity && scope.error ? <T tone="bad">{scope.error}</T> : null}
       {taskId.startsWith('worktree:') && catalog.loading ? <T tone="muted">{t.loadingWorkspaces}</T> : null}
-      {taskId.startsWith('worktree:') && catalog.error ? (
-        <T tone="muted">{catalog.unsupported ? t.workspacesUnsupported : t.workspacesLoadFailed}</T>
-      ) : null}
+      {taskId.startsWith('worktree:') && catalog.error ? <T tone="muted">{t.workspacesLoadFailed}</T> : null}
       {binding?.setupState === 'ready' && !knownProject && !catalog.loading && !catalog.error ? (
         <T tone="muted">{t.fileScopeUnavailable}</T>
       ) : null}

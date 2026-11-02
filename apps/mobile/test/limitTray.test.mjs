@@ -1,12 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  hostHasAutoResume,
-  autoResumeMenu,
-  limitPlaceholderKey,
-  limitTrayModel,
-  limitWaitOf,
-} from '../src/runtime/limitTray.ts'
+import { autoResumeMenu, limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../src/runtime/limitTray.ts'
 import { limitNoteTitle, transcript } from '../src/runtime/transcript.ts'
 
 const NOW = 1_000_000
@@ -118,12 +112,4 @@ test('Limit reached and Paused are separate: a paused goal keeps its own words',
   assert.ok(titles.some((title) => title.startsWith('Limit reached')))
   assert.ok(!titles.some((title) => title.startsWith('Limit reached') && /paused/i.test(title)))
   assert.ok(titles.some((title) => /paused/i.test(title) && !title.startsWith('Limit reached')))
-})
-
-test('per-thread auto-resume is offered only by a host that knows the setting', () => {
-  assert.equal(hostHasAutoResume({ switchAt: null, autoResume: true }), true)
-  assert.equal(hostHasAutoResume({ switchAt: null, autoResume: false }), true)
-  // An older host has no such preference, and refuses agent.setAutoResume.
-  assert.equal(hostHasAutoResume({ switchAt: null }), false)
-  assert.equal(hostHasAutoResume(undefined), false)
 })

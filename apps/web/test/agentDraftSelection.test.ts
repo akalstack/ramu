@@ -183,22 +183,10 @@ it('never overwrites corrupt metadata on Retry and keeps explicit choices usable
   expect(render().blocked).toBe(false)
   expect((await render().verify()).model).toBe('chosen-in-memory')
 })
-it('handles unsupported old hosts without an inference loop and requests refresh on configuration events', async () => {
-  state.queryError = Error('Unknown method tasks.agentDefaults')
-  state.results.clear()
-  expect(render().unsupported).toBe(true)
-  expect(render().blocked).toBe(false)
-  expect(await render().verify()).toEqual(base)
-  expect(state.invoke).not.toHaveBeenCalled()
+it('requests refresh on configuration events', async () => {
+  render()
   state.listeners.get('workspace:changed')!()
   expect(client.invalidateQueries).toHaveBeenCalled()
-})
-
-it('drops a cached repository model when a downgraded host no longer supports repository defaults', async () => {
-  expect(render().settings.model).toBe('repo-model')
-  state.queryError = Error('Unknown method tasks.agentDefaults')
-  expect(render().settings.model).toBe('host-model')
-  expect(await render().verify()).toEqual(base)
 })
 
 it('rejects a preflight superseded by a configuration event even before its refresh is rendered', async () => {

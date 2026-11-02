@@ -11,7 +11,6 @@ import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
 import { draftStore } from './drafts'
 import { clearAgentDraft, loadAgentDraft, saveAgentDraft, type StoredAgentDraft } from './agentDraft'
-import { errorText } from '../lib/errors'
 import { t } from '../i18n'
 
 /** Device-owned explicit choices sit above live repository and host defaults. */
@@ -37,9 +36,8 @@ export function useAgentDraft(project: string, base: AgentSettings) {
     retry: false,
     queryFn: () => host.invoke('tasks.agentDefaults', project, base.provider),
   })
-  const unsupported = !!query.error && /Unknown method tasks\.agentDefaults/.test(errorText(query.error))
-  const settings = agentSettingsForDraft(base, general || unsupported ? undefined : query.data, choice)
-  const fingerprint = JSON.stringify([scope, base, choice, query.data?.status, unsupported, modelChoice(settings)])
+  const settings = agentSettingsForDraft(base, general ? undefined : query.data, choice)
+  const fingerprint = JSON.stringify([scope, base, choice, query.data?.status, modelChoice(settings)])
   const active = useRef(fingerprint)
   active.current = fingerprint
   const sourceRevision = useRef({ value: 0 }).current
@@ -74,11 +72,10 @@ export function useAgentDraft(project: string, base: AgentSettings) {
     !confirmed ||
     (!choice.selection &&
       !general &&
-      !unsupported &&
       (!query.data || query.data.status === 'unavailable' || query.data.status === 'invalid' || !!query.error))
   const verify = async () => {
     if (blocked) throw new Error(t('Choose a model or use the host default before starting.'))
-    if (choice.selection || general || unsupported) return settings
+    if (choice.selection || general) return settings
     const revision = sourceRevision.value
     const latest = await host.invoke('tasks.agentDefaults', project, base.provider)
     if (active.current !== fingerprint || revision !== sourceRevision.value)
@@ -100,7 +97,6 @@ export function useAgentDraft(project: string, base: AgentSettings) {
     confirmed,
     blocked,
     defaults: query.data,
-    unsupported,
     error: query.error,
     loading: !general && !query.data && !query.error,
     change: (next: AgentSettings) => {

@@ -71,7 +71,7 @@ export function BackgroundActivity() {
       }),
     ]
     void refresh()
-    // Reconcile activity when reconnecting or an older service misses a push.
+    // Reconcile activity in case a push was missed.
     const timer = setInterval(() => {
       if (online) void refresh()
     }, 3000)

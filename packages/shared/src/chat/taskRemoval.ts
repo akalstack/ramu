@@ -25,14 +25,8 @@ export async function readRemovalCommands(
   invoke: (method: 'term.background.list', taskId: string) => Promise<BackgroundTerminalInfo[]>,
   taskId: string,
 ): Promise<BackgroundTerminalInfo[]> {
-  try {
-    const commands = await invoke('term.background.list', taskId)
-    if (commands.some((command) => command.taskId !== taskId))
-      throw new Error('Background command scope changed. Reload the thread before deleting.')
-    return removalCommands(commands)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (/unknown method\s+term\.background\.list\b/i.test(message)) return []
-    throw error
-  }
+  const commands = await invoke('term.background.list', taskId)
+  if (commands.some((command) => command.taskId !== taskId))
+    throw new Error('Background command scope changed. Reload the thread before deleting.')
+  return removalCommands(commands)
 }

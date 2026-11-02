@@ -34,9 +34,9 @@ it('reads live frames independently without a fixed screenshot delay and ignores
   expect(fallback).not.toHaveBeenCalled()
 })
 
-it('falls back for an older host but never changes transport to evade an access refusal', async () => {
+it('falls back without a compositor feed but never changes transport to evade an access refusal', async () => {
   const fallback = vi.fn().mockResolvedValue(image)
-  const next = vi.fn().mockRejectedValue(new Error('Unknown method hostBrowser.nextFrame'))
+  const next = vi.fn().mockRejectedValue(new Error('Live browser frames are unavailable'))
   const stop = watchBrowserFrames({ next, fallback, show: vi.fn(), ready: vi.fn(), error: vi.fn() })
   await vi.advanceTimersByTimeAsync(750)
   expect(fallback).toHaveBeenCalledTimes(1)

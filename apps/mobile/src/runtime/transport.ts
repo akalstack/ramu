@@ -115,28 +115,11 @@ export class HostClient {
   get fetch(): Fetcher {
     return this.fetcher
   }
-  private operationKeys: Promise<boolean> | undefined
-  /** Whether the host advertises `operation-keys`, read once from its status. A host that does not say never gets retries. */
-  private supportsOperationKeys(): Promise<boolean> {
-    this.operationKeys ??= this.call('background.status', [])
-      .then((status: { capabilities?: string[] }) => !!status?.capabilities?.includes('operation-keys'))
-      .catch(() => false)
-    return this.operationKeys
-  }
   async invoke<M extends keyof RamuMethods>(
     method: M,
     ...args: Parameters<RamuMethods[M]>
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>> {
-    // Connecting already reads the status, so the first send need not spend a round trip asking again.
-    if (method === 'background.status') {
-      const status = this.call(method, args)
-      this.operationKeys ??= status.then(
-        (info: { capabilities?: string[] }) => !!info?.capabilities?.includes('operation-keys'),
-        () => false,
-      )
-      return status
-    }
-    if (!RECOVERABLE_MUTATIONS.has(method) || !(await this.supportsOperationKeys())) return this.call(method, args)
+    if (!RECOVERABLE_MUTATIONS.has(method)) return this.call(method, args)
     // One key across the attempts: a host that already ran the action returns its first result instead of running it again.
     const key = operationKey()
     for (let attempt = 0; ; attempt++) {

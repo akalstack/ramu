@@ -678,26 +678,7 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
   { section: 'memory', title: 'Memories', words: 'remember forget saved memory archive restore' },
 ]
 
-/**
- * The limit choice as it was before auto-resume existed: one switch for the fallback. A host that has the fallback setting
- * but not `fallback.autoResume` is older than the choice, and shows this instead of nothing.
- */
-const legacyFallback = (row: Extract<SettingRow, { kind: 'limit' }>): SettingRow => ({
-  kind: 'toggle',
-  path: row.path,
-  title: LEGACY_FALLBACK_TITLE,
-  help: LEGACY_FALLBACK_HELP,
-  words: 'provider fallback limit switch',
-})
-export const LEGACY_FALLBACK_TITLE = 'Automatic provider fallback'
-export const LEGACY_FALLBACK_HELP =
-  'Switch to another provider when a usage limit is reached. When off, a thread waits and resumes on the same provider once the limit resets. Applies to new threads.'
-
-/** A host offers a row when it has every setting the row edits; the limit choice needs both of its two, else it degrades to the old switch. */
 const offered = (row: SettingRow, known: ReadonlySet<string>) => known.has(row.path)
-/** The row as this host can edit it: the limit choice becomes the old fallback switch on a host without `fallback.autoResume`. */
-const forHost = (row: SettingRow, known: ReadonlySet<string>): SettingRow =>
-  row.kind === 'limit' && !known.has(row.resumePath) ? legacyFallback(row) : row
 
 /** One computer-side row for a section, hiding rows its server doesn't offer or whose condition isn't met. */
 export function visibleGroups(
@@ -710,9 +691,7 @@ export function visibleGroups(
   return (SETTINGS_ROWS[section] ?? [])
     .map((group) => ({
       ...group,
-      rows: group.rows
-        .filter((row) => offered(row, known) && (!row.when || read(row.when.path) === row.when.equals))
-        .map((row) => forHost(row, known)),
+      rows: group.rows.filter((row) => offered(row, known) && (!row.when || read(row.when.path) === row.when.equals)),
     }))
     .filter((group) => group.rows.length)
 }
@@ -767,7 +746,6 @@ export function searchSettings(
         group.rows
           // Before a computer has answered, offer every row; after, only the ones it has.
           .filter((row) => !known || offered(row, known))
-          .map((row) => (known ? forHost(row, known) : row))
           .map((row) => ({
             section: section as SettingsSection,
             title: row.title,
@@ -808,10 +786,6 @@ export interface SettingsHost {
   (method: 'settings.app.snapshot'): Promise<SettingsSnapshot>
   (method: 'settings.app.patch', edits: SettingEdit[]): Promise<SettingsSnapshot>
 }
-
-/** The computer is too old to offer the portable settings API. */
-export const isOutdated = (error: unknown) =>
-  /unknown method/i.test(error instanceof Error ? error.message : String(error))
 
 /** Saves one setting against what the computer last confirmed, so a change made on the desktop meanwhile is not overwritten blindly. */
 export async function patchSetting(host: SettingsHost, confirmed: SettingsSnapshot, path: string, value: unknown) {

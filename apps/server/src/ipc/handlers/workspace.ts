@@ -323,7 +323,6 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           branchPrefix: prefs.worktreeBranchPrefix,
           branchNaming: prefs.worktreeBranchNaming,
           branchInstructions: prefs.worktreeBranchInstructions,
-          branchNameControls: true,
           configSource: source,
           configError: error,
           worktreeUnavailable: await workspace.worktreeUnavailable(projectId),

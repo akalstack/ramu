@@ -50,11 +50,7 @@ export function ProviderCompatibility({ hostId }: { hostId: string }) {
         if (mine !== generation.current) return
         const message = reason instanceof Error ? reason.message : String(reason)
         setStale(true)
-        setError(
-          /unknown method/i.test(message)
-            ? translate(runtime.current.language, 'Update this host to see provider compatibility.')
-            : message,
-        )
+        setError(message)
       } finally {
         if (mine === generation.current) setBusy(null)
       }

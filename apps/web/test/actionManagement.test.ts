@@ -156,13 +156,9 @@ it('reorders only IDs and never submits stale repository commands or runs hidden
 })
 it('disables unsupported and offline controls and scopes the entire editor to its host and checkout', () => {
   state.visible = []
-  state.settings = { ...state.settings, supported: false, error: 'Unknown method projects.actionSettings', actions: [] }
+  state.settings = { ...state.settings, supported: false, error: 'Actions refused', actions: [] }
   button(control(), 'Manage actions').props.onClick()
-  expect(
-    nodes(manager()).some(
-      (entry) => entry.props.children === 'Update this host to manage action order and visibility.',
-    ),
-  ).toBe(true)
+  expect(nodes(manager()).some((entry) => entry.props.children === 'Actions refused')).toBe(true)
   const first = nodes(render(WindowActions, { ctx: 'project:p', projectId: 'p' })).find(
     (entry) => typeof entry.type === 'function',
   )!

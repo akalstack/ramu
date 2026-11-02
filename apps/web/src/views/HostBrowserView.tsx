@@ -83,7 +83,7 @@ export function HostBrowserView({
   selectedRef.current = selected
   const current = useRef(tab)
   current.current = tab
-  // The host says whether this device is the one in control; older hosts leave it to the generation this view took.
+  // The host says whether a paired device is the one in control; this machine has no device id, so it goes by the generation this view took.
   const controlled =
     !viewOnly && !!tab && tab.controller === 'human' && (tab.controlledHere ?? tab.generation === owned) && !tab.paused
   // A person's other device holds the tab; taking it here is one click, and that device is told.

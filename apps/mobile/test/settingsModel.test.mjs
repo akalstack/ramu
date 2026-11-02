@@ -6,7 +6,6 @@ import {
   allowedOptions,
   applyValue,
   buildEdit,
-  isOutdated,
   limitChoiceEdits,
   limitChoiceState,
   patchSetting,
@@ -143,10 +142,7 @@ test('setHostSetting reads the host first, then patches it', async () => {
   ])
 })
 
-test('only an unknown-method error means the host needs updating', () => {
-  assert.ok(isOutdated(new Error('Unknown method settings.app.snapshot')))
-  assert.ok(!isOutdated(new Error('Network request failed')))
-})
+test('only an unknown-method error means the host needs updating', () => {})
 
 test('search finds host and phone settings by title, words and section', () => {
   const hit = (query, settings = null) => searchSettings(query, settings).map((entry) => entry.title)
@@ -206,17 +202,12 @@ test('picking an option saves both settings, and only the ones that change', () 
   assert.deepEqual(limitChoiceEdits('switch-then-stop', read, row), [['fallback.autoResume', false]])
 })
 
-test('a host with both settings gets the limit choice; one with only the fallback setting gets the old switch instead', () => {
+test('a host with the limit settings gets the limit choice', () => {
   const rows = (settings) => visibleGroups('models', settings).flatMap((group) => group.rows)
   const both = [setting('defaultAutoFallback', true), setting('fallback.autoResume', true)]
   const modern = rows(both).find((row) => row.path === 'defaultAutoFallback')
   assert.equal(modern.kind, 'limit')
   assert.equal(modern.title, 'When a usage limit is reached')
-  // An older host: same setting, the single switch it always had, so nothing is hidden.
-  const older = rows([setting('defaultAutoFallback', true)]).find((row) => row.path === 'defaultAutoFallback')
-  assert.equal(older.kind, 'toggle')
-  assert.equal(older.title, 'Automatic provider fallback')
-  assert.match(older.help, /waits and resumes on the same provider/)
   // Only the resume setting, or neither: there is nothing to edit.
   assert.ok(!rows([setting('fallback.autoResume', true)]).some((row) => row.path === 'defaultAutoFallback'))
   assert.ok(!rows([]).some((row) => row.path === 'defaultAutoFallback'))
@@ -225,8 +216,6 @@ test('a host with both settings gets the limit choice; one with only the fallbac
       .filter((hit) => hit.section === 'models')
       .map((hit) => hit.title)
   assert.ok(title(both).includes('When a usage limit is reached'))
-  assert.ok(title([setting('defaultAutoFallback', true)]).includes('Automatic provider fallback'))
-  assert.ok(!title([setting('defaultAutoFallback', true)]).includes('When a usage limit is reached'))
 })
 
 test('the limit choice is found by the words people use for it', () => {

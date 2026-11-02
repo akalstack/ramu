@@ -39,31 +39,12 @@ export function applyRecapAction(
   )
 }
 
-export interface RecapActOutcome {
-  /** False when the host did not take the chosen time (an older host) and snoozed for its default day instead. */
-  exactTime: boolean
-}
-
-/**
- * Sends the action to the host. A snooze with a chosen time passes it as the third argument; a host that predates that
- * refuses the extra argument, so the snooze is sent again as a plain one (a day) and the outcome says so. Every other call
- * is the same two arguments the host has always accepted, `'open'` included for Undo.
- */
+/** Sends the action to the host; a snooze with a chosen time passes it as the third argument. */
 export async function actOnHost(
   call: (...args: unknown[]) => Promise<unknown>,
   id: string,
   action: RecapAction,
   until?: number,
-): Promise<RecapActOutcome> {
-  if (action !== 'snoozed' || until === undefined) {
-    await call(id, action)
-    return { exactTime: true }
-  }
-  try {
-    await call(id, action, until)
-    return { exactTime: true }
-  } catch {
-    await call(id, action)
-    return { exactTime: false }
-  }
+): Promise<void> {
+  await (action === 'snoozed' && until !== undefined ? call(id, action, until) : call(id, action))
 }

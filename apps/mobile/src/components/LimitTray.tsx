@@ -5,7 +5,7 @@ import { autoResumeOverride } from '@ramu/shared/chat/limitPolicy'
 import { font, radius, space, useTheme } from '../theme'
 import { fill, useT } from '../i18n'
 import { useStore } from '../runtime/store'
-import { autoResumeMenu, hostHasAutoResume, limitTrayModel, limitWaitOf } from '../runtime/limitTray'
+import { autoResumeMenu, limitTrayModel, limitWaitOf } from '../runtime/limitTray'
 import { Sheet, T, tap } from './ui'
 import { SheetGroup, SheetOption } from './SheetOptions'
 
@@ -110,8 +110,7 @@ export function LimitTray({ chatId }: { chatId: string }) {
           </T>
         </Pressable>
       </View>
-      {/* A host that predates per-thread auto-resume cannot set it; the thread still waits and resumes by itself. */}
-      {hostHasAutoResume(store.appPreferences[chat.computerId]?.fallback) ? (
+      {store.appPreferences[chat.computerId] ? (
         <>
           <Pressable
             accessibilityRole="button"

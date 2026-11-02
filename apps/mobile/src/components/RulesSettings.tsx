@@ -37,12 +37,11 @@ export function RulesSettings({ hostId }: { hostId: string }) {
     } catch (reason) {
       if (sequence.current === version) {
         const message = reason instanceof Error ? reason.message : String(reason)
-        setError(/unknown method/i.test(message) ? t('Update this host to manage rules.') : message)
+        setError(message)
       }
     } finally {
       if (sequence.current === version) setLoading(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [hostId] by design; the values it reads beyond these are current as of that run
   }, [hostId])
   useEffect(() => {
     void read()

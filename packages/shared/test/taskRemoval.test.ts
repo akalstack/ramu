@@ -24,11 +24,6 @@ it('does not confuse an offline or denied host with a host lacking managed comma
       throw new Error('This device is a viewer')
     }, 'thread'),
   ).rejects.toThrow('viewer')
-  expect(
-    await readRemovalCommands(async () => {
-      throw new Error('Unknown method term.background.list')
-    }, 'thread'),
-  ).toEqual([])
 })
 it('refuses a command list that belongs to another thread', async () => {
   await expect(

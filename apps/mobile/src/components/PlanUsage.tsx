@@ -4,7 +4,6 @@ import { Pressable, View } from 'react-native'
 import { Gauge, Monitor, Network, Settings } from 'lucide-react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { useRouter } from 'expo-router'
-import { isMethodMissing } from '../runtime/goalVerify'
 import type { AgentProvider, UsageReading } from '@ramu/shared/types'
 import { providerEnabled } from '@ramu/shared/providers/providers'
 import {
@@ -158,7 +157,6 @@ export function PlanUsageSheet({
   const router = useRouter()
   const [accounts, setAccounts] = useState<Record<string, UsageReading[]>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [unsupportedRefresh, setUnsupportedRefresh] = useState<string[]>([])
   const [filter, setFilter] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [details, setDetails] = useState(() => store.drafts?.['usage-show-details'] === 'yes')
@@ -186,22 +184,17 @@ export function PlanUsageSheet({
     refreshing.current = null
     setBusy(false)
     setErrors({})
-    setUnsupportedRefresh([])
     setFilter(null)
     if (!open) return
     const read = (id: string) => {
-      void readAccounts(id, request).catch((error) => {
+      void readAccounts(id, request).catch(() => {
         if (request !== generation.current) return
         setErrors((all) => ({
           ...all,
           [id]:
             store.language === 'id'
-              ? isMethodMissing(error)
-                ? 'Perbarui host untuk melihat penggunaan per akun.'
-                : 'Tidak dapat memuat akun. Data terakhir tetap ditampilkan.'
-              : isMethodMissing(error)
-                ? 'Update this host to inspect usage by account.'
-                : 'Could not load accounts. Last-known readings remain visible.',
+              ? 'Tidak dapat memuat akun. Data terakhir tetap ditampilkan.'
+              : 'Could not load accounts. Last-known readings remain visible.',
         }))
       })
     }
@@ -220,9 +213,7 @@ export function PlanUsageSheet({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [open, key, connectionKey, store.language] by design; the values it reads beyond these are current as of that run
   }, [open, key, connectionKey, store.language])
-  const refreshHosts = hosts.filter(
-    (id) => (!filter || filter === id) && store.isOnline(id) && !unsupportedRefresh.includes(id),
-  )
+  const refreshHosts = hosts.filter((id) => (!filter || filter === id) && store.isOnline(id))
   const refresh = async () => {
     if (refreshing.current !== null || !open) return
     const request = generation.current
@@ -238,7 +229,6 @@ export function PlanUsageSheet({
           await readAccounts(id, request)
         } catch (error) {
           if (request !== generation.current) break
-          if (isMethodMissing(error)) setUnsupportedRefresh((all) => [...new Set([...all, id])])
           setErrors((all) => ({
             ...all,
             [id]:

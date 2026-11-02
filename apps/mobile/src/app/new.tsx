@@ -8,7 +8,6 @@ import { projectWorkspaces } from '@ramu/shared/workspace/explorer'
 import { readWorkspaceChoice, type WorkspaceChoice } from '../runtime/workspaces'
 import { useWorkspaces } from '../runtime/useWorkspaces'
 import { useAgentDraft } from '../runtime/useAgentDraft'
-import { isMethodMissing } from '../runtime/goalVerify'
 import { newComposerKey } from '../runtime/composerDrafts'
 import { routingChoiceLabels } from '../runtime/routingChoices'
 import {
@@ -157,7 +156,6 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     key: string
     value: ReturnType<RamuMethods['tasks.workspaceOptions']> | null
     error: string
-    unsupported?: boolean
   }>({ key: optionsKey, value: null, error: '' })
   const workspaceOptions = optionsState.key === optionsKey ? optionsState.value : null
   const optionsError = optionsState.key === optionsKey ? optionsState.error : ''
@@ -181,7 +179,6 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                 key: optionsKey,
                 value: null,
                 error: String(error instanceof Error ? error.message : error),
-                unsupported: isMethodMissing(error),
               })
           },
         )
@@ -283,17 +280,15 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     ? t.projectModelInvalid
     : !preset || agentDraft.choice.selection || agentDraft.loading
       ? null
-      : agentDraft.unsupported
-        ? t.projectModelUnsupported
-        : agentDraft.defaults?.status === 'invalid'
-          ? t.projectModelConfigInvalid
-          : agentDraft.defaults?.reason === 'provider'
-            ? t.projectModelProviderUnavailable
-            : agentDraft.defaults?.reason === 'model'
-              ? t.projectModelUnavailable
-              : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
-                ? t.projectModelCatalogFailed
-                : null
+      : agentDraft.defaults?.status === 'invalid'
+        ? t.projectModelConfigInvalid
+        : agentDraft.defaults?.reason === 'provider'
+          ? t.projectModelProviderUnavailable
+          : agentDraft.defaults?.reason === 'model'
+            ? t.projectModelUnavailable
+            : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
+              ? t.projectModelCatalogFailed
+              : null
   const chooseModel = (next: ModelChoice) =>
     agentDraft.change({
       ...agentDraft.settings,
@@ -422,25 +417,11 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         throw new Error('The message changed while choosing a project. Send again.')
       let raw = destination
       if (!raw) {
-        let outcome: Awaited<ReturnType<RamuMethods['projects.route']>>
-        try {
-          outcome = await storeRef.current
-            .invoke(selected, 'projects.route', text, verified, {
-              split: store.appPreferences[selected]?.autoProjectSplit !== false,
-              others: others.candidates,
-              localHost: computers.find((x) => x.id === selected)?.name,
-            })
-            // A host that predates splitting takes only the prompt and settings.
-            .catch((error) => {
-              if (isMethodMissing(error)) throw error
-              return storeRef.current.invoke(selected, 'projects.route', text, verified)
-            })
-        } catch (error) {
-          if (!isMethodMissing(error)) throw error
-          setAuto(false)
-          setPicker('project')
-          throw new Error('This host cannot choose a project automatically. Choose one.', { cause: error })
-        }
+        const outcome = await storeRef.current.invoke(selected, 'projects.route', text, verified, {
+          split: store.appPreferences[selected]?.autoProjectSplit !== false,
+          others: others.candidates,
+          localHost: computers.find((x) => x.id === selected)?.name,
+        })
         if (revision !== routeRevision.current)
           throw new Error('The message changed while choosing a project. Send again.')
         if (outcome.kind === 'split' || (outcome.kind === 'resolved' && others.targets.has(outcome.projectId))) {
@@ -477,10 +458,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       const base = preset ?? DEFAULT_AGENT_SETTINGS
       const destinationDefaults = agentDraft.choice.selection
         ? undefined
-        : await storeRef.current.invoke(selected, 'tasks.agentDefaults', raw, base.provider).catch((error) => {
-            if (isMethodMissing(error)) return undefined
-            throw error
-          })
+        : await storeRef.current.invoke(selected, 'tasks.agentDefaults', raw, base.provider)
       const routed = routedAgentSettings(base, destinationDefaults, agentDraft.choice)
       if (!routed) {
         // Stay in Auto so the draft remains visible; a model chosen here then wins over the project default.
@@ -792,8 +770,6 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                 setPicker('mode')
                 throw new Error(t.branchNameInvalid)
               }
-              if (mode === 'worktree' && !workspaceId && sendChoice && !workspaceOptions?.branchNameControls)
-                throw new Error(t.branchNameOutdated)
               const sendModel = asModelChoice(await agentDraft.verify())
               const id = await createChat({
                 computerId: selected,
@@ -995,26 +971,14 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
             }}
           />
         </SheetGroup>
-        {optionsError ? (
-          <T tone="muted">{optionsState.unsupported ? t.workspaceSettingsUnsupported : t.workspaceSettingsFailed}</T>
-        ) : null}
-        {mode === 'worktree' && !workspaceId && choice.branch && !workspaceOptions?.branchNameControls ? (
-          <Row onPress={() => chooseWorkspace({ ...choice, branch: undefined })}>
-            <T>{t.branchNameOutdated}</T>
-            <T tone="accent">{t.branchNameAutomatic}</T>
-          </Row>
-        ) : null}
+        {optionsError ? <T tone="muted">{t.workspaceSettingsFailed}</T> : null}
         {mode === 'worktree' && !workspaceId && reviewed?.key === reviewKey ? (
           <Row onPress={() => setReviewed(null)}>
             <T>{t.branchBasesKept}</T>
             <T tone="accent">{t.branchClearBases}</T>
           </Row>
         ) : null}
-        {mode === 'worktree' &&
-        !workspaceId &&
-        workspaceOptions?.branchNameControls &&
-        picker === 'mode' &&
-        projectId ? (
+        {mode === 'worktree' && !workspaceId && picker === 'mode' && projectId ? (
           <BranchNameControls
             key={choiceKey}
             host={selected}
@@ -1034,9 +998,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           />
         ) : null}
         {catalog.loading ? <T tone="muted">{t.loadingWorkspaces}</T> : null}
-        {catalog.error ? (
-          <T tone="muted">{catalog.unsupported ? t.workspacesUnsupported : t.workspacesLoadFailed}</T>
-        ) : null}
+        {catalog.error ? <T tone="muted">{t.workspacesLoadFailed}</T> : null}
         {workspaces.map((workspace) => (
           <Row
             key={workspace.id}

@@ -58,7 +58,6 @@ import {
   type HostRuntime,
 } from './hostRuntime'
 import { commitUnread, inboxUnread, loadUnread, statusUnread } from './unread'
-import { orWhenUnknown } from '../lib/errors'
 import { createUiPersistence } from './uiPersistence'
 import {
   EMPTY_TASK_UI,
@@ -432,8 +431,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
     const [ps, chats, isolated] = await Promise.all([
       invoke('projects.list'),
       invoke('tasks.list'),
-      // A host that predates isolated workspaces still lists its projects and threads.
-      orWhenUnknown(() => invoke('workspaces.list'), []),
+      invoke('workspaces.list'),
     ])
     const rs: Record<string, Repository[]> = Object.fromEntries(
       await mapBounded(ps, HOST_READ_CONCURRENCY, async (p) => [p.id, await invoke('repos.list', p.id)] as const),
@@ -491,7 +489,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
         const lists = read ?? {
           projects: await invoke('projects.list'),
           tasks: await invoke('tasks.list'),
-          workspaces: await orWhenUnknown(() => invoke('workspaces.list'), []),
+          workspaces: await invoke('workspaces.list'),
         }
         let resume: {
           workspace: WorkspaceUiState

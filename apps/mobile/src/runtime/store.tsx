@@ -70,9 +70,9 @@ import { probeReachableHosts, type ReachableHostProbe } from './reachableHosts'
 import { verifyHost, findHostRoute, chooseHostRoute, rememberRoutes, developmentHostRoute } from './hostRoutes'
 import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
 import { transcript, visibleText, deliveryBaseline, reconcileDelivered } from './transcript'
-import { isOutdated, type Language } from './settingsModel'
+import type { Language } from './settingsModel'
 import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } from './pushCategories'
-import { GOAL_VERIFY_METHOD, isMethodMissing } from './goalVerify'
+import { GOAL_VERIFY_METHOD } from './goalVerify'
 import { mergeTranscript, transcriptRows, updateThreadMetadata, readTranscriptBundle } from './transcriptChanges'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
 import type { Task } from '@ramu/shared/types'
@@ -194,8 +194,6 @@ interface Store extends State {
   clearGoal(id: string): void
   /** Sets, changes or (null) removes the goal's verification command; rejects with the host's reason so the editor can show it. */
   setGoalVerify(id: string, command: string | null): Promise<void>
-  /** Methods a host has answered "Unknown method" to, per computer: it predates them, so their controls are hidden. */
-  missingMethods: Record<string, string[]>
   /** Checks a thread held at a usage limit now instead of at the timer; resolves with whether it continued. */
   retryLimitNow(id: string): Promise<LimitRetryResult | null>
   /** This thread's own auto-resume choice at a limit; null clears it so the thread follows the host's default. */
@@ -294,8 +292,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const eventRows = useRef(new Map<string, Map<number, AgentEvent>>())
   // The host's change counter for each transcript held in `eventRows`, so a refresh reads only what changed.
   const changeCursors = useRef(new Map<string, number>())
-  const changesSupported = useRef(new Map<string, boolean>())
-  const tailSupported = useRef(new Map<string, boolean>())
   // Threads on screen, by scoped session id: they always read in full.
   const shownSessions = useRef(new Set<string>())
   const listeners = useRef(new Map<string, Set<(channel: keyof PushEvents, payload: any) => void>>())
@@ -320,7 +316,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [mobileLayers, setMobileLayers] = useState<
     Record<string, import('@ramu/shared/preferenceScopes').PreferenceLayer | null>
   >({})
-  const [missingMethods, setMissingMethods] = useState<Record<string, string[]>>({})
   const [startSettings, setStartSettings] = useState<Record<string, AgentSettings>>({})
   // The phone carries shared mobile settings between its paired hosts: any host holding an older value (or none) is
   // given the newest one, and a clear spreads as a clear. Each (host, field, revision) is tried once at a time; a failure clears
@@ -342,12 +337,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mobileLayers] by design; the values it reads beyond these are current as of that run
   }, [mobileLayers])
   const loadDefaults = (id: string) => {
-    // Older computers have no shared mobile layer; they keep working with the computer's own setting and this phone's.
     void invoke(id, 'preferences.layers.get').then(
       (snapshot) => setMobileLayers((p) => ({ ...p, [id]: snapshot.mobile })),
-      (error) => {
-        if (isOutdated(error)) setMobileLayers((p) => ({ ...p, [id]: null }))
-      },
+      () => {},
     )
     loadModels(id)
     loadPermissions(id)
@@ -661,39 +653,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 // A thread nobody has open reads only its last turns; opening it reads the rest. So a cold start costs a
                 // list and a preview per thread, not every transcript on the host.
                 const focused = typeof depth === 'object' && depth.has(task.id)
-                if (
-                  !focused &&
-                  !changeCursors.current.has(key) &&
-                  !shownSessions.current.has(key) &&
-                  tailSupported.current.get(id) !== false
-                ) {
-                  try {
-                    const tail = await read('agent.tail', session.id)
-                    return { revision: 0, cursor: undefined, events: tail.events }
-                  } catch (error) {
-                    if (!isMethodMissing(error)) throw error
-                    tailSupported.current.set(id, false)
-                  }
+                if (!focused && !changeCursors.current.has(key) && !shownSessions.current.has(key)) {
+                  const tail = await read('agent.tail', session.id)
+                  return { revision: 0, cursor: undefined, events: tail.events }
                 }
-                if (changesSupported.current.get(id) !== false) {
-                  try {
-                    const held = eventRows.current.get(key)
-                    const result = await read(
-                      'agent.changes',
-                      session.id,
-                      held ? (changeCursors.current.get(key) ?? 0) : 0,
-                      held ? Math.max(0, ...held.keys()) : 0,
-                    )
-                    // Rows that arrived live while this read was in flight are in the map now; apply over those.
-                    const rows = mergeTranscript(eventRows.current.get(key), result)
-                    return { revision: result.revision, cursor: result.cursor, events: transcriptRows(rows) }
-                  } catch (error) {
-                    // A host from before agent.changes sends the whole transcript every time.
-                    if (!isMethodMissing(error)) throw error
-                    changesSupported.current.set(id, false)
-                  }
-                }
-                return { ...(await read('agent.snapshot', session.id)), cursor: undefined }
+                const held = eventRows.current.get(key)
+                const result = await read(
+                  'agent.changes',
+                  session.id,
+                  held ? (changeCursors.current.get(key) ?? 0) : 0,
+                  held ? Math.max(0, ...held.keys()) : 0,
+                )
+                // Rows that arrived live while this read was in flight are in the map now; apply over those.
+                const rows = mergeTranscript(eventRows.current.get(key), result)
+                return { revision: result.revision, cursor: result.cursor, events: transcriptRows(rows) }
               }
               const bundle = await readTranscriptBundle(
                 [
@@ -813,7 +786,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const key = scoped(id, sessionId)
     const held = eventRows.current.get(key)
     const cursor = changeCursors.current.get(key)
-    if (!held || !cursor || changesSupported.current.get(id) === false) return refresh(id, new Set([taskId]))
+    if (!held || !cursor) return refresh(id, new Set([taskId]))
     const result = await invoke(id, 'agent.changes', sessionId, cursor, Math.max(0, ...held.keys()))
     if (result.reset) return refresh(id, new Set([taskId]))
     changeCursors.current.set(key, result.cursor)
@@ -825,7 +798,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let sessionId = chat.sessionId
     if (item.kind === 'chat') {
       let taskId = chat.taskId
-      let started = false
       if (!taskId) {
         const projectId = item.projectId === STANDALONE ? STANDALONE : raw(item.projectId!)
         const title = item.text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments'
@@ -871,8 +843,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 : c,
             ),
           }))
-        // One host call creates the thread, sets a worktree up and starts the agent. A host that predates it answers
-        // that the method is unknown, and the same steps run one call at a time below.
+        // One host call creates the thread, sets a worktree up and starts the agent.
         const plan = await planned()
         const result = await invoke(
           item.computerId,
@@ -883,23 +854,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           item.settings,
           item.attachments,
           item.context,
-        ).catch((error) => {
-          if (isMethodMissing(error)) return null
-          throw error
-        })
-        if (result) {
-          adopt(result.task)
-          if (result.error || !result.session) throw new Error(result.error ?? 'The agent did not start.')
-          taskId = result.task.id
-          sessionId = result.session.id
-          started = true
-        } else {
-          const task = await invoke(item.computerId, 'tasks.create', creation, plan)
-          adopt(task)
-          taskId = task.id
-        }
-      }
-      if (!started) {
+        )
+        adopt(result.task)
+        if (result.error || !result.session) throw new Error(result.error ?? 'The agent did not start.')
+        taskId = result.task.id
+        sessionId = result.session.id
+      } else {
         // Only a worktree has anything to set up; the host's setup of a current checkout does nothing.
         if (item.checkout === 'worktree') await invoke(item.computerId, 'tasks.setup', taskId)
         const session = await invoke(
@@ -1434,7 +1394,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     appPreferences,
     mayUse: (id, permission) => mayUse(permissions[id], permission, Date.now()),
     reloadPermissions: loadPermissions,
-    missingMethods,
     invoke,
     refresh,
     acknowledge: (chatId) => {
@@ -1614,7 +1573,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       connections.current.delete(id)
       for (const key of eventRows.current.keys()) if (key.startsWith(`${id}:`)) eventRows.current.delete(key)
       for (const key of changeCursors.current.keys()) if (key.startsWith(`${id}:`)) changeCursors.current.delete(key)
-      changesSupported.current.delete(id)
       listeners.current.delete(id)
       buffers.current.delete(id)
       setNotifications((n) => n.filter((x) => x.computerId !== id))
@@ -1778,8 +1736,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       )
         throw new Error('This item is not awaiting base review')
       const projectId = raw(item.projectId)
-      const options = await invoke(item.computerId, 'tasks.workspaceOptions', projectId)
-      if (!options.branchNameControls) throw new Error('Update this host to review worktree base commits.')
       const repos = await invoke(item.computerId, 'repos.list', projectId)
       return invoke(
         item.computerId,
@@ -1858,13 +1814,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setGoalVerify: async (id, command) => {
       const chat = ref.current.chats.find((c) => c.id === id)
       if (!chat?.sessionId) throw new Error('This thread has not started on the host yet.')
-      try {
-        await invoke(chat.computerId, GOAL_VERIFY_METHOD, chat.sessionId, command)
-      } catch (error) {
-        if (isMethodMissing(error))
-          setMissingMethods((m) => ({ ...m, [chat.computerId]: [...(m[chat.computerId] ?? []), GOAL_VERIFY_METHOD] }))
-        throw error
-      }
+      await invoke(chat.computerId, GOAL_VERIFY_METHOD, chat.sessionId, command)
       void refresh(chat.computerId).catch(report)
     },
     retryLimitNow: async (id) => {

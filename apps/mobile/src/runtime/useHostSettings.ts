@@ -2,12 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert } from 'react-native'
 import type { SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
 import { useStore } from './store'
-import { applyValue, isOutdated, looseInvoke, patchSetting, type SettingsHost } from './settingsModel'
+import { applyValue, looseInvoke, patchSetting, type SettingsHost } from './settingsModel'
 
 export type HostSettingsState =
   | { status: 'offline' }
   | { status: 'loading' }
-  | { status: 'outdated' }
   | { status: 'error'; message: string }
   | { status: 'ready'; settings: SharedSetting[] }
 
@@ -45,11 +44,7 @@ export function useHostSettings(computerId: string) {
       })
       .catch((error) => {
         if (mine !== generation.current) return
-        setState(
-          isOutdated(error)
-            ? { status: 'outdated' }
-            : { status: 'error', message: error instanceof Error ? error.message : String(error) },
-        )
+        setState({ status: 'error', message: error instanceof Error ? error.message : String(error) })
       })
   }
   const loadRef = useRef(load)

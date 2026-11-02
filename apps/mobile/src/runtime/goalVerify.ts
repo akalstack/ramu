@@ -1,7 +1,7 @@
 import type { ChatGoal } from '@ramu/shared/types'
 import { checkOutcome, checkTail, type CheckOutcome } from '@ramu/shared/chat/goalHistory'
 
-/** The host method behind the editor; hosts that predate it answer "Unknown method". */
+/** The host method behind the editor. */
 export const GOAL_VERIFY_METHOD = 'agent.goal.verify'
 /** The longest verification command the host accepts (the desktop editor uses the same limit). */
 export const VERIFY_LIMIT = 2000
@@ -16,17 +16,9 @@ export function verifyDraft(
   return { command, changed: (command ?? '') !== (current ?? ''), tooLong: text.length > VERIFY_LIMIT }
 }
 
-/** The host has no such method: it runs a Ramu from before the verification command existed. */
-export const isMethodMissing = (error: unknown) =>
-  /unknown method/i.test(error instanceof Error ? error.message : String(error))
-
 /** The goal accepts a verification command until it completes; a completed goal is read-only and the host refuses. */
 export const canEditVerify = (goal: ChatGoal | null | undefined): goal is ChatGoal =>
   !!goal && goal.status !== 'completed'
-
-/** Whether to offer the editor: there is an editable goal, and the host has not already shown it lacks the method. */
-export const offersVerify = (goal: ChatGoal | null | undefined, missingMethods: readonly string[] | undefined) =>
-  canEditVerify(goal) && !missingMethods?.includes(GOAL_VERIFY_METHOD)
 
 export interface VerifyView {
   /** The command now set, if any. */

@@ -275,7 +275,6 @@ export function BrowserViewer({
     const timer = setTimeout(() => {
       if (!allowed()) return
       fitted.current = { key, size }
-      // Hosts from before phone layout answer "unknown method"; the page then keeps its desktop size.
       void io.current
         .invoke(chat.computerId, 'hostBrowser.fit', chat.taskId!, tabId, size)
         // The keyboard shrank the page: the host scrolls the focused field back into view when asked about it.

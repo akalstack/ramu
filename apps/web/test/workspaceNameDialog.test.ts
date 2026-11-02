@@ -99,9 +99,9 @@ it('saves once with the original name despite catalog updates and protects a pen
   expect(close).toHaveBeenCalledOnce()
 })
 
-it('keeps the typed name on old-host and conflict failures and never saves while offline', async () => {
+it('keeps the typed name on failures and conflicts and never saves while offline', async () => {
   const save = vi.fn(async () => {
-    throw new Error('Unknown method workspaces.rename')
+    throw new Error('Rename refused')
   })
   const props = { workspace: { id: 'w', name: 'Original' }, online: false, onSave: save, onClose: vi.fn() }
   let result = render(props)
@@ -113,7 +113,7 @@ it('keeps the typed name on old-host and conflict failures and never saves while
   render(props).dialog.onConfirm()
   await settle()
   result = render(props)
-  expect(result.dialog.error).toBe('Update this host to rename workspace labels.')
+  expect(result.dialog.error).toBe('Rename refused')
   expect(input(result.tree).value).toBe('My draft name')
   save.mockRejectedValueOnce(new Error('Workspace name changed elsewhere. Reopen the name editor to review it.'))
   result.dialog.onConfirm()
