@@ -4251,6 +4251,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Cancel recording': 'Batalkan rekaman',
   Transcribe: 'Transkripsikan',
   'Stop and transcribe': 'Berhenti dan transkripsikan',
+  'Listening…': 'Mendengarkan…',
   'Transcript ready': 'Transkrip siap',
   'The message changed while you spoke, so nothing was inserted.':
     'Pesan berubah saat Anda berbicara, jadi tidak ada yang disisipkan.',

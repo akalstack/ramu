@@ -16,6 +16,8 @@ const state = vi.hoisted(() => ({
   pinned: [{ repoId: 'repo', path: 'login.ts' }],
   context: [{ repoId: 'repo', path: 'login.ts', source: 'mention' }] as FileContext[],
   cleared: vi.fn(),
+  voicePhase: 'idle',
+  voiceStop: vi.fn(),
 }))
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
@@ -64,8 +66,8 @@ vi.mock('../src/voice/useDictation', () => ({
   useVoiceCapability: () => undefined,
   useMicControl: () => ({ kind: 'hidden' }),
   useDictation: () => ({
-    snapshot: { state: { phase: 'idle' }, level: 0 },
-    session: { start() {}, stop() {}, cancel() {}, insertReview: () => true },
+    snapshot: { state: { phase: state.voicePhase }, level: 0 },
+    session: { start() {}, stop: state.voiceStop, cancel() {}, insertReview: () => true },
   }),
 }))
 vi.mock('../src/composer/ComposerInput', () => ({ ComposerInput: 'textarea' }))
@@ -156,6 +158,8 @@ beforeEach(() => {
   state.pending = []
   state.host = 'a'
   state.viewOnly = false
+  state.voicePhase = 'idle'
+  state.voiceStop.mockClear()
   state.scope = 'project:p'
   state.pinned = [{ repoId: 'repo', path: 'login.ts' }]
   state.cleared.mockClear()
@@ -279,4 +283,30 @@ it('blocks both submission callbacks for a viewer even if an event reaches a dis
   expect(submit).not.toHaveBeenCalled()
   expect(alternate).not.toHaveBeenCalled()
   expect(state.cleared).not.toHaveBeenCalled()
+})
+
+it.each(['recording', 'limit'])('Enter finishes a %s take instead of sending the draft', async (phase) => {
+  state.voicePhase = phase
+  const submit = vi.fn()
+  const tree = RenderComposer(submit)
+  const input = find(tree, (props) => typeof props.onKeyDown === 'function')!
+  ;(input.onKeyDown as (event: unknown) => void)({
+    key: 'Enter',
+    nativeEvent: { isComposing: false },
+    preventDefault: vi.fn(),
+  })
+  await settled()
+  expect(state.voiceStop).toHaveBeenCalledOnce()
+  expect(submit).not.toHaveBeenCalled()
+})
+
+it('invites speech in the empty box only while the microphone is listening', () => {
+  const placeholder = (phase: string) => {
+    state.voicePhase = phase
+    const tree = RenderComposer(async () => {})
+    return find(tree, (props) => 'placeholder' in props)?.placeholder
+  }
+  expect(placeholder('recording')).toBe('Listening…')
+  expect(placeholder('limit')).toBe('Message')
+  expect(placeholder('transcribing')).toBe('Message')
 })

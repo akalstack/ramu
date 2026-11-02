@@ -1035,7 +1035,9 @@ export function Composer({
           multiline
           editable={!busy && !viewOnly && !dictating}
           ref={textInput}
-          placeholder={placeholder ?? t.messagePlaceholder}
+          placeholder={
+            dictation.snapshot.state.phase === 'recording' ? t.dictateListening : (placeholder ?? t.messagePlaceholder)
+          }
           placeholderTextColor={c.placeholder}
           style={{
             color: c.text,

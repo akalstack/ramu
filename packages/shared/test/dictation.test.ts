@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   DICTATION_MAX_MS,
   IDLE,
+  VOICE_WAVE_BARS,
+  VOICE_WAVE_SILENT,
   dictationBusy,
   insertTranscript,
+  nextVoiceWave,
   reduceDictation,
   type DictationState,
   type DictationTarget,
@@ -89,5 +92,18 @@ describe('inserting a transcript', () => {
   it('clamps a selection that no longer fits the text instead of throwing', () => {
     const far = { ...target, selection: { start: 99, end: 120 } }
     expect(insertTranscript(draft('short'), far, 'more')).toMatchObject({ kind: 'inserted', text: 'short more' })
+  })
+})
+
+describe('recording meter', () => {
+  it('keeps a fixed width and rolls the newest level in at the end', () => {
+    const wave = nextVoiceWave(nextVoiceWave(VOICE_WAVE_SILENT, 1), 0.25)
+    expect(wave).toHaveLength(VOICE_WAVE_BARS)
+    expect(wave.slice(-2)).toEqual([1, 0.5])
+  })
+
+  it('clamps levels outside 0..1', () => {
+    expect(nextVoiceWave(VOICE_WAVE_SILENT, 4).at(-1)).toBe(1)
+    expect(nextVoiceWave(VOICE_WAVE_SILENT, -1).at(-1)).toBe(0)
   })
 })

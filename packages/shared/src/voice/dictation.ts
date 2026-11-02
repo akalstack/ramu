@@ -3,6 +3,16 @@
 
 /** Initial recording cap. A capped take stops and waits for an explicit Transcribe or Discard. */
 export const DICTATION_MAX_MS = 5 * 60_000
+/** The recording meter: one bar per tick, so it reads the same at every engine's level rate. */
+export const VOICE_WAVE_TICK_MS = 250
+export const VOICE_WAVE_BARS = 24
+export const VOICE_WAVE_SILENT: readonly number[] = Array.from({ length: VOICE_WAVE_BARS }, () => 0)
+
+/** Rolls the meter one tick. The square root lifts quiet speech, which raw levels would leave almost flat. */
+export const nextVoiceWave = (wave: readonly number[], level: number): number[] => [
+  ...wave.slice(1 - VOICE_WAVE_BARS),
+  Math.sqrt(Math.max(0, Math.min(1, level))),
+]
 
 export interface DraftSelection {
   start: number

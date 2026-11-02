@@ -141,6 +141,7 @@ export function Composer({
     },
   })
   const dictating = dictationBusy(dictation.snapshot.state)
+  const recording = dictation.snapshot.state.phase === 'recording' || dictation.snapshot.state.phase === 'limit'
   const startDictation = () => {
     if (mic.kind === 'blocked') {
       if (mic.reason === 'permission-denied') void window.ramu.voice?.openSettings()
@@ -158,7 +159,7 @@ export function Composer({
   }
   const toggleDictation = () => {
     const phase = dictation.snapshot.state.phase
-    if (phase === 'recording' || phase === 'limit') dictation.session.stop()
+    if (recording) dictation.session.stop()
     else if (phase === 'idle' || phase === 'failed' || phase === 'review') startDictation()
   }
   const toggleRef = useRef(toggleDictation)
@@ -554,7 +555,7 @@ export function Composer({
               ? ''
               : value
           }
-          placeholder={t(placeholder)}
+          placeholder={dictation.snapshot.state.phase === 'recording' ? t('Listening…') : t(placeholder)}
           onPaste={(event) => {
             if (!onAttachmentsChange) return
             const files = [...event.clipboardData.files]
@@ -632,7 +633,8 @@ export function Composer({
             }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
-              if ((e.metaKey || e.ctrlKey) && onAlternateSubmit) {
+              if (recording) dictation.session.stop()
+              else if ((e.metaKey || e.ctrlKey) && onAlternateSubmit) {
                 if (canAlternate) alternate()
               } else if (canSend) submit()
             }
@@ -661,11 +663,7 @@ export function Composer({
             <MicButton
               active={dictating}
               disabled={
-                mic.kind === 'blocked' && mic.reason === 'language-unsupported'
-                  ? true
-                  : dictating &&
-                    dictation.snapshot.state.phase !== 'recording' &&
-                    dictation.snapshot.state.phase !== 'limit'
+                mic.kind === 'blocked' && mic.reason === 'language-unsupported' ? true : dictating && !recording
               }
               title={
                 mic.kind === 'blocked'
