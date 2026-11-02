@@ -30,7 +30,7 @@ const en = {
   pairQrHint:
     'On your host open Ramu → Settings → Remote access → Pair a device, then point the camera at its QR code.',
   nearbyIntro:
-    'Nearby and reachable saved hosts. Connect to a paired host, or pick a new host and enter its pairing code.',
+    'Nearby and reachable saved hosts. Connect to a paired host, or pick a new one and allow it on that host when both show the same number.',
   nearbySearching: 'Looking for nearby and saved hosts…',
   nearbyNone:
     'No hosts responded. Keep your host awake and connected to the same LAN or VPN. For a new host, turn on Discoverable on this network or scan its QR code.',
@@ -541,7 +541,7 @@ const id: typeof en = {
   pairQrHint:
     'Di host Anda buka Ramu → Pengaturan → Akses jarak jauh → Pasangkan perangkat, lalu arahkan kamera ke kode QR-nya.',
   nearbyIntro:
-    'Host sekitar dan host tersimpan yang dapat dijangkau. Hubungkan ke host yang sudah dipasangkan, atau pilih host baru dan masukkan kode pairing-nya.',
+    'Host sekitar dan host tersimpan yang dapat dijangkau. Hubungkan ke host yang sudah dipasangkan, atau pilih host baru lalu izinkan di host itu jika keduanya menampilkan angka yang sama.',
   nearbySearching: 'Mencari host sekitar dan host tersimpan…',
   nearbyNone:
     'Tidak ada host yang merespons. Pastikan host menyala dan terhubung ke LAN atau VPN yang sama. Untuk host baru, aktifkan Dapat ditemukan di jaringan ini atau pindai kode QR-nya.',

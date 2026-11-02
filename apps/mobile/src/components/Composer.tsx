@@ -3,7 +3,17 @@ import { SheetFlatList as FlatList } from './ui'
 import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFocusEffect } from 'expo-router'
-import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import {
+  Alert,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
 import { StepSlider } from './StepSlider'
@@ -64,6 +74,7 @@ import { AutoResumeRows, LimitTray } from './LimitTray'
 import { canEditVerify } from '../runtime/goalVerify'
 import { isUserPaused } from '@ramu/shared/chat/goalHold'
 import { GoalVerifySheet } from './GoalVerifySheet'
+import { BottomSearch } from './BottomSearch'
 import { DictationStatus, MicButton } from './DictationControls'
 import { dictationBusy } from '@ramu/shared/voice/dictation'
 import {
@@ -84,6 +95,9 @@ export interface ModelChoice {
 export function modelLabel(m: ModelChoice) {
   return m.model || providerNames[m.provider]
 }
+
+/** Rows an iOS model list draws at a time; the native sheet scrolls them. */
+const MODEL_PAGE = 60
 
 type ModelRow = {
   provider: AgentProvider
@@ -141,6 +155,7 @@ export function ModelChip({
     [models],
   )
   const { c } = useTheme()
+  const { height: windowHeight } = useWindowDimensions()
   const [open, setOpen] = useState(false)
   const [provider, setProvider] = useState<AgentProvider | null>(null)
   const [picking, setPicking] = useState<ModelRow | null>(null)
@@ -178,6 +193,40 @@ export function ModelChip({
         }
       : undefined
   const offline = !store.isOnline(computerId ?? store.selected)
+  const providerCount = provider ? models.filter((m) => m.provider === provider).length : 0
+  const searchProps =
+    provider && !picking && providerCount > 8
+      ? { value: query, onChangeText: setQuery, placeholder: `Search ${providerCount} models` }
+      : undefined
+  const [limit, setLimit] = useState(MODEL_PAGE)
+  useEffect(() => setLimit(MODEL_PAGE), [provider, query])
+  const modelRow = (m: ModelRow) => {
+    const selected = current?.provider === m.provider && current.model === m.model
+    return (
+      <Row
+        key={`${m.provider}:${m.model}`}
+        onPress={() => {
+          tap()
+          if (m.efforts.length > 1) setPicking(m)
+          else commit(m, m.efforts[0] ?? '')
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <T weight={selected ? '600' : '400'} numberOfLines={1}>
+            {m.label}
+          </T>
+          <T size={font.caption} tone="muted" mono numberOfLines={1}>
+            {m.model}
+          </T>
+        </View>
+        {selected ? (
+          <Check size={17} color={c.accent} />
+        ) : m.efforts.length > 1 ? (
+          <ChevronRight size={15} color={c.placeholder} />
+        ) : null}
+      </Row>
+    )
+  }
   return (
     <>
       <Pressable
@@ -220,16 +269,10 @@ export function ModelChip({
         open={open}
         onClose={close}
         title={title}
-        scroll={false}
-        search={
-          provider && !picking && models.filter((m) => m.provider === provider).length > 8
-            ? {
-                value: query,
-                onChangeText: setQuery,
-                placeholder: `Search ${models.filter((m) => m.provider === provider).length} models`,
-              }
-            : undefined
-        }
+        scroll={Platform.OS === 'ios'}
+        // On iOS a search bar added mid-flow rebuilds the native sheet and its rows stop taking taps, so iOS searches
+        // inside the list instead.
+        search={Platform.OS !== 'ios' && searchProps ? searchProps : undefined}
       >
         {back ? (
           <Row onPress={back}>
@@ -270,50 +313,45 @@ export function ModelChip({
             })}
           </View>
         ) : provider ? (
-          <View style={{ flexShrink: 1 }}>
-            {/* Fixed height with its own virtualized list, so only the rows on screen are drawn. */}
-            <FlatList
-              style={{ height: 360, flexGrow: 0, flexShrink: 1 }}
-              data={shown}
-              keyExtractor={(m) => `${m.provider}:${m.model}`}
-              initialNumToRender={12}
-              maxToRenderPerBatch={10}
-              windowSize={5}
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
-              ListEmptyComponent={
+          Platform.OS === 'ios' ? (
+            // iOS sheets are native: a React Native list inside one swallows taps, so the sheet scrolls plain rows.
+            <View>
+              {searchProps ? <BottomSearch {...searchProps} inputOnly /> : null}
+              {shown.slice(0, limit).map(modelRow)}
+              {shown.length > limit ? (
+                <Row onPress={() => setLimit((value) => value + MODEL_PAGE)}>
+                  <T tone="accent" weight="500">
+                    {`Show ${Math.min(MODEL_PAGE, shown.length - limit)} more of ${shown.length - limit}`}
+                  </T>
+                </Row>
+              ) : null}
+              {!shown.length ? (
                 <T tone="muted" style={{ padding: space.l }}>
                   No model matches.
                 </T>
-              }
-              renderItem={({ item: m }) => {
-                const selected = current?.provider === m.provider && current.model === m.model
-                return (
-                  <Row
-                    onPress={() => {
-                      tap()
-                      if (m.efforts.length > 1) setPicking(m)
-                      else commit(m, m.efforts[0] ?? '')
-                    }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <T weight={selected ? '600' : '400'} numberOfLines={1}>
-                        {m.label}
-                      </T>
-                      <T size={font.caption} tone="muted" mono numberOfLines={1}>
-                        {m.model}
-                      </T>
-                    </View>
-                    {selected ? (
-                      <Check size={17} color={c.accent} />
-                    ) : m.efforts.length > 1 ? (
-                      <ChevronRight size={15} color={c.placeholder} />
-                    ) : null}
-                  </Row>
-                )
-              }}
-            />
-          </View>
+              ) : null}
+            </View>
+          ) : (
+            <View style={{ flexShrink: 1 }}>
+              {/* Its own virtualized list, so only the rows on screen are drawn; it grows with its rows up to most of the screen. */}
+              <FlatList
+                style={{ flexGrow: 0, maxHeight: Math.round(windowHeight * 0.7) }}
+                data={shown}
+                keyExtractor={(m) => `${m.provider}:${m.model}`}
+                initialNumToRender={12}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                ListEmptyComponent={
+                  <T tone="muted" style={{ padding: space.l }}>
+                    No model matches.
+                  </T>
+                }
+                renderItem={({ item }) => modelRow(item)}
+              />
+            </View>
+          )
         ) : (
           <View>
             <QuickSteps
