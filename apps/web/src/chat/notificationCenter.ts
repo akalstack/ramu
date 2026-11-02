@@ -52,6 +52,28 @@ export const notices = {
   list: () => all,
 }
 
+let panelOpen = false
+const panelListeners = new Set<() => void>()
+
+/** Toasts and the popover share a corner, so the toasts need to know when it is open. */
+export function setNotificationPanelOpen(open: boolean) {
+  if (open === panelOpen) return
+  panelOpen = open
+  for (const listener of panelListeners) listener()
+}
+
+export function useNotificationPanelOpen(): boolean {
+  return useSyncExternalStore(
+    (listener) => {
+      panelListeners.add(listener)
+      return () => {
+        panelListeners.delete(listener)
+      }
+    },
+    () => panelOpen,
+  )
+}
+
 export function useNotices(): CenterNotice[] {
   return useSyncExternalStore((listener) => {
     listeners.add(listener)

@@ -1,7 +1,7 @@
 import { readBackgroundActivity } from './backgroundActivityState'
 import { useEffect, useState } from 'react'
 import { Bell, CircleCheck, Info, LoaderCircle, OctagonX, WifiOff, X } from 'lucide-react'
-import { notices, useNotices } from './notificationCenter'
+import { notices, setNotificationPanelOpen, useNotices } from './notificationCenter'
 import type { BackgroundActivity as Activity } from '@ramu/shared/chat/activity'
 import { Button } from '@/components/desktop-button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -93,6 +93,16 @@ export function BackgroundActivity() {
   return <BackgroundActivityIndicator items={activities} connected={connected} onStop={stop} />
 }
 
+function pressedToast({ reason, event }: { reason: string; event: Event }) {
+  // Pressing a toast also moves focus into it, which closes the popover under its own reason.
+  const target = reason === 'focus-out' ? (event as FocusEvent).relatedTarget : event.target
+  return (
+    (reason === 'outside-press' || reason === 'focus-out') &&
+    target instanceof Element &&
+    target.closest('[data-slot="toast-viewport"]') !== null
+  )
+}
+
 export function BackgroundActivityIndicator({
   items,
   connected = true,
@@ -104,6 +114,10 @@ export function BackgroundActivityIndicator({
 }) {
   useLanguage()
   const [open, setOpen] = useState(false)
+  useEffect(() => {
+    setNotificationPanelOpen(open)
+    return () => setNotificationPanelOpen(false)
+  }, [open])
   const [stopping, setStopping] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const stop = async (id: string) => {
@@ -137,7 +151,14 @@ export function BackgroundActivityIndicator({
   const activityLabel = !connected ? disconnected : active.length === 1 ? t(active[0]!.label) : summary
   const notificationSummary = missed.length === 1 ? t('1 notification') : t('{0} notifications', { 0: missed.length })
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next, details) => {
+        // Closing would move the toast out from under the click that is pressing it.
+        if (!next && pressedToast(details)) return
+        setOpen(next)
+      }}
+    >
       <div className="ml-auto flex min-w-0 max-w-[240px] items-center gap-1">
         {(!connected || active.length > 0) && (
           <>

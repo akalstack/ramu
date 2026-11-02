@@ -1,9 +1,9 @@
-// One short message at the bottom of the screen, with an optional button (Undo). No React Native in here.
+// One short message over the current screen, with an optional button (Undo). No React Native in here.
 
 export interface Toast {
   /** A copy key in `i18n.ts`, or already-written text such as an error from the host. */
   message: string
-  /** Something went wrong: shown with a warning mark, in the same place as every other notice. */
+  /** Something went wrong: shown with a warning mark, under the header. */
   error?: boolean
   /** `label` is a copy key too. */
   action?: { label: string; run: () => void }
@@ -22,7 +22,7 @@ export function showToast(message: string, action?: Toast['action']) {
   current = { message, action, id: ++counter }
   emit()
 }
-/** An error, shown as a toast like every other short notice rather than a banner across the top. */
+/** An error, shown as a toast that clears itself. */
 export function showError(message: string) {
   current = { message, error: true, id: ++counter }
   emit()

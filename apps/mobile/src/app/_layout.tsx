@@ -33,7 +33,7 @@ function Navigator() {
       colors: { ...base.colors, primary: c.accent, background: c.window, card: c.window, text: c.text, border: c.line },
     }
   }, [scheme, c])
-  // Errors show as the standard toast at the bottom, like every other short notice, and clear themselves.
+  // Errors show as a toast under the header and clear themselves.
   const error = store.error
   useEffect(() => {
     if (!error) return

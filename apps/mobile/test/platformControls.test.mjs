@@ -8095,3 +8095,29 @@ test('a device without Change settings sees a host’s settings rows read-only',
   assert.deepEqual(rows(true), [true])
   assert.deepEqual(rows(false), [false])
 })
+
+test('an error toast sits under the header and never blocks a press, while an Undo toast stays within reach', () => {
+  const render = (toast) => {
+    const { UndoToast } = load('components/UndoToast.tsx', 'ios', {
+      react: { useEffect() {}, useSyncExternalStore: (_subscribe, read) => read() },
+      'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 59, bottom: 34 }) },
+      '../i18n': { useT: () => ({}) },
+      '../runtime/toast': {
+        TOAST_MS: 6000,
+        currentToast: () => toast,
+        dismissToast() {},
+        subscribeToast: () => () => {},
+      },
+    })
+    return UndoToast()
+  }
+  const error = render({ id: 1, message: 'Host unreachable', error: true })
+  assert.equal(error.props.pointerEvents, 'none')
+  assert.equal(error.props.style.top, 59 + 52)
+  assert.equal(error.props.style.bottom, undefined)
+
+  const undo = render({ id: 2, message: 'recapDone', action: { label: 'undo', run() {} } })
+  assert.equal(undo.props.pointerEvents, 'box-none')
+  assert.equal(undo.props.style.bottom, 34 + 72)
+  assert.equal(undo.props.style.top, undefined)
+})

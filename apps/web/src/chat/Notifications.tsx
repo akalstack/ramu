@@ -10,7 +10,7 @@ import { ramu, invokerFor } from '../ipc'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { useHostSelection } from '../workspace/HostSelection'
 import { useHost } from '../workspace/HostProvider'
-import { TOAST_MS, notices } from './notificationCenter'
+import { TOAST_MS, notices, useNotificationPanelOpen } from './notificationCenter'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
 
 type Notification = { id: string; message: string; source: string }
@@ -34,6 +34,7 @@ export function Notifications() {
   const { id: hostId, invoke } = useHost()
   const { on } = useHostRuntime()
   const { preferences } = useAppSettings()
+  const besidePanel = useNotificationPanelOpen()
   const dismissedUpdates = useRef(new Set<string>())
   useEffect(() => {
     if (!preferences.providerUpdateChecks) return
@@ -339,5 +340,5 @@ export function Notifications() {
       window.removeEventListener('ramu:notification', receive)
     }
   }, [])
-  return <AppToaster label={t('Notifications')} closeLabel={t('Dismiss notification')} />
+  return <AppToaster label={t('Notifications')} closeLabel={t('Dismiss notification')} besidePanel={besidePanel} />
 }

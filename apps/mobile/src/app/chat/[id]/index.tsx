@@ -24,6 +24,7 @@ import {
   SquareTerminal,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
+import { belowHeader } from '../../../components/UndoToast'
 import { useChat, useStore } from '../../../runtime/store'
 import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../runtime/busyMode'
 import { sharedValue } from '@ramu/shared/sharedFields'
@@ -1221,7 +1222,7 @@ export default function ChatScreen() {
       </MessageMenu.Provider>
       <Presence
         visible={Boolean(toast)}
-        style={{ position: 'absolute', left: space.l, right: space.l, top: insets.top + (ios ? 52 : 56 + space.s) }}
+        style={{ position: 'absolute', left: space.l, right: space.l, top: belowHeader(insets.top) }}
       >
         <View pointerEvents="none">
           <Glass

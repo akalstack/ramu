@@ -29,6 +29,7 @@ import {
   Undo2,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
+import { belowHeader } from '../../../components/UndoToast'
 import { useChat, useStore } from '../../../runtime/store'
 import type { ChangedFile } from '../../../runtime/types'
 import type { RepositoryBinding, GitStash, CommitDraft, GitStatus } from '@ramu/shared/types'
@@ -1136,7 +1137,12 @@ export default function SourceControl() {
       {toast ? (
         <View
           pointerEvents="none"
-          style={{ position: 'absolute', left: space.l, right: space.l, bottom: Math.max(insets.bottom, space.m) }}
+          style={{
+            position: 'absolute',
+            left: space.l,
+            right: space.l,
+            ...(toast.failed ? { top: belowHeader(insets.top) } : { bottom: Math.max(insets.bottom, space.m) }),
+          }}
         >
           <Glass
             radius={radius.full}
