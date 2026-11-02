@@ -20,7 +20,7 @@ export interface SessionRecorderHost
     Pick<GoalManager, 'getGoal' | 'saveGoal' | 'scheduleGoal'>,
     Pick<SessionRegistry, 'draining' | 'finalizing' | 'live' | 'pendingBackground' | 'runners'>,
     Pick<UserRequests, 'notifyWaiters' | 'applySavedPermission'>,
-    Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'helperSummary' | 'list'>,
+    Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'latestEvent' | 'helperSummary' | 'list'>,
     Pick<SubagentRunner, 'children' | 'mirrorChild' | 'settleChild'>,
     Pick<AgentTasks, 'updateTask'> {
   preferences(): AppPreferences | undefined
@@ -262,7 +262,7 @@ export class SessionRecorder {
       this.finalize(id)
     this.syncTaskStatus(id)
     if (!this.host.children.has(id) && ['failed', 'stopped'].includes(state)) {
-      const previous = this.host.events(id).findLast((event) => event.kind === 'state' || event.kind === 'user')
+      const previous = this.host.latestEvent(id, 'state', 'user')
       if (previous?.kind !== 'state' || previous.state !== state) this.record(id, { kind: 'state', state })
       else this.host.emit(id, { kind: 'state', state })
     } else this.host.emit(id, { kind: 'state', state })

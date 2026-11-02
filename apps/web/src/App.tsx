@@ -364,6 +364,19 @@ function Shell() {
   // New chat in a project always runs in that project's pane, so it has the same rail and tools as its chats.
   if (startContext && (panes.has(startContext) || startProject !== NO_PROJECT)) panes.set(startContext, startContext)
 
+  // A host keeps many threads open. Each pane mounts the first time it is shown, so bringing a host on screen builds
+  // the one thread it opens, not all of them; a pane then stays mounted, keeping its scroll and editors.
+  const visiblePane =
+    [...panes].find(
+      ([workspace, taskId]) =>
+        !globalPage && !landing && (startProject ? workspace === startContext : ui.activeTaskId === taskId),
+    )?.[0] ?? null
+  const [shownPanes, setShownPanes] = useState({ host: shownHost, workspaces: new Set<string>() })
+  if (shownPanes.host !== shownHost || (visiblePane && !shownPanes.workspaces.has(visiblePane))) {
+    const earlier = shownPanes.host === shownHost ? shownPanes.workspaces : []
+    setShownPanes({ host: shownHost, workspaces: new Set([...earlier, ...(visiblePane ? [visiblePane] : [])]) })
+  }
+
   const gitChanges = useGitChangeCount(ui.activeTaskId, ws.bindings[ui.activeTaskId ?? ''] ?? [])
   const activeWorkspace = ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : null
   const activePanelState = ws.taskUi[activeWorkspace ?? '']
@@ -708,15 +721,11 @@ function Shell() {
                 <NewTask projectId={startProject} onProjectChange={(id) => ws.newTask(id)} />
               )}
 
-              {[...panes].map(([workspace, taskId]) => (
-                <TaskPane
-                  key={workspace}
-                  taskId={taskId}
-                  visible={
-                    !globalPage && !landing && (startProject ? workspace === startContext : ui.activeTaskId === taskId)
-                  }
-                />
-              ))}
+              {[...panes]
+                .filter(([workspace]) => shownPanes.workspaces.has(workspace))
+                .map(([workspace, taskId]) => (
+                  <TaskPane key={workspace} taskId={taskId} visible={workspace === visiblePane} />
+                ))}
             </div>
             <StatusBar key={`status:${shownHost}`} usage={sidebarHidden ? <UsageRings /> : null} />
           </main>

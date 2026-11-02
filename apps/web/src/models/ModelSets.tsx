@@ -54,7 +54,8 @@ const Context = createContext<{
   catalogs: ProviderCatalog[]
   error: string | null
   save: (preferences: ModelPreferences) => Promise<void>
-  reload: () => Promise<void>
+  /** Asks every provider again unless `rediscover` is false; the host keeps its list current after a settings change. */
+  reload: (options?: { rediscover?: boolean }) => Promise<void>
   initialSettings: AgentSettings
 } | null>(null)
 
@@ -185,10 +186,10 @@ export function ModelSetsProvider({ children }: { children: ReactNode }) {
             setError(null)
           }
         },
-        reload: async () => {
+        reload: async ({ rediscover = true } = {}) => {
           const request = requests.current
           const edit = edits.current
-          const list = await invoke('agent.catalog', true)
+          const list = rediscover ? await invoke('agent.catalog', true) : await invoke('agent.catalog')
           if (request !== requests.current) return
           setCatalogs(list)
           const saved = await invoke('settings.models.get')

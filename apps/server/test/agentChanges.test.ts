@@ -108,4 +108,28 @@ describe('agent.changes', () => {
     expect(result).toMatchObject({ reset: true, lastSeq: 1 })
     expect(result.events).toHaveLength(1)
   })
+
+  it('answers queue and latest-kind questions from the index, and lists every task at once', async () => {
+    const { svc, id, record } = await start()
+    const store = (svc as unknown as { parts: { store: import('../src/agent/sessionStore').SessionStore } }).parts.store
+    expect(store.queued(id)).toEqual([])
+    record({ kind: 'queue', messages: [{ id: 'a', text: 'first', mode: 'queue' }] })
+    record({ kind: 'queue', messages: [{ id: 'b', text: 'second', mode: 'queue' }], paused: true })
+    record({ kind: 'error', message: 'later row' })
+    expect(store.queued(id).map((message) => message.id)).toEqual(['b'])
+    expect(store.queuePaused(id)).toBe(true)
+    expect(store.latestEvent(id, 'user', 'error')?.kind).toBe('error')
+    expect(
+      svc
+        .listByTask()
+        .get('t')
+        ?.map((session) => session.id),
+    ).toEqual(svc.list('t').map((session) => session.id))
+    const plan = db
+      .prepare(
+        "EXPLAIN QUERY PLAN SELECT event FROM agent_events WHERE session_id = 'x' AND json_extract(event, '$.kind') IN ('queue') ORDER BY seq DESC LIMIT 1",
+      )
+      .all() as { detail: string }[]
+    expect(plan.map((row) => row.detail).join(' ')).toContain('agent_events_kind')
+  })
 })

@@ -181,6 +181,7 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id === '@ramu/shared/browserLinks') return browserLinks
       if (id === '@ramu/shared/chat/toolActivity') return toolActivity
       if (id === './sendJournal') return sendJournal
+      if (id === '@ramu/shared/mapBounded') return { mapBounded: (items, _limit, run) => Promise.all(items.map(run)) }
       if (id === './goalVerify') return goalVerify
       if (id === '@ramu/shared/sync/streamSync')
         return load('../../../packages/shared/src/sync/streamSync.ts', os, {}, globals)
@@ -7033,7 +7034,7 @@ function deliveryStoreHarness() {
   const invoke = async (method, ...args) => {
     calls.push([method, ...args])
     if (method === 'tasks.list') return [{ id: 'task', projectId: 'no-project', status: 'ready-for-review' }]
-    if (method === 'agent.list') return [{ id: 'session', createdAt: 1, state: 'idle', settings: {} }]
+    if (method === 'agent.all') return [{ id: 'session', taskId: 'task', createdAt: 1, state: 'idle', settings: {} }]
     if (method === 'agent.changes') return snapshot
     if (method === 'tasks.bindings') return holdBindings ? bindingRead.promise : []
     if (method === 'agent.goal' || method === 'settings.models.get') return null
@@ -7065,6 +7066,7 @@ function deliveryStoreHarness() {
       readSendJournal: () => [],
       writeSendJournal() {},
     },
+    './refreshDepth': load('runtime/refreshDepth.ts', 'ios'),
     './threadActivity': { normalizeHelperGroups: (rows) => rows },
     './newChatHost': { newChatHost: () => 'a' },
     './workspaces': workspaceChoices,

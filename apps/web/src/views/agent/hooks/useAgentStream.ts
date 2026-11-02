@@ -7,6 +7,26 @@ import { ownHostId } from '../../../hosts'
 import { errorText } from '../../../workspace/TaskPane'
 import { useHost } from '../../../workspace/HostProvider'
 import { useHostRuntime } from '../../../workspace/workspace'
+import { heldTranscript, holdTranscript, lastSeqOf } from '../lib/heldTranscripts'
+
+/** Longest a streamed event waits to be shown: a burst rebuilds the transcript once, not once per event. */
+const STREAM_FRAME_MS = 33
+
+const eventsOf = (rows: ReadonlyMap<number, { event: AgentEvent }>) =>
+  [...rows].sort(([a], [b]) => a - b).map(([, item]) => item.event)
+const latestQueue = (events: readonly AgentEvent[]) => {
+  const queue = events.findLast((e) => e.kind === 'queue')
+  return queue?.kind === 'queue' ? queue : undefined
+}
+
+/** What a chat shows first: the rows this client kept, else the query cache (which has no host sequence numbers). */
+function seedOf(host: string, sessionId: string) {
+  const kept = heldTranscript(host, sessionId)
+  if (kept) return { events: eventsOf(kept.rows), rows: kept.rows, cursor: kept.cursor }
+  const events = cachedDataOn(host, 'agent.events', sessionId)
+  if (!events) return null
+  return { events, rows: new Map(events.map((event, index) => [index + 1, { event }])), cursor: 0 }
+}
 
 /**
  * A chat's session and events: seeded from the query cache, hydrated from the host, then kept current by live
@@ -32,48 +52,56 @@ export function useAgentStream(sessionId: string) {
     enabled: false,
     notifyOnChangeProps: [],
   })
+  const [initial] = useState(() => seedOf(host, sessionId))
   const [eventSequences, setEventSequences] = useState<Map<AgentEvent, number>>(
-    () => new Map((cachedDataOn(host, 'agent.events', sessionId) ?? []).map((event, i) => [event, i + 1])),
+    () => new Map([...(initial?.rows ?? [])].map(([seq, item]) => [item.event, seq])),
   )
-  const [queuePaused, setQueuePaused] = useState(false)
-  const [queued, setQueued] = useState<QueuedMessage[]>([])
-  const [hydrating, setHydrating] = useState(() => !cachedDataOn(host, 'agent.events', sessionId))
+  const [queuePaused, setQueuePaused] = useState(() => !!latestQueue(initial?.events ?? [])?.paused)
+  const [queued, setQueued] = useState<QueuedMessage[]>(() => latestQueue(initial?.events ?? [])?.messages ?? [])
+  const [hydrating, setHydrating] = useState(() => !initial)
   const [session, setSession] = useState<AgentSessionInfo | null>(
     () => cachedDataOn(host, 'agent.get', sessionId) ?? null,
   )
-  const [events, setEvents] = useState<AgentEvent[]>(() => cachedDataOn(host, 'agent.events', sessionId) ?? [])
+  const [events, setEvents] = useState<AgentEvent[]>(() => initial?.events ?? [])
   const [liveText, setLiveText] = useState<AgentEvent | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const cached = cachedDataOn(host, 'agent.events', sessionId)
+    const cached = seedOf(host, sessionId)
     setHydrating(!cached)
     setError(null)
     let cancelled = false,
       revision = 0,
       latestState: AgentSessionState | undefined
     const stored = new Map<number, { event: AgentEvent; revision: number }>(
-      (cached ?? []).map((event, index) => [index + 1, { event, revision: 0 }]),
+      [...(cached?.rows ?? [])].map(([seq, item]) => [seq, { event: item.event, revision: 0 }]),
     )
+    // What this client already holds: the host's change counter, so a read returns only the rows that changed.
+    let cursor = cached?.cursor ?? 0
+    let frame: ReturnType<typeof setTimeout> | undefined
     const refreshEvents = () => {
+      clearTimeout(frame)
+      frame = undefined
       setEventSequences(new Map([...stored].map(([seq, item]) => [item.event, seq])))
-      const list = [...stored].sort(([a], [b]) => a - b).map(([, item]) => item.event)
+      const list = eventsOf(stored)
       setEvents(list)
       queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.events', sessionId), list)
-      const queue = list.findLast((e) => e.kind === 'queue')
-      if (queue?.kind === 'queue') {
+      const queue = latestQueue(list)
+      if (queue) {
         setQueued(queue.messages)
         setQueuePaused(!!queue.paused)
       }
+      holdTranscript(host, sessionId, { rows: stored, cursor })
     }
-    // What this client already holds: the host's change counter, so a reconnect reads only the rows that changed.
-    let cursor = 0
+    const refreshSoon = () => {
+      frame ??= setTimeout(refreshEvents, STREAM_FRAME_MS)
+    }
     let changesSupported = true
     const read = async (requestedAt: number) => {
       if (changesSupported) {
         try {
-          const result = await invoke('agent.changes', sessionId, cursor, Math.max(0, ...stored.keys()))
-          if (cancelled) return
+          const result = await invoke('agent.changes', sessionId, cursor, lastSeqOf(stored))
+          if (cancelled) return false
           if (result.reset) {
             const kept = new Set(result.events.map((row) => row.seq))
             for (const [seq, item] of [...stored])
@@ -83,7 +111,7 @@ export function useAgentStream(sessionId: string) {
             if ((stored.get(row.seq)?.revision ?? -1) <= requestedAt)
               stored.set(row.seq, { event: row.event, revision: requestedAt })
           cursor = result.cursor
-          return
+          return result.reset || result.events.length > 0
         } catch (e) {
           // A host from before agent.changes reads the whole transcript every time.
           if (/unknown method/i.test(errorText(e))) changesSupported = false
@@ -91,21 +119,27 @@ export function useAgentStream(sessionId: string) {
         }
       }
       const evs = await invoke('agent.events', sessionId)
-      if (cancelled) return
+      if (cancelled) return false
       evs.forEach((event, index) => {
         if ((stored.get(index + 1)?.revision ?? -1) <= requestedAt)
           stored.set(index + 1, { event, revision: requestedAt })
       })
+      return true
     }
     const hydrate = async () => {
       const requestedAt = revision
-      const [s] = await Promise.all([invoke('agent.get', sessionId), read(requestedAt)])
+      const [s, changed] = await Promise.all([invoke('agent.get', sessionId), read(requestedAt)])
       if (cancelled) return
       setSession({ ...s, state: latestState ?? s.state })
-      refreshEvents()
+      // Nothing new: the rows on screen stay the same objects, so a reopened chat renders nothing twice.
+      if (changed || !cached) refreshEvents()
       setHydrating(false)
     }
-    setEvents(cached ?? [])
+    setEvents(cached?.events ?? [])
+    setEventSequences(new Map([...stored].map(([seq, item]) => [item.event, seq])))
+    const queue = latestQueue(cached?.events ?? [])
+    setQueued(queue?.messages ?? [])
+    setQueuePaused(!!queue?.paused)
     setLiveText(null)
     void hydrate().catch((e) => {
       if (!cancelled) {
@@ -142,14 +176,17 @@ export function useAgentStream(sessionId: string) {
           event.kind === 'text' && event.messageId
             ? [...stored].find(([, i]) => i.event.kind === 'text' && i.event.messageId === event.messageId)?.[0]
             : undefined
-        stored.set(sameMessage ?? Math.max(0, ...stored.keys()) + 1, { event, revision })
+        stored.set(sameMessage ?? lastSeqOf(stored) + 1, { event, revision })
       }
-      refreshEvents()
+      refreshSoon()
       if (event.kind === 'settings')
         setSession((s) => (s ? { ...s, provider: event.settings.provider, settings: event.settings } : s))
     })
     return () => {
       cancelled = true
+      // Rows that arrived in the last frame still belong to what this client holds.
+      if (frame !== undefined) refreshEvents()
+      else if (stored.size) holdTranscript(host, sessionId, { rows: stored, cursor })
       off()
       rewound()
       reconnect()

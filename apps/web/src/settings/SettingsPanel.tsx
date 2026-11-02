@@ -110,7 +110,8 @@ export function SettingsPanel({
         setDraft(models)
         if (scope.targets.some((entry) => entry.id === scope.currentId)) {
           await app.reload()
-          await store.reload()
+          // Save is done; the lists catch up behind it. The host already drops its catalog when providers change.
+          void store.reload({ rediscover: false }).catch(() => {})
         }
       }
     } catch (reason) {

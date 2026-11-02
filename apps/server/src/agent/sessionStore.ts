@@ -55,6 +55,21 @@ export class SessionStore {
     return rows.map((row) => ({ ...toInfo(row), inputSummary: summaries.get(row.id) ?? null }))
   }
 
+  /** Every task's top-level sessions, oldest first: `list` for all tasks at once, with one read of the input summaries. */
+  listByTask(): Map<string, AgentSessionInfo[]> {
+    const rows = this.db
+      .prepare(`SELECT s.*, ${TITLE_SQL} FROM agent_sessions s WHERE parent_session_id IS NULL ORDER BY created_at`)
+      .all() as unknown as SessionRow[]
+    const summaries = readInputSummaries(this.db)
+    const byTask = new Map<string, AgentSessionInfo[]>()
+    for (const row of rows) {
+      const sessions = byTask.get(row.task_id) ?? []
+      sessions.push({ ...toInfo(row), inputSummary: summaries.get(row.id) ?? null })
+      byTask.set(row.task_id, sessions)
+    }
+    return byTask
+  }
+
   all(): AgentSessionInfo[] {
     const rows = this.db
       .prepare(
@@ -208,14 +223,22 @@ export class SessionStore {
     )
   }
 
+  /** The newest event of these kinds, read without parsing the transcript. */
+  latestEvent<K extends AgentEvent['kind']>(id: string, ...kinds: K[]): Extract<AgentEvent, { kind: K }> | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT event FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') IN (${kinds.map(() => '?').join(',')}) ORDER BY seq DESC LIMIT 1`,
+      )
+      .get(id, ...kinds) as { event: string } | undefined
+    return row ? (JSON.parse(row.event) as Extract<AgentEvent, { kind: K }>) : undefined
+  }
+
   queued(id: string): QueuedMessage[] {
-    const event = this.events(id).findLast((event) => event.kind === 'queue')
-    return event?.kind === 'queue' ? event.messages : []
+    return this.latestEvent(id, 'queue')?.messages ?? []
   }
 
   queuePaused(id: string): boolean {
-    const event = this.events(id).findLast((event) => event.kind === 'queue')
-    return event?.kind === 'queue' && !!event.paused
+    return !!this.latestEvent(id, 'queue')?.paused
   }
 
   /** The latest recorded state of one sub-agent. */

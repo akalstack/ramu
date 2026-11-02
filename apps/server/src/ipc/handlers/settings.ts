@@ -7,7 +7,7 @@ import {
   type SettingsSnapshot,
   type SettingSchema,
 } from '@ramu/shared/settingsCompatibility'
-import type { AppPreferences, ModelPreferences } from '@ramu/shared/types'
+import type { AppPreferences, ModelPreferences, ProviderCatalog } from '@ramu/shared/types'
 import { MODEL_FLOW_FIELD, applyLayerEdit } from '@ramu/shared/modelFlow'
 import type { SharedMobileField } from '@ramu/shared/sharedFields'
 import { parseLayer, type PreferenceLayer } from '@ramu/shared/preferenceScopes'
@@ -33,14 +33,14 @@ export const registerSettingsHandlers: RegisterHandlers = ({
   const mobileMode = z.enum(['inherit', 'model', 'effort'])
   const mobileModeSchema = z.toJSONSchema(mobileMode) as SettingSchema
   const modelSettings = () => workspace.getAppState<ModelPreferences | null>('model-preferences', null)
-  const settingsSnapshot = async (): Promise<SettingsSnapshot> => {
+  const settingsSnapshot = async (known?: ProviderCatalog[]): Promise<SettingsSnapshot> => {
     const preferences = loadPreferences(),
       models = modelSettings()
     return {
       protocol: 1,
       preferences,
       models,
-      catalogs: agents ? await agents.catalog() : [],
+      catalogs: known ?? (agents ? await agents.catalog() : []),
       settings: [
         ...portableSettings(sharedSettingsSchema, preferences as unknown as Record<string, unknown>),
         { path: '$models', schema: modelSettingsSchema, value: models },
@@ -124,7 +124,7 @@ export const registerSettingsHandlers: RegisterHandlers = ({
       run: (kind: 'renderer-crash' | 'desktop-crash') => diagnostics?.record(kind),
     },
     'settings.app.get': { args: z.tuple([]), run: loadPreferences },
-    'settings.app.snapshot': { args: z.tuple([]), run: settingsSnapshot },
+    'settings.app.snapshot': { args: z.tuple([]), run: () => settingsSnapshot() },
     'settings.app.patch': {
       args: z.tuple([
         z
@@ -216,7 +216,8 @@ export const registerSettingsHandlers: RegisterHandlers = ({
         }
         if (catalogs) validateSettingModels(edits, catalogs)
         savePreferences(preferences, models)
-        return settingsSnapshot()
+        // Answer with the list already read: a provider change must not hold the save behind a new discovery.
+        return settingsSnapshot(catalogs ?? undefined)
       },
     },
     'settings.app.set': {

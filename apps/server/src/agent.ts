@@ -167,6 +167,7 @@ export class AgentService {
       },
       emit: (...a) => parts.store.emit(...a),
       events: (...a) => this.events(...a),
+      latestEvent: (...a) => parts.store.latestEvent(...a),
       fail: (...a) => parts.process.fail(...a),
       fallback: (...a) => parts.router.fallback(...a),
       finalize: (...a) => parts.recorder.finalize(...a),
@@ -623,6 +624,10 @@ export class AgentService {
 
   snapshot(...args: Parameters<SessionStore['snapshot']>) {
     return this.parts.store.snapshot(...args)
+  }
+
+  listByTask() {
+    return this.parts.store.listByTask()
   }
 
   changes(...args: Parameters<SessionStore['changes']>) {

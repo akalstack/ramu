@@ -370,6 +370,9 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     );
     CREATE INDEX IF NOT EXISTS remote_threads_source ON remote_threads(source_task_id);`)
   },
+  // Lists, submit and settings ask a thread for its events of one kind; without this each question parses its whole
+  // transcript. The expression matches the `json_extract` those queries use, so they need no rewriting.
+  `CREATE INDEX IF NOT EXISTS agent_events_kind ON agent_events(session_id, json_extract(event, '$.kind'), seq);`,
 ]
 
 export type Db = DatabaseSync

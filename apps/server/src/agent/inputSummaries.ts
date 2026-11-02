@@ -16,7 +16,8 @@ export function readInputSummaries(db: Db, taskId?: string): Map<string, ThreadI
       json_extract(e.event, '$.requestSource.agentId') AS sourceAgent,
       substr(json_extract(e.event, '$.requestSource.name'), 1, 100) AS sourceName,
       json_extract(e.event, '$.requestSource.requestId') AS sourceRequest
-    FROM agent_sessions s JOIN agent_events e ON e.session_id = s.id
+    -- CROSS JOIN keeps sessions first, so each one seeks its requests by kind instead of scanning every event.
+    FROM agent_sessions s CROSS JOIN agent_events e ON e.session_id = s.id
     WHERE s.state IN ('starting','running','needs-input','idle') ${taskId === undefined ? '' : 'AND s.task_id = ?'}
       AND json_extract(e.event, '$.kind') IN ('permission-request','question','elicitation')
       AND (json_extract(e.event, '$.agentId') IS NULL OR json_extract(e.event, '$.requestSource') IS NOT NULL)

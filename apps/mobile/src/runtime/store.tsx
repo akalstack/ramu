@@ -54,6 +54,8 @@ import {
   writeSendJournal,
 } from '../storage'
 import { remainingJournal, restoreOutbox } from './sendJournal'
+import { mapBounded } from '@ramu/shared/mapBounded'
+import { rebuildDelay, readsTranscript, type RefreshDepth } from './refreshDepth'
 import { renewalDue, renewCredential } from './tokenRenewal'
 import {
   HostClient,
@@ -151,7 +153,7 @@ interface Store extends State {
   /** Asks a host for on-demand channels (file changes, a thread's context size, terminal output) while a screen shows them. */
   watch(computerId: string, channels: readonly string[], keys?: Record<string, readonly string[]>): () => void
   /** `full` re-reads every transcript (after a reconnect); otherwise chats already streaming keep their live transcript. */
-  refresh(computerId: string, full?: boolean): Promise<void>
+  refresh(computerId: string, depth?: RefreshDepth): Promise<void>
   send(
     id: string,
     text: string,
@@ -429,51 +431,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...registerCategories(ref.current.drafts[PUSH_MUTED_KEY]),
     )
   const rebuilds = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const rebuildCosts = useRef(new Map<string, number>())
   // Publish completed text blocks and coalesce other activity updates, leaving time for native input.
   const rebuild = (computerId: string, sessionId: string) => {
     const key = scoped(computerId, sessionId)
     if (rebuilds.current.has(key)) return
     rebuilds.current.set(
       key,
-      setTimeout(() => {
-        rebuilds.current.delete(key)
-        const rows = eventRows.current.get(key)
-        if (!rows) return
-        const ordered = [...rows.entries()].sort((a, b) => a[0] - b[0])
-        const events = ordered.map((x) => x[1])
-        const items = transcript(
-          events,
-          ordered.map((x) => x[0]),
-          ref.current.chats.some(
-            (chat) =>
-              chat.computerId === computerId &&
-              chat.sessionId === sessionId &&
-              (chat.executionState === 'running' || chat.executionState === 'starting'),
-          ),
-        )
-        const preview = events.findLast((event) => event.kind === 'text' && !event.agentId)
-        change((s) => ({
-          ...s,
-          chats: s.chats.map((chat) =>
-            chat.computerId === computerId && chat.sessionId === sessionId
-              ? {
-                  ...chat,
-                  items,
-                  activityLabel: agentActivityLabel(chat.executionState, events),
-                  turnStartedAt: turnStartedAt(events),
-                  step: currentStep(chat.executionState, events),
-                  steps: turnSteps(events),
-                  preview: preview?.kind === 'text' ? preview.text.slice(-140) : chat.preview,
-                  inputSummary: ['stopped', 'failed'].includes(chat.executionState ?? '')
-                    ? null
-                    : inputSummary(events, sessionId),
-                  compacting:
-                    chat.executionState !== 'stopped' && chat.executionState !== 'failed' && isCompacting(events),
-                }
-              : chat,
-          ),
-        }))
-      }, 50),
+      setTimeout(
+        () => {
+          rebuilds.current.delete(key)
+          const startedAt = Date.now()
+          const rows = eventRows.current.get(key)
+          if (!rows) return
+          const ordered = [...rows.entries()].sort((a, b) => a[0] - b[0])
+          const events = ordered.map((x) => x[1])
+          const items = transcript(
+            events,
+            ordered.map((x) => x[0]),
+            ref.current.chats.some(
+              (chat) =>
+                chat.computerId === computerId &&
+                chat.sessionId === sessionId &&
+                (chat.executionState === 'running' || chat.executionState === 'starting'),
+            ),
+          )
+          const preview = events.findLast((event) => event.kind === 'text' && !event.agentId)
+          change((s) => ({
+            ...s,
+            chats: s.chats.map((chat) =>
+              chat.computerId === computerId && chat.sessionId === sessionId
+                ? {
+                    ...chat,
+                    items,
+                    activityLabel: agentActivityLabel(chat.executionState, events),
+                    turnStartedAt: turnStartedAt(events),
+                    step: currentStep(chat.executionState, events),
+                    steps: turnSteps(events),
+                    preview: preview?.kind === 'text' ? preview.text.slice(-140) : chat.preview,
+                    inputSummary: ['stopped', 'failed'].includes(chat.executionState ?? '')
+                      ? null
+                      : inputSummary(events, sessionId),
+                    compacting:
+                      chat.executionState !== 'stopped' && chat.executionState !== 'failed' && isCompacting(events),
+                  }
+                : chat,
+            ),
+          }))
+          rebuildCosts.current.set(key, Date.now() - startedAt)
+          // The message this host's outbox waited on may have just appeared.
+          if (ref.current.outbox.some((o) => o.computerId === computerId && o.state === 'waiting'))
+            void flush(computerId)
+        },
+        rebuildDelay(rebuildCosts.current.get(key) ?? 0),
+      ),
     )
   }
   const applyEvent = (computerId: string, payload: PushEvents['agent:event']) => {
@@ -550,10 +561,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     for (const listener of listeners.current.get(id) ?? []) listener(channel, payload)
   }
-  const refresh = (id: string, full = false): Promise<void> => {
-    // A full refresh must not be satisfied by a light one already in flight.
+  const refresh = (id: string, depth: RefreshDepth = false): Promise<void> => {
+    // A deeper refresh must not be satisfied by a light one already in flight.
     if (refreshing.current.has(id))
-      return full ? refreshing.current.get(id)!.then(() => refresh(id, true)) : refreshing.current.get(id)!
+      return depth ? refreshing.current.get(id)!.then(() => refresh(id, depth)) : refreshing.current.get(id)!
     const connection = connections.current.get(id)
     if (!connection) return Promise.resolve()
     const current = () => connections.current.get(id) === connection && !connection.controller.signal.aborted
@@ -563,24 +574,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     buffers.current.set(id, [])
     const promise = (async () => {
-      const [projects, tasks, catalogs, usage] = await Promise.all([
+      // Catalogs and usage change rarely and usage is pushed, so only a reconnect or a first read asks for them.
+      const known = ref.current
+      const [projects, tasks, allSessions, catalogs, usage] = await Promise.all([
         read('projects.list'),
         read('tasks.list'),
-        read('agent.catalog'),
-        read('usage.get'),
+        read('agent.all'),
+        depth !== true && known.catalogs[id] ? known.catalogs[id] : read('agent.catalog'),
+        depth !== true && known.usage[id] ? known.usage[id] : read('usage.get'),
       ])
-      const projectViews = await Promise.all(
-        projects.map(async (p) => {
-          const repos = await read('repos.list', p.id)
-          return {
-            ...p,
-            id: scoped(id, p.id),
-            computerId: id,
-            kind: repos.length === 1 ? ('repo' as const) : ('workspace' as const),
-            repos: repos.map((r) => r.name),
-          }
-        }),
-      )
+      // One read for the host's sessions, not one per thread: a phone pays a round trip for each.
+      const newestSessions = new Map<string, (typeof allSessions)[number]>()
+      for (const candidate of allSessions) {
+        const held = newestSessions.get(candidate.taskId)
+        if (!candidate.parentId && (!held || candidate.createdAt > held.createdAt))
+          newestSessions.set(candidate.taskId, candidate)
+      }
+      const projectViews = await mapBounded(projects, 8, async (p) => {
+        const repos = await read('repos.list', p.id)
+        return {
+          ...p,
+          id: scoped(id, p.id),
+          computerId: id,
+          kind: repos.length === 1 ? ('repo' as const) : ('workspace' as const),
+          repos: repos.map((r) => r.name),
+        }
+      })
       const revisions = new Map<string, number>()
       const chats: Chat[] = []
       // Bound concurrency for large workspaces and many saved computers.
@@ -590,11 +609,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             .slice(index, index + 6)
             .filter((t) => t.status !== 'archived')
             .map(async (task) => {
-              const sessions = await read('agent.list', task.id)
-              const session = sessions.filter((s) => !s.parentId).sort((a, b) => b.createdAt - a.createdAt)[0]
+              const session = newestSessions.get(task.id)
               const known = ref.current.chats.find((c) => c.computerId === id && c.taskId === task.id)
               if (
-                !full &&
+                !readsTranscript(depth, {
+                  taskId: task.id,
+                  state: session?.state,
+                  knownState: known?.executionState,
+                  awaitingDelivery:
+                    !!known && ref.current.outbox.some((o) => o.chatId === known.id && o.state === 'accepted'),
+                }) &&
                 known &&
                 session &&
                 known.sessionId === session.id &&
@@ -720,15 +744,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }),
         )
       if (!current()) return
-      void read('activity.status').then(
-        (list) => setActivity((a) => ({ ...a, [id]: list })),
-        () => {},
-      )
-      loadDefaults(id)
-      void read('notices.list').then(
-        (list) => setInbox((i) => ({ ...i, [id]: list })),
-        () => {},
-      )
+      // All three are pushed as they change; only a reconnect can have missed anything.
+      if (depth === true) {
+        void read('activity.status').then(
+          (list) => setActivity((a) => ({ ...a, [id]: list })),
+          () => {},
+        )
+        loadDefaults(id)
+        void read('notices.list').then(
+          (list) => setInbox((i) => ({ ...i, [id]: list })),
+          () => {},
+        )
+      }
       change((s) => ({
         ...s,
         projects: [...s.projects.filter((p) => p.computerId !== id), ...projectViews],
@@ -760,6 +787,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
     refreshing.current.set(id, promise)
     return promise
+  }
+  /** Brings one thread up to date from where its last read stopped, without touching the rest of the host. */
+  const reconcileThread = async (id: string, taskId: string, sessionId: string) => {
+    const key = scoped(id, sessionId)
+    const held = eventRows.current.get(key)
+    const cursor = changeCursors.current.get(key)
+    if (!held || !cursor || changesSupported.current.get(id) === false) return refresh(id, new Set([taskId]))
+    const result = await invoke(id, 'agent.changes', sessionId, cursor, Math.max(0, ...held.keys()))
+    if (result.reset) return refresh(id, new Set([taskId]))
+    changeCursors.current.set(key, result.cursor)
+    for (const row of result.events) applyEvent(id, { sessionId, seq: row.seq, event: row.event })
   }
   const deliver = async (item: OutboxItem) => {
     const chat = ref.current.chats.find((c) => c.id === item.chatId)
@@ -889,7 +927,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
     // Keep the acknowledged bubble until the authoritative message or queue entry is mounted.
     // Finish reconciliation before another identical message takes its history baseline.
-    const reconcile = refresh(item.computerId, true).catch(report)
+    const delivered = ref.current.chats.find((c) => c.id === chat.id)
+    const reconcile = (
+      delivered?.taskId && sessionId
+        ? reconcileThread(item.computerId, delivered.taskId, sessionId)
+        : refresh(item.computerId, true)
+    ).catch(report)
     // Another message for this host takes its history baseline next, so only then wait for the refresh.
     if (ref.current.outbox.some((o) => o.computerId === item.computerId && o.id !== item.id && o.state !== 'accepted'))
       await reconcile
@@ -1294,7 +1337,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (active.current)
         for (const computer of ref.current.computers)
           if (computer.status === 'online') {
-            void refresh(computer.id, true).catch(report)
+            void refresh(computer.id, 'live').catch(report)
             void learnRoutes(computer.id)
           }
     }, 20_000)
@@ -1317,31 +1360,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
   }, [])
+  // The profile holds every transcript, so saving it is the phone's heaviest work: a queued message is saved promptly,
+  // and anything else waits for a pause in typing and streaming.
+  const savedOutbox = useRef(state.outbox)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const outbox = ref.current.outbox
-      void writeLocal({
-        computers: ref.current.computers,
-        projects: ref.current.projects,
-        chats: ref.current.chats,
-        selected: ref.current.selected,
-        language: ref.current.language,
-        outbox,
-        drafts: ref.current.drafts,
-      })
-        .then(() => {
-          // The profile now records these messages' outcomes, so the journal no longer needs them.
-          const left = remainingJournal(sendJournal, outbox)
-          if (left.length !== sendJournal.length) {
-            sendJournal = left
-            writeSendJournal(left)
-          }
+    const timer = setTimeout(
+      () => {
+        const outbox = ref.current.outbox
+        savedOutbox.current = outbox
+        void writeLocal({
+          computers: ref.current.computers,
+          projects: ref.current.projects,
+          chats: ref.current.chats,
+          selected: ref.current.selected,
+          language: ref.current.language,
+          outbox,
+          drafts: ref.current.drafts,
         })
-        .then(clearSaveError)
-        .catch((error) =>
-          report(new Error(`Could not save phone data. ${error instanceof Error ? error.message : String(error)}`)),
-        )
-    }, 250)
+          .then(() => {
+            // The profile now records these messages' outcomes, so the journal no longer needs them.
+            const left = remainingJournal(sendJournal, outbox)
+            if (left.length !== sendJournal.length) {
+              sendJournal = left
+              writeSendJournal(left)
+            }
+          })
+          .then(clearSaveError)
+          .catch((error) =>
+            report(new Error(`Could not save phone data. ${error instanceof Error ? error.message : String(error)}`)),
+          )
+      },
+      savedOutbox.current === state.outbox ? 1500 : 250,
+    )
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [state.computers, state.projects, state.chats, state.selected, state...] by design; the values it reads beyond these are current as of that run
   }, [state.computers, state.projects, state.chats, state.selected, state.language, state.outbox, state.drafts])
@@ -1575,7 +1625,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const off = connections.current.get(id)?.client.watch(channels, keys)
       // Threads other than the ones on screen arrive in brief, so a thread just asked for is read up to date, from where
       // its last read left off, as the periodic refresh does.
-      if (off && channels.includes('agent:event')) void refresh(id, true).catch(report)
+      if (off && channels.includes('agent:event')) {
+        const shown = keys?.['agent:event']
+        if (!shown) void refresh(id, true).catch(report)
+        for (const sessionId of shown ?? []) {
+          const chat = ref.current.chats.find((c) => c.computerId === id && c.sessionId === sessionId)
+          if (chat?.taskId) void reconcileThread(id, chat.taskId, sessionId).catch(report)
+        }
+      }
       return off ?? (() => {})
     },
     subscribe: (id, listener) => {

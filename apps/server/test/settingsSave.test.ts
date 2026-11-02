@@ -93,6 +93,9 @@ it('reuses discovered models across ordinary saves and refreshes them for UI and
     }
     saved = await patch(saved, 'providerBinaries.codex.binary', '/custom/codex')
     expect(saved.preferences?.providerBinaries.codex?.binary).toBe('/custom/codex')
+    // The save answers at once; the new provider setup is discovered by the next read of the list.
+    expect(discovery).toHaveBeenCalledTimes(1)
+    await snapshot()
     expect(discovery).toHaveBeenCalledTimes(2)
     writeFileSync(
       store.path,

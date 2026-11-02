@@ -57,7 +57,18 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
   const heartbeatMs = options.heartbeatMs ?? 30_000
   const maxInFlight = options.maxInFlight ?? 32
   const maxBuffered = options.maxBuffered ?? 8 * 1024 * 1024
-  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_REQUEST_BYTES })
+  // Transcripts and lists are repetitive JSON, and a phone or tunnel pays for every byte. Small frames (tokens, acks)
+  // skip the deflate, and no shared context means an idle connection holds no compression memory.
+  const wss = new WebSocketServer({
+    noServer: true,
+    maxPayload: MAX_REQUEST_BYTES,
+    perMessageDeflate: {
+      threshold: 4096,
+      serverNoContextTakeover: true,
+      clientNoContextTakeover: true,
+      zlibDeflateOptions: { level: 1 },
+    },
+  })
   const open = new Set<WebSocket>()
 
   server.on('upgrade', (req, socket, head) => {

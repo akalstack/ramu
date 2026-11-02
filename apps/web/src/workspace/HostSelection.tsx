@@ -80,7 +80,8 @@ export function HostSelectionProvider({ children }: { children: (activeHost: str
       return
     }
     if (route === 'switch') requestHostStore(host)
-    setPending({ seq: ++sequence.current, host, destination, refreshed: !needsRefresh(destination) })
+    // Decided when the store is available, not here: on a first switch it has not loaded yet.
+    setPending({ seq: ++sequence.current, host, destination, refreshed: false })
   }, [])
 
   // A startup notification can precede the first host-list response. Retain its destination until routing is known.
@@ -98,7 +99,11 @@ export function HostSelectionProvider({ children }: { children: (activeHost: str
     // Read at run time: the store published in this commit's layout effects is newer than the render's snapshot.
     const store = publishedStore(pending.host)
     if (!store) return
-    if (!pending.refreshed) {
+    if (!pending.refreshed && !needsRefresh(pending.destination, store)) {
+      // Lists may be behind; the store on screen catches up without holding the switch.
+      if (pending.destination.kind === 'task' || pending.destination.kind === 'project')
+        void store.refresh().catch(() => {})
+    } else if (!pending.refreshed) {
       if (refreshing.current === pending.seq) return
       refreshing.current = pending.seq
       const seq = pending.seq

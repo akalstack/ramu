@@ -35,7 +35,7 @@ export interface ProviderWaitsHost
     Pick<UserRequests, 'hasBlockingQuestions'>,
     Pick<FallbackRouter, 'orderOf' | 'policyOf' | 'routing'>,
     Pick<SessionStarter, 'send'>,
-    Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'queuePaused' | 'queued'> {
+    Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'latestEvent' | 'queuePaused' | 'queued'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   preferences(): AppPreferences | undefined
   refreshAccountUsage(): AgentService['refreshAccountUsage']
@@ -92,8 +92,8 @@ export class ProviderWaits {
   private readonly providerDispatching = new Set<string>()
 
   providerWait(id: string): ProviderWaitEvent | null {
-    const event = this.host.events(id).findLast((event) => event.kind === 'provider-wait')
-    return event?.kind === 'provider-wait' && event.retryAt !== null ? event : null
+    const event = this.host.latestEvent(id, 'provider-wait')
+    return event && event.retryAt !== null ? event : null
   }
 
   /** Whether a thread at a limit continues by itself: its own choice, else its parent's, else the live global default. */

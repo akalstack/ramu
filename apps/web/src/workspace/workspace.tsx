@@ -1,5 +1,6 @@
 import { warmModelSets } from '../models/modelSetsCache'
 import { latestOnly } from '@ramu/shared/latestOnly'
+import { mapBounded } from '@ramu/shared/mapBounded'
 import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
 import { changesThreadSummary } from '@ramu/shared/chat/inputSummary'
 import { requestBrowserNavigation } from '../views/browserNavigation'
@@ -77,6 +78,9 @@ import {
   type ViewInput,
 } from './workspaceModel'
 
+/** Reads one store runs at once per host; well under the calls one host connection allows in flight. */
+const HOST_READ_CONCURRENCY = 8
+
 /** A late read from the host never replaces a task with an older snapshot of itself. */
 function keepNewerTasks(current: Task[], incoming: Task[]): Task[] {
   const known = new Map(current.map((task) => [task.id, task]))
@@ -107,7 +111,7 @@ export interface WorkspaceApi {
   openProject(projectId: string): void
   /** Display name for a context: a task title or a project name. */
   titleOf(ctx: string): string
-  refresh(): Promise<void>
+  refresh(): Promise<unknown>
   refreshBindings(taskId: string): Promise<RepositoryBinding[]>
   setSidebar(s: WorkspaceUiState['sidebar']): void
   /** Whether a sidebar section or project is expanded, and the setter that remembers it across restarts. */
@@ -424,16 +428,19 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
   const startRefresh = useRef(latestOnly()).current
   const refresh = useCallback(async () => {
     const newest = startRefresh()
-    const ps = await invoke('projects.list')
-    const rs: Record<string, Repository[]> = {}
-    for (const p of ps) rs[p.id] = await invoke('repos.list', p.id)
-    if (!newest()) return
+    // A remote host answers each call a round trip later, so the lists are read together rather than in turn.
+    const [ps, chats, isolated] = await Promise.all([
+      invoke('projects.list'),
+      invoke('tasks.list'),
+      // A host that predates isolated workspaces still lists its projects and threads.
+      orWhenUnknown(() => invoke('workspaces.list'), []),
+    ])
+    const rs: Record<string, Repository[]> = Object.fromEntries(
+      await mapBounded(ps, HOST_READ_CONCURRENCY, async (p) => [p.id, await invoke('repos.list', p.id)] as const),
+    )
+    if (!newest()) return null
     setProjects(ps)
     setRepos(rs)
-    const chats = await invoke('tasks.list')
-    // A host that predates isolated workspaces still lists its projects and threads.
-    const isolated = await orWhenUnknown(() => invoke('workspaces.list'), [])
-    if (!newest()) return
     setTasks((current) => keepNewerTasks(current, chats))
     setWorkspaces(isolated)
     const known = new Set([
@@ -458,6 +465,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
         )
       return current
     })
+    return { projects: ps, tasks: chats, workspaces: isolated }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [invoke] by design; the values it reads beyond these are current as of that run
   }, [invoke])
 
@@ -478,8 +486,13 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
     let retry: ReturnType<typeof setTimeout> | undefined
     void (async () => {
       try {
-        await refresh()
-        const saved = await invoke('ui.get')
+        // A newer refresh won meanwhile; this attempt still needs the lists to restore against.
+        const [read, saved] = await Promise.all([refresh(), invoke('ui.get')])
+        const lists = read ?? {
+          projects: await invoke('projects.list'),
+          tasks: await invoke('tasks.list'),
+          workspaces: await orWhenUnknown(() => invoke('workspaces.list'), []),
+        }
         let resume: {
           workspace: WorkspaceUiState
           tasks: Record<string, TaskUiState>
@@ -499,9 +512,9 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
           Object.entries(saved.tasks).map(([id, state]) => [id, persistentTaskUi(state)]),
         )
         const known = new Set([
-          ...(await invoke('tasks.list')).map((t) => t.id),
-          ...(await invoke('projects.list')).map((p) => projectCtx(p.id)),
-          ...(await orWhenUnknown(() => invoke('workspaces.list'), [])).map((w) => worktreeCtx(w.id)),
+          ...lists.tasks.map((t) => t.id),
+          ...lists.projects.map((p) => projectCtx(p.id)),
+          ...lists.workspaces.map((w) => worktreeCtx(w.id)),
         ])
         const openTaskIds = saved.workspace.openTaskIds.filter((t) => known.has(t))
         setUi({
@@ -514,7 +527,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
           sidebar: resume ? saved.workspace.sidebar : 'projects',
         })
         const contextsToRestore = new Set(openTaskIds.filter(isWorkspaceCtx))
-        for (const task of await invoke('tasks.list')) {
+        for (const task of lists.tasks) {
           const own = saved.tasks[task.id]
           if (!own || task.projectId === NO_PROJECT) continue
           const ctx = workspaceOfTask(task)
@@ -535,9 +548,8 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
         }
         setTaskUi(saved.tasks)
         if (resume) for (const id of Object.keys(saved.tasks)) persistence.touch(id)
-        for (const ctx of Object.keys(saved.tasks).filter((ctx) => contextsToRestore.has(ctx)))
-          await refreshBindings(ctx)
-        for (const t of openTaskIds) await refreshBindings(t)
+        const contexts = Object.keys(saved.tasks).filter((ctx) => contextsToRestore.has(ctx))
+        await mapBounded([...new Set([...contexts, ...openTaskIds])], HOST_READ_CONCURRENCY, refreshBindings)
         setLoaded(true)
         if (resume) {
           setComposing(resume.composing)

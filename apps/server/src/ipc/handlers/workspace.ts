@@ -9,6 +9,7 @@ import {
   type ModelPreferences,
   type AgentSettings,
   type ProjectAction,
+  type AgentSessionInfo,
 } from '@ramu/shared/types'
 import type { Workspace } from '../../workspace/workspace'
 import {
@@ -281,8 +282,9 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         const tasks = workspace.listTasks()
         const helpers = tasks.length ? agents.helperSummaries() : new Map<string, never>()
         const advice = tasks.length ? agents.unreadAdvice() : new Map<string, number>()
+        const sessionsByTask = tasks.length ? agents.listByTask() : new Map<string, AgentSessionInfo[]>()
         return tasks.map((task) => {
-          const sessions = agents.list(task.id).filter((session) => !session.parentId)
+          const sessions = sessionsByTask.get(task.id) ?? []
           const main = sessions.at(-1)
           const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
           const goal = main ? agents.goalOf(main.id) : null

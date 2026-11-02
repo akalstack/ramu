@@ -21,9 +21,15 @@ export function routeSelection({
   return status === 'connected' ? 'switch' : 'unavailable'
 }
 
-/** A thread or project may have been created elsewhere (a phone, another window), so the store re-reads first. */
-export const needsRefresh = (destination: HostDestination) =>
-  destination.kind === 'task' || destination.kind === 'project'
+/**
+ * A thread or project may have been created elsewhere (a phone, another window), so a destination the store does not
+ * hold yet waits for a re-read. One it already holds opens now and is brought up to date behind the switch.
+ */
+export const needsRefresh = (destination: HostDestination, store: Pick<WorkspaceApi, 'tasks' | 'projects'> | null) => {
+  if (destination.kind === 'task') return !store?.tasks.some((task) => task.id === destination.taskId)
+  if (destination.kind === 'project') return !store?.projects.some((project) => project.id === destination.projectId)
+  return false
+}
 
 export type DestinationTarget = Pick<
   WorkspaceApi,

@@ -51,6 +51,10 @@ A paired remote host is reached over one authenticated WebSocket per host (`Runt
 
 A warm HTTP call and a socket call cost the same; the socket's benefit is one connection and one authenticated channel per host for calls and events, not speed.
 
+Frames over 4 KB are deflated, so a transcript or list costs a phone or tunnel far less; streamed tokens are sent as they are.
+
+Clients keep each transcript with its `agent.changes` cursor and read only what changed: the desktop for its 24 most recent threads, the phone for every thread it holds. Opening a thread on another host applies at once when that host's store holds it, and the lists refresh behind it; only a thread the store has not seen waits for a read. Each task pane mounts the first time it is shown.
+
 ## Hosts and windows
 
 The desktop has one shell renderer for every paired host. `HostSelectionProvider` selects a host and destination; `WorkspaceProvider` lazily mounts a `HostWorkspace` store per connected host. Sidebar rows read those stores, and `useWorkspace()` returns the store on screen. The main process owns connection lifecycle and delivers host-tagged events; `workspace/hostEvents.ts` routes them to listeners and coalesces work for hidden stores. Terminal output uses bounded, cursor-aware buffers.

@@ -23,9 +23,18 @@ it('opens a destination only in the supplied host store, and a host-only selecti
   expect(store.openTask).not.toHaveBeenCalled()
   expect(applyDestination(store, { kind: 'task', taskId: 'same', sessionId: 'chat' }, { openSummary })).toBe(true)
   expect(store.openView).toHaveBeenCalledWith('same', { kind: 'agent', sessionId: 'chat' })
-  expect(needsRefresh({ kind: 'task', taskId: 'same' })).toBe(true)
+  expect(needsRefresh({ kind: 'task', taskId: 'same' }, null)).toBe(true)
   vi.clearAllMocks()
   expect(applyDestination(store, { kind: 'host' }, { openSummary })).toBe(true)
   expect(store.openTask).not.toHaveBeenCalled()
   expect(store.setSidebar).not.toHaveBeenCalled()
+})
+
+it('opens a destination the store already holds without waiting, and waits only for one it has not seen', () => {
+  const store = { tasks: [{ id: 'held' }], projects: [{ id: 'kept' }] } as never
+  expect(needsRefresh({ kind: 'task', taskId: 'held' }, store)).toBe(false)
+  expect(needsRefresh({ kind: 'project', projectId: 'kept' }, store)).toBe(false)
+  expect(needsRefresh({ kind: 'task', taskId: 'from-phone' }, store)).toBe(true)
+  expect(needsRefresh({ kind: 'project', projectId: 'new' }, store)).toBe(true)
+  expect(needsRefresh({ kind: 'inbox' }, store)).toBe(false)
 })
