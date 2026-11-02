@@ -310,7 +310,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const loadPermissions = (id: string) =>
     void invoke(id, 'device.permissions').then(
       (view) => setPermissions((p) => ({ ...p, [id]: view })),
-      // An older host has no permissions to read; its refusals still explain themselves.
       () => setPermissions((p) => ({ ...p, [id]: null })),
     )
   const [mobileLayers, setMobileLayers] = useState<
@@ -416,7 +415,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       throw error
     }
   }
-  /** Registers this phone's push token with a host, along with the alert categories that are on (hosts that predate them ignore it). */
+  /** Registers this phone's push token with a host, along with the alert categories that are on. */
   const registerPushOn = (id: string) =>
     invoke(
       id,
@@ -757,7 +756,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             (c) => c.computerId !== id || (c.pending && !chats.some((next) => c.taskId && next.taskId === c.taskId)),
           ),
           // A read that finished late never brings back a state the host has since moved past: of two reads of the same
-          // thread, the one with the newer `snapshotAt` stays (an older host sends none, so its read always replaces).
+          // thread, the one with the newer `snapshotAt` stays.
           ...chats.map((next) =>
             newerTaskSnapshot(
               s.chats.find((c) => c.computerId === id && c.taskId === next.taskId),

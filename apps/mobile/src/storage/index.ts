@@ -1,7 +1,7 @@
 import { Platform } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
 import { File, Paths } from 'expo-file-system'
-import { LocalCommitError, readLocalCommit, writeLocalCommitAsync, type LocalCommitStorage } from './localCommit'
+import { readLocalCommit, writeLocalCommitAsync, type LocalCommitStorage } from './localCommit'
 
 const key = 'ramu.mobile.v1'
 const preferenceKey = 'ramu.mobile.appearance'
@@ -77,21 +77,10 @@ export const saveSelectedThemeId = (id: string) => writeSmall(themeSelectedKey, 
 export function readLocal<T>(fallback: T): T {
   try {
     if (Platform.OS !== 'web') {
-      try {
-        const committed = readLocalCommit(commits)
-        if (committed) return { ...fallback, ...committed }
-      } catch (error) {
-        // An interrupted first migration still has its original profile. Never roll a newer version back.
-        if (
-          !(error instanceof LocalCommitError) ||
-          error.code !== 'corrupt' ||
-          !new File(Paths.document, `${key}.json`).exists
-        )
-          throw error
-      }
+      const committed = readLocalCommit(commits)
+      return committed ? { ...fallback, ...committed } : fallback
     }
-    // Leave the old profile intact as the migration fallback; the first new commit writes another file.
-    const text = Platform.OS === 'web' ? localStorage.getItem(key) : new File(Paths.document, `${key}.json`).textSync()
+    const text = localStorage.getItem(key)
     return text ? { ...fallback, ...JSON.parse(text) } : fallback
   } catch {
     return fallback
@@ -120,10 +109,7 @@ export function writeLocal(value: unknown, options?: { replaceBackups?: boolean 
         await new File(Paths.document, `${key}.${slot}.json`).write(text)
       },
     }
-    const legacy = new File(Paths.document, `${key}.json`)
-    if (legacy.exists) JSON.parse(await legacy.text())
-    await writeLocalCommitAsync(asyncCommits, JSON.parse(snapshot), legacy.exists)
-    if (legacy.exists) legacy.delete()
+    await writeLocalCommitAsync(asyncCommits, JSON.parse(snapshot))
     if (options?.replaceBackups) await writeLocalCommitAsync(asyncCommits, JSON.parse(snapshot))
   })
   // A failed save is reported to its caller and must not poison later retries.

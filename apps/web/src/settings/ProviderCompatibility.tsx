@@ -1,10 +1,16 @@
 import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { compatibilitySummary } from '@ramu/shared/providers/compatibility'
 import type { ProviderStatus } from '@ramu/shared/providers/providers'
 import { t } from '../i18n'
 import { SECONDARY_BUTTON_CLASS } from './constants'
 import type { CompatibilityPlan } from './compatibilityPlan'
+
+const SUMMARY = {
+  supported: 'Compatible with this Ramu release.',
+  unverified: 'Unverified: no compatibility rule covers this version. It can still be used.',
+  limited: 'Limited: some features are unavailable with this version.',
+  incompatible: 'Incompatible with this Ramu release.',
+} as const
 
 /** Quiet status beside the installed version, with details and the next useful recovery action. */
 export function ProviderCompatibility({
@@ -30,7 +36,6 @@ export function ProviderCompatibility({
   const result = status.compatibility
   if (!result) return null
   const bad = result.status === 'incompatible'
-  const summary = compatibilitySummary(result)
   const checked = result.checkedAt ? new Date(result.checkedAt).toLocaleString() : null
   return (
     <div className="grid gap-1.5">
@@ -38,7 +43,7 @@ export function ProviderCompatibility({
         className={`small text-caption ${bad ? 'text-bad' : 'muted text-muted-foreground'}`}
         role={bad ? 'alert' : 'status'}
       >
-        {t(summary.key, summary.values)}
+        {t(SUMMARY[result.status])}
         {result.affects?.length ? ` ${result.affects.join(', ')}.` : ''}
         {result.recommend ? ` ${t('Recommended version: {0}', { '0': result.recommend })}` : ''}
         {stale ? ` ${t('Showing the last result; the host is not reachable.')}` : ''}

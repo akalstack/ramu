@@ -108,7 +108,6 @@ it('layers repository actions and branch defaults through the API without execut
     branchNaming: 'fixed',
     branchInstructions: 'Global instructions',
     configSource: 'ramu.json',
-    branchNameControls: true,
   })
   expect(dispatcher.invoke('projects.actions', [project.id])).toEqual([{ ...action, source: 'ramu.json' }])
   expect(workspace.listTasks()).toEqual([])

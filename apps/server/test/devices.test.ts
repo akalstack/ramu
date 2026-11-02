@@ -134,20 +134,6 @@ it('supports never-expiring devices only through an explicit lifetime choice', (
   expect(devices.authenticate(`Bearer ${paired.token}`, 1e12)).not.toBeNull()
 })
 
-it('bounds old device records by their last recorded use', () => {
-  const { path, devices } = store()
-  const paired = devices.redeem(devices.createCode(1000).code, 'old', 1000)!
-  const file = JSON.parse(readFileSync(path, 'utf8'))
-  delete file.devices[0].expiresAt
-  delete file.devices[0].role
-  // Records from before claiming existed carry no marker.
-  delete file.devices[0].unclaimed
-  writeFileSync(path, JSON.stringify(file))
-  const migrated = new DeviceStore(path, 600_000)
-  expect(migrated.list()[0]?.expiresAt).toBe(601_000)
-  expect(migrated.authenticate(`Bearer ${paired.token}`, 601_000)).toBeNull()
-})
-
 it('lets the host choose how long devices stay paired, keeps the choice across pairings, and can return to the default', () => {
   const { devices, path } = store()
   const day = 86_400_000

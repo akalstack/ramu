@@ -11,7 +11,6 @@ import {
   type PermissionDuration,
 } from '@ramu/shared/devicePermissions'
 import { loadConfig, parseListen } from './config'
-import { loadToken } from './remote/auth'
 import { runtimeVersion } from './build'
 import { DeviceStore, isHostAccess, PAIRING_TTL_MS } from './remote/devices'
 import { candidateUrls } from './remote/network'
@@ -49,7 +48,6 @@ Usage:
   ramu hosts add <address> <code> [--name <name>]
                                  Add one, with a code from \`ramu pair\` there; it may only start and follow threads
   ramu hosts forget <id|name>    Stop using a host here (revoke it on that host to end it there too)
-  ramu token [--rotate]          Print the shared access token; --rotate revokes it and every paired device
 
 Options:
   --data-dir <dir>               Profile directory (default: the desktop app's, so both share threads and settings)
@@ -65,9 +63,9 @@ Options:
   --worktrees <dir>              Where isolated workspaces are created (default: ~/.ramu/worktrees)
   -h, --help   -v, --version
 
-Environment: RAMU_USER_DATA, RAMU_SOCKET, RAMU_LISTEN, RAMU_TOKEN_FILE, RAMU_DEVICES_FILE, RAMU_WORKTREES,
+Environment: RAMU_USER_DATA, RAMU_SOCKET, RAMU_LISTEN, RAMU_DEVICES_FILE, RAMU_WORKTREES,
              RAMU_ALLOW_PLAINTEXT_REMOTE, RAMU_DISCOVERABLE, RAMU_TLS_CERT, RAMU_TLS_KEY, RAMU_DEVICE_TOKEN_DAYS (90 or never),
-             RAMU_ALLOW_LEGACY_TOKEN (1 to opt in), RAMU_BROWSER_ORIGINS (comma-separated exact origins),
+             RAMU_BROWSER_ORIGINS (comma-separated exact origins),
              RAMU_BROWSER_EXECUTABLE (optional host Chromium executable; Setup checks its sandbox).
 A paired device has the same control as the desktop app, including shell access. Pair only devices you own.`
 
@@ -200,13 +198,6 @@ if (command === 'start') {
   } catch {
     console.error('ramu is not running')
     process.exit(3)
-  }
-} else if (command === 'token') {
-  const rotate = flags.has('rotate')
-  console.log(loadToken(config.tokenPath, rotate))
-  if (rotate) {
-    new DeviceStore(config.devicesPath, config.deviceLifetimeMs).revoke('all')
-    console.error('The previous token and every paired device no longer work.')
   }
 } else if (command === 'pair') {
   const given = text('url')

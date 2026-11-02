@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
-import { compatibilitySummary } from '@ramu/shared/providers/compatibility'
 import { compatibilityPlan } from '@ramu/shared/providers/compatibilityPlan'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import { useStore } from '../runtime/store'
@@ -11,6 +10,13 @@ import { Hint } from './SettingRows'
 
 /** Last result per host, so an unreachable host still shows what was known, marked as stale. */
 const lastKnown = new Map<string, ProviderStatus[]>()
+
+const SUMMARY = {
+  supported: 'Compatible with this Ramu release.',
+  unverified: 'Unverified: no compatibility rule covers this version. It can still be used.',
+  limited: 'Limited: some features are unavailable with this version.',
+  incompatible: 'Incompatible with this Ramu release.',
+} as const
 
 /**
  * Provider versions and runtime compatibility as the selected host reports them. Every probe and update runs on that host;
@@ -114,9 +120,7 @@ export function ProviderCompatibility({ hostId }: { hostId: string }) {
                     accessibilityRole={bad ? 'alert' : undefined}
                     accessibilityLiveRegion="polite"
                   >
-                    {result
-                      ? t(compatibilitySummary(result).key, compatibilitySummary(result).values)
-                      : t('Compatibility is not reported by this host.')}
+                    {result ? t(SUMMARY[result.status]) : t('Compatibility is not reported by this host.')}
                     {result?.affects?.length ? ` ${result.affects.join(', ')}.` : ''}
                     {result?.recommend ? ` ${t('Recommended version: {0}', { '0': result.recommend })}` : ''}
                     {stale && result ? ` ${t('Showing the last result; the host is not reachable.')}` : ''}

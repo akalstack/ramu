@@ -49,7 +49,7 @@ export function ThreadActivity({
   // A fresh host count (new advice arrived, or the host cleared it) replaces the local "seen" mark.
   useEffect(() => setAdviceSeen(false), [chat.unreadAdvice])
   const settledAdvice = activity.advisors.length > 0 && !activity.advisors.some(helperActive)
-  // Opening settled advisor notes counts as reading them; a view-only device is refused and an older host has no such method.
+  // Opening settled advisor notes counts as reading them; a view-only device is refused, which needs no saying.
   useEffect(() => {
     if (opened !== 'advisor' || !online || !chat.sessionId || !settledAdvice || adviceSeen || !chat.unreadAdvice) return
     setAdviceSeen(true)

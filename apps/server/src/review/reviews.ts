@@ -503,11 +503,7 @@ export class ReviewService {
         .map(async (root) => {
           const binding = bindings.find((b) => b.repoId === root.repoId)
           const current = binding ? await reviewCheckout(binding.cwd) : undefined
-          // Legacy reviews did not save a target; derive a best-effort local default.
-          const targetBranch =
-            root.targetBranch !== undefined
-              ? root.targetBranch
-              : (binding?.baseRef ?? (await commitBranchInfo(root.cwd).catch(() => null))?.defaultBranch ?? null)
+          const targetBranch = root.targetBranch ?? null
           return {
             repoId: root.repoId,
             repoName: root.repoName,

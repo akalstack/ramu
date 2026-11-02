@@ -144,6 +144,6 @@ it('a finished turn pushes "done" unless its goal continues, which includes a go
   expect(await finish({ status: 'paused', pausedBy: 'user' })).toBe(1)
   expect(await finish({ status: 'paused' })).toBe(1)
   expect(await finish({ status: 'paused', pausedBy: 'provider-limit' })).toBe(0)
-  expect(await finish({ status: 'waiting-provider' })).toBe(0)
+  expect(await finish({ status: 'paused', pausedBy: 'provider-limit' })).toBe(0)
   expect(await finish({ status: 'active' })).toBe(0)
 })

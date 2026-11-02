@@ -93,7 +93,7 @@ export function agentSettingsForDraft(
 }
 /**
  * Auto routing picks the project after the draft was composed, so the destination's repository defaults apply
- * with the same precedence as a manual pick. `undefined` defaults means an older host without them. Null means
+ * with the same precedence as a manual pick. Null means
  * the destination's defaults cannot be used and the person must review the model in that project first.
  */
 export function routedAgentSettings(

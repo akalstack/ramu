@@ -78,51 +78,31 @@ export const fallbackStep = z.object({
 const effortCap = fallbackStep.shape.effort
 const threshold = z.union([z.literal(80), z.literal(90), z.literal(95), z.null()])
 const order = z.array(fallbackStep).max(10)
-/** Settings saved with a list per provider become one order: the Claude Code list (or the first set), led by that provider. */
-export function migrateChains(value: unknown): unknown {
-  if (!value || typeof value !== 'object' || 'order' in value || !('chains' in value)) return value
-  const { chains, ...rest } = value as { chains?: Record<string, unknown[] | undefined> }
-  const provider = chains?.['claude-code']?.length
-    ? 'claude-code'
-    : Object.keys(chains ?? {}).find((key) => chains?.[key]?.length)
-  return provider
-    ? {
-        ...rest,
-        order: [{ id: `migrated-${provider}`, provider, model: '', effort: null }, ...chains![provider]!].slice(0, 10),
-      }
-    : rest
-}
-const fallbackPreferences = z.preprocess(
-  migrateChains,
-  z.object({
-    switchAt: threshold.default(DEFAULT_FALLBACK_PREFERENCES.switchAt),
-    order: order.optional(),
-    autoResume: z.boolean().default(true),
-  }),
-)
-const subagentPreferences = z.preprocess(
-  migrateChains,
-  z.object({
-    mode: z.enum(['native', 'single', 'per-provider']).default('native'),
-    autoSelect: z.enum(['off', 'model-and-effort', 'effort-only']).default('off'),
-    maxEffort: effortCap.default(null),
-    modelMaxEffort: z.record(z.string().max(400), effortCap.unwrap()).default({}),
-    single: fallbackStep.nullable().default(null),
-    perProvider: z.partialRecord(providerId, fallbackStep.nullable()).default({}),
-    byType: z
-      .array(z.object({ id: z.string().min(1).max(100), type: z.string().max(80), step: fallbackStep.nullable() }))
-      .max(20)
-      .default([]),
-    fallback: z.enum(['same', 'separate']).default('same'),
-    order: order.optional(),
-    switchAt: z.union([threshold, z.literal('same')]).default('same'),
-    continueNative: z.boolean().default(true),
-    isolate: z.boolean().default(false),
-    codexHook: z.boolean().default(false),
-    maxConcurrent: z.number().int().min(1).max(8).default(3),
-    shareContext: z.boolean().default(false),
-  }),
-)
+const fallbackPreferences = z.object({
+  switchAt: threshold.default(DEFAULT_FALLBACK_PREFERENCES.switchAt),
+  order: order.optional(),
+  autoResume: z.boolean().default(true),
+})
+const subagentPreferences = z.object({
+  mode: z.enum(['native', 'single', 'per-provider']).default('native'),
+  autoSelect: z.enum(['off', 'model-and-effort', 'effort-only']).default('off'),
+  maxEffort: effortCap.default(null),
+  modelMaxEffort: z.record(z.string().max(400), effortCap.unwrap()).default({}),
+  single: fallbackStep.nullable().default(null),
+  perProvider: z.partialRecord(providerId, fallbackStep.nullable()).default({}),
+  byType: z
+    .array(z.object({ id: z.string().min(1).max(100), type: z.string().max(80), step: fallbackStep.nullable() }))
+    .max(20)
+    .default([]),
+  fallback: z.enum(['same', 'separate']).default('same'),
+  order: order.optional(),
+  switchAt: z.union([threshold, z.literal('same')]).default('same'),
+  continueNative: z.boolean().default(true),
+  isolate: z.boolean().default(false),
+  codexHook: z.boolean().default(false),
+  maxConcurrent: z.number().int().min(1).max(8).default(3),
+  shareContext: z.boolean().default(false),
+})
 const advisorPreferences = z.object({
   enabled: z.boolean().default(false),
   step: fallbackStep.nullable().default(null),
@@ -190,7 +170,6 @@ export const appPreferences = z.object({
     })
     .default({ agentBrowser: 'integrated', providerOverrides: {}, defaultProfileId: 'default' }),
   sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH),
-  messageBehaviorVersion: z.literal(4).default(4),
   favoriteModels: z.array(z.string().max(200)).max(100).default([]),
   visibleModels: z.record(z.string().max(40), z.array(z.string().max(200)).max(5000)).default({}),
   notifyAgentDone: z.boolean().default(true),

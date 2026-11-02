@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { HostAddressSheet } from '../../components/HostAddressSheet'
-import { hostOfUrl, networkName } from '@ramu/shared/networkLabel'
 import { Alert, Platform, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import Constants from 'expo-constants'
@@ -340,10 +339,7 @@ function Computers() {
             </Row>
             <Divider inset={space.l} />
             <Row onPress={() => setAddressOpen(true)}>
-              <RowLabel
-                title={say('Network')}
-                help={`${say(networkName(hostOfUrl(pc.address)))} · ${hostOfUrl(pc.address)}`}
-              />
+              <RowLabel title={t.hostChangeAddress} help={pc.address} />
               <ChevronRight size={16} color={c.muted} />
             </Row>
             <Divider inset={space.l} />

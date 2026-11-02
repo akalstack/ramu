@@ -13,28 +13,6 @@ describe('new-thread model defaults', () => {
       name: 'GPT-6.1 Sol Low',
     })
   })
-  it('renames generated Light steps while preserving the selected step and custom sets', () => {
-    const defaults = recommendedSets([])
-    const saved = {
-      ...defaults,
-      defaultStepId: 'astra-light',
-      sets: defaults.sets.map((set) => ({
-        ...set,
-        steps: set.steps.map((step) => ({ ...step, name: step.name.replace(/ Low$/, ' Light') })),
-      })),
-    }
-    const migrated = migrateModelDefaults(saved, defaults)
-    expect(migrated.sets[0]!.steps.map((step) => step.name)).toEqual(defaults.sets[0]!.steps.map((step) => step.name))
-    expect(migrated.defaultStepId).toBe('astra-light')
-    const custom = {
-      ...saved,
-      sets: saved.sets.map((set) => ({
-        ...set,
-        steps: set.steps.map((step, index) => (index === 1 ? { ...step, name: 'My fast model' } : step)),
-      })),
-    }
-    expect(migrateModelDefaults(custom, defaults)).toBe(custom)
-  })
   it('prefers GPT-6.1 Sol over an older Sol catalog default', () => {
     const prefs = recommendedSets([
       {
@@ -60,12 +38,6 @@ describe('new-thread model defaults', () => {
       },
     ])
     expect(prefs.sets[0]!.steps.find((step) => step.id === prefs.defaultStepId)?.model).toBe('gpt-6.1-sol')
-  })
-  it('updates the earlier generated Medium default to Low', () => {
-    const defaults = recommendedSets([]),
-      saved = { ...defaults, defaultStepId: 'sol-medium' }
-    expect(migrateModelDefaults(saved, defaults).defaultStepId).toBe('sol-light')
-    expect(saved.defaultStepId).toBe('sol-medium')
   })
   it('preserves a different chosen step or an edited model set', () => {
     const defaults = recommendedSets([]),
@@ -117,16 +89,6 @@ describe('generated defaults for the active providers', () => {
         },
       ]).sets[0]!.steps[0]!.provider,
     ).toBe('codex')
-  })
-  it('replaces untouched Codex defaults without Codex, but not an edited set', () => {
-    const codexDefaults = recommendedSets([])
-    const next = recommendedSets([claude])
-    expect(migrateModelDefaults(codexDefaults, next).sets[0]!.steps[0]!.provider).toBe('claude-code')
-    const edited = {
-      ...codexDefaults,
-      sets: codexDefaults.sets.map((set) => ({ ...set, steps: set.steps.slice(1) })),
-    }
-    expect(migrateModelDefaults(edited, next)).toBe(edited)
   })
 })
 

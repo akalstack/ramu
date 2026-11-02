@@ -22,30 +22,6 @@ it('opens a setup PTY at home without a task and sends commands through terminal
   }
 })
 
-it('migrates the busy-message default to Steer while preserving a newly saved Queue choice', () => {
-  let saved = { busyMessageAction: 'queue', messageBehaviorVersion: 3 }
-  const dispatcher = createDispatcher({ userData: '/tmp/ramu-test', send: () => {}, native: async () => null }, {
-    workspace: {
-      getAppState: (key: string, fallback: unknown) => (key === 'app-preferences' ? saved : fallback),
-      setAppState: vi.fn(),
-    },
-  } as unknown as Services)
-  try {
-    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({
-      busyMessageAction: 'steer',
-      messageBehaviorVersion: 4,
-    })
-    saved = { busyMessageAction: 'queue', messageBehaviorVersion: 4 }
-    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({
-      busyMessageAction: 'queue',
-      messageBehaviorVersion: 4,
-    })
-  } finally {
-    dispatcher.close()
-    configureProviderBinaries({})
-  }
-})
-
 it('ignores removed editor settings and preserves an explicit font smoothing choice', () => {
   let saved: Record<string, unknown> = { formatOnSave: true, languageServers: true, aiCompletion: { enabled: true } }
   const dispatcher = createDispatcher({ userData: '/tmp/ramu-test', send: () => {}, native: async () => null }, {

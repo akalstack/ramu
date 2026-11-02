@@ -56,7 +56,6 @@ describe('threadStatus with a goal', () => {
     expect(threadStatus(task(), false, goal('blocked'))?.kind).toBe('blocked')
     expect(threadStatus(task(), false, goal('turn-limit'))?.kind).toBe('turn-limit')
     expect(threadStatus(task(), false, goal('paused', 'provider-limit'))?.kind).toBe('limit')
-    expect(threadStatus(task(), false, goal('waiting-provider'))?.kind).toBe('limit')
   })
 
   it('shows a failure ahead of a blocked goal, and nothing for a completed goal', () => {

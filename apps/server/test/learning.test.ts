@@ -14,7 +14,6 @@ import { Workspace } from '../src/workspace/workspace'
 import { MemoryService } from '../src/memory/memory'
 import type { AgentService } from '../src/agent'
 import { crossedSwitchAt, LearningService } from '../src/memory/learning'
-import { migrateLearningDefault } from '../src/memory/learningDefault'
 import { findSecret, redactSecrets } from '../src/memory/secrets'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -369,39 +368,6 @@ it('skips a repeated identical review without a model call, visibly, and retries
   db.prepare('UPDATE learning_jobs SET data=? WHERE id=?').run(JSON.stringify({ ...job, status: 'queued' }), job.id)
   await service.tick(true)
   expect(analyze).toHaveBeenCalledTimes(3)
-})
-
-it('defaults to review first for a new data directory and keeps Automatic an explicit opt-in', () => {
-  expect(DEFAULT_INTELLIGENCE_PREFERENCES.learning).toBe('review')
-  // A fresh profile: nothing saved and no earlier migration flag.
-  migrateLearningDefault(workspace)
-  workspace.setAppState('app-preferences', null)
-  expect(
-    workspace.getAppState<{ intelligence?: unknown } | null>('app-preferences', null)?.intelligence,
-  ).toBeUndefined()
-})
-
-it('leaves a user choice alone and only pins Automatic for a profile an earlier release made', () => {
-  const choice = () =>
-    workspace.getAppState<{ intelligence?: { learning?: string } } | null>('app-preferences', null)?.intelligence
-      ?.learning
-  // Made by a new release: no earlier flag, so a missing choice follows the new default.
-  const fresh = new Workspace(openDb(':memory:'), join(root, 'fresh'))
-  migrateLearningDefault(fresh)
-  expect(fresh.getAppState('app-preferences', null)).toBeNull()
-  // Made by the Automatic-by-default release: it ran with Automatic, so it keeps it.
-  workspace.setAppState('migration:learning-auto-default', true)
-  workspace.setAppState('migration:learning-review-default', false)
-  workspace.setAppState('app-preferences', { theme: 'dark' })
-  migrateLearningDefault(workspace)
-  expect(choice()).toBe('auto')
-  expect(workspace.getAppState<{ theme?: string }>('app-preferences', {}).theme).toBe('dark')
-  // An explicit Review first is never overridden, however often the migration runs.
-  workspace.setAppState('migration:learning-review-default', false)
-  workspace.setAppState('app-preferences', { intelligence: { learning: 'review' } })
-  migrateLearningDefault(workspace)
-  migrateLearningDefault(workspace)
-  expect(choice()).toBe('review')
 })
 
 it('recognises known credential formats and long random tokens, and leaves ordinary text alone', () => {

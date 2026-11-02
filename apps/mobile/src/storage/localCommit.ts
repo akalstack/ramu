@@ -57,18 +57,8 @@ export function readLocalCommit(storage: LocalCommitStorage): Record<string, unk
   return latest(storage)?.commit.data ?? null
 }
 
-export function writeLocalCommit(
-  storage: LocalCommitStorage,
-  data: Record<string, unknown>,
-  legacyRecovery = false,
-): void {
-  let previous: ReturnType<typeof latest>
-  try {
-    previous = latest(storage)
-  } catch (error) {
-    if (!legacyRecovery || !(error instanceof LocalCommitError) || error.code !== 'corrupt') throw error
-    previous = null
-  }
+export function writeLocalCommit(storage: LocalCommitStorage, data: Record<string, unknown>): void {
+  const previous = latest(storage)
   const revision = (previous?.commit.revision ?? 0) + 1
   if (!Number.isSafeInteger(revision)) throw new Error('Phone data revision limit reached.')
   const slot = previous?.slot === 0 ? 1 : 0
@@ -86,7 +76,6 @@ export interface AsyncLocalCommitStorage {
 export async function writeLocalCommitAsync(
   storage: AsyncLocalCommitStorage,
   data: Record<string, unknown>,
-  legacyRecovery = false,
 ): Promise<void> {
   const slots = await Promise.all([storage.read(0), storage.read(1)])
   let target: 0 | 1 = 0
@@ -101,7 +90,6 @@ export async function writeLocalCommitAsync(
       },
     },
     data,
-    legacyRecovery,
   )
   await storage.write(target, text)
   if ((await storage.read(target)) !== text) throw new Error('Could not finish saving phone data. Try again.')

@@ -82,7 +82,7 @@ test('a failed verification, a stall and the completion evidence get their own l
   const items = transcript([
     goalEvent(goal()),
     goalEvent(goal({ check: failed })),
-    goalEvent(goal({ status: 'waiting-provider' })),
+    goalEvent(goal({ status: 'paused', pausedBy: 'provider-limit' })),
     goalEvent(goal({ status: 'paused' })),
     goalEvent(goal({ status: 'blocked', reason: 'No progress: the last 2 continuations changed nothing.', stall })),
     goalEvent(

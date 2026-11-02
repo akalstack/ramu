@@ -66,16 +66,6 @@ test('unknown versions or irrecoverably corrupt data block writes rather than re
   assert.equal(JSON.parse(storage.slots[0]).version, 2)
 })
 
-test('an interrupted first migration can retry while the original legacy profile remains intact', () => {
-  const storage = memory()
-  storage.slots[0] = '{interrupted first write'
-  const legacy = { drafts: { active: 'Legacy text and sidecars' } }
-  writeLocalCommit(storage, legacy, true)
-  assert.deepEqual(readLocalCommit(storage), legacy)
-  storage.slots[1] = JSON.stringify({ version: 2, revision: 5, data: {} })
-  assert.throws(() => writeLocalCommit(storage, legacy, true), /newer Ramu/)
-})
-
 test('async commits wait for the native write before verification and preserve the recovery slot on failure', async () => {
   const { writeLocalCommitAsync } = await import('../src/storage/localCommit.ts')
   const storage = memory()
