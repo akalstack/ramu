@@ -11,7 +11,7 @@ Hosts used to be isolated: only people's devices paired with them. Now a host ca
 ## Code to read
 
 - `apps/server/src/remote/access.ts`: `HOST_METHODS`, `deviceMayInvoke`, and `POST /pair`, where the client declares `kind`.
-- `apps/server/src/remote/devices.ts`: `spend`, `allows`, `setMaxAccess`.
+- `apps/server/src/remote/devices.ts`: `spend`, `allows`, `setMaxAccess`, `agentPairingCode`, `hostPairingActive`.
 - `apps/server/src/remote/socket.ts`: host devices are forced to calls-only.
 - `apps/server/src/index.ts`: the `hostThreads.*` branch of `performInvoke`.
 - `apps/server/src/background/agentThreads.ts`: `startForHost`, `settingsForHost`, `statusForHost`, `messageForHost`, `projectsForHost`.
@@ -30,6 +30,8 @@ Hosts used to be isolated: only people's devices paired with them. Now a host ca
 9. **Credentials:** the token is in the OS credential store on A, hashed on B, and sent as a bearer token. Plain HTTP is possible with `--private-network`. Should host pairing require TLS or a private network?
 10. **Revocation:** revoking on B stops new calls, but threads already running on B keep running. Should revoking offer to stop them?
 11. **Headless hosts:** `ramu hosts add` needs an unlocked credential store. What happens on a headless Linux host with none?
+
+12. **Agents permission:** a device granted Agents on B can pair its own computer there with no code from a person. The code is one-time, lasts a minute and only becomes a host pairing, and that pairing ends with the grant. Should a request for Agents say more than other permissions do?
 
 ## Found and fixed while writing this
 

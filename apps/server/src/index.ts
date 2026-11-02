@@ -696,7 +696,9 @@ async function performInvoke(
           ? 'Only a paired host can make this call.'
           : 'This device is a viewer. This action requires full access.',
     )
-  // Computer use, the browser, terminals and settings changes each need their own grant on this host.
+  if (remote && device?.kind === 'host' && !devices.hostPairingActive(device))
+    throw new InvokeRefused('The person on this host turned off Agents for that computer.')
+  // Computer use, the browser, terminals, settings changes and agents each need their own grant on this host.
   const needed = remote && device ? permissionFor(method) : null
   if (needed && !devices.allows(device!.id, needed)) throw new InvokeRefused(permissionRefusal(needed))
   let value: unknown
@@ -711,6 +713,9 @@ async function performInvoke(
           permissions: Object.fromEntries(DEVICE_PERMISSIONS.map((permission) => [permission, { until: null }])),
           pending: [],
         }
+  } else if (method === 'device.agentPairing') {
+    if (!device) throw new Error('This computer’s agents are already here.')
+    value = { code: devices.agentPairingCode(device.id) }
   } else if (method === 'device.requestPermission') {
     if (!device) throw new Error('This computer already has every permission.')
     if (!isDevicePermission(args?.[0])) throw new Error('Invalid permission')
@@ -1383,7 +1388,7 @@ function networkStatus() {
     tls: Boolean(config.tls),
     error: remoteError,
     addresses: localAddresses(),
-    devices: devices.list(),
+    devices: devices.panel(),
     deviceLifetime: devices.lifetime(),
     offers: devices.offers(),
     requests: pairingRequests.list(),

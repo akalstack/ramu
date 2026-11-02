@@ -2,8 +2,16 @@
 // permanently, for a while, or once (until that device's last connection closes). The host enforces them; clients only
 // read them to offer a request instead of a dead end.
 
-export const DEVICE_PERMISSIONS = ['computer', 'browser', 'terminal', 'settings'] as const
+export const DEVICE_PERMISSIONS = ['computer', 'browser', 'terminal', 'settings', 'agents'] as const
 export type DevicePermission = (typeof DEVICE_PERMISSIONS)[number]
+
+/**
+ * What a device holds without anyone choosing. Agents is never among them: it lets another machine's agents cause work
+ * here, so a person grants it to one device on purpose.
+ */
+export const AUTOMATIC_PERMISSIONS: readonly DevicePermission[] = DEVICE_PERMISSIONS.filter(
+  (permission) => permission !== 'agents',
+)
 
 export const isDevicePermission = (value: unknown): value is DevicePermission =>
   typeof value === 'string' && (DEVICE_PERMISSIONS as readonly string[]).includes(value)
@@ -13,6 +21,7 @@ export const PERMISSION_LABEL: Record<DevicePermission, string> = {
   browser: 'Browser',
   terminal: 'Terminals',
   settings: 'Change settings',
+  agents: 'Agents',
 }
 
 export const PERMISSION_HELP: Record<DevicePermission, string> = {
@@ -20,6 +29,7 @@ export const PERMISSION_HELP: Record<DevicePermission, string> = {
   browser: 'Use the browser on this host, with its signed-in sites.',
   terminal: 'Open and type into terminals on this host.',
   settings: 'Change this host’s settings, providers and connections.',
+  agents: 'Let agents on that computer start threads here, up to the most access you allow.',
 }
 
 /** `until` is when it ends (null: until revoked); `session` ends it when the device's last connection closes. */
@@ -78,6 +88,7 @@ const READ = /\.(status|get|list|snapshot|catalog)$/
 
 /** The permission a call needs from a paired device, or null. Reading status and settings stays open. */
 export function permissionFor(method: string): DevicePermission | null {
+  if (method === 'device.agentPairing') return 'agents'
   const domain = method.split('.')[0]!
   if (domain === 'computer') return method === 'computer.status' || method === 'computer.session' ? null : 'computer'
   if (domain === 'hostBrowser') return method === 'hostBrowser.status' ? null : 'browser'
@@ -86,7 +97,7 @@ export function permissionFor(method: string): DevicePermission | null {
   return null
 }
 
-const REFUSAL = /^This device needs the (computer|browser|terminal|settings) permission/
+const REFUSAL = /^This device needs the (computer|browser|terminal|settings|agents) permission/
 
 export const permissionRefusal = (permission: DevicePermission) =>
   `This device needs the ${permission} permission on this host (${PERMISSION_LABEL[permission]}). Request it, then allow it on the host.`

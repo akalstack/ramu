@@ -31,6 +31,7 @@ import { AgentHosts } from './AgentHosts'
 import {
   DefaultPermissions,
   DevicePermissionList,
+  HostCeiling,
   PermissionRequests,
   ThisDevicePermissions,
   type PermissionInvoke,
@@ -315,21 +316,7 @@ function ThisComputer() {
                 title={t('Most access for its threads')}
                 help={t('Threads this host’s agents start here never get more, whatever they ask for.')}
               />
-              <Dropdown
-                label={t('Most access for its threads')}
-                value={device.maxAccess ?? 'edits'}
-                options={[
-                  { value: 'edits', label: t('Allow edits') },
-                  { value: 'auto', label: t('Auto') },
-                  { value: 'full', label: t('Full access') },
-                ]}
-                onChange={(value) =>
-                  void invoke('network.setHostAccess', device.id, value as 'edits' | 'auto' | 'full').then(
-                    setStatus,
-                    (error) => notifyError(errorText(error), t('Remote access')),
-                  )
-                }
-              />
+              <HostCeiling deviceId={device.id} value={device.maxAccess ?? 'edits'} invoke={changePermission} />
             </div>
           ) : (
             <DevicePermissionList device={device} invoke={changePermission} />
@@ -929,6 +916,7 @@ function Computers({ state }: { state: ComputerList }) {
                 )}
               </div>
             </div>
+            {!computer.local && computer.status === 'connected' && <ThisDevicePermissions computer={computer} />}
           </article>
         ))}
       </div>
@@ -1242,7 +1230,6 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
                 : ''}
             </p>
           </div>
-          {computer.status === 'connected' && <ThisDevicePermissions host={computer.id} />}
           <div className="flex items-center justify-between gap-4">
             <span>
               <strong className="text-body font-medium">{t('Keep connected')}</strong>

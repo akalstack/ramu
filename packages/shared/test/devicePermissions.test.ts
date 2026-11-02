@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { mayUse, type DevicePermissionsView } from '../src/devicePermissions'
 
 const view = (permissions: Partial<DevicePermissionsView['permissions']>): DevicePermissionsView => ({
-  permissions: { computer: null, browser: null, terminal: null, settings: null, ...permissions },
+  permissions: { computer: null, browser: null, terminal: null, settings: null, agents: null, ...permissions },
   pending: [],
 })
 

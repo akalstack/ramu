@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
 import {
-  DEVICE_PERMISSIONS,
+  AUTOMATIC_PERMISSIONS,
   PERMISSION_LABEL,
   grantActive,
   refusedPermission,
@@ -39,7 +39,7 @@ export function PhonePermissions({ computerId }: { computerId: string }) {
     <>
       <SectionLabel>{t('Permissions on this host')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
-        {DEVICE_PERMISSIONS.map((permission, index) => {
+        {AUTOMATIC_PERMISSIONS.map((permission, index) => {
           const grant = view.permissions[permission]
           const asked = view.pending.includes(permission)
           const declined = !grant && !!view.blocked?.includes(permission)

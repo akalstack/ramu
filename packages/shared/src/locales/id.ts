@@ -1189,6 +1189,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   Projects: 'Proyek',
   'No project': 'Tanpa proyek',
   'No threads yet': 'Belum ada thread',
+  'Other hosts for agents': 'Host lain untuk agen',
+  'Added with ramu hosts add.': 'Ditambahkan dengan ramu hosts add.',
+  'Turn off': 'Matikan',
+  'Let agents on that computer start threads here, up to the most access you allow.': 'Izinkan agen di komputer itu memulai thread di sini, hingga akses tertinggi yang Anda izinkan.',
   'Needs you': 'Butuh perhatianmu',
   '{0} earlier runs': '{0} eksekusi sebelumnya',
   'No commits': 'Belum ada commit',
@@ -2177,21 +2181,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Let agents start threads': 'Izinkan agen memulai thread',
   "Agents can start threads in this project, other projects and hosts added for agents, and a paired host's agents can start threads here. Sub-agents are not affected. Turn off to start threads only yourself.":
     'Agen bisa memulai thread di proyek ini, proyek lain, dan host yang ditambahkan untuk agen, dan agen host terpasang bisa memulai thread di sini. Sub-agen tidak terpengaruh. Matikan agar hanya Anda yang memulai thread.',
-  'Hosts for agents': 'Host untuk agen',
   '{0} · shown there as device {1}': '{0} · tampil di sana sebagai perangkat {1}',
-  'Name agents use': 'Nama yang dipakai agen',
-  'Add host': 'Tambah host',
-  'Add a host for agents': 'Tambah host untuk agen',
-  'Let agents here start threads on another host. You approve each start.':
-    'Izinkan agen di sini memulai thread di host lain. Anda menyetujui setiap mulai.',
-  'Get a pairing code on that host: run ramu pair, or open Settings → Remote access → Pair a device.':
-    'Ambil kode pairing di host itu: jalankan ramu pair, atau buka Pengaturan → Akses jarak jauh → Pasangkan perangkat.',
-  'Agents can only start, check and message the threads they start. That host decides their model and the most access they get.':
-    'Agen hanya bisa memulai, memeriksa, dan mengirim pesan ke thread yang mereka mulai. Host itu menentukan model dan akses tertinggi mereka.',
-  'Pairing link or code': 'Tautan atau kode pairing',
-  'Another host': 'Host lain',
   'Connection options': 'Opsi koneksi',
-  'Add a host…': 'Tambah host…',
   'Agents here stop using it. Threads already started there keep running. Revoke device {0} on that host to end the pairing there too.':
     'Agen di sini berhenti memakainya. Thread yang sudah dimulai di sana tetap berjalan. Cabut perangkat {0} di host itu untuk mengakhiri pemasangan di sana juga.',
   'Another host’s agents: start and follow threads only': 'Agen host lain: hanya memulai dan mengikuti thread',

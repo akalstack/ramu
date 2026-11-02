@@ -2,6 +2,7 @@ import { SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import {
+  AUTOMATIC_PERMISSIONS,
   DEVICE_PERMISSIONS,
   DURATION_LABEL,
   PERMISSION_DURATIONS,
@@ -14,19 +15,25 @@ import {
   type DevicePermissionsView,
   type PermissionGrant,
 } from '@ramu/shared/devicePermissions'
-import type { NetworkDevice, NetworkStatus } from '@ramu/shared/types'
+import type { AgentHostSummary, Computer, NetworkDevice, NetworkStatus } from '@ramu/shared/types'
 import { useCallback, useEffect, useState } from 'react'
 import { Dropdown } from '../Menu'
 import { SETTINGS_CARD_LINE } from './cards'
-import { invokeOn } from '../ipc'
+import { invoke, invokeOn } from '../ipc'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
 import { errorText } from '../lib/errors'
+import { notifyError } from '../chat/Notifications'
+import { sameAddress } from './agentHostLinks'
 import { t } from '../i18n'
 
 /** Runs one host-only permission change and shows the host's updated status. */
 export type PermissionInvoke = (
-  method: 'network.setDevicePermission' | 'network.decidePermission' | 'network.setDefaultPermissions',
+  method:
+    | 'network.setDevicePermission'
+    | 'network.decidePermission'
+    | 'network.setDefaultPermissions'
+    | 'network.setHostAccess',
   ...args: unknown[]
 ) => Promise<void>
 
@@ -93,7 +100,7 @@ export function DefaultPermissions({ status, invoke }: { status: NetworkStatus; 
   const current = status.defaultPermissions
   return (
     <>
-      {DEVICE_PERMISSIONS.map((permission) => (
+      {AUTOMATIC_PERMISSIONS.map((permission) => (
         <SettingsRow key={permission} className="settings-toggle">
           <SettingsLabel
             title={t('New devices: {0}', { 0: t(PERMISSION_LABEL[permission]) })}
@@ -149,12 +156,121 @@ export function DevicePermissionList({ device, invoke }: { device: NetworkDevice
           </div>
         )
       })}
+      {device.agentHost && (
+        <div className={SETTINGS_CARD_LINE}>
+          <span className="min-w-0 flex-1 truncate text-control">{t('Most access for its threads')}</span>
+          <HostCeiling deviceId={device.agentHost.id} value={device.agentHost.maxAccess} invoke={invoke} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The most access threads get from a host pairing, set on the host they run on. */
+export function HostCeiling({
+  deviceId,
+  value,
+  invoke,
+}: {
+  deviceId: string
+  value: 'edits' | 'auto' | 'full'
+  invoke: PermissionInvoke
+}) {
+  return (
+    <Dropdown
+      label={t('Most access for its threads')}
+      value={value}
+      options={[
+        { value: 'edits', label: t('Allow edits') },
+        { value: 'auto', label: t('Auto') },
+        { value: 'full', label: t('Full access') },
+      ]}
+      onChange={(next) => void invoke('network.setHostAccess', deviceId, next)}
+    />
+  )
+}
+
+/**
+ * Agents on this computer using that host. The host grants the permission; this computer then pairs its own server with
+ * a code the grant allows, so no code passes through a person. Asking and being granted connects without a second step.
+ */
+function AgentsPermission({
+  computer,
+  held,
+  asked,
+  declined,
+  onRequest,
+}: {
+  computer: Computer & { url: string }
+  held: boolean
+  asked: boolean
+  declined: boolean
+  onRequest: () => void
+}) {
+  const [hosts, setHosts] = useState<AgentHostSummary[] | null>(null)
+  const [wanted, setWanted] = useState(false)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    void invoke('network.agentHosts').then(setHosts, () => setHosts([]))
+  }, [])
+  const linked = hosts?.find((host) => sameAddress(host.address, computer.url))
+  const run = async (action: () => Promise<AgentHostSummary[]>) => {
+    setBusy(true)
+    try {
+      setHosts(await action())
+    } catch (reason) {
+      notifyError(errorText(reason), t('Agents'))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const connect = () =>
+    run(async () => {
+      const { code } = await invokeOn(computer.id, 'device.agentPairing')
+      return invoke('network.addAgentHost', computer.url, code, computer.name)
+    })
+  useEffect(() => {
+    if (!wanted || !held || !hosts) return
+    setWanted(false)
+    if (!linked) void connect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the grant arrives; `connect` reads the current render
+  }, [wanted, held, hosts])
+  const state = declined ? t('Declined by the host') : !held ? t('Off') : linked ? t('On') : t('Allowed')
+  return (
+    <div className={SETTINGS_CARD_LINE}>
+      <span className="min-w-0 flex-1 truncate text-control">{t(PERMISSION_LABEL.agents)}</span>
+      <span className="flex-none text-caption text-muted-foreground">{state}</span>
+      {held ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy || !hosts}
+          onClick={() => void (linked ? run(() => invoke('network.forgetAgentHost', linked.id)) : connect())}
+        >
+          {linked ? t('Turn off') : t('Turn on')}
+        </Button>
+      ) : (
+        !declined && (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={asked}
+            onClick={() => {
+              setWanted(true)
+              onRequest()
+            }}
+          >
+            {asked ? t('Asked') : t('Request')}
+          </Button>
+        )
+      )}
     </div>
   )
 }
 
 /** What this computer may do on another host, with a request for anything missing. The other host decides. */
-export function ThisDevicePermissions({ host }: { host: string }) {
+export function ThisDevicePermissions({ computer }: { computer: Computer }) {
+  const host = computer.id
   const [view, setView] = useState<DevicePermissionsView | null>(null)
   const [error, setError] = useState('')
   const load = useCallback(
@@ -168,33 +284,45 @@ export function ThisDevicePermissions({ host }: { host: string }) {
   useEffect(() => {
     void load()
   }, [load])
+  // That host's answer arrives there, so follow it while a request is open.
+  const waiting = !!view?.pending.length
+  useEffect(() => {
+    if (!waiting) return
+    const timer = window.setInterval(() => void load(), 4000)
+    return () => window.clearInterval(timer)
+  }, [waiting, load])
   if (!view) return error ? <p className="m-0 text-caption text-muted-foreground">{error}</p> : null
+  const request = (permission: DevicePermission) =>
+    void invokeOn(host, 'device.requestPermission', permission).then(load, (reason) => setError(errorText(reason)))
+  const url = computer.url
   return (
-    <div className="flex flex-col gap-2">
-      <strong className="text-body font-medium">{t('This computer on that host')}</strong>
+    <div className="mt-3 flex flex-col gap-0.5 border-t border-border pt-2">
       {DEVICE_PERMISSIONS.map((permission) => {
+        // An older host has no such permission; an SSH address is a tunnel only this window can reach.
+        if (permission === 'agents') {
+          if (!(permission in view.permissions) || computer.ssh || !url) return null
+          return (
+            <AgentsPermission
+              key={permission}
+              computer={{ ...computer, url }}
+              held={!!view.permissions.agents}
+              asked={view.pending.includes('agents')}
+              declined={!view.permissions.agents && !!view.blocked?.includes('agents')}
+              onRequest={() => request('agents')}
+            />
+          )
+        }
         const grant = view.permissions[permission]
         const asked = view.pending.includes(permission)
         const declined = !grant && !!view.blocked?.includes(permission)
         return (
-          <div key={permission} className="flex items-center justify-between gap-3">
-            <span className="min-w-0">
-              <span className="block text-body">{t(PERMISSION_LABEL[permission])}</span>
-              <span className="block text-caption text-muted-foreground">
-                {declined ? t('Declined by the host') : grantText(grant)}
-              </span>
+          <div key={permission} className={SETTINGS_CARD_LINE}>
+            <span className="min-w-0 flex-1 truncate text-control">{t(PERMISSION_LABEL[permission])}</span>
+            <span className="flex-none text-caption text-muted-foreground">
+              {declined ? t('Declined by the host') : grantText(grant)}
             </span>
             {!grant && !declined && (
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={asked}
-                onClick={() =>
-                  void invokeOn(host, 'device.requestPermission', permission).then(load, (reason) =>
-                    setError(errorText(reason)),
-                  )
-                }
-              >
+              <Button size="sm" variant="secondary" disabled={asked} onClick={() => request(permission)}>
                 {asked ? t('Asked') : t('Request')}
               </Button>
             )}

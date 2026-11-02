@@ -33,6 +33,8 @@ export interface NetworkDevice {
   kind?: 'host'
   /** Hosts only: the most access their threads get here. */
   maxAccess?: 'edits' | 'auto' | 'full'
+  /** The agent pairing that follows this device's Agents permission. Shown with the device, not as one of its own. */
+  agentHost?: { id: string; maxAccess: 'edits' | 'auto' | 'full' }
 }
 /** An address this computer has, which another device may reach it on (LAN, VPN, ...). */
 export interface NetworkAddress {

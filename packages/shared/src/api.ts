@@ -588,6 +588,8 @@ export interface RamuMethods {
   'device.permissions'(): import('./devicePermissions').DevicePermissionsView
   /** Asks the person at the host for a permission this device lacks. */
   'device.requestPermission'(permission: import('./devicePermissions').DevicePermission): void
+  /** A one-time code that only pairs this device's own computer for agents. Needs the Agents permission. */
+  'device.agentPairing'(): { code: string }
   'network.revoke'(deviceId: string): NetworkStatus
   /** Days an unused device stays paired (1 to 3650), `never`, or null for the server default. Host-only, like the rest of `network.*`. */
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus

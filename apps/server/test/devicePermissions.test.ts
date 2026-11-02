@@ -85,3 +85,61 @@ it('remembers a “never” until the host allows the permission itself', () => 
   expect(devices.blocked(phone.id)).toEqual([])
   expect(devices.allows(phone.id, 'computer')).toBe(true)
 })
+
+it('never gives Agents without a person choosing it', () => {
+  const devices = store()
+  const device = pair(devices)
+  expect(devices.allows(device.id, 'computer')).toBe(true)
+  expect(devices.allows(device.id, 'agents')).toBe(false)
+  const path = join(dirs.at(-1)!, 'devices.json')
+  const file = JSON.parse(readFileSync(path, 'utf8'))
+  for (const entry of file.devices) delete entry.permissions
+  writeFileSync(path, JSON.stringify(file))
+  expect(devices.allows(device.id, 'computer')).toBe(true)
+  expect(devices.allows(device.id, 'agents')).toBe(false)
+  expect(devices.permissionsOf(device.id).agents).toBeNull()
+})
+
+it('asks for the Agents permission before a device can pair its agents', () => {
+  expect(permissionFor('device.agentPairing')).toBe('agents')
+  expect(refusedPermission(permissionRefusal('agents'))).toBe('agents')
+})
+
+it('keeps an agent code to one host pairing that follows the grant and leaves with the device', () => {
+  const devices = store()
+  const device = pair(devices)
+  devices.setPermission(device.id, 'agents', grantFor('always', Date.now()))
+
+  const code = devices.agentPairingCode(device.id)
+  expect(devices.redeem(code, 'Stolen')).toBeNull()
+  const agents = devices.redeem(code, 'Laptop (agents)', Date.now(), 'host')!
+  expect(agents.device.kind).toBe('host')
+  expect(devices.hostPairingActive(agents.device)).toBe(true)
+
+  const panel = devices.panel()
+  expect(panel.map((entry) => entry.id)).toEqual([device.id])
+  expect(panel[0]?.agentHost).toEqual({ id: agents.device.id, maxAccess: 'edits' })
+
+  devices.setPermission(device.id, 'agents', null)
+  expect(devices.hostPairingActive(agents.device)).toBe(false)
+  devices.setPermission(device.id, 'agents', grantFor('hour', 1000), 1000)
+  expect(devices.hostPairingActive(agents.device, 1000 + 61 * 60_000)).toBe(false)
+
+  devices.setPermission(device.id, 'agents', grantFor('always', Date.now()))
+  const again = devices.redeem(devices.agentPairingCode(device.id), 'Laptop (agents)', Date.now(), 'host')!
+  expect(
+    devices
+      .list()
+      .filter((entry) => entry.kind === 'host')
+      .map((entry) => entry.id),
+  ).toEqual([again.device.id])
+
+  devices.revoke(device.id)
+  expect(devices.list()).toEqual([])
+})
+
+it('refuses an agent code for a view-only device', () => {
+  const devices = store()
+  const device = pair(devices, 'viewer')
+  expect(() => devices.agentPairingCode(device.id)).toThrow('full access')
+})

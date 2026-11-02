@@ -5,6 +5,7 @@ import { dirname } from 'node:path'
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { AUTH_SCHEME } from '@ramu/contracts'
 import {
+  AUTOMATIC_PERMISSIONS,
   DEVICE_PERMISSIONS,
   grantActive,
   isDevicePermission,
@@ -13,6 +14,8 @@ import {
 } from '@ramu/shared/devicePermissions'
 
 export const PAIRING_TTL_MS = 10 * 60_000
+/** Used by software moments after it is made, so it need not last as long as a code a person reads out. */
+const AGENT_PAIRING_TTL_MS = 60_000
 const MAX_PENDING = 5
 const MAX_NAME = 60
 // No 0/O/1/I/L, so a code read aloud or off a screen is not mistyped.
@@ -39,6 +42,8 @@ export interface DeviceInfo {
   kind?: 'host'
   /** The most access a thread a host pairing starts may have here, whatever it asks for. Hosts only; default edits. */
   maxAccess?: HostAccess
+  /** The agent pairing that follows this device's Agents permission. */
+  agentHost?: { id: string; maxAccess: HostAccess }
 }
 export type HostAccess = 'edits' | 'auto' | 'full'
 export const isHostAccess = (value: unknown): value is HostAccess =>
@@ -54,6 +59,8 @@ export const RENEWAL_PENDING_MS = 7 * 24 * 60 * 60_000
 export const RENEWAL_OVERLAP_MS = 2 * 60_000
 interface DeviceRecord extends DeviceInfo {
   tokenHash: string
+  /** The device whose Agents permission this host pairing follows. Absent on one paired with a person's code. */
+  agentsOf?: string
   /** Set when pairing redeems and cleared by the first authenticated request: nobody has proven they hold the token. */
   unclaimed?: true
   /** Issued by `renew` and not used yet; promoted on its first authenticated request. */
@@ -71,6 +78,8 @@ interface PendingCode {
   role?: DeviceRole
   codeHash: string
   expiresAt: number
+  /** Made for this device's agents: it can only become a host pairing, which follows that device's Agents permission. */
+  agentsOf?: string
 }
 /** How an offer ended, kept briefly so the host can show exactly which offer was used or cancelled. */
 interface SettledOffer {
@@ -165,7 +174,7 @@ export class DeviceStore {
 
   /** What a new full-access device holds when it pairs. */
   defaultPermissions(): DevicePermission[] {
-    return this.read().defaultPermissions ?? [...DEVICE_PERMISSIONS]
+    return this.read().defaultPermissions ?? [...AUTOMATIC_PERMISSIONS]
   }
 
   setDefaultPermissions(permissions: DevicePermission[]): void {
@@ -177,8 +186,42 @@ export class DeviceStore {
   allows(id: string, permission: DevicePermission, now = Date.now()): boolean {
     const device = this.read().devices.find((entry) => entry.id === id)
     if (!device || device.role === 'viewer' || device.kind === 'host') return false
-    if (!device.permissions) return true
+    if (!device.permissions) return AUTOMATIC_PERMISSIONS.includes(permission)
     return grantActive(device.permissions[permission], now)
+  }
+
+  /**
+   * Whether a host pairing may act now. One made for a device's agents ends with that device's Agents permission, so
+   * a grant that expires or is revoked also stops its agents. One paired with a person's code stands on its own.
+   */
+  hostPairingActive(device: DeviceInfo, now = Date.now()): boolean {
+    const record = this.read().devices.find((entry) => entry.id === device.id)
+    return !record?.agentsOf || this.allows(record.agentsOf, 'agents', now)
+  }
+
+  /**
+   * A short-lived code for this device's computer to pair its agents. Replaces any earlier agent pairing of the device,
+   * so turning agents off and on leaves one. The caller has already checked the Agents permission.
+   */
+  agentPairingCode(id: string, now = Date.now()): string {
+    const file = this.read()
+    const device = file.devices.find((entry) => entry.id === id)
+    if (!device || device.role === 'viewer' || device.kind === 'host')
+      throw new Error('Only a device with full access can pair its agents.')
+    this.write({
+      ...file,
+      devices: file.devices.filter((entry) => entry.agentsOf !== id),
+      pending: file.pending.filter((offer) => offer.agentsOf !== id),
+    })
+    const { code, offerId } = this.createCode(now)
+    const next = this.read()
+    this.write({
+      ...next,
+      pending: next.pending.map((offer) =>
+        offer.id === offerId ? { ...offer, agentsOf: id, expiresAt: now + AGENT_PAIRING_TTL_MS } : offer,
+      ),
+    })
+    return code
   }
 
   /** What this device holds, as shown to it and in Settings. */
@@ -187,7 +230,8 @@ export class DeviceStore {
     return Object.fromEntries(
       DEVICE_PERMISSIONS.map((permission) => {
         if (!device || device.role === 'viewer') return [permission, null]
-        if (!device.permissions) return [permission, { until: null }]
+        if (!device.permissions)
+          return [permission, AUTOMATIC_PERMISSIONS.includes(permission) ? { until: null } : null]
         const grant = device.permissions[permission]
         return [permission, grantActive(grant, now) ? grant! : null]
       }),
@@ -216,7 +260,7 @@ export class DeviceStore {
     if (device.role === 'viewer')
       throw new Error('A view-only device cannot hold permissions. Pair it with full access.')
     // A device from before permissions held everything; it keeps everything else when one is changed.
-    const current = device.permissions ?? Object.fromEntries(DEVICE_PERMISSIONS.map((p) => [p, { until: null }]))
+    const current = device.permissions ?? Object.fromEntries(AUTOMATIC_PERMISSIONS.map((p) => [p, { until: null }]))
     const next = Object.fromEntries(
       Object.entries({ ...current, [permission]: grant }).filter(
         (entry): entry is [string, PermissionGrant] => !!entry[1] && grantActive(entry[1], now),
@@ -371,7 +415,13 @@ export class DeviceStore {
     const file = this.read()
     const live = file.pending.filter((p) => p.expiresAt > now)
     // A view-only code never becomes a host pairing, which can start threads.
-    const match = live.find((offer) => matches(offer) && !(kind === 'host' && offer.role === 'viewer'))
+    const match = live.find(
+      (offer) =>
+        matches(offer) &&
+        !(kind === 'host' && offer.role === 'viewer') &&
+        // A code made for agents never becomes a full-access device.
+        !(offer.agentsOf && kind !== 'host'),
+    )
     if (!match) {
       if (live.length !== file.pending.length) this.write({ ...file, pending: live })
       return null
@@ -388,10 +438,11 @@ export class DeviceStore {
       unclaimed: true,
       // A host pairing holds no device permissions: what it may do is fixed by its kind and access ceiling.
       ...(kind === 'host' ? { kind, maxAccess: 'edits' as const } : {}),
+      ...(match.agentsOf ? { agentsOf: match.agentsOf } : {}),
       ...((match.role ?? 'owner') === 'owner' && kind !== 'host'
         ? {
             permissions: Object.fromEntries(
-              (file.defaultPermissions ?? DEVICE_PERMISSIONS).map((permission) => [permission, { until: null }]),
+              (file.defaultPermissions ?? AUTOMATIC_PERMISSIONS).map((permission) => [permission, { until: null }]),
             ),
           }
         : {}),
@@ -517,6 +568,19 @@ export class DeviceStore {
   }
 
   /** Revokes by id, unique id prefix or "all". Returns the revoked devices. */
+  /** Devices as a person thinks of them: an agent pairing is part of the device it follows. */
+  panel(now = Date.now()): DeviceInfo[] {
+    const records = this.read().devices
+    const follows = new Map(records.flatMap((record) => (record.agentsOf ? [[record.id, record.agentsOf]] : [])))
+    const all = this.list(now)
+    return all
+      .filter((device) => !follows.has(device.id))
+      .map((device) => {
+        const agents = all.find((entry) => follows.get(entry.id) === device.id)
+        return agents ? { ...device, agentHost: { id: agents.id, maxAccess: agents.maxAccess ?? 'edits' } } : device
+      })
+  }
+
   revoke(target: string): DeviceInfo[] {
     const file = this.read()
     let matches = file.devices
@@ -527,6 +591,7 @@ export class DeviceStore {
       if (matches.length > 1) throw new Error(`"${target}" matches ${matches.length} devices; use more of the id`)
     }
     const ids = new Set(matches.map((d) => d.id))
+    for (const device of file.devices) if (device.agentsOf && ids.has(device.agentsOf)) ids.add(device.id)
     if (ids.size) this.write({ ...file, devices: file.devices.filter((d) => !ids.has(d.id)) })
     for (const id of ids) this.seen.delete(id)
     return matches.map(strip)
