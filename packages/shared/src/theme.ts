@@ -234,6 +234,27 @@ export async function themeDigest(theme: RamuTheme): Promise<string> {
   return Array.from(hash, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+/** `#rrggbb` blended `amount` (0..1) of the way from `from` to `to`. */
+export function mixColors(from: string, to: string, amount: number): string {
+  const [a, b] = [parseInt(from.slice(1), 16), parseInt(to.slice(1), 16)]
+  return `#${[16, 8, 0]
+    .map((shift) => {
+      const start = (a >> shift) & 255
+      return Math.round(start + (((b >> shift) & 255) - start) * amount)
+        .toString(16)
+        .padStart(2, '0')
+    })
+    .join('')}`
+}
+
+/**
+ * The card surface, a step between the page and raised controls. It is derived rather than a role, so every existing
+ * theme and shared file gets a matching one. Light themes tint from `subtle`, because their raised surface is the page.
+ */
+export function cardSurface({ overlay, colors: c }: ThemeVariant): string {
+  return overlay === 'white' ? mixColors(c.canvas, c.raised, 0.5) : mixColors(c.raised, c.subtle, 0.6)
+}
+
 /** The CSS custom properties (styles.css `:root`) a variant sets; the rest derive from them. */
 export function themeCssVariables(variant: ThemeVariant): Record<string, string> {
   const c = variant.colors
@@ -241,6 +262,7 @@ export function themeCssVariables(variant: ThemeVariant): Record<string, string>
     '--window': c.window,
     '--canvas': c.canvas,
     '--raised': c.raised,
+    '--raised-2': cardSurface(variant),
     '--subtle': c.subtle,
     '--bubble': c.bubble,
     '--code-bg': c.codeBackground,
@@ -256,6 +278,7 @@ export function themeCssVariables(variant: ThemeVariant): Record<string, string>
     '--ok': c.ok,
     '--warn': c.warn,
     '--bad': c.bad,
+    '--brand-mark': c.textBody,
     '--ok-wash': `${c.ok}14`,
     '--warn-wash': `${c.warn}14`,
     '--bad-wash': `${c.bad}14`,

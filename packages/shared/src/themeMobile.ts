@@ -1,4 +1,4 @@
-import type { ThemeVariant } from './theme'
+import { cardSurface, type ThemeVariant } from './theme'
 
 /** The phone's color roles. Surfaces, text and status come from the theme; fills and lines derive from its overlay ink. */
 export interface MobilePalette {
@@ -36,18 +36,6 @@ const parts = (hex: string): [number, number, number] => {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
-/** `#rrggbb` blended `amount` (0..1) of the way from `from` to `to`. */
-export function mixColors(from: string, to: string, amount: number): string {
-  const [a, b] = [parts(from), parts(to)]
-  return `#${a
-    .map((value, i) =>
-      Math.round(value + (b[i]! - value) * amount)
-        .toString(16)
-        .padStart(2, '0'),
-    )
-    .join('')}`
-}
-
 export function rgba(hex: string, alpha: number): string {
   const [r, g, b] = parts(hex)
   return `rgba(${r},${g},${b},${alpha})`
@@ -66,7 +54,7 @@ export function mobilePalette(variant: ThemeVariant): MobilePalette {
     window: c.window,
     canvas: c.canvas,
     raised: c.raised,
-    raised2: mixColors(c.canvas, c.raised, 0.5),
+    raised2: cardSurface(variant),
     bubble: c.bubble,
     code: c.codeBackground,
     fill: overlay(dark ? 0.05 : 0.08),

@@ -65,7 +65,7 @@ export function StatusDot({ status, className = '' }: { status: ComputerStatus; 
   return (
     <span
       aria-hidden
-      className={`size-1.5 flex-none rounded-full ${status === 'connected' ? 'bg-(--ok)' : status === 'rejected' ? 'bg-bad' : 'bg-[#8b8b91]'} ${status === 'connecting' ? 'animate-pulse' : ''} ${className}`}
+      className={`size-1.5 flex-none rounded-full ${status === 'connected' ? 'bg-(--ok)' : status === 'rejected' ? 'bg-bad' : 'bg-muted-foreground'} ${status === 'connecting' ? 'animate-pulse' : ''} ${className}`}
     />
   )
 }

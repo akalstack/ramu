@@ -16,7 +16,7 @@ Built-in themes live in `packages/shared/src/themePresets.ts`. They are ordinary
 
 A trial is temporary and is not persisted. **Keep theme** validates, saves and selects the theme; **Revert**, closing the editor or restarting restores the saved selection. The recovery controls use a fixed readable palette. Desktop trials affect the current window. Kept desktop themes use device storage shared by host windows; they are not execution-host preferences.
 
-The production-component preview ([UI](UI.md)) includes thread/request states, code/diffs, terminal output and interactive content. Custom colors map to app chrome, terminal and Monaco workbench surfaces; syntax token colors retain the editor's GitHub palette. Interactive documents receive appearance updates without resetting their controls.
+The production-component preview ([UI](UI.md)) includes thread/request states, code/diffs, terminal output and interactive content. Custom colors map to app chrome, cards, the logo mark, terminal and Monaco workbench surfaces; syntax token colors retain the editor's GitHub palette. Interactive documents receive appearance updates without resetting their controls.
 
 ## Generate or refine
 

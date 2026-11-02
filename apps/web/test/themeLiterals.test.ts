@@ -19,7 +19,6 @@ const TOKEN_FILES = new Set([
  * color literal in a component should be a theme token (styles.css) instead; add it here only with a reason.
  */
 const ALLOWED = new Set([
-  'chat.css #fff', // icon on the primary send button
   'chat.css #0005', // shadow
   'chat.css #ffffff2e', // highlight on the primary send button
   'composer/ComposerSuggestions.tsx #0008', // shadow
@@ -30,7 +29,6 @@ const ALLOWED = new Set([
   'settings/AppearanceSettings.tsx #7652d4',
   'settings/AppearanceSettings.tsx #087f7b',
   'views/MediaFileView.tsx bg-white', // a document's own page background
-  'workspace/computers.tsx #8b8b91', // neutral status dot
   'workspace/TaskPane.tsx #0003', // shadow
   'interactive/InteractiveContent.tsx #131315', // fallbacks when a token is unreadable
   'interactive/InteractiveContent.tsx #eeeef0',

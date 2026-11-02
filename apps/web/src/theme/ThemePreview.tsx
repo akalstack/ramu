@@ -56,6 +56,9 @@ export function previewVariables(
     ...themeCssVariables(variant),
     ...steps,
     '--edge': `rgb(${ink} / 0.1)`,
+    // These mix other tokens on :root, so a subtree has to restate them to pick up its own colors.
+    '--accent-wash': `color-mix(in srgb, ${variant.colors.accent} 10%, transparent)`,
+    '--composer-tray': `color-mix(in srgb, ${variant.colors.raised} 55%, ${variant.colors.canvas})`,
     colorScheme: appearance,
   } as CSSProperties
 }

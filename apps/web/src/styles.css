@@ -1345,7 +1345,7 @@ kbd {
 }
 ::highlight(chat-find-current) {
   @apply [background-color:var(--accent)];
-  @apply [color:#fff];
+  @apply [color:var(--canvas)];
 }
 /* A small, slow bounce keeps loading visible without distracting from the conversation. */
 @keyframes loading-dot {

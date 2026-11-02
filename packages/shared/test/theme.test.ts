@@ -6,6 +6,7 @@ import {
   DEFAULT_THEME,
   THEME_FILE_MAX_BYTES,
   canonicalTheme,
+  cardSurface,
   exportThemeFile,
   importThemeFile,
   checkTheme,
@@ -14,6 +15,7 @@ import {
   themeCssVariables,
   themeDigest,
 } from '../src/theme'
+import { themePreset } from '../src/themePresets'
 
 describe('theme', () => {
   it('ships a readable default in both appearances', () => {
@@ -87,6 +89,20 @@ describe('theme', () => {
         expect(declared(source, name), name).toBe(vars[name])
       }
     }
+  })
+})
+
+describe('card surface', () => {
+  it('matches the hand-tuned default in light and stays one step from it in dark', () => {
+    expect(cardSurface(DEFAULT_LIGHT)).toBe('#f6f6f8')
+    expect(cardSurface(DEFAULT_DARK)).toBe('#232326')
+  })
+
+  it('takes its color from each theme instead of keeping the default gray', () => {
+    const midnight = themePreset('ramu-midnight')!
+    expect(themeCssVariables(midnight.dark)['--raised-2']).toBe('#172137')
+    expect(themeCssVariables(midnight.light)['--raised-2']).toBe('#f5f6fb')
+    expect(themeCssVariables(midnight.dark)['--brand-mark']).toBe(midnight.dark.colors.textBody)
   })
 })
 

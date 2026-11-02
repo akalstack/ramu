@@ -383,7 +383,7 @@
   border: 0;
   border-radius: 50%;
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-ink);
   box-shadow:
     0 1px 2px #0005,
     inset 0 1px 0 #ffffff2e;
@@ -399,7 +399,7 @@
 }
 .composer-bar .send[aria-busy='true']:disabled {
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-ink);
 }
 .composer-bar .send.stop,
 .composer-bar .send.resume {

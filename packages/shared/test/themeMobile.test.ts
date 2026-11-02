@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
 import { sha256Hex } from '../src/sha256'
-import { DEFAULT_DARK, DEFAULT_LIGHT, DEFAULT_THEME, canonicalTheme, themeDigest } from '../src/theme'
-import { mixColors, mobilePalette } from '../src/themeMobile'
+import {
+  DEFAULT_DARK,
+  DEFAULT_LIGHT,
+  DEFAULT_THEME,
+  canonicalTheme,
+  cardSurface,
+  mixColors,
+  themeDigest,
+} from '../src/theme'
+import { mobilePalette } from '../src/themeMobile'
 
 describe('theme on a phone', () => {
   it('computes the same digest without SubtleCrypto', async () => {
@@ -18,7 +26,7 @@ describe('theme on a phone', () => {
     expect(dark.badWash).toBe('rgba(255,105,97,0.08)')
     const light = mobilePalette(DEFAULT_LIGHT)
     expect(light.fill).toBe('rgba(60,60,67,0.08)')
-    expect(light.raised2).toBe(mixColors(DEFAULT_LIGHT.colors.canvas, DEFAULT_LIGHT.colors.raised, 0.5))
+    expect(light.raised2).toBe(cardSurface(DEFAULT_LIGHT))
   })
 
   it('mixes colors between their ends', () => {
