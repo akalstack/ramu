@@ -19,7 +19,7 @@ import {
   routingSnapshot,
 } from '../runtime/routingDraft'
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Keyboard, Pressable, View } from 'react-native'
+import { ActivityIndicator, Alert, Keyboard, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -120,6 +120,8 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const pending = useRef<{ text: string; attachments: unknown; context: unknown } | null>(null)
   const routeRevision = useRef(0)
   const routingStart = useRef(false)
+  // The message being routed, shown as a temporary thread while a project is chosen.
+  const [routing, setRouting] = useState<{ text: string; status: string } | null>(null)
   // Auto also weighs projects on the other online hosts; a prompt that needs several projects is reviewed as a list,
   // kept on the phone until it is started or cancelled.
   const others = otherHostTargets(selected, computers, projects)
@@ -411,6 +413,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         setPicker('project')
         throw new Error('Choose a project to start while this host is offline.')
       }
+      setRouting({ text, status: say('Choosing a project…') })
       const revision = ++routeRevision.current
       const verified = await agentDraft.verify()
       if (revision !== routeRevision.current)
@@ -430,8 +433,11 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           setPicker('split')
           return false
         }
-        if (outcome.kind === 'resolved') raw = outcome.projectId
-        else {
+        if (outcome.kind === 'resolved') {
+          raw = outcome.projectId
+          const name = list.find((p) => rawId(p.id) === raw)?.name ?? ''
+          setRouting((current) => current && { ...current, status: say('Starting in {0}…', { 0: name }) })
+        } else {
           const candidates =
             outcome.kind === 'ambiguous'
               ? outcome.candidates
@@ -505,6 +511,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       else router.replace({ pathname: '/chat/[id]', params: { id } })
     } finally {
       routingStart.current = false
+      setRouting(null)
     }
   }
   const pc = computers.find((x) => x.id === selected)
@@ -644,7 +651,32 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       ) : null}
       <View style={{ flex: 1, paddingBottom: keyboardInset, display: picker === 'project' ? 'none' : 'flex' }}>
         {/* Nothing here scrolls: the hero simply centers in the space above the composer. */}
-        {keyboardInset === 0 ? (
+        {routing ? (
+          <View
+            style={{ flex: 1, justifyContent: 'flex-end', alignItems: 'flex-end', padding: space.l, gap: space.s }}
+            accessibilityLiveRegion="polite"
+          >
+            {routing.text ? (
+              <View
+                style={{
+                  maxWidth: '85%',
+                  backgroundColor: c.bubble,
+                  borderRadius: radius.l,
+                  paddingHorizontal: space.m,
+                  paddingVertical: space.s,
+                }}
+              >
+                <T numberOfLines={8}>{routing.text}</T>
+              </View>
+            ) : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+              <ActivityIndicator size="small" color={c.muted} />
+              <T tone="muted" size={font.caption}>
+                {routing.status}
+              </T>
+            </View>
+          </View>
+        ) : keyboardInset === 0 ? (
           <View style={{ flex: 1, justifyContent: 'center', padding: space.l }}>
             <View style={{ alignItems: 'center', gap: space.s }}>
               {/* The desktop's start screen: the animated mark (tap it) over the same question, centred. */}

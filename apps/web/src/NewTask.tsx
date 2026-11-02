@@ -1,3 +1,4 @@
+import { LoadingDots } from '@/components/loading-dots'
 import { BranchNameEditor } from './workspace/BranchNameEditor'
 import { WorkspaceNameDialog } from './workspace/WorkspaceNameDialog'
 import { t, useLanguage } from './i18n'
@@ -316,6 +317,8 @@ export function NewTask({
   const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId), draftStore(host.id)))
   const consumeDraft = useDraftPersistence(draftKey.newChat(projectId), prompt, host.id)
   const [busy, setBusy] = useState(false)
+  // The message being started, shown as a temporary thread until the real one opens.
+  const [pending, setPending] = useState<{ text: string; status: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [issue, setIssue] = useState<IssueLink | null>(null)
   const [renamingWorkspace, setRenamingWorkspace] = useState<{
@@ -496,6 +499,10 @@ export function NewTask({
     sending.current = true
     setError(null)
     setBusy(true)
+    setPending({
+      text: prompt.trim() || attachments.map((attachment) => attachment.name).join(', '),
+      status: auto && !chosen ? t('Choosing a project…') : t('Starting the agent…'),
+    })
     let created: string | null = null
     let target = {
       projectId,
@@ -527,6 +534,13 @@ export function NewTask({
           }
           if (outcome.kind === 'resolved') {
             destination = outcome.projectId
+            setPending(
+              (current) =>
+                current && {
+                  ...current,
+                  status: t('Starting in {0}…', { 0: ws.projects.find((p) => p.id === destination)?.name ?? '' }),
+                },
+            )
             setRouteNote(
               `${t('Starting in')} ${ws.projects.find((p) => p.id === destination)?.name ?? ''} — ${outcome.reason}`,
             )
@@ -665,6 +679,7 @@ export function NewTask({
     } finally {
       sending.current = false
       setBusy(false)
+      setPending(null)
     }
   }
 
@@ -840,6 +855,19 @@ export function NewTask({
               />
             )}
           </NewWorktreeSummary>
+        )}
+        {pending && (
+          <div className="flex flex-col items-end gap-1.5 px-2" role="status" aria-live="polite">
+            {pending.text && (
+              <div className="max-w-[80%] whitespace-pre-wrap rounded-(--radius-l) bg-(--bubble) px-3.5 py-2 text-body line-clamp-6">
+                {pending.text}
+              </div>
+            )}
+            <span className="flex items-center gap-2 text-caption text-muted-foreground">
+              <LoadingDots />
+              {pending.status}
+            </span>
+          </div>
         )}
         <ComposerStack>
           <ComposerTray className="start-chips">

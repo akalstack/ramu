@@ -115,6 +115,24 @@ export default function ChatScreen() {
     }, []),
   )
   const following = useRef(true)
+  // A long thread renders top-down in batches; jumping to its end after each batch showed the whole transcript
+  // scrolling past. It stays hidden until its size settles at the end, then appears already there.
+  const [revealed, setRevealed] = useState(false)
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const revealCap = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const settleReveal = () => {
+    if (revealed) return
+    if (revealTimer.current) clearTimeout(revealTimer.current)
+    revealTimer.current = setTimeout(() => setRevealed(true), 150)
+    revealCap.current ??= setTimeout(() => setRevealed(true), 800)
+  }
+  useEffect(
+    () => () => {
+      if (revealTimer.current) clearTimeout(revealTimer.current)
+      if (revealCap.current) clearTimeout(revealCap.current)
+    },
+    [],
+  )
   const smoothSendScroll = useRef(false)
   const reducedMotion = useReducedMotion()
   const userScrolling = useRef(false)
@@ -346,6 +364,9 @@ export default function ChatScreen() {
   const arrivalChat = useRef(id)
   if (arrivalChat.current !== id) {
     arrivalChat.current = id
+    if (revealed) setRevealed(false)
+    if (revealCap.current) clearTimeout(revealCap.current)
+    revealCap.current = null
     seen.current.clear()
     arrivalReady.current = false
     openedAt.current = Date.now()
@@ -1028,7 +1049,7 @@ export default function ChatScreen() {
               maxToRenderPerBatch={12}
               windowSize={7}
               ItemSeparatorComponent={RowSeparator}
-              style={{ flex: 1 }}
+              style={{ flex: 1, opacity: revealed ? 1 : 0 }}
               contentInset={ios ? { bottom: cover } : undefined}
               scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
               contentContainerStyle={{
@@ -1067,6 +1088,7 @@ export default function ChatScreen() {
               }}
               onContentSizeChange={(_, height) => {
                 metrics.current.content = height
+                settleReveal()
                 if (following.current && !settling.current && Date.now() - held.current > 600) {
                   toEnd(smoothSendScroll.current && !reducedMotion)
                   smoothSendScroll.current = false
