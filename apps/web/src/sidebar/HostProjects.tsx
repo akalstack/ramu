@@ -1,5 +1,5 @@
 import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import {
   CheckCheck,
   MessageCircle,
@@ -26,7 +26,7 @@ import { ProjectsPanel } from './ProjectsPanel'
 import { TaskRow } from './projects/TaskRow'
 import { SectionHead } from './projects/SectionHead'
 import { Collapse } from './projects/Collapse'
-import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, pinnedFirst } from './projects/constants'
+import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, pinnedFirst, STICKY_PROJECT_CLASS } from './projects/constants'
 import { sidebarThreads, projectThreadPreview } from './projects/threadLists'
 import { hostRows } from './hostRows'
 
@@ -77,9 +77,13 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
   const open = !grouped || chrome.isExpanded(key)
   const available = computer.status === 'connected'
   return (
-    <section aria-label={computer.name} className="min-w-0">
+    <section
+      aria-label={computer.name}
+      className="min-w-0"
+      style={grouped ? ({ '--sticky-host-height': '2rem' } as CSSProperties) : undefined}
+    >
       {grouped && (
-        <div className="group/host flex min-h-8 items-center gap-0.5 px-1">
+        <div className="group/host sticky top-0 z-[6] flex min-h-8 items-center gap-0.5 bg-(--sidebar) px-1">
           <SidebarDisclosureButton
             className="flex-1"
             title={computer.name}
@@ -282,61 +286,65 @@ function OtherHostProject({
   const openProject = () => select(host, { kind: 'project', projectId: project.id })
   return (
     <section className="project-group mb-0 [&:has(.task-list)]:mb-2.5 relative">
-      <div
-        role="button"
-        tabIndex={available ? 0 : -1}
-        aria-disabled={!available || undefined}
-        aria-label={t('Open {0}', { '0': project.name })}
-        title={project.root ?? project.name}
-        className="project-row group/project flex min-h-[30px] items-center gap-2 rounded-(--radius-s) px-2 text-body leading-5 text-soft hover:bg-accent hover:text-foreground"
-        onClick={() => {
-          if (available) {
-            chrome.setExpanded(key, true)
-            openProject()
-          }
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && available) openProject()
-        }}
-      >
-        {open ? (
-          <FolderOpen size={15} className="flex-none text-muted-foreground" />
-        ) : (
-          <FolderClosed size={15} className="flex-none text-muted-foreground" />
-        )}
-        <FadeText
-          text={project.name}
-          className="project-name font-medium min-w-0 flex-1 overflow-hidden whitespace-nowrap"
-        />
-        <span className={`${ROW_ACTIONS_CLASS} group-hover/project:opacity-100 group-focus-within/project:opacity-100`}>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={ICON_BUTTON_CLASS}
-            aria-label={t('Toggle {0}', { '0': project.name })}
-            title={open ? t('Collapse') : t('Expand')}
-            onClick={(event) => {
-              event.stopPropagation()
-              chrome.setExpanded(key, !open)
-            }}
+      <div className={STICKY_PROJECT_CLASS}>
+        <div
+          role="button"
+          tabIndex={available ? 0 : -1}
+          aria-disabled={!available || undefined}
+          aria-label={t('Open {0}', { '0': project.name })}
+          title={project.root ?? project.name}
+          className="project-row group/project flex min-h-[30px] items-center gap-2 rounded-(--radius-s) px-2 text-body leading-5 text-soft hover:bg-accent hover:text-foreground"
+          onClick={() => {
+            if (available) {
+              chrome.setExpanded(key, true)
+              openProject()
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && available) openProject()
+          }}
+        >
+          {open ? (
+            <FolderOpen size={15} className="flex-none text-muted-foreground" />
+          ) : (
+            <FolderClosed size={15} className="flex-none text-muted-foreground" />
+          )}
+          <FadeText
+            text={project.name}
+            className="project-name font-medium min-w-0 flex-1 overflow-hidden whitespace-nowrap"
+          />
+          <span
+            className={`${ROW_ACTIONS_CLASS} group-hover/project:opacity-100 group-focus-within/project:opacity-100`}
           >
-            <ChevronRight size={14} className={open ? 'rotate-90' : ''} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={ICON_BUTTON_CLASS}
-            disabled={!available}
-            aria-label={t('New thread in {0}', { '0': project.name })}
-            title={t('New thread')}
-            onClick={(event) => {
-              event.stopPropagation()
-              select(host, { kind: 'new', projectId: project.id })
-            }}
-          >
-            <Plus size={14} />
-          </Button>
-        </span>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={ICON_BUTTON_CLASS}
+              aria-label={t('Toggle {0}', { '0': project.name })}
+              title={open ? t('Collapse') : t('Expand')}
+              onClick={(event) => {
+                event.stopPropagation()
+                chrome.setExpanded(key, !open)
+              }}
+            >
+              <ChevronRight size={14} className={open ? 'rotate-90' : ''} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={ICON_BUTTON_CLASS}
+              disabled={!available}
+              aria-label={t('New thread in {0}', { '0': project.name })}
+              title={t('New thread')}
+              onClick={(event) => {
+                event.stopPropagation()
+                select(host, { kind: 'new', projectId: project.id })
+              }}
+            >
+              <Plus size={14} />
+            </Button>
+          </span>
+        </div>
       </div>
       {open && (
         <div className="task-list relative flex flex-col gap-0.5 pt-0.5 before:pointer-events-none before:absolute before:bottom-2 before:left-[15px] before:top-1 before:w-px before:bg-border before:content-['']">

@@ -29,7 +29,7 @@ import { errorText } from '../../workspace/TaskPane'
 import { projectCtx, useWorkspace } from '../../workspace/workspace'
 import { useAppSettings } from '../../settings/AppSettings'
 import { FadeText } from '../../FadeText'
-import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS } from './constants'
+import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS, STICKY_PROJECT_CLASS } from './constants'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { InlineEdit } from './InlineEdit'
@@ -228,94 +228,96 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
       }}
     >
       {contextMenu.menu}
-      <HoverCard open={hover && !renaming && !isDragging} onOpenChange={setHover}>
-        <HoverCardTrigger
-          delay={150}
-          closeDelay={120}
-          render={<div />}
-          {...listeners}
-          className={
-            active
-              ? 'project-row [&:hover]:bg-accent [&:hover]:text-foreground [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft text-body leading-5 min-h-[30px] p-[0_8px] active'
-              : 'project-row [&:hover]:bg-accent [&:hover]:text-foreground [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft text-body leading-5 min-h-[30px] p-[0_8px]'
-          }
-          role="button"
-          tabIndex={0}
-          aria-label={t('Open {0}', { '0': project.name })}
-          onContextMenu={contextMenu.onContextMenu}
-          onClick={() => {
-            setOpen(true)
-            ws.openProject(project.id)
-          }}
-          onKeyDown={(e) => {
-            contextMenu.onKeyDown(e)
-            if (e.key === 'Enter') ws.openProject(project.id)
-          }}
-          onMouseDown={() => setHover(false)}
-        >
-          {open ? (
-            <FolderOpen size={15} className="muted text-muted-foreground" />
-          ) : (
-            <FolderClosed size={15} className="muted text-muted-foreground" />
-          )}
-          {renaming ? (
-            <InlineEdit
-              readOnly={viewOnly}
-              value={project.name}
-              onDone={(v) => {
-                if (v !== null && !canWrite()) return
-                setRenaming(false)
-                if (v && v !== project.name) void act(() => host.invoke('projects.rename', project.id, v))
-              }}
-            />
-          ) : (
-            <FadeText
-              className="project-name font-medium overflow-hidden whitespace-nowrap flex-1 min-w-0"
-              text={project.name}
-            />
-          )}
-          <span className={ROW_ACTIONS_CLASS}>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={ICON_BUTTON_CLASS}
-              aria-label={t('Toggle {0}', { '0': project.name })}
-              title={open ? t('Collapse') : t('Expand')}
-              onClick={(e) => {
-                e.stopPropagation()
-                setOpen((o) => !o)
-              }}
-            >
-              <ChevronRight
-                size={14}
-                className={
-                  open
-                    ? 'caret [&.open]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)] open'
-                    : 'caret [&.open]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]'
-                }
+      <div className={STICKY_PROJECT_CLASS}>
+        <HoverCard open={hover && !renaming && !isDragging} onOpenChange={setHover}>
+          <HoverCardTrigger
+            delay={150}
+            closeDelay={120}
+            render={<div />}
+            {...listeners}
+            className={
+              active
+                ? 'project-row [&:hover]:bg-accent [&:hover]:text-foreground [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft text-body leading-5 min-h-[30px] p-[0_8px] active'
+                : 'project-row [&:hover]:bg-accent [&:hover]:text-foreground [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft text-body leading-5 min-h-[30px] p-[0_8px]'
+            }
+            role="button"
+            tabIndex={0}
+            aria-label={t('Open {0}', { '0': project.name })}
+            onContextMenu={contextMenu.onContextMenu}
+            onClick={() => {
+              setOpen(true)
+              ws.openProject(project.id)
+            }}
+            onKeyDown={(e) => {
+              contextMenu.onKeyDown(e)
+              if (e.key === 'Enter') ws.openProject(project.id)
+            }}
+            onMouseDown={() => setHover(false)}
+          >
+            {open ? (
+              <FolderOpen size={15} className="muted text-muted-foreground" />
+            ) : (
+              <FolderClosed size={15} className="muted text-muted-foreground" />
+            )}
+            {renaming ? (
+              <InlineEdit
+                readOnly={viewOnly}
+                value={project.name}
+                onDone={(v) => {
+                  if (v !== null && !canWrite()) return
+                  setRenaming(false)
+                  if (v && v !== project.name) void act(() => host.invoke('projects.rename', project.id, v))
+                }}
               />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={ICON_BUTTON_CLASS}
-              aria-label={t('New thread in {0}', { '0': project.name })}
-              title={t('New thread')}
-              onClick={(e) => {
-                e.stopPropagation()
-                ws.newTask(project.id)
-              }}
-            >
-              <Plus size={14} />
-            </Button>
-          </span>
-        </HoverCardTrigger>
-        <ProjectHoverCard
-          project={project}
-          folders={repos.map((r) => ({ id: r.id, name: r.name, root: r.root }))}
-          chats={all.filter((t) => t.status !== 'archived').length}
-        />
-      </HoverCard>
+            ) : (
+              <FadeText
+                className="project-name font-medium overflow-hidden whitespace-nowrap flex-1 min-w-0"
+                text={project.name}
+              />
+            )}
+            <span className={ROW_ACTIONS_CLASS}>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={ICON_BUTTON_CLASS}
+                aria-label={t('Toggle {0}', { '0': project.name })}
+                title={open ? t('Collapse') : t('Expand')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setOpen((o) => !o)
+                }}
+              >
+                <ChevronRight
+                  size={14}
+                  className={
+                    open
+                      ? 'caret [&.open]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)] open'
+                      : 'caret [&.open]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]'
+                  }
+                />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={ICON_BUTTON_CLASS}
+                aria-label={t('New thread in {0}', { '0': project.name })}
+                title={t('New thread')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  ws.newTask(project.id)
+                }}
+              >
+                <Plus size={14} />
+              </Button>
+            </span>
+          </HoverCardTrigger>
+          <ProjectHoverCard
+            project={project}
+            folders={repos.map((r) => ({ id: r.id, name: r.name, root: r.root }))}
+            chats={all.filter((t) => t.status !== 'archived').length}
+          />
+        </HoverCard>
+      </div>
       {routing && (
         <ProjectRoutingDialog
           project={project}

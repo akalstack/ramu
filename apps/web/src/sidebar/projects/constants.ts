@@ -18,3 +18,9 @@ export const ROW_ERROR_CLASS = 'error text-bad small text-caption row-error p-[1
 /** Shared look of the hover-revealed action group at the end of a row. */
 export const ROW_ACTIONS_CLASS =
   "row-actions [&:has([aria-expanded='true'])]:opacity-100 flex items-center gap-0.5 opacity-0 [transition:opacity_0.1s] flex-none"
+
+/**
+ * Keeps a project's row in view while its threads scroll, below the host row when there is one. The fill sits on this
+ * wrapper because the row's own hover color is translucent and threads would show through it.
+ */
+export const STICKY_PROJECT_CLASS = 'sticky top-[var(--sticky-host-height,0px)] z-[5] bg-(--sidebar)'
