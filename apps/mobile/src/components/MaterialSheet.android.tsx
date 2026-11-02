@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { View, useWindowDimensions } from 'react-native'
 import { Host, ModalBottomSheet, RNHostView, type ModalBottomSheetRef } from '@expo/ui/jetpack-compose'
 import { useTheme } from '../theme'
+import { useHostedWidth } from './hostedWidth'
 
 /**
  * Android's official Material 3 modal bottom sheet (Jetpack Compose), hosting our React Native content. It has an opaque
@@ -18,6 +19,7 @@ export function MaterialSheet({
 }) {
   const { c, scheme } = useTheme()
   const { height } = useWindowDimensions()
+  const width = useHostedWidth()
   const sheet = useRef<ModalBottomSheetRef>(null)
   const [mounted, setMounted] = useState(open)
   const [generation, setGeneration] = useState(0)
@@ -62,8 +64,8 @@ export function MaterialSheet({
         scrimColor="rgba(0,0,0,0.32)"
         skipPartiallyExpanded
       >
-        <RNHostView matchContents={{ vertical: true }}>
-          <View style={{ maxHeight: height * 0.72 }}>{children}</View>
+        <RNHostView matchContents={{ vertical: true }} onLayout={width.onLayout}>
+          <View style={{ width: width.value, maxHeight: height * 0.72 }}>{children}</View>
         </RNHostView>
       </ModalBottomSheet>
     </Host>

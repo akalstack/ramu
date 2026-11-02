@@ -33,13 +33,22 @@ import {
 import { space, useTheme } from '../theme'
 import type { NativeSheetProps, SheetSearchProps } from './NativeSheet'
 import { useSay } from '../i18n'
+import { useHostedWidth } from './hostedWidth'
 
 /** Native presentation, navigation chrome, dismissal and scroll-edge material for every iOS dialog. */
 export function NativeSheet({ open, onClose, title, children, scroll = true, presentation, search }: NativeSheetProps) {
   const { c, scheme } = useTheme()
+  const width = useHostedWidth()
   const content = (
-    <RNHostView matchContents={scroll ? { vertical: true } : false}>
-      <View style={{ backgroundColor: c.window, paddingBottom: space.l, ...(scroll ? {} : { flex: 1 }) }}>
+    <RNHostView matchContents={scroll ? { vertical: true } : false} onLayout={width.onLayout}>
+      <View
+        style={{
+          width: width.value,
+          backgroundColor: c.window,
+          paddingBottom: space.l,
+          ...(scroll ? {} : { flex: 1 }),
+        }}
+      >
         {children}
       </View>
     </RNHostView>
