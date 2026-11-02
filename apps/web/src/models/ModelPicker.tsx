@@ -4,20 +4,41 @@ import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { Kbd } from '@/components/ui/kbd'
 import { Button } from '@/components/desktop-button'
-import { moveFavorite } from '@ramu/shared/workspace/favorites'
+import { dropFavorite } from '@ramu/shared/workspace/favorites'
 import { SearchInput } from '../SearchInput'
 import { Check, GripVertical, Layers, List, Pencil, SlidersHorizontal, Star } from 'lucide-react'
 import {
+  closestCenter,
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
-  useDraggable,
   useSensor,
   useSensors,
-  type DragMoveEvent,
+  type DragEndEvent,
+  type Modifier,
 } from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { createPortal } from 'react-dom'
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+  type ReactNode,
+  type Ref,
+} from 'react'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider, AgentModel, AgentSettings } from '@ramu/shared/types'
 import { useAppSettings } from '../settings/AppSettings'
@@ -28,6 +49,9 @@ import { peakUsage, usageTone, useUsage, windowLabel } from '../settings/Usage'
 
 type Tab = 'all' | 'sets' | AgentProvider
 const keyOf = (model: Pick<AgentModel, 'provider' | 'id'>) => `${model.provider}:${model.id}`
+
+/** Favorites reorder up and down a list; the row never leaves its column. */
+const alongTheList: Modifier = ({ transform }) => ({ ...transform, x: 0 })
 
 type ListItem =
   | { kind: 'heading'; key: string; label: string; provider?: AgentProvider }
@@ -52,7 +76,10 @@ export function ModelPicker({
   const language = useLanguage()
   const { catalogs, preferences, reload } = useModelSets()
   const app = useAppSettings()
-  const favorites = useMemo(() => app.preferences.favoriteModels ?? [], [app.preferences.favoriteModels])
+  // A dropped row stays where it landed while the save runs, instead of snapping back until the host answers.
+  const [landedFavorites, setLandedFavorites] = useState<string[] | null>(null)
+  const savedFavorites = app.preferences.favoriteModels
+  const favorites = useMemo(() => landedFavorites ?? savedFavorites ?? [], [landedFavorites, savedFavorites])
   const all = useMemo(() => catalogs.flatMap((catalog) => catalog.models), [catalogs])
   const modelByKey = useMemo(() => new Map(all.map((model) => [keyOf(model), model])), [all])
   const searchable = useMemo(
@@ -70,9 +97,10 @@ export function ModelPicker({
   const [query, setQuery] = useState('')
   const [editingFavorites, setEditingFavorites] = useState(false)
   const [draggedFavorite, setDraggedFavorite] = useState<string | null>(null)
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-  const [dropTarget, setDropTarget] = useState<{ key: string; after: boolean } | null>(null)
-  const [savingFavorites, setSavingFavorites] = useState(false)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
   const [reorderNotice, setReorderNotice] = useState('')
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -157,7 +185,8 @@ export function ModelPicker({
   const [listHeight, setListHeight] = useState(420)
   const pendingFocus = useRef<number | null>(null)
   const rowHeight = Math.max(34, Math.ceil(app.preferences.fontSize * 1.4 + 14))
-  const virtual = items.length > 100
+  // Sortable rows have to be mounted to be measured, so the list stays whole while favorites are reordered.
+  const virtual = items.length > 100 && !editingFavorites
   const start = virtual ? Math.max(0, Math.min(items.length - 1, Math.floor(scrollTop / rowHeight)) - 5) : 0
   const end = virtual ? Math.min(items.length, start + Math.ceil(listHeight / rowHeight) + 11) : items.length
   useLayoutEffect(() => {
@@ -211,46 +240,41 @@ export function ModelPicker({
     })
     onDone()
   }
-  const saveFavorites = async (next: string[], notice = '') => {
-    if (savingFavorites) return
-    setSavingFavorites(true)
-    try {
-      await app.save({ ...app.preferences, favoriteModels: next })
-      setReorderNotice(notice)
-    } catch (reason) {
-      notifyError(errorText(reason), 'Models')
-    } finally {
-      setSavingFavorites(false)
-    }
+  const saving = useRef<Promise<unknown>>(Promise.resolve())
+  const latestSave = useRef(0)
+  /** Saves in the order they were made, so quick moves in a row all land and the last one wins. */
+  const saveFavorites = (next: string[], notice = '') => {
+    const save = ++latestSave.current
+    setLandedFavorites(next)
+    saving.current = saving.current
+      .then(() => app.save({ ...app.preferences, favoriteModels: next }))
+      .then(
+        () => setReorderNotice(notice),
+        (reason) => notifyError(errorText(reason), 'Models'),
+      )
+      .finally(() => {
+        if (save === latestSave.current) setLandedFavorites(null)
+      })
   }
-  const reorder = (key: string, target: string, after: boolean) => {
-    const next = moveFavorite(favorites, key, target, after)
+  const shownFavorites = favoriteRows.map(keyOf)
+  const reorder = (key: string, target: string) => {
+    const next = dropFavorite(favorites, shownFavorites, key, target)
     if (next.join('\0') === favorites.join('\0')) return
     const model = modelByKey.get(key)
     const visible = next.filter((key) => modelByKey.has(key))
-    void saveFavorites(
+    saveFavorites(
       next,
       `Moved ${model ? modelDisplayName(model.name) : 'favorite'} to position ${visible.indexOf(key) + 1} of ${visible.length}.`,
     )
   }
-  // Rows are found under the pointer, so the list can stay virtualized and the overlay never needs droppables.
-  const targetUnder = (event: DragMoveEvent) => {
-    const origin = event.activatorEvent as PointerEvent,
-      x = origin.clientX + event.delta.x,
-      y = origin.clientY + event.delta.y
-    const row = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-favorite-key]')
-    if (!row?.dataset.favoriteKey || row.dataset.favoriteKey === String(event.active.id)) return null
-    const rect = row.getBoundingClientRect()
-    return { key: row.dataset.favoriteKey, after: y >= rect.top + rect.height / 2 }
-  }
-  const endDrag = () => {
+  const drop = ({ active, over }: DragEndEvent) => {
     setDraggedFavorite(null)
-    setDropTarget(null)
+    if (over && over.id !== active.id) reorder(String(active.id), String(over.id))
   }
   const toggleFavorite = (model: AgentModel) => {
     const key = keyOf(model)
     const next = favorites.includes(key) ? favorites.filter((entry) => entry !== key) : [...favorites, key]
-    void saveFavorites(next)
+    saveFavorites(next)
   }
   const latest = useRef({ rows, choose })
   latest.current = { rows, choose }
@@ -293,7 +317,6 @@ export function ModelPicker({
             onChange={(event) => {
               setQuery(event.target.value)
               setEditingFavorites(false)
-              setDropTarget(null)
               setDraggedFavorite(null)
             }}
           />
@@ -307,7 +330,6 @@ export function ModelPicker({
               aria-pressed={editingFavorites}
               onClick={() => {
                 setEditingFavorites((value) => !value)
-                setDropTarget(null)
                 setDraggedFavorite(null)
               }}
             >
@@ -331,7 +353,6 @@ export function ModelPicker({
                 onClick={() => {
                   setTab(entry.id)
                   setEditingFavorites(false)
-                  setDropTarget(null)
                   setDraggedFavorite(null)
                 }}
               >
@@ -346,183 +367,186 @@ export function ModelPicker({
         </span>
         <DndContext
           sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[alongTheList]}
           autoScroll={{ layoutShiftCompensation: false }}
           onDragStart={(event) => setDraggedFavorite(String(event.active.id))}
-          onDragMove={(event) =>
-            setDropTarget((current) => {
-              const next = savingFavorites ? null : targetUnder(event)
-              return current?.key === next?.key && current?.after === next?.after ? current : next
-            })
-          }
-          onDragCancel={endDrag}
-          onDragEnd={(event) => {
-            const target = savingFavorites ? null : targetUnder(event as DragMoveEvent)
-            if (target) reorder(String(event.active.id), target.key, target.after)
-            endDrag()
-          }}
+          onDragCancel={() => setDraggedFavorite(null)}
+          onDragEnd={drop}
         >
-          <div
-            className="mp-list flex-1 min-h-0 overflow-y-auto p-1 [overflow-anchor:none]"
-            ref={list}
-            aria-busy={query !== deferredQuery}
-            onScroll={(event) => {
-              if (virtual) setScrollTop(event.currentTarget.scrollTop)
-            }}
-          >
-            {sets.map((set) => (
-              <Button
-                variant="secondary"
-                type="button"
-                key={set.id}
-                className="bg-fill hover:bg-fill-hover mp-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&.selected]:bg-accent [&.drop-before]:[box-shadow:inset_0_2px_var(--accent)] [&.drop-after]:[box-shadow:inset_0_-2px_var(--accent)] flex items-center gap-2 w-full min-h-[44px] p-[6px_8px] [border:0] rounded-(--radius-s) bg-transparent text-left justify-start cursor-default text-foreground"
-                onClick={() => {
-                  onSet(set.id)
-                  onDone()
-                }}
-              >
-                <span className="mp-text flex flex-col min-w-0 flex-1">
-                  <span className="mp-name text-control font-medium leading-[1.4] overflow-hidden text-ellipsis whitespace-nowrap">
-                    {set.name}
-                  </span>
-                  <span className="mp-sub flex items-center gap-[5px] text-caption text-muted-foreground leading-[1.4]">
-                    {set.id === 'recommended'
-                      ? t('Recommended set of models')
-                      : t('{0} configured steps', { '0': set.steps.length })}
-                  </span>
-                </span>
-              </Button>
-            ))}
-            {virtual && <div aria-hidden="true" style={{ height: start * rowHeight }} />}
-            {items.slice(start, end).map((item) => {
-              if (item.kind === 'heading')
-                return (
-                  <div
-                    key={`heading:${item.key}`}
-                    role="presentation"
-                    style={{ height: rowHeight }}
-                    className="flex items-end gap-1.5 px-2 pb-1 text-caption font-medium text-muted-foreground"
-                  >
-                    <span className="truncate">{item.label}</span>
-                    {item.provider && usageByProvider.get(item.provider)}
-                  </div>
-                )
-              const { model, index } = item
-              return (
-                <div
-                  key={keyOf(model)}
-                  data-model-index={index}
-                  data-favorite-key={favoriteKeys.has(keyOf(model)) && editingFavorites ? keyOf(model) : undefined}
-                  role="menuitemradio"
-                  aria-checked={selected(model)}
-                  aria-posinset={index + 1}
-                  aria-setsize={rows.length}
-                  tabIndex={0}
-                  style={{ height: rowHeight }}
-                  className={`mp-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&.selected]:bg-accent [&.drop-before]:[box-shadow:inset_0_2px_var(--accent)] [&.drop-after]:[box-shadow:inset_0_-2px_var(--accent)] group flex items-center gap-2 w-full px-2 [border:0] rounded-(--radius-s) bg-transparent text-left justify-start cursor-default text-foreground mp-model-row [box-sizing:border-box] ${selected(model) ? ' selected' : ''}${dropTarget?.key === keyOf(model) ? (dropTarget.after ? ' drop-after' : ' drop-before') : ''}`}
-                  onClick={() => choose(model)}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      choose(model)
-                    } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-                      event.preventDefault()
-                      focusRow(
-                        event.key === 'Home'
-                          ? 0
-                          : event.key === 'End'
-                            ? rows.length - 1
-                            : index + (event.key === 'ArrowDown' ? 1 : -1),
-                      )
-                    }
+          <SortableContext items={shownFavorites} strategy={verticalListSortingStrategy}>
+            <div
+              className="mp-list flex-1 min-h-0 overflow-y-auto p-1 [overflow-anchor:none]"
+              ref={list}
+              aria-busy={query !== deferredQuery}
+              onScroll={(event) => {
+                if (virtual) setScrollTop(event.currentTarget.scrollTop)
+              }}
+            >
+              {sets.map((set) => (
+                <Button
+                  variant="secondary"
+                  type="button"
+                  key={set.id}
+                  className="bg-fill hover:bg-fill-hover mp-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&.selected]:bg-accent flex items-center gap-2 w-full min-h-[44px] p-[6px_8px] [border:0] rounded-(--radius-s) bg-transparent text-left justify-start cursor-default text-foreground"
+                  onClick={() => {
+                    onSet(set.id)
+                    onDone()
                   }}
                 >
-                  {favoriteKeys.has(keyOf(model)) && editingFavorites && (
-                    <FavoriteHandle
-                      id={keyOf(model)}
-                      disabled={savingFavorites}
-                      name={modelDisplayName(model.name)}
-                      className="mp-drag py-1"
-                      onKeyDown={(event) => {
-                        if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return
-                        event.preventDefault()
-                        event.stopPropagation()
-                        const direction = event.key === 'ArrowUp' ? -1 : 1
-                        const target =
-                          favoriteRows[favoriteRows.findIndex((entry) => keyOf(entry) === keyOf(model)) + direction]
-                        if (target) reorder(keyOf(model), keyOf(target), direction > 0)
-                      }}
-                    />
-                  )}
-                  <ProviderIcon provider={model.provider} size={14} />
-                  <span className="mp-name min-w-0 flex-1 truncate text-control font-medium">
-                    {modelDisplayName(model.name)}
+                  <span className="mp-text flex flex-col min-w-0 flex-1">
+                    <span className="mp-name text-control font-medium leading-[1.4] overflow-hidden text-ellipsis whitespace-nowrap">
+                      {set.name}
+                    </span>
+                    <span className="mp-sub flex items-center gap-[5px] text-caption text-muted-foreground leading-[1.4]">
+                      {set.id === 'recommended'
+                        ? t('Recommended set of models')
+                        : t('{0} configured steps', { '0': set.steps.length })}
+                    </span>
                   </span>
-                  {model.isLegacy && (
-                    <span className="flex-none text-caption text-muted-foreground">{t('Legacy')}</span>
-                  )}
-                  {!editingFavorites && index < 9 && (
-                    <Kbd className="mp-key flex-none opacity-0 group-hover:opacity-100 group-focus:opacity-100">
-                      ⌘{index + 1}
-                    </Kbd>
-                  )}
-                  {selected(model) && <Check size={15} className="flex-none text-brand" aria-hidden="true" />}
-                  {!editingFavorites && (
-                    <Button
-                      variant="secondary"
-                      type="button"
-                      disabled={savingFavorites}
-                      className={
-                        favorites.includes(keyOf(model))
-                          ? 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none on'
-                          : 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none opacity-0 group-hover:opacity-100 group-focus:opacity-100 focus-visible:opacity-100'
-                      }
-                      aria-label={
-                        favorites.includes(keyOf(model))
-                          ? t('Remove {0} from favorites', { '0': modelDisplayName(model.name) })
-                          : t('Add {0} to favorites', { '0': modelDisplayName(model.name) })
-                      }
-                      aria-pressed={favorites.includes(keyOf(model))}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        toggleFavorite(model)
-                      }}
+                </Button>
+              ))}
+              {virtual && <div aria-hidden="true" style={{ height: start * rowHeight }} />}
+              {items.slice(start, end).map((item) => {
+                if (item.kind === 'heading')
+                  return (
+                    <div
+                      key={`heading:${item.key}`}
+                      role="presentation"
+                      style={{ height: rowHeight }}
+                      className="flex items-end gap-1.5 px-2 pb-1 text-caption font-medium text-muted-foreground"
                     >
-                      <Star size={15} fill={favorites.includes(keyOf(model)) ? 'currentColor' : 'none'} />
-                    </Button>
-                  )}
-                </div>
-              )
-            })}
-            {virtual && <div aria-hidden="true" style={{ height: (rows.length - end) * rowHeight }} />}
-            {(q || tab !== 'sets') && !rows.length && (
-              <p className="mp-empty m-0 p-3 text-muted-foreground text-control leading-[1.5]">
-                {providerError || error || t('No matching models')}
-              </p>
-            )}
-            {(providerError || error) && (
-              <Button
-                variant="secondary"
-                type="button"
-                className="bg-fill hover:bg-fill-hover mp-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&.selected]:bg-accent [&.drop-before]:[box-shadow:inset_0_2px_var(--accent)] [&.drop-after]:[box-shadow:inset_0_-2px_var(--accent)] flex items-center gap-2 w-full min-h-[44px] p-[6px_8px] [border:0] rounded-(--radius-s) bg-transparent text-left justify-start cursor-default text-foreground"
-                onClick={() => {
-                  void reload().catch((reason) => setError(errorText(reason)))
-                }}
-              >
-                <span className="mp-text flex flex-col min-w-0 flex-1">
-                  <span className="mp-name text-control font-medium leading-[1.4] overflow-hidden text-ellipsis whitespace-nowrap">
-                    {t('Reload available models')}
+                      <span className="truncate">{item.label}</span>
+                      {item.provider && usageByProvider.get(item.provider)}
+                    </div>
+                  )
+                const { model, index } = item
+                const row = (sortable?: SortableFavorite) => (
+                  <div
+                    ref={sortable?.ref}
+                    data-model-index={index}
+                    role="menuitemradio"
+                    aria-checked={selected(model)}
+                    aria-posinset={index + 1}
+                    aria-setsize={rows.length}
+                    tabIndex={0}
+                    style={{ height: rowHeight, ...sortable?.style }}
+                    className={`mp-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&.selected]:bg-accent group flex items-center gap-2 w-full px-2 [border:0] rounded-(--radius-s) bg-transparent text-left justify-start cursor-default text-foreground mp-model-row [box-sizing:border-box] ${selected(model) ? ' selected' : ''}`}
+                    onClick={() => choose(model)}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        choose(model)
+                      } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+                        event.preventDefault()
+                        focusRow(
+                          event.key === 'Home'
+                            ? 0
+                            : event.key === 'End'
+                              ? rows.length - 1
+                              : index + (event.key === 'ArrowDown' ? 1 : -1),
+                        )
+                      }
+                    }}
+                  >
+                    {sortable && (
+                      <DragHandle
+                        {...sortable.handle}
+                        className="mp-drag py-1"
+                        aria-label={t('Reorder {0}', { '0': modelDisplayName(model.name) })}
+                        title={t('Drag to reorder. Alt+↑/↓ moves this favorite.')}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => {
+                          if (event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            const direction = event.key === 'ArrowUp' ? -1 : 1
+                            const target = shownFavorites[shownFavorites.indexOf(keyOf(model)) + direction]
+                            if (target) reorder(keyOf(model), target)
+                          } else sortable.handle.onKeyDown?.(event)
+                        }}
+                      />
+                    )}
+                    <ProviderIcon provider={model.provider} size={14} />
+                    <span className="mp-name min-w-0 flex-1 truncate text-control font-medium">
+                      {modelDisplayName(model.name)}
+                    </span>
+                    {model.isLegacy && (
+                      <span className="flex-none text-caption text-muted-foreground">{t('Legacy')}</span>
+                    )}
+                    {!editingFavorites && index < 9 && (
+                      <Kbd className="mp-key flex-none opacity-0 group-hover:opacity-100 group-focus:opacity-100">
+                        ⌘{index + 1}
+                      </Kbd>
+                    )}
+                    {selected(model) && <Check size={15} className="flex-none text-brand" aria-hidden="true" />}
+                    {!editingFavorites && (
+                      <Button
+                        variant="secondary"
+                        type="button"
+                        className={
+                          favorites.includes(keyOf(model))
+                            ? 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none on'
+                            : 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none opacity-0 group-hover:opacity-100 group-focus:opacity-100 focus-visible:opacity-100'
+                        }
+                        aria-label={
+                          favorites.includes(keyOf(model))
+                            ? t('Remove {0} from favorites', { '0': modelDisplayName(model.name) })
+                            : t('Add {0} to favorites', { '0': modelDisplayName(model.name) })
+                        }
+                        aria-pressed={favorites.includes(keyOf(model))}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          toggleFavorite(model)
+                        }}
+                      >
+                        <Star size={15} fill={favorites.includes(keyOf(model)) ? 'currentColor' : 'none'} />
+                      </Button>
+                    )}
+                  </div>
+                )
+                return favoriteKeys.has(keyOf(model)) && editingFavorites ? (
+                  <SortableFavoriteRow key={keyOf(model)} id={keyOf(model)}>
+                    {row}
+                  </SortableFavoriteRow>
+                ) : (
+                  <Fragment key={keyOf(model)}>{row()}</Fragment>
+                )
+              })}
+              {virtual && <div aria-hidden="true" style={{ height: (rows.length - end) * rowHeight }} />}
+              {(q || tab !== 'sets') && !rows.length && (
+                <p className="mp-empty m-0 p-3 text-muted-foreground text-control leading-[1.5]">
+                  {providerError || error || t('No matching models')}
+                </p>
+              )}
+              {(providerError || error) && (
+                <Button
+                  variant="secondary"
+                  type="button"
+                  className="bg-fill hover:bg-fill-hover mp-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&.selected]:bg-accent flex items-center gap-2 w-full min-h-[44px] p-[6px_8px] [border:0] rounded-(--radius-s) bg-transparent text-left justify-start cursor-default text-foreground"
+                  onClick={() => {
+                    void reload().catch((reason) => setError(errorText(reason)))
+                  }}
+                >
+                  <span className="mp-text flex flex-col min-w-0 flex-1">
+                    <span className="mp-name text-control font-medium leading-[1.4] overflow-hidden text-ellipsis whitespace-nowrap">
+                      {t('Reload available models')}
+                    </span>
                   </span>
-                </span>
-              </Button>
-            )}
-          </div>
+                </Button>
+              )}
+            </div>
+          </SortableContext>
           {createPortal(
-            <DragOverlay dropAnimation={null} zIndex={10000}>
+            <DragOverlay zIndex={10000}>
               {draggedFavorite && modelByKey.get(draggedFavorite) && (
-                <div className="pointer-events-none flex items-center gap-2 rounded-(--radius-s) border border-(--line-strong) bg-raised p-[6px_8px] text-control text-foreground shadow-lg">
-                  <GripVertical size={14} className="text-muted-foreground" />
-                  {modelDisplayName(modelByKey.get(draggedFavorite)!.name)}
+                <div className="pointer-events-none flex h-full w-full items-center gap-2 rounded-(--radius-s) border border-(--line-strong) bg-raised px-2 text-control font-medium text-foreground shadow-lg">
+                  <GripVertical size={14} className="flex-none text-muted-foreground" />
+                  <ProviderIcon provider={modelByKey.get(draggedFavorite)!.provider} size={14} />
+                  <span className="min-w-0 flex-1 truncate">
+                    {modelDisplayName(modelByKey.get(draggedFavorite)!.name)}
+                  </span>
                 </div>
               )}
             </DragOverlay>,
@@ -559,33 +583,20 @@ export function ModelPicker({
   )
 }
 
-/** The grip that starts a pointer-driven drag; Alt+↑/↓ still reorders from the keyboard. */
-function FavoriteHandle({
-  id,
-  disabled,
-  name,
-  className,
-  onKeyDown,
-}: {
-  id: string
-  disabled: boolean
-  name: string
-  className: string
-  onKeyDown: (event: React.KeyboardEvent) => void
-}) {
-  const { attributes, listeners, setNodeRef } = useDraggable({ id, disabled })
-  return (
-    <DragHandle
-      ref={setNodeRef}
-      className={className}
-      {...attributes}
-      {...listeners}
-      disabled={disabled}
-      focusableWhenDisabled
-      aria-label={t('Reorder {0}', { '0': name })}
-      title={t('Drag to reorder. Alt+↑/↓ moves this favorite.')}
-      onClick={(event) => event.stopPropagation()}
-      onKeyDown={onKeyDown}
-    />
-  )
+interface SortableFavorite {
+  ref: Ref<HTMLDivElement>
+  style: CSSProperties
+  handle: Pick<ComponentProps<typeof DragHandle>, 'ref' | 'onKeyDown'> & Record<string, unknown>
+}
+
+/** One favorite while they are being reordered. The grip starts the drag, by pointer or Space; Alt+↑/↓ moves it directly. */
+function SortableFavoriteRow({ id, children }: { id: string; children(row: SortableFavorite): ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  })
+  return children({
+    ref: setNodeRef,
+    style: { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.35 : undefined },
+    handle: { ...attributes, ...listeners, ref: setActivatorNodeRef },
+  })
 }
