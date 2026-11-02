@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
@@ -255,6 +256,14 @@ export class HostBrowser implements HostedBrowserBackend {
     this.profiles.rename(id, name)
     this.changed()
   }
+  /** Open tabs of a profile as a stable key. Without a running browser there are none, and its data can still be cleared. */
+  private profileTabs(id: string): string {
+    return (this.runtime?.list() ?? [])
+      .filter((tab) => tab.profileId === id)
+      .map((tab) => tab.id)
+      .sort()
+      .join(',')
+  }
   reviewProfile(id: string, remove: boolean) {
     if (remove) this.profiles.requireCustom(id)
     const profile = this.catalog().profiles.find((profile) => profile.id === id && !profile.temporary)
@@ -262,12 +271,7 @@ export class HostBrowser implements HostedBrowserBackend {
     for (const [token, review] of this.profileReviews)
       if (review.expires < Date.now()) this.profileReviews.delete(token)
     if (this.profileReviews.size >= 20) throw new Error('Finish the pending profile reviews first.')
-    const tabs = this.ready()
-      .list()
-      .filter((tab) => tab.profileId === id)
-      .map((tab) => tab.id)
-      .sort()
-      .join(',')
+    const tabs = this.profileTabs(id)
     const token = randomUUID()
     this.profileReviews.set(token, { id, name: profile.name, remove, tabs, expires: Date.now() + 5 * 60_000 })
     return { token, id, name: profile.name, tabs: tabs ? tabs.split(',').length : 0, remove }
@@ -276,27 +280,23 @@ export class HostBrowser implements HostedBrowserBackend {
     const review = this.profileReviews.get(token)
     this.profileReviews.delete(token)
     if (!review || review.expires < Date.now()) throw new Error('Review this profile change again.')
-    const runtime = this.ready()
-    const current = runtime
-      .list()
-      .filter((tab) => tab.profileId === review.id)
-      .map((tab) => tab.id)
-      .sort()
-      .join(',')
+    const runtime = this.runtime
     if (
-      current !== review.tabs ||
+      this.profileTabs(review.id) !== review.tabs ||
       this.catalog().profiles.find((profile) => profile.id === review.id)?.name !== review.name
     )
       throw new Error('The profile or its tabs changed. Review the action again.')
-    await this.profiles.withLock(review.id, () =>
-      runtime.withClosedProfile(review.id, async () => {
-        await this.factory!.clearProfile(review.id)
+    await this.profiles.withLock(review.id, async () => {
+      const clear = async () => {
+        if (this.factory) await this.factory.clearProfile(review.id)
+        else await rm(join(this.root, 'profiles', review.id), { recursive: true, force: true })
         if (review.remove) {
           await resetDefault(review.id)
           this.profiles.remove(review.id)
         }
-      }),
-    )
+      }
+      await (runtime ? runtime.withClosedProfile(review.id, clear) : clear())
+    })
     this.changed()
   }
   downloads(device: string, thread: string) {

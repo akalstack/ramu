@@ -8,7 +8,14 @@ import { t } from '../i18n'
 import { errorText } from '../lib/errors'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { Switch } from '@/components/ui/switch'
 import { Dropdown } from '../Menu'
@@ -249,22 +256,24 @@ export function HostBrowserSettings({
               {review?.name}
             </DialogDescription>
           </DialogHeader>
-          <Button variant="secondary" disabled={busy} onClick={() => setReview(null)}>
-            {t('Cancel')}
-          </Button>
-          <Button
-            disabled={busy}
-            onClick={() =>
-              review &&
-              void act(async () => {
-                await invokeOn(hostId, 'hostBrowser.profileConfirm', review.token)
-                if (review.remove) onRemoved(review.id)
-                setReview(null)
-              })
-            }
-          >
-            {t('Confirm')}
-          </Button>
+          <DialogFooter>
+            <Button variant="secondary" disabled={busy} onClick={() => setReview(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                review &&
+                void act(async () => {
+                  await invokeOn(hostId, 'hostBrowser.profileConfirm', review.token)
+                  if (review.remove) onRemoved(review.id)
+                  setReview(null)
+                })
+              }
+            >
+              {t('Confirm')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,6 +33,22 @@ it('enables fresh hosts without downloading a browser at startup', () => {
   const fresh = new HostBrowser(join(dir, 'fresh'), () => {})
   expect(fresh.selected()).toBe(true)
   expect(fresh.status()).toMatchObject({ enabled: true, available: false })
+})
+
+it('reviews and clears a profile before any browser has started', async () => {
+  const idle = new HostBrowser(join(dir, 'idle'), () => {})
+  const profile = idle.createProfile('Work')
+  const profileDir = join(dir, 'idle', 'profiles', profile.id)
+  mkdirSync(profileDir, { recursive: true })
+  writeFileSync(join(profileDir, 'Cookies'), 'data')
+  const review = idle.reviewProfile(profile.id, false)
+  expect(review).toMatchObject({ id: profile.id, tabs: 0, remove: false })
+  await idle.confirmProfile(review.token, async () => {})
+  expect(existsSync(profileDir)).toBe(false)
+  expect(idle.catalog().profiles.some((entry) => entry.id === profile.id)).toBe(true)
+  const removal = idle.reviewProfile(profile.id, true)
+  await idle.confirmProfile(removal.token, async () => {})
+  expect(idle.catalog().profiles.some((entry) => entry.id === profile.id)).toBe(false)
 })
 
 it('prefers a connected desktop browser unless Host Chromium is chosen, and remembers the choice', () => {
