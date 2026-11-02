@@ -85,6 +85,11 @@ describe('pull request parsing', () => {
     expect(forge.availabilityFromError('To get started with GitHub CLI, please run:  gh auth login')).toBe('signed-out')
     expect(
       forge.availabilityFromError(
+        'gh: To use GitHub CLI in a GitHub Actions workflow, set the GH_TOKEN environment variable.',
+      ),
+    ).toBe('signed-out')
+    expect(
+      forge.availabilityFromError(
         'none of the git remotes configured for this repository point to a known GitHub host',
       ),
     ).toBe('not-github')
