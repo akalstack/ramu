@@ -195,8 +195,13 @@ export function ModelBar({
         icon={
           <>
             {fast ? <Zap size={13} /> : <ProviderIcon provider={settings.provider} size={14} />}
-            <span title={pending ? t('Applying model in {0}s', { 0: seconds }) : undefined}>
-              {modelName} <span className="muted text-muted-foreground">{effortName}</span>
+            <span
+              className="flex min-w-0 items-baseline gap-1"
+              title={pending ? t('Applying model in {0}s', { 0: seconds }) : modelName}
+            >
+              {/* A long model id (an OpenCode route) is cut short so the effort and the rest of the bar stay visible. */}
+              <span className="max-w-[180px] truncate">{modelName}</span>
+              <span className="muted flex-none text-muted-foreground">{effortName}</span>
             </span>
             <ChevronDown size={12} />
           </>
@@ -229,7 +234,7 @@ export function ModelBar({
               role="group"
               aria-label={t('Model and effort controls')}
             >
-              <div className="model-bar-summary [&_.model-bar-mode]:[border:0] [&_.model-bar-mode]:text-muted-foreground [&_.model-bar-mode]:flex-none [&_.model-bar-mode]:w-6 [&_.model-bar-mode]:h-6 [&_.model-bar-mode]:min-h-6 [&_.model-bar-mode]:p-0 [&_.model-bar-mode]:rounded-(--radius-s) [&_.model-bar-mode[aria-pressed='true']]:bg-accent [&_.model-bar-mode[aria-pressed='true']]:text-foreground [&_.model-bar-fast[aria-pressed='true']]:text-brand [&_.model-bar-fast]:w-7 [&_.model-bar-fast]:h-7 [&_.model-bar-fast]:rounded-(--radius-s) grid items-center [grid-template-columns:auto_minmax(0,_1fr)_auto] gap-1.5 min-h-7">
+              <div className="model-bar-summary [&_.model-bar-mode]:[border:0] [&_.model-bar-mode]:text-muted-foreground [&_.model-bar-mode]:flex-none [&_.model-bar-mode]:w-6 [&_.model-bar-mode]:h-6 [&_.model-bar-mode]:min-h-6 [&_.model-bar-mode]:p-0 [&_.model-bar-mode]:rounded-(--radius-s) [&_.model-bar-mode[aria-pressed='true']]:bg-accent [&_.model-bar-mode[aria-pressed='true']]:text-foreground [&_.model-bar-fast[aria-pressed='true']]:text-brand [&_.model-bar-fast]:w-7 [&_.model-bar-fast]:h-7 [&_.model-bar-fast]:rounded-(--radius-s) flex items-center gap-1.5 min-h-7">
                 {fastSupported && (
                   <Button
                     variant="ghost"
@@ -248,15 +253,15 @@ export function ModelBar({
                     <Zap size={15} />
                   </Button>
                 )}
-                <div className="model-bar-title [&_strong]:min-w-0 [&_strong]:overflow-hidden [&_strong]:text-ellipsis [&_strong]:whitespace-nowrap [&_strong]:text-foreground [&_strong]:text-chat [&_strong]:font-semibold flex items-center min-w-0 justify-start flex-nowrap gap-1">
+                <div className="model-bar-title flex-1 overflow-hidden [&_strong]:min-w-0 [&_strong]:overflow-hidden [&_strong]:text-ellipsis [&_strong]:whitespace-nowrap [&_strong]:text-foreground [&_strong]:text-chat [&_strong]:font-semibold flex items-center min-w-0 justify-start flex-nowrap gap-1">
                   <Button
                     variant="secondary"
                     disabled={disabled}
-                    className="bg-fill hover:bg-fill-hover model-bar-model-name [&_>_svg]:flex-none [&_>_svg]:text-muted-foreground [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:text-foreground min-w-0 [border:0] bg-transparent p-0 gap-1 flex items-center"
+                    className="bg-fill hover:bg-fill-hover model-bar-model-name shrink max-w-[min(100%,260px)] [&_>_svg]:flex-none [&_>_svg]:text-muted-foreground [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:text-foreground min-w-0 [border:0] bg-transparent p-0 gap-1 flex items-center"
                     aria-label={t('Select model · {0}', { '0': modelName })}
                     onClick={() => setPicker('model')}
                   >
-                    <strong>{modelName}</strong>
+                    <strong title={modelName}>{modelName}</strong>
                     <ChevronRight size={13} />
                   </Button>
                   {(efforts.length > 0 || shown.provider === 'codex') && (
@@ -272,7 +277,7 @@ export function ModelBar({
                   )}
                 </div>
                 <div
-                  className="model-bar-actions [&_.model-bar-mode]:w-6 [&_.model-bar-mode]:h-6 [&_.model-bar-mode]:min-h-6 [&_.model-bar-mode]:p-0 [&_.model-bar-mode]:rounded-(--radius-s) flex items-center gap-1"
+                  className="model-bar-actions flex-none [&_.model-bar-mode]:w-6 [&_.model-bar-mode]:h-6 [&_.model-bar-mode]:min-h-6 [&_.model-bar-mode]:p-0 [&_.model-bar-mode]:rounded-(--radius-s) flex items-center gap-1"
                   role="group"
                   aria-label={t('Model bar actions')}
                 >
