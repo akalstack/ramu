@@ -405,9 +405,11 @@ export function SettingsPage({
                     ? `${scope.readOnlyHosts.join(', ')}: ${t(VIEW_ONLY_WRITE_NOTICE)}`
                     : (scope.message ??
                       (scope.target === 'all'
-                        ? t('Changes apply to {0} connected hosts. Offline hosts keep their settings.', {
-                            0: scope.targets.length,
-                          })
+                        ? scope.targets.length === 1
+                          ? t('Changes apply to the connected host. Offline hosts keep their settings.')
+                          : t('Changes apply to {0} connected hosts. Offline hosts keep their settings.', {
+                              0: scope.targets.length,
+                            })
                         : t('Changes apply to the selected host.')))}
             </span>
             {scope.permissionHosts.map((host) => (

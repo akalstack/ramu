@@ -182,17 +182,19 @@ function ResourcesPanel({ resources }: { resources: ReturnType<typeof useResourc
         const used = data.memory ? data.memory.totalBytes - data.memory.availableBytes : null
         return (
           <div key={id} className="flex flex-col">
-            <p className="m-0 flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground" role="status">
-              {resources.snapshots.length > 1 && <span className="text-foreground">{name(id)}</span>}
-              {used !== null && data.memory && (
-                <span>{t('{0} of {1} GB used', { 0: gigabytes(used), 1: gigabytes(data.memory.totalBytes) })}</span>
-              )}
-              <span>
-                {t('Ramu {0} GB', {
+            <p className="m-0 text-caption text-muted-foreground" role="status">
+              {[
+                resources.snapshots.length > 1 ? name(id) : '',
+                used !== null && data.memory
+                  ? t('{0} of {1} GB used', { 0: gigabytes(used), 1: gigabytes(data.memory.totalBytes) })
+                  : '',
+                t('Ramu {0} GB', {
                   0: gigabytes(ramuBytes + data.threads.reduce((sum, thread) => sum + thread.rssBytes, 0)),
-                })}
-              </span>
-              {data.memory && isLowMemory(data.memory) && <span className="text-warn">{t('Low memory')}</span>}
+                }),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              {data.memory && isLowMemory(data.memory) && <span className="text-warn"> · {t('Low memory')}</span>}
             </p>
             {data.threads.map((thread) => (
               <ThreadRow
@@ -203,7 +205,7 @@ function ResourcesPanel({ resources }: { resources: ReturnType<typeof useResourc
                 onStopped={() => void refetch()}
               />
             ))}
-            {ramuBytes > 0 && (
+            {ramuBytes > 0 && data.threads.length > 0 && (
               <div className="flex min-h-7 items-center gap-2 pl-6 text-caption text-muted-foreground">
                 <span className="min-w-0 flex-1 truncate">{t('Ramu (service, browser)')}</span>
                 <Figure bytes={ramuBytes} />

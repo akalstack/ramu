@@ -284,7 +284,8 @@ export class SubagentRunner {
     // Its own copy of the checkout, when asked for: parallel helpers never overwrite each other or the chat.
     const isolationRoot = this.host.isolationRoot()
     const isolation =
-      this.host.preferences()?.subagents.isolate && isolationRoot
+      // A teammate works in the thread's own checkout, one writer at a time, so it can always be messaged.
+      this.host.preferences()?.subagents.isolate && isolationRoot && !input.teammate
         ? await createIsolation({
             cwd: parent.cwd,
             covers: parent.covers,

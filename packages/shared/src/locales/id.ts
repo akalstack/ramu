@@ -10,6 +10,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open providers': 'Buka provider',
   'Favorites': 'Favorit',
   'Brief': 'Ringkas',
+  'Changes apply to the connected host. Offline hosts keep their settings.': 'Perubahan berlaku untuk host yang terhubung. Host luring mempertahankan pengaturannya.',
+  'Make the first recap': 'Buat recap pertama',
   'Float': 'Mengambang',
   'Float: keep a live view in the corner': 'Mengambang: simpan tampilan langsung di sudut',
   'Live view': 'Tampilan langsung',

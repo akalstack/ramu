@@ -597,8 +597,21 @@ export class AgentThreadService {
     const base = { title: task.title, queued: session ? this.agents.queued(session.id).length : 0 }
     if (!session)
       return { ...base, running: false, prompt: '', settings: {} as AgentSettings, repo: null, problem: 'no-agent' }
+    let transcript: string
+    try {
+      transcript = this.agents.continuationPrompt(session.id)
+    } catch {
+      return {
+        ...base,
+        running: false,
+        prompt: '',
+        settings: session.settings,
+        repo: null,
+        problem: 'no-agent',
+      }
+    }
     const prompt = clipText(
-      redactSecrets(this.agents.continuationPrompt(session.id))
+      redactSecrets(transcript)
         // Those event numbers exist only on this host.
         .split('\n')
         .filter((line) => !line.includes('session_recall'))
@@ -623,10 +636,15 @@ export class AgentThreadService {
     const projects = await Promise.all(
       this.workspace.listProjects().map(async (project) => {
         const repositories = this.workspace.listRepositories(project.id)
+        // Every remote counts: a fork may call the shared repository upstream rather than origin.
         const remotes =
           repositories.length === 1
-            ? await git(repositories[0]!.root, ['remote', 'get-url', 'origin']).then(
-                (url) => [url.trim()],
+            ? await git(repositories[0]!.root, ['config', '--get-regexp', '^remote\\..*\\.url$']).then(
+                (output) =>
+                  output
+                    .split('\n')
+                    .map((line) => line.split(/\s+/)[1] ?? '')
+                    .filter(Boolean),
                 () => [],
               )
             : []

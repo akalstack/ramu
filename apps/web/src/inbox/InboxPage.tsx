@@ -192,16 +192,23 @@ function CurrentHostInbox() {
                             })
                           : ''}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="text-muted-foreground"
-                      aria-label={t('Refresh recap')}
-                      disabled={recaps.recap?.generating}
-                      onClick={() => void recaps.refresh()}
-                    >
-                      <RefreshCw size={13} />
-                    </Button>
+                    {recaps.recap?.generatedAt || recaps.recap?.generating ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted-foreground"
+                        aria-label={t('Refresh recap')}
+                        disabled={recaps.recap?.generating}
+                        onClick={() => void recaps.refresh()}
+                      >
+                        <RefreshCw size={13} />
+                      </Button>
+                    ) : (
+                      <Button variant="secondary" size="xs" onClick={() => void recaps.refresh()}>
+                        <RefreshCw size={12} />
+                        {t('Make the first recap')}
+                      </Button>
+                    )}
                   </div>
                 )}
                 {recaps.recap?.error && (
