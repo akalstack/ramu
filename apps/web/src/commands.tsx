@@ -1,3 +1,4 @@
+import { openComputer } from './chat/openComputer'
 import { NEW_TAB, openBrowser } from './views/browserPane'
 import { syncRepositories } from './git/syncRepositories'
 import { SETTINGS_SECTIONS } from './settings/SettingsPage'
@@ -442,6 +443,14 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       category: t('View'),
       keys: 'mod+alt+c',
       run: () => taskId && taskAction(taskId, 'toggle-chat'),
+      when: hasTask,
+    },
+    {
+      id: 'view.computer',
+      title: t('Open computer'),
+      category: t('View'),
+      keys: 'mod+alt+m',
+      run: () => taskId && void openComputer(invoke as never, taskId),
       when: hasTask,
     },
     {

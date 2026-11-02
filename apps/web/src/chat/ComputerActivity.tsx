@@ -2,6 +2,7 @@ import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Ellipsis, Keyboard, Monitor, PictureInPicture2 } from 'lucide-react'
 import { floatLiveView } from '../liveView/liveViewStore'
+import { OPEN_COMPUTER_EVENT } from './openComputer'
 import { useAppSettings } from '../settings/AppSettings'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
 import { COMPUTER_FRAME_STALE_MS, type ComputerAction } from '@ramu/shared/computerBridge'
@@ -458,6 +459,20 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   const [error, setError] = useState('')
   const [needed, setNeeded] = useState<DevicePermission | null>(null)
   const [viewing, setViewing] = useState(false)
+  const tray = useRef<HTMLDivElement>(null)
+  // The header button and shortcut ask for this thread's computer: the viewer when one is shared, else this tray.
+  useEffect(() => {
+    const open = (event: Event) => {
+      if ((event as CustomEvent<{ taskId: string }>).detail.taskId !== taskId) return
+      if (session) setViewing(true)
+      else {
+        tray.current?.scrollIntoView({ block: 'nearest' })
+        tray.current?.querySelector<HTMLElement>('button')?.focus()
+      }
+    }
+    window.addEventListener(OPEN_COMPUTER_EVENT, open)
+    return () => window.removeEventListener(OPEN_COMPUTER_EVENT, open)
+  }, [taskId, session])
   const [asked, setAsked] = useState(false)
   const [apps, setApps] = useState<string[]>([])
   const [appHint, setAppHint] = useState('')
@@ -520,6 +535,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   if (!taskId || (!enabled && !viewOnly)) return null
   return (
     <ComposerTraySection
+      ref={tray}
       aria-label={t('Computer')}
       title={t('Computer')}
       icon={<Monitor />}

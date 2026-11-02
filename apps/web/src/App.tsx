@@ -34,6 +34,7 @@ import {
   PanelRight,
   SquareTerminal,
   Globe,
+  Monitor,
   Search,
 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -65,6 +66,7 @@ import { SchedulesPage } from './Automation'
 import { InboxPage } from './inbox/InboxPage'
 import { useInboxModel } from './inbox/useBrief'
 import { LiveView } from './liveView/LiveView'
+import { openComputer } from './chat/openComputer'
 import { AUTO_PROJECT, DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
 import { SettingsPanel } from './settings/SettingsPanel'
 import { UsageFooter, UsageRings } from './settings/Usage'
@@ -518,6 +520,19 @@ function Shell() {
           <Globe data-icon="inline-start" />
         </Button>
       )}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
+        aria-label={t('Computer')}
+        title={`${t('Open computer')} (${formatKeys('mod+alt+m')})`}
+        disabled={!ui.activeTaskId}
+        onClick={() => {
+          if (ui.activeTaskId) void openComputer(hostInvoke as never, ui.activeTaskId)
+        }}
+      >
+        <Monitor data-icon="inline-start" />
+      </Button>
       <Button
         variant="ghost"
         size="icon-sm"
