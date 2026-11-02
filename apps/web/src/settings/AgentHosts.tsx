@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AgentHostSummary } from '@ramu/shared/types'
-import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { parsePairInput } from '@ramu/contracts'
 import { Button } from '@/components/desktop-button'
 import { Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -12,11 +12,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Dialog as ConfirmDialog } from '../Menu'
+import { Dialog as ConfirmDialog, Dropdown } from '../Menu'
 import { invoke } from '../ipc'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
 import { t, useLanguage } from '../i18n'
+import { useComputers } from '../workspace/computers'
+import { agentHostChoices } from './agentHostChoices'
+import { SettingsCard, SettingsCardList, SettingsSectionHead } from './cards'
+
+const OTHER_HOST = 'other'
 
 /**
  * Other hosts this host's agents may start threads on. Adding one pairs this host there with a code from that host; the
@@ -26,12 +31,42 @@ export function AgentHosts() {
   useLanguage()
   const [hosts, setHosts] = useState<AgentHostSummary[] | null>(null)
   const [adding, setAdding] = useState(false)
+  const computers = useComputers()
+  const [choice, setChoice] = useState(OTHER_HOST)
   const [form, setForm] = useState({ address: '', code: '', name: '' })
   const [busy, setBusy] = useState(false)
   const [forgetting, setForgetting] = useState<AgentHostSummary | null>(null)
   useEffect(() => {
     void invoke('network.agentHosts').then(setHosts, () => setHosts([]))
   }, [])
+  const choices = agentHostChoices(computers?.computers ?? [], hosts ?? [])
+  const pick = (id: string) => {
+    const computer = choices.find((entry) => entry.id === id)
+    setChoice(id)
+    setForm((current) => ({ ...current, address: computer?.url ?? '', name: computer?.name ?? '' }))
+  }
+  const open = () => {
+    setForm({ address: '', code: '', name: '' })
+    if (choices[0]) pick(choices[0].id)
+    else setChoice(OTHER_HOST)
+    setAdding(true)
+  }
+  // A pasted pairing link carries the address too, so it fills both; a bare code is left as typed.
+  const enterCode = (text: string) => {
+    setForm((current) => ({ ...current, code: text }))
+    if (!/^(ramu:|https?:|\{)/i.test(text.trim())) return
+    try {
+      const parsed = parsePairInput(text)
+      setChoice(OTHER_HOST)
+      setForm((current) => ({
+        address: parsed.url,
+        code: parsed.code ?? '',
+        name: current.name || (parsed.name ?? ''),
+      }))
+    } catch (error) {
+      notifyError(errorText(error), t('Hosts for agents'))
+    }
+  }
   const add = async () => {
     setBusy(true)
     try {
@@ -47,30 +82,32 @@ export function AgentHosts() {
   if (!hosts) return null
   return (
     <>
-      <SettingsGroupTitle className="mt-5">{t('Hosts for agents')}</SettingsGroupTitle>
-      <SettingsRow>
-        <SettingsLabel
-          title={t('Add a host for agents')}
-          help={t(
-            'Agents here can start threads on these hosts, after you approve each start. A host pairing can only start, check and message the threads it starts; that host decides their model and the most access they get.',
-          )}
-        />
-        <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setAdding(true)}>
-          <Plus size={14} />
-          {t('Add a host…')}
-        </Button>
-      </SettingsRow>
-      {hosts.map((host) => (
-        <SettingsRow key={host.id}>
-          <SettingsLabel
-            title={host.name}
-            help={t('{0} · shown there as device {1}', { 0: host.address, 1: host.deviceId })}
-          />
-          <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setForgetting(host)}>
-            {t('Forget')}
+      <SettingsSectionHead
+        title={t('Hosts for agents')}
+        help={t('Let agents here start threads on another host. You approve each start.')}
+        action={
+          <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={open}>
+            <Plus size={14} />
+            {t('Add a host…')}
           </Button>
-        </SettingsRow>
-      ))}
+        }
+      />
+      {hosts.length > 0 && (
+        <SettingsCardList>
+          {hosts.map((host) => (
+            <SettingsCard
+              key={host.id}
+              title={host.name}
+              meta={t('{0} · shown there as device {1}', { 0: host.address, 1: host.deviceId })}
+              actions={
+                <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setForgetting(host)}>
+                  {t('Forget')}
+                </Button>
+              }
+            />
+          ))}
+        </SettingsCardList>
+      )}
       {adding && (
         <Dialog
           open
@@ -90,25 +127,42 @@ export function AgentHosts() {
                 <DialogTitle>{t('Add a host for agents')}</DialogTitle>
                 <DialogDescription>
                   {t(
-                    'On the other host, run ramu pair or open Settings → Remote access → Pair a device, then enter its address and code.',
+                    'Get a pairing code on that host: run ramu pair, or open Settings → Remote access → Pair a device.',
                   )}
                 </DialogDescription>
               </DialogHeader>
+              {choices.length > 0 && (
+                <div className="flex flex-col gap-1 text-caption text-muted-foreground">
+                  {t('Host')}
+                  <Dropdown
+                    label={t('Host')}
+                    value={choice}
+                    options={[
+                      ...choices.map((computer) => ({ value: computer.id, label: computer.name })),
+                      { value: OTHER_HOST, label: t('Another host') },
+                    ]}
+                    onChange={pick}
+                  />
+                </div>
+              )}
+              {choice === OTHER_HOST && (
+                <label className="flex flex-col gap-1 text-caption text-muted-foreground">
+                  {t('Address')}
+                  <Input
+                    placeholder="http://100.64.0.2:7788"
+                    autoFocus
+                    value={form.address}
+                    onChange={(event) => setForm({ ...form, address: event.target.value })}
+                  />
+                </label>
+              )}
               <label className="flex flex-col gap-1 text-caption text-muted-foreground">
-                {t('Address')}
-                <Input
-                  placeholder="http://100.64.0.2:7788"
-                  autoFocus
-                  value={form.address}
-                  onChange={(event) => setForm({ ...form, address: event.target.value })}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-caption text-muted-foreground">
-                {t('Pairing code')}
+                {t('Pairing link or code')}
                 <Input
                   placeholder="K7QM2-X9RTD"
+                  autoFocus={choice !== OTHER_HOST}
                   value={form.code}
-                  onChange={(event) => setForm({ ...form, code: event.target.value })}
+                  onChange={(event) => enterCode(event.target.value)}
                 />
               </label>
               <label className="flex flex-col gap-1 text-caption text-muted-foreground">
@@ -120,6 +174,11 @@ export function AgentHosts() {
                   onChange={(event) => setForm({ ...form, name: event.target.value })}
                 />
               </label>
+              <p className="m-0 text-caption text-muted-foreground">
+                {t(
+                  'Agents can only start, check and message the threads they start. That host decides their model and the most access they get.',
+                )}
+              </p>
               <DialogFooter>
                 <Button
                   variant="secondary"

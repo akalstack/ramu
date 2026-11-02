@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '@/components/desktop-button'
+import { SettingsGroupTitle } from '@/components/settings-row'
 import { t } from '../i18n'
 
 /** The compact look of every card in a Settings list: a tight header row, one quiet meta line, actions at the end. */
@@ -37,6 +38,31 @@ export function SettingsCard({
     </article>
   )
 }
+
+/** A section's title and one line on what it is for, with its main action at the end. */
+export function SettingsSectionHead({
+  title,
+  help,
+  action,
+}: {
+  title: ReactNode
+  help?: ReactNode
+  action?: ReactNode
+}) {
+  return (
+    <div className="mt-5 mb-3 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <SettingsGroupTitle className="mb-1">{title}</SettingsGroupTitle>
+        {help && <p className="m-0 text-caption text-muted-foreground">{help}</p>}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+/** A settings line inside a card: its label, then a control of fixed width so labels are never squeezed. */
+export const SETTINGS_CARD_LINE =
+  'flex min-h-8 items-center justify-between gap-3 [&_.dropdown-trigger]:w-[150px] [&_.dropdown-trigger]:flex-none'
 
 /** Cards stacked tightly, as one list. */
 export function SettingsCardList({ children }: { children: ReactNode }) {

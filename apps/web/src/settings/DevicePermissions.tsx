@@ -17,6 +17,7 @@ import {
 import type { NetworkDevice, NetworkStatus } from '@ramu/shared/types'
 import { useCallback, useEffect, useState } from 'react'
 import { Dropdown } from '../Menu'
+import { SETTINGS_CARD_LINE } from './cards'
 import { invokeOn } from '../ipc'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
@@ -120,30 +121,32 @@ export function DevicePermissionList({ device, invoke }: { device: NetworkDevice
   const held = (permission: DevicePermission): PermissionGrant | null =>
     device.permissions ? (device.permissions[permission] ?? null) : { until: null }
   return (
-    <div className="mb-3 flex flex-wrap gap-2 pl-1">
+    <div className="mt-1 flex flex-col gap-0.5 border-t border-border pt-1.5">
       {DEVICE_PERMISSIONS.map((permission) => {
         const grant = held(permission)
         const state = device.blocked?.includes(permission) ? t('Never') : grantText(grant)
         return (
-          <Dropdown
-            key={permission}
-            label={`${t(PERMISSION_LABEL[permission])}: ${state}`}
-            value=""
-            placeholder={`${t(PERMISSION_LABEL[permission])} · ${state}`}
-            options={[
-              ...PERMISSION_DURATIONS.map((duration) => ({ value: duration, label: t(DURATION_LABEL[duration]) })),
-              { value: 'revoke', label: t('Off') },
-              { value: 'never', label: t('Never (no more requests)') },
-            ]}
-            onChange={(value) =>
-              void invoke(
-                'network.setDevicePermission',
-                device.id,
-                permission,
-                value as PermissionDuration | 'revoke' | 'never',
-              )
-            }
-          />
+          <div key={permission} className={SETTINGS_CARD_LINE}>
+            <span className="min-w-0 flex-1 truncate text-control">{t(PERMISSION_LABEL[permission])}</span>
+            <Dropdown
+              label={`${t(PERMISSION_LABEL[permission])}: ${state}`}
+              value=""
+              placeholder={state}
+              options={[
+                ...PERMISSION_DURATIONS.map((duration) => ({ value: duration, label: t(DURATION_LABEL[duration]) })),
+                { value: 'revoke', label: t('Off') },
+                { value: 'never', label: t('Never (no more requests)') },
+              ]}
+              onChange={(value) =>
+                void invoke(
+                  'network.setDevicePermission',
+                  device.id,
+                  permission,
+                  value as PermissionDuration | 'revoke' | 'never',
+                )
+              }
+            />
+          </div>
         )
       })}
     </div>

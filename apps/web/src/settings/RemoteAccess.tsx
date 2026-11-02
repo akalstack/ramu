@@ -10,10 +10,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { SETTINGS_CARD_LINE, SettingsCard } from './cards'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Check, Copy, Link2, Monitor, Network, Plus, Radar, Settings2, Terminal } from 'lucide-react'
+import { Check, ChevronDown, Copy, Link2, Monitor, Network, Plus, Radar, Settings2, Terminal } from 'lucide-react'
 import { useContext, useCallback, useEffect, useRef, useState } from 'react'
 import type { Computer, Computers as ComputerList, NetworkStatus, PairingOffer } from '@ramu/shared/types'
 import { Dialog as ConfirmDialog, Dropdown, timeAgo } from '../Menu'
@@ -187,6 +189,7 @@ function ThisComputer() {
   const listening = status.listening ? `${status.tls ? 'https' : 'http'}://${status.host}:${status.port}` : null
   return (
     <>
+      <AgentHosts />
       <SettingsGroupTitle>{t('Let other devices connect')}</SettingsGroupTitle>
       <SettingsRow className="settings-toggle">
         <SettingsLabel
@@ -244,37 +247,6 @@ function ThisComputer() {
           )}
         </>
       )}
-      {!managed && (
-        <>
-          <SettingsRow>
-            <SettingsLabel
-              title={t('Network')}
-              help={t(
-                'Choose your VPN address (Tailscale, NetBird, ZeroTier, WireGuard) to keep Ramu off other networks.',
-              )}
-            />
-            <Dropdown label={t('Network')} value={host} options={options} onChange={setHost} disabled={busy} />
-          </SettingsRow>
-          <SettingsRow>
-            <SettingsLabel title={t('Port')} help={portValid ? undefined : t('Use a number from 1024 to 65535.')} />
-            <Input
-              aria-label={t('Port')}
-              inputMode="numeric"
-              value={port}
-              aria-invalid={!portValid}
-              disabled={busy}
-              onChange={(event) => setPort(event.target.value.replace(/\D/g, '').slice(0, 5))}
-            />
-          </SettingsRow>
-        </>
-      )}
-      {changed && !managed && (
-        <div className="flex justify-end pb-3">
-          <Button variant="default" disabled={busy || !portValid} onClick={() => void apply(true)}>
-            {t('Apply')}
-          </Button>
-        </div>
-      )}
       {status.enabled && (
         <p className="muted text-muted-foreground small text-caption m-[0_0_12px]" role="status">
           {listening
@@ -294,8 +266,6 @@ function ThisComputer() {
         </p>
       )}
 
-      <SettingsGroupTitle className="mt-5">{t('Devices that can use this host')}</SettingsGroupTitle>
-      <PermissionRequests status={status} invoke={changePermission} />
       <SettingsRow>
         <SettingsLabel
           title={t('Pair a device')}
@@ -315,42 +285,32 @@ function ThisComputer() {
           {t('Pair a device…')}
         </Button>
       </SettingsRow>
-      {status.deviceLifetime && (
-        <SettingsRow>
-          <SettingsLabel
-            title={t('Keep devices paired')}
-            help={t(
-              'A device that is not used for this long must be paired again. Using it renews the time. Changes apply the next time each device connects.',
-            )}
-          />
-          <Dropdown
-            label={t('Keep devices paired')}
-            value={String(status.deviceLifetime.days)}
-            options={lifetimeOptions(status.deviceLifetime.days, status.deviceLifetime.saved)}
-            onChange={(value) => void setLifetime(value)}
-          />
-        </SettingsRow>
-      )}
-      <DefaultPermissions status={status} invoke={changePermission} />
+      <SettingsGroupTitle className="mt-5">{t('Devices that can use this host')}</SettingsGroupTitle>
+      <PermissionRequests status={status} invoke={changePermission} />
       {status.devices.map((device) => (
-        <div key={device.id}>
-          <SettingsRow>
-            <SettingsLabel
-              title={device.name}
-              help={`${device.kind === 'host' ? t('Another host’s agents: start and follow threads only') : device.role === 'viewer' ? t('Viewer') : t('Full access')} · ${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t(
+        <SettingsCard
+          key={device.id}
+          className="mb-2"
+          title={device.name}
+          meta={
+            <span className="whitespace-normal">
+              {`${device.kind === 'host' ? t('Another host’s agents: start and follow threads only') : device.role === 'viewer' ? t('Viewer') : t('Full access')} · ${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t(
                 'Paired {0} · last seen {1}',
                 {
                   0: new Date(device.createdAt).toLocaleDateString(),
                   1: device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never'),
                 },
               )}`}
-            />
+            </span>
+          }
+          actions={
             <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setRevoking(device.id)}>
               {t('Revoke')}
             </Button>
-          </SettingsRow>
+          }
+        >
           {device.kind === 'host' ? (
-            <SettingsRow>
+            <div className={`${SETTINGS_CARD_LINE} mt-1 border-t border-border pt-2`}>
               <SettingsLabel
                 title={t('Most access for its threads')}
                 help={t('Threads this host’s agents start here never get more, whatever they ask for.')}
@@ -370,16 +330,73 @@ function ThisComputer() {
                   )
                 }
               />
-            </SettingsRow>
+            </div>
           ) : (
             <DevicePermissionList device={device} invoke={changePermission} />
           )}
-        </div>
+        </SettingsCard>
       ))}
       {!status.devices.length && (
         <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">{t('No devices paired yet.')}</p>
       )}
-      <AgentHosts />
+      <Collapsible className="mt-3">
+        <CollapsibleTrigger
+          render={<Button variant="ghost" size="sm" className="group/options text-caption text-muted-foreground" />}
+        >
+          {t('Connection options')}
+          <ChevronDown size={14} className="transition-transform group-data-[panel-open]/options:rotate-180" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-2">
+          {!managed && (
+            <>
+              <SettingsRow>
+                <SettingsLabel
+                  title={t('Network')}
+                  help={t(
+                    'Choose your VPN address (Tailscale, NetBird, ZeroTier, WireGuard) to keep Ramu off other networks.',
+                  )}
+                />
+                <Dropdown label={t('Network')} value={host} options={options} onChange={setHost} disabled={busy} />
+              </SettingsRow>
+              <SettingsRow>
+                <SettingsLabel title={t('Port')} help={portValid ? undefined : t('Use a number from 1024 to 65535.')} />
+                <Input
+                  aria-label={t('Port')}
+                  inputMode="numeric"
+                  value={port}
+                  aria-invalid={!portValid}
+                  disabled={busy}
+                  onChange={(event) => setPort(event.target.value.replace(/\D/g, '').slice(0, 5))}
+                />
+              </SettingsRow>
+            </>
+          )}
+          {changed && !managed && (
+            <div className="flex justify-end pb-3">
+              <Button variant="default" disabled={busy || !portValid} onClick={() => void apply(true)}>
+                {t('Apply')}
+              </Button>
+            </div>
+          )}
+          {status.deviceLifetime && (
+            <SettingsRow>
+              <SettingsLabel
+                title={t('Keep devices paired')}
+                help={t(
+                  'A device that is not used for this long must be paired again. Using it renews the time. Changes apply the next time each device connects.',
+                )}
+              />
+              <Dropdown
+                label={t('Keep devices paired')}
+                value={String(status.deviceLifetime.days)}
+                options={lifetimeOptions(status.deviceLifetime.days, status.deviceLifetime.saved)}
+                onChange={(value) => void setLifetime(value)}
+              />
+            </SettingsRow>
+          )}
+          <DefaultPermissions status={status} invoke={changePermission} />
+        </CollapsibleContent>
+      </Collapsible>
 
       {confirm && (
         <ConfirmDialog
