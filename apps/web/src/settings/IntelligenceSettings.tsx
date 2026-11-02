@@ -223,98 +223,100 @@ export function LearningSettings({ value, onChange }: Props) {
       <Button
         disabled={viewOnly || busy || snapshot?.running || value.learning === 'off'}
         variant="secondary"
-        className="bg-fill hover:bg-fill-hover self-start mb-4"
+        className="bg-fill hover:bg-fill-hover self-start mt-3 mb-4"
         onClick={() => void act(() => invoke('learning.run'))}
       >
         {snapshot?.running ? t('Reviewing…') : t('Run learning maintenance')}
       </Button>
-      <ListToolbar
-        view={reviewView}
-        label={t('Search reviews')}
-        filters={[
-          {
-            key: 'status',
-            label: t('Status'),
-            value: reviewStatus,
-            options: [
-              { value: 'all', label: t('All') },
-              ...[...new Set((reviews ?? []).map((job) => job.status))].map((value) => ({ value, label: t(value) })),
-            ],
-            onChange: setReviewStatus,
-          },
-        ]}
-      />
-      <ListCount view={reviewView} />
-      {reviewView.empty === 'filtered' && (
-        <ListEmpty
+      <div className="flex flex-col gap-3">
+        <ListToolbar
           view={reviewView}
-          none=""
-          filtered="No reviews match your search."
-          onReset={() => setReviewStatus('all')}
+          label={t('Search reviews')}
+          filters={[
+            {
+              key: 'status',
+              label: t('Status'),
+              value: reviewStatus,
+              options: [
+                { value: 'all', label: t('All') },
+                ...[...new Set((reviews ?? []).map((job) => job.status))].map((value) => ({ value, label: t(value) })),
+              ],
+              onChange: setReviewStatus,
+            },
+          ]}
         />
-      )}
-      <SettingsCardList>
-        {pagedReviews.shown.map((job) => (
-          <SettingsCard
-            key={job.id}
-            title={
-              <>
-                {t('Learning review')} · {t(job.status)}
-              </>
-            }
-            meta={`${new Date(job.createdAt).toLocaleString()} · ${job.sessionTitle ?? t('Thread')}`}
-            actions={
-              <>
-                {job.status === 'pending' && (
-                  <Button
-                    disabled={viewOnly || busy}
-                    variant="default"
-                    size="sm"
-                    className={PRIMARY_ACTION_CLASS}
-                    onClick={() => void act(() => invoke('learning.apply', job.id))}
-                  >
-                    {t('Apply')}
-                  </Button>
-                )}
-                {['pending', 'failed'].includes(job.status) && (
-                  <Button
-                    disabled={viewOnly || busy}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void act(() => invoke('learning.retry', job.id))}
-                  >
-                    {t('Retry review')}
-                  </Button>
-                )}
-                {['queued', 'pending', 'failed'].includes(job.status) && (
-                  <Button
-                    disabled={viewOnly || busy}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void act(() => invoke('learning.dismiss', job.id))}
-                  >
-                    {t('Dismiss')}
-                  </Button>
-                )}
-              </>
-            }
-          >
-            {job.error && (
-              <p role="alert" className="text-bad small text-caption m-0!">
-                {job.error}
-              </p>
-            )}
-            {job.proposal && (
-              <LearningProposal
-                proposal={job.proposal}
-                skills={snapshot?.skills ?? []}
-                showCheckpoint={job.status !== 'applied'}
-              />
-            )}
-          </SettingsCard>
-        ))}
-        {pagedReviews.more}
-      </SettingsCardList>
+        <ListCount view={reviewView} />
+        {reviewView.empty === 'filtered' && (
+          <ListEmpty
+            view={reviewView}
+            none=""
+            filtered="No reviews match your search."
+            onReset={() => setReviewStatus('all')}
+          />
+        )}
+        <SettingsCardList>
+          {pagedReviews.shown.map((job) => (
+            <SettingsCard
+              key={job.id}
+              title={
+                <>
+                  {t('Learning review')} · {t(job.status)}
+                </>
+              }
+              meta={`${new Date(job.createdAt).toLocaleString()} · ${job.sessionTitle ?? t('Thread')}`}
+              actions={
+                <>
+                  {job.status === 'pending' && (
+                    <Button
+                      disabled={viewOnly || busy}
+                      variant="default"
+                      size="sm"
+                      className={PRIMARY_ACTION_CLASS}
+                      onClick={() => void act(() => invoke('learning.apply', job.id))}
+                    >
+                      {t('Apply')}
+                    </Button>
+                  )}
+                  {['pending', 'failed'].includes(job.status) && (
+                    <Button
+                      disabled={viewOnly || busy}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void act(() => invoke('learning.retry', job.id))}
+                    >
+                      {t('Retry review')}
+                    </Button>
+                  )}
+                  {['queued', 'pending', 'failed'].includes(job.status) && (
+                    <Button
+                      disabled={viewOnly || busy}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void act(() => invoke('learning.dismiss', job.id))}
+                    >
+                      {t('Dismiss')}
+                    </Button>
+                  )}
+                </>
+              }
+            >
+              {job.error && (
+                <p role="alert" className="text-bad small text-caption m-0!">
+                  {job.error}
+                </p>
+              )}
+              {job.proposal && (
+                <LearningProposal
+                  proposal={job.proposal}
+                  skills={snapshot?.skills ?? []}
+                  showCheckpoint={job.status !== 'applied'}
+                />
+              )}
+            </SettingsCard>
+          ))}
+          {pagedReviews.more}
+        </SettingsCardList>
+      </div>
     </div>
   )
 }

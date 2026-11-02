@@ -148,9 +148,9 @@ export function ModelSetsEditor({
             />
           </SettingsRow>
         </div>
-        <div>
+        <div className="flex flex-col gap-3">
           <SettingsGroupTitle>{t('Model sets')}</SettingsGroupTitle>
-          <p className="m-0 mb-3 text-caption text-muted-foreground">
+          <p className="m-0 text-caption text-muted-foreground">
             {t('Create model and effort presets for the thread selection bar.')}
           </p>
           <div className="settings-set-toolbar [&_>_.dropdown-trigger]:flex-1 [&_>_.dropdown-trigger]:min-w-0 flex items-center gap-2">
@@ -217,7 +217,7 @@ export function ModelSetsEditor({
             </>
           ) : (
             <>
-              <label className="settings-set-name">
+              <label className="settings-set-name flex flex-col gap-1.5">
                 {t('Set name')}
                 <Input
                   value={set.name}
