@@ -122,6 +122,8 @@ function load(file, os, overrides = {}, globals = {}) {
       GlassView: 'NativeGlass',
     },
     'expo-blur': { BlurView: 'BlurView' },
+    // Sheets size their hosted content to the sheet; a fixed phone width keeps their trees plain to inspect.
+    './hostedWidth': { useHostedWidth: () => ({ value: 390, onLayout() {} }) },
     ...overrides,
   }
   mocks['react-native'] = { ...native, ...mocks['react-native'] }

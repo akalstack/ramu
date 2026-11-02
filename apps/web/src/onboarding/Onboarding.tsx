@@ -144,7 +144,7 @@ export function Onboarding() {
       <DialogContent
         showCloseButton={false}
         aria-describedby="onboarding-lead"
-        className="onboarding flex max-h-[calc(100vh-48px)] w-[min(600px,calc(100vw-48px))] max-w-none! flex-col gap-0 overflow-hidden rounded-(--radius-l) p-0 [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_24px_64px_rgba(0,0,0,0.55)]"
+        className="onboarding flex max-h-[calc(100vh-48px)] w-[min(600px,calc(100vw-48px))] sm:max-w-none flex-col gap-0 overflow-hidden rounded-(--radius-l) p-0 [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_24px_64px_rgba(0,0,0,0.55)]"
       >
         <div className="flex-none px-6 pt-5 pb-4">
           <div className="mb-4 flex items-center gap-1.5" aria-hidden>
