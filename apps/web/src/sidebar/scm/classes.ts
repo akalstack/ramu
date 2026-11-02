@@ -6,8 +6,11 @@ export const ICON_BUTTON = GHOST_ICON_BUTTON_CLASS
 
 export const PRIMARY_BUTTON = PRIMARY_ACTION_CLASS
 
-/** Commit and sync share the primary action states; only their compact sidebar geometry differs. */
-export const COMMIT_ACTION = `${PRIMARY_ACTION_CLASS} h-(--action-size) min-h-(--action-size) rounded-(--radius-s) gap-1.5 px-2.5 text-[length:var(--font-control)]`
+/**
+ * Commit and sync share the primary action states; only their compact sidebar geometry differs. No border: Button clips
+ * its fill to the padding box, so a transparent border would show the sidebar through the commit split as a dark seam.
+ */
+export const COMMIT_ACTION = `${PRIMARY_ACTION_CLASS} h-(--action-size) min-h-(--action-size) rounded-(--radius-s) border-0 gap-1.5 px-2.5 text-[length:var(--font-control)]`
 
 export const CARET =
   "caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]"

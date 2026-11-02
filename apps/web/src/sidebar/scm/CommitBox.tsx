@@ -126,7 +126,7 @@ export function CommitBox({
           <Button
             variant="default"
             size="sm"
-            className={`${COMMIT_ACTION} scm-commit flex-1 min-w-0 rounded-r-none`}
+            className={`${COMMIT_ACTION} scm-commit flex-1 min-w-0 rounded-l-(--radius-s)! active:not-aria-[haspopup]:translate-y-0`}
             aria-label={commitLabel}
             disabled={!canRunCommit(commitAction)}
             title={
@@ -158,7 +158,7 @@ export function CommitBox({
             disabled={!canRunCommit(commitAction)}
             label={t('Commit options')}
             icon={<ChevronDown size={14} />}
-            className={`${COMMIT_ACTION} scm-commit-menu relative w-(--action-size) flex-none px-0 rounded-l-none before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-px before:bg-primary-foreground/25`}
+            className={`${COMMIT_ACTION} scm-commit-menu relative w-(--action-size) flex-none px-0 rounded-r-(--radius-s)! before:content-[''] before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-px before:bg-current before:opacity-30`}
             align="end"
             items={[
               {
