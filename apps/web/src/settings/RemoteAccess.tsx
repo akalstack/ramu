@@ -469,7 +469,6 @@ function PairDialog({ onClose }: { onClose: () => void }) {
   }, [offer, qrUrl])
   const [joined, setJoined] = useState<{ name: string; role: 'owner' | 'viewer' } | null>(null),
     [showOther, setShowOther] = useState(false)
-  const [status] = useNetworkStatus(1500)
   const offerRequest = useRef(0)
   // One owner per dialog: a new code (or a role change) replaces this dialog's unused one on the host.
   const owner = useRef(crypto.randomUUID()).current
@@ -544,7 +543,7 @@ function PairDialog({ onClose }: { onClose: () => void }) {
           {!joined && (
             <DialogDescription>
               {t(
-                'On the other device open Ramu and choose this host under Nearby hosts, then allow it here when both show the same number. Or enter one of these addresses and the code.',
+                'On the other device open Ramu and choose this host under Nearby hosts; you will be asked to allow it when both show the same number. Or enter one of these addresses and the code.',
               )}
             </DialogDescription>
           )}
@@ -565,39 +564,6 @@ function PairDialog({ onClose }: { onClose: () => void }) {
             {error}
           </p>
         )}
-        {!joined &&
-          offerId &&
-          !expired &&
-          status?.requests?.map((request) => (
-            <div
-              key={request.id}
-              role="alert"
-              className="flex flex-col gap-2 rounded-(--radius-m) border border-(--line) bg-fill p-[14px_16px]"
-            >
-              <strong className="text-control">{t('{0} wants to pair', { 0: request.name || t('A device') })}</strong>
-              <span className="muted text-muted-foreground small text-caption">
-                {t('Allow it only if it shows this number. From {0}.', { 0: request.address })}
-              </span>
-              <div className="font-mono text-[28px] font-semibold tracking-[0.12em]">{request.code}</div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() =>
-                    void Promise.resolve(invoke('network.approveRequest', request.id, offerId)).catch((e) =>
-                      setError(errorText(e)),
-                    )
-                  }
-                >
-                  {t('Allow')}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => void Promise.resolve(invoke('network.denyRequest', request.id)).catch(() => {})}
-                >
-                  {t('Deny')}
-                </Button>
-              </div>
-            </div>
-          ))}
         {joined ? (
           <p className="muted text-muted-foreground">
             {t(joined.role === 'viewer' ? 'View threads and answer requests' : 'Full access')}

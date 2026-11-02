@@ -76,6 +76,7 @@ export async function ensureRuntime(
       RAMU_APP_VERSION: runtimeVersion(daemonPath),
       RAMU_USER_DATA: userData,
       RAMU_SOCKET: socketPath,
+      ...desktopApp(),
     },
   })
   child.on('error', () => {})
@@ -90,6 +91,12 @@ export async function ensureRuntime(
   }
   throw new Error(`Background service could not start. See ${join(userData, 'background.log')}`)
 }
+/**
+ * The installed app, so the service can open it to show a pairing request while it is closed. Development runs
+ * (`electron .`) leave it out: their executable is a bare Electron.
+ */
+const desktopApp = (): Record<string, string> =>
+  process.defaultApp || !process.versions.electron ? {} : { RAMU_DESKTOP_APP: process.execPath }
 const xml = (text: string) =>
   text.replace(/[<>&"']/g, (s) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[s]!)
 export function loginService(userData: string, daemonPath: string, enabled: boolean): void {
@@ -116,6 +123,7 @@ export function loginService(userData: string, daemonPath: string, enabled: bool
     RAMU_APP_VERSION: runtimeVersion(daemonPath),
     RAMU_USER_DATA: userData,
     RAMU_SOCKET: runtimeSocket(userData),
+    ...desktopApp(),
     PATH: process.env.PATH ?? '/usr/bin:/bin:/opt/homebrew/bin',
     ...(process.env.RAMU_WORKTREES ? { RAMU_WORKTREES: process.env.RAMU_WORKTREES } : {}),
   }

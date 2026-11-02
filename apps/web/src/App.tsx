@@ -56,6 +56,7 @@ import { CommitBranchDialog } from './git/CommitBranchDialog'
 import { CommitDialog } from './git/CommitDialog'
 import { CreatePullRequestHost } from './git/CreatePullRequestHost'
 import { openPublishRepository, PublishRepositoryHost } from './git/PublishRepositoryHost'
+import { PairingRequestDialog } from './settings/PairingRequestDialog'
 import { Notifications, notifyError } from './chat/Notifications'
 import { SummaryHost } from './summaries/SummaryHost'
 import { TitleTooltips } from './TitleTooltips'
@@ -758,6 +759,7 @@ function Shell() {
       {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
       <Notifications />
+      <PairingRequestDialog />
       <TitleTooltips />
       <Fragment key={`dialogs:${shownHost}`}>
         <ProviderSetupTerminal />

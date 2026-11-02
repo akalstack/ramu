@@ -1,6 +1,6 @@
-// Pairing by request, on the host (see `@ramu/shared/pairRequest`). A nearby device asks while the host has an unused
-// pairing offer; the request shows at the host only once the device has revealed the key it committed to, with the
-// six-digit code both screens show. A person at the host approves it, which spends that offer like a typed code.
+// Pairing by request, on the host (see `@ramu/shared/pairRequest`). A nearby device asks while the host is discoverable
+// (or has Pair a device open); the request shows at the host only once the device has revealed the key it committed
+// to, with the six-digit code both screens show. A person at the host approves it with the access it should have.
 import { randomBytes, randomUUID } from 'node:crypto'
 import {
   PAIR_REQUEST_TTL_MS,
@@ -12,12 +12,14 @@ import {
   type PairRequestAnswer,
   type PairWaitAnswer,
 } from '@ramu/shared/pairRequest'
-import type { DeviceInfo, DeviceStore } from './devices'
+import type { DeviceInfo, DeviceRole, DeviceStore } from './devices'
 
 /** A few at once, so one noisy neighbour cannot block a real request; one per network address. */
 const MAX_REQUESTS = 4
 /** How long one wait call holds before answering "pending"; the device simply asks again. */
 const WAIT_MS = 25_000
+/** After a decline the same address waits this long, so a neighbour cannot keep raising the prompt. */
+const DECLINED_COOLDOWN_MS = 60_000
 
 interface Request {
   id: string
@@ -55,10 +57,13 @@ export class PairingError extends Error {
 
 export class PairingRequests {
   private readonly requests = new Map<string, Request>()
+  private readonly declined = new Map<string, number>()
   constructor(
     private readonly options: {
       devices: DeviceStore
       hostId: string
+      /** Whether nearby devices may ask now. Defaults to while a pairing offer is open. */
+      accepting?: () => boolean
       changed?: () => void
       now?: () => number
       random?: (bytes: number) => Uint8Array
@@ -71,11 +76,15 @@ export class PairingRequests {
 
   private sweep() {
     const now = this.now()
+    let removed = false
     for (const [id, request] of this.requests)
       if (request.expiresAt <= now) {
+        removed ||= request.state === 'revealed'
         request.waiter?.({ state: 'expired' })
         this.requests.delete(id)
       }
+    for (const [peer, until] of this.declined) if (until <= now) this.declined.delete(peer)
+    if (removed) this.options.changed?.()
   }
 
   begin(peer: string, body: unknown): PairRequestAnswer {
@@ -83,8 +92,13 @@ export class PairingRequests {
     const input = body as { name?: unknown; commit?: unknown } | null
     if (typeof input?.commit !== 'string' || !/^[0-9a-f]{64}$/.test(input.commit))
       throw new PairingError(400, 'Invalid pairing request')
-    if (!this.options.devices.offers(this.now()).length)
-      throw new PairingError(403, 'Open Pair a device on the host first.')
+    const accepting = this.options.accepting?.() ?? this.options.devices.offers(this.now()).length > 0
+    if (!accepting)
+      throw new PairingError(
+        403,
+        'This host is not discoverable. Turn on Discoverable in its Remote access settings, or pair with its code.',
+      )
+    if (this.declined.has(peer)) throw new PairingError(429, 'The host declined. Try again in a minute.')
     // A new request from the same address replaces its unanswered one.
     for (const [id, request] of this.requests)
       if (request.peer === peer && request.state !== 'approved') {
@@ -149,13 +163,18 @@ export class PairingRequests {
     )
   }
 
-  /** Spends the given unused offer for this device, with the offer's access. Host-only, like the rest of pairing. */
-  approve(id: string, offerId: string): DeviceInfo {
+  /**
+   * Pairs the device with the given access. It goes through a one-time offer like a typed code, so the device is
+   * created in the same single write. Host-only, like the rest of pairing.
+   */
+  approve(id: string, access: DeviceRole): DeviceInfo {
     this.sweep()
     const request = this.requests.get(id)
     if (!request || request.state !== 'revealed') throw new Error('That request expired. Ask the device to try again.')
-    const device = this.options.devices.redeemOffer(offerId, request.name || undefined, request.token!, this.now())
-    if (!device) throw new Error('This pairing offer expired. Open Pair a device again.')
+    const now = this.now()
+    const { offerId } = this.options.devices.createCode(now, access, `request:${id}`)
+    const device = this.options.devices.redeemOffer(offerId, request.name || undefined, request.token!, now)
+    if (!device) throw new Error('That request expired. Ask the device to try again.')
     const fields = {
       deviceId: device.id,
       role: device.role ?? ('owner' as const),
@@ -176,6 +195,7 @@ export class PairingRequests {
     if (!request || request.state === 'approved') return
     request.state = 'denied'
     request.token = undefined
+    this.declined.set(request.peer, this.now() + DECLINED_COOLDOWN_MS)
     request.waiter?.({ state: 'denied' })
     request.waiter = undefined
     this.options.changed?.()

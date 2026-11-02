@@ -4290,8 +4290,10 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Pencarian berhenti setelah beberapa saat. Cari lagi, masukkan alamat, atau pakai SSH.',
   'No hosts found. That does not mean none exist: a host appears here only when it has Discoverable on this network turned on, and some networks block discovery. Enter an address or use SSH instead.':
     'Tidak ada host ditemukan. Bukan berarti tidak ada: host hanya muncul di sini jika Dapat ditemukan di jaringan ini aktif, dan beberapa jaringan memblokir penemuan. Masukkan alamat atau pakai SSH.',
-  'Hosts on this network that chose to be found. Selecting one fills in its address; you still need a pairing code from that host.':
-    'Host di jaringan ini yang memilih untuk dapat ditemukan. Memilih satu akan mengisi alamatnya; Anda tetap memerlukan kode pairing dari host itu.',
+  'Hosts on this network that chose to be found. Choose one to ask it to pair, then allow it on that host when both show the same number.':
+    'Host di jaringan ini yang memilih untuk dapat ditemukan. Pilih satu untuk meminta pairing, lalu izinkan di host itu jika keduanya menampilkan angka yang sama.',
+  'Expires in {0}': 'Berakhir dalam {0}',
+  'Code {0}. Open Ramu to allow or deny it.': 'Kode {0}. Buka Ramu untuk mengizinkan atau menolaknya.',
   'Nearby hosts': 'Host terdekat',
   'Not encrypted': 'Tidak terenkripsi',
   'Already paired': 'Sudah dipasangkan',
@@ -4787,8 +4789,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} wants to pair': '{0} ingin dipasangkan',
   'Allow it only if it shows this number. From {0}.':
     'Izinkan hanya jika perangkat itu menampilkan angka ini. Dari {0}.',
-  'On the other device open Ramu and choose this host under Nearby hosts, then allow it here when both show the same number. Or enter one of these addresses and the code.':
-    'Di perangkat lain, buka Ramu dan pilih host ini di Host terdekat, lalu izinkan di sini jika keduanya menampilkan angka yang sama. Atau masukkan salah satu alamat ini beserta kodenya.',
+  'On the other device open Ramu and choose this host under Nearby hosts; you will be asked to allow it when both show the same number. Or enter one of these addresses and the code.':
+    'Di perangkat lain, buka Ramu dan pilih host ini di Host terdekat; Anda akan diminta mengizinkannya jika keduanya menampilkan angka yang sama. Atau masukkan salah satu alamat ini beserta kodenya.',
   'Allow this computer on {0} if it shows this number': 'Izinkan komputer ini di {0} jika menampilkan angka ini',
   'Asking {0}…': 'Meminta {0}…',
   Asked: 'Sudah diminta',

@@ -18,7 +18,7 @@ const shown = (url: string) => url.replace(/^https?:\/\//, '')
 /**
  * Hosts on this computer's networks that chose to be found. Browsing runs on this computer (the main process), starts
  * when this panel shows, and stops when it hides, the window is in the background, or a different method is chosen.
- * Choosing a host only fills the address; pairing still needs the host's code.
+ * Choosing a host asks it to pair; the person at that host allows it after comparing a six-digit number.
  */
 export function NearbyHosts({
   onChoose,
@@ -126,26 +126,28 @@ export function NearbyHosts({
     <div className="flex flex-col gap-3">
       <p className="m-0 text-caption text-muted-foreground">
         {t(
-          'Hosts on this network that chose to be found. Selecting one fills in its address; you still need a pairing code from that host.',
+          'Hosts on this network that chose to be found. Choose one to ask it to pair, then allow it on that host when both show the same number.',
         )}
       </p>
       <p role="status" aria-live="polite" className="m-0 text-caption text-muted-foreground">
         {message}
       </p>
       {hosts.length > 0 && (
-        <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label={t('Nearby hosts')}>
+        <ul className="-mx-1 m-0 flex list-none flex-col gap-1 p-0" aria-label={t('Nearby hosts')}>
           {hosts.map((host) => {
             const route = host.routes[0]
             const active = selected?.key === host.key
             return (
               <li key={host.key}>
                 <RowButton
+                  size="lg"
+                  className="rounded-(--radius-m) px-3 py-2.5"
                   aria-pressed={active}
                   disabled={!route}
                   onClick={() => route && setSelected({ key: host.key, url: route.url })}
                 >
-                  <Monitor size={16} className="flex-none text-muted-foreground" />
-                  <span className="min-w-0 grow">
+                  <Monitor size={18} className="flex-none text-muted-foreground" aria-hidden />
+                  <span className="flex min-w-0 grow flex-col gap-0.5">
                     <span className="block truncate text-body font-medium">{host.label}</span>
                     <span className="block truncate text-caption text-muted-foreground">
                       {route ? shown(route.url) : ''}

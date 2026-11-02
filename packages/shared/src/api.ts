@@ -579,7 +579,7 @@ export interface RamuMethods {
   /** What became of one offer: pending, redeemed by a device, cancelled or expired. */
   'network.offer'(offerId: string): PairingOfferStatus
   /** Pairs a device that asked, spending the given open offer (and its access). Host-only, like the rest of `network.*`. */
-  'network.approveRequest'(requestId: string, offerId: string): NetworkStatus
+  'network.approveRequest'(requestId: string, access: 'owner' | 'viewer'): NetworkStatus
   'network.denyRequest'(requestId: string): NetworkStatus
   /** Grants a paired device a permission once, for a while or always, or revokes it. Host-only. */
   'network.setDevicePermission'(
@@ -1271,6 +1271,8 @@ export type PushEvents = {
   'mcp:changed': Record<string, never>
   /** A paired device's permissions changed; each device reads its own again. */
   'device:permissions': Record<string, never>
+  /** Nearby devices waiting for the person at this host to allow them. Sent only to apps on the host itself. */
+  'pairing:requests': { requests: NetworkStatus['requests'] }
   'notify:inapp': {
     hostId?: string
     sessionId: string

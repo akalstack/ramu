@@ -16,11 +16,11 @@ afterEach(async () => {
   for (const close of cleanup.splice(0)) await close()
 })
 
-async function fixture() {
+async function fixture(discoverable = true) {
   const dir = mkdtempSync(join(tmpdir(), 'ramu-pairing-'))
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }))
   const devices = new DeviceStore(join(dir, 'devices.json'))
-  const pairing = new PairingRequests({ devices, hostId: 'host-1' })
+  const pairing = new PairingRequests({ devices, hostId: 'host-1', accepting: () => discoverable })
   const access = new RemoteAccess({ devices, hostId: 'host-1', pairing, browserOrigins: [] })
   const server: Server = createServer(async (req, res) => {
     const device = await access.accept(req, res)
@@ -54,9 +54,8 @@ async function answerAtHost(pairing: PairingRequests, decide: (id: string, code:
   throw new Error('No request reached the host')
 }
 
-it('pairs a nearby device once a person at the host approves the matching code, and its derived token works', async () => {
+it('pairs a nearby device once a person at the host approves the matching code, with no code opened first', async () => {
   const { devices, pairing, base, post } = await fixture()
-  const { offerId } = devices.createCode(Date.now(), 'viewer')
   let shown = ''
   const pairingDone = requestPairing({
     post: (path, body, signal) => post(path, body, signal),
@@ -69,21 +68,20 @@ it('pairs a nearby device once a person at the host approves the matching code, 
   await answerAtHost(pairing, (id, code) => {
     approvedCode = code
     expect(pairing.list()[0]).toMatchObject({ name: 'Ahmad’s iPhone', address: '127.0.0.1' })
-    pairing.approve(id, offerId)
+    pairing.approve(id, 'viewer')
   })
   const result = await pairingDone
   expect(shown).toBe(approvedCode)
   expect(result).toMatchObject({ hostId: 'host-1', role: 'viewer' })
-  // The offer is spent, exactly as if its code had been typed.
+  // Approval leaves no usable code behind.
   expect(devices.offers()).toEqual([])
-  expect(devices.offerStatus(offerId)).toMatchObject({ state: 'redeemed' })
+  expect(() => pairing.approve(pairing.list()[0]?.id ?? 'gone', 'owner')).toThrow('expired')
   const authorized = await fetch(base + '/anything', { headers: { Authorization: `${AUTH_SCHEME} ${result.token}` } })
   expect(await authorized.text()).toBe(result.deviceId)
 })
 
 it('tells the device when the host declines', async () => {
   const { devices, pairing, post } = await fixture()
-  devices.createCode(Date.now(), 'owner')
   const done = requestPairing({
     post: (path, body, signal) => post(path, body, signal),
     name: 'Phone',
@@ -94,14 +92,27 @@ it('tells the device when the host declines', async () => {
   await answerAtHost(pairing, (id) => pairing.deny(id))
   await expect(done).rejects.toThrow('declined')
   expect(devices.list()).toEqual([])
+  // The same address waits a minute before it can raise the prompt again.
+  const again = await post(PAIR_REQUEST_PATH, { name: 'Phone', commit: pairCommit(pairKeys(random).publicKey) })
+  expect(again.status).toBe(429)
 })
 
-it('accepts requests only while an offer is open, one reveal that matches the commitment, and never twice', async () => {
-  const { devices, pairing, post } = await fixture()
+it('accepts requests only while the host is discoverable or has an offer open, and one matching reveal', async () => {
+  const { devices, pairing, post } = await fixture(false)
   const keys = pairKeys(random)
   const commit = pairCommit(keys.publicKey)
   expect((await post(PAIR_REQUEST_PATH, { name: 'Phone', commit })).status).toBe(401)
+  expect(pairing.list()).toEqual([])
+  const open = new PairingRequests({ devices, hostId: 'host-1' })
+  expect(() => open.begin('10.0.0.2', { name: 'Phone', commit })).toThrow('not discoverable')
   devices.createCode(Date.now(), 'owner')
+  expect(open.begin('10.0.0.2', { name: 'Phone', commit }).requestId).toBeTruthy()
+})
+
+it('shows a request at the host only after one reveal that matches the commitment', async () => {
+  const { pairing, post } = await fixture()
+  const keys = pairKeys(random)
+  const commit = pairCommit(keys.publicKey)
   const begun = await post(PAIR_REQUEST_PATH, { name: 'Phone', commit })
   expect(begun.status).toBe(200)
   // Nothing shows at the host until the device reveals the key it committed to.
@@ -111,21 +122,4 @@ it('accepts requests only while an offer is open, one reveal that matches the co
   // A failed reveal ends the request; revealing the right key afterwards does not revive it.
   expect((await post(PAIR_REVEAL_PATH, { requestId: begun.body.requestId, key: keys.publicKey })).status).toBe(404)
   expect(pairing.list()).toEqual([])
-})
-
-it('refuses to approve once the offer is gone, so a code and a request never both spend one offer', async () => {
-  const { devices, pairing, post } = await fixture()
-  const { code, offerId } = devices.createCode(Date.now(), 'owner')
-  void requestPairing({
-    post: (path, body, signal) => post(path, body, signal),
-    name: 'Phone',
-    random,
-    onCode() {},
-    signal: new AbortController().signal,
-  }).catch(() => {})
-  await answerAtHost(pairing, (id) => {
-    expect(devices.redeem(code, 'Typed')).not.toBeNull()
-    expect(() => pairing.approve(id, offerId)).toThrow('expired')
-  })
-  expect(devices.list().map((device) => device.name)).toEqual(['Typed'])
 })

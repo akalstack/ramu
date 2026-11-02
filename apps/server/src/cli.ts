@@ -32,6 +32,8 @@ Usage:
   ramu pair [--url <address>] [--role owner|viewer] [--json]
                                  Create a one-time code and link to pair another device (valid 10 minutes, works once).
                                  --json prints { code, expiresAt, links, urls, listening } for scripts and SSH pairing.
+  ramu pair --approve <request> [--role owner|viewer]   ramu pair --deny <request>
+                                 Answer a nearby device's request; the server prints each one with its six-digit code.
   ramu devices                   List paired devices
   ramu devices revoke <id|all>   Revoke one paired device, or all of them
   ramu devices allow <id> <permission> [once|hour|day|always]
@@ -80,7 +82,7 @@ A paired device has the same control as the desktop app, including shell access.
  * Nearby devices that chose this host ask here; each shows a six-digit number, and only a matching one is allowed.
  * Ends when the offer is used or expires. Ctrl-C leaves the code valid until it expires.
  */
-async function answerNearby(offerId: string) {
+async function answerNearby(offerId: string, role: 'owner' | 'viewer') {
   const { createInterface } = await import('node:readline/promises')
   const prompt = createInterface({ input: process.stdin, output: process.stdout })
   console.log('\nOr choose this host under Nearby hosts on the other device. Waiting for it… (Ctrl-C to stop)')
@@ -107,7 +109,7 @@ async function answerNearby(offerId: string) {
         `\n${request.name || 'A device'} (${request.address}) wants to pair and shows ${request.code}. Allow? [y/N] `,
       )
       if (/^y(es)?$/i.test(reply.trim()))
-        await runtimeInvoke(config.socketPath, 'network.approveRequest', [request.id, offerId]).catch((error) =>
+        await runtimeInvoke(config.socketPath, 'network.approveRequest', [request.id, role]).catch((error) =>
           console.log(error instanceof Error ? error.message : String(error)),
         )
       else await runtimeInvoke(config.socketPath, 'network.denyRequest', [request.id]).catch(() => {})
@@ -207,6 +209,22 @@ if (command === 'start') {
     console.error('ramu is not running')
     process.exit(3)
   }
+} else if (command === 'pair' && (text('approve') || text('deny'))) {
+  // Answers a nearby device's request, as printed by the running server when it arrived.
+  const id = (text('approve') ?? text('deny'))!
+  const role = text('role') ?? 'owner'
+  if (role !== 'owner' && role !== 'viewer') fail('Role must be owner or viewer')
+  try {
+    if (text('approve')) {
+      await runtimeInvoke(config.socketPath, 'network.approveRequest', [id, role])
+      console.log(role === 'viewer' ? 'Paired, view only.' : 'Paired, with full access.')
+    } else {
+      await runtimeInvoke(config.socketPath, 'network.denyRequest', [id])
+      console.log('Declined.')
+    }
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error))
+  }
 } else if (command === 'pair') {
   const given = text('url')
   let urls: { url: string; note: string }[] = []
@@ -259,7 +277,7 @@ if (command === 'start') {
   console.log(
     `\nOn that device, send the code to <address>/pair, which returns its own token:\n  curl -s -X POST <address>/pair -H 'Content-Type: application/json' -d '{"code":"${code}","name":"My laptop"}'`,
   )
-  if (running && process.stdin.isTTY) await answerNearby(offerId)
+  if (running && process.stdin.isTTY) await answerNearby(offerId, role)
 } else if (command === 'browser') {
   const action = positional[1] ?? 'status'
   try {

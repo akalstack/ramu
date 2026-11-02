@@ -62,6 +62,7 @@ import { AttachmentStore } from '@ramu/server/attachments'
 import { attachmentActions } from './attachmentActions'
 import { terminalMenu } from './terminalMenu'
 import { createAgentNotifier } from './agentNotifier'
+import { createPairingNotifier } from './pairingNotifier'
 import {
   runtimeInvoke,
   runtimeInvokeRecoverable,
@@ -103,6 +104,8 @@ if (process.env.RAMU_USER_DATA) app.setPath('userData', process.env.RAMU_USER_DA
 /** One window shows only so many chats; anything longer is not this app asking. */
 const MAX_FOLLOWED_THREADS = 64
 const e2eHeadless = process.env.RAMU_E2E_HEADLESS === '1'
+// The background service opened the app only to show a nearby device's pairing request; the window waits for a click.
+const launchedForPairing = process.argv.includes('--pairing-request')
 if (e2eHeadless) app.dock?.hide()
 
 const CSP = [
@@ -356,7 +359,7 @@ async function main() {
     minWidth: 900,
     minHeight: 560,
     title: 'Ramu',
-    show: !e2eHeadless,
+    show: !e2eHeadless && !launchedForPairing,
     backgroundColor: '#131315',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
@@ -487,6 +490,18 @@ async function main() {
   win.on('leave-full-screen', chromeChanged)
 
   const notifiers = new Map<string, ReturnType<typeof createAgentNotifier>>()
+  const pairing = createPairingNotifier({ window: win, launchedForRequest: launchedForPairing, quit: () => app.quit() })
+  // macOS also activates an app as it launches; only a later activation (Dock, Finder) is the person opening it.
+  const pairingLaunchAt = Date.now()
+  app.on('activate', () => {
+    if (Date.now() - pairingLaunchAt > 3000) pairing.reveal()
+  })
+  // Requests raised before this app connected arrive with this read, not as an event.
+  if (launchedForPairing)
+    void runtimeInvoke(runtime, 'network.status').then(
+      (status) => pairing.receive(status.requests ?? []),
+      () => app.quit(),
+    )
   const hostNavigation = new HostNavigation((hostId, destination) =>
     send('computers:navigate', { hostId, destination }),
   )
@@ -546,6 +561,8 @@ async function main() {
     pair: runtimePair,
     renew: (url, token) => runtimeRenew(url, token),
     deliver: (id, channel, payload) => {
+      if (id === LOCAL && channel === 'pairing:requests')
+        pairing.receive((payload as { requests: Parameters<typeof pairing.receive>[0] }).requests)
       observeHostActivity(id, channel, payload)
       sendTo(id, channel, payload)
       notifierFor(id).observe(channel, payload)

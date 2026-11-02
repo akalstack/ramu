@@ -78,6 +78,7 @@ import {
   type PermissionDuration,
 } from '@ramu/shared/devicePermissions'
 import { PairingRequests } from './remote/pairingRequests'
+import { createPairingNotice } from './remote/pairingNotice'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
   candidateUrls,
@@ -127,7 +128,13 @@ mkdirSync(userData, { recursive: true })
 // Network clients present either their own device token (see `ramu pair`) or the older shared token.
 const devices = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
 const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
-const pairingRequests = new PairingRequests({ devices, hostId })
+const pairingRequests = new PairingRequests({
+  devices,
+  hostId,
+  // Nearby devices may ask while this host lets itself be found, or while Pair a device is open.
+  accepting: () => network.discoverable || devices.offers().length > 0,
+  changed: () => pairingNotice(pairingRequests.list()),
+})
 const permissionRequests = new PermissionRequests()
 const remoteAccess = new RemoteAccess({
   devices,
@@ -1407,6 +1414,15 @@ const localSocketHost: SocketHost = {
   },
 }
 const localSockets = serveSockets(runtime, localSocketHost)
+const pairingNotice = createPairingNotice({
+  // Only the desktop apps on this machine answer pairing requests; paired devices never see them.
+  push: (requests) => {
+    const message = `data: ${JSON.stringify({ channel: 'pairing:requests', payload: { requests } })}\n\n`
+    for (const client of hostClients) if (!client.destroyed) writeEvent(client, message)
+  },
+  desktopConnected: () => desktopClients.size > 0,
+  desktopApp: process.env.RAMU_DESKTOP_APP,
+})
 function startRemote() {
   if (!network.enabled || stopping) return
   remoteError = null
@@ -1554,7 +1570,8 @@ async function networkMethod(method: string, args: unknown[]) {
     return cancelled
   }
   if (method === 'network.approveRequest') {
-    if (typeof args[0] !== 'string' || typeof args[1] !== 'string') throw new Error('Invalid pairing request')
+    if (typeof args[0] !== 'string') throw new Error('Invalid pairing request')
+    if (args[1] !== 'owner' && args[1] !== 'viewer') throw new Error('Invalid device access')
     pairingRequests.approve(args[0], args[1])
     syncDiscovery()
     return networkStatus()

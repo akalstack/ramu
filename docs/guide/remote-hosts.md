@@ -7,7 +7,7 @@ A **host** is a computer that runs Ramu's workspace server: your agents, termina
 **Settings → Remote access**:
 
 - **Let other devices connect** opens the host on a network you choose (all networks, or one such as your VPN) and a port.
-- **Pair a device** shows a one-time code and this host's addresses. Nearby devices can also ask to pair; allow one only when both screens show the same six-digit number.
+- **Pair a device** shows a one-time code and this host's addresses. With **Discoverable** on, a nearby device can also ask without a code: Ramu asks you to allow it (in the app, or as a notification when it is in the background or closed). Allow it only when both screens show the same six-digit number.
 - **Device permissions** decide what each device may use: computer use, the browser, terminals, settings changes and agents. Grant this time, for an hour, a day or always.
 - **Hosts** adds another host by choosing it nearby, or by address and code. Each host card has a switch that turns its connection off and on without forgetting it.
 
@@ -26,6 +26,7 @@ ramu pair
 | `ramu [serve]` | Run the server in the foreground |
 | `ramu status`, `stop`, `restart` | Check, stop or restart it |
 | `ramu pair [--role viewer]` | Print a one-time pairing code and this host's addresses |
+| `ramu pair --approve <request>`, `--deny <request>` | Answer a nearby device's request; the server prints each one with its number |
 | `ramu devices` | List, revoke and grant permissions to paired devices |
 | `ramu hosts add <address> <code>` | Let this host's agents start threads on another host |
 | `ramu thread start\|status\|message\|list` | Start and follow threads from a terminal |
