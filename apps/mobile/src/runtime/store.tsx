@@ -48,7 +48,9 @@ import {
   deleteToken,
   readLocal,
   readRenewedAt,
+  readDrafts,
   readSendJournal,
+  writeDrafts,
   readToken,
   saveRenewedAt,
   saveToken,
@@ -294,6 +296,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       chats: saved.chats.map((chat) => ({ ...chat, items: normalizeHelperGroups(chat.items) })),
       computers: saved.computers.map((c) => ({ ...c, status: restoredStatus(c.status) })),
       outbox: restoreOutbox(saved.outbox, sendJournal),
+      // The drafts file is newer than the profile's copy whenever both exist.
+      drafts: readDrafts() ?? saved.drafts,
     }
   })
   const ref = useRef(state)
@@ -1360,7 +1364,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
   }, [])
   // The profile holds every transcript, so saving it is the phone's heaviest work: a queued message is saved promptly,
-  // and anything else waits for a pause in typing and streaming.
+  // and anything else waits for a pause in streaming. Typing never triggers it (drafts save on their own below).
   const savedOutbox = useRef(state.outbox)
   useEffect(() => {
     const timer = setTimeout(
@@ -1393,7 +1397,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     )
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [state.computers, state.projects, state.chats, state.selected, state...] by design; the values it reads beyond these are current as of that run
-  }, [state.computers, state.projects, state.chats, state.selected, state.language, state.outbox, state.drafts])
+  }, [state.computers, state.projects, state.chats, state.selected, state.language, state.outbox])
+  // Drafts save on their own, small and soon after typing pauses; the profile keeps a copy whenever it saves.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        writeDrafts(ref.current.drafts)
+      } catch (error) {
+        report(new Error(`Could not save drafts. ${error instanceof Error ? error.message : String(error)}`))
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [state.drafts] by design; it reads the latest drafts when it fires
+  }, [state.drafts])
   const sessionAction = (id: string, fn: (computer: string, session: string) => Promise<unknown>) => {
     const chat = ref.current.chats.find((c) => c.id === id)
     if (chat?.sessionId)

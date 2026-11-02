@@ -28,7 +28,7 @@ export function StepSlider({
   const { c } = useTheme()
   const [width, setWidth] = useState(0)
   const [drag, setDrag] = useState<number | null>(null)
-  const state = useRef({ width: 0, count, index, last: -1 })
+  const state = useRef({ width: 0, count, index, last: -1, startX: 0 })
   state.current.width = width
   state.current.count = count
   state.current.index = index
@@ -36,40 +36,43 @@ export function StepSlider({
     const { width: w, count: n } = state.current
     return n < 2 || w <= THUMB ? 0 : Math.min(n - 1, Math.max(0, Math.round(((x - THUMB / 2) / (w - THUMB)) * (n - 1))))
   }
-  const pan = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => !disabled && state.current.count > 1,
-        onMoveShouldSetPanResponder: () => !disabled && state.current.count > 1,
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: (event) => {
-          const i = at(event.nativeEvent.locationX)
+  const pan = useMemo(() => {
+    const finish = () => {
+      const i = state.current.last
+      state.current.last = -1
+      setDrag(null)
+      if (i >= 0 && i !== state.current.index) onCommit(i)
+    }
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => !disabled && state.current.count > 1,
+      onStartShouldSetPanResponderCapture: () => !disabled && state.current.count > 1,
+      onMoveShouldSetPanResponder: () => !disabled && state.current.count > 1,
+      onMoveShouldSetPanResponderCapture: () => !disabled && state.current.count > 1,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (event) => {
+        // Every child ignores touches, so locationX is on the track. Moves add the gesture's own distance to it: a
+        // window position measured once would be stale inside a sheet that was still sliding in.
+        state.current.startX = event.nativeEvent.locationX
+        const i = at(state.current.startX)
+        state.current.last = i
+        setDrag(i)
+        onPreview?.(i)
+        tap()
+      },
+      onPanResponderMove: (_event, gesture) => {
+        const i = at(state.current.startX + gesture.dx)
+        if (i !== state.current.last) {
           state.current.last = i
           setDrag(i)
           onPreview?.(i)
           tap()
-        },
-        onPanResponderMove: (event) => {
-          // locationX is relative to the touched child; pageX minus the track's left edge is stable.
-          const i = at(event.nativeEvent.pageX - trackLeft.current)
-          if (i !== state.current.last) {
-            state.current.last = i
-            setDrag(i)
-            onPreview?.(i)
-            tap()
-          }
-        },
-        onPanResponderRelease: () => {
-          const i = state.current.last
-          setDrag(null)
-          if (i >= 0 && i !== state.current.index) onCommit(i)
-        },
-        onPanResponderTerminate: () => setDrag(null),
-      }),
-    [disabled, onPreview, onCommit],
-  )
-  const track = useRef<import('react-native').ViewInstance>(null)
-  const trackLeft = useRef(0)
+        }
+      },
+      onPanResponderRelease: () => finish(),
+      // A sheet or scroll view may take the touch over mid-drag; keep the step the finger had reached.
+      onPanResponderTerminate: () => finish(),
+    })
+  }, [disabled, onPreview, onCommit])
   const shown = drag ?? index
   const fraction = count > 1 && shown >= 0 ? shown / (count - 1) : 0
   const left = width > THUMB ? fraction * (width - THUMB) : 0
@@ -86,18 +89,7 @@ export function StepSlider({
           event.nativeEvent.actionName === 'increment' ? Math.min(count - 1, index + 1) : Math.max(0, index - 1)
         if (next !== index) onCommit(next)
       }}
-      onLayout={(event) => {
-        setWidth(event.nativeEvent.layout.width)
-        track.current?.measureInWindow((x: number) => {
-          trackLeft.current = x
-        })
-      }}
-      ref={(node) => {
-        track.current = node
-        node?.measureInWindow?.((x: number) => {
-          trackLeft.current = x
-        })
-      }}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
       style={{ height: 40, justifyContent: 'center', opacity: disabled ? 0.4 : 1 }}
       {...pan.panHandlers}
     >
@@ -139,6 +131,7 @@ export function StepSlider({
           width: THUMB,
           height: THUMB,
           borderRadius: THUMB / 2,
+          transform: [{ scale: drag === null ? 1 : 1.15 }],
           backgroundColor: c.text,
           shadowColor: '#000',
           shadowOpacity: 0.3,

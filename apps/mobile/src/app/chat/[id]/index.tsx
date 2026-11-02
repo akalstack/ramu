@@ -4,7 +4,7 @@ import { goBackOrHome } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, FlatList, Platform, Pressable, View } from 'react-native'
+import { ActivityIndicator, Alert, Animated, FlatList, Platform, Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -123,9 +123,12 @@ export default function ChatScreen() {
   const revealCap = useRef<ReturnType<typeof setTimeout> | null>(null)
   const settleReveal = () => {
     if (revealed) return
+    // A started thread whose history is still on its way has nothing to show yet: wait for it, briefly.
+    const loading = !!chat?.sessionId && !chat.items?.length
+    revealCap.current ??= setTimeout(() => setRevealed(true), loading ? 2500 : 800)
+    if (loading) return
     if (revealTimer.current) clearTimeout(revealTimer.current)
     revealTimer.current = setTimeout(() => setRevealed(true), 150)
-    revealCap.current ??= setTimeout(() => setRevealed(true), 800)
   }
   useEffect(
     () => () => {
@@ -438,7 +441,7 @@ export default function ChatScreen() {
         if (nextIsUser) map.set(row.id, { ...map.get(row.id), footer: true })
         nextIsUser = false
       }
-    })
+    }
     return map
   }, [pageRows, store.language])
   // New rows ease the rows around them into place instead of the list jumping.
@@ -1061,7 +1064,7 @@ export default function ChatScreen() {
               maxToRenderPerBatch={12}
               windowSize={7}
               ItemSeparatorComponent={RowSeparator}
-              style={{ flex: 1, opacity: revealed ? 1 : 0 }}
+              style={{ flex: 1 }}
               contentInset={ios ? { bottom: cover } : undefined}
               scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
               contentContainerStyle={{
@@ -1118,6 +1121,8 @@ export default function ChatScreen() {
                 </View>
               }
             />
+            {/* Covers the transcript while it settles at its end, then fades away; the composer stays above it. */}
+            <OpeningCover visible={!revealed} color={c.window} spinner={c.muted} />
             {ios ? null : <TopFade visible={scrolled} color={c.window} />}
             <KeyboardLift keyboard={keyboard}>
               <BottomFade height={composerHeight * 0.75} color={c.window} />
@@ -1408,5 +1413,33 @@ export default function ChatScreen() {
       <ContinueOnHostSheet chat={chat} targetId={continueHost} onClose={() => setContinueHost(null)} />
       <AddTeammateSheet chat={chat} open={addingTeammate} onClose={() => setAddingTeammate(false)} />
     </Screen>
+  )
+}
+
+/** A plain surface with a small spinner over a thread that is still settling, faded out once it is ready. */
+function OpeningCover({ visible, color, spinner }: { visible: boolean; color: string; spinner: string }) {
+  const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current
+  const [mounted, setMounted] = useState(visible)
+  useEffect(() => {
+    if (visible) {
+      opacity.setValue(1)
+      setMounted(true)
+      return
+    }
+    const fade = Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true })
+    fade.start(({ finished }) => finished && setMounted(false))
+    return () => fade.stop()
+  }, [visible, opacity])
+  if (!mounted) return null
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        { backgroundColor: color, opacity, alignItems: 'center', justifyContent: 'center' },
+      ]}
+    >
+      <ActivityIndicator size="small" color={spinner} />
+    </Animated.View>
   )
 }

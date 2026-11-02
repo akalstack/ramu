@@ -54,6 +54,27 @@ const writeSmall = (name: string, value: string) => {
   if (Platform.OS === 'web') localStorage.setItem(name, value)
   else new File(Paths.document, name).writeSync(value)
 }
+const draftsKey = 'ramu.mobile.drafts'
+/**
+ * Composer drafts in their own small file. They change with every keystroke, so saving them with the profile (which
+ * holds every transcript) would block typing and taps while it serializes. Null when none were saved here yet.
+ */
+export function readDrafts(): Record<string, string> | null {
+  try {
+    const text = readSmall(draftsKey)
+    if (!text) return null
+    const value = JSON.parse(text) as unknown
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+    return Object.fromEntries(
+      Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    )
+  } catch {
+    return null
+  }
+}
+export function writeDrafts(drafts: Record<string, string>) {
+  writeSmall(draftsKey, JSON.stringify(drafts))
+}
 const sendingKey = 'ramu.mobile.sending'
 /** Outbox ids handed to the network but not yet recorded in the saved profile; see `sendJournal.ts`. */
 export function readSendJournal(): string[] {

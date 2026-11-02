@@ -1185,6 +1185,8 @@ export function Composer({
                       : 'Send'
               }
               disabled={!has || viewOnly || busy || uploading || dictating}
+              // A 34-point button beside the keyboard is easy to miss; the touch area reaches past it.
+              hitSlop={10}
 
               onPress={() => {
                 tap()

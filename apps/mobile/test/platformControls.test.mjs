@@ -3167,6 +3167,8 @@ for (const ambiguous of [false, true]) {
           writes.push(JSON.parse(JSON.stringify(value)))
         },
         readSendJournal: () => [],
+        readDrafts: () => null,
+        writeDrafts: () => {},
         writeSendJournal: (ids) => {
           if (failWrite) throw new Error('Storage full')
           journals.push([...ids])
@@ -5581,6 +5583,8 @@ for (const os of ['ios', 'android']) {
         readLocal: (defaults) => ({ ...defaults, ...initial }),
         writeLocal() {},
         readSendJournal: () => [],
+        readDrafts: () => null,
+        writeDrafts: () => {},
         writeSendJournal() {},
       },
       './transport': { HostError, SuspendedError: class extends HostError {} },
@@ -5655,6 +5659,8 @@ for (const os of ['ios', 'android']) {
         readLocal: (defaults) => ({ ...defaults, ...initial }),
         writeLocal() {},
         readSendJournal: () => [],
+        readDrafts: () => null,
+        writeDrafts: () => {},
         writeSendJournal() {},
       },
       './transport': { HostError, SuspendedError: class extends HostError {} },
@@ -6998,6 +7004,8 @@ function deliveryStoreHarness() {
       readLocal: (defaults) => ({ ...defaults, ...initial }),
       writeLocal: async () => {},
       readSendJournal: () => [],
+      readDrafts: () => null,
+      writeDrafts: () => {},
       writeSendJournal() {},
     },
     './refreshDepth': load('runtime/refreshDepth.ts', 'ios'),
