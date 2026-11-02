@@ -149,6 +149,11 @@
 .stream-word {
   animation: stream-in var(--chat-enter-duration, 180ms) var(--chat-enter-ease, var(--ease)) both;
 }
+@media (prefers-reduced-motion: reduce) {
+  .stream-word {
+    animation: none;
+  }
+}
 
 /* Automatic following must not flash the native thumb between streamed updates.
    Keep its gutter stable, and reveal it consistently when the reader interacts. */

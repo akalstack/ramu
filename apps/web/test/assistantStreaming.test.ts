@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({ ref: null as { current: unknown } | null, effects: [] as (() => void)[] }))
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
@@ -22,8 +22,12 @@ vi.mock('../src/composer/Attachments', () => ({ Attachments: () => null }))
 import { AssistantText } from '../src/views/agent/components/AssistantText'
 import { PendingSubmission } from '../src/views/agent/components/PendingSubmission'
 beforeEach(() => {
+  vi.useFakeTimers()
   state.ref = null
   state.effects = []
+})
+afterEach(() => {
+  vi.useRealTimers()
 })
 const render = (text: string, generating = true) => {
   const html = renderToStaticMarkup(
@@ -46,6 +50,19 @@ it('keeps word spans stable across repeated chunks so their running animation ca
   const first = render('Hello there')
   expect(render('Hello there')).toBe(first)
   expect(render('Hello there friend')).toContain('<span class="stream-word">Hello</span>')
+})
+it('resumes a word that is rendered again instead of restarting its fade', () => {
+  render('Hello')
+  vi.advanceTimersByTime(100)
+  expect(render('Hello there')).toContain('<span class="stream-word" style="animation-delay:-100ms">Hello</span>')
+})
+it('never fades settled words again when the text around them changes the markdown', () => {
+  render('1. **Ramu** first')
+  vi.advanceTimersByTime(1000)
+  const html = render('1. **Ramu** first and more\n\n2. second')
+  expect(html).not.toContain('<span class="stream-word">Ramu</span>')
+  expect(html).not.toContain('<span class="stream-word">first</span>')
+  expect(html).toContain('<span class="stream-word">more</span>')
 })
 it('animates prose inside links, emphasis, headings and tables without wrapping code blocks', () => {
   const html = render(

@@ -3,13 +3,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Button } from '@/components/desktop-button'
 import { Brain, ChevronRight } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import Markdown, { type Components } from 'react-markdown'
+import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
 import { reducedMotion } from '../../../workspace/panelMotion'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { formatDuration } from '../lib/format'
-import { SETTLED_CHARS, streaming, type WordPlan } from './AssistantText'
+import { noteArrival, rehypeStreamWords, streamClock } from '../lib/streamWords'
 import { WorkingText } from './WorkingText'
 import { CARET_CLASS, TOOL_DISCLOSURE_PANEL_CLASS, TOOL_ICON_CLASS, TOOL_SUMMARY_CLASS } from '../styles'
 
@@ -32,11 +32,9 @@ export function ThinkingRow({
   const startedAt = useRef<number | null>(active ? Date.now() : null)
   const [took, setTook] = useState<number | null>(null)
   const body = useScrollFade<HTMLDivElement>()
-  const words = useRef<WordPlan>({ plan: [], next: 0, settle: text.length > SETTLED_CHARS })
-  words.current.next = 0
-  useEffect(() => {
-    words.current.settle = false
-  }, [])
+  const clock = useRef(streamClock(text))
+  noteArrival(clock.current, text)
+  const rehypePlugins = useMemo(() => [rehypeStreamWords(clock.current)], [])
   useEffect(() => {
     if (active) {
       startedAt.current ??= Date.now()
@@ -51,10 +49,6 @@ export function ThinkingRow({
     const el = body.current
     if (active && el) el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'auto' : 'smooth' })
   }, [text, active, body])
-  const components = useMemo<Components>(
-    () => ({ ...chatMarkdownComponents, ...(active ? streaming(words.current) : {}) }),
-    [active],
-  )
   return (
     <Collapsible
       open={open}
@@ -82,7 +76,11 @@ export function ThinkingRow({
           ref={body}
           className={`thinking-body fade-scroll [--fade-top:0px] [--fade-bottom:0px] [mask-image:linear-gradient(to_bottom,_transparent_0,_#000_var(--fade-top),_#000_calc(100%_-_var(--fade-bottom)),_transparent_100%)] [transition:--fade-top_0.14s_ease-out,_--fade-bottom_0.14s_ease-out] m-[2px_0_4px_20px] pl-2.5 [border-left:2px_solid_var(--line-strong)] text-muted-foreground text-control leading-[1.55] [overflow-wrap:anywhere] overflow-y-auto [&_p]:m-[0_0_6px] [&_p:last-child]:mb-0 [&_ul]:m-[0_0_6px] [&_ul]:pl-5 [&_ol]:m-[0_0_6px] [&_ol]:pl-5 [&_li]:m-[2px_0] [&_strong]:font-semibold [&_strong]:text-soft [&_:is(h1,_h2,_h3,_h4)]:m-[6px_0_4px] [&_:is(h1,_h2,_h3,_h4)]:text-[length:1em] [&_:is(h1,_h2,_h3,_h4)]:font-semibold [&_:not(pre)>code]:rounded-(--radius-xs) [&_:not(pre)>code]:bg-fill [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:text-[length:0.9em] ${active || preview ? 'max-h-[6.2em]' : 'max-h-[260px]'}`}
         >
-          <Markdown remarkPlugins={[remarkGfm]} components={components}>
+          <Markdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={active ? rehypePlugins : undefined}
+            components={chatMarkdownComponents}
+          >
             {text}
           </Markdown>
         </div>

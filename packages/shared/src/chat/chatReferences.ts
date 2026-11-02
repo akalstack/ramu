@@ -49,7 +49,18 @@ interface ReferenceNode {
   value?: string
   url?: string
   children?: ReferenceNode[]
+  position?: NodePosition
 }
+interface NodePosition {
+  start: { line: number; column: number; offset?: number }
+  end: { line: number; column: number; offset?: number }
+}
+
+const shifted = (position: NodePosition, at: number, part: string): NodePosition => {
+  const point = (offset: number) => ({ ...position.start, offset: (position.start.offset ?? 0) + offset })
+  return { start: point(at), end: point(at + part.length) }
+}
+
 /** Transform prose text only: existing links, images, and code retain their meaning. */
 export function remarkChatReferences() {
   return (tree: ReferenceNode) => {
@@ -60,13 +71,26 @@ export function remarkChatReferences() {
           visit(child)
           return [child]
         }
-        return chatReferences(child.value ?? '').map((part): ReferenceNode =>
+        const value = child.value ?? ''
+        let cursor = 0
+        // Text keeps its source position: the streaming fade tells new words from old ones by source offset.
+        const text = (part: string): ReferenceNode => {
+          const at = value.indexOf(part, cursor)
+          if (at < 0) return { type: 'text', value: part }
+          cursor = at + part.length
+          return {
+            type: 'text',
+            value: part,
+            ...(child.position ? { position: shifted(child.position, at, part) } : {}),
+          }
+        }
+        return chatReferences(value).map((part): ReferenceNode =>
           part.kind === 'text'
-            ? { type: 'text', value: part.text }
+            ? text(part.text)
             : {
                 type: 'link',
                 url: part.kind === 'skill' ? SKILL_REFERENCE_PREFIX + encodeURIComponent(part.target) : part.target,
-                children: [{ type: 'text', value: part.text }],
+                children: [text(part.text)],
               },
         )
       })
