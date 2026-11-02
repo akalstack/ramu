@@ -1189,6 +1189,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   Projects: 'Proyek',
   'No project': 'Tanpa proyek',
   'No threads yet': 'Belum ada thread',
+  'Needs you': 'Butuh perhatianmu',
+  '{0} earlier runs': '{0} eksekusi sebelumnya',
   'No commits': 'Belum ada commit',
   'No commits yet.': 'Belum ada commit.',
   'Add project': 'Tambah proyek',

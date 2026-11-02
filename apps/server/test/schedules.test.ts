@@ -123,6 +123,7 @@ describe('durable dispatch', () => {
     await service.tick(at('2026-10-11T00:00:00Z'))
     expect(start).toHaveBeenCalledTimes(1)
     expect(service.get(s.id).state).toBe('completed')
+    expect(ws.getTask(service.runs(s.id)[0]!.taskId!).scheduleId).toBe(s.id)
     state = 'idle'
     await service.tick(at('2026-10-12T00:00:00Z'))
     expect(service.runs(s.id)[0]?.status).toBe('completed')

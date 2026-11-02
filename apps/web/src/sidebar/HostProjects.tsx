@@ -2,6 +2,7 @@ import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
 import { useEffect, useState, type CSSProperties } from 'react'
 import {
   CheckCheck,
+  CircleAlert,
   MessageCircle,
   Pin,
   ChevronDown,
@@ -10,6 +11,7 @@ import {
   FolderClosed,
   FolderPlus,
   Plus,
+  type LucideIcon,
 } from 'lucide-react'
 import { NO_PROJECT, type Computer, type Project, type Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
@@ -26,7 +28,7 @@ import { TaskRow } from './projects/TaskRow'
 import { SectionHead } from './projects/SectionHead'
 import { Collapse } from './projects/Collapse'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, pinnedFirst, STICKY_PROJECT_CLASS } from './projects/constants'
-import { mergedThreads, sidebarThreads } from './projects/threadLists'
+import { mergedThreads, sidebarThreads, threadNeedsYou } from './projects/threadLists'
 import { useSidebarExpansion } from './projects/sidebarExpansion'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 import { hostRows } from './hostRows'
@@ -60,6 +62,7 @@ export function HostProjects() {
     <div
       className={`flex flex-col gap-2 pb-4 pt-1 ${state.scope ? '' : 'px-2 [&>section+section]:border-t [&>section+section]:border-border [&>section+section]:pt-2'}`}
     >
+      {!state.scope && <NeedsYou computers={state.computers} />}
       {!state.scope && preferences.recentChatMode ? (
         <MergedRecent computers={state.computers} />
       ) : (
@@ -167,7 +170,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
     computer.id,
     all,
     NO_PROJECT,
-    Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT),
+    embedded ? Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT) : Infinity,
   )
   const projectsDomId = `host:${computer.id}:projects`
   const projectsOpen = embedded || tree.isExpanded('section:projects')
@@ -260,7 +263,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
         </Collapse>
         {!preferences.recentChatMode &&
           section('Threads', 'section:chats', loose, {
-            body: embedded ? <ThreadPreviewList preview={loosePreview} /> : undefined,
+            body: <ThreadPreviewList preview={loosePreview} />,
             action: (
               <Button
                 variant="ghost"
@@ -409,29 +412,69 @@ function MergedRecent({ computers }: { computers: Computer[] }) {
   )
 }
 
-/** Finished work is one list across hosts, so it does not interrupt each host's projects. */
-function MergedDone({ computers }: { computers: Computer[] }) {
+/** One collapsible list drawn from every host. Absent while it would be empty. */
+function MergedSection({
+  computers,
+  id,
+  title,
+  icon,
+  threads,
+  order,
+}: {
+  computers: Computer[]
+  id: string
+  title: string
+  icon: LucideIcon
+  threads: (source: HostThreads) => Task[]
+  order: (a: Task, b: Task) => number
+}) {
   const tree = useSidebarExpansion()
-  const rows = mergedThreads(useHostThreads(computers), (source) => source.done).sort(
-    (a, b) => b.task.doneAt! - a.task.doneAt!,
-  )
+  const rows = mergedThreads(useHostThreads(computers), threads).sort((a, b) => order(a.task, b.task))
   if (!rows.length) return null
-  const open = tree.isExpanded('section:done')
+  const open = tree.isExpanded(`section:${id}`)
   return (
     <section className="min-w-0">
       <SectionHead
-        title={t('Done')}
-        icon={CheckCheck}
+        title={title}
+        icon={icon}
         count={rows.length}
         open={open}
-        onToggle={() => tree.setExpanded('section:done', !open)}
-        controls="all-hosts-done"
+        onToggle={() => tree.setExpanded(`section:${id}`, !open)}
+        controls={`all-hosts-${id}`}
       />
-      <Collapse open={open} id="all-hosts-done" className="flex flex-col gap-0.5">
+      <Collapse open={open} id={`all-hosts-${id}`} className="flex flex-col gap-0.5">
         {rows.map(({ task, source }) => (
           <MergedRow key={`${source.host}:${task.id}`} task={task} source={source} />
         ))}
       </Collapse>
     </section>
+  )
+}
+
+/** What is blocked on the person leads the sidebar, so they need not scan every host for it. */
+function NeedsYou({ computers }: { computers: Computer[] }) {
+  return (
+    <MergedSection
+      computers={computers}
+      id="needs-you"
+      title={t('Needs you')}
+      icon={CircleAlert}
+      threads={(source) => source.active.filter(threadNeedsYou)}
+      order={(a, b) => b.lastActiveAt - a.lastActiveAt}
+    />
+  )
+}
+
+/** Finished work is one list across hosts, so it does not interrupt each host's projects. */
+function MergedDone({ computers }: { computers: Computer[] }) {
+  return (
+    <MergedSection
+      computers={computers}
+      id="done"
+      title={t('Done')}
+      icon={CheckCheck}
+      threads={(source) => source.done}
+      order={(a, b) => b.doneAt! - a.doneAt!}
+    />
   )
 }

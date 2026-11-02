@@ -51,6 +51,7 @@ export function TaskRow({
   hidePin,
   nested,
   merged,
+  earlierRuns,
 }: {
   task: Task
   projectName?: string
@@ -58,6 +59,8 @@ export function TaskRow({
   nested?: boolean
   /** Rows from several hosts share one list, so each says where it lives. */
   merged?: boolean
+  /** Older quiet runs of the same schedule folded into this row. */
+  earlierRuns?: number
 }) {
   useLanguage()
   const ws = useRowStore()
@@ -411,6 +414,14 @@ export function TaskRow({
                   className="grow flex-1 min-w-0 text-left task-title overflow-hidden whitespace-nowrap"
                   text={task.title}
                 />
+              )}
+              {!!earlierRuns && (
+                <span
+                  className="flex-none text-caption tabular-nums text-muted-foreground"
+                  title={t('{0} earlier runs', { 0: earlierRuns })}
+                >
+                  +{earlierRuns}
+                </span>
               )}
               {task.startedFrom && (
                 <GitFork

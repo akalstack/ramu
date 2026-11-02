@@ -38,7 +38,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
     host.id,
     ws.tasks,
     NO_PROJECT,
-    Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT),
+    embedded ? Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT) : Infinity,
     ws.ui.activeTaskId,
   )
   // Recent mode: every chat in one list by activity, each led by its project's name.
@@ -162,11 +162,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
               </Button>
             </SectionHead>
             <Collapse open={showChats} id="loose-chats" className="flex flex-col gap-0.5">
-              {embedded ? (
-                <ThreadPreviewList preview={loosePreview} />
-              ) : (
-                looseChats.map((t) => <TaskRow key={t.id} task={t} />)
-              )}
+              {looseChats.length > 0 && <ThreadPreviewList preview={loosePreview} />}
             </Collapse>
           </>
         )}

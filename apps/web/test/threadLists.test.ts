@@ -58,7 +58,7 @@ it('bounds local and remote project previews, keeps an older active thread, and 
   expect(preview.tasks.map((entry) => entry.id)).toEqual(['thread-0', 'thread-1', 'thread-2', 'thread-12'])
   expect(preview.hasMore).toBe(true)
   expect(projectThreadPreview(tasks, 'project', 3, true).tasks).toHaveLength(15)
-  expect(projectThreadPreview(tasks, 'empty', 3, false)).toEqual({ tasks: [], hasMore: false })
+  expect(projectThreadPreview(tasks, 'empty', 3, false)).toMatchObject({ tasks: [], hasMore: false })
 })
 
 it('bounds projectless threads like a project and keeps every host source when merging', async () => {
@@ -82,4 +82,34 @@ it('keeps a host tree key independent of which host is on screen', async () => {
   const { sidebarTreeKey } = await import('../src/sidebar/projects/threadLists')
   expect(sidebarTreeKey('own', 'own', 'project:p')).toBe('project:p')
   expect(sidebarTreeKey('mini', 'own', 'project:p')).toBe('host:mini:project:p')
+})
+
+it('folds quiet schedule runs into the newest and keeps runs that still have something to show', async () => {
+  const { projectThreadPreview } = await import('../src/sidebar/projects/threadLists')
+  const run = (id: string, lastActiveAt: number, extra: Partial<Task> = {}) =>
+    task(id, { scheduleId: 'daily', lastActiveAt, ...extra })
+  const tasks = [
+    run('newest', 50),
+    run('quiet', 40),
+    run('waiting', 30, { status: 'needs-input' }),
+    run('unread', 20),
+    run('open', 10),
+    task('person', { lastActiveAt: 5 }),
+  ]
+  const preview = projectThreadPreview(tasks, 'project', 10, false, 'open', new Set(['unread']))
+  expect(preview.tasks.map((entry) => entry.id)).toEqual(['newest', 'waiting', 'unread', 'open', 'person'])
+  expect(preview.earlierRuns).toEqual({ newest: 1 })
+  expect(preview.hasMore).toBe(true)
+
+  const expanded = projectThreadPreview(tasks, 'project', 10, true, 'open')
+  expect(expanded.tasks).toHaveLength(6)
+  expect(expanded.earlierRuns).toEqual({})
+})
+
+it('counts only threads blocked on the person as needing them', async () => {
+  const { threadNeedsYou } = await import('../src/sidebar/projects/threadLists')
+  expect(threadNeedsYou(task('input', { status: 'needs-input' }))).toBe(true)
+  expect(threadNeedsYou(task('failed', { status: 'failed' }))).toBe(false)
+  expect(threadNeedsYou(task('running', { status: 'running' }))).toBe(false)
+  expect(threadNeedsYou(task('idle'))).toBe(false)
 })

@@ -128,6 +128,8 @@ export interface Task {
   executionState?: AgentSessionState
   /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */
   kind?: 'library-review' | null
+  /** The schedule whose run created this thread. Absent on older hosts; null for every other thread. */
+  scheduleId?: string | null
   /**
    * Who started this thread, when an agent or one Home prompt did: the starting thread (null for Home) and how many
    * threads started together. Absent on older hosts and for threads a person started.

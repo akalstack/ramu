@@ -5,6 +5,7 @@ import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../../i18n'
 import { TaskRow } from './TaskRow'
 import { projectThreadPreview } from './threadLists'
+import { useWorkspaceOf } from '../../workspace/workspace'
 import { useSidebarExpansion } from './sidebarExpansion'
 
 /** How many threads each group previews when every host shares the sidebar. */
@@ -21,8 +22,9 @@ export function useThreadPreview(
   const tree = useSidebarExpansion(host)
   const key = `preview:${projectId}`
   const showAll = !tree.isExpanded(key)
+  const unread = useWorkspaceOf(host)?.unread
   return {
-    ...projectThreadPreview(tasks, projectId, limit, showAll, activeId),
+    ...projectThreadPreview(tasks, projectId, limit, showAll, activeId, unread),
     showAll,
     toggle: () => tree.setExpanded(key, showAll),
   }
@@ -48,7 +50,7 @@ export function ThreadPreviewList({
         </div>
       )}
       {preview.tasks.map((task) => (
-        <TaskRow key={task.id} task={task} nested />
+        <TaskRow key={task.id} task={task} nested earlierRuns={preview.earlierRuns[task.id]} />
       ))}
       {preview.hasMore && (
         <Button

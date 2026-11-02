@@ -1,3 +1,4 @@
+import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import type { Task } from '@ramu/shared/types'
 
 /** Done threads gather across projects, including pinned and projectless threads. */
@@ -17,6 +18,35 @@ export function mergedThreads<Source>(sources: Source[], threads: (source: Sourc
   return sources.flatMap((source) => threads(source).map((task) => ({ task, source })))
 }
 
+const NEEDS_YOU = new Set(['approval', 'input', 'blocked', 'turn-limit'])
+
+/** Work that cannot continue until the person acts. A failure is excluded: it can sit for weeks without blocking anything. */
+export function threadNeedsYou(task: Task) {
+  const status = threadStatus(task, false, task.goalState)
+  return !!status && NEEDS_YOU.has(status.kind)
+}
+
+/**
+ * A recurring schedule reads as one row, its newest run. An older run stays in the list while it still has something to
+ * show: it is open, unread or has a status of its own. Expects `tasks` newest first.
+ */
+function collapseScheduleRuns(tasks: Task[], keep: (task: Task) => boolean) {
+  const newest = new Map<string, Task>()
+  const earlierRuns: Record<string, number> = {}
+  const visible = tasks.filter((task) => {
+    if (!task.scheduleId) return true
+    const lead = newest.get(task.scheduleId)
+    if (!lead) {
+      newest.set(task.scheduleId, task)
+      return true
+    }
+    if (keep(task) || threadStatus(task, false, task.goalState)) return true
+    earlierRuns[lead.id] = (earlierRuns[lead.id] ?? 0) + 1
+    return false
+  })
+  return { visible, earlierRuns }
+}
+
 /** Use the same bounded project preview for local and remote hosts. Keep the active thread visible. */
 export function projectThreadPreview(
   tasks: Task[],
@@ -24,12 +54,18 @@ export function projectThreadPreview(
   limit: number,
   expanded: boolean,
   activeId?: string | null,
+  unread?: ReadonlySet<string>,
 ) {
   const sorted = tasks
     .filter((task) => task.projectId === projectId && task.status !== 'archived' && !task.doneAt && !task.pinnedAt)
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  const { visible, earlierRuns } = collapseScheduleRuns(
+    sorted,
+    (task) => task.id === activeId || !!unread?.has(task.id),
+  )
   return {
-    tasks: expanded ? sorted : sorted.filter((task, index) => index < limit || task.id === activeId),
-    hasMore: sorted.length > limit,
+    tasks: expanded ? sorted : visible.filter((task, index) => index < limit || task.id === activeId),
+    hasMore: sorted.length > Math.min(limit, visible.length),
+    earlierRuns: expanded ? {} : earlierRuns,
   }
 }
