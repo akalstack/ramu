@@ -5006,4 +5006,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Jangkau host ini dari mana saja tanpa VPN atau port terbuka. Perangkat yang masuk ke akun Google atau GitHub yang sama akan menemukannya; relay tidak dapat membaca koneksinya.',
   'Agents keep running on each computer. The phone follows them while the app is open.':
     'Agen tetap berjalan di setiap komputer. Ponsel mengikutinya selama aplikasi terbuka.',
+  'Show fewer lines': 'Tampilkan lebih sedikit baris',
+  'Show all {0} lines': 'Tampilkan semua {0} baris',
 }

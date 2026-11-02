@@ -524,7 +524,7 @@ function SheetBody({
  * and swipe-to-dismiss). Elsewhere it is built on Modal so it runs in Expo Go; on iOS it floats inset from the edges on an opaque surface.
  */
 export function Sheet(props: SheetProps) {
-  if (Platform.OS === 'ios') return <NativeSheet {...props} />
+  if (Platform.OS === 'ios') return <LazyNativeSheet {...props} />
   if (props.presentation === 'screen') return <ScreenSheet {...props} />
   if (Platform.OS === 'android')
     return (
@@ -533,6 +533,34 @@ export function Sheet(props: SheetProps) {
       </MaterialSheet>
     )
   return <FloatingSheet {...props} />
+}
+
+/** How long a closed sheet keeps its native tree, so its dismissal animation finishes before it goes. */
+const KEEP_CLOSED_SHEET_MS = 700
+
+/**
+ * A screen declares many sheets and opens few. A native sheet's tree and content exist only from its first opening until
+ * it has been closed a moment; closed, it renders nothing, so the screen's updates do not redraw every unopened sheet.
+ */
+function LazyNativeSheet(props: SheetProps) {
+  const { open } = props
+  const [mounted, setMounted] = useState(open)
+  // Presented a frame after mounting, so SwiftUI animates the sheet in rather than showing it already up.
+  const [presented, setPresented] = useState(false)
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      return
+    }
+    const timer = setTimeout(() => setMounted(false), KEEP_CLOSED_SHEET_MS)
+    return () => clearTimeout(timer)
+  }, [open])
+  useEffect(() => {
+    if (!mounted) return setPresented(false)
+    const frame = requestAnimationFrame(() => setPresented(open))
+    return () => cancelAnimationFrame(frame)
+  }, [mounted, open])
+  return mounted ? <NativeSheet {...props} open={presented} /> : null
 }
 
 /** A task surface rather than a bottom drawer: the keyboard resizes its scrollable content. */

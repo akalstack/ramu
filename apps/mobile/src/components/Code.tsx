@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { memo, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { Check, Copy } from 'lucide-react-native'
@@ -8,6 +8,7 @@ import { grammarFor, highlightLines, type Token } from '../runtime/highlight'
 import { tap } from './ui'
 import { FileIcon } from './FileIcon'
 import { useSay } from '../i18n'
+import { RowToggle } from './rowToggle'
 
 export { grammarFor, highlightLines, type Token }
 
@@ -97,7 +98,7 @@ export function useTokenColor() {
 }
 
 /** One line of highlighted tokens, as nested Text so it sits inside any Text (and keeps the line's own font). */
-export function CodeTokens({ tokens }: { tokens: Token[] }): ReactNode {
+export const CodeTokens = memo(function CodeTokens({ tokens }: { tokens: Token[] }): ReactNode {
   const color = useTokenColor()
   return tokens.map((token, index) => {
     const tint = color(token.scope)
@@ -114,10 +115,16 @@ export function CodeTokens({ tokens }: { tokens: Token[] }): ReactNode {
       token.text
     )
   })
-}
+})
 
 /** Up to this many lines wrap to the screen, so a path or a command is read whole; longer code scrolls sideways. */
 const WRAP_LINES = 4
+/**
+ * A longer block shows its first lines and a "Show all" control. A thread full of generated code otherwise mounts every
+ * line of every block at once, which is what made long threads slow to open, and scrolls past screens of code.
+ */
+const COLLAPSE_OVER = 24
+const COLLAPSED_LINES = 14
 
 /**
  * A fenced code block in chat output: a header naming the file, a lone path or the language with its file icon, a copy
@@ -132,10 +139,19 @@ export function CodeBlock({ source: raw, hint }: { source: string; hint?: string
     const timer = setTimeout(() => setCopied(false), 2000)
     return () => clearTimeout(timer)
   }, [copied])
+  const toggled = useContext(RowToggle)
   const source = useMemo(() => dedentCode(raw), [raw])
   const header = codeBlockLabel(source, hint)
-  const lines = useMemo(() => highlightLines(source, grammarFor(source, hint)), [source, hint])
-  const wrap = source.split('\n').length <= WRAP_LINES
+  const total = useMemo(() => source.split('\n').length, [source])
+  const [expanded, setExpanded] = useState(false)
+  const collapsed = total > COLLAPSE_OVER && !expanded
+  // Only what is shown is highlighted; the grammar is still chosen from the whole block.
+  const shown = useMemo(
+    () => (collapsed ? source.split('\n').slice(0, COLLAPSED_LINES).join('\n') : source),
+    [collapsed, source],
+  )
+  const lines = useMemo(() => highlightLines(shown, grammarFor(source, hint)), [shown, source, hint])
+  const wrap = total <= WRAP_LINES
   const copy = () => {
     tap()
     void Clipboard.setStringAsync(source).then(() => setCopied(true))
@@ -149,7 +165,7 @@ export function CodeBlock({ source: raw, hint }: { source: string; hint?: string
               <CodeTokens tokens={line} />
             </Text>
           ))
-        : source}
+        : shown}
     </Text>
   )
   return (
@@ -214,6 +230,29 @@ export function CodeBlock({ source: raw, hint }: { source: string; hint?: string
           {code}
         </ScrollView>
       )}
+      {total > COLLAPSE_OVER ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          onPress={() => {
+            tap()
+            toggled()
+            setExpanded((open) => !open)
+          }}
+          style={({ pressed }) => ({
+            minHeight: 36,
+            justifyContent: 'center',
+            paddingHorizontal: space.m,
+            borderTopWidth: 0.5,
+            borderTopColor: c.line,
+            backgroundColor: pressed ? c.pressed : 'transparent',
+          })}
+        >
+          <Text style={{ color: c.accent, fontSize: font.caption, fontWeight: '500' }}>
+            {expanded ? say('Show fewer lines') : say('Show all {0} lines', { 0: total })}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   )
 }

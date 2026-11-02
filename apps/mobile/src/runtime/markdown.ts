@@ -129,3 +129,23 @@ export function parseBlocks(text: string): Block[] {
   }
   return blocks
 }
+
+/**
+ * A very long paragraph as pieces of at most about `max` characters, cut at a line break, else a sentence, else a space.
+ * iOS draws one Text into one layer; a paragraph many screens tall exceeds what it can draw and shows as a blank slab.
+ */
+export function splitLongParagraph(text: string, max = 1500): string[] {
+  if (text.length <= max) return [text]
+  const pieces: string[] = []
+  let rest = text
+  while (rest.length > max) {
+    const window = rest.slice(0, max)
+    const cut =
+      [window.lastIndexOf('\n'), window.lastIndexOf('. '), window.lastIndexOf(' ')].find((index) => index > max / 3) ??
+      max
+    pieces.push(rest.slice(0, cut + 1).trimEnd())
+    rest = rest.slice(cut + 1).replace(/^\n/, '')
+  }
+  if (rest) pieces.push(rest)
+  return pieces
+}

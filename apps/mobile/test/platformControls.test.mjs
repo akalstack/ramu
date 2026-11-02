@@ -7236,13 +7236,31 @@ test('iOS dialogs use a native sheet, navigation stack, close action and scroll-
 })
 
 test('the shared Sheet routes every iOS dialog, including full workflows, through native navigation', () => {
-  const ui = load('components/ui.tsx', 'ios', { './NativeSheet': { NativeSheet: 'NativeSheet' } })
   for (const presentation of [undefined, 'screen']) {
-    const tree = ui.Sheet({ open: true, title: 'Choose a project', children: 'Projects', onClose() {}, presentation })
+    const hooks = hookHarness()
+    const ui = load('components/ui.tsx', 'ios', {
+      react: { ...require('react'), ...hooks.react },
+      './NativeSheet': { NativeSheet: 'NativeSheet' },
+    })
+    const lazy = ui.Sheet({ open: true, title: 'Choose a project', children: 'Projects', onClose() {}, presentation })
+    const tree = hooks.render(() => lazy.type(lazy.props))
     assert.equal(tree.type, 'NativeSheet')
     assert.equal(tree.props.title, 'Choose a project')
     assert.equal(tree.props.presentation, presentation)
   }
+})
+
+test('an iOS sheet that has never opened renders nothing, so screen updates do not redraw it', () => {
+  const hooks = hookHarness()
+  const ui = load('components/ui.tsx', 'ios', {
+    react: { ...require('react'), ...hooks.react },
+    './NativeSheet': { NativeSheet: 'NativeSheet' },
+  })
+  const lazy = ui.Sheet({ open: false, title: 'Usage', children: 'Readings', onClose() {} })
+  assert.equal(
+    hooks.render(() => lazy.type(lazy.props)),
+    null,
+  )
 })
 
 test('Settings uses a native scroll edge and gains a raised background after content scrolls underneath', () => {

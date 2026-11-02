@@ -5,7 +5,7 @@ import { ReferenceBadge } from './ReferenceChip'
 export { ReferenceBadge } from './ReferenceChip'
 import { CodeBlock } from './Code'
 import { useReducedMotion } from './Motion'
-import { parseBlocks, type Block } from '../runtime/markdown'
+import { parseBlocks, splitLongParagraph, type Block } from '../runtime/markdown'
 import { chatReferences } from '@ramu/shared/chat/chatReferences'
 import { draftChip, skillChip } from '@ramu/shared/chat/referenceChip'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
@@ -306,8 +306,17 @@ function BlockView({ block, stream }: { block: Block; stream?: StreamFade }) {
           <Markdown text={block.text} muted />
         </View>
       )
-    case 'paragraph':
-      return <Inline text={block.text} stream={stream} />
+    case 'paragraph': {
+      const pieces = splitLongParagraph(block.text)
+      if (pieces.length === 1) return <Inline text={block.text} stream={stream} />
+      return (
+        <View>
+          {pieces.map((piece, index) => (
+            <Inline key={index} text={piece} stream={index === pieces.length - 1 ? stream : undefined} />
+          ))}
+        </View>
+      )
+    }
     case 'list': {
       let counter = 0
       return (

@@ -1,4 +1,5 @@
 import { pastScrollEdge } from '../runtime/scrollSurface'
+import { LegendList, type LegendListProps, type LegendListRef } from '@legendapp/list/react-native'
 import { goBackOrHome } from '../runtime/navigation'
 import {
   Children,
@@ -83,6 +84,19 @@ export function PageFlatList<T>({ ref, ...props }: FlatListProps<T> & { ref?: Re
   return (
     <PrimaryScroll>
       <FlatList {...props} ref={ref} style={[{ backgroundColor: c.window }, props.style]} />
+    </PrimaryScroll>
+  )
+}
+
+/**
+ * A long, growing list (a thread's transcript): only the rows near the screen are mounted, rows of one kind share a size
+ * estimate, and it can open at its end without laying out everything above it.
+ */
+export function PageLegendList<T>({ ref, ...props }: LegendListProps<T> & { ref?: Ref<LegendListRef> }) {
+  const { c } = useTheme()
+  return (
+    <PrimaryScroll>
+      <LegendList {...props} ref={ref} style={[{ backgroundColor: c.window }, props.style]} />
     </PrimaryScroll>
   )
 }

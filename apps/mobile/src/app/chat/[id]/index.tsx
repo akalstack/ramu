@@ -4,7 +4,7 @@ import { goBackOrHome } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Animated, FlatList, Platform, Pressable, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Alert, Animated, Platform, Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -38,7 +38,8 @@ import { fill, useT, useSay } from '../../../i18n'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
-import { Header, HeaderButton, HeaderMenu, Screen, PageFlatList } from '../../../components/Screen'
+import { Header, HeaderButton, HeaderMenu, Screen, PageLegendList } from '../../../components/Screen'
+import type { LegendListRef } from '@legendapp/list/react-native'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
@@ -69,7 +70,7 @@ import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../componen
 import { PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
-import { Arrive, Presence, animateLayout, useReducedMotion } from '../../../components/Motion'
+import { Arrive, Presence, useReducedMotion } from '../../../components/Motion'
 import { ChatActionsSheet, confirmChatDeletion, offerThreadUndo } from '../../../components/ChatActions'
 import * as Clipboard from 'expo-clipboard'
 
@@ -98,7 +99,7 @@ export default function ChatScreen() {
   latestStore.current = store
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const scroll = useRef<FlatList<import('../../../runtime/types').TranscriptItem>>(null)
+  const scroll = useRef<LegendListRef>(null)
   const [contentScreenFocused, setContentScreenFocused] = useState(false)
   const toolActivity = useThreadToolActivity(chat, contentScreenFocused)
   const [visibleContentRows, setVisibleContentRows] = useState<Set<string>>(() => new Set())
@@ -444,13 +445,8 @@ export default function ChatScreen() {
     }
     return map
   }, [pageRows, store.language])
-  // New rows ease the rows around them into place instead of the list jumping.
-  const rowCount = useRef<number | null>(null)
-  const itemCount = chat?.items.length ?? 0
-  useEffect(() => {
-    if (rowCount.current !== null && itemCount > rowCount.current) animateLayout(180)
-    rowCount.current = itemCount
-  }, [itemCount])
+  // New rows fade in on their own (`fresh` below). A screen-wide layout animation is not used here: it left the list's
+  // row positions behind their measured sizes, drawing a tall message over the reply under it.
   const renderRow = ({ item }: { item: TranscriptItem; index: number }) => {
     const fresh = !seen.current.has(item.id)
     seen.current.add(item.id)
@@ -1017,7 +1013,7 @@ export default function ChatScreen() {
       >
         <CancelPendingSettings.Provider value={() => setStaged(null)}>
           <RowToggle.Provider value={holdScroll}>
-            <PageFlatList
+            <PageLegendList
               key={chat.id}
               ref={scroll}
               contentInsetAdjustmentBehavior="automatic"
@@ -1057,12 +1053,16 @@ export default function ChatScreen() {
               data={pageRows}
               viewabilityConfig={contentViewability}
               onViewableItemsChanged={contentViewabilityChanged}
-              maintainVisibleContentPosition={pagedBack ? { minIndexForVisible: 0 } : undefined}
+              // Earlier turns arrive above what you are reading; they must not move it.
+              maintainVisibleContentPosition={pagedBack ? { data: true, size: true } : undefined}
               keyExtractor={(item) => item.id}
               renderItem={renderRow}
-              initialNumToRender={20}
-              maxToRenderPerBatch={12}
-              windowSize={7}
+              // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
+              getItemType={(item) => item.kind}
+              estimatedItemSize={260}
+              drawDistance={400}
+              // Lays out the newest rows first instead of the whole page from the top.
+              initialScrollAtEnd
               ItemSeparatorComponent={RowSeparator}
               style={{ flex: 1 }}
               contentInset={ios ? { bottom: cover } : undefined}

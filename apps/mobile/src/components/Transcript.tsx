@@ -59,8 +59,9 @@ const toolIcons: Record<ToolKind, Icon> = {
   other: Wrench,
 }
 
-/** Called before a row expands or collapses by hand; the screen keeps its scroll position instead of following the end. */
-export const RowToggle = createContext<() => void>(() => {})
+export { RowToggle } from './rowToggle'
+import { messagePreview } from '../runtime/messagePreview'
+import { RowToggle } from './rowToggle'
 
 /** Drops the model change waiting for the next send; set by the chat screen that holds it. */
 export const CancelPendingSettings = createContext<() => void>(() => {})
@@ -69,15 +70,24 @@ export const CancelPendingSettings = createContext<() => void>(() => {})
 export function ChatReferences({ chat, children }: { chat: Chat; children: ReactNode }) {
   const files = useOpenFile(chat)
   const store = useStore()
-  const actions = {
-    image: async (href: string) => {
-      if (!chat.taskId) return null
-      const file = await store.invoke(chat.computerId, 'files.resolveLink', chat.taskId, href)
-      return file ? (await store.invoke(chat.computerId, 'files.media', chat.taskId, file.repoId, file.path)).url : null
-    },
-    openFile: (href: string) => void files.openLink(href),
-    openUrl: (url: string) => void Linking.openURL(url).catch(() => {}),
-  }
+  // The actions read the latest store and opener when called. Their identity changes only with the chat they act on,
+  // so a store update does not redraw every link and badge in every mounted message.
+  const latest = useRef({ files, store })
+  latest.current = { files, store }
+  const { computerId, taskId } = chat
+  const actions = useMemo(
+    () => ({
+      image: async (href: string) => {
+        if (!taskId) return null
+        const { store } = latest.current
+        const file = await store.invoke(computerId, 'files.resolveLink', taskId, href)
+        return file ? (await store.invoke(computerId, 'files.media', taskId, file.repoId, file.path)).url : null
+      },
+      openFile: (href: string) => void latest.current.files.openLink(href),
+      openUrl: (url: string) => void Linking.openURL(url).catch(() => {}),
+    }),
+    [computerId, taskId],
+  )
   return <ReferenceContext.Provider value={actions}>{children}</ReferenceContext.Provider>
 }
 
@@ -397,7 +407,7 @@ export function TranscriptItemView({ item, chat, meta }: { item: TranscriptItem;
 }
 
 /** Time of an answer and a copy button, like the desktop's row under each reply. */
-function AnswerFooter({ at, text }: { at?: number; text: string }) {
+const AnswerFooter = memo(function AnswerFooter({ at, text }: { at?: number; text: string }) {
   const { c } = useTheme()
   const store = useStore()
   const [copied, setCopied] = useState(false)
@@ -434,7 +444,7 @@ function AnswerFooter({ at, text }: { at?: number; text: string }) {
       </Pressable>
     </View>
   )
-}
+})
 
 const RESUME_PROMPT = '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>'
 
@@ -783,6 +793,9 @@ function TurnSummary({ label, children }: { label: string; children: ReactNode }
 
 function UserBubble({ text, attachments, chat }: { text: string; attachments?: Attachment[]; chat: Chat }) {
   const { c } = useTheme()
+  const say = useSay()
+  const toggled = useContext(RowToggle)
+  const [expanded, setExpanded] = useState(false)
   const actions = useContext(ReferenceContext)
   const segments = composerDraft(text + ' ').segments
   // Quotes stand above the message as their own block, like the desktop's quoted reply; the rest flows as text with badges.
@@ -811,8 +824,18 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
           .join('')
           .trim()
       : null
+  // Code and tables scroll sideways, which needs a width to scroll within: a bubble that only fits its content gave
+  // them none, so it came out shorter than its own content and was drawn over the reply below.
+  const wide = plain !== null && /^\s*(```|~~~|\|.*\|)/m.test(plain)
   return (
-    <View style={{ alignSelf: 'flex-end', maxWidth: '86%', gap: space.s, alignItems: 'flex-end' }}>
+    <View
+      style={{
+        alignSelf: 'flex-end',
+        ...(wide ? { width: '86%' } : { maxWidth: '86%' }),
+        gap: space.s,
+        alignItems: wide ? 'stretch' : 'flex-end',
+      }}
+    >
       {attachments?.length ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
           {attachments.map((file) => (
@@ -839,7 +862,17 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
             </View>
           ))}
           {plain !== null ? (
-            <Markdown text={plain} />
+            <LongMessage
+              text={plain}
+              expanded={expanded}
+              label={expanded ? say('Show less') : say('Show more')}
+              accent={c.accent}
+              onToggle={() => {
+                tap()
+                toggled()
+                setExpanded((open) => !open)
+              }}
+            />
           ) : hasText ? (
             <T tone="text" style={{ lineHeight: 21 }}>
               {body}
@@ -848,6 +881,34 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
         </View>
       ) : null}
     </View>
+  )
+}
+
+/** A sent message, or only its beginning with a control to show the rest when it is long. */
+function LongMessage({
+  text,
+  expanded,
+  label,
+  accent,
+  onToggle,
+}: {
+  text: string
+  expanded: boolean
+  label: string
+  accent: string
+  onToggle: () => void
+}) {
+  const preview = useMemo(() => messagePreview(text), [text])
+  if (!preview) return <Markdown text={text} />
+  return (
+    <>
+      <Markdown text={expanded ? text : preview} />
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded }} hitSlop={8} onPress={onToggle}>
+        <T size={font.control} weight="500" style={{ color: accent }}>
+          {label}
+        </T>
+      </Pressable>
+    </>
   )
 }
 
