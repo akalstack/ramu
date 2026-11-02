@@ -15,7 +15,7 @@ const state = vi.hoisted(() => ({
 }))
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
-  useState: () => ['all', vi.fn()],
+  useState: () => ['running', vi.fn()],
   useEffect() {},
 }))
 vi.mock('../src/i18n', () => ({ useLanguage() {}, t: (text: string) => text }))
@@ -31,10 +31,11 @@ vi.mock('../src/sidebar/projects/TaskStateIcon', () => ({ StatusMark: () => null
 vi.mock('../src/Menu', () => ({ timeAgo: () => 'now' }))
 vi.mock('../src/ipc', () => ({ ramu: {} }))
 vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: {} }) }))
-vi.mock('../src/inbox/OperatorBox', () => ({ OperatorBox: () => null }))
+vi.mock('../src/inbox/Brief', () => ({ Brief: () => null, blockerLabel: () => '' }))
+vi.mock('../src/inbox/failureSeen', () => ({ useFailureSeen: () => () => false }))
 vi.mock('../src/inbox/recaps', () => ({ SnoozeMenu: () => null, notifyRecapAction: vi.fn() }))
 vi.mock('../src/chat/Notifications', () => ({ notifyError: vi.fn() }))
-vi.mock('../src/inbox/navigation', () => ({ savedInboxTab: () => 'all', saveInboxTab: vi.fn() }))
+vi.mock('../src/inbox/navigation', () => ({ savedInboxTab: () => 'running', saveInboxTab: vi.fn() }))
 
 const elements = (node: ReactNode): ReactElement<Record<string, unknown>>[] => {
   if (!isValidElement<Record<string, unknown>>(node)) return []

@@ -1,26 +1,15 @@
 import { RowButton } from '@/components/row-button'
-import { OperatorBox } from './OperatorBox'
-import { useAppSettings } from '../settings/AppSettings'
+import { Brief, blockerLabel } from './Brief'
+import { useInboxModel } from './useBrief'
 import { useState, useEffect } from 'react'
-import {
-  blockerTally,
-  blockerTallyLine,
-  TALLY_MIN_THREADS,
-  buildInbox,
-  inboxBlocker,
-  INBOX_TABS,
-  type InboxChat,
-  type InboxTab,
-} from '@ramu/shared/hostInbox'
-import { hostInboxInput } from '@ramu/shared/hostOverview'
+import { inboxBlocker, INBOX_TABS, type InboxChat, type InboxTab } from '@ramu/shared/hostInbox'
 import type { Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
 import { HostProvider } from '../workspace/HostProvider'
 import { ThreadHoverCard } from '../sidebar/projects/ThreadHoverCard'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { useComputers, statusText } from '../workspace/computers'
-import { useHostOverviews } from '../workspace/hostOverview'
+import { statusText } from '../workspace/computers'
 import { useHostSelection } from '../workspace/HostSelection'
 import { FeedSection } from '../HomeSection'
 import { t, useLanguage } from '../i18n'
@@ -36,11 +25,9 @@ import { errorText } from '../lib/errors'
 /** All sections are derived after host filtering, including counts and limits. Actions always carry the owning host. */
 export function HostsInbox() {
   useLanguage()
-  const computers = useComputers()
-  const { preferences } = useAppSettings()
   const { select } = useHostSelection()
+  const { model, hosts, computers } = useInboxModel()
   const host = computers?.scope ?? null
-  const hosts = useHostOverviews(computers?.computers.map((c) => c.id) ?? [])
   const [tab, setTab] = useState<InboxTab>(savedInboxTab)
   useEffect(() => {
     const onTab = (event: Event) => setTab((event as CustomEvent<InboxTab>).detail)
@@ -51,11 +38,6 @@ export function HostsInbox() {
     setTab(value)
     saveInboxTab(value)
   }
-  const model = buildInbox({
-    ...hostInboxInput(hosts),
-    computerId: host,
-    visit: Number(localStorage.getItem('ramu.last-visit') ?? 0),
-  })
   const pc = (id: string) => computers?.computers.find((c) => c.id === id)
   const data = (id: string) => hosts.find((entry) => entry.id === id)?.data
   const where = (id: string, taskId?: string) => {
@@ -65,7 +47,6 @@ export function HostsInbox() {
     return [project?.name, pc(id)?.name].filter(Boolean).join(' · ')
   }
   const available = (id: string) => pc(id)?.status === 'connected'
-  const shown = <T,>(list: T[]) => (tab === 'all' ? list.slice(0, 5) : list)
   // The same status as the sidebar, including goal states; a finished result shows its age instead of a mark.
   const state = (task?: Task) => {
     if (!task) return null
@@ -73,7 +54,7 @@ export function HostsInbox() {
     return status ? <StatusMark task={task} status={status} /> : null
   }
   const chats = (list: InboxChat[]) =>
-    shown(list).map((chat) => {
+    list.map((chat) => {
       const task = data(chat.computerId)?.tasks.find((entry) => entry.id === chat.taskId)
       return (
         <HostProvider key={JSON.stringify([chat.computerId, chat.id])} hostId={chat.computerId}>
@@ -142,7 +123,7 @@ export function HostsInbox() {
     }
   }
   const recaps = (list: typeof model.attention) =>
-    shown(list).map(({ computerId, item }) => (
+    list.map(({ computerId, item }) => (
       <article key={JSON.stringify([computerId, item.id])} className="rounded-(--radius-m) bg-card p-4">
         <p className="mb-1 text-caption text-muted-foreground">{where(computerId, item.taskId)}</p>
         <h3 className="text-body font-medium">{item.title}</h3>
@@ -180,34 +161,22 @@ export function HostsInbox() {
       </article>
     ))
   const section = (id: InboxTab, title: string, count: number, children: React.ReactNode) =>
-    count && (tab === 'all' || tab === id) ? (
-      <FeedSection
-        title={title}
-        count={count}
-        action={
-          tab === 'all' && count > 5 ? (
-            <Button variant="ghost" size="sm" onClick={() => choose(id)}>
-              {t('See all')}
-            </Button>
-          ) : undefined
-        }
-      >
+    count && tab === id ? (
+      <FeedSection title={title} count={count}>
         {children}
       </FeedSection>
     ) : null
   const scopedHosts = hosts.filter((entry) => !host || entry.id === host)
   const pending = scopedHosts.some((entry) => available(entry.id) && entry.isPending)
   const counts: Record<InboxTab, number> = {
-    all: 0,
-    'needs-you': model.needsYou,
+    brief: model.needsYou,
     running: model.running.length,
     recaps: model.recent.length,
     learned: model.unreadSummaries,
     completed: model.completed.length,
   }
   const labels: Record<InboxTab, string> = {
-    all: t('All'),
-    'needs-you': t('Waiting'),
+    brief: t('Brief'),
     running: t('Running'),
     recaps: t('Recaps'),
     learned: t('Learned'),
@@ -216,7 +185,6 @@ export function HostsInbox() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-auto">
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-5 px-6 pt-6 pb-10">
-        {preferences.operator && <OperatorBox />}
         <Tabs value={tab} onValueChange={(value) => choose(value as InboxTab)} className="flex-col gap-5">
           <TabsList variant="line" className="h-auto flex-wrap justify-start gap-3">
             {INBOX_TABS.map((id) => (
@@ -247,13 +215,7 @@ export function HostsInbox() {
                 {t('Loading…')}
               </p>
             )}
-            {(tab === 'all' || tab === 'needs-you') && model.waiting.length >= TALLY_MIN_THREADS && (
-              <p role="status" className="m-0 text-caption text-muted-foreground">
-                {blockerTallyLine(blockerTally(model.waiting), t)}
-              </p>
-            )}
-            {section('needs-you', t('Waiting for your input'), model.waiting.length, chats(model.waiting))}
-            {section('needs-you', t('Needs your attention'), model.attention.length, recaps(model.attention))}
+            {tab === 'brief' && <Brief />}
             {section('running', t('Running in the background'), model.running.length, chats(model.running))}
             {section('recaps', t('Since your last visit'), model.sinceVisit.length, recaps(model.sinceVisit))}
             {tab === 'recaps' && section('recaps', t('Earlier'), model.earlier.length, recaps(model.earlier))}
@@ -261,7 +223,7 @@ export function HostsInbox() {
               'learned',
               t('What Ramu learned'),
               model.summaries.length,
-              shown(model.summaries).map(({ computerId, summary }) => (
+              model.summaries.map(({ computerId, summary }) => (
                 <RowButton
                   size="lg"
                   key={JSON.stringify([computerId, summary.id])}
@@ -279,7 +241,7 @@ export function HostsInbox() {
               )),
             )}
             {section('completed', t('Completed'), model.completed.length, chats(model.completed))}
-            {!pending && (tab === 'all' ? model.empty : tab === 'learned' ? !model.summaries.length : !counts[tab]) && (
+            {!pending && tab !== 'brief' && (tab === 'learned' ? !model.summaries.length : !counts[tab]) && (
               <p className="py-12 text-center text-body text-muted-foreground">{t('Nothing here yet')}</p>
             )}
           </TabsContent>
@@ -292,22 +254,5 @@ export function HostsInbox() {
 /** One line saying what a waiting thread needs from the person; empty for a thread that is not waiting. */
 function blockerText(chat: InboxChat): string {
   const blocker = inboxBlocker(chat)
-  if (!blocker) return ''
-  const count = blocker.count ?? 1
-  switch (blocker.kind) {
-    case 'approval':
-      return t(count === 1 ? '1 approval needed' : '{0} approvals needed', { 0: count })
-    case 'connector':
-      return t(count === 1 ? 'Sign in to 1 connector' : 'Sign in to {0} connectors', { 0: count })
-    case 'question':
-      return t(count === 1 ? '1 question to answer' : '{0} questions to answer', { 0: count })
-    case 'verification-failed':
-      return blocker.reason ? t('Goal check failed: {0}', { 0: blocker.reason }) : t('Goal check failed')
-    case 'goal-blocked':
-      return blocker.reason ? t('Goal blocked: {0}', { 0: blocker.reason }) : t('Goal blocked')
-    case 'turn-limit':
-      return t('Goal reached its turn limit')
-    case 'goal-paused':
-      return t('Goal paused')
-  }
+  return blocker ? blockerLabel(blocker) : ''
 }

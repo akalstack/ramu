@@ -1,4 +1,5 @@
-import type { ThreadInputRequest, ThreadInputSummary } from '@ramu/shared/types'
+import { questionChoices } from '@ramu/shared/chat/inputSummary'
+import type { AgentQuestion, ThreadInputRequest, ThreadInputSummary } from '@ramu/shared/types'
 import type { Db } from '../db'
 
 /** One bounded query for list context, independent of transcript size; rebuilds honestly after rewind/restart. */
@@ -12,6 +13,8 @@ export function readInputSummaries(db: Db, taskId?: string): Map<string, ThreadI
         WHEN 'permission-request' THEN COALESCE(NULLIF(json_extract(e.event, '$.title'), ''), json_extract(e.event, '$.toolName'))
         WHEN 'question' THEN json_extract(e.event, '$.questions[0].question') ELSE json_extract(e.event, '$.message') END, 1, 240) AS title,
       CASE WHEN json_extract(e.event, '$.kind') = 'elicitation' THEN substr(NULLIF(json_extract(e.event, '$.serverName'), ''), 1, 100) END AS connectorName,
+      CASE WHEN json_extract(e.event, '$.kind') = 'question' THEN json_extract(e.event, '$.questions') END AS questionsJson,
+      json_extract(e.event, '$.responseMode') AS responseMode,
       json_extract(e.event, '$.requestSource.sessionId') AS sourceSession,
       json_extract(e.event, '$.requestSource.agentId') AS sourceAgent,
       substr(json_extract(e.event, '$.requestSource.name'), 1, 100) AS sourceName,
@@ -38,6 +41,8 @@ export function readInputSummaries(db: Db, taskId?: string): Map<string, ThreadI
     approvals: number
     connectors: number
     connectorName: string | null
+    questionsJson: string | null
+    responseMode: string | null
     sourceSession: string | null
     sourceAgent: string | null
     sourceName: string | null
@@ -51,12 +56,16 @@ export function readInputSummaries(db: Db, taskId?: string): Map<string, ThreadI
       connectors: row.connectors,
       requests: [],
     }
+    const choices = row.questionsJson
+      ? questionChoices(JSON.parse(row.questionsJson) as AgentQuestion[], row.responseMode ?? undefined)
+      : undefined
     summary.requests.push({
       sessionId: row.sessionId,
       requestId: row.requestId,
       kind: row.kind,
       title: row.title ?? '',
       ...(row.connectorName ? { connector: row.connectorName } : {}),
+      ...(choices ? { choices } : {}),
       ...(row.sourceSession && row.sourceAgent
         ? {
             source: {

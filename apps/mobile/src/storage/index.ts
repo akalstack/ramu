@@ -167,6 +167,27 @@ export function saveLastVisit(at: number) {
   }
 }
 
+const failuresKey = 'ramu.mobile.failures-seen'
+/** Failures this phone has opened, each with the activity time it was seen at. */
+export function readFailuresSeen(): Record<string, number> {
+  try {
+    const value =
+      Platform.OS === 'web' ? localStorage.getItem(failuresKey) : new File(Paths.document, failuresKey).textSync()
+    return value ? (JSON.parse(value) as Record<string, number>) : {}
+  } catch {
+    return {}
+  }
+}
+export function saveFailuresSeen(seen: Record<string, number>) {
+  try {
+    const text = JSON.stringify(seen)
+    if (Platform.OS === 'web') localStorage.setItem(failuresKey, text)
+    else new File(Paths.document, failuresKey).writeSync(text)
+  } catch {
+    // Losing the marks only means a failure already opened shows in Inbox again.
+  }
+}
+
 /** A separate, bounded content cache; never rewrites account/draft storage. */
 export const contentStorage = {
   getItem(key: string): string | null {

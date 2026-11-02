@@ -73,7 +73,7 @@ With **Auto** as the destination (Home on the desktop, a new thread on the phone
 - **The same project on several hosts:** copies with the same name are one project to route, not a reason to split. The hosts named in the prompt narrow them ("fix the login in ramu on vps" uses that copy without a model call); a prompt that names no host asks which copy, and only a prompt naming every copy's host can split between them. Choices show the host whenever names match.
 - **Turning it off:** **Split requests across projects** (Settings → Threads, on by default) makes Auto always start one thread.
 - **Starting:** each host starts its own rows (`threads.startGroup`) as one group with the project's default checkout and the reviewed model. Every thread's first message is its brief, the contract and the person's original request, and names the other threads of the group, which it can read and message (see [Threads started by agents](#threads-started-by-agents)). A host that fails reports its rows without stopping the others. An Auto request that resolves to one project on another host is reviewed the same way, as a single row.
-- **Following up:** Home's **Started together** card (desktop) and the threads list (phone) show each group across connected hosts with every thread's state and one line for the group (waiting, still working, or how it settled) until a few days after all of it settles.
+- **Following up:** the **Started together** cards in Inbox's Brief (desktop) and the threads list (phone) show each group across connected hosts with every thread's state and one line for the group (waiting, still working, or how it settled) until a few days after all of it settles.
 
 ## Operator
 

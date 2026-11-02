@@ -1,12 +1,12 @@
-import { OperatorBox } from './OperatorBox'
-import { useAppSettings } from '../settings/AppSettings'
+import { Brief } from './Brief'
+import { useInboxModel } from './useBrief'
 import { useHost } from '../workspace/HostProvider'
 import { useComputers } from '../workspace/computers'
 import { HostsInbox } from './HostsInbox'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useWorkspace } from '../workspace/workspace'
 import { DateTime } from 'luxon'
-import { ChevronRight, CircleCheck, Inbox, Loader, Newspaper, RefreshCw, Sparkles } from 'lucide-react'
+import { Inbox, Loader, Newspaper, RefreshCw, Sparkles } from 'lucide-react'
 import type { LibrarySummary } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -20,7 +20,8 @@ import { RecapCard, useRecaps } from './recaps'
 import { FadeText } from '../FadeText'
 import { timeAgo } from '../Menu'
 import { StateDot } from '../sidebar/projects/TaskStateIcon'
-import { saveInboxTab, savedInboxTab, type InboxTab } from './navigation'
+import type { InboxTab } from '@ramu/shared/hostInbox'
+import { saveInboxTab, savedInboxTab } from './navigation'
 
 function Nothing({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) {
   return (
@@ -31,16 +32,6 @@ function Nothing({ icon, title, detail }: { icon: ReactNode; title: string; deta
         <EmptyDescription>{detail}</EmptyDescription>
       </EmptyHeader>
     </Empty>
-  )
-}
-
-function SeeAll({ count, shown, onClick }: { count: number; shown: number; onClick: () => void }) {
-  if (count <= shown) return null
-  return (
-    <Button variant="ghost" size="sm" className="h-6 text-muted-foreground small text-caption" onClick={onClick}>
-      {t('See all')} · {count}
-      <ChevronRight size={12} />
-    </Button>
   )
 }
 
@@ -81,7 +72,6 @@ function LearnedList({ summaries }: { summaries: LibrarySummary[] }) {
   )
 }
 
-const OVERVIEW = 5
 const LEARNED_MAX = 20
 
 const Count = ({ n }: { n: number }) =>
@@ -92,8 +82,8 @@ const Count = ({ n }: { n: number }) =>
   ) : null
 
 /**
- * Everything agents, recaps and learning have for you, beyond Home's glance: what needs you, what is running,
- * recaps, what Ramu learned and finished work, one tab each.
+ * Everything agents, recaps and learning have for you: the Brief of what needs you, what is running, recaps, what
+ * Ramu learned and finished work, one tab each.
  */
 export function InboxPage() {
   const computers = useComputers()
@@ -103,7 +93,7 @@ export function InboxPage() {
 function CurrentHostInbox() {
   useLanguage()
   const { groups, error } = useAgentOverview()
-  const { preferences } = useAppSettings()
+  const { model } = useInboxModel()
   const recaps = useRecaps()
   const { snapshot } = useSummaries()
   const [tab, setTab] = useState<InboxTab>(savedInboxTab)
@@ -116,7 +106,6 @@ function CurrentHostInbox() {
     setTab(next)
     saveInboxTab(next)
   }
-  const waiting = rowsOf(groups, 'Waiting for your input')
   const running = rowsOf(groups, 'Running', 'Limit reached')
   const ws = useWorkspace()
   const finishedAt = (taskId: string) => ws.tasks.find((task) => task.id === taskId)?.lastActiveAt ?? 0
@@ -138,8 +127,7 @@ function CurrentHostInbox() {
   const unread = summaries.filter((summary) => summary.status === 'unread').length
   const earlier = recaps.recent.filter((item) => !recaps.sinceVisit.includes(item))
   const tabs: { id: InboxTab; label: string; count: number }[] = [
-    { id: 'all', label: t('All'), count: 0 },
-    { id: 'needs-you', label: t('Waiting'), count: waiting.length + recaps.attention.length },
+    { id: 'brief', label: t('Brief'), count: model.needsYou },
     { id: 'running', label: t('Running'), count: running.length },
     { id: 'recaps', label: t('Recaps'), count: recaps.sinceVisit.length },
     { id: 'learned', label: t('Learned'), count: unread },
@@ -153,7 +141,6 @@ function CurrentHostInbox() {
             {String(error)}
           </p>
         )}
-        {preferences.operator && <OperatorBox />}
         <Tabs value={tab} onValueChange={(value) => choose(value as InboxTab)} className="flex-col gap-5">
           <TabsList variant="line" className="h-9! w-full justify-start gap-4 border-b border-(--line) p-0">
             {tabs.map((entry) => (
@@ -164,108 +151,8 @@ function CurrentHostInbox() {
             ))}
           </TabsList>
 
-          <TabsContent value="all" className="flex flex-col gap-6">
-            {tab === 'all' && (
-              <>
-                {waiting.length > 0 && (
-                  <FeedSection
-                    title={t('Waiting for your input')}
-                    count={waiting.length}
-                    action={<SeeAll count={waiting.length} shown={OVERVIEW} onClick={() => choose('needs-you')} />}
-                  >
-                    <AgentList items={waiting.slice(0, OVERVIEW)} />
-                  </FeedSection>
-                )}
-                {recaps.attention.length > 0 && (
-                  <FeedSection
-                    title={t('Needs your attention')}
-                    count={recaps.attention.length}
-                    action={<SeeAll count={recaps.attention.length} shown={3} onClick={() => choose('needs-you')} />}
-                  >
-                    {recaps.attention.slice(0, 3).map((item) => (
-                      <RecapCard key={item.id} item={item} attention act={recaps.act} />
-                    ))}
-                  </FeedSection>
-                )}
-                {running.length > 0 && (
-                  <FeedSection
-                    title={t('Running in the background')}
-                    count={running.length}
-                    label={t('Running')}
-                    action={<SeeAll count={running.length} shown={OVERVIEW} onClick={() => choose('running')} />}
-                  >
-                    <AgentList items={running.slice(0, OVERVIEW)} />
-                  </FeedSection>
-                )}
-                {recaps.sinceVisit.length > 0 && (
-                  <FeedSection
-                    title={t('Since your last visit')}
-                    count={recaps.sinceVisit.length}
-                    action={<SeeAll count={recaps.sinceVisit.length} shown={3} onClick={() => choose('recaps')} />}
-                  >
-                    {recaps.sinceVisit.slice(0, 3).map((item) => (
-                      <RecapCard key={item.id} item={item} attention={false} act={recaps.act} />
-                    ))}
-                  </FeedSection>
-                )}
-                {summaries.length > 0 && (
-                  <FeedSection
-                    title={t('What Ramu learned')}
-                    count={summaries.length}
-                    action={<SeeAll count={summaries.length} shown={3} onClick={() => choose('learned')} />}
-                  >
-                    <LearnedList summaries={summaries.slice(0, 3)} />
-                  </FeedSection>
-                )}
-                {completed.length > 0 && (
-                  <FeedSection
-                    title={t('Completed')}
-                    count={completed.length}
-                    action={<SeeAll count={completed.length} shown={OVERVIEW} onClick={() => choose('completed')} />}
-                  >
-                    <AgentList items={completed.slice(0, OVERVIEW)} />
-                  </FeedSection>
-                )}
-                {!waiting.length &&
-                  !recaps.attention.length &&
-                  !running.length &&
-                  !recaps.sinceVisit.length &&
-                  !summaries.length &&
-                  !completed.length && (
-                    <Nothing
-                      icon={<CircleCheck />}
-                      title={t('You are all caught up')}
-                      detail={t('Threads, recaps and what Ramu learns show up here as you work.')}
-                    />
-                  )}
-              </>
-            )}
-          </TabsContent>
-
-          <TabsContent value="needs-you" className="flex flex-col gap-6">
-            {tab === 'needs-you' && (
-              <>
-                {waiting.length > 0 && (
-                  <FeedSection title={t('Waiting for your input')} count={waiting.length}>
-                    <AgentList items={waiting} />
-                  </FeedSection>
-                )}
-                {recaps.attention.length > 0 && (
-                  <FeedSection title={t('Needs your attention')} count={recaps.attention.length}>
-                    {recaps.attention.map((item) => (
-                      <RecapCard key={item.id} item={item} attention act={recaps.act} />
-                    ))}
-                  </FeedSection>
-                )}
-                {!waiting.length && !recaps.attention.length && (
-                  <Nothing
-                    icon={<CircleCheck />}
-                    title={t('Nothing needs you')}
-                    detail={t('Questions, approvals and recaps that need a decision show up here.')}
-                  />
-                )}
-              </>
-            )}
+          <TabsContent value="brief" className="flex flex-col gap-6">
+            {tab === 'brief' && <Brief />}
           </TabsContent>
 
           <TabsContent value="running" className="flex flex-col gap-6">
@@ -291,12 +178,14 @@ function CurrentHostInbox() {
                   <div className="flex items-center gap-2 text-caption text-muted-foreground">
                     <span>
                       {recaps.recap?.generating
-                        ? t('Updating recap…')
+                        ? recaps.recap.generatedAt
+                          ? t('Updating recap…')
+                          : t('Preparing your first recap')
                         : recaps.recap?.generatedAt
                           ? t('Daily recap updated {0}', {
                               '0': DateTime.fromMillis(recaps.recap.generatedAt).toRelative(),
                             })
-                          : t('Preparing your first recap')}
+                          : ''}
                     </span>
                     <Button
                       variant="ghost"
@@ -329,7 +218,7 @@ function CurrentHostInbox() {
                     ))}
                   </FeedSection>
                 )}
-                {!recaps.recent.length && (
+                {!recaps.recent.length && !(recaps.recap?.generating && !recaps.recap.generatedAt) && (
                   <Nothing
                     icon={<Newspaper />}
                     title={t('No recaps yet')}

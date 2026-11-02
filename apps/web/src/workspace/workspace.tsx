@@ -57,6 +57,7 @@ import {
   mountedHosts,
   type HostRuntime,
 } from './hostRuntime'
+import { markFailureSeen } from '../inbox/failureSeen'
 import { commitUnread, inboxUnread, loadUnread, statusUnread } from './unread'
 import { createUiPersistence } from './uiPersistence'
 import {
@@ -607,6 +608,13 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
     window.addEventListener('focus', evaluate)
     return () => window.removeEventListener('focus', evaluate)
   }, [tasks, ui.activeTaskId, composing, active, storage])
+
+  // A failure on screen has been seen, so it stops asking for the person in the Brief and the badge.
+  useEffect(() => {
+    if (!active) return
+    const task = tasks.find((entry) => entry.id === ui.activeTaskId)
+    if (task?.status === 'failed') markFailureSeen(hostId, task.id, task.lastActiveAt)
+  }, [tasks, ui.activeTaskId, active, hostId])
 
   // Unread follows the computer's inbox too: a chat that finished while this window was closed is marked, and opening it
   // on a paired phone clears the mark here.

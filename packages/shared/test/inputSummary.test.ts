@@ -1,6 +1,12 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { AgentEvent } from '../src/types'
-import { describeInputCounts, inputSummary, mergeInputSummaries, changesThreadSummary } from '../src/chat/inputSummary'
+import {
+  describeInputCounts,
+  inputSummary,
+  mergeInputSummaries,
+  changesThreadSummary,
+  questionChoices,
+} from '../src/chat/inputSummary'
 import { threadStatus } from '../src/chat/threadStatus'
 const approval = (requestId: string): AgentEvent => ({
   kind: 'permission-request',
@@ -103,4 +109,25 @@ it('records which connector an elicitation is for, bounded, so the Inbox can gro
   expect(summary?.connectors).toBe(2)
   expect(summary?.requests[0]?.connector).toBe('Atlassian')
   expect(summary?.requests[1]?.connector).toHaveLength(100)
+})
+
+describe('questionChoices', () => {
+  const question = (overrides = {}) => ({
+    question: 'ISO or locale?',
+    header: 'Format',
+    multiSelect: false,
+    options: [
+      { label: 'ISO', description: '' },
+      { label: 'Locale', description: '' },
+    ],
+    ...overrides,
+  })
+
+  it('offers buttons only for one single-choice question answered through Ramu', () => {
+    expect(questionChoices([question()])).toEqual({ key: 'ISO or locale?', options: ['ISO', 'Locale'] })
+    expect(questionChoices([question({ multiSelect: true })])).toBeUndefined()
+    expect(questionChoices([question(), question()])).toBeUndefined()
+    expect(questionChoices([question()], 'message')).toBeUndefined()
+    expect(questionChoices([question({ options: [] })])).toBeUndefined()
+  })
 })

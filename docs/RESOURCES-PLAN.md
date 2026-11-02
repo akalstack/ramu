@@ -42,7 +42,7 @@ Ramu (service, browser)             1.3 GB
 - **Stop:** an agent stops through `agent.stop`, and a command or terminal through its existing stop path, so the thread and its transcript stay and the person can continue later. Stopping work in progress names the thread and asks first; stopping an idle thread needs no confirmation. Stopped rows leave the list as their state changes.
 - **Left running:** commands and terminals still alive under a finished or archived thread get a **Still running** label, so forgotten dev servers are found and stopped.
 - **Ramu row:** the service, Host Chromium and, on desktop for the local host, the app's own windows and browser tabs. It is read-only. Desktop's figure comes from Electron on the device; hosts report the rest.
-- **Low memory in the Brief:** when a host stays below a low-memory threshold across two checks, the [Brief](HOME-INBOX-PLAN.md) gains one row, ordered after limits and paused goals: **vps is low on memory: 2 idle threads use 5 GB**, with **Stop idle** and **Open**. It clears when memory recovers. Only idle threads are offered, and the row counts toward the Inbox badge like other items that need the person.
+- **Low memory in the Brief:** when a host stays below a low-memory threshold across two checks, Inbox's Brief gains one row, ordered after limits and paused goals: **vps is low on memory: 2 idle threads use 5 GB**, with **Stop idle** and **Open**. It clears when memory recovers. Only idle threads are offered, and the row counts toward the Inbox badge like other items that need the person.
 - **Phone:** the same line, figures and Stop in the Inbox Running tab, and the same Brief row. No separate screen.
 
 ## Host service

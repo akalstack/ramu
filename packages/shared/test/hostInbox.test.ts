@@ -2,9 +2,13 @@ import { expect, it } from 'vitest'
 import {
   blockerTally,
   blockerTallyLine,
+  briefRows,
   buildInbox,
+  finishedSince,
   inboxBlocker,
+  inboxTabOf,
   type InboxChat,
+  type InboxRecap,
   type InboxSummary,
 } from '../src/hostInbox'
 import { hostInboxInput, isHostDestination, type HostOverview } from '../src/hostOverview'
@@ -336,4 +340,41 @@ it('groups sign-ins by connector so threads waiting on the same one read as a si
     '2 need sign-in to Atlassian · 1 need sign-in to Linear · 1 need sign-in',
   )
   expect(inboxBlocker(signIn('a', 'Atlassian'))).toEqual({ kind: 'connector', count: 1, connector: 'Atlassian' })
+})
+
+it('orders the Brief: requests, failures, limits, then recaps, and counts failures until seen', () => {
+  const blocked = { ...chat('a', 'goal'), status: 'idle' as const, goalState: { status: 'turn-limit' as const } }
+  const failed = { ...chat('b', 'failed'), status: 'failed' as const }
+  const approval = {
+    ...chat('a', 'approval'),
+    inputSummary: { count: 1, approvals: 1, connectors: 0, requests: [] },
+  }
+  const item = { id: 'r', taskId: 'failed', group: 'attention', status: 'open', updatedAt: now } as InboxRecap['item']
+  const input = { chats: [blocked, failed, approval], recaps: [{ computerId: 'b', item }], summaries: [], now }
+  const model = buildInbox(input)
+  expect(briefRows(model).map((row) => row.kind + (row.kind === 'blocker' ? `:${row.chat.taskId}` : ''))).toEqual([
+    'blocker:approval',
+    'failure',
+    'blocker:goal',
+    'recap',
+  ])
+  expect(model.needsYou).toBe(4)
+  const seen = buildInbox({ ...input, failureSeen: (entry) => entry.taskId === 'failed' })
+  expect(seen.needsYou).toBe(3)
+  expect(seen.failed).toEqual([])
+  // Seen failures still belong in finished work; only the ask goes away.
+  expect(seen.completed.map((entry) => entry.taskId)).toContain('failed')
+})
+
+it('opens retired or unknown tabs on the Brief', () => {
+  expect(inboxTabOf('all')).toBe('brief')
+  expect(inboxTabOf('needs-you')).toBe('brief')
+  expect(inboxTabOf('recaps')).toBe('recaps')
+})
+
+it('counts finished threads since the last visit', () => {
+  const finished = { ...chat('a', 'done'), status: 'ready-for-review' as const, lastActiveAt: now - 10 }
+  const model = buildInbox({ chats: [finished], recaps: [], summaries: [], now })
+  expect(finishedSince(model, now - 20)).toBe(1)
+  expect(finishedSince(model, now)).toBe(0)
 })

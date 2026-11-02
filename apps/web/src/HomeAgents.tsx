@@ -29,7 +29,7 @@ import { ProviderWaitIcon } from './models/ProviderWait'
 import { timeAgo } from './Menu'
 import { groupOf, type AgentGroup } from './agentGroups'
 
-function PendingInput({ sessionId }: { sessionId: string }) {
+export function PendingInput({ sessionId }: { sessionId: string }) {
   const { events } = useAgentStream(sessionId)
   const outcomes = useMemo(() => outcomesOf(events), [events])
   const states = useMemo(() => questionStatesOf(events), [events])

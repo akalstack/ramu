@@ -11,7 +11,7 @@ import type {
   ScheduleRun,
   SummariesSnapshot,
 } from '@ramu/shared/types'
-import { readLastVisit, saveLastVisit } from '../storage'
+import { readFailuresSeen, readLastVisit, saveFailuresSeen, saveLastVisit } from '../storage'
 import { useStore } from './store'
 import { buildInbox, type InboxModel } from './inbox'
 import { looseInvoke } from './settingsModel'
@@ -20,6 +20,8 @@ import { showToast } from './toast'
 
 // What the computers keep beyond threads: recaps, what Ramu learned, and schedules. Every online computer is read
 // at once (Inbox shows what needs you on all of them) and refreshed when the computer says automation changed.
+
+const FAILURES_KEPT = 300
 
 export interface Automation {
   recaps: RecapSnapshot | null
@@ -36,6 +38,9 @@ interface AutomationStore {
   inbox: InboxModel
   /** The moment recaps count as "since your last visit" from. */
   visit: number
+  failureSeen: (chat: { id: string; lastActiveAt: number }) => boolean
+  /** Opening a failed thread is seeing it: it stops asking in the Brief and the badge. */
+  seeFailure: (chat: { id: string; lastActiveAt: number }) => void
   reload(computerId: string): Promise<void>
   refreshRecaps(computerId: string): Promise<void>
   /**
@@ -71,6 +76,7 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
   // "Since your last visit" means since you last left the app, not since this screen last mounted: the marker moves
   // forward only after the app was in the background for a while, so recaps don't vanish on the next tap.
   const [visit, setVisit] = useState(() => readLastVisit())
+  const [failures, setFailures] = useState(() => readFailuresSeen())
   useEffect(() => {
     let leftAt = 0
     saveLastVisit(Date.now())
@@ -159,10 +165,22 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
   }, [recapKey, load])
 
   const value = useMemo<AutomationStore>(() => {
+    const failureSeen = (chat: { id: string; lastActiveAt: number }) => failures[chat.id] === chat.lastActiveAt
     const call = <T,>(id: string, run: (invoke: typeof store.invoke) => Promise<T>) => run(storeRef.current.invoke)
     const api: AutomationStore = {
       of: (id) => state[id] ?? empty,
       visit,
+      failureSeen,
+      seeFailure: (chat) =>
+        setFailures((current) => {
+          if (current[chat.id] === chat.lastActiveAt) return current
+          const kept = Object.entries(current)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, FAILURES_KEPT - 1)
+          const next = { ...Object.fromEntries(kept), [chat.id]: chat.lastActiveAt }
+          saveFailuresSeen(next)
+          return next
+        }),
       inbox: buildInbox({
         chats: store.chats,
         recaps: store.computers.flatMap((c) =>
@@ -172,6 +190,7 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
           (state[c.id]?.summaries?.summaries ?? []).map((summary) => ({ computerId: c.id, summary })),
         ),
         recapsEnabled: recapsOn,
+        failureSeen,
         visit,
       }),
       reload: (id) => load(id),
@@ -255,7 +274,7 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
     }
     return api
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, store.chats, store.computers, store.appPreferences, visit, load, patch])
+  }, [state, store.chats, store.computers, store.appPreferences, visit, failures, load, patch])
   return <Context.Provider value={value}>{children}</Context.Provider>
 }
 

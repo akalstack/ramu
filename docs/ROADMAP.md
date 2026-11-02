@@ -20,7 +20,6 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Browser and computer use:** provider capability negotiation and more session-import sources. **Open on this phone** reaches only dev servers listening beyond the host's loopback; forwarding one loopback port to one paired phone (expiring, IP-bound, shown with its port) needs a security review first. Computer use on Windows and Linux waits for native capture, permissions and signing.
 - **Provider compatibility:** compatibility rules for OpenCode's ACP runner, Cursor and Antigravity after protocol checks; entry points that bypass `validateSettings`.
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live, which needs an event channel between hosts; a thread started there with its report covers the need until then.
-- **Simple Home and Inbox Brief:** Home keeps only the start box and one summary line; Inbox gains a live summary with one-tap actions ([plan](HOME-INBOX-PLAN.md)).
 - **Teammates, then custom agents:** a second model reviews or takes over in one thread; then a sentence creates a reusable agent ([plan](TEAMMATES-PLAN.md)).
 - **Resources:** Inbox shows what each thread uses on every host, with Stop one tap away and a warning when a host runs low on memory ([plan](RESOURCES-PLAN.md)).
 - **Work across hosts:** continue a thread on another connected host, with the project set up there and the threads linked; then choose hosts, schedule on them, merge totals and reach threads from a terminal ([plan](CROSS-HOST-PLAN.md)).
@@ -34,7 +33,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 ## Acceptance
 
-- **Physical iOS and Android devices:** everything in [apps/mobile/VERIFICATION.md](../apps/mobile/VERIFICATION.md), from pairing and permissions to the viewers, keyboards, push and Live Activities.
+- **Physical iOS and Android devices:** everything in [apps/mobile/VERIFICATION.md](../apps/mobile/VERIFICATION.md), the Inbox Brief's one-tap rows, from pairing and permissions to the viewers, keyboards, push and Live Activities.
 - **Packaged and signed desktop builds:** upgrading real profiles, browser session import with a real keychain, computer-use permission identity, theme and system-appearance changes, background-terminal stop timing, and installation on a second Mac.
 - **Live providers and second hosts:** provider version compatibility records, Shared MCP across two providers, skill and rule delivery, project routing quality, plan-usage and limit-notice handling, GitHub with live tokens and Enterprise hosts, interactive content, agent-started threads and their reports, Auto splits and their briefs, threads started on a second physical host (pairing, ceiling, offline wait, revoke) and the review sheet on a physical phone, title generation, multi-host load, and a matched HTTP versus WebSocket comparison. Paid calls and credentials are opt-in.
 

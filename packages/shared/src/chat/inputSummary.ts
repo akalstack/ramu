@@ -1,6 +1,23 @@
-import type { AgentEvent, ThreadInputSummary, ThreadInputRequest } from '../types'
+import type { AgentEvent, AgentQuestion, ThreadInputSummary, ThreadInputRequest } from '../types'
+import { questionKey } from './questions'
 
 const priority = (request: ThreadInputRequest) => (request.kind === 'approval' ? 0 : 1)
+
+const CHOICE_MAX = 4
+const CHOICE_LENGTH = 40
+
+/** Choices a list can offer as buttons. A form of several questions, or one a person answers in the chat, opens in place. */
+export function questionChoices(
+  questions: AgentQuestion[],
+  responseMode?: string,
+): ThreadInputRequest['choices'] | undefined {
+  const question = questions[0]
+  if (questions.length !== 1 || !question || question.multiSelect || responseMode === 'message') return undefined
+  const options = question.options.map((option) => option.label)
+  if (!options.length || options.length > CHOICE_MAX || options.some((label) => label.length > CHOICE_LENGTH))
+    return undefined
+  return { key: questionKey(question), options }
+}
 
 /** Keep identities and origin, but never copy tool arguments, credentials or entire request forms into lists. */
 export function summarizeInputs(requests: ThreadInputRequest[]): ThreadInputSummary | null {
@@ -41,6 +58,11 @@ export function mergeInputSummaries(summaries: (ThreadInputSummary | null | unde
   }
 }
 
+const withChoices = (questions: AgentQuestion[], responseMode?: string) => {
+  const choices = questionChoices(questions, responseMode)
+  return choices ? { choices } : {}
+}
+
 /** Fold the authoritative ordered event snapshot; a reused native ID starts a new request after its old resolution. */
 export function inputSummary(events: AgentEvent[], sessionId: string): ThreadInputSummary | null {
   const pending = new Map<string, ThreadInputRequest>()
@@ -59,6 +81,7 @@ export function inputSummary(events: AgentEvent[], sessionId: string): ThreadInp
             : event.message
         ).slice(0, 240),
         ...(event.kind === 'elicitation' && event.serverName ? { connector: event.serverName.slice(0, 100) } : {}),
+        ...(event.kind === 'question' ? withChoices(event.questions, event.responseMode) : {}),
         ...(event.requestSource
           ? { source: { ...event.requestSource, name: event.requestSource.name.slice(0, 100) } }
           : {}),

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
+import { useAutomation } from '../../../runtime/automation'
 import { useChat, useStore } from '../../../runtime/store'
 import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../runtime/busyMode'
 import { sharedValue } from '@ramu/shared/sharedFields'
@@ -77,6 +78,13 @@ export default function ChatScreen() {
   const tr = useSay()
   const { id } = useLocalSearchParams<{ id: string }>()
   const chat = useChat(id)
+  const { seeFailure } = useAutomation()
+  const failedAt = chat?.status === 'failed' ? chat.lastActiveAt : null
+  useFocusEffect(
+    useCallback(() => {
+      if (failedAt !== null) seeFailure({ id, lastActiveAt: failedAt })
+    }, [failedAt, id, seeFailure]),
+  )
   const { c } = useTheme()
   const t = useT()
   const store = useStore()

@@ -63,7 +63,7 @@ import { ModelSetsProvider } from './models/ModelSets'
 import type { SettingsSection } from './settings/SettingsPage'
 import { SchedulesPage } from './Automation'
 import { InboxPage } from './inbox/InboxPage'
-import { useRecaps } from './inbox/recaps'
+import { useInboxModel } from './inbox/useBrief'
 import { AUTO_PROJECT, DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
 import { SettingsPanel } from './settings/SettingsPanel'
 import { UsageFooter, UsageRings } from './settings/Usage'
@@ -346,7 +346,7 @@ function Shell() {
   // The start screen shows for New chat, and when nothing is open yet.
   const globalPage = ui.sidebar === 'schedules' || ui.sidebar === 'inbox'
   const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
-  // Chats with nothing open is the home page: the start box, background chats and recaps. New chat without a project lands here too.
+  // Chats with nothing open is the home page: the start box and a line leading to the Inbox. New chat without a project lands here too.
   const landing = ui.sidebar === 'projects' && !ui.activeTaskId
   // Auto exists only on the home page; a project pane never opens for it.
   const composingProject = ws.composing === AUTO_PROJECT ? NO_PROJECT : ws.composing
@@ -408,12 +408,8 @@ function Shell() {
     () => activity.setShownTerminal(terminalShown ? activeWorkspace : null),
     [activity, terminalShown, activeWorkspace],
   )
-  const recaps = useRecaps()
-  // What Inbox's Waiting tab holds: threads waiting on you and recaps that need a decision.
-  const inboxCount =
-    ws.tasks.filter((task) => task.status === 'needs-input').length +
-    recaps.attention.length +
-    (computers?.computers.filter((c) => c.id !== activeHost).reduce((sum, c) => sum + c.needsInput, 0) ?? 0)
+  // What the Brief holds, so the badge and the list always agree.
+  const inboxCount = useInboxModel({ everyHost: true }).model.needsYou
   const attentionChats = ws.tasks.filter(
     (task) => task.status !== 'archived' && (ws.unread.has(task.id) || task.status === 'needs-input'),
   ).length

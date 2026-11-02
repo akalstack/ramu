@@ -4,8 +4,12 @@ import { goalContinues } from '@ramu/shared/chat/goalHold'
 // Shared desktop/mobile inbox: what needs you, what is running, recaps, learning, and finished work.
 // Keep derivation independent of rendering and apply host scope before limits or counts.
 
-export type InboxTab = 'all' | 'needs-you' | 'running' | 'recaps' | 'learned' | 'completed'
-export const INBOX_TABS: InboxTab[] = ['all', 'needs-you', 'running', 'recaps', 'learned', 'completed']
+export type InboxTab = 'brief' | 'running' | 'recaps' | 'learned' | 'completed'
+export const INBOX_TABS: InboxTab[] = ['brief', 'running', 'recaps', 'learned', 'completed']
+
+/** A saved or linked tab, or the Brief when it is unknown, as the retired All and Waiting tabs now are. */
+export const inboxTabOf = (value: unknown): InboxTab =>
+  INBOX_TABS.includes(value as InboxTab) ? (value as InboxTab) : 'brief'
 
 /** The few fields of a chat the Inbox cares about; the app's `Chat` satisfies it. */
 export interface InboxChat {
@@ -184,6 +188,8 @@ export function buildInbox(input: {
   summaries: InboxSummary[]
   /** Recaps are only shown when the computer has them turned on. */
   recapsEnabled?: (computerId: string) => boolean
+  /** A failure the person already opened on this device no longer asks for them. */
+  failureSeen?: (chat: InboxChat) => boolean
   visit?: number
   now?: number
 }) {
@@ -214,6 +220,10 @@ export function buildInbox(input: {
     .filter(
       (chat) => (chat.status === 'running' || goalContinues(goalOf(chat)) || helpersRunning(chat)) && !needsInput(chat),
     )
+    .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  const failureSeen = input.failureSeen ?? (() => false)
+  const failed = live
+    .filter((chat) => chat.status === 'failed' && !needsInput(chat) && !helpersRunning(chat) && !failureSeen(chat))
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   const enabled = input.recapsEnabled ?? (() => true)
   const recaps = splitRecaps(
@@ -252,16 +262,18 @@ export function buildInbox(input: {
   ).filter((day) => day.items.length)
   return {
     waiting,
+    failed,
     running,
     ...recaps,
     summaries,
     unreadSummaries: summaries.filter((s) => s.summary.status === 'unread').length,
     completed,
     days,
-    /** What the tab bar badge counts: threads waiting on you plus recaps that need a decision. */
-    needsYou: waiting.length + recaps.attention.length,
+    /** What the badge counts: threads waiting on you, failures not yet looked at and recaps that need a decision. */
+    needsYou: waiting.length + failed.length + recaps.attention.length,
     empty:
       !waiting.length &&
+      !failed.length &&
       !running.length &&
       !recaps.attention.length &&
       !recaps.sinceVisit.length &&
@@ -270,3 +282,34 @@ export function buildInbox(input: {
   }
 }
 export type InboxModel = ReturnType<typeof buildInbox>
+
+export type BriefRow =
+  | { kind: 'failure'; chat: InboxChat }
+  | { kind: 'blocker'; chat: InboxChat; blocker: InboxBlocker }
+  | { kind: 'recap'; recap: InboxRecap }
+
+/** Rows the Brief shows before **See all**, so the first screen always holds what matters most. */
+export const BRIEF_ROWS = 5
+
+const blockerRank = (kind: InboxBlockerKind) =>
+  kind === 'approval' || kind === 'connector' || kind === 'question' ? 0 : 2
+const briefRank = (row: BriefRow) =>
+  row.kind === 'blocker' ? blockerRank(row.blocker.kind) : row.kind === 'failure' ? 1 : 4
+
+/** What needs the person now: requests, then failures, then limits and paused goals, then recaps needing a decision. */
+export function briefRows(model: Pick<InboxModel, 'waiting' | 'failed' | 'attention'>): BriefRow[] {
+  const rows: BriefRow[] = [
+    ...model.waiting.flatMap((chat): BriefRow[] => {
+      const blocker = inboxBlocker(chat)
+      return blocker ? [{ kind: 'blocker', chat, blocker }] : []
+    }),
+    ...model.failed.map((chat): BriefRow => ({ kind: 'failure', chat })),
+    ...model.attention.map((recap): BriefRow => ({ kind: 'recap', recap })),
+  ]
+  // Array sorting is stable, so each kind keeps its newest-first order.
+  return rows.sort((a, b) => briefRank(a) - briefRank(b))
+}
+
+/** Threads finished since the last visit, for Home's and the Brief's one summary line. */
+export const finishedSince = (model: Pick<InboxModel, 'completed'>, visit: number) =>
+  model.completed.filter((chat) => chat.lastActiveAt > visit).length

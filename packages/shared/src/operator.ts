@@ -182,11 +182,20 @@ type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<un
 
 const RETRY_TEXT = 'Continue where you left off.'
 
-async function latestSession(invoke: Invoke, thread: OperatorThread): Promise<AgentSessionInfo> {
+async function latestSession(
+  invoke: Invoke,
+  thread: Pick<OperatorThread, 'hostId' | 'taskId'>,
+): Promise<AgentSessionInfo> {
   const sessions = (await invoke(thread.hostId, 'agent.list', thread.taskId)) as AgentSessionInfo[]
   const session = sessions.at(-1)
   if (!session) throw new Error('That thread has no agent.')
   return session
+}
+
+/** Continues a failed or stopped thread on its own host, the same way the Operator's retry does. */
+export async function retryThread(invoke: Invoke, thread: Pick<OperatorThread, 'hostId' | 'taskId'>) {
+  const session = await latestSession(invoke, thread)
+  await invoke(thread.hostId, 'agent.submit', session.id, RETRY_TEXT, 'queue')
 }
 
 export interface OperatorResult {

@@ -158,6 +158,8 @@ export interface ThreadInputRequest {
   source?: { sessionId: string; agentId: string; name: string; requestId?: string }
   /** The MCP server a `connector` request is for, so the Inbox can group threads waiting on the same sign-in. */
   connector?: string
+  /** One-tap answers, for a single single-choice question: its answer key and option labels. */
+  choices?: { key: string; options: string[] }
 }
 /** Independently running helpers of a thread's main sessions; advisors, shell commands and restored activity are excluded. */
 export interface ThreadHelperSummary {

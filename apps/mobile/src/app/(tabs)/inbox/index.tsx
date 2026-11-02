@@ -1,50 +1,29 @@
 import { useCallback, useState } from 'react'
 import { Platform, Pressable, RefreshControl, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import {
-  Activity,
-  Bell,
-  CircleCheck,
-  Inbox as InboxIcon,
-  Loader,
-  Newspaper,
-  RefreshCw,
-  Sparkles,
-  X,
-} from 'lucide-react-native'
+import { Activity, Bell, Inbox as InboxIcon, Loader, Newspaper, RefreshCw, Sparkles, X } from 'lucide-react-native'
 import type { LibrarySummary } from '@ramu/shared/types'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { OperatorSheet } from '../../../components/OperatorSheet'
 import { useAutomation } from '../../../runtime/automation'
-import {
-  blockerTally,
-  blockerTallyLine,
-  TALLY_MIN_THREADS,
-  buildInbox,
-  INBOX_TABS,
-  type InboxChat,
-  type InboxTab,
-} from '../../../runtime/inbox'
+import { buildInbox, INBOX_TABS, inboxTabOf, type InboxChat, type InboxTab } from '../../../runtime/inbox'
 import { STANDALONE, type Chat } from '../../../runtime/types'
 import { ago, useSay, useT, type Strings } from '../../../i18n'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { TopFade } from '../../../components/Glass'
+import { InboxBrief } from '../../../components/InboxBrief'
 import { InboxThread } from '../../../components/InputRequests'
 import { Chips, Group, Nothing, RecapCard, Section } from '../../../components/InboxParts'
 import { useTabActions } from '../../../components/Overlays'
 import { Button, Row, T, tap } from '../../../components/ui'
 
-const PREVIEW = 5
-const PREVIEW_SMALL = 3
-
 // Remembered for the session, so coming back to the tab shows the chip you left it on.
-let lastTab: InboxTab = 'all'
+let lastTab: InboxTab = 'brief'
 
 function tabLabel(tab: InboxTab, t: Strings) {
   return {
-    all: t.tabAll,
-    'needs-you': t.needsYou,
+    brief: t.tabBrief,
     running: t.tabRunning,
     recaps: t.tabRecaps,
     learned: t.tabLearned,
@@ -71,12 +50,11 @@ export default function InboxScreen() {
       (auto.of(pc.id).summaries?.summaries ?? []).map((summary) => ({ computerId: pc.id, summary })),
     ),
     recapsEnabled: (id) => store.appPreferences[id]?.recapsEnabled !== false,
+    failureSeen: auto.failureSeen as (chat: InboxChat) => boolean,
     visit: auto.visit,
   })
   const params = useLocalSearchParams<{ tab?: string }>()
-  const [tab, setTab] = useState<InboxTab>(() =>
-    INBOX_TABS.includes(params.tab as InboxTab) ? (params.tab as InboxTab) : lastTab,
-  )
+  const [tab, setTab] = useState<InboxTab>(() => (params.tab ? inboxTabOf(params.tab) : lastTab))
   const choose = (next: InboxTab) => {
     lastTab = next
     setTab(next)
@@ -85,7 +63,7 @@ export default function InboxScreen() {
   const [seenParam, setSeenParam] = useState(params.tab)
   if (params.tab !== seenParam) {
     setSeenParam(params.tab)
-    if (INBOX_TABS.includes(params.tab as InboxTab)) choose(params.tab as InboxTab)
+    if (params.tab) choose(inboxTabOf(params.tab))
   }
   const edge = useScrolledUnderBar(40)
   const [refreshing, setRefreshing] = useState(false)
@@ -110,12 +88,6 @@ export default function InboxScreen() {
   const where = (computerId: string, projectId: string) =>
     [projectName(computerId, projectId), multi ? computerName(computerId) : undefined].filter(Boolean).join(' · ')
   const say = useSay()
-  const tallyLine = (list: InboxChat[]) =>
-    list.length >= TALLY_MIN_THREADS ? (
-      <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
-        {blockerTallyLine(blockerTally(list), say)}
-      </T>
-    ) : null
   const rows = (list: InboxChat[]) => (
     <Group>
       {list.map((chat, i) => {
@@ -235,7 +207,7 @@ export default function InboxScreen() {
     key,
     label: tabLabel(key, t),
     count:
-      key === 'needs-you'
+      key === 'brief'
         ? inbox.needsYou
         : key === 'running'
           ? inbox.running.length
@@ -246,89 +218,16 @@ export default function InboxScreen() {
               : 0,
   }))
 
-  const all = (
-    <>
-      {inbox.waiting.length ? (
-        <Section
-          title={t.waitingForInput}
-          count={inbox.waiting.length}
-          onSeeAll={inbox.waiting.length > PREVIEW ? () => choose('needs-you') : undefined}
-        >
-          {tallyLine(inbox.waiting)}
-          {rows(inbox.waiting.slice(0, PREVIEW))}
-        </Section>
-      ) : null}
-      {inbox.attention.length ? (
-        <Section
-          title={t.needsAttention}
-          count={inbox.attention.length}
-          onSeeAll={inbox.attention.length > PREVIEW_SMALL ? () => choose('needs-you') : undefined}
-        >
-          {inbox.attention.slice(0, PREVIEW_SMALL).map((r) => recap(r, true))}
-        </Section>
-      ) : null}
-      {missedSection}
-      {inbox.running.length ? (
-        <Section
-          title={t.runningBackground}
-          count={inbox.running.length}
-          onSeeAll={inbox.running.length > PREVIEW ? () => choose('running') : undefined}
-        >
-          {rows(inbox.running.slice(0, PREVIEW))}
-        </Section>
-      ) : null}
-      {inbox.sinceVisit.length ? (
-        <Section
-          title={t.sinceVisit}
-          count={inbox.sinceVisit.length}
-          onSeeAll={inbox.sinceVisit.length > PREVIEW_SMALL ? () => choose('recaps') : undefined}
-        >
-          {inbox.sinceVisit.slice(0, PREVIEW_SMALL).map((r) => recap(r, false))}
-        </Section>
-      ) : null}
-      {inbox.summaries.length ? (
-        <Section
-          title={t.whatLearned}
-          count={inbox.summaries.length}
-          onSeeAll={inbox.summaries.length > PREVIEW_SMALL ? () => choose('learned') : undefined}
-        >
-          <Group>{inbox.summaries.slice(0, PREVIEW_SMALL).map(summary)}</Group>
-        </Section>
-      ) : null}
-      {inbox.completed.length ? (
-        <Section
-          title={t.tabCompleted}
-          count={inbox.completed.length}
-          onSeeAll={inbox.completed.length > PREVIEW ? () => choose('completed') : undefined}
-        >
-          {rows(inbox.completed.slice(0, PREVIEW))}
-        </Section>
-      ) : null}
-      {inbox.empty && !missed.length ? (
-        <Nothing icon={CircleCheck} title={t.allCaughtUp} detail={t.allCaughtUpHint} />
-      ) : null}
-    </>
-  )
-
   const body = {
-    all,
-    'needs-you': (
+    brief: (
       <>
-        {inbox.waiting.length ? (
-          <Section title={t.waitingForInput} count={inbox.waiting.length}>
-            {tallyLine(inbox.waiting)}
-            {rows(inbox.waiting)}
-          </Section>
-        ) : null}
-        {inbox.attention.length ? (
-          <Section title={t.needsAttention} count={inbox.attention.length}>
-            {inbox.attention.map((r) => recap(r, true))}
-          </Section>
+        <InboxBrief inbox={inbox} where={(chat) => where(chat.computerId, chat.projectId)} />
+        {store.appPreferences[store.selected]?.operator ? (
+          <View style={{ paddingHorizontal: space.l, paddingTop: space.m }}>
+            <Button kind="secondary" title={say('Ask the Operator')} onPress={() => setOperatorOpen(true)} />
+          </View>
         ) : null}
         {missedSection}
-        {!inbox.waiting.length && !inbox.attention.length && !missed.length ? (
-          <Nothing icon={CircleCheck} title={t.nothingNeedsYou} detail={t.nothingNeedsYouHint} />
-        ) : null}
       </>
     ),
     running: (
@@ -421,11 +320,6 @@ export default function InboxScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={c.muted} />}
       >
         <LargeTitle>{t.inbox}</LargeTitle>
-        {store.appPreferences[store.selected]?.operator ? (
-          <View style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
-            <Button kind="secondary" title={say('Ask the Operator')} onPress={() => setOperatorOpen(true)} />
-          </View>
-        ) : null}
         {multi ? (
           <Chips
             value={host ?? ''}
@@ -436,10 +330,7 @@ export default function InboxScreen() {
             ]}
           />
         ) : null}
-        {/* With nothing anywhere, the tabs would only lead to more empty states; "all caught up" says it once. */}
-        {tab === 'all' && inbox.empty && !missed.length ? null : (
-          <Chips value={tab} onChange={choose} options={chips} />
-        )}
+        <Chips value={tab} onChange={choose} options={chips} />
         {body}
       </PageScrollView>
       {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}

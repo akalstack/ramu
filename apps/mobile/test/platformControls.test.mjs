@@ -5229,7 +5229,7 @@ test('schedule callbacks recheck the current host role before every RPC, includi
     './store': { useStore: () => store },
     './scheduleModel': scheduleModel,
     './inbox': { buildInbox: () => null },
-    '../storage': { readLastVisit: () => 0 },
+    '../storage': { readLastVisit: () => 0, readFailuresSeen: () => ({}) },
   })
   const render = () => hooks.render(() => AutomationProvider({ children: null })).props.value
   const original = render()
