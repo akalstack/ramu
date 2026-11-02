@@ -7,6 +7,8 @@ import { ProviderSettings } from './ProviderSettings'
 import { Button } from '@/components/desktop-button'
 import { RotateCcw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { previewAppearance } from '../appearance'
+import { endTrial } from '../theme/themes'
 import { commitStaged, StagingContext, withStaged, type StagedChanges } from './stagedChanges'
 import { resetPanelLayouts } from '../workspace/panelLayout'
 import { DEFAULT_SIDEBAR_WIDTH, type AppPreferences, type ModelPreferences } from '@ramu/shared/types'
@@ -84,6 +86,14 @@ export function SettingsPanel({
     [],
   )
   const staging = useMemo(() => ({ changes: staged, stage }), [staged, stage])
+  // Previews last only as long as the panel: closing it without saving shows what is saved.
+  useEffect(
+    () => () => {
+      endTrial()
+      previewAppearance(null)
+    },
+    [],
+  )
   const hasChanges = settingsChanged || environment.changed || staged.size > 0
   scope.dirty.current = !scope.loading && hasChanges
   useEffect(() => {

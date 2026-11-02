@@ -19,12 +19,22 @@ export function setAppearance(appearance: Appearance) {
   deviceStorage.setItem(KEY, appearance)
 }
 
+/** A choice being tried before Save: this window shows it, nothing stores it. */
+let preview: Appearance | null = null
+const previewListeners = new Set<() => void>()
+
+export function previewAppearance(appearance: Appearance | null) {
+  if (preview === appearance) return
+  preview = appearance
+  for (const listener of previewListeners) listener()
+}
+
 export function resolveAppearance(appearance: Appearance, systemDark: boolean): ResolvedAppearance {
   return appearance === 'system' ? (systemDark ? 'dark' : 'light') : appearance
 }
 
 export function resolvedAppearance(): ResolvedAppearance {
-  return resolveAppearance(storedAppearance(), media()?.matches ?? true)
+  return resolveAppearance(preview ?? storedAppearance(), media()?.matches ?? true)
 }
 
 /** Runs when the stored choice or the system appearance changes. Returns the unsubscribe function. */
@@ -32,8 +42,10 @@ export function subscribeAppearance(listener: () => void) {
   const query = media()
   const off = deviceStorage.subscribe((key) => key === KEY && listener())
   query?.addEventListener('change', listener)
+  previewListeners.add(listener)
   return () => {
     off()
+    previewListeners.delete(listener)
     query?.removeEventListener('change', listener)
   }
 }

@@ -102,3 +102,36 @@ describe('theme library', () => {
     expect(target.values.size).toBe(0)
   })
 })
+
+describe('trying before saving', () => {
+  beforeEach(() => storage.clear())
+
+  it('keeps a new theme in the library and selects it after a reload of the stored text', () => {
+    themes.keepTheme(custom({ id: 'my-theme-abc', name: 'My theme' }))
+    expect(themes.themeLibrary().map((theme) => theme.id)).toEqual(['my-theme-abc'])
+    expect(themes.selectedTheme().id).toBe('my-theme-abc')
+  })
+
+  it('shows a trial without storing it and returns to the saved theme when it ends', () => {
+    themes.keepTheme(custom({ id: 'saved-theme' }))
+    themes.startTrial(themes.builtInThemes()[0]!)
+    expect(themes.effectiveTheme().id).toBe(themes.builtInThemes()[0]!.id)
+    expect(themes.selectedTheme().id).toBe('saved-theme')
+    themes.endTrial()
+    expect(themes.effectiveTheme().id).toBe('saved-theme')
+  })
+
+  it('previews light or dark without storing it', async () => {
+    const { previewAppearance, resolvedAppearance, storedAppearance } = await import('../src/appearance')
+    const heard = vi.fn()
+    const { subscribeAppearance } = await import('../src/appearance')
+    const off = subscribeAppearance(heard)
+    previewAppearance('light')
+    expect(resolvedAppearance()).toBe('light')
+    expect(storedAppearance()).toBe('dark')
+    expect(heard).toHaveBeenCalledOnce()
+    previewAppearance(null)
+    expect(resolvedAppearance()).toBe('dark')
+    off()
+  })
+})

@@ -18,7 +18,7 @@ The renderer uses shadcn/ui on Base UI, Tailwind 4 and shared theme tokens. `com
 
 - `ui.css` maps colors and typography to Ramu's tokens; `styles.css` holds shared desktop sizing. Tailwind preflight is omitted because Monaco and xterm manage their own styles. Reuse shared components for menus, dialogs, list rows and empty states.
 - Tabs (browser and others) share selected, hover, focus and disabled styling with Arrow/Home/End navigation that skips disabled or hidden tabs.
-- Every setting waits for **Save changes** and **Cancel** drops it, including settings stored outside app preferences, which stage through `useStagedValue` (`settings/stagedChanges.tsx`). One-off actions such as Revoke, Pair, Sign in, Forget and answering a request happen when chosen.
+- Every setting waits for **Save changes** and **Cancel** drops it, including settings stored outside app preferences, which stage through `useStagedValue` (`settings/stagedChanges.tsx`). One-off actions such as Revoke, Pair, Sign in, Forget and answering a request happen when chosen. A color theme or light and dark choice shows across the app as soon as it is picked and is stored on Save; closing Settings without saving restores the saved one.
 - Settings lists (memories, approvals, skills, learning reviews) use `SettingsCard` from `settings/cards.tsx` and page with `usePaged` (20 items, 10 for skills and reviews, then **Show more**).
 - Customize colors previews the candidate with production components, a read-only Monaco code/diff sample on an isolated `ramu-theme:` origin, xterm ANSI output and an interactive chart. Previews have no workspace, file or provider access and never change the selected theme.
 

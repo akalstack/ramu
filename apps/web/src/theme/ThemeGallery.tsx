@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Check,
   ClipboardPaste,
@@ -17,39 +17,44 @@ import { Input } from '@/components/desktop-input'
 import { useResolvedAppearance } from '../appearance'
 import { t } from '../i18n'
 import { Dialog, Menu, type MenuEntry } from '../Menu'
-import { useStagedValue } from '../settings/stagedChanges'
-import { builtInThemes, copyOfTheme, removeTheme, renameTheme, selectTheme } from './themes'
+import { useStaging } from '../settings/stagedChanges'
+import {
+  builtInThemes,
+  copyOfTheme,
+  endTrial,
+  removeTheme,
+  renameTheme,
+  selectTheme,
+  startTrial,
+  themeById,
+} from './themes'
 import { useSelectedTheme, useThemeLibrary } from './themes'
 import { shareTheme } from './ThemeEditor'
 
-/** A small picture of the theme in the current appearance: sidebar, main surface, a message, text and the primary action. */
+/** The app in miniature, in the current appearance: threads, a message, a reply and the message box with its send button. */
 function Thumb({ theme }: { theme: RamuTheme }) {
   const appearance = useResolvedAppearance()
   const c = theme[appearance].colors
   return (
-    <div
-      aria-hidden
-      className="relative h-[78px] overflow-hidden rounded-(--radius-s) [border:1px_solid_var(--line)]"
-      style={{ background: c.window }}
-    >
-      <div className="absolute left-2 top-2.5 flex w-[18%] flex-col gap-1.5">
-        <span className="h-1 rounded-full" style={{ background: c.text, opacity: 0.85 }} />
-        <span className="h-1 w-3/4 rounded-full" style={{ background: c.muted }} />
-        <span className="h-1 w-2/3 rounded-full" style={{ background: c.muted }} />
+    <div aria-hidden className="flex aspect-[16/10] w-full overflow-hidden" style={{ background: c.window }}>
+      <div className="flex w-[27%] flex-none flex-col gap-[7%] p-[6%] pt-[8%]">
+        <span className="h-[5%] min-h-1 rounded-full" style={{ background: c.text }} />
+        <span className="h-[5%] min-h-1 w-3/4 rounded-full" style={{ background: c.accent }} />
+        <span className="h-[5%] min-h-1 w-5/6 rounded-full" style={{ background: c.muted }} />
+        <span className="h-[5%] min-h-1 w-2/3 rounded-full" style={{ background: c.muted }} />
       </div>
       <div
-        className="absolute bottom-0 left-[26%] right-0 top-2 flex flex-col gap-1.5 rounded-tl-md p-2"
-        style={{ background: c.canvas, boxShadow: `0 0 0 1px ${c.raised}` }}
+        className="mt-[5%] flex min-w-0 flex-1 flex-col gap-[5%] rounded-tl-lg p-[6%]"
+        style={{ background: c.canvas }}
       >
-        <span className="h-1 w-2/5 rounded-full" style={{ background: c.text }} />
-        <span className="h-1 w-3/5 rounded-full" style={{ background: c.textBody, opacity: 0.7 }} />
-        <span className="ml-auto h-3 w-1/2 rounded-md" style={{ background: c.bubble }} />
-        <div className="mt-auto flex items-center gap-1.5">
-          <span className="h-3 w-8 rounded-full" style={{ background: c.primary }} />
-          <span className="size-2 rounded-full" style={{ background: c.accent }} />
-          <span className="size-2 rounded-full" style={{ background: c.ok }} />
-          <span className="size-2 rounded-full" style={{ background: c.warn }} />
-          <span className="size-2 rounded-full" style={{ background: c.bad }} />
+        <span className="ml-auto h-[13%] w-[46%] flex-none rounded-md" style={{ background: c.bubble }} />
+        <span className="h-1 w-4/5 flex-none rounded-full" style={{ background: c.textBody }} />
+        <span className="h-1 w-3/5 flex-none rounded-full" style={{ background: c.muted }} />
+        <div
+          className="mt-auto flex h-[24%] flex-none items-center justify-end rounded-lg px-[4%]"
+          style={{ background: c.raised }}
+        >
+          <span className="aspect-square h-3/5 rounded-full" style={{ background: c.primary }} />
         </div>
       </div>
     </div>
@@ -60,46 +65,45 @@ function Tile({
   theme,
   selected,
   onSelect,
-  yours,
   actions,
 }: {
   theme: RamuTheme
   selected: boolean
   onSelect: () => void
-  yours: boolean
   actions: MenuEntry[]
 }) {
   return (
-    <div
-      className={`group relative flex flex-col gap-2 rounded-(--radius-m) bg-fill p-2 transition-colors [&:hover]:bg-hover ${
-        selected ? '[box-shadow:0_0_0_2px_var(--primary)]' : '[box-shadow:0_0_0_1px_var(--line)]'
-      }`}
-    >
+    <div className="group relative flex min-w-0 flex-col gap-1.5">
       <Button
         variant="ghost"
         role="radio"
         aria-checked={selected}
         aria-label={theme.name}
         onClick={onSelect}
-        className="h-auto w-full min-w-0 flex-col items-stretch justify-start gap-2 rounded-(--radius-s) bg-transparent p-0 text-left font-normal whitespace-normal [&:hover:not(:disabled)]:bg-transparent"
+        className={`relative h-auto w-full overflow-hidden rounded-(--radius-m) bg-transparent p-0 [&:hover:not(:disabled)]:bg-transparent motion-safe:transition-shadow ${
+          selected
+            ? '[box-shadow:0_0_0_2px_var(--canvas),0_0_0_4px_var(--primary)]'
+            : '[box-shadow:0_0_0_1px_var(--line)] hover:[box-shadow:0_0_0_1px_var(--line-strong)]'
+        }`}
       >
         <Thumb theme={theme} />
-        <span className="flex items-center gap-1.5 px-0.5 pr-7">
-          <span className="min-w-0 flex-1 truncate text-control font-medium">{theme.name}</span>
-          {selected && <Check size={13} className="flex-none text-(--primary)" aria-label={t('In use')} />}
-        </span>
-        <span className="-mt-1 px-0.5 text-caption text-muted-foreground">
-          {theme.id === DEFAULT_THEME.id ? t('Default') : yours ? t('Yours') : t('Built in')}
-        </span>
+        {selected && (
+          <span className="absolute right-1.5 top-1.5 grid size-[18px] place-items-center rounded-full bg-(--primary) text-primary-foreground">
+            <Check size={11} strokeWidth={3} aria-label={t('In use')} />
+          </span>
+        )}
       </Button>
-      <span className="absolute bottom-1.5 right-1.5">
-        <Menu
-          label={t('Theme actions for {name}', { name: theme.name })}
-          icon={<MoreHorizontal size={14} />}
-          items={actions}
-          align="end"
-        />
-      </span>
+      <div className="flex h-7 items-center gap-1 pl-0.5">
+        <span className="min-w-0 flex-1 truncate text-control font-medium">{theme.name}</span>
+        <span className="flex-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 motion-safe:transition-opacity">
+          <Menu
+            label={t('Theme actions for {name}', { name: theme.name })}
+            icon={<MoreHorizontal size={14} />}
+            items={actions}
+            align="end"
+          />
+        </span>
+      </div>
     </div>
   )
 }
@@ -110,10 +114,13 @@ function Tile({
  * or removes it. Editing a built-in theme always works on a copy, so the original stays available.
  */
 export function ThemeGallery({
+  editing,
   onEdit,
   onImportFile,
   onPaste,
 }: {
+  /** The editor is open and owns the trial. */
+  editing: boolean
   /** Opens the editor on `theme` as a trial; the person keeps or reverts it there. */
   onEdit: (theme: RamuTheme) => void
   onImportFile: () => void
@@ -121,7 +128,22 @@ export function ThemeGallery({
 }) {
   const saved = useThemeLibrary()
   const current = useSelectedTheme()
-  const [chosen, choose] = useStagedValue('theme', current.id, (id) => selectTheme(id === DEFAULT_THEME.id ? null : id))
+  const { valueOf, stage } = useStaging()
+  const chosen = valueOf('theme', current.id)
+  const choose = (id: string) =>
+    stage('theme', id, current.id, (next) => {
+      selectTheme(next === DEFAULT_THEME.id ? null : next)
+      endTrial()
+    })
+  // A theme kept in the editor is the choice now, so an older pick must not replace it on Save.
+  useEffect(() => stage('theme', current.id, current.id, () => {}), [current.id]) // eslint-disable-line react-hooks/exhaustive-deps -- only when the saved theme changes
+  // The app shows the pick right away; only Save stores it.
+  useEffect(() => {
+    if (editing) return
+    const picked = chosen === current.id ? undefined : themeById(chosen)
+    if (picked) startTrial(picked)
+    else endTrial()
+  }, [chosen, current.id, editing])
   const [renaming, setRenaming] = useState<RamuTheme | null>(null)
   const [name, setName] = useState('')
   const [removing, setRemoving] = useState<RamuTheme | null>(null)
@@ -235,14 +257,13 @@ export function ThemeGallery({
           <SwatchBook size={12} />
           {t('Built in')}
         </h5>
-        <div className="grid [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
+        <div className="grid [grid-template-columns:repeat(auto-fill,minmax(168px,1fr))] gap-x-4 gap-y-3">
           {builtIn.map((theme) => (
             <Tile
               key={theme.id}
               theme={theme}
               selected={chosen === theme.id}
               onSelect={() => choose(theme.id)}
-              yours={false}
               actions={builtInActions(theme)}
             />
           ))}
@@ -251,14 +272,13 @@ export function ThemeGallery({
       <section aria-label={t('Yours')} className="flex flex-col gap-2">
         <h5 className="m-0 text-caption font-medium text-muted-foreground">{t('Yours')}</h5>
         {saved.length ? (
-          <div className="grid [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
+          <div className="grid [grid-template-columns:repeat(auto-fill,minmax(168px,1fr))] gap-x-4 gap-y-3">
             {saved.map((theme) => (
               <Tile
                 key={theme.id}
                 theme={theme}
                 selected={chosen === theme.id}
                 onSelect={() => choose(theme.id)}
-                yours
                 actions={yoursActions(theme)}
               />
             ))}

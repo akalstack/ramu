@@ -21,7 +21,7 @@ import { notifyError } from '../chat/Notifications'
 import { ThemePreview } from './ThemePreview'
 import { t } from '../i18n'
 import { resolvedAppearance } from '../appearance'
-import { endTrial, keepTheme, selectedTheme, startTrial } from './themes'
+import { effectiveTheme, endTrial, keepTheme, startTrial } from './themes'
 
 const MAX_REFERENCES = 3
 
@@ -153,7 +153,7 @@ export function ThemeEditor({
   imported?: RamuTheme
   notice?: string
 }) {
-  const base = useMemo(() => imported ?? selectedTheme(), [imported])
+  const base = useMemo(() => imported ?? effectiveTheme(), [imported])
   const [draft, setDraft] = useState<RamuTheme>(() =>
     base.id === DEFAULT_THEME.id ? { ...base, id: `my-theme-${Date.now().toString(36)}`, name: t('My theme') } : base,
   )

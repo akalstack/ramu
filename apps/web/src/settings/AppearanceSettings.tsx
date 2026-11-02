@@ -5,11 +5,11 @@ import { t } from '../i18n'
 import { PasteTheme, ThemeEditor } from '../theme/ThemeEditor'
 import { selectTheme, themeLibrary, useSelectedTheme } from '../theme/themes'
 import { ThemeGallery } from '../theme/ThemeGallery'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { importThemeFile, themeDigest, type RamuTheme } from '@ramu/shared/theme'
 import { notifyError } from '../chat/Notifications'
 import { useStagedValue } from './stagedChanges'
-import { setAppearance, useAppearance, type Appearance } from '../appearance'
+import { previewAppearance, setAppearance, useAppearance, type Appearance } from '../appearance'
 import { Dropdown } from '../Menu'
 import { SECONDARY_BUTTON_CLASS, SETTINGS_FORM_CLASS, sizeOptions } from './constants'
 import { ToggleRow, type DraftProps } from './ToggleRow'
@@ -24,6 +24,10 @@ export function AppearanceSettings({
   const toggleProps = { draft, onChange, busy }
   const appearance = useAppearance()
   const [stagedAppearance, stageAppearance] = useStagedValue('appearance', appearance, setAppearance)
+  useEffect(
+    () => previewAppearance(stagedAppearance === appearance ? null : stagedAppearance),
+    [stagedAppearance, appearance],
+  )
   const [opened, setOpened] = useState<{ theme: RamuTheme; notice?: string } | null>(null)
   const [pasting, setPasting] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -81,6 +85,7 @@ export function AppearanceSettings({
         />
       </SettingsRow>
       <ThemeGallery
+        editing={!!opened}
         onEdit={(theme) => setOpened({ theme })}
         onImportFile={() => fileInput.current?.click()}
         onPaste={() => setPasting(true)}
