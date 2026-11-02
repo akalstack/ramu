@@ -13,24 +13,39 @@ export type SwipeAction = {
 const BUTTON = 60
 
 /**
- * Swipe left to reveal tappable buttons, as in Mail and Messages. Nothing fires from the gesture itself:
- * the row settles open, the user taps a button (or the row, or swipes back) and it closes again.
+ * Swipe left to reveal tappable buttons, as in Mail and Messages. Nothing fires from a short swipe: the row settles
+ * open, the user taps a button (or the row, or swipes back) and it closes again. With `fullSwipe`, pulling the row
+ * well past the buttons runs the first one, with a tap at the point where letting go will do it.
  */
 export function SwipeRow({
   children,
   actions = [],
   background,
+  fullSwipe = false,
 }: {
   children: ReactNode
   actions?: SwipeAction[]
   background: string
+  fullSwipe?: boolean
 }) {
   const say = useSay()
   const x = useRef(new Animated.Value(0)).current
   const width = actions.length * BUTTON
   const [open, setOpen] = useState(false)
-  const state = useRef({ width, open: false, start: 0 })
+  const state = useRef({
+    width,
+    open: false,
+    start: 0,
+    rowWidth: 0,
+    armed: false,
+    full: fullSwipe,
+    first: actions[0]?.onPress,
+  })
   state.current.width = width
+  state.current.full = fullSwipe
+  state.current.first = actions[0]?.onPress
+  // Far enough that it cannot happen by accident: past the buttons, and about halfway across the row.
+  const commitAt = () => Math.max(state.current.width + 60, state.current.rowWidth * 0.5)
   const settle = (to: 'open' | 'closed') => {
     const isOpen = to === 'open'
     if (isOpen !== state.current.open) tap()
@@ -55,9 +70,22 @@ export function SwipeRow({
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           state.current.start = state.current.open ? -state.current.width : 0
+          state.current.armed = false
         },
         onPanResponderMove: (_, g) => {
           const next = state.current.start + g.dx
+          const full = state.current.full && state.current.first
+          if (full && next < -state.current.width) {
+            // The row follows the finger toward the full swipe instead of resisting.
+            const armed = next < -commitAt()
+            if (armed !== state.current.armed) {
+              state.current.armed = armed
+              tap()
+            }
+            x.setValue(Math.max(next, -(state.current.rowWidth || Infinity)))
+            return
+          }
+          state.current.armed = false
           // Past either end the row resists instead of stopping dead.
           x.setValue(
             next > 0
@@ -69,6 +97,11 @@ export function SwipeRow({
         },
         onPanResponderRelease: (_, g) => {
           const at = state.current.start + g.dx
+          if (state.current.full && state.current.first && at < -commitAt()) {
+            settle('closed')
+            state.current.first()
+            return
+          }
           settle(g.vx < -0.3 || (g.vx < 0.3 && at < -state.current.width / 2) ? 'open' : 'closed')
         },
         onPanResponderTerminate: () => settle(state.current.open ? 'open' : 'closed'),
@@ -125,7 +158,13 @@ export function SwipeRow({
           ))}
         </View>
       ) : null}
-      <Animated.View {...pan.panHandlers} style={{ transform: [{ translateX: x }], backgroundColor: background }}>
+      <Animated.View
+        {...pan.panHandlers}
+        onLayout={(event) => {
+          state.current.rowWidth = event.nativeEvent.layout.width
+        }}
+        style={{ transform: [{ translateX: x }], backgroundColor: background }}
+      >
         {children}
         {open ? (
           <Pressable

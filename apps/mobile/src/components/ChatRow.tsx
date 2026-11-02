@@ -1,7 +1,7 @@
 import { memo, useState } from 'react'
 import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Archive, ArchiveRestore, Clock, GitBranch, Pin, PinOff } from 'lucide-react-native'
+import { Archive, ArchiveRestore, Check, Clock, GitBranch, Pin, RotateCcw } from 'lucide-react-native'
 import { TEXT_SCALE, font, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
 import { ago, useT, type Strings, useSay } from '../i18n'
@@ -69,10 +69,10 @@ export const ChatRow = memo(function ChatRow({
       ? []
       : [
           {
-            icon: commands.pinned ? PinOff : Pin,
-            label: commands.pinned ? 'Unpin' : 'Pin',
+            icon: commands.done ? RotateCcw : Check,
+            label: say(commands.done ? 'Reopen' : 'Mark done'),
             color: c.primary,
-            onPress: () => void commands.togglePin(),
+            onPress: () => void commands.toggleDone(),
           },
           {
             icon: commands.archived ? ArchiveRestore : Archive,
@@ -110,7 +110,7 @@ export const ChatRow = memo(function ChatRow({
   )
   return (
     <>
-      <SwipeRow actions={actions} background={c.raised2}>
+      <SwipeRow actions={actions} background={c.raised2} fullSwipe>
         <Row
           onLongPress={
             chat.pending

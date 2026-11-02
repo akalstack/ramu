@@ -135,7 +135,7 @@ export async function confirmChatDeletion(
   }
 }
 
-/** One-shot pin/archive commands shared by the row's swipe actions. */
+/** One-shot pin/done/archive commands shared by the row's swipe actions. */
 export function useChatCommands(chat: Chat) {
   const store = useStore()
   const latestStore = useRef(store)
@@ -165,7 +165,9 @@ export function useChatCommands(chat: Chat) {
     viewOnly: store.computers?.find((host) => host.id === chat.computerId)?.access === 'viewer',
     pinned: chat.pinnedAt !== null,
     archived: chat.status === 'archived',
+    done: !!chat.doneAt,
     togglePin: () => run(() => store.invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null)),
+    toggleDone: () => run(() => store.invoke(chat.computerId, 'tasks.done', chat.taskId, !chat.doneAt)),
     toggleArchive: () =>
       run(() => store.invoke(chat.computerId, 'tasks.archive', chat.taskId, chat.status !== 'archived')),
     /** Asks first; `done` runs after the chat is gone (a chat screen leaves itself). */
