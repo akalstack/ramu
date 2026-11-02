@@ -1,5 +1,6 @@
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { EfficiencySettings } from './IntelligenceSettings'
+import { Input } from '@/components/desktop-input'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
 import { SETTINGS_FORM_CLASS } from './constants'
@@ -59,6 +60,20 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         title="Operator"
         description="Inbox gets a box where one sentence proposes actions across threads and schedules on connected hosts. Nothing runs until you confirm. Each request uses one short model call; it costs nothing otherwise."
       />
+      <SettingsRow setting="hostDescription" className="settings-stack">
+        <SettingsLabel
+          title={t('Describe this host')}
+          help={t(
+            'A few words such as GPU box or office network. Continue on another host suggests it when a request mentions them.',
+          )}
+        />
+        <Input
+          aria-label={t('Describe this host')}
+          maxLength={80}
+          value={draft.hostDescription}
+          onChange={(event) => onChange({ ...draft, hostDescription: event.target.value })}
+        />
+      </SettingsRow>
       <ToggleRow
         {...toggleProps}
         setting="agentThreads"

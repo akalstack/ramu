@@ -231,6 +231,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'models', title: 'Fallback order', words: 'provider model effort chain list order' },
   { section: 'workflows', title: 'Where sub-agents run', words: 'subagent native provider cross delegate' },
   { section: 'workflows', title: 'Custom agents', words: 'custom agent reusable reviewer recipe' },
+  { section: 'chats', title: 'Describe this host', words: 'host description gpu office network suggest continue' },
   { section: 'workflows', title: 'Automatic selection', words: 'subagent model effort automatic cap maximum' },
   { section: 'workflows', title: 'By type', words: 'explore plan subagent type route' },
   { section: 'workflows', title: 'When a sub-agent is limited', words: 'subagent fallback order limit separate same' },

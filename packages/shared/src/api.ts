@@ -1132,6 +1132,8 @@ export interface RamuMethods {
   'usage.get'(): UsageReading[]
   /** Readings for every login of every provider, not just the selected one. */
   'usage.accounts'(): UsageReading[]
+  /** Finished turns per day and provider for the last `days` days, with cost where the provider reports it. */
+  'usage.activity'(days: number): import('./usageAcrossHosts').ActivityRow[]
   /** Reads Claude's plan usage now, without a turn, when the stored reading is old. */
   'usage.refresh'(): UsageReading[]
   /** The context window usage last reported for a chat, if any. */

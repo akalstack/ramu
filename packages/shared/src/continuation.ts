@@ -153,10 +153,15 @@ export interface HostChoice {
  * memory free first. A plain word match, no model call; a host that reports nothing is never suggested.
  */
 export function rankHosts<T extends HostChoice>(hosts: readonly T[], request: string) {
-  const words = new Set(request.toLowerCase().match(/[a-z]+/g) ?? [])
+  const words = new Set(request.toLowerCase().match(/[a-z0-9]+/g) ?? [])
   const ranked = hosts.map((host) => {
     const platform = host.resources?.platform
-    const suggested = !!platform && (PLATFORM_WORDS[platform] ?? []).some((word) => words.has(word))
+    const described = (host.resources?.description?.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter(
+      (word) => word.length > 2,
+    )
+    const suggested =
+      (!!platform && (PLATFORM_WORDS[platform] ?? []).some((word) => words.has(word))) ||
+      described.some((word) => words.has(word))
     const low = !!host.resources?.low
     return { host, suggested, low, free: host.resources?.memory?.availableBytes ?? -1 }
   })

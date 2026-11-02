@@ -1,3 +1,4 @@
+import { UsageAcrossHosts } from './UsageAcrossHosts'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ProviderIcon } from './Logos'
 import { Pressable, View } from 'react-native'
@@ -307,6 +308,12 @@ export function PlanUsageSheet({
             />
           ))}
         </SheetGroup>
+      ) : null}
+      {!filter && !provider ? (
+        <UsageAcrossHosts
+          hosts={hosts}
+          readings={Object.fromEntries(hosts.map((id) => [id, accounts[id] ?? store.usage[id] ?? []]))}
+        />
       ) : null}
       {hosts
         .filter((id) => !filter || id === filter)

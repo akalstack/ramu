@@ -38,6 +38,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
     'autoProjectSplit',
     'agentThreads',
     'operator',
+    'hostDescription',
     'notifyAgentDone',
     'resumeChatsOnRestart',
     'asyncQuestions',

@@ -4243,3 +4243,17 @@ describe('MCP connection status', () => {
     svc.stopAll()
   })
 })
+
+describe('activity', () => {
+  it('counts finished turns per day and provider, keeping unpriced turns apart from cost', async () => {
+    const svc = service()
+    const s = svc.start('t', scopeOf(cwd), 'hello', full)
+    await until(() => svc.get(s.id).state === 'idle')
+    const rows = svc.activity(0)
+    expect(rows.reduce((sum, row) => sum + row.turns, 0)).toBeGreaterThan(0)
+    expect(rows[0]).toMatchObject({ provider: 'claude-code' })
+    expect(rows[0]!.day).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(svc.activity(Date.now() + 60_000)).toEqual([])
+    svc.stopAll()
+  })
+})

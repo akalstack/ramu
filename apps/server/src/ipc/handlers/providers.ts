@@ -66,6 +66,15 @@ export const registerProviderHandlers: RegisterHandlers = ({
   'providers.pickBinary': { args: z.tuple([]), run: () => host.native('pickExecutable') },
   'usage.get': { args: z.tuple([]), run: () => usage.list() },
   'usage.accounts': { args: z.tuple([]), run: () => usage.all() },
+  'usage.activity': {
+    args: z.tuple([z.number().int().min(1).max(31)]),
+    run: (days: number) => {
+      const start = new Date()
+      start.setHours(0, 0, 0, 0)
+      start.setDate(start.getDate() - (days - 1))
+      return agents.activity(start.getTime())
+    },
+  },
   'usage.refresh': {
     args: z.tuple([]),
     run: async () => {

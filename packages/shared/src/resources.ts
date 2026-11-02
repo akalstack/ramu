@@ -41,6 +41,8 @@ export interface HostResources {
   /** `process.platform` and `process.arch`, reported as facts; Ramu detects no other capability. */
   platform?: string
   arch?: string
+  /** What the person wrote about this host. */
+  description?: string
 }
 
 export interface ProcessRow {

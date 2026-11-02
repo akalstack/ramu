@@ -1,4 +1,10 @@
-import { loginsAcrossHosts, peakOf, type LoginUsage } from '@ramu/shared/usageAcrossHosts'
+import {
+  activityAcrossHosts,
+  loginsAcrossHosts,
+  peakOf,
+  type ActivityTotal,
+  type LoginUsage,
+} from '@ramu/shared/usageAcrossHosts'
 import { useComputers } from '../workspace/computers'
 import { LocalInlineAction } from '@/components/inline-action'
 import { usageTone, usagePercent, usageScopeHint } from '@ramu/shared/usage/presentation'
@@ -523,6 +529,7 @@ function UsagePopover({
           </Fragment>
         ))}
         {open && <OtherHostLogins />}
+        {open && <WeekActivity />}
         <Separator className="h-px bg-line" />
         <p className="m-0 text-caption leading-normal whitespace-normal text-muted-foreground">
           {t('Fallback continues the thread when a usage limit is reached.')}
@@ -592,6 +599,56 @@ function OtherHostLogins() {
             </div>
           )
         })}
+      </section>
+    </>
+  )
+}
+
+/** This week's finished turns and reported cost, added across connected hosts; a host not read is named, not zero. */
+function WeekActivity() {
+  const computers = useComputers()
+  const [total, setTotal] = useState<ActivityTotal | null>(null)
+  const hosts = (computers?.computers ?? []).filter((computer) => computer.status !== 'rejected')
+  const key = hosts.map((computer) => `${computer.id}:${computer.status}`).join(',')
+  useEffect(() => {
+    let live = true
+    void Promise.all(
+      hosts.map(async (computer) => ({
+        host: computer.name,
+        rows:
+          computer.status === 'connected' ? await invokeOn(computer.id, 'usage.activity', 7).catch(() => null) : null,
+      })),
+    ).then((rows) => live && setTotal(activityAcrossHosts(rows)))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on hosts and their connection state
+  }, [key])
+  if (!total || !total.turns) return null
+  const money =
+    total.costUsd > 0
+      ? ` · ${new Intl.NumberFormat(formatLocale(), { style: 'currency', currency: 'USD' }).format(total.costUsd)}`
+      : ''
+  return (
+    <>
+      <Separator className="h-px bg-line" />
+      <section className="flex flex-col gap-1" aria-label={t('This week')}>
+        <p className="m-0 text-caption text-muted-foreground">{t('This week')}</p>
+        <p className="m-0 text-caption">
+          {t('{0} turns', { 0: total.turns })}
+          {money}
+          {total.byHost.length > 1 && ` · ${total.byHost.map((entry) => `${entry.host} ${entry.turns}`).join(', ')}`}
+        </p>
+        {total.unpricedOn.length > 0 && (
+          <p className="m-0 text-caption text-muted-foreground">
+            {t('Some providers on {0} report no cost', { 0: total.unpricedOn.join(', ') })}
+          </p>
+        )}
+        {total.missing.length > 0 && (
+          <p className="m-0 text-caption text-muted-foreground">
+            {t('Not counted: {0}', { 0: total.missing.join(', ') })}
+          </p>
+        )}
       </section>
     </>
   )

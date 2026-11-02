@@ -55,7 +55,7 @@ Each stage is useful alone. Stage 1 ships first because it needs no new runtime.
 - **Seeing the app:** an accessibility tree when the platform provides one, otherwise a screenshot with coordinates. Logs are bounded, filtered to the launched app and stripped of known secrets.
 - **Ownership:** one thread holds a device at a time, and another thread is told which one holds it. A host runs at most 2 by default. A device idle for 15 minutes with no viewer shuts down, and **Stop** is always available. Running devices appear in Resources as the thread's work, with **Still running** after the thread ends.
 - **Pill and viewer:** the thread gains a device pill beside Browser and Computer, opening the existing viewer in a device-shaped frame. Clicks and drags map to touches, the phone uses direct touch, and **Take control** works as it does for computer use. **Float** works from Stage 1 with no extra design.
-- **Across hosts:** a host reports which platforms are ready, for the host list in [Work across hosts](CROSS-HOST-PLAN.md).
+- **Across hosts:** a host reports which platforms are ready, for the Continue on another host menu ([Agents and routing](AGENT-ROUTING.md#continue-on-another-host)).
 
 ### Stage 3: System picture-in-picture on the phone
 

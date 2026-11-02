@@ -45,6 +45,7 @@ const viewerMethods = new Set([
   'activity.status',
   'usage.get',
   'usage.accounts',
+  'usage.activity',
   'aside.list',
   'interactive.get',
   'interactive.list',

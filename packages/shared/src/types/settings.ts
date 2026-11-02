@@ -83,6 +83,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   agentThreads: boolean
   /** Inbox offers one box that proposes actions across threads and schedules. Off until someone wants it. */
   operator: boolean
+  /** A few words the person writes about this host (`GPU box`, `office network`), matched when suggesting one. */
+  hostDescription: string
   /** Opt-in until integrated runtime/provider acceptance passes; website identities stay on the runtime's desktop. */
   agentBrowser?: import('../browser').AgentBrowserPreferences
   /** Dragged width of the sidebar, in px. */
@@ -178,6 +180,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   autoProjectSplit: true,
   agentThreads: true,
   operator: false,
+  hostDescription: '',
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
   busyMessageAction: 'steer',
 }

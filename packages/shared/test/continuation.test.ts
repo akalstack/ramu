@@ -115,3 +115,17 @@ it('starts on several hosts, and one failing leaves the others running', async (
   const starts = invoke.mock.calls.filter(([, method]) => method === 'threads.continueHere')
   expect(starts.map(([, , input]) => (input as { key: string }).key)).toEqual(['good-key', 'bad-key'])
 })
+
+it('suggests a host whose description the request names', () => {
+  const order = rankHosts(
+    [
+      { id: 'a', name: 'a', resources: { memory: null, low: null, platform: 'linux' } },
+      { id: 'b', name: 'b', resources: { memory: null, low: null, platform: 'linux', description: 'GPU box' } },
+    ],
+    'train it on the gpu',
+  )
+  expect(order.map((entry) => [entry.host.id, entry.suggested])).toEqual([
+    ['b', true],
+    ['a', false],
+  ])
+})

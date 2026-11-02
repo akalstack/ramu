@@ -56,6 +56,7 @@ export class ResourceService {
     private readonly sources: ResourceSources,
     private readonly readMemory: () => Promise<HostMemory | null> = readHostMemory,
     private readonly readTable: typeof readProcesses = readProcesses,
+    private readonly description: () => string = () => '',
   ) {}
 
   start() {
@@ -76,7 +77,8 @@ export class ResourceService {
   }
 
   host(): HostResources {
-    return this.latest
+    const description = this.description().trim()
+    return description ? { ...this.latest, description } : this.latest
   }
 
   /** Low only after two checks in a row, so one busy minute does not raise a row and a badge. */

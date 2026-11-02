@@ -41,3 +41,24 @@ it('lists a login it cannot match by host, never adding percentages', () => {
     [['vps'], 10],
   ])
 })
+
+it('adds each host’s activity, marks unpriced turns and names hosts it could not read', async () => {
+  const { activityAcrossHosts } = await import('../src/usageAcrossHosts')
+  const row = (turns: number, costUsd: number, unpriced = 0) => ({
+    day: '2026-11-02',
+    provider: 'claude-code' as const,
+    turns,
+    costUsd,
+    unpriced,
+  })
+  const total = activityAcrossHosts([
+    { host: 'Mac', rows: [row(3, 1.5)] },
+    { host: 'vps', rows: [row(2, 0, 2)] },
+    { host: 'gpu', rows: null },
+  ])
+  expect(total).toMatchObject({ turns: 5, costUsd: 1.5, unpricedOn: ['vps'], missing: ['gpu'] })
+  expect(total.byHost).toEqual([
+    { host: 'Mac', turns: 3, costUsd: 1.5 },
+    { host: 'vps', turns: 2, costUsd: 0 },
+  ])
+})

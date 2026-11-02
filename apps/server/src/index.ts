@@ -352,35 +352,40 @@ const terminals = new TerminalService(
 setAcpTerminalService(terminals)
 const customAgents = new CustomAgentStore(workspace)
 agents.customAgents = () => customAgents.list()
-const resources = new ResourceService({
-  roots: () => {
-    const sessions = new Map(agents.all().map((session) => [session.id, session]))
-    return [
-      ...terminals.processes().map(({ pid, taskId, id, kind, name }) => ({ pid, taskId, item: { kind, id, name } })),
-      ...[...processRoots()].flatMap(([pid, sessionId]) => {
-        const session = sessions.get(sessionId)
-        return session
-          ? [
-              {
-                pid,
-                taskId: session.taskId,
-                item: { kind: 'agent' as const, id: sessionId, name: session.title || session.provider },
-              },
-            ]
-          : []
-      }),
-    ]
+const resources = new ResourceService(
+  {
+    roots: () => {
+      const sessions = new Map(agents.all().map((session) => [session.id, session]))
+      return [
+        ...terminals.processes().map(({ pid, taskId, id, kind, name }) => ({ pid, taskId, item: { kind, id, name } })),
+        ...[...processRoots()].flatMap(([pid, sessionId]) => {
+          const session = sessions.get(sessionId)
+          return session
+            ? [
+                {
+                  pid,
+                  taskId: session.taskId,
+                  item: { kind: 'agent' as const, id: sessionId, name: session.title || session.provider },
+                },
+              ]
+            : []
+        }),
+      ]
+    },
+    idleThreads: () => {
+      const sessions = agents.all()
+      const busy = new Set(
+        sessions
+          .filter(({ state }) => ['starting', 'running', 'needs-input'].includes(state))
+          .map(({ taskId }) => taskId),
+      )
+      return new Set(sessions.map(({ taskId }) => taskId).filter((taskId) => !busy.has(taskId)))
+    },
   },
-  idleThreads: () => {
-    const sessions = agents.all()
-    const busy = new Set(
-      sessions
-        .filter(({ state }) => ['starting', 'running', 'needs-input'].includes(state))
-        .map(({ taskId }) => taskId),
-    )
-    return new Set(sessions.map(({ taskId }) => taskId).filter((taskId) => !busy.has(taskId)))
-  },
-})
+  undefined,
+  undefined,
+  () => workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).hostDescription ?? '',
+)
 resources.start()
 const inbox = new NoticeInbox(
   (items) => send('notices:changed', items),

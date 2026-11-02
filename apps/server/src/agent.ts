@@ -4,6 +4,7 @@ import { mcpRequest, mcpServerDetails } from './agent/mcpStatus'
 import { latestTasks } from '@ramu/shared/chat/agentTasks'
 import { clipText } from '@ramu/shared/text'
 import { customAgentFor, type CustomAgent } from '@ramu/shared/customAgents'
+import type { ActivityRow } from '@ramu/shared/usageAcrossHosts'
 import { PermissionApprovals } from './agent/permissionApprovals'
 import { providerBinary } from './providers/providerBinaries'
 import { DEFAULT_RUNNERS, sameRunnerForAll } from './providers/runners'
@@ -855,6 +856,20 @@ export class AgentService {
   /** The person wrote, so a teammate exchange that paused may continue. */
   resetTeammateRounds(sessionId: string) {
     this.parts.subagents.resetTeammateRounds(sessionId)
+  }
+
+  /** Finished turns per local day and provider since `since`, with cost where the provider reported it. */
+  activity(since: number): ActivityRow[] {
+    return this.db
+      .prepare(
+        `SELECT date(json_extract(e.event, '$.at') / 1000, 'unixepoch', 'localtime') AS day, s.provider AS provider,
+           COUNT(*) AS turns, COALESCE(SUM(json_extract(e.event, '$.costUsd')), 0) AS costUsd,
+           SUM(json_extract(e.event, '$.costUsd') IS NULL) AS unpriced
+         FROM agent_events e JOIN agent_sessions s ON s.id = e.session_id
+         WHERE json_extract(e.event, '$.kind') = 'result' AND json_extract(e.event, '$.at') >= ?
+         GROUP BY day, s.provider ORDER BY day`,
+      )
+      .all(since) as unknown as ActivityRow[]
   }
 
   /** Custom agents the lead may use; set by the host, so tests and a bare service run without any. */
