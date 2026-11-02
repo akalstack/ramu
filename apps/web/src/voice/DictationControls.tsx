@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Mic, Square } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { DICTATION_MAX_MS, type DictationFailure, type DictationState } from '@ramu/shared/voice/dictation'
 import { formatElapsed } from '@ramu/shared/voice/settings'
 import { copyText } from '../ipc'

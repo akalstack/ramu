@@ -643,7 +643,7 @@ export function Composer({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="icon small-icon"
+              className="icon small-icon hover:bg-fill-hover dark:hover:bg-fill-hover"
               aria-label={t('Attach files')}
               title={t('Attach files')}
               disabled={viewOnly || uploading || attachments.length >= 10}

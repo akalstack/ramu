@@ -3,7 +3,7 @@ import { usageTone, usagePercent, usageScopeHint } from '@ramu/shared/usage/pres
 export { usageTone } from '@ramu/shared/usage/presentation'
 import { t, useLanguage, formatLocale } from '../i18n'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'

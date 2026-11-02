@@ -39,3 +39,24 @@ it('keeps the device font-size token alongside a text color instead of merging i
   const inherited = renderToStaticMarkup(createElement(Button, { className: 'text-muted-foreground' }, 'Save'))
   expect(inherited).toContain('text-[length:var(--font-body)]')
 })
+
+const ghostClasses = (className?: string) =>
+  renderToStaticMarkup(createElement(Button, { variant: 'ghost', className }, 'Clear'))
+    .match(/class="([^"]*)"/)![1]!
+    .split(' ')
+
+it('fills every ghost button on hover, in dark mode too', () => {
+  for (const className of [undefined, 'hover:bg-hover text-muted-foreground']) {
+    const list = ghostClasses(className)
+    expect(list).toContain('hover:bg-fill-hover')
+    expect(list).toContain('dark:hover:bg-fill-hover')
+    expect(list).not.toContain('dark:hover:bg-muted/50')
+    expect(list).not.toContain('hover:bg-hover')
+  }
+})
+
+it('leaves a button that opts out of the hover fill alone', () => {
+  const list = ghostClasses('hover:bg-transparent')
+  expect(list).toContain('dark:hover:bg-transparent')
+  expect(list).not.toContain('hover:bg-fill-hover')
+})

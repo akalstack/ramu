@@ -5,7 +5,7 @@
 
 /** Transparent button that fills on hover and while its menu is open. */
 export const GHOST_BUTTON_CLASS =
-  'ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover'
+  'ghost bg-transparent border-transparent text-muted-foreground hover:bg-fill-hover hover:text-foreground aria-expanded:bg-fill-hover'
 
 /** Quiet square icon button; always give it an accessible label. */
 export const GHOST_ICON_BUTTON_CLASS = `${GHOST_BUTTON_CLASS} icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)`

@@ -90,7 +90,7 @@ export function Menu({
     <TriggerButton
       variant={standard ? 'ghost' : 'secondary'}
       disabled={disabled}
-      className={`${className}${open ? ' on' : ''}`}
+      className={`${className}${open ? ' on' : ''}${standard ? ' hover:bg-fill-hover dark:hover:bg-fill-hover' : ''}`}
       aria-label={label}
       title={label}
       onClick={(e) => e.stopPropagation()}

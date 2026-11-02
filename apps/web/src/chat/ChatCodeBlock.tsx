@@ -3,7 +3,7 @@ const MermaidBlock = lazy(() => import('./MermaidBlock').then((m) => ({ default:
 import { useEffect, useState } from 'react'
 import type { Components } from 'react-markdown'
 import { Check, Copy } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import {
   CodeBlock,
   CodeBlockActions,
