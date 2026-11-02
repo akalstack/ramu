@@ -28,6 +28,8 @@ export type PairWaitAnswer =
       role: 'owner' | 'viewer'
       hostId: string
       expiresAt: number | null
+      /** The host's Ramu Link identity key, bound by `mac` so a relay cannot substitute its own. */
+      linkKey?: string
       mac: string
     }
 
@@ -97,7 +99,9 @@ export const pairResultMac = (macKey: Uint8Array, result: Omit<Approved, 'state'
       sha256,
       macKey,
       utf8ToBytes(
-        `ramu-pair-result:1:${result.deviceId}:${result.role}:${result.hostId}:${result.expiresAt ?? 'never'}`,
+        result.linkKey
+          ? `ramu-pair-result:2:${result.deviceId}:${result.role}:${result.hostId}:${result.expiresAt ?? 'never'}:${result.linkKey}`
+          : `ramu-pair-result:1:${result.deviceId}:${result.role}:${result.hostId}:${result.expiresAt ?? 'never'}`,
       ),
     ),
   )
@@ -108,6 +112,8 @@ export interface PairByRequestResult {
   hostId: string
   role: 'owner' | 'viewer'
   expiresAt: number | null
+  /** The host's Link key as the host itself vouched for it; pin it for later Link connections. */
+  linkKey?: string
 }
 
 /** One JSON POST to the host; returns the status and parsed body (null when there is none). */
@@ -172,6 +178,7 @@ export async function requestPairing(input: {
         role: result.role,
         hostId: result.hostId,
         expiresAt: result.expiresAt,
+        ...(isPairKey(result.linkKey) ? { linkKey: result.linkKey } : {}),
       }
       // Only the host that ran this exchange can produce the check; a tampered answer is refused.
       if (result.hostId !== answer.hostId || result.mac !== pairResultMac(secrets.macKey, fields))

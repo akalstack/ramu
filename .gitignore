@@ -16,3 +16,7 @@ coverage/
 apps/web/_debug-*
 .playwright-cli/
 .expo/
+
+# Cloudflare Worker local state and secrets
+.wrangler/
+.dev.vars
