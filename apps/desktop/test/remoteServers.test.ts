@@ -139,3 +139,16 @@ it('does not merge hosts with different ids, and a tunnel is never merged with a
   expect(tunnel.id).not.toBe(a.id)
   expect(servers.list()).toHaveLength(3)
 })
+
+it('keeps the host’s pinned Link key when the same host is paired again at a new address', () => {
+  const { servers } = store()
+  const key = 'a'.repeat(64)
+  const first = servers.add('192.168.1.5:7788', 'Studio', 'token-1', 1, undefined, { hostId: 'h1', linkKey: key })
+  expect(servers.linkKeyOf('h1')).toBe(key)
+  const again = servers.add('https://abc.link.invalid', 'Studio', 'token-2', 2, undefined, { hostId: 'h1' })
+  expect(again.id).toBe(first.id)
+  expect(servers.linkKeyOf('h1')).toBe(key)
+  servers.setLinkKey(first.id, 'b'.repeat(64))
+  expect(servers.linkKeyOf('h1')).toBe('b'.repeat(64))
+  expect(servers.linkKeyOf('other')).toBeNull()
+})

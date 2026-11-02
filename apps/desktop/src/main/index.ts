@@ -78,6 +78,9 @@ import { HOST_PUSH_CHANNELS, STREAMING_KINDS } from '@ramu/shared/pushChannels'
 import { SshComputers } from './sshComputers'
 import { NearbyBrowser } from './discovery'
 import { RemoteServers } from './remoteServers'
+import { LinkAccount } from './linkAccount'
+import { isHostId, linkAddress, linkHostOf } from '@ramu/shared/link/protocol'
+import type { NetworkStatus } from '@ramu/shared/types'
 import { ComputerBroadcaster } from './computerBroadcast'
 import { ComputerRegistry, LOCAL } from './computers'
 import { ScreenSharing } from './screenSharing'
@@ -538,6 +541,68 @@ async function main() {
   const nearby = new NearbyBrowser({ verifiedHost: (hostId) => computers.byHostId(hostId) })
   /** The one request to a nearby host this computer is waiting on, if any. */
   let pairRequest: AbortController | null = null
+  const linkAccount = new LinkAccount({
+    path: join(userData, 'link-account.json'),
+    sealer: {
+      get available() {
+        return safeStorage.isEncryptionAvailable()
+      },
+      seal: (text) => safeStorage.encryptString(text).toString('base64'),
+      open: (text) => safeStorage.decryptString(Buffer.from(text, 'base64')),
+    },
+    pinned: (hostId) => servers.linkKeyOf(hostId),
+    localService: async () => ((await runtimeInvoke(runtime, 'network.status')) as NetworkStatus).link.service ?? null,
+    localHostId: async () =>
+      linkHostOf(((await runtimeInvoke(runtime, 'network.status')) as NetworkStatus).link.address),
+    pairedId: (hostId) => servers.byHostId(hostId)?.id ?? null,
+    changed: () => send('linkAccount:changed', {}),
+  })
+  /** The desktop's own Ramu Link account: sign-in, the account's hosts, and connecting one through Link. */
+  const linkAccountMethod = async (method: string, args: unknown[]) => {
+    if (method === 'linkAccount.status') return linkAccount.status()
+    if (method === 'linkAccount.signIn') {
+      const status = await linkAccount.signIn()
+      if (status.signIn) void shell.openExternal(status.signIn.url)
+      return status
+    }
+    if (method === 'linkAccount.cancelSignIn') {
+      linkAccount.cancelSignIn()
+      return linkAccount.status()
+    }
+    if (method === 'linkAccount.signOut') {
+      await linkAccount.signOut()
+      return linkAccount.status()
+    }
+    if (method === 'linkAccount.setService') {
+      const value = args[0]
+      if (value !== null && typeof value !== 'string') throw new Error('Enter the service address')
+      linkAccount.setService(value)
+      return linkAccount.status()
+    }
+    if (method === 'linkAccount.hosts') return linkAccount.hosts()
+    if (method === 'linkAccount.connect') {
+      const [hostId, label] = args
+      if (!isHostId(hostId) || (label !== undefined && typeof label !== 'string')) throw new Error('Invalid host')
+      const address = linkAddress(hostId)
+      pairRequest?.abort()
+      const controller = new AbortController()
+      pairRequest = controller
+      const previous = servers.list()
+      try {
+        await computers.pairByRequest(
+          address,
+          label,
+          (code) => send('computers:pairCode', { address, code }),
+          controller.signal,
+        )
+      } finally {
+        if (pairRequest === controller) pairRequest = null
+      }
+      for (const server of previous) if (!computers.exists(server.id)) await closeComputer(server.id)
+      return computers.list(LOCAL)
+    }
+    throw new Error(`Unknown method ${method}`)
+  }
   const computers = new ComputerRegistry({
     servers,
     ssh,
@@ -1135,6 +1200,7 @@ async function main() {
       pairRequest = null
       return null
     }
+    if (method.startsWith('linkAccount.')) return linkAccountMethod(method, args)
     // Device-local: this computer listens for nearby hosts and only lists them.
     if (method === 'computers.discovery.start') return nearby.start()
     if (method === 'computers.discovery.state') return nearby.state()
@@ -1322,6 +1388,7 @@ async function main() {
   const networkWake = () => refreshRuntimeNetwork(true)
   powerMonitor.on('resume', networkWake)
   app.on('before-quit', () => {
+    linkAccount.stop()
     powerMonitor.removeListener('resume', networkWake)
     nearby.stop()
     desktopUpdater.close()

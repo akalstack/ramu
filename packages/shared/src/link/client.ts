@@ -170,7 +170,7 @@ const headersOf = (init?: { headers?: unknown }): Record<string, string> => {
  * small JSON requests that happen outside the socket (pairing, renewal, identity, health) use it.
  */
 export function linkFetch(options: LinkClientOptions, fallback: typeof fetch): typeof fetch {
-  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const target = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
     const url = new URL(target)
     const hostId = linkHostOf(url.origin)

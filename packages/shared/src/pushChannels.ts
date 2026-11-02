@@ -58,6 +58,7 @@ export const WINDOW_PUSH_CHANNELS = [
   'computers:navigate',
   'computers:activity',
   'computers:pairCode',
+  'linkAccount:changed',
   'device-state:changed',
   'live:closed',
   'live:open',

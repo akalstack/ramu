@@ -27,6 +27,8 @@ interface StoredServer {
   hostId?: string
   /** Other addresses the host named in a proven identity answer; tried only when the saved one stops answering. */
   routes?: string[]
+  /** The host's Ramu Link key as the host itself vouched for it; a Link stream proving any other key is refused. */
+  linkKey?: string
 }
 interface StoredFile {
   servers: StoredServer[]
@@ -45,6 +47,7 @@ export interface SavedServer {
 export interface PairedIdentity {
   deviceId?: string
   hostId?: string
+  linkKey?: string
 }
 export interface ComputerUpdate {
   name?: string
@@ -218,6 +221,7 @@ export class RemoteServers {
       ...(ssh ? { ssh } : {}),
       ...(identity.deviceId ? { deviceId: identity.deviceId } : {}),
       ...(identity.hostId ? { hostId: identity.hostId } : {}),
+      ...((identity.linkKey ?? sameHost?.linkKey) ? { linkKey: identity.linkKey ?? sameHost?.linkKey } : {}),
     }
     // The same tunnel target replaces its entry even when the local tunnel port changed.
     this.write({
@@ -271,6 +275,21 @@ export class RemoteServers {
     if (!server) return
     if (JSON.stringify(server.routes ?? []) === JSON.stringify(routes)) return
     server.routes = routes
+    this.write(file)
+  }
+
+  /** The pinned Link key of the saved host with this durable id. */
+  linkKeyOf(hostId: string): string | null {
+    this.load()
+    for (const server of this.records.values()) if (server.hostId === hostId && server.linkKey) return server.linkKey
+    return null
+  }
+
+  setLinkKey(id: string, linkKey: string) {
+    const file = this.read(),
+      server = file.servers.find((entry) => entry.id === id)
+    if (!server || server.linkKey === linkKey) return
+    server.linkKey = linkKey
     this.write(file)
   }
 

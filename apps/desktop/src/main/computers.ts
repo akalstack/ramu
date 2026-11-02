@@ -68,6 +68,13 @@ export class ComputerRegistry {
 
   start() {
     for (const server of this.deps.servers.list()) this.connect(server.id)
+    // Hosts reached through Ramu Link check their direct routes every minute and move back when one works.
+    const direct = setInterval(() => {
+      for (const [id, live] of this.live)
+        if (live.status === 'connected') this.routeWork('direct', id, 60_000, (host) => this.preferDirect(host))
+    }, 60_000)
+    direct.unref()
+    this.timers.set('direct-routes', direct)
   }
 
   stop() {
@@ -159,6 +166,7 @@ export class ComputerRegistry {
           if (payload.connected) {
             void this.deps.follow(endpoint, this.followed.get(id) ?? []).catch(() => {})
             this.routeWork('learn', id, 3_600_000, (host) => this.learnRoutes(host))
+            this.routeWork('direct', id, 60_000, (host) => this.preferDirect(host))
             this.countSoon(id)
             void this.renewIfDue(id)
           } else if (!payload.connected) {
@@ -347,15 +355,16 @@ export class ComputerRegistry {
     onCode: (code: string) => void,
     signal: AbortSignal,
   ): Promise<Computer> {
-    const [{ parseRemoteUrl }, { requestPairing }, { randomBytes }] = await Promise.all([
+    const [{ parseRemoteUrl }, { requestPairing }, { randomBytes }, { hostFetch }] = await Promise.all([
       import('@ramu/contracts'),
       import('@ramu/shared/pairRequest'),
       import('node:crypto'),
+      import('@ramu/client-runtime'),
     ])
     const url = parseRemoteUrl(address)
     const result = await requestPairing({
       post: async (path, body, aborted) => {
-        const response = await fetch(new URL(path, url), {
+        const response = await hostFetch(new URL(path, url), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -379,7 +388,7 @@ export class ComputerRegistry {
   private async savePaired(
     url: string,
     label: string | undefined,
-    { token, deviceId, hostId }: { token: string; deviceId?: string; hostId?: string },
+    { token, deviceId, hostId, linkKey }: { token: string; deviceId?: string; hostId?: string; linkKey?: string },
   ): Promise<Computer> {
     // The code is spent once the token exists. If the first request fails, keep the credential and let the normal
     // connection retry reach the host, rather than discarding a valid grant the person cannot get again.
@@ -395,6 +404,7 @@ export class ComputerRegistry {
     const saved = this.deps.servers.add(url, label?.trim() || status?.hostname, token, Date.now(), undefined, {
       deviceId,
       hostId,
+      ...(linkKey ? { linkKey } : {}),
     })
     // Access was granted but never confirmed by a normal request: say so until the host answers, instead of
     // showing a connected host or asking for the spent code again.
@@ -483,8 +493,9 @@ export class ComputerRegistry {
   private async verify(url: string, deviceId: string, token: string, hostId: string) {
     const { verifyHost } = await import('@ramu/shared/hostProof')
     const { randomBytes } = await import('node:crypto')
+    const { hostFetch } = await import('@ramu/client-runtime')
     return verifyHost({
-      fetch: (target, init) => fetch(target, { ...init, redirect: 'error', signal: AbortSignal.timeout(8000) }),
+      fetch: (target, init) => hostFetch(target, { ...init, redirect: 'error', signal: AbortSignal.timeout(8000) }),
       baseUrl: url,
       deviceId,
       token,
@@ -500,7 +511,19 @@ export class ComputerRegistry {
     const deviceId = this.deps.servers.deviceIdOf(id)
     if (!saved?.hostId || !endpoint || !deviceId || saved.ssh) return
     const result = await this.verify(saved.url, deviceId, endpoint.token, saved.hostId)
-    if (result.state === 'verified' && this.deps.servers.get(id)) this.deps.servers.setRoutes(id, result.routes)
+    if (result.state !== 'verified' || !this.deps.servers.get(id)) return
+    this.deps.servers.setRoutes(id, result.routes)
+    if (result.linkKey) this.deps.servers.setLinkKey(id, result.linkKey)
+  }
+
+  /** On Link, a direct route is faster and needs no relay: move back to one as soon as it proves itself. */
+  private async preferDirect(id: string) {
+    const saved = this.deps.servers.get(id)
+    if (!saved || !saved.url.endsWith('.link.invalid')) return
+    for (const route of this.deps.servers.routesOf(id)) {
+      if (this.stopped || route.endsWith('.link.invalid')) continue
+      if ((await this.reviewAddress(id, route).catch(() => 'unreachable')) === 'moved') return
+    }
   }
 
   /** When the saved address stops answering, try the learned ones; each must prove it is this host before it is used. */
@@ -513,7 +536,7 @@ export class ComputerRegistry {
 
   private routeTimes = new Map<string, number>()
   /** Runs `work` for a host at most once per `every` ms. */
-  private routeWork(kind: 'learn' | 'try', id: string, every: number, work: (id: string) => Promise<void>) {
+  private routeWork(kind: 'learn' | 'try' | 'direct', id: string, every: number, work: (id: string) => Promise<void>) {
     const now = Date.now()
     const key = `${kind}:${id}`
     if (now - (this.routeTimes.get(key) ?? -Infinity) < every) return

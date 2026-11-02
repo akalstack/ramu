@@ -186,3 +186,21 @@ export interface AgentHostSummary {
   expiresAt: number | null
   addedAt: number
 }
+
+/** This desktop or phone's own Ramu Link account, which finds the hosts linked to it. */
+export interface LinkAccountStatus {
+  service: string | null
+  account: { name: string; email: string } | null
+  signIn: { userCode: string; url: string; expiresAt: number } | null
+  error: string | null
+}
+/** A host linked to the same account. */
+export interface LinkAccountHost {
+  hostId: string
+  name: string
+  publicKey: string
+  online: boolean
+  lastSeenAt: number | null
+  /** This device already paired it; the id of that saved host. */
+  pairedId?: string
+}

@@ -15,7 +15,19 @@ import { SETTINGS_CARD_LINE } from './cards'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Check, ChevronDown, Copy, Link2, Monitor, Network, Plus, Radar, Settings2, Terminal } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  Globe,
+  Link2,
+  Monitor,
+  Network,
+  Plus,
+  Radar,
+  Settings2,
+  Terminal,
+} from 'lucide-react'
 import { useContext, useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AgentHostSummary,
@@ -39,6 +51,8 @@ import { workspaceVisible } from '../workspace/workspaceLifetime'
 import { onPairLink, takePairLink } from '../pairLink'
 import { NearbyHosts } from './NearbyHosts'
 import { AgentHosts } from './AgentHosts'
+import { LinkSettings, TunnelSettings } from './ReachThisHost'
+import { AccountHosts } from './AccountHosts'
 import { useStagedValue } from './stagedChanges'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
@@ -299,21 +313,25 @@ function ThisComputer() {
         </p>
       )}
 
+      <LinkSettings status={status} setStatus={setStatus} />
+      <TunnelSettings status={status} setStatus={setStatus} />
+
+      <SettingsGroupTitle className="mt-5">{t('Pair a device')}</SettingsGroupTitle>
       <SettingsRow>
         <SettingsLabel
           title={t('Pair a device')}
           help={
-            status.listening
+            status.reachable
               ? t(
                   'Creates a one-time code for a phone or another host. With Discoverable on, nearby devices can also ask, and you allow them here.',
                 )
-              : t('Turn on access above first.')
+              : t('Turn on a way in above first: other devices, Ramu Link or a tunnel.')
           }
         />
         <Button
           variant="secondary"
           className="bg-fill hover:bg-fill-hover"
-          disabled={!status.listening}
+          disabled={!status.reachable}
           onClick={() => setPairing(true)}
         >
           <Link2 size={14} />
@@ -651,7 +669,7 @@ function Computers({ state }: { state: ComputerList }) {
   const [adding, setAdding] = useState(false),
     [editing, setEditing] = useState<string | null>(null)
   // Nearby hosts come first; entering an address or using SSH stays one click away in every state.
-  const [mode, setMode] = useState<'nearby' | 'link' | 'ssh'>('nearby'),
+  const [mode, setMode] = useState<'nearby' | 'account' | 'link' | 'ssh'>('nearby'),
     [focusCode, setFocusCode] = useState(false),
     [link, setLink] = useState(''),
     [linkError, setLinkError] = useState<string | null>(null)
@@ -712,7 +730,7 @@ function Computers({ state }: { state: ComputerList }) {
     setLinkError(null)
     setTarget('')
   }
-  const choose = (next: 'nearby' | 'link' | 'ssh') => {
+  const choose = (next: 'nearby' | 'account' | 'link' | 'ssh') => {
     setFocusCode(false)
     setMode(next)
     if (next === 'ssh' && !hosts.length) void invoke('computers.sshHosts').then(setHosts, () => {})
@@ -948,6 +966,17 @@ function Computers({ state }: { state: ComputerList }) {
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={mode === 'account'}
+              className={mode === 'account' ? 'bg-hover' : ''}
+              disabled={busy}
+              onClick={() => choose('account')}
+            >
+              <Globe size={14} />
+              {t('Ramu Link')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               aria-pressed={mode === 'link'}
               className={mode === 'link' ? 'bg-hover' : ''}
               disabled={busy}
@@ -999,7 +1028,25 @@ function Computers({ state }: { state: ComputerList }) {
               }}
             />
           )}
-          {mode === 'nearby' && asking ? (
+          {mode === 'account' && (
+            <AccountHosts
+              onConnect={(host) => {
+                setAsking({ name: host.name, code: null })
+                void Promise.resolve(invoke('linkAccount.connect', host.hostId, host.name))
+                  .then(() => {
+                    setAsking(null)
+                    reset()
+                    setAdding(false)
+                  })
+                  .catch((error) => {
+                    setAsking(null)
+                    const message = errorText(error)
+                    if (!/cancelled|aborted/i.test(message)) notifyError(message, t('Hosts'))
+                  })
+              }}
+            />
+          )}
+          {(mode === 'nearby' || mode === 'account') && asking ? (
             <div
               role="status"
               className="mt-3 flex flex-col items-start gap-2 rounded-(--radius-m) bg-fill p-[14px_16px]"
@@ -1026,7 +1073,7 @@ function Computers({ state }: { state: ComputerList }) {
               </Button>
             </div>
           ) : null}
-          {mode === 'nearby' ? null : mode === 'link' ? (
+          {mode === 'nearby' || mode === 'account' ? null : mode === 'link' ? (
             <>
               <p className="m-[0_0_12px] text-caption text-muted-foreground">
                 {t(

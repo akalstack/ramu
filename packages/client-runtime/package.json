@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@ramu/contracts": "workspace:*",
+    "@ramu/shared": "workspace:*",
     "ws": "8.22.0"
   },
   "devDependencies": {

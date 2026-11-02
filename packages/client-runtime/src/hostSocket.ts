@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { RuntimeEndpoint } from '@ramu/contracts'
 import { nodeSocketFactory } from './nodeSocket'
+import { remoteSocketFactory } from './linkTransport'
 import { RuntimeSocket, type SocketState } from './socket'
 
 /** What a consumer of a host's socket hears: its events and its connection state. */
@@ -62,7 +63,7 @@ export function hostSocket(endpoint: RuntimeEndpoint, options: HostSocketOptions
     socket: new RuntimeSocket({
       url: local ? `ws+unix://${endpoint.path}` : endpoint.url,
       token: local ? '' : endpoint.token,
-      factory: nodeSocketFactory,
+      factory: local ? nodeSocketFactory : remoteSocketFactory,
       // The service on this machine comes back quickly after a restart; a remote host backs off further.
       ...(local ? { maxBackoffMs: 2000 } : {}),
       headers: {

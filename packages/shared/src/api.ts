@@ -672,6 +672,16 @@ export interface RamuMethods {
   'computers.discovery.stop'(): NearbyHostsState
   /** Adds a computer over SSH: `target` is user@host or an alias from ~/.ssh/config. */
   'computers.pairSsh'(target: string, name?: string): Computers
+  /** This desktop's Ramu Link account. Handled by the desktop app itself. */
+  'linkAccount.status'(): import('./types').LinkAccountStatus
+  'linkAccount.signIn'(): import('./types').LinkAccountStatus
+  'linkAccount.cancelSignIn'(): import('./types').LinkAccountStatus
+  'linkAccount.signOut'(): import('./types').LinkAccountStatus
+  'linkAccount.setService'(url: string | null): import('./types').LinkAccountStatus
+  /** Hosts linked to the same account, other than this computer. */
+  'linkAccount.hosts'(): import('./types').LinkAccountHost[]
+  /** Pairs a host from the account through Ramu Link; the number to match arrives as `computers:pairCode`. */
+  'linkAccount.connect'(hostId: string, name?: string): Computers
   /** Paired computers this computer lets use its screen (opt-in per host). */
   'computers.screenSharing'(): string[]
   'computers.setScreenSharing'(id: string, enabled: boolean): string[]
@@ -1303,6 +1313,8 @@ export type PushEvents = {
   'pairing:requests': { requests: NetworkStatus['requests'] }
   /** Link or tunnel state changed; Settings reads `network.status` again. Sent only to apps on the host itself. */
   'network:changed': Record<string, never>
+  /** This desktop's Ramu Link account changed. */
+  'linkAccount:changed': Record<string, never>
   'notify:inapp': {
     hostId?: string
     sessionId: string

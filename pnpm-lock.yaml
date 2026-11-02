@@ -659,6 +659,9 @@ importers:
       '@ramu/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@ramu/shared':
+        specifier: workspace:*
+        version: link:../shared
       ws:
         specifier: 8.22.0
         version: 8.22.0
