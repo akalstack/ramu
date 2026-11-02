@@ -45,6 +45,8 @@ A host paired with another as `host` may call only `hostThreads.start`, `status`
 - **Transport and tokens.** The token is in the OS credential store on the asking host and hashed here. Plain HTTP needs `--private-network`. On a headless host without an unlocked credential store, `ramu hosts add` fails with a message to unlock it, and nothing is stored in plain text.
 - **Agents permission.** A device granted **Agents** may pair its own computer here without a code from a person. That code is one-time, lasts a minute, only becomes a host pairing, and the pairing ends with the grant.
 
+Test devices give agents fixed operations on simulators and emulators, not a shell: every command is a fixed program with checked arguments, app files must resolve inside the thread's workspace, logs are filtered to the launched app with known secrets removed, and a device belongs to one thread at a time.
+
 ## Isolated content
 
 - **Theme preview:** the Code/Diff preview in the theme editor runs bundled Monaco code on its own `ramu-theme:` origin. It serves only the preview entry and bundled assets, cannot read workspace files, call the native bridge or reach the parent window, and accepts only validated palette and view messages.

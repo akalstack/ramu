@@ -235,7 +235,10 @@ export function AgentHeader({
                 <>
                   <ArrowUpRight size={13} /> {translate('Continue on {0}', { 0: computer.name })}
                   {computer.resources?.platform && (
-                    <span className="text-muted-foreground"> · {computer.resources.platform}</span>
+                    <span className="text-muted-foreground">
+                      {' '}
+                      · {[computer.resources.platform, ...(computer.resources.testDevices ?? [])].join(', ')}
+                    </span>
                   )}
                   {suggested && <span className="text-muted-foreground"> · {translate('Suggested')}</span>}
                   {low && <span className="text-warn"> · {translate('Low memory')}</span>}

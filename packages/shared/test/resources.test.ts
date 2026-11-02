@@ -80,4 +80,5 @@ it('labels commands left running under finished work, and stops each kind its ow
   expect(stopItemCall('t', { kind: 'agent', id: 's' })).toEqual(['agent.stop', 's'])
   expect(stopItemCall('t', { kind: 'terminal', id: 'x' })).toEqual(['term.close', 'x'])
   expect(stopItemCall('t', { kind: 'command', id: 'c' })).toEqual(['term.background.stop', 't', 'c'])
+  expect(stopItemCall('t', { kind: 'device', id: 'avd:pixel' })).toEqual(['testDevices.stop', 'avd:pixel'])
 })

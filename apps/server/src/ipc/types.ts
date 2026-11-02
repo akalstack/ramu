@@ -41,6 +41,7 @@ export interface Services {
   terminals: TerminalService
   resources?: import('../background/resources').ResourceService
   customAgents?: import('../agent/customAgents').CustomAgentStore
+  testDevices?: import('../testDevice/testDevices').TestDevices
   agents: AgentService
   schedules: ScheduleService
   pullRequestWatches?: PullRequestWatchService

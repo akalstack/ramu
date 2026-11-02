@@ -6,7 +6,7 @@ export interface HostMemory {
 }
 
 export interface ResourceItem {
-  kind: 'agent' | 'terminal' | 'command'
+  kind: 'agent' | 'terminal' | 'command' | 'device'
   id: string
   /** A name the thread already uses; never a command line. */
   name: string
@@ -43,6 +43,8 @@ export interface HostResources {
   arch?: string
   /** What the person wrote about this host. */
   description?: string
+  /** Test device platforms ready on this host. */
+  testDevices?: ('ios' | 'android')[]
 }
 
 export interface ProcessRow {
@@ -162,6 +164,8 @@ export function threadActivity(
 export const stopItemCall = (taskId: string, item: Pick<ResourceItem, 'kind' | 'id'>) =>
   item.kind === 'agent'
     ? (['agent.stop', item.id] as const)
-    : item.kind === 'terminal'
-      ? (['term.close', item.id] as const)
-      : (['term.background.stop', taskId, item.id] as const)
+    : item.kind === 'device'
+      ? (['testDevices.stop', item.id] as const)
+      : item.kind === 'terminal'
+        ? (['term.close', item.id] as const)
+        : (['term.background.stop', taskId, item.id] as const)

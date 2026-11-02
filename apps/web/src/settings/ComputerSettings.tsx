@@ -1,3 +1,4 @@
+import { TestDeviceSettings } from './TestDeviceSettings'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useStagedValue, useStaging } from './stagedChanges'
 import { Check } from 'lucide-react'
@@ -444,6 +445,10 @@ export function ComputerUseSettings(props: DraftProps) {
         hostId={hostId}
         readOnly={!!scope?.targets.find((target) => target.id === hostId)?.viewOnly}
         awakeControl={<KeepAwakeSettings {...props} />}
+      />
+      <TestDeviceSettings
+        hostId={hostId}
+        readOnly={!!scope?.targets.find((target) => target.id === hostId)?.viewOnly}
       />
     </div>
   )

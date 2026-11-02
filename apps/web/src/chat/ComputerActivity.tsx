@@ -479,7 +479,8 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
     const status = await invoke('computer.status').catch(() => null)
     if (!valid() || !canWrite()) return
     const appsReady = !!status?.apps?.available
-    const granted = status?.enabled ? await invoke('computer.session', taskId).catch(() => null) : null
+    // A test device is a computer session too, and it works without turning computer use on.
+    const granted = await invoke('computer.session', taskId).catch(() => null)
     if (!valid() || !canWrite()) return
     const apps =
       status?.enabled && (appsReady || runtime !== 'local')
@@ -488,7 +489,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
     if (!valid() || !canWrite()) return
     const runtimes = status?.enabled ? await invoke('computer.runtimes').catch(() => []) : []
     if (!valid() || !canWrite()) return
-    setEnabled(!!status?.enabled && (status.runtime.available || appsReady))
+    setEnabled((!!status?.enabled && (status.runtime.available || appsReady)) || !!granted)
     setKeepAwake(status?.keepAwake ?? true)
     setAppHint(status?.apps && !status.apps.available ? (status.apps.detail ?? '') : '')
     setSession(granted)

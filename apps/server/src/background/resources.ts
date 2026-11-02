@@ -76,9 +76,16 @@ export class ResourceService {
     }))
   }
 
+  /** Test device platforms ready here, refreshed by the host now and then; reported with the memory reading. */
+  testDevices: ('ios' | 'android')[] = []
+
   host(): HostResources {
     const description = this.description().trim()
-    return description ? { ...this.latest, description } : this.latest
+    return {
+      ...this.latest,
+      ...(description ? { description } : {}),
+      ...(this.testDevices.length ? { testDevices: this.testDevices } : {}),
+    }
   }
 
   /** Low only after two checks in a row, so one busy minute does not raise a row and a badge. */

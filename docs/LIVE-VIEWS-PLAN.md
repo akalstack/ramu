@@ -37,16 +37,6 @@ Pills and headers show the device's own name (**iPhone 17 · iOS 26**), so **Tes
 
 Each stage is useful alone. Stage 1 ships first because it needs no new runtime.
 
-### Stage 2: Test devices
-
-- **Settings → Test devices (host):** a switch, off by default, with a readiness check for each platform: Xcode and Apple Silicon for iOS, the Android SDK and hardware acceleration for Android. Each missing item states its fix, and **Install & set up** handles only Ramu's own helpers. Xcode and the Android SDK stay the person's install.
-- **Agent tools:** `test_device_list`, `test_device_open`, `test_device_install`, `test_device_launch` and `test_device_logs`, plus the existing observe and action tools for tapping, typing and gestures. Rotate, hardware buttons, deep links and permissions join them where a platform supports them. The first opening follows computer use's approval, and access rules match it.
-- **Finding the right build:** `test_device_install` takes a path. Project commands remain how an app is built, so Ramu needs no knowledge of Xcode schemes or Gradle.
-- **Seeing the app:** an accessibility tree when the platform provides one, otherwise a screenshot with coordinates. Logs are bounded, filtered to the launched app and stripped of known secrets.
-- **Ownership:** one thread holds a device at a time, and another thread is told which one holds it. A host runs at most 2 by default. A device idle for 15 minutes with no viewer shuts down, and **Stop** is always available. Running devices appear in Resources as the thread's work, with **Still running** after the thread ends.
-- **Pill and viewer:** the thread gains a device pill beside Browser and Computer, opening the existing viewer in a device-shaped frame. Clicks and drags map to touches, the phone uses direct touch, and **Take control** works as it does for computer use. **Float** works from Stage 1 with no extra design.
-- **Across hosts:** a host reports which platforms are ready, for the Continue on another host menu ([Agents and routing](AGENT-ROUTING.md#continue-on-another-host)).
-
 ### Stage 3: System picture-in-picture on the phone
 
 - **Keep watching:** an action on the live view, and optional on leaving the app, continues it in iOS or Android picture-in-picture over other apps. It is watch-only, and tapping it returns to the thread.
@@ -66,15 +56,6 @@ Each stage is useful alone. Stage 1 ships first because it needs no new runtime.
 Validate every input with `zod` and bound paths, logs and gestures. Keep new methods off `HOST_METHODS`, and off the viewer allowlist unless they only watch. Every string goes through `t()` with an Indonesian translation, and controls have keyboard and screen-reader labels. Update [UI](UI.md), [Architecture](ARCHITECTURE.md), [Security](../SECURITY.md) and the mobile verification list as each stage lands.
 
 ## Acceptance
-
-### Stage 2
-
-- **Representative task:** a person asks an agent to check a screen in this project's Expo app on an iPhone Simulator and an Android emulator. The agent boots, installs, launches, finds a real layout bug from what it sees, fixes it and shows the result, with no manual steps beyond the first approval.
-- Repeat from a phone against a remote Mac host, watching in a live view, with **Take control** used mid-run.
-- A missing SDK, a helper failure and a full device limit each report a fix and never hang.
-- Agents cannot reach a shell, leave the workspace with an install path, or reach a helper's port from another machine.
-- Two threads cannot control one device, and idle shutdown, thread stop and app quit leave no orphan processes.
-- A slow network stays usable, and reopening a view leaves one stream.
 
 ### Stage 3
 

@@ -1,5 +1,6 @@
 import { terminalThreadRequest } from './background/agentThreads'
 import { CustomAgentStore } from './agent/customAgents'
+import { TEST_DEVICE_GUIDE, TestDevices } from './testDevice/testDevices'
 import { customAgentList } from '@ramu/shared/customAgents'
 import { ResourceService } from './background/resources'
 import { processRoots } from './agent/processOwners'
@@ -351,6 +352,15 @@ const terminals = new TerminalService(
 )
 setAcpTerminalService(terminals)
 const customAgents = new CustomAgentStore(workspace)
+const testDevices = new TestDevices(() => workspace.getAppState<boolean>('test-devices:enabled', false) === true)
+testDevices.start()
+const refreshTestPlatforms = () =>
+  void testDevices.readyPlatforms().then(
+    (platforms) => (resources.testDevices = platforms),
+    () => {},
+  )
+setTimeout(refreshTestPlatforms, 5000).unref?.()
+setInterval(refreshTestPlatforms, 10 * 60_000).unref?.()
 agents.customAgents = () => customAgents.list()
 const resources = new ResourceService(
   {
@@ -358,6 +368,9 @@ const resources = new ResourceService(
       const sessions = new Map(agents.all().map((session) => [session.id, session]))
       return [
         ...terminals.processes().map(({ pid, taskId, id, kind, name }) => ({ pid, taskId, item: { kind, id, name } })),
+        ...testDevices
+          .processes()
+          .map(({ pid, taskId, id, name }) => ({ pid, taskId, item: { kind: 'device' as const, id, name } })),
         ...[...processRoots()].flatMap(([pid, sessionId]) => {
           const session = sessions.get(sessionId)
           return session
@@ -608,6 +621,7 @@ const dispatcher = createDispatcher(
     terminals,
     resources,
     customAgents,
+    testDevices,
     agents,
     threadTitles,
     interactive,
@@ -981,6 +995,7 @@ const mcpHttp = createServer(async (req, res) => {
         },
       },
     )
+  if (!review) registerTestDeviceTools(server, source, () => agents.get(source.id))
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
   if (!review) agentThreads.register(server, source.id)
@@ -1261,7 +1276,11 @@ agents.toolConnection = (session) => {
       if (review) return {}
       const integrated =
         (browserPreferences?.providerOverrides[session.provider] ?? browserPreferences?.agentBrowser) === 'integrated'
-      const parts = [...(integrated ? [INTEGRATED_BROWSER_GUIDE] : []), COMPUTER_GUIDE]
+      const parts = [
+        ...(integrated ? [INTEGRATED_BROWSER_GUIDE] : []),
+        COMPUTER_GUIDE,
+        ...(workspace.getAppState<boolean>('test-devices:enabled', false) ? [TEST_DEVICE_GUIDE] : []),
+      ]
       return parts.length ? { browserInstructions: parts.join('\n\n') } : {}
     })(),
     ...(mcpConfigDirs.length ? { mcpConfigDirs } : {}),
@@ -1595,3 +1614,105 @@ void schedules.tick().catch(console.error)
 void recaps.tick().catch(console.error)
 process.on('SIGTERM', () => void stop())
 process.on('SIGINT', () => void stop())
+
+/** test_device_* tools for one session. Opening a device follows computer use's approval and then grants it as the thread's computer. */
+function registerTestDeviceTools(server: McpServer, source: AgentSessionInfo, current: () => AgentSessionInfo) {
+  const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
+  const refuse = (error: unknown) => ({
+    isError: true,
+    content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+  })
+  const live = () => {
+    const session = current()
+    if (session.id !== source.id || !['starting', 'running'].includes(session.state))
+      throw new Error('This run is no longer active.')
+    return session
+  }
+  const guard = (work: () => Promise<unknown>) => work().then(result, refuse)
+  const id = z.string().min(1).max(200)
+  server.registerTool(
+    'test_device_list',
+    {
+      description:
+        'List iOS Simulators and Android emulators on this host, which are running, and which platforms are ready.',
+      inputSchema: {},
+    },
+    () => guard(() => testDevices.status()),
+  )
+  server.registerTool(
+    'test_device_open',
+    {
+      description:
+        "Boot a test device for this thread and make it the thread's computer, so computer_observe and the action tools work on it. The first opening may ask the person.",
+      inputSchema: { id, reason: z.string().max(1000).optional() },
+    },
+    ({ id: deviceId, reason }) =>
+      guard(async () => {
+        const session = live()
+        const automatic = !session.parentId && workspace.getAppState<boolean>('test-devices:enabled', false) === true
+        if (
+          !automatic &&
+          !(await agents.requestPermission(
+            source.id,
+            'Test device',
+            `Allow this thread to boot and control the test device ${deviceId}?${reason ? `\n\n${reason}` : ''}`,
+          ))
+        )
+          throw new Error('Test device access was denied for this run. Respect that decision.')
+        const opened = await testDevices.open(deviceId, session.taskId)
+        computer.grant(
+          session.taskId,
+          { target: testDevices.target(deviceId), observe: true, input: true },
+          { id: `test-device:${deviceId}`, name: opened.name, backend: testDevices.backend(deviceId) },
+        )
+        computer.rememberAccessRun(session.taskId, session.id)
+        return { opened: true, ...opened, next: 'Call computer_observe to see the screen.' }
+      }),
+  )
+  server.registerTool(
+    'test_device_install',
+    {
+      description:
+        'Install a built app on the opened test device. path is relative to the workspace: a .app bundle for iOS, an .apk for Android.',
+      inputSchema: { id, path: z.string().min(1).max(1000) },
+    },
+    ({ id: deviceId, path }) =>
+      guard(() => testDevices.install(deviceId, live().taskId, workspace.agentScope(live().taskId).cwd, path)),
+  )
+  server.registerTool(
+    'test_device_launch',
+    {
+      description:
+        'Start an installed app on the opened test device by bundle identifier (iOS) or package name (Android).',
+      inputSchema: { id, app: z.string().min(1).max(200) },
+    },
+    ({ id: deviceId, app }) => guard(() => testDevices.launch(deviceId, live().taskId, app)),
+  )
+  server.registerTool(
+    'test_device_open_link',
+    {
+      description: 'Open a deep link or web address on the opened test device.',
+      inputSchema: { id, url: z.string().min(3).max(2000) },
+    },
+    ({ id: deviceId, url }) => guard(() => testDevices.openUrl(deviceId, live().taskId, url)),
+  )
+  server.registerTool(
+    'test_device_logs',
+    {
+      description: "Read the launched app's recent log lines, filtered to that app, with known secrets removed.",
+      inputSchema: { id, app: z.string().min(1).max(200), lines: z.number().int().min(1).max(500).optional() },
+    },
+    ({ id: deviceId, app, lines }) => guard(() => testDevices.logs(deviceId, live().taskId, app, lines)),
+  )
+  server.registerTool(
+    'test_device_stop',
+    { description: 'Shut down a test device this thread opened.', inputSchema: { id } },
+    ({ id: deviceId }) =>
+      guard(async () => {
+        const session = live()
+        await testDevices.releaseThread(session.taskId)
+        computer.revoke(session.taskId)
+        return { stopped: deviceId }
+      }),
+  )
+}

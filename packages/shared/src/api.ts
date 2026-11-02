@@ -209,6 +209,10 @@ type ComputerAction = import('./computerBridge').ComputerAction
 export type ReviewAddressResult = 'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable' | 'insecure'
 
 export interface RamuMethods {
+  /** Test devices on this host: whether they are on, each platform's readiness and the devices. */
+  'testDevices.status'(): import('./testDevices').TestDeviceStatus
+  'testDevices.setEnabled'(enabled: boolean): void
+  'testDevices.stop'(id: string): void
   'computer.status'(): {
     enabled: boolean
     runtime: import('./computerBridge').ComputerRuntimeStatus

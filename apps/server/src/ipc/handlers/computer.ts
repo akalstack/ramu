@@ -49,6 +49,7 @@ const action = z.discriminatedUnion('kind', [
 const lockedUse = new LockedUse()
 
 export const registerComputerHandlers: RegisterHandlers = ({
+  testDevices,
   computer,
   computerBroker: broker,
   computerVideo: video,
@@ -123,6 +124,24 @@ export const registerComputerHandlers: RegisterHandlers = ({
     }
   }
   return {
+    'testDevices.status': {
+      args: z.tuple([]),
+      run: () => {
+        if (!testDevices) throw new Error('Test devices are unavailable on this host.')
+        return testDevices.status()
+      },
+    },
+    'testDevices.setEnabled': {
+      args: z.tuple([z.boolean()]),
+      run: async (enabled: boolean) => {
+        workspace.setAppState('test-devices:enabled', enabled)
+        if (!enabled) await testDevices?.stopAll()
+      },
+    },
+    'testDevices.stop': {
+      args: z.tuple([z.string().min(1).max(200)]),
+      run: (deviceId: string) => testDevices?.stop(deviceId),
+    },
     'computer.status': {
       args: z.tuple([]),
       run: async () => ({
