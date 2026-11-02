@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { transcript } from '../src/runtime/transcript.ts'
-import { foldTurns, formatDuration } from '../src/runtime/turns.ts'
+import { endedOnError, foldTurns, formatDuration } from '../src/runtime/turns.ts'
 
 const tool = (id, at, isError = false) => [
   { kind: 'tool-use', toolUseId: id, name: 'Bash', title: `run ${id}`, summary: id, toolKind: 'execute', at },
@@ -214,4 +214,20 @@ test('mobile preserves plan states and keeps unfinished steps visible after the 
   ])
   assert.deepEqual(items[0].entries, entries)
   assert.equal(foldTurns(items, false, false)[0].kind, 'plan')
+})
+
+test('a thread that stopped on an error can continue from it, past its end marker', () => {
+  const rows = transcript([
+    { kind: 'user', text: 'go', at: 1_000 },
+    { kind: 'error', message: 'boom', at: 2_000 },
+    { kind: 'result', text: '', isError: true, at: 3_000 },
+  ])
+  const error = rows.find((row) => row.kind === 'error')
+  assert.equal(error.message, 'boom')
+  assert.equal(endedOnError(rows, error.id), true)
+  const later = transcript([
+    { kind: 'error', message: 'boom', at: 1_000 },
+    { kind: 'user', text: 'again', at: 2_000 },
+  ])
+  assert.equal(endedOnError(later, later.find((row) => row.kind === 'error').id), false)
 })

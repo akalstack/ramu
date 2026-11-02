@@ -32,6 +32,7 @@ import {
 import { font, radius, space, useTheme } from '../theme'
 import { fill, useT, useSay } from '../i18n'
 import { agentErrorView } from '@ramu/shared/chat/agentErrorView'
+import { endedOnError } from '../runtime/turns'
 import { showError } from '../runtime/toast'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
@@ -354,6 +355,8 @@ function ErrorCard({ message, last, chat }: { message: string; last: boolean; ch
     !!chat.sessionId &&
     chat.status !== 'running' &&
     chat.status !== 'needs-input' &&
+    chat.executionState !== 'running' &&
+    chat.executionState !== 'starting' &&
     store.isOnline(chat.computerId) &&
     store.computers?.find((host) => host.id === chat.computerId)?.access !== 'viewer'
   return (
@@ -408,7 +411,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
         </MessageActions>
       )
     case 'error':
-      return <ErrorCard message={item.message} last={chat.items.at(-1)?.id === item.id} chat={chat} />
+      return <ErrorCard message={item.message} last={endedOnError(chat.items, item.id)} chat={chat} />
     case 'text':
       return (
         <MessageActions text={item.text} from="assistant">

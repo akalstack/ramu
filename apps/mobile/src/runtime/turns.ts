@@ -9,6 +9,12 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }
 
+/** The thread stopped on this error: only end markers and notes came after it, so continuing from it makes sense. */
+export function endedOnError(items: TranscriptItem[], id: string): boolean {
+  const index = items.findIndex((item) => item.id === id)
+  return index >= 0 && items.slice(index + 1).every((item) => item.kind === 'end' || item.kind === 'note')
+}
+
 const settled = (item: TranscriptItem) =>
   item.kind === 'text' ||
   (item.kind === 'tool' && item.status === 'completed') ||

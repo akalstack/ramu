@@ -41,7 +41,7 @@ export function mobileThreadActivity(chat: Chat, connected: boolean) {
   const waitIndex = wait ? chat.items.indexOf(wait) : -1
   const afterWait = chat.items
     .slice(waitIndex + 1)
-    .some((item) => item.kind === 'user' || item.kind === 'text' || item.kind === 'tool')
+    .some((item) => item.kind === 'user' || item.kind === 'text' || item.kind === 'tool' || item.kind === 'error')
   const goal =
     !chat.goal || chat.goal.status === 'completed'
       ? null
