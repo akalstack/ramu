@@ -358,7 +358,7 @@ export class TestDevices {
     const device = this.held(id, taskId)
     if (!/^[A-Za-z0-9._-]{1,200}$/.test(appId)) throw new Error('Give the bundle identifier or package name.')
     const count = Math.min(Math.max(lines, 1), 500)
-    let text = ''
+    let text: string
     if (device.platform === 'ios') {
       const { stdout } = await run(
         '/usr/bin/xcrun',
