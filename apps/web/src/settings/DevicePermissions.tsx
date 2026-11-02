@@ -196,16 +196,25 @@ export function HostCeiling({
     invoke('network.setHostAccess', deviceId, next),
   )
   return (
-    <Dropdown
-      label={t('Most access for its threads')}
-      value={access}
-      options={[
-        { value: 'edits', label: t('Allow edits') },
-        { value: 'auto', label: t('Auto') },
-        { value: 'full', label: t('Full access') },
-      ]}
-      onChange={stageAccess}
-    />
+    <>
+      <Dropdown
+        label={t('Most access for its threads')}
+        value={access}
+        options={[
+          { value: 'edits', label: t('Allow edits') },
+          { value: 'auto', label: t('Auto') },
+          { value: 'full', label: t('Full access') },
+        ]}
+        onChange={stageAccess}
+      />
+      {access !== 'edits' && (
+        <p className="m-0 text-caption text-warn" role="note">
+          {t(
+            'The other host’s agent writes what these threads do. If it is compromised, it can run commands here without asking you.',
+          )}
+        </p>
+      )}
+    </>
   )
 }
 

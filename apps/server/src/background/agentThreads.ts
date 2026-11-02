@@ -414,15 +414,16 @@ export class AgentThreadService {
     return this.start(planned, {
       source: null,
       ...(key ? { groupId: `${device.id}:${key}` } : {}),
+      // The label shows this host's own name for the pairing; the other host's claim about itself is only context.
       sourceHost: {
         deviceId: device.id,
-        name: clipText(request.from.host, 80),
+        name: clipText(device.name, 80),
         thread: clipText(request.from.thread, 200),
       },
       settings,
       depth: request.depth,
       context: [
-        `Started by an agent on the host "${clipText(request.from.host, 80)}", in its thread "${clipText(request.from.thread, 200)}".`,
+        `Started by an agent on the paired host "${clipText(device.name, 80)}" (it calls itself "${clipText(request.from.host, 80)}"), in its thread "${clipText(request.from.thread, 200)}".`,
         request.from.request
           ? `The person's request there: ${JSON.stringify(clipText(request.from.request, 1500))}`
           : '',

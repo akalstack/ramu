@@ -10,6 +10,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open providers': 'Buka provider',
   'Favorites': 'Favorit',
   'Brief': 'Ringkas',
+  'The other host’s agent writes what these threads do. If it is compromised, it can run commands here without asking you.': 'Agent host lain menulis apa yang dilakukan thread ini. Jika host itu disusupi, ia bisa menjalankan perintah di sini tanpa bertanya kepada Anda.',
   'Describe this host': 'Jelaskan host ini',
   'A few words such as GPU box or office network. Continue on another host suggests it when a request mentions them.': 'Beberapa kata seperti GPU box atau jaringan kantor. Lanjut di host lain menyarankannya saat permintaan menyebutnya.',
   'Across hosts': 'Lintas host',

@@ -427,7 +427,7 @@ describe('threads.startGroup', () => {
 })
 
 describe('threads another host asks for', () => {
-  const device = { id: 'dev1', kind: 'host', maxAccess: 'edits', role: 'owner' } as DeviceInfo
+  const device = { id: 'dev1', name: 'studio', kind: 'host', maxAccess: 'edits', role: 'owner' } as DeviceInfo
   const request = (extra: Partial<RemoteRequest> = {}): RemoteRequest => ({
     thread: { prompt: 'Backfill dueDate', project: 'web' },
     depth: 1,
@@ -437,16 +437,17 @@ describe('threads another host asks for', () => {
     ...extra,
   })
 
-  it('starts the thread under this host’s ceiling, names the asking host and thread, and keeps it off Home', async () => {
+  it('starts the thread under this host’s ceiling, names the pairing as this host knows it, and keeps it off Home', async () => {
     const [started] = await service.startForHost(device, request())
     expect(started!.error).toBeUndefined()
     const task = ws.getTask(started!.taskId)
     expect(task.projectId).toBe(web.id)
-    expect(task.startedFrom).toMatchObject({ taskId: null, title: 'Plan dueDate', host: 'laptop' })
+    // The label is this host's own name for the pairing, not what the asking host claims to be.
+    expect(task.startedFrom).toMatchObject({ taskId: null, title: 'Plan dueDate', host: 'studio' })
     expect(sessions.get('started-1')!.settings.access).toBe('edits')
     expect(startedGroups([{ hostId: 'h', tasks: ws.listTasks() }])).toEqual([])
     const brief = (events.get('started-1')![0] as { text: string }).text
-    expect(brief).toContain('Started by an agent on the host "laptop"')
+    expect(brief).toContain('Started by an agent on the paired host "studio" (it calls itself "laptop")')
   })
 
   it('ignores the asking host’s account and tier, and spends nothing on a vague project name', async () => {

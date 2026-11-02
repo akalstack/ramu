@@ -348,6 +348,10 @@ if (command === 'start') {
         fail((error as Error).message)
       }
     console.log(`Threads ${deviceId} starts here get at most ${access} access.`)
+    if (access !== 'edits')
+      console.log(
+        "Warning: that host's agent writes what these threads do. If it is compromised, it can run commands here without asking you.",
+      )
   } else if (positional[1] === 'offers') {
     const offers = store.offers()
     if (!offers.length) console.log('No unused pairing offers.')
