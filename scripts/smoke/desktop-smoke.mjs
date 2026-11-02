@@ -158,7 +158,8 @@ test('desktop shell starts without fatal errors', async () => {
     if (app) {
       const forced = setTimeout(() => app.process().kill('SIGKILL'), 5_000)
       try {
-        await app.close().catch(() => {})
+        // On Linux, Electron's helper processes can hold its output open after it exits, so close() may never settle.
+        await Promise.race([app.close().catch(() => {}), delay(8_000)])
       } finally {
         clearTimeout(forced)
       }
