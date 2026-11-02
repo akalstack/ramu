@@ -217,7 +217,7 @@ export function ModelSetsEditor({
             </>
           ) : (
             <>
-              <label className="settings-set-name flex flex-col gap-1.5">
+              <label className="settings-set-name">
                 {t('Set name')}
                 <Input
                   value={set.name}

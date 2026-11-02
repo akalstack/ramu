@@ -1,7 +1,6 @@
 import { WorkspaceAccessBoundary } from '../components/workspace-access-boundary'
 import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { cn } from 'cn'
-import { ContentSkeleton } from '@/components/content-skeleton'
 import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
 import { WrapText } from 'lucide-react'
@@ -431,7 +430,6 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
         className="file-body relative [&_>_.editor-host]:[flex:1_1_0] [&_>_.editor-host]:min-w-0 flex-1 min-h-0 min-w-0 flex"
         style={{ display: comparing ? 'none' : 'flex' }}
       >
-        {loading && <ContentSkeleton variant="editor" rows={12} className="absolute inset-0 z-10 bg-canvas" />}
         <div
           ref={host}
           className="editor-host flex-1 min-h-0"

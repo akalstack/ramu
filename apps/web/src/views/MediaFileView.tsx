@@ -1,4 +1,3 @@
-import { ContentSkeleton } from '@/components/content-skeleton'
 import { useEffect, useState } from 'react'
 import type { RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
 import { t, useLanguage } from '../i18n'
@@ -65,7 +64,7 @@ export function MediaFileView({
         {error}
       </p>
     )
-  if (!media) return <ContentSkeleton />
+  if (!media) return null
   const kind = media.mimeType.split('/')[0]
   return (
     <div className="media-view flex flex-col h-full min-h-0 min-w-0">
