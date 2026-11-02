@@ -460,12 +460,16 @@ describe('agent changes and batched feedback', () => {
     const insert = db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?,?,?)')
     insert.run('session', 1, JSON.stringify({ kind: 'result', text: 'Earlier result', isError: false, costUsd: null }))
     await service.beforeFollowup('session')
-    const firstId = (db.prepare("SELECT id FROM change_reviews WHERE state='recording'").get() as { id: string }).id
+    const firstId = (
+      db.prepare("SELECT id FROM change_reviews WHERE state='recording' ORDER BY rowid DESC").get() as { id: string }
+    ).id
     insert.run('session', 2, JSON.stringify({ kind: 'user', text: 'First request' }))
     writeFileSync(join(cwd, 'changed.txt'), 'First run changes\n')
     insert.run('session', 3, JSON.stringify({ kind: 'result', text: 'First result', isError: false, costUsd: null }))
     await service.beforeFollowup('session')
-    const nextId = (db.prepare("SELECT id FROM change_reviews WHERE state='recording'").get() as { id: string }).id
+    const nextId = (
+      db.prepare("SELECT id FROM change_reviews WHERE state='recording' ORDER BY rowid DESC").get() as { id: string }
+    ).id
     insert.run('session', 4, JSON.stringify({ kind: 'user', text: 'Follow up' }))
     writeFileSync(join(cwd, 'changed.txt'), 'Follow-up changes\n')
     insert.run('session', 5, JSON.stringify({ kind: 'result', text: 'Second result', isError: false, costUsd: null }))

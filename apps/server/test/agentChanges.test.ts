@@ -132,4 +132,19 @@ describe('agent.changes', () => {
       .all() as { detail: string }[]
     expect(plan.map((row) => row.detail).join(' ')).toContain('agent_events_kind')
   })
+
+  it('reads the end of a long transcript from a turn, within its bounds', async () => {
+    const { svc, id, record } = await start()
+    expect(svc.tail(id).complete).toBe(true)
+    for (let turn = 0; turn < 40; turn++) {
+      record({ kind: 'user', text: `turn ${turn}` })
+      record({ kind: 'text', text: 'x'.repeat(100) })
+    }
+    const tail = svc.tail(id, 30)
+    expect(tail.complete).toBe(false)
+    expect(tail.events[0]!.event.kind).toBe('user')
+    expect(tail.events.length).toBeLessThanOrEqual(30)
+    expect(tail.events.at(-1)!.seq).toBe(Math.max(...svc.snapshot(id).events.map((row) => row.seq)))
+    expect(svc.tail(id, 300, 1).events.length).toBeLessThanOrEqual(1)
+  })
 })

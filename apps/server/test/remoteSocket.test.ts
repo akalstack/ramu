@@ -192,6 +192,28 @@ const push = (sinks: Set<EventSink>, channel: string, payload: unknown) => {
 const events = (frames: SocketServerFrame[]) =>
   frames.filter((f) => f.t === 'event').map((f) => `${(f as any).channel}:${JSON.stringify((f as any).payload)}`)
 
+it('thins a keyed channel while leaving every other channel alone for a client that asks for everything', async () => {
+  const { connect, sinks } = await start()
+  const { ws, frames, until } = connect()
+  await until(() => sinks.size === 1)
+  ws.send(
+    encodeSocketFrame({
+      t: 'subscribe',
+      id: 1,
+      channels: ['agent:event'],
+      keys: { 'agent:event': ['open'] },
+      skip: { 'agent:event': ['text'] },
+      everything: true,
+    }),
+  )
+  await until(() => frames.some((f) => f.t === 'result' && f.id === 1))
+  push(sinks, 'updates:changed', { ok: true })
+  push(sinks, 'agent:event', { sessionId: 'hidden', event: { kind: 'text' }, seq: 1 })
+  push(sinks, 'agent:event', { sessionId: 'open', event: { kind: 'text' }, seq: 1 })
+  await until(() => events(frames).length === 2)
+  expect(events(frames).map((e) => JSON.parse(e.slice(e.indexOf('{'))).sessionId)).toEqual([undefined, 'open'])
+})
+
 it('streams the skipped kinds only for the threads the client named, and everything else it follows in brief', async () => {
   const { connect, sinks } = await start()
   const { ws, frames, until } = connect()

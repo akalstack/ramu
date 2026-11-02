@@ -57,6 +57,7 @@ export interface SocketSubscription {
   channels: string[]
   keys?: Record<string, string[]>
   skip?: Record<string, string[]>
+  everything?: boolean
 }
 export interface SocketInvokeOptions {
   operationKey?: string
@@ -300,8 +301,18 @@ export class RuntimeSocket {
    * to the listed ids. Replaces any earlier subscription, and is restored after a reconnect. Without a subscription every
    * event arrives, as on the SSE stream.
    */
-  subscribe(channels: string[], keys?: Record<string, string[]>, skip?: Record<string, string[]>): Promise<unknown> {
-    this.subscription = { channels, ...(keys ? { keys } : {}), ...(skip ? { skip } : {}) }
+  subscribe(
+    channels: string[],
+    keys?: Record<string, string[]>,
+    skip?: Record<string, string[]>,
+    everything?: boolean,
+  ): Promise<unknown> {
+    this.subscription = {
+      channels,
+      ...(keys ? { keys } : {}),
+      ...(skip ? { skip } : {}),
+      ...(everything ? { everything } : {}),
+    }
     return this.ready ? this.sendSubscription(this.subscription) : Promise.resolve()
   }
 

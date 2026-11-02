@@ -72,7 +72,9 @@ import {
   refreshRuntimeNetwork,
   runtimeNetwork,
   PresenceListener,
+  hostSocket,
 } from '@ramu/client-runtime'
+import { HOST_PUSH_CHANNELS, STREAMING_KINDS } from '@ramu/shared/pushChannels'
 import { SshComputers } from './sshComputers'
 import { NearbyBrowser } from './discovery'
 import { RemoteServers } from './remoteServers'
@@ -99,6 +101,8 @@ if (process.env.RAMU_USER_DATA) app.setPath('userData', process.env.RAMU_USER_DA
 
 // End-to-end runs stay out of the way: windows are created hidden and unfocused, and macOS shows no Dock icon.
 // Hidden pages would otherwise be throttled, so throttling is off; tests emulate focus through Playwright.
+/** One window shows only so many chats; anything longer is not this app asking. */
+const MAX_FOLLOWED_THREADS = 64
 const e2eHeadless = process.env.RAMU_E2E_HEADLESS === '1'
 if (e2eHeadless) app.dock?.hide()
 
@@ -526,6 +530,13 @@ async function main() {
     deviceName: hostname(),
     localName: () => t('This host'),
     local: runtime,
+    follow: (target, sessionIds) =>
+      hostSocket(target).subscribe(
+        [...HOST_PUSH_CHANNELS],
+        { 'agent:event': sessionIds },
+        { 'agent:event': [...STREAMING_KINDS] },
+        true,
+      ),
     subscribe: (target, receive, options) =>
       subscribeRuntime(target, receive, runtimeNetwork, {
         ...options,
@@ -979,6 +990,18 @@ async function main() {
       )
       observeHostActivity(id, 'automation:changed', {})
       return
+    }
+    if (method === 'computers.threads') {
+      const [id, sessionIds] = args
+      if (
+        typeof id !== 'string' ||
+        !computers.exists(id) ||
+        !Array.isArray(sessionIds) ||
+        sessionIds.length > MAX_FOLLOWED_THREADS ||
+        !sessionIds.every((sessionId) => typeof sessionId === 'string' && sessionId.length <= 200)
+      )
+        throw new Error('Invalid request')
+      return computers.follow(id, sessionIds as string[])
     }
     if (method === 'computers.overview') {
       const id = args[0]

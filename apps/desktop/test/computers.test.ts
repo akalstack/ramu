@@ -38,6 +38,7 @@ function setup() {
     deviceName: 'My Mac',
     localName: () => 'This host',
     local: '/tmp/local.sock',
+    follow: async () => {},
     subscribe: (target: RuntimeEndpoint, receive) => {
       streams.set(urlOf(target), receive)
       return () => {

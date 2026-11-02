@@ -5532,10 +5532,17 @@ for (const os of ['ios', 'android']) {
     const block = nodes(root).find((node) => node.type?.name === 'TranscriptBlock')
     const action = block.type(block.props)
     const render = () => hooks.render(() => action.type(action.props))
-    find(render(), 'Pressable').props.onLongPress()
+    // A long press selects the text; the selection bar's More opens the rest of the message's actions.
+    const openMore = () => {
+      find(render(), 'Pressable').props.onLongPress()
+      const selecting = render()
+      selecting.props.more()
+      selecting.props.done()
+    }
+    openMore()
     assert.ok(sheets[0].options.includes('Edit and resend'))
     menu = { ...menu, readOnly: true }
-    find(render(), 'Pressable').props.onLongPress()
+    openMore()
     assert.deepEqual(Array.from(sheets[1].options), ['Copy', 'Quote in reply', 'Quote in new thread', 'Cancel'])
     for (const label of ['Edit and resend', 'Undo file changes from here', 'Ask aside about this'])
       sheets[0].select(sheets[0].options.indexOf(label))
@@ -7036,6 +7043,7 @@ function deliveryStoreHarness() {
     if (method === 'tasks.list') return [{ id: 'task', projectId: 'no-project', status: 'ready-for-review' }]
     if (method === 'agent.all') return [{ id: 'session', taskId: 'task', createdAt: 1, state: 'idle', settings: {} }]
     if (method === 'agent.changes') return snapshot
+    if (method === 'agent.tail') throw new Error('Unknown method: agent.tail')
     if (method === 'tasks.bindings') return holdBindings ? bindingRead.promise : []
     if (method === 'agent.goal' || method === 'settings.models.get') return null
     if (method === 'preferences.layers.get') return { mobile: null }

@@ -1,4 +1,4 @@
-import { HOST_PUSH_CHANNELS } from '@ramu/shared/pushChannels'
+import { HOST_PUSH_CHANNELS, STREAMING_KINDS } from '@ramu/shared/pushChannels'
 
 /**
  * Channels the phone takes from a host only while a screen needs them, because they are frequent (file changes, terminal
@@ -23,13 +23,6 @@ const UNUSED_CHANNELS: readonly string[] = [
 export const BASE_CHANNELS: string[] = HOST_PUSH_CHANNELS.filter(
   (channel) => !ON_DEMAND_CHANNELS.includes(channel) && !UNUSED_CHANNELS.includes(channel),
 )
-
-/**
- * The streaming kinds of a thread's transcript. The host sends them only for the threads a screen has asked to watch;
- * every other thread arrives in brief (state, questions, queue, goal, settings, replies to requests), which is all the
- * thread list, previews, Inbox and notifications are built from. What a brief thread missed is read when it is opened.
- */
-export const STREAMING_KINDS: readonly string[] = ['text', 'thinking', 'tool-use', 'tool-result', 'turn-diff']
 
 /** A screen's need for some on-demand channels, optionally only for the resources (threads, terminals) it shows. */
 export interface Interest {

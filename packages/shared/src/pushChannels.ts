@@ -34,6 +34,12 @@ export const HOST_PUSH_CHANNELS = [
 export type HostPushChannel = (typeof HOST_PUSH_CHANNELS)[number]
 
 /**
+ * The streaming kinds of a thread's transcript. A client asks for them only for the threads on screen; every other
+ * thread arrives in brief (state, questions, queue, goal, settings), and what it missed is read when it is opened.
+ */
+export const STREAMING_KINDS: readonly string[] = ['text', 'thinking', 'tool-use', 'tool-result', 'turn-diff']
+
+/**
  * Push channels about this window or this machine: visibility and checkpoints, menus, pairing links, app updates (one
  * per machine), notifications the main process raises for a window, the host list, and device-wide UI state.
  */

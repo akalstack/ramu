@@ -207,6 +207,46 @@ export class SessionStore {
     return { reset: false, ...base, events: parse(changed) }
   }
 
+  /**
+   * The end of a transcript, bounded in rows and bytes and starting at a turn when one fits, so a long thread can show
+   * before the rest of it arrives. `complete` says nothing older exists.
+   */
+  tail(
+    id: string,
+    maxRows = 300,
+    maxBytes = 512 * 1024,
+  ): { complete: boolean; events: { seq: number; event: AgentEvent }[] } {
+    this.get(id)
+    const sizes = this.db
+      .prepare(
+        'SELECT seq, length(CAST(event AS BLOB)) AS size FROM agent_events WHERE session_id = ? ORDER BY seq DESC LIMIT ?',
+      )
+      .all(id, maxRows) as { seq: number; size: number }[]
+    let from = sizes[0]?.seq ?? 0
+    let bytes = 0
+    for (const row of sizes) {
+      if ((bytes += row.size) > maxBytes && row !== sizes[0]) break
+      from = row.seq
+    }
+    const first = this.db.prepare('SELECT MIN(seq) AS seq FROM agent_events WHERE session_id = ?').get(id) as {
+      seq: number | null
+    }
+    const complete = first.seq === null || from <= first.seq
+    const turn = complete
+      ? undefined
+      : (
+          this.db
+            .prepare(
+              "SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'user' AND seq >= ? ORDER BY seq LIMIT 1",
+            )
+            .get(id, from) as { seq: number } | undefined
+        )?.seq
+    const rows = this.db
+      .prepare('SELECT seq, event FROM agent_events WHERE session_id = ? AND seq >= ? ORDER BY seq')
+      .all(id, turn ?? from) as { seq: number; event: string }[]
+    return { complete, events: rows.map((row) => ({ seq: row.seq, event: JSON.parse(row.event) as AgentEvent })) }
+  }
+
   events(id: string): AgentEvent[] {
     const rows = this.db.prepare('SELECT event FROM agent_events WHERE session_id = ? ORDER BY seq').all(id) as {
       event: string

@@ -295,6 +295,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // The host's change counter for each transcript held in `eventRows`, so a refresh reads only what changed.
   const changeCursors = useRef(new Map<string, number>())
   const changesSupported = useRef(new Map<string, boolean>())
+  const tailSupported = useRef(new Map<string, boolean>())
+  // Threads on screen, by scoped session id: they always read in full.
+  const shownSessions = useRef(new Set<string>())
   const listeners = useRef(new Map<string, Set<(channel: keyof PushEvents, payload: any) => void>>())
   const refreshing = useRef(new Map<string, Promise<void>>())
   const buffers = useRef(new Map<string, PushEvents['agent:event'][]>())
@@ -655,6 +658,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                     events: [] as { seq: number; event: AgentEvent }[],
                   }
                 const key = scoped(id, session.id)
+                // A thread nobody has open reads only its last turns; opening it reads the rest. So a cold start costs a
+                // list and a preview per thread, not every transcript on the host.
+                const focused = typeof depth === 'object' && depth.has(task.id)
+                if (
+                  !focused &&
+                  !changeCursors.current.has(key) &&
+                  !shownSessions.current.has(key) &&
+                  tailSupported.current.get(id) !== false
+                ) {
+                  try {
+                    const tail = await read('agent.tail', session.id)
+                    return { revision: 0, cursor: undefined, events: tail.events }
+                  } catch (error) {
+                    if (!isMethodMissing(error)) throw error
+                    tailSupported.current.set(id, false)
+                  }
+                }
                 if (changesSupported.current.get(id) !== false) {
                   try {
                     const held = eventRows.current.get(key)
@@ -1625,15 +1645,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const off = connections.current.get(id)?.client.watch(channels, keys)
       // Threads other than the ones on screen arrive in brief, so a thread just asked for is read up to date, from where
       // its last read left off, as the periodic refresh does.
+      const shown = (channels.includes('agent:event') && keys?.['agent:event']) || []
+      for (const sessionId of shown) shownSessions.current.add(scoped(id, sessionId))
       if (off && channels.includes('agent:event')) {
-        const shown = keys?.['agent:event']
-        if (!shown) void refresh(id, true).catch(report)
-        for (const sessionId of shown ?? []) {
+        if (!keys?.['agent:event']) void refresh(id, true).catch(report)
+        for (const sessionId of shown) {
           const chat = ref.current.chats.find((c) => c.computerId === id && c.sessionId === sessionId)
           if (chat?.taskId) void reconcileThread(id, chat.taskId, sessionId).catch(report)
         }
       }
-      return off ?? (() => {})
+      return () => {
+        off?.()
+        for (const sessionId of shown) shownSessions.current.delete(scoped(id, sessionId))
+      }
     },
     subscribe: (id, listener) => {
       const set = listeners.current.get(id) ?? new Set()

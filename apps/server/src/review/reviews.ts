@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { gzipSync, gunzipSync } from 'node:zlib'
+import { gunzip, gzip } from 'node:zlib'
 import { z } from 'zod'
 import type { Db } from '../db'
 import type { AgentService } from '../agent'
@@ -103,6 +103,9 @@ async function walkFolder(cwd: string): Promise<string[]> {
   await walk('')
   return paths
 }
+
+const gzipAsync = promisify(gzip)
+const gunzipAsync = promisify(gunzip)
 
 export class ReviewService {
   private undo: RunUndo
@@ -212,7 +215,7 @@ export class ReviewService {
       .run(review.state, JSON.stringify(review), review.sessionId, review.id)
     this.changed()
   }
-  async begin(taskId: string, scope: AgentScope): Promise<string> {
+  async begin(taskId: string, scope: AgentScope, known?: SnapshotFile[]): Promise<string> {
     const bindings = this.workspace.listBindings(taskId)
     const roots = bindings.length
       ? bindings.map((b) => ({ repoId: b.repoId, repoName: b.repoName, cwd: b.cwd }))
@@ -245,8 +248,9 @@ export class ReviewService {
       aiSummary: null,
     }
     try {
-      const snapshot = await this.snapshot(roots)
-      writeFileSync(join(this.root, `${id}.gz`), gzipSync(JSON.stringify(snapshot)), { mode: 0o600 })
+      const snapshot = known ?? (await this.snapshot(roots))
+      // Compressing a large working tree must not hold up every other call on this host.
+      writeFileSync(join(this.root, `${id}.gz`), await gzipAsync(JSON.stringify(snapshot)), { mode: 0o600 })
     } catch (error) {
       review.state = 'failed'
       review.error = `Change capture unavailable: ${String(error)}`
@@ -273,21 +277,44 @@ export class ReviewService {
       rmSync(join(this.root, `${id}.gz`))
     } catch {}
   }
+  /**
+   * A follow-up waits only for what must happen before the agent touches files: reading where the last run left them.
+   * That reading is also this run's starting point, and the last run's comparison finishes behind the message.
+   */
   async beforeFollowup(sessionId: string): Promise<void> {
-    await this.complete(sessionId)
+    let known: { roots: ReviewData['roots']; files: SnapshotFile[] } | undefined
+    await new Promise<void>((resolve, reject) => {
+      this.complete(sessionId, (capture) => {
+        known = capture
+        resolve()
+      }).then(resolve, reject)
+    })
     const session = this.agents.get(sessionId)
-    const id = await this.begin(session.taskId, session)
+    const roots = this.workspace.listBindings(session.taskId).map((b) => `${b.repoId}\0${b.cwd}`)
+    const sameRoots =
+      !!known &&
+      known.roots.length === roots.length &&
+      known.roots.every((root) => roots.includes(`${root.repoId}\0${root.cwd}`))
+    const id = await this.begin(session.taskId, session, sameRoots ? known!.files : undefined)
     this.bind(id, sessionId)
   }
-  async complete(sessionId: string): Promise<void> {
+  async complete(
+    sessionId: string,
+    captured?: (capture: { roots: ReviewData['roots']; files: SnapshotFile[] }) => void,
+  ): Promise<void> {
+    // A comparison still finishing behind the last message; a later run has its own to do once it is done.
     const existing = this.completing.get(sessionId)
-    if (existing) return existing
+    if (existing) {
+      await existing
+      return this.complete(sessionId, captured)
+    }
     const operation = (async () => {
-      for (const base of this.stored(sessionId).filter((r) => r.state === 'recording')) {
+      const recording = this.stored(sessionId).filter((r) => r.state === 'recording')
+      for (const [index, base] of recording.entries()) {
         try {
           const review = base as ReviewData
           const before = JSON.parse(
-            gunzipSync(readFileSync(join(this.root, `${review.id}.gz`))).toString(),
+            (await gunzipAsync(readFileSync(join(this.root, `${review.id}.gz`)))).toString(),
           ) as SnapshotFile[]
           const after = await this.snapshot(review.roots)
           const key = (f: { repoId: string; path: string }) => `${f.repoId}\0${f.path}`
@@ -328,6 +355,16 @@ export class ReviewService {
               }
             }
           }
+          // Everything read from disk, Git or the transcript is read by now: nothing below can see the next run.
+          const endSeq = (
+            this.db
+              .prepare('SELECT COALESCE(MAX(seq),0) AS seq FROM agent_events WHERE session_id=?')
+              .get(sessionId) as { seq: number }
+          ).seq
+          const roots = await Promise.all(
+            review.roots.map(async (r) => ({ ...r, checkout: await reviewCheckout(r.cwd) })),
+          )
+          if (index === recording.length - 1) captured?.({ roots: review.roots, files: after })
           for (const files of [oldFiles, newFiles]) for (const [id, f] of files) if (f.deleted) files.delete(id)
           const changed: ChangeFile[] = []
           for (const id of new Set([...oldFiles.keys(), ...newFiles.keys()])) {
@@ -349,14 +386,6 @@ export class ReviewService {
               oldMode: old?.mode,
             })
           }
-          const endSeq = (
-            this.db
-              .prepare('SELECT COALESCE(MAX(seq),0) AS seq FROM agent_events WHERE session_id=?')
-              .get(sessionId) as { seq: number }
-          ).seq
-          const roots = await Promise.all(
-            review.roots.map(async (r) => ({ ...r, checkout: await reviewCheckout(r.cwd) })),
-          )
           const files = await reviewLineStats(changed, this.root).catch(() => changed)
           this.update({ ...this.get(review.id), roots, state: 'ready', files, endSeq } as ReviewData)
           rmSync(join(this.root, `${review.id}.gz`), { force: true })
@@ -364,13 +393,9 @@ export class ReviewService {
           this.update({ ...this.get(base.id), state: 'failed', error: String(error) })
         }
       }
-    })()
+    })().finally(() => this.completing.delete(sessionId))
     this.completing.set(sessionId, operation)
-    try {
-      await operation
-    } finally {
-      this.completing.delete(sessionId)
-    }
+    return operation
   }
   /**
    * A Git checkout records only what already differs from HEAD (everything, before the first commit). Anything else is

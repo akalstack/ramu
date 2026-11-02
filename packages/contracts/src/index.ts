@@ -106,6 +106,8 @@ export type SocketClientFrame =
        */
       skip?: Record<string, string[]>
       flow?: boolean
+      /** Every channel, whatever `channels` lists. A host that predates this keeps to the list. */
+      everything?: boolean
     }
   /** Output of terminal `id` the client has processed, in the characters of its `term:data` chunks. */
   | { t: 'ack'; id: string; bytes: number }
@@ -319,6 +321,7 @@ export function decodeSocketFrame(
       frame.channels.length <= MAX_SUBSCRIBED_CHANNELS &&
       frame.channels.every((c: unknown) => typeof c === 'string' && c.length > 0 && c.length <= 64) &&
       (frame.flow === undefined || typeof frame.flow === 'boolean') &&
+      (frame.everything === undefined || typeof frame.everything === 'boolean') &&
       (frame.skip === undefined ||
         (frame.skip &&
           typeof frame.skip === 'object' &&

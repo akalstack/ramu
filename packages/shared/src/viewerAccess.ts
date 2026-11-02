@@ -6,6 +6,7 @@ const viewerMethods = new Set([
   'agent.get',
   'agent.events',
   'agent.snapshot',
+  'agent.tail',
   'agent.goal',
   'agent.context',
   'agent.checkpoint',

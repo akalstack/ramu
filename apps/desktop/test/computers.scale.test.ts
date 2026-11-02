@@ -43,6 +43,7 @@ it('keeps 100 remote connections independent and measures full-list broadcast ov
     deviceName: 'local',
     localName: () => 'This host',
     local: '/tmp/unused.sock',
+    follow: async () => {},
     subscribe: (target, receive) => {
       const url = target.kind === 'http' ? target.url : target.path
       streams.set(url, receive)

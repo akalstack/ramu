@@ -25,6 +25,8 @@ export interface ComputerDeps {
   localName: () => string
   /** The local server: a unix socket path. */
   local: string
+  /** Tells a host which threads to stream in full; the rest arrive in brief. Resolves once the host has it. */
+  follow(target: RuntimeEndpoint, sessionIds: string[]): Promise<unknown>
   subscribe(
     target: RuntimeEndpoint,
     receive: (channel: string, payload: any) => void,
@@ -155,6 +157,7 @@ export class ComputerRegistry {
           live.waiting = payload.waiting
           live.retryAt = payload.retryAt
           if (payload.connected) {
+            void this.deps.follow(endpoint, this.followed.get(id) ?? []).catch(() => {})
             this.routeWork('learn', id, 3_600_000, (host) => this.learnRoutes(host))
             this.countSoon(id)
             void this.renewIfDue(id)
@@ -170,6 +173,15 @@ export class ComputerRegistry {
       },
       { retryMode: saved?.retryMode ?? 'events' },
     )
+  }
+
+  private followed = new Map<string, string[]>()
+
+  /** Which of a host's threads this window shows. Remembered, so a new connection starts narrowed too. */
+  follow(id: string, sessionIds: string[]) {
+    this.followed.set(id, sessionIds)
+    const endpoint = id === LOCAL ? undefined : this.deps.servers.endpoint(id)
+    return endpoint && this.status(id) === 'connected' ? this.deps.follow(endpoint, sessionIds) : undefined
   }
 
   /** Rotates the stored token when it is due. Any failure just retries at the next connection. */

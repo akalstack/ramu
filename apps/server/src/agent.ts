@@ -626,6 +626,10 @@ export class AgentService {
     return this.parts.store.snapshot(...args)
   }
 
+  tail(...args: Parameters<SessionStore['tail']>) {
+    return this.parts.store.tail(...args)
+  }
+
   listByTask() {
     return this.parts.store.listByTask()
   }

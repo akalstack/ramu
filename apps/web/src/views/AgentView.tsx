@@ -135,7 +135,7 @@ export const AgentView = memo(function AgentView({
     hydrating,
     error,
     setError,
-  } = useAgentStream(view.sessionId)
+  } = useAgentStream(view.sessionId, visible)
   // Uploaded files wait with the text for the next send, across chat switches and restarts.
   const [attachments, setAttachments] = useJsonDraft<Attachment[]>(
     `files:${view.sessionId}`,

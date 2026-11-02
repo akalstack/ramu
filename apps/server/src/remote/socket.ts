@@ -100,13 +100,17 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     open.add(ws)
     // Until a client subscribes it receives every event, as an SSE client does. A subscription narrows delivery to the
     // listed channels, and for resource channels to the listed ids; it is replaced whole by the next one.
-    let filter: { channels: Set<string>; keys: Map<string, Set<string>>; skip: Map<string, Set<string>> } | null = null
+    let filter: {
+      channels: Set<string> | null
+      keys: Map<string, Set<string>>
+      skip: Map<string, Set<string>>
+    } | null = null
     // The channel is read from the front of the event text, so an unwanted or unkeyed event is never fully parsed; only
     // a keyed channel the client narrowed to particular ids, or whose event kinds it skips, is.
     const wanted = (json: string) => {
       if (!filter) return true
       const channel = /^\{"channel":"((?:[^"\\]|\\.)*)"/.exec(json)?.[1]
-      if (channel === undefined || !filter.channels.has(channel)) return false
+      if (channel === undefined || (filter.channels && !filter.channels.has(channel))) return false
       const keys = filter.keys.get(channel)
       const skip = filter.skip.get(channel)
       const field = SOCKET_EVENT_KEYS[channel]
@@ -221,7 +225,8 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
         windows.clear()
         behind.clear()
         filter = {
-          channels: new Set(frame.channels),
+          // `everything` names the event kinds to thin without having to list each channel this client uses.
+          channels: frame.everything ? null : new Set(frame.channels),
           keys: new Map(Object.entries(frame.keys ?? {}).map(([channel, list]) => [channel, new Set(list)])),
           skip: new Map(Object.entries(frame.skip ?? {}).map(([channel, list]) => [channel, new Set(list)])),
         }

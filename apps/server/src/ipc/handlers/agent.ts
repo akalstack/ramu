@@ -46,6 +46,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.number().int().min(0), z.number().int().min(0)]),
       run: (sessionId: string, cursor: number, knownLastSeq: number) => agents.changes(sessionId, cursor, knownLastSeq),
     },
+    'agent.tail': { args: z.tuple([id]), run: (sessionId: string) => agents.tail(sessionId) },
     'agent.events': { args: z.tuple([id]), run: (sessionId: string) => agents.events(sessionId) },
     'agent.searchMessages': {
       args: z.tuple([z.string().max(200)]),

@@ -1,11 +1,7 @@
 import { test } from 'node:test'
+import { STREAMING_KINDS } from '../../../packages/shared/src/pushChannels.ts'
 import assert from 'node:assert/strict'
-import {
-  BASE_CHANNELS,
-  ON_DEMAND_CHANNELS,
-  STREAMING_KINDS,
-  hostSubscription,
-} from '../src/runtime/hostSubscription.ts'
+import { BASE_CHANNELS, ON_DEMAND_CHANNELS, hostSubscription } from '../src/runtime/hostSubscription.ts'
 
 test('with no screen asking, frequent single-screen channels and unused ones are not requested', () => {
   const idle = hostSubscription([])

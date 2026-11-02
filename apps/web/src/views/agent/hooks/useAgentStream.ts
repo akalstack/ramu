@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentEvent, AgentSessionInfo, AgentSessionState, QueuedMessage } from '@ramu/shared/types'
 import { cachedDataOn, ipcQueryKeyOn, queryClient } from '../../../dataQueries'
@@ -8,6 +8,7 @@ import { errorText } from '../../../workspace/TaskPane'
 import { useHost } from '../../../workspace/HostProvider'
 import { useHostRuntime } from '../../../workspace/workspace'
 import { heldTranscript, holdTranscript, lastSeqOf } from '../lib/heldTranscripts'
+import { followThread } from '../lib/threadFollow'
 
 /** Longest a streamed event waits to be shown: a burst rebuilds the transcript once, not once per event. */
 const STREAM_FRAME_MS = 33
@@ -33,7 +34,7 @@ function seedOf(host: string, sessionId: string) {
  * A chat's session and events: seeded from the query cache, hydrated from the host, then kept current by live
  * events. Also exposes the queued messages the host reports and the last error to show above the message box.
  */
-export function useAgentStream(sessionId: string) {
+export function useAgentStream(sessionId: string, visible = true) {
   // The chat's host: its cache entries, its calls and its events.
   const { id: host, invoke } = useHost()
   const { on } = useHostRuntime()
@@ -66,6 +67,19 @@ export function useAgentStream(sessionId: string) {
   const [events, setEvents] = useState<AgentEvent[]>(() => initial?.events ?? [])
   const [liveText, setLiveText] = useState<AgentEvent | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const catchUp = useRef<() => void>(() => {})
+  // Another host streams a thread in full only while it is on screen. What a hidden chat missed is read when it returns,
+  // after the host has been told, so nothing falls between that read and the stream.
+  useEffect(() => {
+    if (own || !visible) return
+    const follow = followThread(host, sessionId)
+    void follow.ready.then(
+      () => catchUp.current(),
+      () => {},
+    )
+    return follow.stop
+  }, [own, visible, host, sessionId])
 
   useEffect(() => {
     const cached = seedOf(host, sessionId)
@@ -109,9 +123,12 @@ export function useAgentStream(sessionId: string) {
               if (!kept.has(seq) && item.revision <= requestedAt) stored.delete(seq)
           }
           for (const row of result.events)
-            if ((stored.get(row.seq)?.revision ?? -1) <= requestedAt)
+            // The same row keeps its object, so the turns already on screen do not render again.
+            if (tailShown && JSON.stringify(stored.get(row.seq)?.event) === JSON.stringify(row.event)) continue
+            else if ((stored.get(row.seq)?.revision ?? -1) <= requestedAt)
               stored.set(row.seq, { event: row.event, revision: requestedAt })
           cursor = result.cursor
+          tailShown = false
           return result.reset || result.events.length > 0
         } catch (e) {
           // A host from before agent.changes reads the whole transcript every time.
@@ -126,6 +143,16 @@ export function useAgentStream(sessionId: string) {
           stored.set(index + 1, { event, revision: requestedAt })
       })
       return true
+    }
+    // A long thread shows its last turns first; the full read below completes it and carries the cursor.
+    let tailShown = false
+    const showTail = async () => {
+      const tail = await invoke('agent.tail', sessionId).catch(() => null)
+      if (cancelled || !tail || tail.complete || cursor || stored.size) return
+      for (const row of tail.events) stored.set(row.seq, { event: row.event, revision: 0 })
+      tailShown = true
+      refreshEvents()
+      setHydrating(false)
     }
     const hydrate = async () => {
       const requestedAt = revision
@@ -142,6 +169,8 @@ export function useAgentStream(sessionId: string) {
     setQueued(queue?.messages ?? [])
     setQueuePaused(!!queue?.paused)
     setLiveText(null)
+    catchUp.current = () => void hydrate().catch(() => {})
+    if (!cached) void showTail()
     void hydrate().catch((e) => {
       if (!cancelled) {
         setError(errorText(e))

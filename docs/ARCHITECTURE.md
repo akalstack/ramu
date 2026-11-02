@@ -55,6 +55,10 @@ Frames over 4 KB are deflated for clients that negotiate it, except on the local
 
 Clients keep each transcript with its `agent.changes` cursor and read only what changed: the desktop for its 24 most recent threads, the phone for every thread it holds. Opening a thread on another host applies at once when that host's store holds it, and the lists refresh behind it; only a thread the store has not seen waits for a read. Each task pane mounts the first time it is shown.
 
+A thread without held rows shows `agent.tail` (its last turns, bounded in rows and bytes) while the full read completes behind it; on the phone a thread nobody has open stops at the tail. The desktop and the phone both ask a host for the streaming event kinds only for the threads on screen, and everything else arrives in brief.
+
+A follow-up waits for the review capture alone. That capture also starts the next run's snapshot, and the comparison and line stats finish after the message is sent.
+
 ## Hosts and windows
 
 The desktop has one shell renderer for every paired host. `HostSelectionProvider` selects a host and destination; `WorkspaceProvider` lazily mounts a `HostWorkspace` store per connected host. Sidebar rows read those stores, and `useWorkspace()` returns the store on screen. The main process owns connection lifecycle and delivers host-tagged events; `workspace/hostEvents.ts` routes them to listeners and coalesces work for hidden stores. Terminal output uses bounded, cursor-aware buffers.
