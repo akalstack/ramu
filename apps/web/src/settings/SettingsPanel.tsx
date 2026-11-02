@@ -6,7 +6,8 @@ import { t, useLanguage } from '../i18n'
 import { ProviderSettings } from './ProviderSettings'
 import { Button } from '@/components/desktop-button'
 import { RotateCcw } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { commitStaged, StagingContext, withStaged, type StagedChanges } from './stagedChanges'
 import { resetPanelLayouts } from '../workspace/panelLayout'
 import { DEFAULT_SIDEBAR_WIDTH, type AppPreferences, type ModelPreferences } from '@ramu/shared/types'
 import { GoalSettings } from './GoalSettings'
@@ -76,13 +77,21 @@ export function SettingsPanel({
   const modelsChanged = !sameValue(draft, scope.models)
   const environment = useProviderEnvironment(scope, page === 'environment')
   const settingsChanged = paths.length > 0 || modelsChanged || scope.edited.size > 0
-  const hasChanges = settingsChanged || environment.changed
+  const [staged, setStaged] = useState<StagedChanges>(new Map())
+  const stage = useCallback(
+    <T,>(key: string, value: T, saved: T, apply: (value: T) => unknown) =>
+      setStaged((current) => withStaged(current, key, value, saved, apply as (value: never) => unknown)),
+    [],
+  )
+  const staging = useMemo(() => ({ changes: staged, stage }), [staged, stage])
+  const hasChanges = settingsChanged || environment.changed || staged.size > 0
   scope.dirty.current = !scope.loading && hasChanges
   useEffect(() => {
     if (scope.loading) return
     setAppDraft(structuredClone(scope.preferences))
     setDraft(structuredClone(scope.models))
     setSelected(scope.models.defaultSetId)
+    setStaged(new Map())
     setError(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [scope.loadKey] by design; the values it reads beyond these are current as of that run
   }, [scope.loadKey])
@@ -104,6 +113,11 @@ export function SettingsPanel({
             }
           : draft
       if (environment.changed) await environment.save()
+      if (staged.size) {
+        const { left, error: failed } = await commitStaged(staged)
+        setStaged(left)
+        if (failed) throw failed
+      }
       if (!settingsChanged) return
       const saved = await scope.save(appDraft, models, [...paths, ...(modelsChanged ? ['$models'] : [])])
       if (saved) {
@@ -148,119 +162,121 @@ export function SettingsPanel({
     setReset(null)
   }
   return (
-    <SettingsScopeContext.Provider value={scope}>
-      <AppSettingsOverride value={{ ...app, preferences: appDraft }}>
-        <ModelSetsOverride value={{ ...store, catalogs: scope.catalogs, preferences: draft }}>
-          <SettingsPage
-            section={page}
-            target={initialTarget}
-            onSection={setPage}
-            busy={busy || scope.saving}
-            hasChanges={hasChanges}
-            error={error ?? scope.error}
-            onSave={() => void save()}
-            onClose={() => {
-              if (!busy) onClose()
-            }}
-          >
-            {page === 'environment' && (
-              <EnvironmentSettings environment={environment} preferences={appDraft} busy={busy} />
-            )}
-            {page === 'providers' && (
-              <>
-                <SettingsGroupTitle>{t('Providers')}</SettingsGroupTitle>
-                <ProviderSettings value={appDraft} onChange={setAppDraft} onOpenSection={setPage} />
-                <div className={`${SETTINGS_FORM_CLASS} mt-8`}>
-                  <SettingsGroupTitle>{t('Usage')}</SettingsGroupTitle>
-                  <ToggleRow
-                    {...draftProps}
-                    setting="showUsageLimits"
-                    title="Show usage limits"
-                    description="Show provider usage in the sidebar or status bar."
+    <StagingContext.Provider value={staging}>
+      <SettingsScopeContext.Provider value={scope}>
+        <AppSettingsOverride value={{ ...app, preferences: appDraft }}>
+          <ModelSetsOverride value={{ ...store, catalogs: scope.catalogs, preferences: draft }}>
+            <SettingsPage
+              section={page}
+              target={initialTarget}
+              onSection={setPage}
+              busy={busy || scope.saving}
+              hasChanges={hasChanges}
+              error={error ?? scope.error}
+              onSave={() => void save()}
+              onClose={() => {
+                if (!busy) onClose()
+              }}
+            >
+              {page === 'environment' && (
+                <EnvironmentSettings environment={environment} preferences={appDraft} busy={busy} />
+              )}
+              {page === 'providers' && (
+                <>
+                  <SettingsGroupTitle>{t('Providers')}</SettingsGroupTitle>
+                  <ProviderSettings value={appDraft} onChange={setAppDraft} onOpenSection={setPage} />
+                  <div className={`${SETTINGS_FORM_CLASS} mt-8`}>
+                    <SettingsGroupTitle>{t('Usage')}</SettingsGroupTitle>
+                    <ToggleRow
+                      {...draftProps}
+                      setting="showUsageLimits"
+                      title="Show usage limits"
+                      description="Show provider usage in the sidebar or status bar."
+                    />
+                  </div>
+                </>
+              )}
+              {page === 'remote' && <RemoteAccessSettings />}
+              {page === 'agent-setup' && <AgentSetup />}
+              {page === 'system' && <SystemSettings {...draftProps} />}
+              {page === 'appearance' && (
+                <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />
+              )}
+              {page === 'editor' && <EditorSettings {...draftProps} />}
+              {page === 'browser' && <BrowserSettings {...draftProps} />}
+              {page === 'computer' && <ComputerUseSettings {...draftProps} />}
+              {page === 'access' && <AccessSettings {...draftProps} />}
+              {page === 'memory' && (
+                <>
+                  <MemorySettings value={appDraft.memory} onChange={(memory) => setAppDraft({ ...appDraft, memory })} />
+                  <LearningSettings
+                    value={appDraft.intelligence}
+                    onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
                   />
+                  <MaintenanceModelSettings
+                    value={appDraft.intelligence}
+                    cleanup={appDraft.memory.enabled && appDraft.memory.dream}
+                    onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
+                  />
+                  <SummarySettings
+                    value={appDraft.intelligence}
+                    onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
+                    hasChanges={hasChanges}
+                  />
+                  {appDraft.memory.enabled && <MemoryBrowser />}
+                  <ManagedSkills />
+                </>
+              )}
+              {page === 'workflows' && (
+                <>
+                  <GoalSettings value={appDraft.goals} onChange={(goals) => setAppDraft({ ...appDraft, goals })} />
+                  <SubagentSettings value={appDraft} onChange={setAppDraft} busy={busy} />
+                  <AdvisorSettings value={appDraft} onChange={setAppDraft} busy={busy} />
+                </>
+              )}
+              {page === 'archived' && <ArchivedThreads />}
+              {page === 'chats' && (
+                <>
+                  <ChatsSettings {...draftProps} />
+                  <div className={SETTINGS_FORM_CLASS}>
+                    <VoiceSettings />
+                  </div>
+                </>
+              )}
+              {page === 'git' && <GitSettings {...draftProps} />}
+              {page === 'shortcuts' && <ShortcutsSettings shortcuts={shortcuts} />}
+              {page === 'models' && (
+                <ModelSetsEditor
+                  draft={draft}
+                  setDraft={setDraft}
+                  selected={selected}
+                  setSelected={setSelected}
+                  catalogs={scope.catalogs}
+                  busy={busy}
+                  onRestore={() => setReset('models')}
+                  onRefresh={() => {
+                    setBusy(true)
+                    void store
+                      .reload()
+                      .catch((reason) => setError(errorText(reason)))
+                      .finally(() => setBusy(false))
+                  }}
+                />
+              )}
+              {page === 'models' && <ProviderFallbackSettings {...draftProps} />}
+              {pageKeys && (
+                <div className="settings-maintenance flex items-center gap-2 pt-3 justify-between">
+                  <Button variant="ghost" className={GHOST_BUTTON_CLASS} disabled={busy} onClick={() => setReset(page)}>
+                    <RotateCcw size={13} />
+                    {t('Reset to defaults')}
+                  </Button>
                 </div>
-              </>
-            )}
-            {page === 'remote' && <RemoteAccessSettings />}
-            {page === 'agent-setup' && <AgentSetup />}
-            {page === 'system' && <SystemSettings {...draftProps} />}
-            {page === 'appearance' && (
-              <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />
-            )}
-            {page === 'editor' && <EditorSettings {...draftProps} />}
-            {page === 'browser' && <BrowserSettings {...draftProps} />}
-            {page === 'computer' && <ComputerUseSettings {...draftProps} />}
-            {page === 'access' && <AccessSettings {...draftProps} />}
-            {page === 'memory' && (
-              <>
-                <MemorySettings value={appDraft.memory} onChange={(memory) => setAppDraft({ ...appDraft, memory })} />
-                <LearningSettings
-                  value={appDraft.intelligence}
-                  onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
-                />
-                <MaintenanceModelSettings
-                  value={appDraft.intelligence}
-                  cleanup={appDraft.memory.enabled && appDraft.memory.dream}
-                  onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
-                />
-                <SummarySettings
-                  value={appDraft.intelligence}
-                  onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
-                  hasChanges={hasChanges}
-                />
-                {appDraft.memory.enabled && <MemoryBrowser />}
-                <ManagedSkills />
-              </>
-            )}
-            {page === 'workflows' && (
-              <>
-                <GoalSettings value={appDraft.goals} onChange={(goals) => setAppDraft({ ...appDraft, goals })} />
-                <SubagentSettings value={appDraft} onChange={setAppDraft} busy={busy} />
-                <AdvisorSettings value={appDraft} onChange={setAppDraft} busy={busy} />
-              </>
-            )}
-            {page === 'archived' && <ArchivedThreads />}
-            {page === 'chats' && (
-              <>
-                <ChatsSettings {...draftProps} />
-                <div className={SETTINGS_FORM_CLASS}>
-                  <VoiceSettings />
-                </div>
-              </>
-            )}
-            {page === 'git' && <GitSettings {...draftProps} />}
-            {page === 'shortcuts' && <ShortcutsSettings shortcuts={shortcuts} />}
-            {page === 'models' && (
-              <ModelSetsEditor
-                draft={draft}
-                setDraft={setDraft}
-                selected={selected}
-                setSelected={setSelected}
-                catalogs={scope.catalogs}
-                busy={busy}
-                onRestore={() => setReset('models')}
-                onRefresh={() => {
-                  setBusy(true)
-                  void store
-                    .reload()
-                    .catch((reason) => setError(errorText(reason)))
-                    .finally(() => setBusy(false))
-                }}
-              />
-            )}
-            {page === 'models' && <ProviderFallbackSettings {...draftProps} />}
-            {pageKeys && (
-              <div className="settings-maintenance flex items-center gap-2 pt-3 justify-between">
-                <Button variant="ghost" className={GHOST_BUTTON_CLASS} disabled={busy} onClick={() => setReset(page)}>
-                  <RotateCcw size={13} />
-                  {t('Reset to defaults')}
-                </Button>
-              </div>
-            )}
-            <ResetDialog reset={reset} onCancel={() => setReset(null)} onConfirm={confirmReset} />
-          </SettingsPage>
-        </ModelSetsOverride>
-      </AppSettingsOverride>
-    </SettingsScopeContext.Provider>
+              )}
+              <ResetDialog reset={reset} onCancel={() => setReset(null)} onConfirm={confirmReset} />
+            </SettingsPage>
+          </ModelSetsOverride>
+        </AppSettingsOverride>
+      </SettingsScopeContext.Provider>
+    </StagingContext.Provider>
   )
 }

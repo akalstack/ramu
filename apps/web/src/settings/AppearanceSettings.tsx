@@ -8,6 +8,7 @@ import { ThemeGallery } from '../theme/ThemeGallery'
 import { useRef, useState } from 'react'
 import { importThemeFile, themeDigest, type RamuTheme } from '@ramu/shared/theme'
 import { notifyError } from '../chat/Notifications'
+import { useStagedValue } from './stagedChanges'
 import { setAppearance, useAppearance, type Appearance } from '../appearance'
 import { Dropdown } from '../Menu'
 import { SECONDARY_BUTTON_CLASS, SETTINGS_FORM_CLASS, sizeOptions } from './constants'
@@ -22,6 +23,7 @@ export function AppearanceSettings({
 }: DraftProps & { sizesReset: boolean; onResetSizes: () => void }) {
   const toggleProps = { draft, onChange, busy }
   const appearance = useAppearance()
+  const [stagedAppearance, stageAppearance] = useStagedValue('appearance', appearance, setAppearance)
   const [opened, setOpened] = useState<{ theme: RamuTheme; notice?: string } | null>(null)
   const [pasting, setPasting] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -65,17 +67,17 @@ export function AppearanceSettings({
       <SettingsRow>
         <SettingsLabel
           title={t('Theme')}
-          help={t('Choose light or dark, or follow your device. Applies immediately on this device only.')}
+          help={t('Choose light or dark, or follow your device. Saved on this device only.')}
         />
         <Dropdown
           label={t('Theme')}
-          value={appearance}
+          value={stagedAppearance}
           options={[
             { value: 'system', label: t('Match device') },
             { value: 'light', label: t('Light') },
             { value: 'dark', label: t('Dark') },
           ]}
-          onChange={(value) => setAppearance(value as Appearance)}
+          onChange={(value) => stageAppearance(value as Appearance)}
         />
       </SettingsRow>
       <ThemeGallery

@@ -20,6 +20,7 @@ import { SettingsGroupTitle } from '@/components/settings-row'
 import { Switch } from '@/components/ui/switch'
 import { Dropdown } from '../Menu'
 import { BrowserImportPanel } from './BrowserImportPanel'
+import { useStagedValue } from './stagedChanges'
 
 /** Runtime preferences and profile administration stay on the owning host. */
 export function HostBrowserSettings({
@@ -63,6 +64,12 @@ export function HostBrowserSettings({
       active = false
     }
   }, [refresh])
+  const [hostBrowser, stageHostBrowser] = useStagedValue('hostBrowser.enabled', !!status?.enabled, (enabled) =>
+    act(() => invokeOn(hostId, enabled ? 'hostBrowser.setup' : 'hostBrowser.disable')),
+  )
+  const [engine, stageEngine] = useStagedValue<string>('hostBrowser.engine', status?.engine ?? 'auto', (value) =>
+    act(() => invokeOn(hostId, 'hostBrowser.setEngine', value === 'chromium' ? 'chromium' : 'auto')),
+  )
   const act = async (work: () => Promise<unknown>) => {
     if (!allowed()) return
     setBusy(true)
@@ -104,11 +111,9 @@ export function HostBrowserSettings({
       <div className="flex gap-2">
         <Switch
           aria-label={t('Host browser')}
-          checked={!!status?.enabled}
+          checked={hostBrowser}
           disabled={busy || !local || !status}
-          onCheckedChange={(enabled) =>
-            void act(() => invokeOn(hostId, enabled ? 'hostBrowser.setup' : 'hostBrowser.disable'))
-          }
+          onCheckedChange={stageHostBrowser}
         />
         {local &&
           status?.enabled &&
@@ -126,15 +131,13 @@ export function HostBrowserSettings({
         <div className="flex flex-col gap-1">
           <Dropdown
             label={t('Browser engine')}
-            value={status.engine ?? 'auto'}
+            value={engine}
             disabled={busy}
             options={[
               { value: 'auto', label: t('Automatic') },
               { value: 'chromium', label: t('Host Chromium') },
             ]}
-            onChange={(value) =>
-              void act(() => invokeOn(hostId, 'hostBrowser.setEngine', value === 'chromium' ? 'chromium' : 'auto'))
-            }
+            onChange={stageEngine}
           />
           <p className="text-caption text-muted-foreground">
             {t(

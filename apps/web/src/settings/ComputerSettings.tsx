@@ -1,4 +1,5 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
+import { useStagedValue, useStaging } from './stagedChanges'
 import { Check } from 'lucide-react'
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { SettingsScopeContext } from './SettingsScope'
@@ -63,19 +64,20 @@ export function ComputerSettings({
       document.removeEventListener('visibilitychange', check)
     }
   }, [status?.apps?.available, refresh])
-  const toggle = async () => {
-    if (!canWrite() || !status) return
-    setBusy(true)
-    setError('')
-    try {
-      await invokeOn(hostId, 'computer.setEnabled', !status.enabled)
+  const [agentUse, stageAgentUse] = useStagedValue('computer.enabled', !!status?.enabled, async (enabled) => {
+    if (!canWrite()) return
+    await invokeOn(hostId, 'computer.setEnabled', enabled)
+    await refresh()
+  })
+  const [realPointer, stageRealPointer] = useStagedValue(
+    'computer.globalPointer',
+    !!status?.globalPointer,
+    async (checked) => {
+      if (!canWrite()) return
+      await invokeOn(hostId, 'computer.setGlobalPointer', checked)
       await refresh()
-    } catch (reason) {
-      setError(t(errorText(reason)))
-    } finally {
-      setBusy(false)
-    }
-  }
+    },
+  )
   const install = async () => {
     if (!canWrite()) return
     setBusy(true)
@@ -115,9 +117,9 @@ export function ComputerSettings({
         <SettingsLabel title={t('Let agents use this computer')} help={t(runtimeHelp(status))} />
         <Switch
           aria-label={t('Let agents use this computer')}
-          checked={!!status?.enabled}
+          checked={agentUse}
           disabled={busy || !status || (!status.enabled && !status.runtime.available)}
-          onCheckedChange={() => void toggle()}
+          onCheckedChange={stageAgentUse}
         />
       </SettingsRow>
       {status?.apps && (
@@ -174,21 +176,9 @@ export function ComputerSettings({
           />
           <Switch
             aria-label={t('Let app drags use your real pointer')}
-            checked={status.globalPointer}
+            checked={realPointer}
             disabled={busy}
-            onCheckedChange={async (checked) => {
-              if (!canWrite()) return
-              setBusy(true)
-              setError('')
-              try {
-                await invokeOn(hostId, 'computer.setGlobalPointer', checked)
-                await refresh()
-              } catch (reason) {
-                setError(t(errorText(reason)))
-              } finally {
-                setBusy(false)
-              }
-            }}
+            onCheckedChange={stageRealPointer}
           />
         </SettingsRow>
       )}
@@ -255,6 +245,7 @@ function ScreenSharing({ hostId, enabled, canWrite }: { hostId: string; enabled:
   useLanguage()
   const computers = useComputers()
   const [shared, setShared] = useState<string[]>([])
+  const { valueOf, stage } = useStaging()
   const [devices, setDevices] = useState<ReturnType<RamuMethods['computer.runtimeDevices']>>([])
   const [error, setError] = useState('')
   const load = useCallback(async () => {
@@ -293,9 +284,11 @@ function ScreenSharing({ hostId, enabled, canWrite }: { hostId: string; enabled:
           />
           <Switch
             aria-label={t('Let {0} use this computer’s screen', { 0: computer.name })}
-            checked={shared.includes(computer.id)}
+            checked={valueOf(`screen:${computer.id}`, shared.includes(computer.id))}
             onCheckedChange={(checked) =>
-              void act(() => ramu.invoke('computers.setScreenSharing', computer.id, checked))
+              stage(`screen:${computer.id}`, checked, shared.includes(computer.id), (value) =>
+                act(() => ramu.invoke('computers.setScreenSharing', computer.id, value)),
+              )
             }
           />
         </SettingsRow>
@@ -308,9 +301,11 @@ function ScreenSharing({ hostId, enabled, canWrite }: { hostId: string; enabled:
           />
           <Switch
             aria-label={t('{0} shares its screen with this host', { 0: device.name })}
-            checked={device.allowed}
+            checked={valueOf(`runtime:${device.deviceId}`, device.allowed)}
             onCheckedChange={(checked) =>
-              void act(() => invokeOn(hostId, 'computer.allowRuntime', device.deviceId, checked))
+              stage(`runtime:${device.deviceId}`, checked, device.allowed, (value) =>
+                act(() => invokeOn(hostId, 'computer.allowRuntime', device.deviceId, value)),
+              )
             }
           />
         </SettingsRow>

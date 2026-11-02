@@ -24,6 +24,7 @@ import { useHostRuntime } from '../workspace/workspace'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
 import { sameAddress } from './agentHostLinks'
+import { useStagedValue } from './stagedChanges'
 import { t } from '../i18n'
 
 /** Runs one host-only permission change and shows the host's updated status. */
@@ -95,8 +96,11 @@ export function PermissionRequests({ status, invoke }: { status: NetworkStatus; 
 
 /** What a full-access device gets when it pairs. */
 export function DefaultPermissions({ status, invoke }: { status: NetworkStatus; invoke: PermissionInvoke }) {
+  const saved = status.defaultPermissions ?? []
+  const [current, stageCurrent] = useStagedValue('network.defaultPermissions', saved, (value) =>
+    invoke('network.setDefaultPermissions', value),
+  )
   if (!status.defaultPermissions) return null
-  const current = status.defaultPermissions
   return (
     <>
       {DEVICE_PERMISSIONS.map((permission) => (
@@ -109,9 +113,9 @@ export function DefaultPermissions({ status, invoke }: { status: NetworkStatus; 
             aria-label={t('New devices: {0}', { 0: t(PERMISSION_LABEL[permission]) })}
             checked={current.includes(permission)}
             onCheckedChange={(checked) =>
-              void invoke(
-                'network.setDefaultPermissions',
-                checked ? [...current, permission] : current.filter((entry) => entry !== permission),
+              stageCurrent(
+                // Saved order, so turning one off and on again is no change.
+                DEVICE_PERMISSIONS.filter((entry) => (entry === permission ? checked : current.includes(entry))),
               )
             }
           />
@@ -121,42 +125,53 @@ export function DefaultPermissions({ status, invoke }: { status: NetworkStatus; 
   )
 }
 
+const PERMISSION_CHOICES = () => [
+  ...PERMISSION_DURATIONS.map((duration) => ({ value: duration as string, label: t(DURATION_LABEL[duration]) })),
+  { value: 'revoke', label: t('Off') },
+  { value: 'never', label: t('Never (no more requests)') },
+]
+
+function PermissionLine({
+  device,
+  permission,
+  invoke,
+}: {
+  device: NetworkDevice
+  permission: DevicePermission
+  invoke: PermissionInvoke
+}) {
+  const grant = device.permissions ? (device.permissions[permission] ?? null) : { until: null }
+  const state = device.blocked?.includes(permission) ? t('Never') : grantText(grant)
+  // A choice has no saved value of its own: the grant it makes is what is stored, and it may be time-limited.
+  const [choice, choose] = useStagedValue(`permission:${device.id}:${permission}`, '', (value) =>
+    invoke('network.setDevicePermission', device.id, permission, value as PermissionDuration | 'revoke' | 'never'),
+  )
+  const label = t(PERMISSION_LABEL[permission])
+  return (
+    <div className={SETTINGS_CARD_LINE}>
+      <span className="min-w-0 flex-1 truncate text-control">{label}</span>
+      <Dropdown
+        label={`${label}: ${state}`}
+        value={choice}
+        placeholder={state}
+        options={PERMISSION_CHOICES()}
+        onChange={choose}
+      />
+    </div>
+  )
+}
+
 /** One paired device's permissions, each changeable: off, this time, for a while or always. */
 export function DevicePermissionList({ device, invoke }: { device: NetworkDevice; invoke: PermissionInvoke }) {
   if (device.role === 'viewer') return null
-  const held = (permission: DevicePermission): PermissionGrant | null =>
-    device.permissions ? (device.permissions[permission] ?? null) : { until: null }
   return (
-    <div className="mt-1 flex flex-col gap-0.5 border-t border-border pt-1.5">
-      {DEVICE_PERMISSIONS.map((permission) => {
+    <div className="mt-2 flex flex-col gap-2 border-t border-border pt-3">
+      {DEVICE_PERMISSIONS.map((permission) =>
         // Phones have no agents to send, so Agents appears once a computer has asked and been answered.
-        if (permission === 'agents' && !device.permissions?.agents && !device.blocked?.includes(permission)) return null
-        const grant = held(permission)
-        const state = device.blocked?.includes(permission) ? t('Never') : grantText(grant)
-        return (
-          <div key={permission} className={SETTINGS_CARD_LINE}>
-            <span className="min-w-0 flex-1 truncate text-control">{t(PERMISSION_LABEL[permission])}</span>
-            <Dropdown
-              label={`${t(PERMISSION_LABEL[permission])}: ${state}`}
-              value=""
-              placeholder={state}
-              options={[
-                ...PERMISSION_DURATIONS.map((duration) => ({ value: duration, label: t(DURATION_LABEL[duration]) })),
-                { value: 'revoke', label: t('Off') },
-                { value: 'never', label: t('Never (no more requests)') },
-              ]}
-              onChange={(value) =>
-                void invoke(
-                  'network.setDevicePermission',
-                  device.id,
-                  permission,
-                  value as PermissionDuration | 'revoke' | 'never',
-                )
-              }
-            />
-          </div>
-        )
-      })}
+        permission === 'agents' && !device.permissions?.agents && !device.blocked?.includes(permission) ? null : (
+          <PermissionLine key={permission} device={device} permission={permission} invoke={invoke} />
+        ),
+      )}
       {device.agentHost && (
         <div className={SETTINGS_CARD_LINE}>
           <span className="min-w-0 flex-1 truncate text-control">{t('Most access for its threads')}</span>
@@ -177,16 +192,19 @@ export function HostCeiling({
   value: 'edits' | 'auto' | 'full'
   invoke: PermissionInvoke
 }) {
+  const [access, stageAccess] = useStagedValue<string>(`ceiling:${deviceId}`, value, (next) =>
+    invoke('network.setHostAccess', deviceId, next),
+  )
   return (
     <Dropdown
       label={t('Most access for its threads')}
-      value={value}
+      value={access}
       options={[
         { value: 'edits', label: t('Allow edits') },
         { value: 'auto', label: t('Auto') },
         { value: 'full', label: t('Full access') },
       ]}
-      onChange={(next) => void invoke('network.setHostAccess', deviceId, next)}
+      onChange={stageAccess}
     />
   )
 }
@@ -317,7 +335,7 @@ export function ThisDevicePermissions({ computer, agents }: { computer: Computer
     void invokeOn(host, 'device.requestPermission', permission).then(load, (reason) => setError(errorText(reason)))
   const url = computer.url
   return (
-    <div className="mt-3 flex flex-col gap-0.5 border-t border-border pt-2">
+    <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
       {DEVICE_PERMISSIONS.map((permission) => {
         // An older host has no such permission; an SSH address is a tunnel only this window can reach.
         if (permission === 'agents') {

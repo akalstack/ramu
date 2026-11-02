@@ -17,6 +17,7 @@ import { Input } from '@/components/desktop-input'
 import { useResolvedAppearance } from '../appearance'
 import { t } from '../i18n'
 import { Dialog, Menu, type MenuEntry } from '../Menu'
+import { useStagedValue } from '../settings/stagedChanges'
 import { builtInThemes, copyOfTheme, removeTheme, renameTheme, selectTheme } from './themes'
 import { useSelectedTheme, useThemeLibrary } from './themes'
 import { shareTheme } from './ThemeEditor'
@@ -58,11 +59,13 @@ function Thumb({ theme }: { theme: RamuTheme }) {
 function Tile({
   theme,
   selected,
+  onSelect,
   yours,
   actions,
 }: {
   theme: RamuTheme
   selected: boolean
+  onSelect: () => void
   yours: boolean
   actions: MenuEntry[]
 }) {
@@ -77,7 +80,7 @@ function Tile({
         role="radio"
         aria-checked={selected}
         aria-label={theme.name}
-        onClick={() => selectTheme(theme.id === DEFAULT_THEME.id ? null : theme.id)}
+        onClick={onSelect}
         className="h-auto w-full min-w-0 flex-col items-stretch justify-start gap-2 rounded-(--radius-s) bg-transparent p-0 text-left font-normal whitespace-normal [&:hover:not(:disabled)]:bg-transparent"
       >
         <Thumb theme={theme} />
@@ -118,6 +121,7 @@ export function ThemeGallery({
 }) {
   const saved = useThemeLibrary()
   const current = useSelectedTheme()
+  const [chosen, choose] = useStagedValue('theme', current.id, (id) => selectTheme(id === DEFAULT_THEME.id ? null : id))
   const [renaming, setRenaming] = useState<RamuTheme | null>(null)
   const [name, setName] = useState('')
   const [removing, setRemoving] = useState<RamuTheme | null>(null)
@@ -236,7 +240,8 @@ export function ThemeGallery({
             <Tile
               key={theme.id}
               theme={theme}
-              selected={current.id === theme.id}
+              selected={chosen === theme.id}
+              onSelect={() => choose(theme.id)}
               yours={false}
               actions={builtInActions(theme)}
             />
@@ -251,7 +256,8 @@ export function ThemeGallery({
               <Tile
                 key={theme.id}
                 theme={theme}
-                selected={current.id === theme.id}
+                selected={chosen === theme.id}
+                onSelect={() => choose(theme.id)}
                 yours
                 actions={yoursActions(theme)}
               />

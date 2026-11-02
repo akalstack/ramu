@@ -1,4 +1,5 @@
 import { InlineAction, InlineLink } from '@/components/inline-action'
+import { useStaging } from './stagedChanges'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentProvider } from '@ramu/shared/types'
@@ -321,6 +322,7 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
     [on, refetch],
   )
   const canAdminister = status.data?.canAdminister === true && ready && !viewOnly
+  const { valueOf, stage } = useStaging()
   const share = async (id: string, work: () => Promise<unknown>) => {
     const current = epoch.current
     setPending(id)
@@ -352,12 +354,16 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
             ? server.transport.url
             : [server.transport.command, ...server.transport.args].join(' ')
         }
-        item={server}
+        item={{ ...server, shared: valueOf(`mcp-share:${projectId}:${server.key}`, server.shared) }}
         providers={server.providers}
         sources={server.sources}
         label={t('Share {name} with every provider and account', { name: server.name })}
         disabled={locked}
-        onShare={(shared) => void share(server.key, () => invoke('mcp.share', server.key, shared, projectId))}
+        onShare={(shared) =>
+          stage(`mcp-share:${projectId}:${server.key}`, shared, server.shared, (value) =>
+            share(server.key, () => invoke('mcp.share', server.key, value, projectId)),
+          )
+        }
         extra={
           server.managedConnectionId ? (
             <span className="text-caption text-muted-foreground">{t('Connected through Ramu')}</span>
@@ -377,10 +383,20 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
     ))
   const skillList = (scopeName: 'user' | 'project') => (
     <Skills
-      skills={skillsIn(scopeName)}
+      skills={skillsIn(scopeName).map((skill) => ({
+        ...skill,
+        shared: valueOf(`skill-share:${projectId}:${skill.name}`, skill.shared),
+      }))}
       query={query}
       disabled={locked}
-      onShare={(name, shared) => void share(name, () => invoke('skills.share', name, shared, projectId))}
+      onShare={(name, shared) =>
+        stage(
+          `skill-share:${projectId}:${name}`,
+          shared,
+          skillsIn(scopeName).find((skill) => skill.name === name)?.shared ?? false,
+          (value) => share(name, () => invoke('skills.share', name, value, projectId)),
+        )
+      }
       onWiden={(name) =>
         void share(name, async () => {
           await invoke('skills.share', name, true)

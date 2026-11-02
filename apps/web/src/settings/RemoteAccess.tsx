@@ -34,6 +34,7 @@ import { workspaceVisible } from '../workspace/workspaceLifetime'
 import { onPairLink, takePairLink } from '../pairLink'
 import { NearbyHosts } from './NearbyHosts'
 import { AgentHosts } from './AgentHosts'
+import { useStagedValue } from './stagedChanges'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
   DefaultPermissions,
@@ -48,6 +49,7 @@ const ALL_NETWORKS = '0.0.0.0'
 /** Virtual networks that Docker, VMs and macOS create. Another device almost never reaches this computer through them. */
 const VIRTUAL_INTERFACE = /^(bridge|docker|br-|veth|vmnet|vboxnet|virbr|awdl|llw|anpi|ap|gif|stf)\d*/i
 const DEFAULT_PORT = 7788
+const validPort = (port: number) => Number.isInteger(port) && port >= 1024 && port <= 65535
 
 /** `m:ss` left until a pairing code expires. */
 const countdown = (expiresAt: number, now: number) => {
@@ -124,50 +126,59 @@ export function RemoteAccessSettings() {
 function ThisComputer() {
   const invoke = useSettingsInvoke()
   const [status, setStatus, reload] = useNetworkStatus(2500)
-  const [host, setHost] = useState(ALL_NETWORKS),
-    [port, setPort] = useState(String(DEFAULT_PORT)),
-    [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(false),
     [pairing, setPairing] = useState(false),
     [revoking, setRevoking] = useState<string | null>(null)
-  const loaded = useRef(false)
-  // Take the saved choice once; later polls must not overwrite what the user is typing.
-  useEffect(() => {
-    if (status && !loaded.current) {
-      loaded.current = true
-      setHost(status.host)
-      setPort(String(status.port))
-    }
-  }, [status])
+  const [config, stageConfig] = useStagedValue(
+    'network.config',
+    {
+      enabled: !!status?.enabled,
+      host: status?.host ?? ALL_NETWORKS,
+      port: String(status?.port ?? DEFAULT_PORT),
+      discoverable: status?.discovery?.discoverable,
+    },
+    async ({ port: chosen, discoverable, ...rest }) => {
+      if (!validPort(Number(chosen))) throw new Error(t('Use a number from 1024 to 65535.'))
+      try {
+        setStatus(
+          await invoke('network.configure', {
+            ...rest,
+            port: Number(chosen),
+            acceptUnencrypted: true,
+            // Older hosts have no such setting; leaving it out keeps whatever they saved.
+            ...(discoverable === undefined ? {} : { discoverable }),
+          }),
+        )
+      } catch (error) {
+        notifyError(errorText(error), t('Remote access'))
+      }
+    },
+  )
+  const { host, port } = config
+  const [lifetime, stageLifetime] = useStagedValue(
+    'network.deviceLifetime',
+    String(status?.deviceLifetime?.days),
+    async (value) => {
+      try {
+        setStatus(
+          await invoke(
+            'network.setDeviceLifetime',
+            value === 'default' ? null : value === 'never' ? 'never' : Number(value),
+          ),
+        )
+      } catch (error) {
+        notifyError(errorText(error), t('Remote access'))
+      }
+    },
+  )
   if (!status) return null
   const managed = status.source === 'command-line'
-  const portNumber = Number(port)
-  const portValid = Number.isInteger(portNumber) && portNumber >= 1024 && portNumber <= 65535
-  const changed = status.enabled && (host !== status.host || portNumber !== status.port)
+  const portValid = validPort(Number(port))
   const options = [
     { value: ALL_NETWORKS, label: t('All networks') },
     ...status.addresses.map((entry) => ({ value: entry.address, label: `${entry.name} · ${entry.address}` })),
   ]
   if (!options.some((option) => option.value === host)) options.push({ value: host, label: host })
-  const apply = async (enabled: boolean, discoverable = status.discovery?.discoverable) => {
-    setBusy(true)
-    try {
-      setStatus(
-        await invoke('network.configure', {
-          enabled,
-          host,
-          port: portNumber,
-          acceptUnencrypted: true,
-          // Older hosts have no such setting; leaving it out keeps whatever they saved.
-          ...(discoverable === undefined ? {} : { discoverable }),
-        }),
-      )
-    } catch (error) {
-      notifyError(errorText(error), t('Remote access'))
-    } finally {
-      setBusy(false)
-    }
-  }
   const changePermission: PermissionInvoke = async (method, ...args) => {
     try {
       setStatus(await (invoke as (method: string, ...args: unknown[]) => Promise<NetworkStatus>)(method, ...args))
@@ -178,18 +189,6 @@ function ThisComputer() {
   const revoke = async (id: string) => {
     try {
       setStatus(await invoke('network.revoke', id))
-    } catch (error) {
-      notifyError(errorText(error), t('Remote access'))
-    }
-  }
-  const setLifetime = async (value: string) => {
-    try {
-      setStatus(
-        await invoke(
-          'network.setDeviceLifetime',
-          value === 'default' ? null : value === 'never' ? 'never' : Number(value),
-        ),
-      )
     } catch (error) {
       notifyError(errorText(error), t('Remote access'))
     }
@@ -210,10 +209,10 @@ function ThisComputer() {
         />
         <Switch
           aria-label={t('Allow other devices')}
-          checked={status.enabled}
-          disabled={busy || managed || (!status.enabled && !portValid)}
+          checked={config.enabled}
+          disabled={managed || (!config.enabled && !portValid)}
           onCheckedChange={(checked) => {
-            if (!checked || status.tls || /^(127\.|::1$)/.test(host)) void apply(checked)
+            if (!checked || status.tls || /^(127\.|::1$)/.test(host)) stageConfig({ ...config, enabled: checked })
             else setConfirm(true)
           }}
         />
@@ -234,9 +233,9 @@ function ThisComputer() {
             />
             <Switch
               aria-label={t('Discoverable on this network')}
-              checked={status.discovery.discoverable}
-              disabled={busy || managed || !status.enabled}
-              onCheckedChange={(checked) => void apply(status.enabled, checked)}
+              checked={!!config.discoverable}
+              disabled={managed || !config.enabled}
+              onCheckedChange={(checked) => stageConfig({ ...config, discoverable: checked })}
             />
           </SettingsRow>
           {status.enabled && status.discovery.discoverable && (
@@ -298,7 +297,7 @@ function ThisComputer() {
       {status.devices.map((device) => (
         <SettingsCard
           key={device.id}
-          className="mb-2"
+          className="mb-3 gap-2 px-4 py-3"
           title={device.name}
           meta={
             <span className="whitespace-normal">
@@ -318,7 +317,7 @@ function ThisComputer() {
           }
         >
           {device.kind === 'host' ? (
-            <div className={`${SETTINGS_CARD_LINE} mt-1 border-t border-border pt-2`}>
+            <div className={`${SETTINGS_CARD_LINE} mt-2 border-t border-border pt-3`}>
               <SettingsLabel
                 title={t('Most access for its threads')}
                 help={t('Threads this host’s agents start here never get more, whatever they ask for.')}
@@ -350,7 +349,12 @@ function ThisComputer() {
                     'Choose your VPN address (Tailscale, NetBird, ZeroTier, WireGuard) to keep Ramu off other networks.',
                   )}
                 />
-                <Dropdown label={t('Network')} value={host} options={options} onChange={setHost} disabled={busy} />
+                <Dropdown
+                  label={t('Network')}
+                  value={host}
+                  options={options}
+                  onChange={(next) => stageConfig({ ...config, host: next })}
+                />
               </SettingsRow>
               <SettingsRow>
                 <SettingsLabel title={t('Port')} help={portValid ? undefined : t('Use a number from 1024 to 65535.')} />
@@ -359,18 +363,12 @@ function ThisComputer() {
                   inputMode="numeric"
                   value={port}
                   aria-invalid={!portValid}
-                  disabled={busy}
-                  onChange={(event) => setPort(event.target.value.replace(/\D/g, '').slice(0, 5))}
+                  onChange={(event) =>
+                    stageConfig({ ...config, port: event.target.value.replace(/\D/g, '').slice(0, 5) })
+                  }
                 />
               </SettingsRow>
             </>
-          )}
-          {changed && !managed && (
-            <div className="flex justify-end pb-3">
-              <Button variant="default" disabled={busy || !portValid} onClick={() => void apply(true)}>
-                {t('Apply')}
-              </Button>
-            </div>
           )}
           {status.deviceLifetime && (
             <SettingsRow>
@@ -382,9 +380,9 @@ function ThisComputer() {
               />
               <Dropdown
                 label={t('Keep devices paired')}
-                value={String(status.deviceLifetime.days)}
+                value={lifetime}
                 options={lifetimeOptions(status.deviceLifetime.days, status.deviceLifetime.saved)}
-                onChange={(value) => void setLifetime(value)}
+                onChange={stageLifetime}
               />
             </SettingsRow>
           )}
@@ -399,7 +397,7 @@ function ThisComputer() {
           onCancel={() => setConfirm(false)}
           onConfirm={() => {
             setConfirm(false)
-            void apply(true)
+            stageConfig({ ...config, enabled: true })
           }}
         >
           <p>

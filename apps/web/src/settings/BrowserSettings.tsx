@@ -1,6 +1,7 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { LINK_TARGET_KEY, linkTargetFrom } from '@ramu/shared/browserLinks'
+import { useStagedValue } from './stagedChanges'
 import type { AgentBrowserPreferences, LinkTarget } from '@ramu/shared/browser'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { deviceStorage } from '../deviceStorage'
@@ -21,6 +22,9 @@ import { HostBrowserSettings } from './HostBrowserSettings'
 export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
   useLanguage()
   const [target, setTarget] = useState<LinkTarget>(() => linkTargetFrom(deviceStorage.getItem(LINK_TARGET_KEY)))
+  const [stagedTarget, stageTarget] = useStagedValue('linkTarget', target, (value) =>
+    deviceStorage.setItem(LINK_TARGET_KEY, value),
+  )
   useEffect(
     () =>
       deviceStorage.subscribe(
@@ -295,12 +299,12 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
         />
         <Dropdown
           label={t('Open clicked links in')}
-          value={target}
+          value={stagedTarget}
           options={[
             { value: 'system', label: t('System browser') },
             { value: 'integrated', label: t('Ramu browser (in the thread)') },
           ]}
-          onChange={(value) => deviceStorage.setItem(LINK_TARGET_KEY, linkTargetFrom(value))}
+          onChange={(value) => stageTarget(linkTargetFrom(value))}
         />
       </SettingsRow>
       <SettingsRow>

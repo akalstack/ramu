@@ -1060,8 +1060,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   Success: 'Berhasil',
   Warning: 'Peringatan',
   Theme: 'Tema',
-  'Choose light or dark, or follow your device. Applies immediately on this device only.':
-    'Pilih terang atau gelap, atau ikuti perangkat. Langsung berlaku di perangkat ini saja.',
+  'Choose light or dark, or follow your device. Saved on this device only.':
+    'Pilih terang atau gelap, atau ikuti perangkat. Disimpan hanya di perangkat ini.',
   'Match device': 'Ikuti perangkat',
   Dark: 'Gelap',
   'Background & Recaps': 'Aktivitas & ringkasan',

@@ -1,4 +1,5 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
+import { useStaging } from './stagedChanges'
 import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
 import { errorText } from '../lib/errors'
 import { SettingsRow } from '@/components/settings-row'
@@ -56,6 +57,7 @@ export function ProviderSettings({
   /** Account consent to reuse approved Shared MCP connections; absent until someone saves it. */
   const sharing = (provider: AgentProvider, id: string) =>
     mcp.data?.accounts.find((entry) => entry.provider === provider && entry.accountId === id)?.shareApprovals
+  const { valueOf, stage } = useStaging()
   const setSharing = async (provider: AgentProvider, ids: string[], shareApprovals: boolean) => {
     setError(null)
     try {
@@ -268,8 +270,15 @@ export function ProviderSettings({
               onRename={(id, label) => rename(provider, id, label)}
               onRemove={(id) => remove(provider, id)}
               onAddAccount={() => add(provider)}
-              mcpSharing={canShare ? (id) => sharing(provider, id) : undefined}
-              onMcpSharing={(ids, on) => void setSharing(provider, ids, on)}
+              mcpSharing={
+                canShare ? (id) => valueOf(`mcp-sharing:${provider}:${id}`, sharing(provider, id)) : undefined
+              }
+              onMcpSharing={(ids, on) => {
+                for (const id of ids)
+                  stage(`mcp-sharing:${provider}:${id}`, on, sharing(provider, id), (value) =>
+                    setSharing(provider, [id], !!value),
+                  )
+              }}
               mcpReadiness={canShare ? (id) => readiness(provider, id) : undefined}
               mcpRechecking={(id) => rechecking === `${provider}:${id}`}
               onMcpRecheck={canShare ? (id) => void recheck(provider, id) : undefined}

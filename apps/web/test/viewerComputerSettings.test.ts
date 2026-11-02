@@ -20,6 +20,14 @@ vi.mock('react', async () => ({
 vi.mock('../src/settings/SettingsScope', async () => ({
   SettingsScopeContext: (await import('react')).createContext(null),
 }))
+// Staged settings apply on Save; here they apply at once so each write path still meets its access check.
+vi.mock('../src/settings/stagedChanges', () => ({
+  useStagedValue: (_key: string, saved: unknown, apply: (value: unknown) => unknown) => [saved, apply],
+  useStaging: () => ({
+    valueOf: (_key: string, saved: unknown) => saved,
+    stage: (_key: string, value: unknown, _saved: unknown, apply: (value: unknown) => unknown) => apply(value),
+  }),
+}))
 vi.mock('../src/settings/KeepAwakeSettings', () => ({ KeepAwakeSettings: () => null }))
 vi.mock('../src/workspace/computers', () => ({ useComputers: () => null }))
 vi.mock('../src/hosts', () => ({ ownHostId: () => 'local' }))

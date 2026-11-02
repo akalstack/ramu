@@ -1,4 +1,5 @@
 import { SkillCopyUpdateReview } from './SkillCopyUpdateReview'
+import { useStaging } from './stagedChanges'
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { ManagedSkill, SkillInstallPreview, SkillCopyUpdate, Project } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
@@ -102,6 +103,7 @@ export function InstalledSkills() {
       .then((v) => setAvailable(v.available))
       .catch(() => {})
   }, [load, invoke, viewOnly])
+  const { valueOf, stage: stageSetting } = useStaging()
   const act = async (work: () => Promise<unknown>) => {
     if (!allowed()) return
     setError('')
@@ -407,12 +409,16 @@ export function InstalledSkills() {
               </fieldset>
               <Dropdown
                 label={`${t('Move skill')}: ${skill.name}`}
-                value={skill.projectId ?? ''}
+                value={valueOf(`skill-project:${skill.id}`, skill.projectId ?? '')}
                 options={[
                   { value: '', label: t('All projects') },
                   ...projects.map((p) => ({ value: p.id, label: p.name })),
                 ]}
-                onChange={(id) => void act(() => invoke('skills.move', skill.id, id || null))}
+                onChange={(id) =>
+                  stageSetting(`skill-project:${skill.id}`, id, skill.projectId ?? '', (value) =>
+                    act(() => invoke('skills.move', skill.id, value || null)),
+                  )
+                }
                 disabled={busy}
               />
             </SettingsCard>

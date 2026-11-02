@@ -10,6 +10,14 @@ const state = vi.hoisted(() => ({
   localPreference: vi.fn(),
   change: vi.fn(),
 }))
+// Staged settings apply on Save; here they apply at once so each write path still meets its access check.
+vi.mock('../src/settings/stagedChanges', () => ({
+  useStagedValue: (_key: string, saved: unknown, apply: (value: unknown) => unknown) => [saved, apply],
+  useStaging: () => ({
+    valueOf: (_key: string, saved: unknown) => saved,
+    stage: (_key: string, value: unknown, _saved: unknown, apply: (value: unknown) => unknown) => apply(value),
+  }),
+}))
 vi.mock('react', async () => ({
   ...(await vi.importActual<typeof import('react')>('react')),
   useRef: (value: unknown) => (state.slots[state.cursor++] ??= { current: value }),
