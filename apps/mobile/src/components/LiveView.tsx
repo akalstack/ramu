@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AppState, Image, Pressable, View } from 'react-native'
+import { AppState, Image, PanResponder, Pressable, useWindowDimensions, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Move, X } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -7,7 +7,7 @@ import { liveState, liveSurface, type LiveSurface } from '@ramu/shared/liveView'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
 import { useSay } from '../i18n'
-import { closeLiveView, moveLiveView, pinLiveSurface, useLiveViewPin } from '../runtime/liveView'
+import { closeLiveView, moveLiveView, pinLiveSurface, setLiveCorner, useLiveViewPin } from '../runtime/liveView'
 import { useStore } from '../runtime/store'
 import { font, radius, space, useTheme } from '../theme'
 import { Button, T } from './ui'
@@ -27,6 +27,18 @@ export function LiveView() {
   const [computer, setComputer] = useState<ComputerSessionSummary | null>(null)
   const [tabs, setTabs] = useState<BrowserTabInfo[]>([])
   const [image, setImage] = useState<string | null>(null)
+  const { width, height } = useWindowDimensions()
+  const [drag, setDrag] = useState({ x: 0, y: 0 })
+  // Dragging moves the view with the finger; letting go settles it in the nearest corner.
+  const responder = PanResponder.create({
+    onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) + Math.abs(gesture.dy) > 8,
+    onPanResponderMove: (_event, gesture) => setDrag({ x: gesture.dx, y: gesture.dy }),
+    onPanResponderRelease: (_event, gesture) => {
+      setDrag({ x: 0, y: 0 })
+      setLiveCorner(`${gesture.moveY < height / 2 ? 'top' : 'bottom'}-${gesture.moveX < width / 2 ? 'left' : 'right'}`)
+    },
+    onPanResponderTerminate: () => setDrag({ x: 0, y: 0 }),
+  })
   const hostId = pin?.hostId ?? ''
   const taskId = pin?.taskId ?? ''
   const online = !!pin && store.isOnline(hostId)
@@ -111,7 +123,9 @@ export function LiveView() {
   return (
     <View
       accessibilityLabel={say('Live view')}
+      {...responder.panHandlers}
       style={{
+        transform: [{ translateX: drag.x }, { translateY: drag.y }],
         position: 'absolute',
         width: 220,
         ...(top ? { top: insets.top + 56 } : { bottom: insets.bottom + 96 }),

@@ -16,6 +16,7 @@ import { executeBrowserBridge } from './browserBridge'
 import { randomUUID } from 'node:crypto'
 import { ElectronGuestFactory } from './electronGuest'
 import { browserMethod, isBrowserMethod } from './browserMethods'
+import { LiveWindow, liveMethodAllowed, liveWindowFile } from './liveWindow'
 import {
   isHostInvokeAllowed,
   isSettingsActionAllowed,
@@ -726,6 +727,15 @@ async function main() {
     { localClientId: browserClientId },
   )
   const attachment = attachmentActions(win, new AttachmentStore(join(userData, 'attachments')))
+  const liveWindow = new LiveWindow({
+    file: liveWindowFile(userData),
+    preload: join(import.meta.dirname, '../preload/index.cjs'),
+    load: (window) =>
+      process.env.ELECTRON_RENDERER_URL
+        ? window.loadURL(`${process.env.ELECTRON_RENDERER_URL}?live=1`)
+        : window.loadFile(join(import.meta.dirname, '../renderer/index.html'), { query: { live: '1' } }),
+    closed: () => sendTo(LOCAL, 'live:closed', {}),
+  })
   const routing = (self: string) => ({
     self,
     exists: (id: string) => computers.exists(id),
@@ -741,9 +751,28 @@ async function main() {
   }
   ipcMain.handle('ramu:invoke', async (event, requestMethod: unknown, requestArgs: unknown, requestHost?: unknown) => {
     // Only our windows may invoke IPC. Normal calls reach their owning computer; explicit computer management validates its target below.
-    const self = event.sender === win.webContents ? LOCAL : undefined
+    // The live view window is trusted only for watching and stopping.
+    const fromLive = liveWindow.owns(event.sender)
+    const self = event.sender === win.webContents || fromLive ? LOCAL : undefined
     if (!self || event.senderFrame !== event.sender.mainFrame) throw new Error('Untrusted IPC sender')
     if (typeof requestMethod !== 'string' || !Array.isArray(requestArgs)) throw new Error('Invalid request')
+    if (fromLive && !liveMethodAllowed(requestMethod)) throw new Error('That is not available in the live view.')
+    if (requestMethod === 'live.window') {
+      if (fromLive) throw new Error('That is not available in the live view.')
+      if (requestArgs[0] === true) liveWindow.open(requestArgs[1] === true)
+      else liveWindow.close()
+      return
+    }
+    if (requestMethod === 'live.close') return liveWindow.close()
+    if (requestMethod === 'live.open') {
+      const [hostId, taskId] = requestArgs
+      if (typeof hostId !== 'string' || typeof taskId !== 'string') throw new Error('Invalid thread')
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+      sendTo(LOCAL, 'live:open', { hostId, taskId })
+      return
+    }
     // A call may name its host. Another host is reached directly, for allow-listed methods only; the window's own host (or none) takes the path below.
     const route = routeInvoke(requestHost, requestMethod, routing(self))
     if (route.direct) return runOnHost(route.host, requestMethod, requestArgs)

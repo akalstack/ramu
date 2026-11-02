@@ -620,6 +620,11 @@ export interface RamuMethods {
   /** Runs an allow-listed method on one host's server, whichever window asks. Same as `RamuBridge.invokeOn`. */
   'computers.invoke'(id: string, method: string, args: unknown[]): unknown
   'computers.overview'(id: string): HostOverview
+  /** Opens the live view window above other apps, or closes it. Desktop only. */
+  'live.window'(open: boolean, hideFromSharing?: boolean): void
+  /** From the live view window: bring the main window forward on that thread. */
+  'live.open'(hostId: string, taskId: string): void
+  'live.close'(): void
   /** Memory the desktop app's own windows and browser tabs use, in bytes. */
   'computers.appMemory'(): number
   /** The threads this window shows from a host: only they stream in full, and the host's other threads arrive in brief. */
@@ -1239,6 +1244,10 @@ export type PushEvents = {
   'menu:action': { action: 'settings' | 'check-updates' }
   /** A `ramu://pair` link was opened; the text is validated by the screen that uses it. */
   'pair:link': { link: string }
+  /** The live view window closed. */
+  'live:closed': Record<string, never>
+  /** The live view window asked to open its thread here. */
+  'live:open': { hostId: string; taskId: string }
   'automation:changed': Record<string, never>
   /** Projects, repositories, chats or sessions were created, renamed, moved or removed (by any client). */
   'workspace:changed': Record<string, never>

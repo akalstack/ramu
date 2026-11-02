@@ -9,6 +9,10 @@ export interface LiveViewPin {
   /** A surface the person chose; absent means follow what the agent used last. */
   pinned?: LiveSurface
   corner: LiveCorner
+  /** Shown in its own window above other apps instead of inside Ramu's window. */
+  window?: boolean
+  /** Hidden from screen sharing where the system supports it. */
+  hideFromSharing?: boolean
 }
 
 export const LIVE_CORNERS: LiveCorner[] = ['bottom-right', 'bottom-left', 'top-left', 'top-right']

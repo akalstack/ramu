@@ -24,7 +24,13 @@ const write = (next: LiveViewPin | null) => {
 
 /** Float: the person asks for a live view of this thread. It stays pinned to the thread until closed. */
 export const floatLiveView = (hostId: string, taskId: string, pinned?: LiveSurface) =>
-  write({ hostId, taskId, ...(pinned ? { pinned } : {}), corner: pin?.corner ?? 'bottom-right' })
+  write({
+    hostId,
+    taskId,
+    ...(pinned ? { pinned } : {}),
+    corner: pin?.corner ?? 'bottom-right',
+    hideFromSharing: pin?.hideFromSharing ?? true,
+  })
 export const closeLiveView = () => write(null)
 export const pinLiveSurface = (pinned: LiveSurface | undefined) => {
   if (!pin) return
@@ -32,6 +38,15 @@ export const pinLiveSurface = (pinned: LiveSurface | undefined) => {
   write(pinned ? { ...rest, pinned } : rest)
 }
 export const moveLiveView = () => pin && write({ ...pin, corner: nextCorner(pin.corner) })
+export const setLiveWindow = (open: boolean, hideFromSharing = pin?.hideFromSharing ?? true) =>
+  pin && write({ ...pin, window: open, hideFromSharing })
+
+// The live view window and the main window share this pin: a change in one shows in the other.
+globalThis.window?.addEventListener('storage', (event) => {
+  if (event.key !== KEY) return
+  pin = read()
+  for (const listener of listeners) listener()
+})
 
 export const useLiveViewPin = () =>
   useSyncExternalStore(

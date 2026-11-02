@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, Globe, Monitor, Move, Square, X } from 'lucide-react'
+import { ExternalLink, Globe, Monitor, Move, PictureInPicture2, Square, X } from 'lucide-react'
 import { liveState, liveSurface, type LiveSurface } from '@ramu/shared/liveView'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
 import { Button } from '@/components/desktop-button'
+import { Checkbox } from '@/components/desktop-checkbox'
 import { notifyError } from '../chat/Notifications'
 import { useViewOnly } from '../composer/useViewOnly'
 import { t, useLanguage } from '../i18n'
@@ -13,7 +14,7 @@ import { useComputers } from '../workspace/computers'
 import { useHostOverviews } from '../workspace/hostOverview'
 import { HostProvider, useHost } from '../workspace/HostProvider'
 import { useHostSelection } from '../workspace/HostSelection'
-import { closeLiveView, moveLiveView, pinLiveSurface, useLiveViewPin } from './liveViewStore'
+import { closeLiveView, moveLiveView, pinLiveSurface, setLiveWindow, useLiveViewPin } from './liveViewStore'
 
 const FRAME_MS = 1000
 const CORNER_CLASS = {
@@ -92,13 +93,22 @@ function useFrame(taskId: string, surface: LiveSurface | null) {
   return image
 }
 
-function Body({ taskId }: { taskId: string }) {
+function Body({
+  taskId,
+  onOpen,
+  onClose,
+  inWindow,
+}: {
+  taskId: string
+  onOpen: () => void
+  onClose: () => void
+  inWindow: boolean
+}) {
   useLanguage()
   const pin = useLiveViewPin()
   const host = useHost()
   const viewOnly = useViewOnly()
   const computers = useComputers()
-  const { select } = useHostSelection()
   const overview = useHostOverviews([host.id])[0]?.data
   const task = overview?.tasks.find((entry) => entry.id === taskId)
   const { computer, tabs } = useSurfaces(taskId)
@@ -138,14 +148,35 @@ function Body({ taskId }: { taskId: string }) {
             {[online ? stateText : t('Reconnecting…'), hostName].filter(Boolean).join(' · ')}
           </p>
         </div>
-        <Button variant="ghost" size="icon-xs" aria-label={t('Move live view')} onClick={moveLiveView}>
-          <Move size={12} />
-        </Button>
-        <Button variant="ghost" size="icon-xs" aria-label={t('Close live view')} onClick={closeLiveView}>
+        {!inWindow && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('Keep on top of other apps')}
+              title={t('Keep on top of other apps')}
+              onClick={() => {
+                setLiveWindow(true)
+                void ramu.invoke('live.window', true, pin?.hideFromSharing ?? true).catch((error) => {
+                  setLiveWindow(false)
+                  notifyError(errorText(error))
+                })
+              }}
+            >
+              <PictureInPicture2 size={12} />
+            </Button>
+            <Button variant="ghost" size="icon-xs" aria-label={t('Move live view')} onClick={moveLiveView}>
+              <Move size={12} />
+            </Button>
+          </>
+        )}
+        <Button variant="ghost" size="icon-xs" aria-label={t('Close live view')} onClick={onClose}>
           <X size={13} />
         </Button>
       </div>
-      <div className="relative mx-2 mt-1.5 aspect-video overflow-hidden rounded-(--radius-s) bg-muted">
+      <div
+        className={`relative mx-2 mt-1.5 overflow-hidden rounded-(--radius-s) bg-muted ${inWindow ? 'min-h-0 flex-1' : 'aspect-video'}`}
+      >
         {image && online ? (
           <img
             alt={t('Live view of {0}', { 0: task?.title ?? '' })}
@@ -190,6 +221,18 @@ function Body({ taskId }: { taskId: string }) {
             ))}
           </div>
         )}
+        {inWindow && (
+          <label className="flex items-center gap-1.5 text-caption text-muted-foreground">
+            <Checkbox
+              checked={pin?.hideFromSharing ?? true}
+              onCheckedChange={(checked) => {
+                setLiveWindow(true, !!checked)
+                void ramu.invoke('live.window', true, !!checked).catch(() => {})
+              }}
+            />
+            {t('Hide from screen sharing')}
+          </label>
+        )}
         <span className="flex-1" />
         {!viewOnly && computer && (
           <Button variant="ghost" size="xs" onClick={() => void host.invoke('computer.stop', taskId).catch(() => {})}>
@@ -202,7 +245,7 @@ function Body({ taskId }: { taskId: string }) {
             {t('Stop the agent')}
           </Button>
         )}
-        <Button variant="ghost" size="xs" disabled={!online} onClick={() => select(host.id, { kind: 'task', taskId })}>
+        <Button variant="ghost" size="xs" disabled={!online} onClick={onOpen}>
           <ExternalLink size={11} />
           {t('Open')}
         </Button>
@@ -214,15 +257,55 @@ function Body({ taskId }: { taskId: string }) {
 /** One small view of a thread's Browser or Computer that stays in a corner while the person works elsewhere in Ramu. */
 export function LiveView() {
   const pin = useLiveViewPin()
-  if (!pin) return null
+  const { select } = useHostSelection()
+  useEffect(() => {
+    const offClosed = ramu.on('live:closed', () => setLiveWindow(false))
+    const offOpen = ramu.on('live:open', ({ hostId, taskId }) => select(hostId, { kind: 'task', taskId }))
+    return () => {
+      offClosed()
+      offOpen()
+    }
+  }, [select])
+  if (!pin || pin.window) return null
   return (
     <aside
       className={`fixed z-50 w-[320px] max-w-[calc(100vw-32px)] rounded-(--radius-m) border border-edge bg-card text-foreground shadow-(--shadow-float) ${CORNER_CLASS[pin.corner]}`}
       aria-label={t('Live view')}
     >
       <HostProvider hostId={pin.hostId}>
-        <Body key={`${pin.hostId}:${pin.taskId}`} taskId={pin.taskId} />
+        <Body
+          key={`${pin.hostId}:${pin.taskId}`}
+          taskId={pin.taskId}
+          inWindow={false}
+          onOpen={() => select(pin.hostId, { kind: 'task', taskId: pin.taskId })}
+          onClose={closeLiveView}
+        />
       </HostProvider>
     </aside>
+  )
+}
+
+/** The live view in its own window above other apps: the same view, filling the window. */
+export function LiveWindowView() {
+  const pin = useLiveViewPin()
+  useEffect(() => {
+    if (!pin) void ramu.invoke('live.close').catch(() => {})
+  }, [pin])
+  if (!pin) return null
+  return (
+    <main className="flex h-screen flex-col bg-card text-foreground" aria-label={t('Live view')}>
+      <HostProvider hostId={pin.hostId}>
+        <Body
+          key={`${pin.hostId}:${pin.taskId}`}
+          taskId={pin.taskId}
+          inWindow
+          onOpen={() => void ramu.invoke('live.open', pin.hostId, pin.taskId).catch(() => {})}
+          onClose={() => {
+            closeLiveView()
+            void ramu.invoke('live.close').catch(() => {})
+          }}
+        />
+      </HostProvider>
+    </main>
   )
 }

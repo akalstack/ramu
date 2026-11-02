@@ -12,6 +12,7 @@ const write = (next: LiveViewPin | null) => {
 export const floatLiveView = (hostId: string, taskId: string, pinned?: LiveSurface) =>
   write({ hostId, taskId, ...(pinned ? { pinned } : {}), corner: pin?.corner ?? 'bottom-right' })
 export const closeLiveView = () => write(null)
+export const setLiveCorner = (corner: LiveViewPin['corner']) => pin && write({ ...pin, corner })
 export const moveLiveView = () => pin && write({ ...pin, corner: nextCorner(pin.corner) })
 export const pinLiveSurface = (pinned: LiveSurface) => pin && write({ ...pin, pinned })
 

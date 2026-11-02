@@ -37,15 +37,6 @@ Pills and headers show the device's own name (**iPhone 17 · iOS 26**), so **Tes
 
 Each stage is useful alone. Stage 1 ships first because it needs no new runtime.
 
-### Stage 1: Live view above other apps
-
-The in-app live view has shipped ([UI](UI.md)). Still to build:
-
-- **Desktop window:** the live view as a small Electron window with **Keep on top**, remembering its size and corner, so it stays above other apps. The main process trusts invokes only from the main window today, so a second window needs its own narrow allowlist (session reads, frames, Stop) before it can call anything.
-- **Moving the desktop browser:** the native page moves into that window, with **Showing in live view** and **Bring back** in its pane, keeping page and control state.
-- **Screen sharing:** a setting that hides live views from screen sharing where the system supports it.
-- **Phone:** dragging the view to any corner, rather than the corner button.
-
 ### Stage 2: Test devices
 
 - **Settings → Test devices (host):** a switch, off by default, with a readiness check for each platform: Xcode and Apple Silicon for iOS, the Android SDK and hardware acceleration for Android. Each missing item states its fix, and **Install & set up** handles only Ramu's own helpers. Xcode and the Android SDK stay the person's install.
@@ -75,11 +66,6 @@ The in-app live view has shipped ([UI](UI.md)). Still to build:
 Validate every input with `zod` and bound paths, logs and gestures. Keep new methods off `HOST_METHODS`, and off the viewer allowlist unless they only watch. Every string goes through `t()` with an Indonesian translation, and controls have keyboard and screen-reader labels. Update [UI](UI.md), [Architecture](ARCHITECTURE.md), [Security](../SECURITY.md) and the mobile verification list as each stage lands.
 
 ## Acceptance
-
-### Stage 1
-
-- **Representative task:** with an agent working in Browser, a person floats it, works in another app, notices it needs them, and stops or opens it from the live view.
-- A desktop browser page keeps its state and control through floating and **Bring back**.
 
 ### Stage 2
 

@@ -1,3 +1,4 @@
+import { LiveWindowView } from './liveView/LiveView'
 import { chatMotionVariables } from '@ramu/shared/chat/presentation'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
@@ -84,7 +85,16 @@ installTheme()
 installEditorTheme()
 
 // Fonts and application data load behind one continuous logo-to-wordmark reveal.
-if (!new URLSearchParams(location.search).has('ramu-storage-migration')) {
+if (new URLSearchParams(location.search).has('live')) {
+  // The live view window: one thread's view and Stop, nothing else of the workspace.
+  createRoot(document.getElementById('root')!).render(
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary scope="app">
+        <LiveWindowView />
+      </ErrorBoundary>
+    </QueryClientProvider>,
+  )
+} else if (!new URLSearchParams(location.search).has('ramu-storage-migration')) {
   pruneDrafts()
   createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
