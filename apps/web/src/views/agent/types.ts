@@ -65,5 +65,6 @@ export interface TranscriptContext {
   onStopTask: (task: AgentTask) => void
   onOpenQuestion: (requestId: string) => void
   onReviewAccess: () => void
+  onRetry?: () => void
   onEditMessage?: (text: string, files: Attachment[], seq?: number) => void
 }

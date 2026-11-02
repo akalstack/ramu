@@ -49,7 +49,7 @@ The renderer uses shadcn/ui on Base UI, Tailwind 4 and shared theme tokens. `com
 
 ## Usage limits
 
-Errors in a thread are a quiet card: a plain title, the provider's message, Copy, and the step that fixes it when there is one (**Change model** opens the model list, **Open providers** goes to sign-in).
+Errors in a thread are a quiet card: a plain title, the provider's message, Copy, and the step that fixes it when there is one (**Change model** opens the model list, **Open providers** goes to sign-in, **Try again** continues the thread and shows only while the error is its latest word). Mobile shows the same card with **Try again**.
 
 The composer shows Markdown as it is typed (bold, italic, code, headings, lists, links) and keeps every character, so what is sent is exactly what was written. While writing, ⌘B, ⌘I and ⌘E wrap the selection in bold, italic and code; ⌘B toggles the side bar everywhere else, and on Windows and Linux Ctrl+B stays with a focused terminal. Sent messages render as Markdown with their file and skill references still chips; on mobile a message with inline references stays plain text. The mobile composer is plain text.
 

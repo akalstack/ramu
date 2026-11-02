@@ -1,6 +1,7 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  'That didn’t work': 'Itu tidak berhasil',
   'This model isn’t available': 'Model ini tidak tersedia',
   'Sign-in needed': 'Perlu masuk',
   'The provider is limiting requests': 'Provider sedang membatasi permintaan',

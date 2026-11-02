@@ -49,6 +49,7 @@ export function EventRow({
   onOpenAgent,
   onOpenQuestion,
   onReviewAccess,
+  onRetry,
 }: {
   event: AgentEvent
   sessionId: string
@@ -65,6 +66,8 @@ export function EventRow({
   onOpenQuestion?: (requestId: string) => void
   /** Opens the thread's MCP access dialog from a switch notice. */
   onReviewAccess?: () => void
+  /** Continues the thread from an error that ended it. */
+  onRetry?: () => void
 }) {
   useLanguage()
   const { invoke } = useHost()
@@ -272,7 +275,7 @@ export function EventRow({
         </div>
       )
     case 'error':
-      return <ErrorNote message={e.message} />
+      return <ErrorNote message={e.message} onRetry={onRetry} />
     default:
       return null
   }

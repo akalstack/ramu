@@ -112,6 +112,15 @@ function TranscriptBlock({
             onOpenAgent={ctx.onOpenAgent}
             onOpenQuestion={ctx.onOpenQuestion}
             onReviewAccess={ctx.onReviewAccess}
+            onRetry={
+              !ctx.busyAgent &&
+              !ctx.needsInput &&
+              !ctx.blocks
+                .slice(index + 1)
+                .some((later) => later.kind === 'tools' || ['user', 'text'].includes(later.event.kind))
+                ? ctx.onRetry
+                : undefined
+            }
           />
         ))}
     </div>

@@ -94,6 +94,7 @@ import { ContinueChatDialog } from './agent/components/ContinueChatDialog'
 import { ModelChangeDialog } from './agent/components/ModelChangeDialog'
 import { PendingQuestionsBar } from './agent/components/PendingQuestionsBar'
 import { QueuedMessages } from './agent/components/QueuedMessages'
+import { ErrorNote } from './agent/components/ErrorNote'
 import { TranscriptTurn } from './agent/components/TranscriptTurn'
 import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
 import { ChatStatus } from '../chat/ChatMotion'
@@ -558,6 +559,13 @@ export const AgentView = memo(function AgentView({
     onStopTask: stopTask,
     onOpenQuestion: openQuestion,
     onReviewAccess: () => setMcpOpen(true),
+    onRetry: viewOnly
+      ? undefined
+      : () => {
+          setInterrupted(false)
+          stick.current = true
+          void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
+        },
     readOnly: viewOnly,
     onEditMessage: viewOnly ? undefined : editMessage,
   }
@@ -752,7 +760,7 @@ export const AgentView = memo(function AgentView({
           </MessageScrollerProvider>
           <div className="composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]">
             <ComposerStack>
-              {error && <div className="error text-bad">{error}</div>}
+              {error && <ErrorNote message={error} title={translate('That didn’t work')} />}
               <ConfirmStopDialog
                 command={stopping ? stopping.name : null}
                 onCancel={() => setStopping(null)}

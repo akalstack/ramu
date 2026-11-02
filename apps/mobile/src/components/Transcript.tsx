@@ -27,9 +27,12 @@ import {
   SquareTerminal,
   Wrench,
   X,
+  CircleAlert,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { fill, useT, useSay } from '../i18n'
+import { agentErrorView } from '@ramu/shared/chat/agentErrorView'
+import { showError } from '../runtime/toast'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { Markdown, ReferenceBadge, ReferenceContext } from './Markdown'
@@ -337,6 +340,65 @@ function AnswerFooter({ at, text }: { at?: number; text: string }) {
   )
 }
 
+const RESUME_PROMPT = '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>'
+
+/** An error in the thread, in the same words as the desktop: what happened, then the provider's message. */
+function ErrorCard({ message, last, chat }: { message: string; last: boolean; chat: Chat }) {
+  const { c } = useTheme()
+  const say = useSay()
+  const store = useStore()
+  const { title, action } = agentErrorView(message)
+  const canRetry =
+    action === 'retry' &&
+    last &&
+    !!chat.sessionId &&
+    chat.status !== 'running' &&
+    chat.status !== 'needs-input' &&
+    store.isOnline(chat.computerId) &&
+    store.computers?.find((host) => host.id === chat.computerId)?.access !== 'viewer'
+  return (
+    <MessageActions text={message} from="assistant">
+      <View
+        accessibilityRole="alert"
+        style={{
+          flexDirection: 'row',
+          gap: space.s,
+          padding: space.m,
+          borderRadius: radius.m,
+          backgroundColor: c.raised,
+        }}
+      >
+        <CircleAlert size={15} color={c.bad} style={{ marginTop: 2 }} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <T size={font.control} weight="600">
+            {say(title)}
+          </T>
+          <T size={font.control} tone="muted">
+            {message}
+          </T>
+          {canRetry ? (
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={() => {
+                tap()
+                void store
+                  .invoke(chat.computerId, 'agent.submit', chat.sessionId!, RESUME_PROMPT, 'steer', [], [])
+                  .catch((error) => showError(error instanceof Error ? error.message : String(error)))
+              }}
+              style={{ alignSelf: 'flex-start', paddingVertical: space.s }}
+            >
+              <T size={font.control} weight="600" tone="accent">
+                {say('Try again')}
+              </T>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    </MessageActions>
+  )
+}
+
 function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Chat; meta?: ItemMeta }) {
   switch (item.kind) {
     case 'user':
@@ -345,6 +407,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
           <UserBubble text={item.text} attachments={item.attachments} chat={chat} />
         </MessageActions>
       )
+    case 'error':
+      return <ErrorCard message={item.message} last={chat.items.at(-1)?.id === item.id} chat={chat} />
     case 'text':
       return (
         <MessageActions text={item.text} from="assistant">

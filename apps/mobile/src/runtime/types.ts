@@ -42,6 +42,7 @@ export interface TranscriptTool {
 }
 
 export type TranscriptItem = (
+  | { kind: 'error'; id: string; message: string }
   | {
       kind: 'user'
       id: string

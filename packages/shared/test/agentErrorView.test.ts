@@ -7,7 +7,7 @@ it('offers the step that fixes a known error', () => {
     action: 'model',
   })
   expect(agentErrorView('Not logged in. Please run /login').action).toBe('providers')
-  expect(agentErrorView('429 Too many requests').action).toBeUndefined()
+  expect(agentErrorView('429 Too many requests').action).toBe('retry')
 })
 
 it('stays general for anything else', () => {
