@@ -9,7 +9,7 @@ Only checks that still need a physical phone, an account or a live provider. Tes
 
 ## Pairing and hosts
 
-- [ ] Pair by Nearby hosts (both screens show one number; **Allow**, **Deny** and the two-minute expiry work; an older build or host falls back to the code), by QR and by typed code, on a LAN and a VPN. Repeat from a second desktop and with `ramu pair` on a headless host.
+- [ ] Pair by Nearby hosts (both screens show one number; **Allow**, **Deny** and the two-minute expiry work), by QR and by typed code, on a LAN and a VPN. Repeat from a second desktop and with `ramu pair` on a headless host.
 - [ ] Pairing screens: camera and local-network permissions (granted and denied), HTTP consent reset after an address edit, Pair above the keyboard on small screens and in landscape, large text and screen readers, external pairing links.
 - [ ] Two hosts streaming at once: switching, notifications and revoking one never disturbs the other; forgetting a host clears its state.
 - [ ] Sleep, network loss, background and service restart recover the transcript, drafts, pending input and terminal output without duplicates.

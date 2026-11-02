@@ -37,7 +37,7 @@ verify: pnpm --filter @ramu/server test
 
 A last line `verify: <command>` in a new goal sets the command; `/goal verify: <command>` changes it on the current goal and `/goal verify: off` removes it. The command runs in the thread's folder, with a ten-minute limit.
 
-The shield button in the desktop goal bar and in the phone's goal tray edits the same command: set or change it, or leave the field blank (or `off`) to remove it (2000 characters; hidden for a completed goal). The call is `agent.goal.verify`, which the agent's goal tools do not have, so an agent cannot set it. A host that predates it answers "Unknown method"; the phone then asks to update that host and hides the button.
+The shield button in the desktop goal bar and in the phone's goal tray edits the same command: set or change it, or leave the field blank (or `off`) to remove it (2000 characters; hidden for a completed goal). The call is `agent.goal.verify`, which the agent's goal tools do not have, so an agent cannot set it.
 
 ## Continuation
 
@@ -74,7 +74,7 @@ Whether a waiting goal continues by itself is the thread's **auto-resume**: the 
 
 A held goal has one status, `paused`, and a `pausedBy`: `user` (you paused it or pressed Stop; it never resumes by itself, and a missing value means this) or `provider-limit` (the provider's usage limit; it continues at the reset). The wording differs: **Limit reached · resumes …** versus **Goal paused**. A limit hold is never a stall, never counts toward the turn limit and never fails a verification; pressing **Pause** on it turns it into your pause, which the retry timer leaves alone.
 
-`goalHold` (`packages/shared/src/chat/goalHold.ts`) still reads the retired `waiting-provider` status from older data and hosts but never writes it. An older app talking to a newer host shows a limit hold as **Goal paused**, and its Resume acts as **Try again**. A goal travels through every provider switch: providers with session guidance get it there, others in the handoff's state block ([limits and handoff](AGENT-ROUTING.md#usage-limits-and-fallback)).
+`goalHold` (`packages/shared/src/chat/goalHold.ts`) tells a limit hold from a user pause.
 
 Goal detection depends on the model following its instructions. Creating a goal does not grant permission for additional work.
 

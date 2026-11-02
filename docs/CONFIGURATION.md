@@ -4,7 +4,7 @@
 
 The execution host stores global preferences in `settings.json` in its application data directory, next to `ramu.db`. Desktop and headless servers use the same layout. Model sets live in the file's `models` field. Threads, events and schedules stay in SQLite; drafts and UI state stay in device storage.
 
-On upgrade the host exports existing SQLite preferences once and keeps the old rows as an archive. Writes use a verified temporary file and atomic replacement. External edits reload the host's services and notify clients. Invalid JSON, invalid values or a file over 2 MiB leave the last valid settings active (built-in defaults at startup); a save from Settings refuses to overwrite an invalid file, so fix it first.
+ Writes use a verified temporary file and atomic replacement. External edits reload the host's services and notify clients. Invalid JSON, invalid values or a file over 2 MiB leave the last valid settings active (built-in defaults at startup); a save from Settings refuses to overwrite an invalid file, so fix it first.
 
 The file uses the same flat names as the settings API:
 
@@ -62,4 +62,4 @@ Repository actions appear in the project action menu with their source file and 
 - The repository default applies until a person picks a model in the draft; that choice, and any existing thread's model, is never replaced. Switching provider clears the previous account and fast tier but keeps the draft's access and fallback settings.
 - An unavailable or invalid default blocks Send, keeps the draft, and offers **Use host default** or another model. Send revalidates before creating a thread; a changed result asks for review. **Use project default** resumes inheritance.
 - Home's **Auto** routing applies the destination project's default the same way. If it is unavailable the thread is not created, the draft stays in Auto, and the error names the project. A routed thread always uses the destination's default workspace.
-- Explicit choices are kept with the draft per host and project for 30 days. On mobile, a queued message freezes its model and settings in the outbox, and offline drafts without loaded host defaults need a reviewed choice. Older hosts keep the host default and show an update hint.
+- Explicit choices are kept with the draft per host and project for 30 days. On mobile, a queued message freezes its model and settings in the outbox, and offline drafts without loaded host defaults need a reviewed choice.

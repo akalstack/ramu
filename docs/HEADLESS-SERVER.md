@@ -21,10 +21,9 @@ The package also installs `ramu` and `ramu-server`.
 | `ramu devices allow <id> <permission> [once\|hour\|day\|always]` / `deny` / `never` | Grant or remove computer, browser, terminal, settings or agents for one device; `ramu devices` lists what each holds and pending requests. |
 | `ramu hosts` / `ramu hosts add <address> <code> [--name <name>]` / `ramu hosts forget <id\|name>` | Hosts this host's agents may start threads on; adding one pairs this host there as a limited host device ([Agents and routing](AGENT-ROUTING.md#threads-on-another-host)). |
 | `ramu devices access <id> <edits\|auto\|full>` | The most access threads a paired host starts here may have (default edits). |
-| `ramu token [--rotate]` | Print the legacy shared token; `--rotate` revokes it and every paired device. |
 | `ramu browser status\|threads\|setup\|stop` | Host browser readiness, thread IDs, Chromium preflight, or cancel work and close host tabs. |
 
-Options: `--data-dir`, `--listen [host:]port`, `--discoverable`, `--worktrees`, `--private-network` (alias `--allow-plaintext-remote`), `--tls-cert`, `--tls-key`. Environment equivalents: `RAMU_USER_DATA`, `RAMU_LISTEN`, `RAMU_DISCOVERABLE`, `RAMU_WORKTREES`, `RAMU_ALLOW_PLAINTEXT_REMOTE`, `RAMU_TLS_CERT`, `RAMU_TLS_KEY`, `RAMU_SOCKET`, `RAMU_TOKEN_FILE`, `RAMU_DEVICES_FILE`.
+Options: `--data-dir`, `--listen [host:]port`, `--discoverable`, `--worktrees`, `--private-network` (alias `--allow-plaintext-remote`), `--tls-cert`, `--tls-key`. Environment equivalents: `RAMU_USER_DATA`, `RAMU_LISTEN`, `RAMU_DISCOVERABLE`, `RAMU_WORKTREES`, `RAMU_ALLOW_PLAINTEXT_REMOTE`, `RAMU_TLS_CERT`, `RAMU_TLS_KEY`, `RAMU_SOCKET`, `RAMU_DEVICES_FILE`.
 
 The default data directory is the desktop app's (`~/Library/Application Support/Ramu`, `~/.config/Ramu`, `%APPDATA%\Ramu`), so the headless server and the desktop share threads, settings and database. One server runs per data directory; a desktop that finds one running attaches to it.
 
@@ -65,7 +64,7 @@ It then sends `Authorization: Bearer <token>`; `packages/client-runtime` provide
 ### Discovery and availability
 
 - **Discoverable** (off by default; needs network access on): the host advertises its name, a random identifier, protocol version, transport and port over mDNS (`_ramu._tcp`) on the interfaces its listener serves, and nothing else. Finding a host grants nothing; pairing still needs a code. The identifier lives in `<data-dir>/discovery.json`. Headless hosts use `--discoverable`.
-- **Announcements:** the desktop listens on a small UDP port and tells the host where; when the host's listener starts or its interfaces change it sends a short signed packet asking paired devices to reconnect. Packets are signed with a key derived from the device token, replays and expired packets are ignored, and recipients are stored in `<data-dir>/presence.json` without tokens. Firewalls, NAT, older hosts or clock skew over two minutes can block delivery; use **Retry** or the five-minute fallback.
+- **Announcements:** the desktop listens on a small UDP port and tells the host where; when the host's listener starts or its interfaces change it sends a short signed packet asking paired devices to reconnect. Packets are signed with a key derived from the device token, replays and expired packets are ignored, and recipients are stored in `<data-dir>/presence.json` without tokens. Firewalls, NAT or clock skew over two minutes can block delivery; use **Retry** or the five-minute fallback.
 - **Browse roots:** the mobile app can browse the host's folders to add projects. Roots default to the home folder and existing projects; set `RAMU_BROWSE_ROOTS` to restrict them.
 
 ## From the desktop app

@@ -43,7 +43,7 @@ Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockChe
 A paired remote host is reached over one authenticated WebSocket per host (`RuntimeSocket`, pooled in `hostSocket.ts` for the Node client and `socketTransport.ts` on the phone). It carries every call and every event; there is no HTTP/SSE path. The local service speaks the same socket over its Unix socket. HTTP remains only for pairing, token renewal, health and `GET /session`, which happen before a socket can authenticate.
 
 - **Reconnect:** bounded, jittered backoff. After three failed attempts an `events`-mode host waits for an announcement or wake; a `periodic` host checks every five minutes. A network loss suspends the socket; a network change or wake reconnects at once. The phone rehydrates whenever its stream ends.
-- **Errors:** a refused socket or a host that predates sockets is reported as such ("Pairing was revoked", "Update Ramu on this host"). A socket that never connects is probed once over HTTP so a blocked WebSocket is named.
+- **Errors:** a refused socket is reported as such ("Pairing was revoked"). A socket that never connects is probed once over HTTP so a blocked WebSocket is named.
 - **Subscriptions:** clients subscribe by channel and resource (`hostSubscription.ts` on the phone). Agent events stream in full only for the thread on screen; state, questions, permission requests, queue and goal events still arrive for all threads.
 - **Recovery:** `agent.changes(sessionId, cursor, knownLastSeq)` resumes a transcript from a per-row revision counter, with a full snapshot for no cursor, a future cursor, a rewind or more than 2000 changes. `TerminalService.snapshot(id, since)` fetches only the missed terminal gap.
 - **Flow control:** terminal flow control is opt-in per subscription. A client with `flow: true` acknowledges each `term:data` chunk; the host holds output past a 1,000,000-character unacknowledged window and sends `term:behind` once the client catches up so it fetches the gap. The phone enables it.
@@ -96,7 +96,7 @@ User-facing behavior is in [UI](UI.md#integrated-browser).
 
 `index.ts` is the service entry point, `cli.ts` the CLI, `db.ts` the database, and `build.ts` the build fingerprint that detects a stale running service.
 
-Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`; SQLite keeps operational state. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or widening permissions. See [Configuration files](CONFIGURATION.md).
+Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`; SQLite keeps operational state. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or widening permissions. See [Configuration files](CONFIGURATION.md). The schema is one script in `db.ts`, stamped with a version; a new profile runs it, and a profile at another version is refused untouched.
 
 ### Shared MCP
 

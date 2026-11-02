@@ -301,7 +301,6 @@ function Computers() {
   const router = useRouter()
   const { c } = useTheme()
   const { computers, selected, select, retry } = useStore()
-  const t = useT()
   const [addressOpen, setAddressOpen] = useState(false)
   const pc = computers.find((computer) => computer.id === selected)
   return (
