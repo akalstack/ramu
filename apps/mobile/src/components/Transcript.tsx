@@ -9,6 +9,7 @@ import { InteractiveContent } from './InteractiveContent'
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ActionSheetIOS, Alert, Image, Linking, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
+import { readableText } from '../runtime/transcript'
 import type { Attachment } from '@ramu/shared/types'
 import { useRouter } from 'expo-router'
 import {
@@ -87,9 +88,64 @@ export const MessageMenu = createContext<{
   edit(seq: number, text: string, files: Attachment[]): void
   undo(seq: number): void
   aside(text: string, from: 'user' | 'assistant'): void
+  /** The text selected in a message, for the bar over the message box; null when nothing is selected. */
+  select(selection: MessageSelection | null): void
 } | null>(null)
 
-/** Long-press a message for Copy, Quote and Ask aside (the native action sheet on iOS, an alert menu on Android). */
+export interface MessageSelection {
+  text: string
+  from: 'user' | 'assistant'
+  /** The rest of what the message offers: edit, undo. */
+  more(): void
+  done(): void
+}
+
+/**
+ * A message opened for selecting, in place: the system's own handles, loupe and word snapping over plain text, which
+ * React Native's Text cannot report. It is an input only for that: no keyboard, and its text cannot change.
+ */
+function SelectableMessage({
+  text,
+  from,
+  more,
+  done,
+}: {
+  text: string
+  from: 'user' | 'assistant'
+  more(): void
+  done(): void
+}) {
+  const { c } = useTheme()
+  const menu = useContext(MessageMenu)
+  const readable = useMemo(() => readableText(text), [text])
+  const [range, setRange] = useState({ start: 0, end: readable.length })
+  const picked = readable.slice(range.start, range.end).trim()
+  const select = menu?.select
+  useEffect(() => {
+    select?.({ text: picked || readable, from, more, done })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `more` and `done` are new each render; the text decides
+  }, [select, picked, readable, from])
+  useEffect(() => () => select?.(null), [select])
+  return (
+    <TextInput
+      autoFocus
+      multiline
+      scrollEnabled={false}
+      value={readable}
+      selection={range}
+      onSelectionChange={(event) => setRange(event.nativeEvent.selection)}
+      onBlur={done}
+      showSoftInputOnFocus={false}
+      contextMenuHidden
+      caretHidden
+      selectionColor={c.accent}
+      accessibilityLabel={readable}
+      style={{ color: c.body, fontSize: font.body, lineHeight: 22, padding: 0, textAlignVertical: 'top' }}
+    />
+  )
+}
+
+/** Long-press a message to select its text; the bar over the message box then acts on the selection, as on the desktop. */
 function MessageActions({
   text,
   from,
@@ -106,9 +162,9 @@ function MessageActions({
   const menu = useContext(MessageMenu)
   const latestMenu = useRef(menu)
   latestMenu.current = menu
+  const [selecting, setSelecting] = useState(false)
   const open = () => {
     if (!text.trim()) return
-    tap()
     const actions: [string, () => void][] = [
       ['Copy', () => void Clipboard.setStringAsync(text)],
       ...(menu
@@ -146,11 +202,17 @@ function MessageActions({
         { text: 'Cancel', style: 'cancel' as const },
       ])
   }
+  if (selecting) return <SelectableMessage text={text} from={from} more={open} done={() => setSelecting(false)} />
   return (
     <Pressable
-      onLongPress={open}
+      onLongPress={() => {
+        if (!text.trim()) return
+        tap()
+        if (menu) setSelecting(true)
+        else open()
+      }}
       delayLongPress={350}
-      accessibilityHint={menu?.readOnly ? 'Long-press for Copy and Quote' : 'Long-press for Copy, Quote and Ask aside'}
+      accessibilityHint="Long-press to select text"
     >
       {children}
     </Pressable>

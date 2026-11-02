@@ -52,10 +52,12 @@ import type { AgentSettings } from '@ramu/shared/types'
 import {
   CancelPendingSettings,
   MessageMenu,
+  type MessageSelection,
   RowToggle,
   TranscriptListRow,
   type ItemMeta,
 } from '../../../components/Transcript'
+import { SelectionBar } from '../../../components/SelectionBar'
 import { ConnectionDot, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
@@ -106,6 +108,7 @@ export default function ChatScreen() {
   const [away, setAway] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [composerHeight, setComposerHeight] = useState(120)
+  const [selection, setSelection] = useState<MessageSelection | null>(null)
   // iOS: the composer and keyboard cover the list's bottom through UIScrollView.contentInset, which moves no content.
   // The keyboard handler then sets the offset itself: the end when following, else the same lines stay above the keys.
   const ios = Platform.OS === 'ios'
@@ -873,6 +876,7 @@ export default function ChatScreen() {
       <MessageMenu.Provider
         value={{
           readOnly: viewOnly,
+          select: setSelection,
           // Quote: "> line" blocks appended to the draft, as the desktop's Quote does.
           quote: (text) => {
             const key = `${chat.computerId}:chat:${chat.taskId || chat.id}`
@@ -1050,6 +1054,11 @@ export default function ChatScreen() {
             {ios ? null : <TopFade visible={scrolled} color={c.window} />}
             <KeyboardLift keyboard={keyboard}>
               <BottomFade height={composerHeight * 0.75} color={c.window} />
+              {selection ? (
+                <View style={{ position: 'absolute', left: 0, right: 0, bottom: composerHeight }}>
+                  <SelectionBar selection={selection} />
+                </View>
+              ) : null}
               {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
               <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
                 <Composer

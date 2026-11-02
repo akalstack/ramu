@@ -337,6 +337,18 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
 }
 
 /** Snapshot the existing occurrences so repeated messages cannot match old history. */
+/** A message as a person reads it, without Markdown's marks: what a selection in the thread shows and quotes. */
+export function readableText(markdown: string): string {
+  return markdown
+    .replace(/^ {0,3}```.*$\n?/gm, '')
+    .replace(/^ {0,3}#{1,6}\s+/gm, '')
+    .replace(/^ {0,3}>\s?/gm, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__|~~|`)(.+?)\1/g, '$2')
+    .replace(/(^|[\s(])[*_]([^\s*_][^*_\n]*)[*_](?=[\s).,!?:;]|$)/gm, '$1$2')
+    .trim()
+}
+
 export function deliveryBaseline(chat: Chat, text: string) {
   const shown = visibleText(text)
   return {
