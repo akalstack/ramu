@@ -4960,4 +4960,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Allow this phone on {0} if it shows this number': 'Izinkan ponsel ini di {0} jika menampilkan angka ini',
   'Reach this host from anywhere without a VPN or open ports. Devices signed in to the same Google or GitHub account find it; the relay cannot read the connection.':
     'Jangkau host ini dari mana saja tanpa VPN atau port terbuka. Perangkat yang masuk ke akun Google atau GitHub yang sama akan menemukannya; relay tidak dapat membaca koneksinya.',
+  'Agents keep running on each computer. The phone follows them while the app is open.':
+    'Agen tetap berjalan di setiap komputer. Ponsel mengikutinya selama aplikasi terbuka.',
 }

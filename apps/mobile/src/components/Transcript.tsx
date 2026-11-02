@@ -318,7 +318,34 @@ export interface ItemMeta {
   fresh?: boolean
 }
 
-/** A chat list row. Memoised on primitives, so streaming into the last row or scrolling doesn't re-render the other rows. */
+/** What rows read from their chat; any other change to the chat leaves them as drawn. */
+const rowChatKey = (chat: Chat) =>
+  [
+    chat.id,
+    chat.computerId,
+    chat.sessionId,
+    chat.taskId,
+    chat.status,
+    chat.executionState,
+    chat.provider,
+    chat.model,
+  ].join('\u0000')
+interface RowProps {
+  item: TranscriptItem
+  chat: Chat
+  date?: string
+  footer?: boolean
+  streaming: boolean
+  fresh: boolean
+  visible: boolean
+}
+/** Rows that read the rest of the chat: an error offers Retry only while it ended the thread; teammates read it whole. */
+const READS_ITEMS = new Set<TranscriptItem['kind']>(['error', 'agents'])
+
+/**
+ * A chat list row. It re-renders only when its own row, its place in the thread or what rows read from the chat
+ * changes, so streaming into the last row or a status tick does not redraw the rest of a long thread.
+ */
 export const TranscriptListRow = memo(function TranscriptListRow({
   item,
   chat,
@@ -327,15 +354,7 @@ export const TranscriptListRow = memo(function TranscriptListRow({
   streaming,
   fresh,
   visible,
-}: {
-  item: TranscriptItem
-  chat: Chat
-  date?: string
-  footer?: boolean
-  streaming: boolean
-  fresh: boolean
-  visible: boolean
-}) {
+}: RowProps) {
   const meta = useMemo(() => ({ date, footer, streaming, fresh }), [date, footer, streaming, fresh])
   return (
     <Arrive animate={fresh}>
@@ -344,7 +363,20 @@ export const TranscriptListRow = memo(function TranscriptListRow({
       </InteractiveVisibility.Provider>
     </Arrive>
   )
-})
+}, sameRow)
+
+function sameRow(previous: RowProps, next: RowProps): boolean {
+  return (
+    previous.item === next.item &&
+    previous.date === next.date &&
+    previous.footer === next.footer &&
+    previous.streaming === next.streaming &&
+    previous.fresh === next.fresh &&
+    previous.visible === next.visible &&
+    (previous.chat === next.chat ||
+      (!READS_ITEMS.has(next.item.kind) && rowChatKey(previous.chat) === rowChatKey(next.chat)))
+  )
+}
 
 export function TranscriptItemView({ item, chat, meta }: { item: TranscriptItem; chat: Chat; meta?: ItemMeta }) {
   return (

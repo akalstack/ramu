@@ -10,6 +10,32 @@ import { useT, ago, useSay } from '../i18n'
 import { GlassButton, Header, Screen, PageScrollView as ScrollView } from '../components/Screen'
 import { Card, ConnectionDot, Divider, Pill, Row, T } from '../components/ui'
 
+/** Where a host's text starts: the row's padding, the icon tile and the gap after it. */
+const TEXT_INSET = space.m + 34 + space.m
+
+/** A small tonal action under a host; several fit on one line. */
+function Action({ label, onPress, tone = 'accent' }: { label: string; onPress: () => void; tone?: 'accent' | 'bad' }) {
+  const { c } = useTheme()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      hitSlop={6}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        minHeight: 30,
+        justifyContent: 'center',
+        paddingHorizontal: space.s + 2,
+        borderRadius: radius.full,
+        backgroundColor: pressed ? c.pressed : c.fill,
+      })}
+    >
+      <T size={font.control} weight="500" tone={tone}>
+        {label}
+      </T>
+    </Pressable>
+  )
+}
+
 export default function Computers() {
   const say = useSay()
   const { c } = useTheme()
@@ -33,7 +59,7 @@ export default function Computers() {
                     select(pc.id)
                     goBackOrHome(router)
                   }}
-                  style={{ paddingVertical: space.m }}
+                  style={{ paddingTop: space.m, paddingBottom: space.s }}
                 >
                   <View
                     style={{
@@ -47,23 +73,26 @@ export default function Computers() {
                   >
                     <I size={17} color={c.soft} strokeWidth={1.8} />
                   </View>
-                  <View style={{ flex: 1, gap: 3 }}>
+                  <View style={{ flex: 1, gap: 2 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <T weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
                         {pc.name}
                       </T>
+                      {pc.id === selected ? <Check size={15} color={c.accent} strokeWidth={2.4} /> : null}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <ConnectionDot status={pc.status} />
-                      <T size={font.caption} tone="muted">
-                        {pc.status === 'online'
-                          ? t.online
-                          : pc.lastSeen
-                            ? `${t[pc.status]} · ${ago(pc.lastSeen)}`
-                            : t[pc.status]}
+                      <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                        {[
+                          pc.status === 'online'
+                            ? t.online
+                            : pc.lastSeen
+                              ? `${t[pc.status]} · ${ago(pc.lastSeen)}`
+                              : t[pc.status],
+                          pc.address.replace(/^https?:\/\//, ''),
+                        ].join(' · ')}
                       </T>
                     </View>
-                    <T size={font.caption} tone="muted" mono numberOfLines={1}>
-                      {pc.address.replace(/^https?:\/\//, '')}
-                    </T>
                     {n.running || n.waiting ? (
                       <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
                         {n.running ? (
@@ -73,7 +102,6 @@ export default function Computers() {
                       </View>
                     ) : null}
                   </View>
-                  {pc.id === selected ? <Check size={18} color={c.accent} /> : null}
                   {pc.status !== 'revoked' ? (
                     <Switch
                       accessibilityLabel={`${t.keepConnected}: ${pc.name}`}
@@ -82,57 +110,43 @@ export default function Computers() {
                     />
                   ) : null}
                 </Row>
-                {pc.deviceId && pc.status === 'offline' && !pc.lastSeen ? (
-                  <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.m }}>
-                    {t.grantedUnreachable}
-                  </T>
-                ) : null}
-                {pc.error ? (
-                  <T tone="bad" size={font.caption} style={{ paddingHorizontal: space.m }}>
-                    {pc.error}
-                  </T>
-                ) : null}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: space.m, gap: space.s }}>
-                  <Pressable
-                    accessibilityRole="button"
-                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s }}
-                    onPress={() => retry(pc.id)}
-                  >
-                    <T tone="accent">Reconnect</T>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s }}
-                    onPress={() => setEditing(pc.id)}
-                  >
-                    <T tone="accent">{say('Switch network')}</T>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s }}
-                    onPress={() => router.push('/pair')}
-                  >
-                    <T tone="accent">Pair again</T>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s }}
-                    onPress={() =>
-                      Alert.alert('Forget host?', `${pc.name}: ${t.forgetHostDraftHint}`, [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Forget',
-                          style: 'destructive',
-                          onPress: () =>
-                            void forget(pc.id).catch((error) =>
-                              Alert.alert(t.forgetHostFailed, error instanceof Error ? error.message : String(error)),
-                            ),
-                        },
-                      ])
-                    }
-                  >
-                    <T tone="bad">Forget</T>
-                  </Pressable>
+                <View style={{ paddingLeft: TEXT_INSET, paddingRight: space.m, paddingBottom: space.m, gap: space.s }}>
+                  {pc.deviceId && pc.status === 'offline' && !pc.lastSeen ? (
+                    <T tone="muted" size={font.caption}>
+                      {t.grantedUnreachable}
+                    </T>
+                  ) : null}
+                  {pc.error ? (
+                    <T tone="bad" size={font.caption}>
+                      {pc.error}
+                    </T>
+                  ) : null}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
+                    {pc.status !== 'online' && pc.status !== 'paused' ? (
+                      <Action label={say('Reconnect')} onPress={() => retry(pc.id)} />
+                    ) : null}
+                    <Action label={say('Switch network')} onPress={() => setEditing(pc.id)} />
+                    {pc.status === 'revoked' || pc.error ? (
+                      <Action label={say('Pair again')} onPress={() => router.push('/pair')} />
+                    ) : null}
+                    <Action
+                      label={say('Forget')}
+                      tone="bad"
+                      onPress={() =>
+                        Alert.alert(say('Forget {0}?', { 0: pc.name }), t.forgetHostDraftHint, [
+                          { text: say('Cancel'), style: 'cancel' },
+                          {
+                            text: say('Forget'),
+                            style: 'destructive',
+                            onPress: () =>
+                              void forget(pc.id).catch((error) =>
+                                Alert.alert(t.forgetHostFailed, error instanceof Error ? error.message : String(error)),
+                              ),
+                          },
+                        ])
+                      }
+                    />
+                  </View>
                 </View>
               </View>
             )
@@ -140,7 +154,7 @@ export default function Computers() {
         </Card>
         <GlassButton icon={Plus} title={t.pair} onPress={() => router.push('/pair')} />
         <T size={font.caption} tone="muted" style={{ textAlign: 'center', lineHeight: 18, paddingHorizontal: space.l }}>
-          Agents keep running on each computer. The phone follows them while the app is open.
+          {say('Agents keep running on each computer. The phone follows them while the app is open.')}
         </T>
       </ScrollView>
       {editing && computers.find((pc) => pc.id === editing) ? (

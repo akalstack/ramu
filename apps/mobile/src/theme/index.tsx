@@ -17,11 +17,12 @@ import { Appearance, Platform, useColorScheme } from 'react-native'
 
 // Ported from apps/web/src/styles.css: neutral gray surfaces separated by shade,
 // violet only for primary actions and highlights.
+// Cards stand off a near-black page by about as much as the light theme's white cards do from its gray page.
 const dark = {
-  window: '#131315',
-  canvas: '#1c1c1f',
-  raised: '#29292d',
-  raised2: '#232327',
+  window: '#0c0c0e',
+  canvas: '#141416',
+  raised: '#2a2a2e',
+  raised2: '#202024',
   bubble: '#2c2c31',
   code: '#141416',
   fill: 'rgba(255,255,255,0.05)',

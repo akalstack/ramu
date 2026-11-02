@@ -1,6 +1,7 @@
 import { deliveryVisible } from '../../../runtime/transcript'
 import { transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome } from '../../../runtime/navigation'
+import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, FlatList, Platform, Pressable, View } from 'react-native'
@@ -351,15 +352,20 @@ export default function ChatScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [chat?.computerId, chat?.sessionId, chat?.status] by design; the values it reads beyond these are current as of that run
   }, [chat?.computerId, chat?.sessionId, chat?.status])
-  const rows = useMemo(
-    () =>
+  // Folded rows are rebuilt as new objects; keeping the unchanged ones lets each memoised row skip its render.
+  const previousRows = useRef<TranscriptItem[]>([])
+  const rows = useMemo(() => {
+    const next = shareRows(
+      previousRows.current,
       withChangeCards(
         foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input'),
         reviews,
         chat?.sessionId,
       ),
-    [chat?.items, chat?.status, chat?.sessionId, reviews],
-  )
+    )
+    previousRows.current = next
+    return next
+  }, [chat?.items, chat?.status, chat?.sessionId, reviews])
   const arrivalReady = useRef(false)
   const arrivalChat = useRef(id)
   if (arrivalChat.current !== id) {
@@ -417,14 +423,20 @@ export default function ChatScreen() {
   const itemMeta = useMemo(() => {
     const map = new Map<string, ItemMeta>()
     let previous: number | undefined
-    pageRows.forEach((row, index) => {
-      if (row.kind === 'user') {
-        const at = row.at || undefined
-        if (needsChatDate(at, previous)) map.set(row.id, { date: formatChatDate(at!, Date.now(), store.language) })
-        if (at) previous = at
-      } else if (row.kind === 'text') {
-        const next = pageRows.slice(index + 1).find((other) => other.kind === 'user' || other.kind === 'text')
-        if (!next || next.kind === 'user') map.set(row.id, { footer: true })
+    for (const row of pageRows) {
+      if (row.kind !== 'user') continue
+      const at = row.at || undefined
+      if (needsChatDate(at, previous)) map.set(row.id, { date: formatChatDate(at!, Date.now(), store.language) })
+      if (at) previous = at
+    }
+    // From the end, one pass: a reply is its turn's last when the next user or reply row after it is a user's.
+    let nextIsUser = true
+    for (let index = pageRows.length - 1; index >= 0; index--) {
+      const row = pageRows[index]!
+      if (row.kind === 'user') nextIsUser = true
+      else if (row.kind === 'text') {
+        if (nextIsUser) map.set(row.id, { ...map.get(row.id), footer: true })
+        nextIsUser = false
       }
     })
     return map

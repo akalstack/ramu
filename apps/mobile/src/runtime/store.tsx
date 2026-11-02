@@ -26,6 +26,7 @@ import { createWorkspaceTask, workspaceCreation } from './workspaces'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState, NativeModules } from 'react-native'
 import { hostFetch as expoFetch, pinLinkKey } from './link'
+import { shareRows } from './shareRows'
 import * as Device from 'expo-device'
 import Constants from 'expo-constants'
 import type { PushEvents, RamuMethods, ReviewAddressResult } from '@ramu/shared/api'
@@ -469,7 +470,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               chat.computerId === computerId && chat.sessionId === sessionId
                 ? {
                     ...chat,
-                    items,
+                    items: shareRows(chat.items, items),
                     activityLabel: agentActivityLabel(chat.executionState, events),
                     turnStartedAt: turnStartedAt(events),
                     step: currentStep(chat.executionState, events),
