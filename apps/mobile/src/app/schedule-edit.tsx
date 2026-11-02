@@ -1,6 +1,6 @@
 import { goBackOrHome } from '../runtime/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, View } from 'react-native'
+import { ActivityIndicator, Alert, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Check, Folder, MessagesSquare } from 'lucide-react-native'
@@ -22,7 +22,7 @@ import {
   toggleWeekday,
   validateInput,
 } from '../runtime/scheduleModel'
-import { useT } from '../i18n'
+import { useSay, useT } from '../i18n'
 import { GlassButton, Header, PageScrollView, Screen } from '../components/Screen'
 import { ModelChip, type ModelChoice } from '../components/Composer'
 import { Field, Stepper, TextField, TimeField, WeekdayPicker } from '../components/ScheduleFields'
@@ -42,13 +42,17 @@ const factor = (unit: Unit) => UNITS.find((u) => u.key === unit)!.factor
 export default function ScheduleEdit() {
   const { c } = useTheme()
   const t = useT()
+  const say = useSay()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const store = useStore()
   const auto = useAutomation()
   const { computer, id } = useLocalSearchParams<{ computer?: string; id?: string }>()
-  const computerId = computer ?? store.selected
-  const existing = id ? auto.of(computerId).schedules.find((s) => s.id === id) : undefined
+  const ownerId = computer ?? store.selected
+  const existing = id ? auto.of(ownerId).schedules.find((s) => s.id === id) : undefined
+  // Runs on: a schedule lives on the host that fires it. Moving one saves it there, then removes it here on confirmation.
+  const [computerId, setComputerId] = useState(ownerId)
+  const hosts = store.computers.filter((pc) => pc.status === 'online' && pc.access !== 'viewer')
   const preset = store.defaults[computerId]
   const [input, setInput] = useState<ScheduleInput>(() =>
     existing
@@ -117,7 +121,21 @@ export default function ScheduleEdit() {
     setBusy(true)
     setError(null)
     try {
-      await auto.saveSchedule(computerId, input, existing?.id)
+      const moving = !!existing && computerId !== ownerId
+      await auto.saveSchedule(computerId, input, moving ? undefined : existing?.id)
+      if (moving && existing) {
+        const from = store.computers.find((pc) => pc.id === ownerId)?.name ?? ''
+        const to = store.computers.find((pc) => pc.id === computerId)?.name ?? ''
+        Alert.alert(say('Saved on {0}. Remove it from {1}?', { 0: to, 1: from }), undefined, [
+          { text: say('Keep both'), style: 'cancel', onPress: () => goBackOrHome(router) },
+          {
+            text: say('Remove'),
+            style: 'destructive',
+            onPress: () => void auto.deleteSchedule(ownerId, existing.id).finally(() => goBackOrHome(router)),
+          },
+        ])
+        return
+      }
       goBackOrHome(router)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -176,6 +194,19 @@ export default function ScheduleEdit() {
         keyboardDismissMode="interactive"
         contentContainerStyle={{ padding: space.l, gap: space.l + 4, paddingBottom: insets.bottom + 96 }}
       >
+        {hosts.length > 1 ? (
+          <Field label={say('Runs on')}>
+            <Segmented
+              value={computerId}
+              onChange={(next) => {
+                setComputerId(next)
+                // Projects are per host; that host checks the model when the schedule is saved.
+                patch({ projectId: NO_PROJECT, workspaceId: null })
+              }}
+              options={hosts.map((pc) => ({ key: pc.id, label: pc.name }))}
+            />
+          </Field>
+        ) : null}
         <Field label={t.name}>
           <TextField
             value={input.name}

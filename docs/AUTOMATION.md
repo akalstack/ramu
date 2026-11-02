@@ -12,6 +12,10 @@ Claude and Codex can ask questions while continuing independent work. Related qu
 
 Async questions and drafts survive reopening and service restarts. A dead process's blocking questions and approvals must be requested again. Dismissal and **No longer needed** close questions without supplying an answer.
 
+
+### Runs on
+
+A schedule lives on the host that fires it, so it follows that host's **Missed** setting and never runs twice. With several hosts connected, the editor's **Runs on** saves it on another host, and Schedules lists other hosts' schedules under **On ‹host›**. Moving a schedule saves it on the new host first, then asks before removing it from the old one. Projects are chosen from the new host, which checks the model when saving.
 ## Restart recovery
 
 **Continue threads after restart** is on by default. Unfinished threads resume their native provider session where available, otherwise use the stored transcript. Finished, failed, and manually stopped threads stay stopped.

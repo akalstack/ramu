@@ -28,7 +28,6 @@ Stage 1, **Continue on ‹host›**, has shipped ([Agents and routing](AGENT-ROU
 ### Stage 2: Choosing hosts
 
 - **Host descriptions:** hosts already report platform and architecture, and the Continue menu suggests one whose platform the request names. A short description the person writes (`GPU box`, `office network`) would be matched the same way, and `hostThreads.projects` would add these facts so `project_list` lets an agent recommend a host.
-- **Scheduled work on a chosen host:** the Automation editor gains **Runs on**, saving through `schedules.save` on that host, and lists schedules from every connected host with a host label. Schedules already live on their host, so it fires them, follows its own **Missed** setting and never runs twice. Moving a schedule saves it on the new host, then removes it from the old one after confirmation. Project and model are checked against the new host in the editor.
 
 ### Stage 3: Outside the app
 
@@ -36,7 +35,7 @@ Stage 1, **Continue on ‹host›**, has shipped ([Agents and routing](AGENT-ROU
 
 ## Services to extend
 
-- **Stage 2:** `hostThreads.projects` and `projectsForHost`, the host status that already reports `process.platform`, the free-memory figure and low-memory state each host sends through inbox state (Resources), `apps/server/src/background/schedules.ts`, and `apps/web/src/Automation.tsx` with its phone equivalent. Add the new host facts to the [host pairing review](HOST-PAIRING-REVIEW.md).
+- **Stage 2:** `hostThreads.projects` and `projectsForHost`, the host status that already reports `process.platform`, the free-memory figure and low-memory state each host sends through inbox state (Resources), Add the new host facts to the [host pairing review](HOST-PAIRING-REVIEW.md).
 - **Stage 3:** `usage.accounts` and the `costUsd` values in result events, for which a stored daily summary is new; Check whether `accountId` matches across hosts before relying on it.
 
 Every string goes through `t()` with an Indonesian translation, and the phone gets the same sheet, labels and actions. Update [Agents and routing](AGENT-ROUTING.md), [Security](../SECURITY.md) and [Automation](AUTOMATION.md) as each stage lands.
@@ -46,7 +45,6 @@ Every string goes through `t()` with an Indonesian translation, and the phone ge
 ### Stage 2
 
 - A description match never starts anything, and a host with no description is not suggested by one.
-- A schedule set for another host runs there once, follows its **Missed** setting after that host sleeps, and does not run on the first host. A moved schedule exists on one host only.
 
 ### Stage 3
 

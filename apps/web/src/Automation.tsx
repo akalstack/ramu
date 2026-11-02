@@ -27,8 +27,10 @@ import {
 import { AgentControls } from './chat/AgentControls'
 import { useModelSets } from './models/ModelSets'
 import { useAppSettings } from './settings/AppSettings'
-import { useHostRuntime, useWorkspace } from './workspace/workspace'
-import { useHost } from './workspace/HostProvider'
+import { useHostRuntime, useWorkspace, useWorkspacesOf } from './workspace/workspace'
+import { HostProvider, useHost } from './workspace/HostProvider'
+import { useComputers } from './workspace/computers'
+import { invokerFor } from './ipc'
 import { usePaged } from './settings/cards'
 import { useViewOnly } from './composer/useViewOnly'
 import { VIEW_ONLY_WRITE_NOTICE } from './composer/viewerAccess'
@@ -199,8 +201,89 @@ export function SchedulesPage({
             ))}
           </div>
         )}
+        {!editing && <OtherHostSchedules />}
       </div>
     </div>
+  )
+}
+
+/** Schedules live on their host, which fires them; other connected hosts' schedules are listed with a host label. */
+function OtherHostSchedules() {
+  const host = useHost()
+  const computers = useComputers()
+  const others = (computers?.computers ?? []).filter(
+    (computer) => computer.id !== host.id && computer.status === 'connected',
+  )
+  return (
+    <>
+      {others.map((computer) => (
+        <HostProvider key={computer.id} hostId={computer.id}>
+          <HostScheduleList name={computer.name} />
+        </HostProvider>
+      ))}
+    </>
+  )
+}
+
+function HostScheduleList({ name }: { name: string }) {
+  const { invoke } = useHost()
+  const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [runs, setRuns] = useState<ScheduleRun[]>([])
+  const reload = useCallback(
+    () =>
+      Promise.all([invoke('schedules.list'), invoke('schedules.runs')]).then(([list, history]) => {
+        setSchedules(list)
+        setRuns(history)
+      }),
+    [invoke],
+  )
+  useEffect(() => {
+    void reload().catch(() => {})
+    const timer = setInterval(() => void reload().catch(() => {}), 30_000)
+    return () => clearInterval(timer)
+  }, [reload])
+  const viewOnly = useViewOnly()
+  const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState<Schedule | null>(null)
+  if (!schedules.length) return null
+  const act = async (fn: () => Promise<unknown>) => {
+    setBusy(true)
+    try {
+      await fn()
+      await reload()
+    } catch (e) {
+      notifyError(errorText(e), 'Schedules')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section className="flex flex-col gap-1.5" aria-label={t('Schedules on {0}', { 0: name })}>
+      <h2 className="m-0 mt-4 text-control font-medium text-muted-foreground">{t('On {0}', { 0: name })}</h2>
+      {editing && (
+        <ScheduleEditor
+          key={editing.id}
+          schedule={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            void reload()
+          }}
+        />
+      )}
+      {byNextRun(schedules).map((s) => (
+        <ScheduleCard
+          key={s.id}
+          schedule={s}
+          runs={runs.filter((r) => r.scheduleId === s.id)}
+          selected={false}
+          busy={busy || viewOnly}
+          onEdit={() => setEditing(s)}
+          onAct={act}
+          onOpenRun={() => {}}
+        />
+      ))}
+    </section>
   )
 }
 const ICON_BTN =
@@ -387,9 +470,17 @@ function ScheduleEditor({
   onSaved: () => void
 }) {
   useLanguage()
-  const ws = useWorkspace(),
-    { initialSettings } = useModelSets(),
-    { invoke } = useHost()
+  const here = useHost()
+  const computers = useComputers()
+  const hosts = (computers?.computers ?? []).filter(
+    (computer) => computer.id === here.id || computer.status === 'connected',
+  )
+  const [runsOn, setRunsOn] = useState(here.id)
+  const [moved, setMoved] = useState<string | null>(null)
+  const current = useWorkspace()
+  const ws = useWorkspacesOf([runsOn])[0] ?? current,
+    { initialSettings } = useModelSets()
+  const invoke = invokerFor(runsOn)
   const [input, setInput] = useState<ScheduleInput>(
     () =>
       schedule ??
@@ -437,8 +528,10 @@ function ScheduleEditor({
     setBusy(true)
     setError(null)
     try {
-      await invoke('schedules.save', input, schedule?.id)
-      onSaved()
+      // A schedule moving to another host is created there first; the old one goes only after the person confirms.
+      const saved = await invoke('schedules.save', input, runsOn === here.id ? schedule?.id : undefined)
+      if (schedule && runsOn !== here.id && saved) setMoved(runsOn)
+      else onSaved()
     } catch (e) {
       setError(errorText(e))
     } finally {
@@ -465,6 +558,41 @@ function ScheduleEditor({
         disabled={busy}
         className="schedule-form [&_label]:flex [&_label]:flex-col [&_label]:gap-[7px] [&_label]:text-caption [&_input]:w-full [&_input]:p-[9px_10px] [&_input]:rounded-(--radius-s) [&_input]:[border:1px_solid_transparent] [&_input]:[background:var(--field)] [&_input]:text-inherit [&_input]:[font:inherit] [&_select]:w-full [&_select]:p-[9px_10px] [&_select]:rounded-(--radius-s) [&_select]:[border:1px_solid_transparent] [&_select]:[background:var(--field)] [&_select]:text-inherit [&_select]:[font:inherit] [&_textarea]:w-full [&_textarea]:p-[9px_10px] [&_textarea]:rounded-(--radius-s) [&_textarea]:[border:1px_solid_transparent] [&_textarea]:[background:var(--field)] [&_textarea]:text-inherit [&_textarea]:[font:inherit] [&_textarea]:resize-y [&_textarea]:leading-[1.5] [&_[data-slot='select-trigger']]:p-[9px_10px] [&_[data-slot='select-trigger']]:[background:var(--field)] [&_[data-slot='select-trigger']]:h-auto [border:0] p-0 mt-4 grid gap-4 min-w-0 grid-cols-1 min-[640px]:grid-cols-2 [&_>_*]:min-w-0 [&_>_:is(.schedule-wide,_.schedule-form-row,_.schedule-weekdays,_.schedule-preview,_p,_.error,_.schedule-form-actions)]:col-span-full"
       >
+        {hosts.length > 1 && (
+          <label className="schedule-wide col-span-full">
+            {t('Runs on')}
+            <Dropdown
+              label={t('Runs on')}
+              value={runsOn}
+              onChange={(id) => {
+                setRunsOn(id)
+                // Projects are per host; the new host checks the model when the schedule is saved.
+                setInput((current) => ({ ...current, projectId: NO_PROJECT, workspaceId: null }))
+              }}
+              options={hosts.map((computer) => ({ value: computer.id, label: computer.name }))}
+            />
+          </label>
+        )}
+        {moved && schedule && (
+          <div className="schedule-wide col-span-full flex flex-wrap items-center gap-2 text-caption" role="status">
+            {t('Saved on {0}. Remove it from {1}?', {
+              0: hosts.find((computer) => computer.id === moved)?.name ?? '',
+              1: hosts.find((computer) => computer.id === here.id)?.name ?? '',
+            })}
+            <Button
+              size="xs"
+              type="button"
+              onClick={() =>
+                void here.invoke('schedules.delete', schedule.id).then(onSaved, (e) => setError(errorText(e)))
+              }
+            >
+              {t('Remove')}
+            </Button>
+            <Button size="xs" variant="ghost" type="button" onClick={onSaved}>
+              {t('Keep both')}
+            </Button>
+          </div>
+        )}
         <label className="schedule-wide col-span-full">
           {t('Name')}
           <Input
