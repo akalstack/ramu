@@ -18,7 +18,7 @@ Ramu is an **Agent Development Environment (ADE)**: work with a coding agent nex
 
 Open a project, describe what you want, and review the result. Everything else is optional: the defaults work out of the box, and **Settings** has the controls for power users.
 
-Inspired by **T3 Code**, **Codex**, and **VS Code**.
+Inspired by [T3 Code](https://github.com/pingdotgg/t3code), [Codex](https://github.com/openai/codex), and [VS Code](https://github.com/microsoft/vscode).
 
 ## Why Ramu
 
@@ -30,6 +30,7 @@ On top of the workspace, Ramu adds orchestration that works without setup:
 - **Carry knowledge forward.** Share project memory and preferences across providers. Turn completed work into reusable skills and lessons, with editable notes and revision history. A periodic "What Ramu learned" summary says what was saved, merged or archived, and a review thread can fix it.
 - **Recall past work.** Ask agents to find decisions and fixes in earlier threads across providers, with links to the original messages. Skills can declare required tools and fallback procedures so agents can select instructions that fit their current tools.
 - **Work across repositories.** Add a parent folder and Ramu detects the child Git repositories and groups them into one workspace, with no multi-root file to write. Each repository gets its own branches, staging, stashes, sync, and diffs, and agents see the whole workspace.
+- **Give agents useful tools.** Use the integrated browser, grant an agent access to a specific app or screen, and connect external MCP tools with per-thread approvals and host-managed credentials. See [browser](docs/UI.md#integrated-browser), [computer use](docs/UI.md#computer-use), and [MCP security and setup](docs/ARCHITECTURE.md#shared-mcp).
 - **Continue from your phone.** Pair the iOS or Android app with your host to chat, review changes, manage Git, use terminals, and respond to agent requests.
 
 ## Features
@@ -81,6 +82,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and validation requirements. [R
 [Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENT-ROUTING.md) · [Goals](docs/GOALS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Pull requests and issues](docs/PULL-REQUESTS.md) · [Memory](docs/MEMORY.md) · [Learning](docs/LEARNING.md) · [Mobile](apps/mobile/README.md) · [Editor](docs/EDITOR.md) · [Themes](docs/THEMES.md) · [Configuration](docs/CONFIGURATION.md) · [Headless server](docs/HEADLESS-SERVER.md)
 
 Unfinished work is in [the roadmap](docs/ROADMAP.md); contributors should read the [code conventions](docs/CODE-STYLE.md).
+
+## Acknowledgments
+
+- [T3 Code](https://github.com/pingdotgg/t3code) by Ping Labs and Theo for client-host agent UX patterns, companion socket transport, and workflow shortcuts that inspired parts of Ramu.
+- [VS Code](https://github.com/microsoft/vscode) for foundational UI patterns and editor architecture.
+- [Codex](https://github.com/openai/codex) for agent session and provider interaction patterns.
 
 ## License
 
