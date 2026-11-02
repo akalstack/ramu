@@ -90,7 +90,7 @@ export function HostBrowserSettings({
           'The browser runs on this host, like terminals. Paired owner devices can open it without extra access setup. Chromium is downloaded automatically on first use; website sign-ins stay on this host.',
         )}
       </p>
-      {status?.reason && (
+      {status?.reason && status.selected !== false && (
         <p role="status" className="text-caption">
           {t(status.reason)}
         </p>
@@ -142,7 +142,7 @@ export function HostBrowserSettings({
           </p>
         </div>
       )}
-      {local && status?.enabled && (
+      {local && status?.enabled && status.selected !== false && (
         <>
           <p className="text-caption text-muted-foreground">{t('Host browser profiles')}</p>
           <form

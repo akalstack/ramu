@@ -65,11 +65,12 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
           ? null
           : await invokeOn(selectedHost, 'hostBrowser.status').catch(() => null)
       if (mine !== profileGeneration.current) return
-      setHosted(!access.current.viewOnly && !!hostStatus?.enabled)
-      const catalog =
-        !access.current.viewOnly && hostStatus?.enabled
-          ? await invokeOn(selectedHost, 'hostBrowser.profiles')
-          : await ramu.invoke('browser.profiles.list', selectedHost)
+      // Automatic uses this computer's own browser while the desktop is connected, so its profiles are the ones in use.
+      const onHost = !access.current.viewOnly && !!hostStatus?.enabled && (hostStatus.selected ?? true)
+      setHosted(onHost)
+      const catalog = onHost
+        ? await invokeOn(selectedHost, 'hostBrowser.profiles')
+        : await ramu.invoke('browser.profiles.list', selectedHost)
       if (mine === profileGeneration.current) setProfiles({ host: selectedHost, catalog })
     } catch {
       if (mine === profileGeneration.current)
@@ -113,7 +114,10 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
       try {
         const hostStatus = await invokeOn(selectedHost, 'hostBrowser.status').catch(() => null)
         if (access.current.host !== selectedHost || access.current.viewOnly) return
-        const next = hostStatus?.enabled ? hostStatus : await ramu.invoke('browser.runtimeStatus', selectedHost)
+        const next =
+          hostStatus?.enabled && (hostStatus.selected ?? true)
+            ? hostStatus
+            : await ramu.invoke('browser.runtimeStatus', selectedHost)
         if (active && mine === revision) setReadiness(next)
       } catch {
         if (active && mine === revision)
