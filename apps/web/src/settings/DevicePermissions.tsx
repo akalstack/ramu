@@ -2,7 +2,6 @@ import { SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import {
-  AUTOMATIC_PERMISSIONS,
   DEVICE_PERMISSIONS,
   DURATION_LABEL,
   PERMISSION_DURATIONS,
@@ -100,7 +99,7 @@ export function DefaultPermissions({ status, invoke }: { status: NetworkStatus; 
   const current = status.defaultPermissions
   return (
     <>
-      {AUTOMATIC_PERMISSIONS.map((permission) => (
+      {DEVICE_PERMISSIONS.map((permission) => (
         <SettingsRow key={permission} className="settings-toggle">
           <SettingsLabel
             title={t('New devices: {0}', { 0: t(PERMISSION_LABEL[permission]) })}
@@ -192,34 +191,42 @@ export function HostCeiling({
   )
 }
 
+/** This computer's agent hosts, shared by every host row and the switch for all of them. */
+export interface AgentHostsControl {
+  hosts: AgentHostSummary[] | null
+  refresh: () => Promise<unknown>
+  /** The latest use of the switch for every host; `seq` is 0 until it is used. */
+  everywhere: { on: boolean; seq: number }
+}
+
 /**
  * Agents on this computer using that host. The host grants the permission; this computer then pairs its own server with
  * a code the grant allows, so no code passes through a person. Asking and being granted connects without a second step.
  */
 function AgentsPermission({
   computer,
+  agents,
   held,
   asked,
   declined,
   onRequest,
 }: {
   computer: Computer & { url: string }
+  agents: AgentHostsControl
   held: boolean
   asked: boolean
   declined: boolean
   onRequest: () => void
 }) {
-  const [hosts, setHosts] = useState<AgentHostSummary[] | null>(null)
+  const { hosts, refresh, everywhere } = agents
   const [wanted, setWanted] = useState(false)
   const [busy, setBusy] = useState(false)
-  useEffect(() => {
-    void invoke('network.agentHosts').then(setHosts, () => setHosts([]))
-  }, [])
   const linked = hosts?.find((host) => sameAddress(host.address, computer.url))
-  const run = async (action: () => Promise<AgentHostSummary[]>) => {
+  const run = async (action: () => Promise<unknown>) => {
     setBusy(true)
     try {
-      setHosts(await action())
+      await action()
+      await refresh()
     } catch (reason) {
       notifyError(errorText(reason), t('Agents'))
     } finally {
@@ -231,6 +238,18 @@ function AgentsPermission({
       const { code } = await invokeOn(computer.id, 'device.agentPairing')
       return invoke('network.addAgentHost', computer.url, code, computer.name)
     })
+  // The switch for every host acts through each row, so a host still gets asked or connected the one way.
+  useEffect(() => {
+    if (!everywhere.seq || !hosts) return
+    if (!everywhere.on) {
+      if (linked) void run(() => invoke('network.forgetAgentHost', linked.id))
+      return
+    }
+    if (linked || declined) return
+    setWanted(true)
+    if (!held && !asked) onRequest()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per use of the switch
+  }, [everywhere.seq])
   useEffect(() => {
     if (!wanted || !held || !hosts) return
     setWanted(false)
@@ -271,7 +290,7 @@ function AgentsPermission({
 }
 
 /** What this computer may do on another host, with a request for anything missing. The other host decides. */
-export function ThisDevicePermissions({ computer }: { computer: Computer }) {
+export function ThisDevicePermissions({ computer, agents }: { computer: Computer; agents: AgentHostsControl }) {
   const host = computer.id
   const [view, setView] = useState<DevicePermissionsView | null>(null)
   const [error, setError] = useState('')
@@ -307,6 +326,7 @@ export function ThisDevicePermissions({ computer }: { computer: Computer }) {
             <AgentsPermission
               key={permission}
               computer={{ ...computer, url }}
+              agents={agents}
               held={!!view.permissions.agents}
               asked={view.pending.includes('agents')}
               declined={!view.permissions.agents && !!view.blocked?.includes('agents')}

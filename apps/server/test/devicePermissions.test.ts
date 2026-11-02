@@ -100,11 +100,13 @@ it('never gives Agents without a person choosing it', () => {
   expect(devices.permissionsOf(device.id).agents).toBeNull()
 })
 
-it('refuses to make Agents a default for new devices', () => {
+it('gives new devices Agents only once the host makes it a default', () => {
   const devices = store()
+  expect(devices.defaultPermissions()).not.toContain('agents')
+  const earlier = pair(devices)
   devices.setDefaultPermissions(['terminal', 'agents'])
-  expect(devices.defaultPermissions()).toEqual(['terminal'])
-  expect(devices.allows(pair(devices).id, 'agents')).toBe(false)
+  expect(devices.allows(pair(devices).id, 'agents')).toBe(true)
+  expect(devices.allows(earlier.id, 'agents')).toBe(false)
 })
 
 it('asks for the Agents permission before a device can pair its agents', () => {

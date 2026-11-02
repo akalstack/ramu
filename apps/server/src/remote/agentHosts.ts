@@ -89,7 +89,9 @@ export class AgentHostService {
       addedAt: Date.now(),
     }
     host.credential = await this.credentials.put(this.scope(index, host), paired.token)
-    this.workspace.setAppState(KEY, { ...index, hosts: [...index.hosts, host] })
+    // Read again: another host may have been added while this one's token was being stored.
+    const latest = this.index()
+    this.workspace.setAppState(KEY, { ...latest, hosts: [...latest.hosts, host] })
     return this.list().find((entry) => entry.id === host.id)!
   }
 

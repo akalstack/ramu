@@ -17,7 +17,13 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Check, ChevronDown, Copy, Link2, Monitor, Network, Plus, Radar, Settings2, Terminal } from 'lucide-react'
 import { useContext, useCallback, useEffect, useRef, useState } from 'react'
-import type { Computer, Computers as ComputerList, NetworkStatus, PairingOffer } from '@ramu/shared/types'
+import type {
+  AgentHostSummary,
+  Computer,
+  Computers as ComputerList,
+  NetworkStatus,
+  PairingOffer,
+} from '@ramu/shared/types'
 import { Dialog as ConfirmDialog, Dropdown, timeAgo } from '../Menu'
 import { copyText, invoke, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
@@ -28,6 +34,7 @@ import { workspaceVisible } from '../workspace/workspaceLifetime'
 import { onPairLink, takePairLink } from '../pairLink'
 import { NearbyHosts } from './NearbyHosts'
 import { AgentHosts } from './AgentHosts'
+import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
   DefaultPermissions,
   DevicePermissionList,
@@ -715,6 +722,17 @@ function Computers({ state }: { state: ComputerList }) {
     [],
   )
   const others = state.computers.filter((computer) => !computer.local)
+  const [agentHosts, setAgentHosts] = useState<AgentHostSummary[] | null>(null)
+  const [everywhere, setEverywhere] = useState({ on: false, seq: 0 })
+  const refreshAgentHosts = useCallback(
+    () => invoke('network.agentHosts').then(setAgentHosts, () => setAgentHosts([])),
+    [],
+  )
+  useEffect(() => {
+    void refreshAgentHosts()
+  }, [refreshAgentHosts])
+  const agents = { hosts: agentHosts, refresh: refreshAgentHosts, everywhere }
+  const reachable = agentReachable(state.computers)
   const selected = state.computers.find((computer) => computer.id === editing)
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true)
@@ -916,10 +934,30 @@ function Computers({ state }: { state: ComputerList }) {
                 )}
               </div>
             </div>
-            {!computer.local && computer.status === 'connected' && <ThisDevicePermissions computer={computer} />}
+            {!computer.local && computer.status === 'connected' && (
+              <ThisDevicePermissions computer={computer} agents={agents} />
+            )}
           </article>
         ))}
       </div>
+      {reachable.length > 0 && (
+        <div className="mt-2">
+          <SettingsRow className="settings-toggle">
+            <SettingsLabel
+              title={t('Agents on all hosts')}
+              help={t(
+                'Let agents here start threads on every connected host. A host that has not allowed it is asked.',
+              )}
+            />
+            <Switch
+              aria-label={t('Agents on all hosts')}
+              checked={agentsOnEverywhere(reachable, agentHosts ?? [])}
+              disabled={!agentHosts}
+              onCheckedChange={(on) => setEverywhere((current) => ({ on, seq: current.seq + 1 }))}
+            />
+          </SettingsRow>
+        </div>
+      )}
       {!others.length && (
         <p className="mt-3 text-caption text-muted-foreground">
           {t('Add your laptop, workstation or server. They stay connected together while Ramu is open.')}

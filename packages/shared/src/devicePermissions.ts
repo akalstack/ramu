@@ -6,8 +6,8 @@ export const DEVICE_PERMISSIONS = ['computer', 'browser', 'terminal', 'settings'
 export type DevicePermission = (typeof DEVICE_PERMISSIONS)[number]
 
 /**
- * What a device holds without anyone choosing. Agents is never among them: it lets another machine's agents cause work
- * here, so a person grants it to one device on purpose.
+ * What a device holds without anyone choosing: a device from before permissions, and a new one until the host saves its
+ * own defaults. Agents is left out because it lets another machine's agents cause work here, so it takes a choice.
  */
 export const AUTOMATIC_PERMISSIONS: readonly DevicePermission[] = DEVICE_PERMISSIONS.filter(
   (permission) => permission !== 'agents',

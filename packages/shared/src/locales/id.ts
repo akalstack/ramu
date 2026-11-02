@@ -1189,6 +1189,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   Projects: 'Proyek',
   'No project': 'Tanpa proyek',
   'No threads yet': 'Belum ada thread',
+  'Agents on all hosts': 'Agen di semua host',
+  'Let agents here start threads on every connected host. A host that has not allowed it is asked.':
+    'Izinkan agen di sini memulai thread di setiap host yang terhubung. Host yang belum mengizinkan akan ditanya.',
   'Other hosts for agents': 'Host lain untuk agen',
   'Added with ramu hosts add.': 'Ditambahkan dengan ramu hosts add.',
   'Turn off': 'Matikan',
