@@ -31,6 +31,7 @@ import { useHost } from '../workspace/HostProvider'
 import { t, useLanguage } from '../i18n'
 import { registerSelection } from './editorBuffers'
 import type { monaco } from './monaco'
+import './markdown-document.css'
 import './markdown-editor.css'
 
 // Keep HTML blocks as editable source instead of dropping attributes or executing embedded markup.
@@ -145,7 +146,7 @@ export function MarkdownEditor({
       contentType: 'markdown',
       editorProps: {
         attributes: {
-          class: 'ramu-rich-text',
+          class: 'ramu-rich-text markdown-document',
           role: 'textbox',
           'aria-label': t('Markdown editor'),
           'aria-multiline': 'true',
@@ -310,9 +311,9 @@ export function MarkdownEditor({
   ]
   return (
     <div className="rich-text-editor">
-      <div className="rich-text-toolbar-frame bg-canvas">
+      <div className="rich-text-toolbar-frame">
         <div
-          className="rich-text-toolbar flex flex-wrap items-center gap-1"
+          className="rich-text-toolbar flex flex-wrap items-center gap-0.5"
           role="toolbar"
           aria-label={t('Text formatting')}
         >
@@ -357,6 +358,7 @@ export function MarkdownEditor({
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
+          <span className="rich-text-toolbar-divider" aria-hidden />
           <Button
             variant="ghost"
             size="icon-sm"
@@ -396,6 +398,7 @@ export function MarkdownEditor({
               },
             ]}
           />
+          <span className="rich-text-toolbar-divider" aria-hidden />
           <Button
             variant="ghost"
             size="icon-sm"

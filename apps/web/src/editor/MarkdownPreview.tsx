@@ -10,6 +10,7 @@ import {
   previewRemarkRehypeOptions,
   previewUrlTransform,
 } from '@ramu/shared/workspace/markdownRendering'
+import './markdown-document.css'
 
 type Context = { taskId: string; repoId: string; path: string }
 
