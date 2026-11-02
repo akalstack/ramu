@@ -139,7 +139,7 @@ export function AccountHosts({ onConnect }: { onConnect: (host: LinkAccountHost)
             key={host.hostId}
             disabled={busy || Boolean(host.pairedId) || !host.online}
             onClick={() => onConnect(host)}
-            className="flex items-center gap-3"
+            className="flex items-center gap-3 rounded-(--radius-m) px-3 py-3"
           >
             <Monitor size={16} aria-hidden />
             <span className="flex min-w-0 flex-1 flex-col items-start">

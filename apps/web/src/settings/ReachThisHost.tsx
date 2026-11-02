@@ -73,11 +73,6 @@ export function LinkSettings({ status, setStatus }: { status: NetworkStatus; set
   return (
     <>
       <SettingsGroupTitle className="mt-5">{t('Ramu Link')}</SettingsGroupTitle>
-      <Note>
-        {t(
-          'Reach this host from anywhere without a VPN or open ports. Sign in with Google or GitHub; your phone and other computers signed in to the same account find it. Connections are end-to-end encrypted, so the relay cannot read them.',
-        )}
-      </Note>
       {!link.account && !link.serviceFixed && (
         <SettingsRow>
           <SettingsLabel
@@ -141,7 +136,13 @@ export function LinkSettings({ status, setStatus }: { status: NetworkStatus; set
         <SettingsRow>
           <SettingsLabel
             title={t('Sign in to Ramu Link')}
-            help={link.service ? undefined : t('Set the service address first.')}
+            help={
+              link.service
+                ? t(
+                    'Reach this host from anywhere without a VPN or open ports. Devices signed in to the same Google or GitHub account find it; the relay cannot read the connection.',
+                  )
+                : t('Set the service address first.')
+            }
           />
           <Button
             variant="secondary"

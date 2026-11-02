@@ -18,7 +18,7 @@ export function RowButton({
       type="button"
       variant="tree"
       className={cn(
-        'h-auto min-w-0 w-full cursor-default justify-start whitespace-normal text-left font-normal text-soft aria-pressed:bg-hover aria-selected:bg-hover aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-soft',
+        'row-button h-auto min-w-0 w-full cursor-default justify-start whitespace-normal text-left font-normal text-soft aria-pressed:bg-hover aria-selected:bg-hover aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-soft',
         size === 'sm'
           ? 'min-h-8 gap-2.5 px-1.5 py-0.5 text-[length:var(--font-control)]'
           : size === 'lg'

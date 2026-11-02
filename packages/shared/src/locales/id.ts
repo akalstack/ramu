@@ -3538,8 +3538,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Manage {0}': 'Kelola {0}',
   'Connection settings': 'Pengaturan koneksi',
   '{0} connected · {1} saved': '{0} tersambung · {1} tersimpan',
-  'Each host keeps its own projects, threads and settings. Switching only changes the workspace you see.':
-    'Setiap host menyimpan proyek, thread, dan pengaturannya sendiri. Berpindah hanya mengubah ruang kerja yang kamu lihat.',
   'Add your laptop, workstation or server. They stay connected together while Ramu is open.':
     'Tambahkan laptop, workstation, atau server. Semuanya tetap tersambung bersama selama Ramu terbuka.',
   'Saved on this device. The other host’s projects and settings stay as they are.':
@@ -4931,7 +4929,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Public hostname': 'Hostname publik',
   'Ramu Link': 'Ramu Link',
   'Ramu Link is unreachable right now. Ramu keeps trying.': 'Ramu Link tidak dapat dijangkau saat ini. Ramu terus mencoba.',
-  'Reach this host from anywhere without a VPN or open ports. Sign in with Google or GitHub; your phone and other computers signed in to the same account find it. Connections are end-to-end encrypted, so the relay cannot read them.': 'Jangkau host ini dari mana saja tanpa VPN atau port terbuka. Masuk dengan Google atau GitHub; ponsel dan komputer lain yang masuk ke akun yang sama akan menemukannya. Koneksi terenkripsi ujung ke ujung, jadi relay tidak dapat membacanya.',
   'Reach through Ramu Link': 'Jangkau lewat Ramu Link',
   'Reachable at': 'Dapat dijangkau di',
   'Saved in this computer’s credential store. Paste a new one to replace it.': 'Tersimpan di penyimpanan kredensial komputer ini. Tempel yang baru untuk menggantinya.',
@@ -4960,3 +4957,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Signed in as {0}': 'Masuk sebagai {0}',
   'Allow this phone on {0} if it shows this number': 'Izinkan ponsel ini di {0} jika menampilkan angka ini',
 }
+  'Reach this host from anywhere without a VPN or open ports. Devices signed in to the same Google or GitHub account find it; the relay cannot read the connection.':
+    'Jangkau host ini dari mana saja tanpa VPN atau port terbuka. Perangkat yang masuk ke akun Google atau GitHub yang sama akan menemukannya; relay tidak dapat membaca koneksinya.',

@@ -20,12 +20,16 @@ import {
   ChevronDown,
   Copy,
   Globe,
+  Laptop,
   Link2,
   Monitor,
   Network,
   Plus,
   Radar,
+  Server,
   Settings2,
+  Smartphone,
+  Tablet,
   Terminal,
 } from 'lucide-react'
 import { useContext, useCallback, useEffect, useRef, useState } from 'react'
@@ -316,28 +320,29 @@ function ThisComputer() {
       <LinkSettings status={status} setStatus={setStatus} />
       <TunnelSettings status={status} setStatus={setStatus} />
 
-      <SettingsGroupTitle className="mt-5">{t('Pair a device')}</SettingsGroupTitle>
-      <SettingsRow>
-        <SettingsLabel
-          title={t('Pair a device')}
-          help={
-            status.reachable
-              ? t(
-                  'Creates a one-time code for a phone or another host. With Discoverable on, nearby devices can also ask, and you allow them here.',
-                )
-              : t('Turn on a way in above first: other devices, Ramu Link or a tunnel.')
-          }
-        />
-        <Button
-          variant="secondary"
-          className="bg-fill hover:bg-fill-hover"
-          disabled={!status.reachable}
-          onClick={() => setPairing(true)}
-        >
-          <Link2 size={14} />
-          {t('Pair a device…')}
-        </Button>
-      </SettingsRow>
+      <div>
+        <SettingsRow>
+          <SettingsLabel
+            title={t('Pair a device')}
+            help={
+              status.reachable
+                ? t(
+                    'Creates a one-time code for a phone or another host. With Discoverable on, nearby devices can also ask, and you allow them here.',
+                  )
+                : t('Turn on a way in above first: other devices, Ramu Link or a tunnel.')
+            }
+          />
+          <Button
+            variant="secondary"
+            className="bg-fill hover:bg-fill-hover"
+            disabled={!status.reachable}
+            onClick={() => setPairing(true)}
+          >
+            <Link2 size={14} />
+            {t('Pair a device…')}
+          </Button>
+        </SettingsRow>
+      </div>
       <SettingsGroupTitle className="mt-5">{t('Devices that can use this host')}</SettingsGroupTitle>
       <PermissionRequests status={status} invoke={changePermission} />
       {status.devices.map((device) => (
@@ -772,20 +777,21 @@ function Computers({ state }: { state: ComputerList }) {
       setAdding(false)
     })
   return (
-    <section className="computer-management mb-7" aria-label={t('Hosts')}>
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <div>
-          <SettingsGroupTitle className="mb-1">{t('Connect to a host')}</SettingsGroupTitle>
-          <p className="m-0 text-caption text-muted-foreground">
+    <section className="computer-management mb-6" aria-label={t('Hosts')}>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <SettingsGroupTitle className="m-0">
+          {t('Connect to a host')}
+          <span className="ml-2 font-normal text-muted-foreground">
             {t('{0} connected · {1} saved', {
               0: state.computers.filter((computer) => computer.status === 'connected').length,
               1: state.computers.length,
             })}
-          </p>
-        </div>
+          </span>
+        </SettingsGroupTitle>
         {others.length > 0 && !adding && (
           <Button
             variant="secondary"
+            size="sm"
             disabled={busy}
             onClick={() => {
               setAdding(true)
@@ -797,66 +803,45 @@ function Computers({ state }: { state: ComputerList }) {
           </Button>
         )}
       </div>
-      <p className="m-[0_0_12px] text-caption text-muted-foreground">
-        {t('Each host keeps its own projects, threads and settings. Switching only changes the workspace you see.')}
-      </p>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         {state.computers.map((computer) => (
           <article
             key={computer.id}
-            className={`computer-card rounded-(--radius-m) p-3 ${computer.id === state.current ? 'bg-primary/10' : 'bg-fill'}`}
+            className={`computer-card rounded-(--radius-m) px-3 py-2.5 ${computer.id === state.current ? 'bg-primary/10' : 'bg-fill'}`}
             aria-label={computer.name}
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-center gap-3">
               <span className="flex size-8 flex-none items-center justify-center rounded-(--radius-s) bg-hover text-muted-foreground">
                 {computer.local ? <Monitor size={16} /> : computer.ssh ? <Terminal size={16} /> : <Network size={16} />}
               </span>
               <div className="min-w-0 grow">
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <strong className="truncate text-body font-medium">{computer.name}</strong>
-                  <span className="text-caption text-muted-foreground">
+                  <span className="flex-none text-caption text-muted-foreground">
                     {computer.local ? t('Local') : computer.ssh ? t('SSH') : t('Remote')}
                   </span>
                   {computer.id === state.current && (
-                    <span className="ml-auto flex-none rounded-full bg-primary/10 px-2 py-0.5 text-caption text-(--accent)">
+                    <span className="flex-none rounded-full bg-primary/10 px-2 py-0.5 text-caption text-(--accent)">
                       {t('Showing')}
                     </span>
                   )}
-                  {!computer.local && computer.status !== 'rejected' && (
-                    <Switch
-                      className={computer.id === state.current ? 'flex-none' : 'ml-auto flex-none'}
-                      aria-label={t('Keep {0} connected', { 0: computer.name })}
-                      title={t('Turn off to pause this connection without forgetting it.')}
-                      checked={computer.status !== 'paused'}
-                      disabled={busy}
-                      onCheckedChange={(on) => void act(() => invoke('computers.update', computer.id, { enabled: on }))}
-                    />
-                  )}
                 </div>
                 <p
-                  className="m-[3px_0_0] truncate text-caption text-muted-foreground"
+                  className="m-0 flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground"
                   title={computer.ssh ?? computer.url ?? state.deviceName}
                 >
-                  {computer.ssh ? `ssh ${computer.ssh}` : (computer.url ?? state.deviceName)}
+                  <StatusDot status={computer.status} />
+                  <span className="flex-none">{activityText(computer) || statusText(computer.status)}</span>
+                  <span className="truncate">
+                    · {computer.ssh ? `ssh ${computer.ssh}` : (computer.url ?? state.deviceName)}
+                  </span>
                 </p>
               </div>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <span className="flex min-w-0 items-center gap-2 text-caption text-muted-foreground">
-                <StatusDot status={computer.status} />
-                <span>{activityText(computer) || statusText(computer.status)}</span>
-              </span>
-              {computer.grantedUnreachable && (
-                <p role="status" className="m-0 basis-full text-caption text-muted-foreground">
-                  {t(
-                    'Paired, but this host has not answered yet. Ramu keeps the access and connects when it is reachable; you do not need the code again.',
-                  )}
-                </p>
-              )}
               <div className="flex flex-none items-center gap-1">
                 {computer.id !== state.current && (computer.local || computer.status === 'connected') && (
                   <Button
                     variant="secondary"
+                    size="sm"
                     disabled={busy}
                     onClick={() => void act(() => invoke('computers.open', computer.id))}
                   >
@@ -866,6 +851,7 @@ function Computers({ state }: { state: ComputerList }) {
                 {!computer.local && computer.status === 'offline' && (
                   <Button
                     variant="secondary"
+                    size="sm"
                     disabled={busy}
                     onClick={() => void act(() => invoke('computers.retry', computer.id))}
                   >
@@ -873,7 +859,7 @@ function Computers({ state }: { state: ComputerList }) {
                   </Button>
                 )}
                 {!computer.local && computer.status === 'rejected' && (
-                  <Button variant="secondary" disabled={busy} onClick={() => repair(computer)}>
+                  <Button variant="secondary" size="sm" disabled={busy} onClick={() => repair(computer)}>
                     {t('Pair again')}
                   </Button>
                 )}
@@ -890,17 +876,34 @@ function Computers({ state }: { state: ComputerList }) {
                   </Button>
                 )}
                 {!computer.local && (
-                  <Button variant="ghost" disabled={busy} onClick={() => setForgetting(computer.id)}>
+                  <Button variant="ghost" size="sm" disabled={busy} onClick={() => setForgetting(computer.id)}>
                     {t('Forget')}
                   </Button>
                 )}
+                {!computer.local && computer.status !== 'rejected' && (
+                  <Switch
+                    className="ml-1 flex-none"
+                    aria-label={t('Keep {0} connected', { 0: computer.name })}
+                    title={t('Turn off to pause this connection without forgetting it.')}
+                    checked={computer.status !== 'paused'}
+                    disabled={busy}
+                    onCheckedChange={(on) => void act(() => invoke('computers.update', computer.id, { enabled: on }))}
+                  />
+                )}
               </div>
             </div>
+            {computer.grantedUnreachable && (
+              <p role="status" className="m-[6px_0_0_44px] text-caption text-muted-foreground">
+                {t(
+                  'Paired, but this host has not answered yet. Ramu keeps the access and connects when it is reachable; you do not need the code again.',
+                )}
+              </p>
+            )}
             {!computer.local && computer.status === 'connected' && (
-              <Collapsible className="mt-2">
+              <Collapsible className="mt-1 ml-[36px]">
                 <CollapsibleTrigger
                   render={
-                    <Button variant="ghost" size="sm" className="group/perm -ml-2 text-caption text-muted-foreground" />
+                    <Button variant="ghost" size="sm" className="group/perm text-caption text-muted-foreground" />
                   }
                 >
                   {t('What this computer may do there')}
@@ -932,15 +935,17 @@ function Computers({ state }: { state: ComputerList }) {
           </SettingsRow>
         </div>
       )}
-      {!others.length && (
-        <p className="mt-3 text-caption text-muted-foreground">
-          {t('Add your laptop, workstation or server. They stay connected together while Ramu is open.')}
-        </p>
-      )}
       {(adding || !others.length) && (
-        <div className="mt-3 rounded-(--radius-m) bg-fill p-4">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <strong className="text-body font-medium">{t('Add a host')}</strong>
+        <div className="mt-2 rounded-(--radius-m) bg-fill p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="flex flex-col">
+              <strong className="text-body font-medium">{t('Add a host')}</strong>
+              {!others.length && (
+                <span className="text-caption text-muted-foreground">
+                  {t('Add your laptop, workstation or server. They stay connected together while Ramu is open.')}
+                </span>
+              )}
+            </span>
             {others.length > 0 && (
               <Button variant="ghost" disabled={busy} onClick={() => setAdding(false)}>
                 {t('Cancel')}
@@ -948,7 +953,7 @@ function Computers({ state }: { state: ComputerList }) {
             )}
           </div>
           <div
-            className="mb-4 inline-flex gap-1 rounded-(--radius-s) bg-background/40 p-0.5"
+            className="mb-3 inline-flex gap-1 rounded-(--radius-s) bg-background/40 p-0.5"
             role="group"
             aria-label={t('How to connect')}
           >
@@ -1406,6 +1411,14 @@ function deviceSummary(device: NetworkDevice): string {
  * One paired device as a single row: name, what it may do and when it was last seen. Its permissions, dates and Revoke
  * open below it, so a long list of devices stays scannable.
  */
+/** Devices report no platform, so the name decides: a paired host, a phone or tablet, or a computer. */
+function DeviceIcon({ device }: { device: NetworkDevice }) {
+  if (device.kind === 'host') return <Server size={16} aria-hidden />
+  if (/\b(iphone|android|pixel|galaxy|phone)\b/i.test(device.name)) return <Smartphone size={16} aria-hidden />
+  if (/\b(ipad|tablet)\b/i.test(device.name)) return <Tablet size={16} aria-hidden />
+  return <Laptop size={16} aria-hidden />
+}
+
 function PairedDeviceRow({
   device,
   invoke,
@@ -1418,16 +1431,19 @@ function PairedDeviceRow({
   const [open, setOpen] = useState(false)
   const seen = device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never')
   return (
-    <Collapsible open={open} onOpenChange={setOpen} render={<SettingsRow className="settings-stack gap-0 py-2.5" />}>
+    <Collapsible open={open} onOpenChange={setOpen} render={<SettingsRow className="settings-stack gap-0 p-1.5" />}>
       <CollapsibleTrigger
         render={
           <RowButton
             size="lg"
-            className="-mx-2 w-[calc(100%+16px)] rounded-(--radius-s) px-2"
+            className="rounded-(--radius-s) px-2.5 py-2.5"
             aria-label={t('{0}, {1}, last seen {2}', { 0: device.name, 1: deviceSummary(device), 2: seen })}
           />
         }
       >
+        <span className="flex size-8 flex-none items-center justify-center rounded-(--radius-s) bg-hover text-muted-foreground">
+          <DeviceIcon device={device} />
+        </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate text-control font-medium text-foreground">{device.name}</span>
           <span className="truncate text-caption text-muted-foreground">
@@ -1440,7 +1456,7 @@ function PairedDeviceRow({
           aria-hidden
         />
       </CollapsibleTrigger>
-      <CollapsibleContent className="flex flex-col gap-2 pt-2">
+      <CollapsibleContent className="flex flex-col gap-2 px-2.5 pt-2 pb-2.5">
         {device.kind === 'host' ? (
           <div className={SETTINGS_CARD_LINE}>
             <SettingsLabel

@@ -839,7 +839,8 @@ kbd {
     .add-project-btn,
     .composer button,
     .start-dock button,
-    .home-agent
+    .home-agent,
+    .row-button
   ) {
   @apply min-h-7;
   @apply p-[0_12px];

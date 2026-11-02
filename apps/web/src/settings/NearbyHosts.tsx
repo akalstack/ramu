@@ -133,7 +133,7 @@ export function NearbyHosts({
         {message}
       </p>
       {hosts.length > 0 && (
-        <ul className="-mx-1 m-0 flex list-none flex-col gap-1 p-0" aria-label={t('Nearby hosts')}>
+        <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label={t('Nearby hosts')}>
           {hosts.map((host) => {
             const route = host.routes[0]
             const active = selected?.key === host.key
@@ -141,7 +141,7 @@ export function NearbyHosts({
               <li key={host.key}>
                 <RowButton
                   size="lg"
-                  className="rounded-(--radius-m) px-3 py-2.5"
+                  className="rounded-(--radius-m) px-3 py-3"
                   aria-pressed={active}
                   disabled={!route}
                   onClick={() => route && setSelected({ key: host.key, url: route.url })}
