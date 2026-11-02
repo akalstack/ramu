@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { HostAddressSheet } from '../components/HostAddressSheet'
 import { goBackOrHome } from '../runtime/navigation'
-import { Alert, Pressable, View } from 'react-native'
+import { Alert, Pressable, Switch, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Check, Laptop, Plus, Server } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
@@ -16,7 +16,7 @@ export default function Computers() {
   const t = useT()
   const router = useRouter()
   const [editing, setEditing] = useState<string | null>(null)
-  const { computers, chats, selected, select, forget, retry } = useStore()
+  const { computers, chats, selected, select, forget, retry, setConnected } = useStore()
   return (
     <Screen bg="canvas">
       <Header modal title={t.computers} subtitle={say('Every paired host stays connected')} />
@@ -74,6 +74,13 @@ export default function Computers() {
                     ) : null}
                   </View>
                   {pc.id === selected ? <Check size={18} color={c.accent} /> : null}
+                  {pc.status !== 'revoked' ? (
+                    <Switch
+                      accessibilityLabel={`${t.keepConnected}: ${pc.name}`}
+                      value={pc.status !== 'paused'}
+                      onValueChange={(on) => void setConnected(pc.id, on)}
+                    />
+                  ) : null}
                 </Row>
                 {pc.deviceId && pc.status === 'offline' && !pc.lastSeen ? (
                   <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.m }}>

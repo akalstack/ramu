@@ -860,6 +860,16 @@ function Computers({ state }: { state: ComputerList }) {
                       {t('Showing')}
                     </span>
                   )}
+                  {!computer.local && computer.status !== 'rejected' && (
+                    <Switch
+                      className={computer.id === state.current ? 'flex-none' : 'ml-auto flex-none'}
+                      aria-label={t('Keep {0} connected', { 0: computer.name })}
+                      title={t('Turn off to pause this connection without forgetting it.')}
+                      checked={computer.status !== 'paused'}
+                      disabled={busy}
+                      onCheckedChange={(on) => void act(() => invoke('computers.update', computer.id, { enabled: on }))}
+                    />
+                  )}
                 </div>
                 <p
                   className="m-[3px_0_0] truncate text-caption text-muted-foreground"
@@ -889,15 +899,6 @@ function Computers({ state }: { state: ComputerList }) {
                     onClick={() => void act(() => invoke('computers.open', computer.id))}
                   >
                     {t('Open')}
-                  </Button>
-                )}
-                {!computer.local && computer.status === 'paused' && (
-                  <Button
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() => void act(() => invoke('computers.update', computer.id, { enabled: true }))}
-                  >
-                    {t('Resume')}
                   </Button>
                 )}
                 {!computer.local && computer.status === 'offline' && (

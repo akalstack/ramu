@@ -2,7 +2,8 @@ import type { AgentProvider, AgentQuestion, ChatGoal, Project, QueuedMessage, Ta
 
 // Native view models; host IDs are kept separately from computer-scoped UI IDs.
 
-export type ComputerStatus = 'online' | 'connecting' | 'offline' | 'revoked'
+/** `paused`: the person turned this connection off; nothing connects or retries until it is turned on again. */
+export type ComputerStatus = 'online' | 'connecting' | 'offline' | 'revoked' | 'paused'
 
 export interface Computer {
   id: string

@@ -142,6 +142,8 @@ interface Store extends State {
   /** Moves a saved host to a new address only after that address proves it is the host this phone paired with. */
   reviewAddress(id: string, address: string, signal?: AbortSignal): Promise<ReviewAddressResult>
   probeHosts: ReachableHostProbe
+  /** Turns a host's connection off without forgetting it, or back on. */
+  setConnected(id: string, on: boolean): Promise<void>
   forget(id: string): Promise<void>
   retry(id: string): void
   invoke<M extends keyof RamuMethods>(
@@ -279,7 +281,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...saved,
       ready: false,
       chats: saved.chats.map((chat) => ({ ...chat, items: normalizeHelperGroups(chat.items) })),
-      computers: saved.computers.map((c) => ({ ...c, status: c.status === 'revoked' ? 'revoked' : 'connecting' })),
+      // A revoked pairing and a connection the person turned off keep their state; every other host reconnects.
+      computers: saved.computers.map((c) => ({
+        ...c,
+        status: c.status === 'revoked' || c.status === 'paused' ? c.status : 'connecting',
+      })),
       outbox: restoreOutbox(saved.outbox, sendJournal),
     }
   })
@@ -1130,7 +1136,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     connections.current.delete(computer.id)
     const generation = (generations.current.get(computer.id) ?? 0) + 1
     generations.current.set(computer.id, generation)
-    if (!active.current) return
+    // A connection the person turned off stays off: no connecting and no retries.
+    if (!active.current || ref.current.computers.find((c) => c.id === computer.id)?.status === 'paused') return
     if (!resuming || computer.status !== 'online') status(computer.id, 'connecting')
     const token = await readToken(computer.id)
     if (generations.current.get(computer.id) !== generation || !active.current) return
@@ -1261,7 +1268,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           reconnectTimers.current.delete(computer.id)
           if (!active.current || generations.current.get(computer.id) !== generation) return
           const saved = ref.current.computers.find((c) => c.id === computer.id)
-          if (saved && saved.status !== 'revoked') void connect(saved, false, backoff + 1).catch(report)
+          if (saved && saved.status !== 'revoked' && saved.status !== 'paused')
+            void connect(saved, false, backoff + 1).catch(report)
         },
         Math.min(30_000, 1000 * 2 ** Math.min(backoff, 5)) + Math.random() * 500,
       )
@@ -1271,7 +1279,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     active.current = AppState.currentState !== 'background'
     for (const computer of ref.current.computers)
-      if (computer.status !== 'revoked') void connect(computer).catch(report)
+      if (computer.status !== 'revoked' && computer.status !== 'paused') void connect(computer).catch(report)
     change((s) => ({ ...s, ready: true }))
     if (ref.current.drafts['push-enabled'] === 'yes')
       void import('./push')
@@ -1310,7 +1318,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       else
         for (const computer of ref.current.computers)
-          if (computer.status !== 'revoked') void connect(computer, true).catch(report)
+          if (computer.status !== 'revoked' && computer.status !== 'paused') void connect(computer, true).catch(report)
     })
     const poll = setInterval(() => {
       if (active.current)
@@ -1535,6 +1543,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return checkHostConnection(address, token, expoFetch as typeof globalThis.fetch, probeSignal)
         },
       })
+    },
+    setConnected: async (id, on) => {
+      const computer = ref.current.computers.find((c) => c.id === id)
+      if (!computer || computer.status === 'revoked') return
+      if (!on) {
+        clearTimeout(reconnectTimers.current.get(id))
+        reconnectTimers.current.delete(id)
+        const connection = connections.current.get(id)
+        generations.current.set(id, (generations.current.get(id) ?? 0) + 1)
+        connection?.controller.abort()
+        connection?.client.close()
+        connections.current.delete(id)
+        status(id, 'paused')
+      } else {
+        status(id, 'offline')
+        const saved = ref.current.computers.find((c) => c.id === id)
+        if (saved) await connect(saved)
+      }
+      await writeLocal({ ...ref.current, usage: undefined, catalogs: undefined, ready: undefined, error: undefined })
     },
     forget: async (id) => {
       clearTimeout(reconnectTimers.current.get(id))

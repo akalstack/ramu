@@ -406,7 +406,9 @@ export function StatusIcon({ status, size = 16 }: { status: TaskStatus; size?: n
 
 export function ConnectionDot({ status, size = 8 }: { status: ComputerStatus; size?: number }) {
   const { c } = useTheme()
-  const color = { online: c.ok, connecting: c.warn, offline: c.placeholder, revoked: c.bad }[status]
+  const color = { online: c.ok, connecting: c.warn, offline: c.placeholder, revoked: c.bad, paused: c.placeholder }[
+    status
+  ]
   return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />
 }
 

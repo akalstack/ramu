@@ -10,6 +10,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open providers': 'Buka provider',
   'Favorites': 'Favorit',
   'Brief': 'Ringkas',
+  'Keep {0} connected': 'Tetap hubungkan {0}',
+  'Turn off to pause this connection without forgetting it.': 'Matikan untuk menjeda koneksi ini tanpa melupakannya.',
   'Float on desktop': 'Mengambang di desktop',
   'Browser, Computer and test device trays get Float: a small live view in a corner, or a window above other apps, with Stop always in reach.': 'Baki Browser, Computer, dan perangkat uji mendapat Mengambang: tampilan langsung kecil di sudut, atau jendela di atas aplikasi lain, dengan Hentikan selalu terjangkau.',
   'Test devices': 'Perangkat uji',
