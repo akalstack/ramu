@@ -23,7 +23,19 @@ Settings → Remote access → **How devices reach this host** (more than one ca
 | **Direct** | A host with a public name | A certificate (`--tls-cert`, `--tls-key`) or **Cloudflare Tunnel** (below) | HTTPS |
 | **Ramu Link** | Everyone else | A free Ramu account (Google or GitHub) | Outbound-only relay, end-to-end encrypted between device and host |
 
-Each mode shows its address, whether it is reachable now (checked from the host), and a **Pair a device** action that already knows which address to hand out. The phone and desktop try addresses in order of preference (private network, direct, Link) and fall back without a person choosing.
+Each mode shows its address, whether it is reachable now (checked from the host), and a **Pair a device** action that already knows which address to hand out.
+
+### Routes: pair once, reach it every way
+
+T3 Connect keeps a list of routes per machine and learns LAN and Tailscale addresses through its relay; Ramu does the same and goes further:
+
+- **One device, every route.** A device pairs once and keeps one token, role and set of permissions whichever route carries it. T3 Code gives its relay and direct pairing separate sessions with different permissions; Ramu never does.
+- **Learned routes.** The host already names its addresses in the identity answer (`IDENTITY_PATH`), and clients prove the host before using one (`hostProof.ts`, the phone's `hostRoutes.ts`). Link and tunnel addresses join that list, so pairing once through Link is enough to use the LAN at home, and a device paired on the LAN gains Link without pairing again.
+- **Fastest first, back when it works.** Clients try direct routes first and Link last, and move back to a direct route when the network changes, when the app returns to the foreground and every minute while on Link.
+
+### Guided setup: `ramu up`
+
+One command for a command-line host, like `t3 up`: it asks how other devices reach this host (private network, Cloudflare Tunnel, Ramu Link, any combination), signs in when Link is chosen, installs the background service on macOS and Linux, and prints a pairing code. Flags (`--private-network`, `--tunnel`, `--link`, their `--no-` forms, `--yes`) make it scriptable; without a terminal it never prompts and names the missing flags. `ramu status --json` shows the result.
 
 ### Cloudflare Tunnel (Direct, no account with us)
 
@@ -38,17 +50,18 @@ Ramu downloads a pinned `cloudflared` release with a checked hash into its data 
 
 ### Pieces
 
-1. **Account service** (`apps/link`, new): [Better Auth](https://www.better-auth.com) on Cloudflare Workers with D1. Google and GitHub social sign-in only (no passwords to store or reset). The [device authorization](https://www.better-auth.com/docs/plugins/device-authorization) plugin signs in a headless host (`ramu link login` prints a code and URL). The account holds only: profile name and email, linked hosts (id, name, identity public key, last seen) and linked devices. No workspace data, settings, credentials or transcripts.
+1. **Account service** (`apps/link`, new): [Better Auth](https://www.better-auth.com) on Cloudflare Workers with D1. Google and GitHub social sign-in only (no passwords to store or reset). Every client signs in the same way, with the [device authorization](https://www.better-auth.com/docs/plugins/device-authorization) flow: the app or `ramu link login` shows a short code and opens (or prints) a link, the person signs in with Google or GitHub on any device and confirms the code, and the client continues on its own. No OAuth callback port or app redirect is needed, so it works over SSH and on a phone alike. The account holds only: profile name and email, linked hosts (id, name, identity public key, last seen) and linked devices. No workspace data, settings, credentials or transcripts.
 2. **Relay** (same Worker): one [Durable Object](https://developers.cloudflare.com/durable-objects/) per host. The host keeps one outbound WebSocket to its object; each device connects to the same object and the object forwards opaque encrypted frames between them. WebSocket hibernation and automatic ping responses keep idle hosts from consuming requests, which keeps a personal host inside Cloudflare's free plan.
 3. **Host side** (`apps/server/src/remote/link/`): sign-in state, the outbound relay connection with back-off, the persistent host identity key, and a bridge that hands each relayed device stream to the existing socket handler as if it came from the network listener.
 4. **Clients:** `packages/client-runtime` and the phone's `socketTransport.ts` get a Link transport beside the direct one; `RuntimeSocket` runs unchanged on top. Desktop and phone get **Sign in with Google / GitHub** in Remote access and on the phone's pairing screen, and a **Your hosts** list from the account.
 
 ### Trust model
 
-- **End-to-end encryption.** Each host gets a persistent X25519 identity key (today only per-request keys exist in `pairingRequests.ts`). A device learns it at pairing and runs a Noise handshake (IK once the key is known, XX for first contact) inside the relay stream. The relay sees connection metadata and frame sizes, not content or bearer tokens.
+- **End-to-end encryption.** Each host gets a persistent X25519 identity key (today only per-request keys exist in `pairingRequests.ts`). Every Link stream runs `Noise_NX_25519_ChaChaPoly_SHA256`: the device learns the host's key inside the handshake and, once paired, refuses a stream whose key differs from the one it pinned. Before pairing it may only use pairing by request, whose commit-reveal number already defeats a relay that substitutes keys. The relay sees connection metadata and frame sizes, not content or bearer tokens.
 - **The account finds hosts; the host decides.** Signing in lists your hosts and lets a device send a pairing request through the relay. The host shows it like a nearby request today (dialog, notification, or `ramu pair --approve`), with both screens showing the same six-digit number derived from the Noise handshake, so a compromised relay or account cannot pair silently.
 - **Optional auto-approve.** **Approve my account's devices automatically** (off by default, choosing viewer or full access) trusts the Ramu Link service and the identity provider. The setting says so, and works only for devices signed in to the host's own account.
 - **Existing rules unchanged.** Device tokens, roles, the viewer allowlist, device permissions, renewal and revocation stay in the host exactly as in [Security](../../SECURITY.md#remote-access). Signing out or unlinking a host closes its relay connection; revoking a device at the host still ends it immediately.
+- **Host limit.** The hosted service links up to 5 hosts per account; phones and browsers do not count. There is no paid tier to raise it: a self-hosted Link Worker has no limit. Removing a host frees its slot at once.
 - **Limits.** The relay authenticates the host with a host-scoped token from the device flow and devices with session tokens, rate-limits connection attempts per account and IP, and caps frame size and concurrent devices per host.
 
 ### Protocol changes
@@ -57,7 +70,9 @@ Link carries one encrypted stream per device. `POST /pair`, `POST /renew` and `G
 
 ## Delivery order
 
-1. **Connection modes and Cloudflare Tunnel.** The Remote access section, reachability checks, address preference in clients, managed `cloudflared` (quick and named). No account. Useful on its own.
+Self-hosting is supported from the start: `apps/link` deploys to any Cloudflare account with `wrangler deploy`, and hosts and clients take the service URL from Settings or `RAMU_LINK_URL`.
+
+1. **Connection modes and Cloudflare Tunnel.** The Remote access section, managed `cloudflared` (quick and named), tunnel addresses in the host's routes, and `ramu up`. No account. Useful on its own.
 2. **Accounts.** `apps/link` with Better Auth, Google and GitHub, device flow, host and device lists, sign-in on desktop, phone and `ramu link login`. Privacy notice and account deletion that removes every linked host and device.
 3. **Relay and end-to-end encryption.** Host identity keys, Durable Object relay, Noise handshake, Link transport in clients, pairing through the account.
 4. **Docs.** [Remote hosts](../guide/remote-hosts.md) gets the three modes; [Security](../../SECURITY.md#remote-access) replaces "Ramu has no relay and no end-to-end encryption" with the Link trust model; the roadmap's relay and preference-sync decisions are updated.
@@ -84,5 +99,4 @@ Link carries one encrypted stream per device. `POST /pair`, `POST /renew` and `G
 
 - Push wake-ups through the relay so a phone without a direct path still gets notifications (design with the existing direct-host push).
 - Sharing a host with another account as a viewer.
-- Self-hosting the Link Worker on your own Cloudflare account, with the URL set in Settings.
 - Passkeys as a third sign-in method.
