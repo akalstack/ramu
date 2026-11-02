@@ -1737,7 +1737,8 @@ describe('AI commit message drafts', () => {
     const analyze = vi
       .spyOn(svc as unknown as { analyze: (prompt: string) => Promise<unknown> }, 'analyze')
       .mockResolvedValue({
-        message: '```\nTitle: feat(login): retry expired sessions\n\nRetries once when a session expires.\n\n- Adds a retry\n```',
+        message:
+          '```\nTitle: feat(login): retry expired sessions\n\nRetries once when a session expires.\n\n- Adds a retry\n```',
         provider: 'claude-code',
         model: 'sonnet',
       })

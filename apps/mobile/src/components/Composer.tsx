@@ -16,7 +16,6 @@ import {
 } from 'react-native'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
-import { StepSlider } from './StepSlider'
 import { SuggestionList, useComposerSuggest } from './ComposerSuggest'
 import {
   ArrowUp,
@@ -1509,15 +1508,14 @@ function QuickSteps({
   computerId: string
   onChange: (m: ModelChoice) => void
 }) {
+  const { c } = useTheme()
   // This phone's own choice, then the shared mobile setting, then the computer's. Changing it only redraws the control.
   const flow = useModelFlow(computerId).effective.value
   const [mode, setMode] = useState<'model' | 'effort'>(flow)
   useEffect(() => {
     setMode(flow)
-    setPreview(null)
   }, [flow])
   const [setId, setSetId] = useState(prefs?.defaultSetId ?? '')
-  const [preview, setPreview] = useState<number | null>(null)
   if (!prefs?.sets.length && mode === 'model') return null
   const set = prefs?.sets.find((s) => s.id === setId) ?? prefs?.sets[0]
   const row = (provider: AgentProvider, model: string) =>
@@ -1550,7 +1548,7 @@ function QuickSteps({
         )
       : efforts.indexOf(effortNow)
   if (items.length < 2) return null
-  const shown = items[preview ?? index]
+  const shown = items[index]
   const cap = (s: string) => s.replace(/\b\w/g, (ch) => ch.toUpperCase())
   return (
     <View style={{ paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: space.m, gap: space.xs }}>
@@ -1568,17 +1566,46 @@ function QuickSteps({
           style={{ width: 150 }}
         />
       </View>
-      <StepSlider
-        label={mode === 'model' ? 'Model set step' : 'Reasoning effort level'}
-        count={items.length}
-        index={index}
-        onPreview={setPreview}
-        onCommit={(i) => {
-          setPreview(null)
-          const pick = items[i]!.pick
-          onChange({ settings: value.settings, ...pick })
-        }}
-      />
+      {mode === 'model' ? (
+        // One tap per step: a slider inside a sheet fought the sheet's own drag.
+        <View accessibilityRole="radiogroup" accessibilityLabel="Model set step" style={{ marginHorizontal: -space.l }}>
+          {items.map((item, i) => (
+            <Row
+              key={`${item.pick.provider}:${item.pick.model}:${item.pick.effort}`}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: i === index }}
+              onPress={() => {
+                tap()
+                onChange({ settings: value.settings, ...item.pick })
+              }}
+            >
+              <T style={{ flex: 1 }} weight={i === index ? '600' : '400'} numberOfLines={1}>
+                {cap(item.label)}
+              </T>
+              {i === index ? <Check size={17} color={c.accent} /> : null}
+            </Row>
+          ))}
+        </View>
+      ) : (
+        <View
+          accessibilityRole="radiogroup"
+          accessibilityLabel="Reasoning effort level"
+          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, paddingTop: space.xs }}
+        >
+          {items.map((item, i) => (
+            <Chip
+              key={item.label}
+              label={cap(item.label)}
+              fill
+              selected={i === index}
+              onPress={() => {
+                tap()
+                onChange({ settings: value.settings, ...item.pick })
+              }}
+            />
+          ))}
+        </View>
+      )}
       {mode === 'model' && (prefs?.sets.length ?? 0) > 1 ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
           {prefs!.sets.map((s) => (
