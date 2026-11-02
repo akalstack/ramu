@@ -17,7 +17,7 @@ function bubble(online, state = 'sending') {
       exports: module.exports,
       require: (id) => {
         if (id === 'react/jsx-runtime') return require(id)
-        if (id === 'react') return { useState: () => [false, () => {}] }
+        if (id === 'react') return { useState: () => [false, () => {}], useEffect() {} }
         if (id === '../runtime/store') return { useStore: () => ({ language: 'en', isOnline: () => online }) }
         if (id === '../theme') return { useTheme: () => ({ c: {} }), radius: {}, space: {}, font: {} }
         if (id === '../i18n') return { useT: () => ({}), useSay: () => (text) => text }
@@ -34,7 +34,9 @@ test('delivery shows the complete submitted text immediately without offering an
   assert.equal(tree.props.disabled, true)
   assert.equal(tree.props.accessibilityLabel, 'Sending: Hello')
   assert.equal(tree.props.children[0].props.children.props.children, 'Hello')
-  assert.equal(tree.props.children[1].props.children[1].props.children, 'Sending…')
+  // On its way it reads as the sent message: no status words under the bubble.
+  assert.equal(tree.props.children[1], null)
+  assert.equal(tree.props.children[2], null)
 })
 
 test('offline and uncertain messages remain available to review or cancel', () => {
@@ -48,5 +50,6 @@ test('acknowledged delivery stays visible as sent while the phone reconnects', (
   const tree = bubble(false, 'accepted')
   assert.equal(tree.props.disabled, true)
   assert.equal(tree.props.children[0].props.children.props.children, 'Hello')
-  assert.equal(tree.props.children[1].props.children[1].props.children, 'Sent')
+  assert.equal(tree.props.children[1], null)
+  assert.equal(tree.props.children[2], null)
 })
