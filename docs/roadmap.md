@@ -7,7 +7,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 ## Release
 
 - macOS signing and notarization in CI, and signed auto-update (`APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` stays `false` until builds are signed). See [Releasing](contributing/releasing.md).
-- A clean Linux x64 GUI run of the packaged app. Windows stays unsupported until macOS signing works.
+- Windows: the port is under way on the `windows-port` branch (CI on Windows, the local service over a named pipe). Next are the server's shell, terminal and path handling, packaging, and a hands-on run in a Windows 11 VM.
 - Mobile distribution: Apple and Google accounts, APNs/FCM credentials, TestFlight and Android internal builds.
 
 ## Implementation
@@ -29,6 +29,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 ## Acceptance
 
 - **Physical iOS and Android devices:** everything in [apps/mobile/VERIFICATION.md](../apps/mobile/VERIFICATION.md), the Inbox Brief's one-tap rows, from pairing and permissions to the viewers, keyboards, push and Live Activities.
+- **Linux desktop:** CI installs the x64 `.deb` and runs the startup smoke under a virtual display, without Chromium's sandbox. Still to run by hand: the installed app on a real GNOME or KDE desktop (Wayland and X11), with the sandbox, on Ubuntu 24.04.
 - **Packaged and signed desktop builds:** upgrading real profiles, browser session import with a real keychain, computer-use permission identity, theme and system-appearance changes, background-terminal stop timing, and installation on a second Mac.
 - **Live providers and second hosts:** provider version compatibility records, Shared MCP across two providers, skill and rule delivery, project routing quality, plan-usage and limit-notice handling, GitHub with live tokens and Enterprise hosts, interactive content, agent-started threads and their reports, Auto splits and their briefs, threads started on a second physical host (pairing, ceiling, offline wait, revoke), Continue on another host between a Mac and a Linux host and from a phone, `ramu thread` from a live terminal agent, a schedule on another host running there once after that host sleeps, a login on two hosts shown once and activity totals matching each host, and the review sheet on a physical phone, title generation, the live view window above other apps while an agent works in Browser, an agent finding and fixing a layout bug in an Expo app on an iPhone Simulator (with idb) and an Android emulator, also watched from a phone against a remote Mac, Teammates across providers (Review stays read-only on each runtime), custom agents drafted and used on a live model, Resources figures for each provider with a helper agent and against Activity Monitor and `free`, multi-host load, and a matched HTTP versus WebSocket comparison. Paid calls and credentials are opt-in.
 
