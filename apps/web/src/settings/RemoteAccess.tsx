@@ -25,6 +25,8 @@ import type {
   PairingOffer,
 } from '@ramu/shared/types'
 import { Dialog as ConfirmDialog, Dropdown, timeAgo } from '../Menu'
+import { learnedRoutes } from '@ramu/shared/hostProof'
+import { hostOfUrl, networkName, VIRTUAL_INTERFACE } from '@ramu/shared/networkLabel'
 import { copyText, invoke, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
@@ -46,8 +48,6 @@ import {
 } from './DevicePermissions'
 
 const ALL_NETWORKS = '0.0.0.0'
-/** Virtual networks that Docker, VMs and macOS create. Another device almost never reaches this computer through them. */
-const VIRTUAL_INTERFACE = /^(bridge|docker|br-|veth|vmnet|vboxnet|virbr|awdl|llw|anpi|ap|gif|stf)\d*/i
 const DEFAULT_PORT = 7788
 const validPort = (port: number) => Number.isInteger(port) && port >= 1024 && port <= 65535
 
@@ -176,7 +176,14 @@ function ThisComputer() {
   const portValid = validPort(Number(port))
   const options = [
     { value: ALL_NETWORKS, label: t('All networks') },
-    ...status.addresses.map((entry) => ({ value: entry.address, label: `${entry.name} · ${entry.address}` })),
+    ...status.addresses
+      .filter(
+        (entry) => entry.address === host || (!VIRTUAL_INTERFACE.test(entry.name) && !entry.address.includes(':')),
+      )
+      .map((entry) => ({
+        value: entry.address,
+        label: `${t(networkName(entry.address, entry.name))} · ${entry.name} · ${entry.address}`,
+      })),
   ]
   if (!options.some((option) => option.value === host)) options.push({ value: host, label: host })
   const changePermission: PermissionInvoke = async (method, ...args) => {
@@ -217,6 +224,22 @@ function ThisComputer() {
           }}
         />
       </SettingsRow>
+      {!managed && (
+        <SettingsRow>
+          <SettingsLabel
+            title={t('Network')}
+            help={t(
+              'Other devices connect to and find this host only on this network. Choose your VPN to keep Ramu off other networks.',
+            )}
+          />
+          <Dropdown
+            label={t('Network')}
+            value={host}
+            options={options}
+            onChange={(next) => stageConfig({ ...config, host: next })}
+          />
+        </SettingsRow>
+      )}
       {status.discovery && (
         <>
           <SettingsRow className="settings-toggle">
@@ -341,34 +364,18 @@ function ThisComputer() {
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-2">
           {!managed && (
-            <>
-              <SettingsRow>
-                <SettingsLabel
-                  title={t('Network')}
-                  help={t(
-                    'Choose your VPN address (Tailscale, NetBird, ZeroTier, WireGuard) to keep Ramu off other networks.',
-                  )}
-                />
-                <Dropdown
-                  label={t('Network')}
-                  value={host}
-                  options={options}
-                  onChange={(next) => stageConfig({ ...config, host: next })}
-                />
-              </SettingsRow>
-              <SettingsRow>
-                <SettingsLabel title={t('Port')} help={portValid ? undefined : t('Use a number from 1024 to 65535.')} />
-                <Input
-                  aria-label={t('Port')}
-                  inputMode="numeric"
-                  value={port}
-                  aria-invalid={!portValid}
-                  onChange={(event) =>
-                    stageConfig({ ...config, port: event.target.value.replace(/\D/g, '').slice(0, 5) })
-                  }
-                />
-              </SettingsRow>
-            </>
+            <SettingsRow>
+              <SettingsLabel title={t('Port')} help={portValid ? undefined : t('Use a number from 1024 to 65535.')} />
+              <Input
+                aria-label={t('Port')}
+                inputMode="numeric"
+                value={port}
+                aria-invalid={!portValid}
+                onChange={(event) =>
+                  stageConfig({ ...config, port: event.target.value.replace(/\D/g, '').slice(0, 5) })
+                }
+              />
+            </SettingsRow>
           )}
           {status.deviceLifetime && (
             <SettingsRow>
@@ -1210,6 +1217,36 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
   const [retryMode, setRetryMode] = useState(computer.retryMode ?? 'events'),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null)
+  const routes = computer.url && !computer.ssh ? learnedRoutes([computer.url, ...(computer.routes ?? [])]) : []
+  const switchNetwork = async (url: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await invoke('computers.reviewAddress', computer.id, url)
+      if (result === 'mismatch')
+        setError(
+          t('That address did not prove it is {0}, so nothing changed. Pair it again to add it as a new host.', {
+            0: computer.name,
+          }),
+        )
+      else if (result === 'unsupported')
+        setError(
+          t('{0} was paired before Ramu could check hosts. Pair it again to use this address.', { 0: computer.name }),
+        )
+      else if (result === 'insecure')
+        setError(
+          t(
+            'That address is not encrypted, and {0} was paired over an encrypted connection. Pair it again to use it.',
+            { 0: computer.name },
+          ),
+        )
+      else if (result === 'unreachable') setError(t('Could not reach that network to check it. Nothing changed.'))
+    } catch (cause) {
+      setError(errorText(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
   const save = async () => {
     setBusy(true)
     setError(null)
@@ -1260,6 +1297,26 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
                 : ''}
             </p>
           </div>
+          {routes.length > 1 && (
+            <div className="flex items-center justify-between gap-4">
+              <span>
+                <strong className="text-body font-medium">{t('Network')}</strong>
+                <span className="block mt-1 text-caption text-muted-foreground">
+                  {t('Both devices must be on the network you pick. Ramu checks it is the same host before switching.')}
+                </span>
+              </span>
+              <Dropdown
+                label={t('Network')}
+                value={computer.url ?? ''}
+                disabled={busy}
+                options={routes.map((route) => ({
+                  value: route,
+                  label: `${t(networkName(hostOfUrl(route)))} · ${hostOfUrl(route)}`,
+                }))}
+                onChange={(next) => void switchNetwork(next)}
+              />
+            </div>
+          )}
           <div className="flex items-center justify-between gap-4">
             <span>
               <strong className="text-body font-medium">{t('Keep connected')}</strong>

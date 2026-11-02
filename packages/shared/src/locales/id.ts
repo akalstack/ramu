@@ -39,6 +39,20 @@ export const indonesian: Readonly<Record<string, string>> = {
   Wide: 'Lebar',
   Narrow: 'Sempit',
   'Compatible with this Ramu release.': 'Kompatibel dengan rilis Ramu ini.',
+  'Newer than the last version tested with this Ramu ({0}). It can still be used.':
+    'Lebih baru dari versi terakhir yang diuji dengan Ramu ini ({0}). Tetap bisa digunakan.',
+  VPN: 'VPN',
+  'Local network': 'Jaringan lokal',
+  'Virtual network': 'Jaringan virtual',
+  'Other network': 'Jaringan lain',
+  'Switch network': 'Ganti jaringan',
+  'Could not reach that network to check it. Nothing changed.':
+    'Tidak bisa menjangkau jaringan itu untuk memeriksanya. Tidak ada yang berubah.',
+  'Both devices must be on the network you pick. Ramu checks it is the same host before switching.':
+    'Kedua perangkat harus ada di jaringan yang dipilih. Ramu memastikan host-nya sama sebelum beralih.',
+  'Or enter another address': 'Atau masukkan alamat lain',
+  'Other devices connect to and find this host only on this network. Choose your VPN to keep Ramu off other networks.':
+    'Perangkat lain hanya bisa terhubung ke dan menemukan host ini di jaringan ini. Pilih VPN agar Ramu tidak terbuka di jaringan lain.',
   'Unverified: no compatibility rule covers this version. It can still be used.':
     'Belum terverifikasi: tidak ada aturan kompatibilitas untuk versi ini. Versi ini tetap bisa dipakai.',
   'Limited: some features are unavailable with this version.': 'Terbatas: beberapa fitur tidak tersedia di versi ini.',
@@ -3269,8 +3283,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Allow other devices?': 'Izinkan perangkat lain?',
   'Cannot listen on {0}:{1} ({2}). Local use is unaffected; Ramu keeps retrying.':
     'Tidak bisa mendengarkan di {0}:{1} ({2}). Pemakaian di host ini tidak terganggu; Ramu terus mencoba lagi.',
-  'Choose your VPN address (Tailscale, NetBird, ZeroTier, WireGuard) to keep Ramu off other networks.':
-    'Pilih alamat VPN kamu (Tailscale, NetBird, ZeroTier, WireGuard) supaya Ramu tidak terbuka di jaringan lain.',
   'Connect to a host': 'Sambungkan ke host',
   'Copy address': 'Salin alamat',
   'Copy code': 'Salin kode',

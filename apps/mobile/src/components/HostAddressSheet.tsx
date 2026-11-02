@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
+import { Check } from 'lucide-react-native'
 import { learnedRoutes } from '@ramu/shared/hostProof'
+import { hostOfUrl, networkName } from '@ramu/shared/networkLabel'
 import type { ReviewAddressResult } from '@ramu/shared/api'
 import type { Computer } from '../runtime/types'
 import { useStore } from '../runtime/store'
-import { useT, fill } from '../i18n'
+import { useSay, useT, fill } from '../i18n'
 import { font, radius, space, useTheme } from '../theme'
 import { Button, Sheet, T } from './ui'
 
@@ -12,6 +14,7 @@ import { Button, Sheet, T } from './ui'
 export function HostAddressSheet({ computer, onClose }: { computer: Computer; onClose: () => void }) {
   const { c } = useTheme()
   const t = useT()
+  const say = useSay()
   const { reviewAddress, retry } = useStore()
   const [address, setAddress] = useState(computer.address)
   const [busy, setBusy] = useState(false)
@@ -31,14 +34,14 @@ export function HostAddressSheet({ computer, onClose }: { computer: Computer; on
     unsupported: fill(t.nearbyUnsupported, computer.name),
     insecure: fill(t.nearbyInsecure, computer.name),
   }
-  const apply = async () => {
-    if (pending.current || !address.trim()) return
+  const apply = async (target = address) => {
+    if (pending.current || !target.trim()) return
     const controller = new AbortController()
     pending.current = controller
     setBusy(true)
     setError(null)
     try {
-      const result = await reviewAddress(computer.id, address.trim(), controller.signal)
+      const result = await reviewAddress(computer.id, target.trim(), controller.signal)
       if (!mounted.current || controller.signal.aborted) return
       if (result === 'moved' || result === 'unchanged') {
         if (result === 'unchanged' && computer.status !== 'online') retry(computer.id)
@@ -59,37 +62,44 @@ export function HostAddressSheet({ computer, onClose }: { computer: Computer; on
         pending.current?.abort()
         onClose()
       }}
-      title={t.hostChangeAddress}
+      title={say('Switch network')}
     >
       <View style={{ padding: space.l, gap: space.m }}>
         <T tone="muted" size={font.caption}>
-          {t.hostAddressHelp}
+          {say('Both devices must be on the network you pick. Ramu checks it is the same host before switching.')}
         </T>
         {learnedRoutes([computer.address, ...(computer.routes ?? [])]).map((route) => (
           <Pressable
             key={route}
             accessibilityRole="radio"
-            accessibilityState={{ selected: address === route, disabled: busy }}
+            accessibilityState={{ selected: computer.address === route, disabled: busy }}
             disabled={busy}
             onPress={() => {
               setAddress(route)
               setError(null)
+              void apply(route)
             }}
             style={{
-              minHeight: 44,
-              justifyContent: 'center',
-              paddingHorizontal: space.s,
-              backgroundColor: address === route ? c.fill : undefined,
+              minHeight: 52,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.s,
+              paddingHorizontal: space.m,
+              backgroundColor: c.fill,
               borderRadius: radius.s,
             }}
           >
-            <T mono size={font.caption} tone={address === route ? 'accent' : 'soft'}>
-              {route}
-            </T>
+            <View style={{ flex: 1 }}>
+              <T>{say(networkName(hostOfUrl(route)))}</T>
+              <T mono size={font.caption} tone="muted" numberOfLines={1}>
+                {hostOfUrl(route)}
+              </T>
+            </View>
+            {computer.address === route ? <Check size={18} color={c.accent} /> : null}
           </Pressable>
         ))}
         <T size={font.caption} tone="muted">
-          {t.pairAddress}
+          {say('Or enter another address')}
         </T>
         <TextInput
           value={address}
