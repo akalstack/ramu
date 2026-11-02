@@ -1,6 +1,11 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  'Favorites': 'Favorit',
+  'Choose models': 'Pilih model',
+  '{0} of {1} listed in model pickers': '{0} dari {1} tampil di pemilih model',
+  '{0} models': 'Model {0}',
+  'Only checked models appear in model pickers. New models stay out until you add them, and a model already in use keeps working.': 'Hanya model yang dicentang yang tampil di pemilih model. Model baru tidak ditambahkan sampai Anda memilihnya, dan model yang sedang dipakai tetap berjalan.',
   'Marked {0} threads done': '{0} thread ditandai selesai',
   'Archived {0} threads': '{0} thread diarsipkan',
   'View source': 'Lihat sumber',

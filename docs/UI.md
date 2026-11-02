@@ -49,6 +49,8 @@ The renderer uses shadcn/ui on Base UI, Tailwind 4 and shared theme tokens. `com
 
 ## Usage limits
 
+The model picker is search, a strip of All, Sets and each provider that reports models, then one compact list: Favorites, then a heading per provider carrying its remaining usage. **Choose models** opens Settings → Providers, where each provider has **Models** to pick what pickers and dropdowns list, on desktop and mobile. Providers list everything until narrowed, and a narrowed list keeps new models out. Models left out don't appear in search either; a favorite or the model in use still shows.
+
 Marking threads done or archiving them (one, a project's, or a selection) shows an **Undo** toast on desktop and mobile. Pin, Reopen and Unarchive have none: the thread stays where the person is looking and one click reverses them.
 
 A thread at a usage limit is idle, not failed. Every surface reads **Limit reached · resumes around 5:00 PM** (or **resuming automatically** when the time is a guess); **Paused** means only a goal the person paused. The sidebar clock, Home and Inbox groups, goal bar and mobile transcript all read the thread's `provider-wait` event through `packages/shared/src/chat/providerWait.ts` and `limitPolicy.ts`.

@@ -23,7 +23,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { AgentProvider } from '@ramu/shared/types'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { SharedMcpAccountReadiness } from '@ramu/shared/mcp'
 import { t } from '../i18n'
 import { ProviderIcon } from '../models/ProviderIcon'
@@ -60,6 +60,7 @@ export function ProviderCard({
   onMcpRecheck,
   onUpdate,
   onBrowse,
+  models,
   stale = false,
   onCheckAgain,
   onUpdateRamu,
@@ -92,6 +93,8 @@ export function ProviderCard({
   onMcpRecheck?: (id: string) => void
   onUpdate: () => void
   onBrowse: (key: 'binary' | 'harness') => void
+  /** The control for which of this provider's models are listed. */
+  models?: ReactNode
   /** The host could not be reached; the status is its last known result. */
   stale?: boolean
   onCheckAgain: () => void
@@ -380,6 +383,7 @@ export function ProviderCard({
               )}
             </CollapsibleContent>
           </Collapsible>
+          {models}
         </>
       )}
     </Card>

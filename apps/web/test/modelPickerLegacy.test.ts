@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, expect, it, vi } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
 import { ModelPicker } from '../src/models/ModelPicker'
+import { visiblePickerModels } from '../src/models/modelVisibility'
 
 const stored = vi.hoisted(() => new Map<string, string>())
 vi.mock('../src/deviceStorage', () => ({
@@ -81,4 +82,24 @@ it('renders a legacy reveal control and labels older models when revealed or sel
   expect(revealed).toContain('Legacy')
   stored.clear()
   expect(render('old')).toContain('Older Sol')
+})
+
+it('keeps a provider list out of the picker and search, but not the model in use', () => {
+  const models = [
+    { provider: 'opencode', id: 'kept', name: 'Kept', isDefault: false, efforts: [], defaultEffort: '' },
+    { provider: 'opencode', id: 'left-out', name: 'Left out', isDefault: false, efforts: [], defaultEffort: '' },
+  ] as never[]
+  const options = {
+    showLegacy: false,
+    settings: { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' as const, model: 'x' },
+    favorites: [],
+    visible: { opencode: ['kept'] },
+  }
+  const ids = (extra: object) =>
+    visiblePickerModels(models, { ...options, query: 'o', ...extra }).map((model) => model.id)
+  expect(ids({})).toEqual(['kept'])
+  expect(ids({ settings: { ...options.settings, provider: 'opencode', model: 'left-out' } })).toEqual([
+    'kept',
+    'left-out',
+  ])
 })

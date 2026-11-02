@@ -1,3 +1,4 @@
+import { isModelListed } from '@ramu/shared/providers/modelVisibility'
 import { SheetFlatList as FlatList } from './ui'
 import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -114,19 +115,25 @@ export function ModelChip({
   const store = useStore()
   const t = useT()
   const catalog = store.catalogs[computerId ?? store.selected]
+  const visible = store.appPreferences[computerId ?? store.selected]?.visibleModels
   const models = useMemo<ModelRow[]>(
     () =>
       (catalog ?? []).flatMap((p) =>
-        p.models.map((m) => ({
-          provider: p.provider,
-          model: m.id,
-          label: m.name,
-          efforts: m.efforts as string[],
-          isDefault: m.isDefault,
-          defaultEffort: (m.defaultEffort ?? '') as string,
-        })),
+        p.models
+          .filter((m) => {
+            const inUse = p.provider === value.provider && (m.id === value.model || (!value.model && m.isDefault))
+            return inUse || isModelListed(visible, { provider: p.provider, id: m.id })
+          })
+          .map((m) => ({
+            provider: p.provider,
+            model: m.id,
+            label: m.name,
+            efforts: m.efforts as string[],
+            isDefault: m.isDefault,
+            defaultEffort: (m.defaultEffort ?? '') as string,
+          })),
       ),
-    [catalog],
+    [catalog, visible, value.provider, value.model],
   )
   const providers = useMemo(
     () =>

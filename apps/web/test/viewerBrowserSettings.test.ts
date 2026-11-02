@@ -62,6 +62,8 @@ vi.mock('@tanstack/react-query', () => ({
 }))
 vi.mock('../src/settings/Usage', () => ({ useAccountUsage: () => ({}) }))
 vi.mock('../src/settings/ProviderCard', () => ({ ProviderCard: 'ProviderCard' }))
+vi.mock('../src/settings/ProviderModels', () => ({ ProviderModels: 'ProviderModels' }))
+vi.mock('../src/models/ModelSets', () => ({ useModelSets: () => ({ catalogs: [] }) }))
 vi.mock('../src/models/ProviderSetupTerminal', () => ({ runProviderCommand: state.runCommand }))
 import { ProviderSettings } from '../src/settings/ProviderSettings'
 import { BrowserSettings } from '../src/settings/BrowserSettings'

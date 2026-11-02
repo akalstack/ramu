@@ -90,6 +90,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   messageBehaviorVersion: 4
   /** Starred models, as `provider:model-id`; they get their own tab and ⌘1–⌘9 shortcuts in the model picker. */
   favoriteModels: string[]
+  /** Models listed per provider in pickers and dropdowns; a provider with no entry lists all of its models. */
+  visibleModels: Partial<Record<AgentProvider, string[]>>
   /** Tell me when an agent finishes, needs input or fails: a system notification when Ramu is in the background, a toast when it is open. */
   notifyAgentDone: boolean
   /** Resume interrupted chats when the background service starts again. */
@@ -153,6 +155,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultAccess: 'full',
   defaultAutoFallback: true,
   favoriteModels: [],
+  visibleModels: {},
   notifyAgentDone: true,
   resumeChatsOnRestart: true,
   asyncQuestions: true,

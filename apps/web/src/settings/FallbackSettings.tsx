@@ -4,6 +4,7 @@ import { SettingsField, useSettingsInvoke } from './SettingsScope'
 import { SettingsGroupTitle, SettingsRow } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
 import { limitChoiceOf, limitChoiceSwitches } from '@ramu/shared/chat/limitPolicy'
+import { isModelListed } from '@ramu/shared/providers/modelVisibility'
 import { t, useLanguage } from '../i18n'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
@@ -97,12 +98,15 @@ function StepPicker({
       )
     : undefined
   const key = step ? `${step.provider}:${step.model}` : NATIVE
+  const { visibleModels } = useAppSettings().preferences
   const options = [
     ...(allowNative ? [{ value: NATIVE, label: t('Native') }] : []),
-    ...models.map((entry) => ({
-      value: `${entry.provider}:${entry.id}`,
-      label: `${modelDisplayName(entry.name)} · ${providerName(entry.provider)}`,
-    })),
+    ...models
+      .filter((entry) => isModelListed(visibleModels, entry) || `${entry.provider}:${entry.id}` === key)
+      .map((entry) => ({
+        value: `${entry.provider}:${entry.id}`,
+        label: `${modelDisplayName(entry.name)} · ${providerName(entry.provider)}`,
+      })),
   ]
   if (step && !options.some((option) => option.value === key))
     options.unshift({

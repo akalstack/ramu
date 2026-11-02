@@ -14,6 +14,8 @@ import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
 import { useAccountUsage } from './Usage'
 import { ProviderCard } from './ProviderCard'
+import { ProviderModels } from './ProviderModels'
+import { useModelSets } from '../models/ModelSets'
 import { providerStatusQuery } from './providerStatusQuery'
 
 export function ProviderSettings({
@@ -28,6 +30,7 @@ export function ProviderSettings({
 }) {
   const invoke = useSettingsInvoke()
   useLanguage()
+  const { catalogs } = useModelSets()
   const scope = useContext(SettingsScopeContext)
   const queryClient = useQueryClient()
   const [updating, setUpdating] = useState<AgentProvider | null>(null)
@@ -275,6 +278,18 @@ export function ProviderSettings({
               onCheckAgain={() => void refresh()}
               onUpdateRamu={onOpenSection ? () => onOpenSection('system') : undefined}
               onBrowse={(key) => void browse(provider, key)}
+              models={
+                <ProviderModels
+                  provider={provider}
+                  models={catalogs.find((catalog) => catalog.provider === provider)?.models ?? []}
+                  listed={value.visibleModels?.[provider]}
+                  onChange={(listed) => {
+                    if (!allowed()) return
+                    const { [provider]: _previous, ...others } = value.visibleModels ?? {}
+                    onChange({ ...value, visibleModels: listed ? { ...others, [provider]: listed } : others })
+                  }}
+                />
+              }
             />
           )
         })}

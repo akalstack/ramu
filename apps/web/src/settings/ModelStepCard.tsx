@@ -7,6 +7,8 @@ import { providerName } from '@ramu/shared/providers/providers'
 import type { ModelStep } from '@ramu/shared/types'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
+import { isModelListed } from '@ramu/shared/providers/modelVisibility'
+import { useAppSettings } from './AppSettings'
 import { effortDisplayName, modelDisplayName, modelStepName } from '../models/ModelSets'
 import type { useSettingsScope } from './SettingsScope'
 import { GHOST_ICON_BUTTON_CLASS } from './constants'
@@ -43,10 +45,13 @@ export function ModelStepCard({
     (entry) => entry.provider === step.provider && (entry.id === step.model || (!step.model && entry.isDefault)),
   )
   const key = `${step.provider}:${step.model}`
-  const options = models.map((entry) => ({
-    value: `${entry.provider}:${entry.id}`,
-    label: `${modelDisplayName(entry.name)} · ${providerName(entry.provider)}`,
-  }))
+  const { visibleModels } = useAppSettings().preferences
+  const options = models
+    .filter((entry) => isModelListed(visibleModels, entry) || `${entry.provider}:${entry.id}` === key)
+    .map((entry) => ({
+      value: `${entry.provider}:${entry.id}`,
+      label: `${modelDisplayName(entry.name)} · ${providerName(entry.provider)}`,
+    }))
   if (!options.some((option) => option.value === key))
     options.unshift({
       value: key,
