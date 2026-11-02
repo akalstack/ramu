@@ -82,6 +82,16 @@ describe('advertisedInterfaces', () => {
     ])
   })
 
+  it('skips Docker, VM and macOS bridges for a wildcard, but honours one chosen directly', () => {
+    const address = (value: string) =>
+      ({ address: value, family: 'IPv4', internal: false }) as Interfaces[string] extends (infer T)[] | undefined
+        ? T
+        : never
+    const virtual: Interfaces = { en0: [address('192.168.1.3')], bridge100: [address('192.168.64.1')] }
+    expect(advertisedInterfaces('0.0.0.0', virtual).map((entry) => entry.name)).toEqual(['en0'])
+    expect(advertisedInterfaces('192.168.64.1', virtual).map((entry) => entry.name)).toEqual(['bridge100'])
+  })
+
   it('advertises only the interface that owns a specific bind address', () => {
     expect(advertisedInterfaces('100.64.0.7', interfaces)).toEqual([
       { name: 'utun3', join: '100.64.0.7', addresses: ['100.64.0.7'] },

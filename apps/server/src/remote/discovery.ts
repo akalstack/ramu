@@ -14,6 +14,7 @@ import {
   type DiscoveryAdvert,
 } from '@ramu/shared/discovery/contract'
 import { MDNS_ADDRESS, MDNS_PORT, decodeMessage, encodeResponse } from '@ramu/shared/discovery/mdns'
+import { VIRTUAL_INTERFACE } from '@ramu/shared/networkLabel'
 import {
   asks,
   conflictsWith,
@@ -89,7 +90,8 @@ interface Wanted {
 
 /**
  * The interfaces to advertise on: those that the listener really serves. A specific bind advertises only the interface
- * that owns the address, a wildcard every non-loopback interface with an IPv4 address (needed to join multicast).
+ * that owns the address, a wildcard every non-loopback, non-virtual interface with an IPv4 address (needed to join
+ * multicast). Docker, VM and macOS bridges are skipped: another device almost never reaches a host through them.
  * Loopback and link-local addresses are never published.
  */
 export function advertisedInterfaces(host: string, interfaces: Interfaces = networkInterfaces()): Wanted[] {
@@ -98,7 +100,7 @@ export function advertisedInterfaces(host: string, interfaces: Interfaces = netw
   for (const [name, entries] of Object.entries(interfaces)) {
     const usable = (entries ?? []).filter((entry) => !entry.internal && usableAddress(entry.address))
     const v4 = usable.find((entry) => entry.family === 'IPv4')
-    if (!v4) continue
+    if (!v4 || (wildcard && VIRTUAL_INTERFACE.test(name))) continue
     const serves = (address: string) => (host === '0.0.0.0' ? !address.includes(':') : wildcard || address === host)
     const addresses = usable.map((entry) => entry.address).filter(serves)
     if (addresses.length) found.push({ name, join: v4.address, addresses })
