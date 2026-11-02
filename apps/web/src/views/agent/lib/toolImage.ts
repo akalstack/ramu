@@ -1,3 +1,4 @@
+import type { AgentContent } from '@ramu/shared/types'
 import type { ToolUse } from '../types'
 
 export const isViewImageTool = (name: string) => /(?:^|[_.])view_image$/i.test(name)
@@ -20,4 +21,24 @@ export function toolImageName(tool: ToolUse): string | undefined {
 
 function basename(path: string): string {
   return path.split(/[\\/]/).pop() || path
+}
+
+const IMAGE_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  ico: 'image/x-icon',
+  svg: 'image/svg+xml',
+}
+
+/**
+ * Some providers answer a Read of an image with text or nothing. The preview then comes from the file itself, which the
+ * workspace serves under the same boundary as the explorer.
+ */
+export function readImageContent(path: string): AgentContent | undefined {
+  const mimeType = IMAGE_TYPES[path.split('.').pop()?.toLowerCase() ?? '']
+  return mimeType ? { type: 'image', mimeType, uri: path, alt: basename(path) } : undefined
 }

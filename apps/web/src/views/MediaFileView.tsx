@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
+import { Button } from '@/components/desktop-button'
 import type { RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
 import { errorText } from '../workspace/TaskPane'
 
-const MEDIA = /\.(png|jpe?g|gif|webp|avif|bmp|ico|pdf|mp3|wav|ogg|m4a|flac|mp4|webm|mov)$/i
+const MEDIA = /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg|pdf|mp3|wav|ogg|m4a|flac|mp4|webm|mov)$/i
 export const isMedia = (path: string) => MEDIA.test(path)
+export const isSvg = (path: string) => /\.svg$/i.test(path)
 
 type Media = { mimeType: string; size: number; url: string }
 const size = (bytes: number) =>
@@ -17,10 +19,13 @@ export function MediaFileView({
   taskId,
   view,
   binding,
+  onViewSource,
 }: {
   taskId: string
   view: Extract<ViewDescriptor, { kind: 'file' }>
   binding: RepositoryBinding
+  /** Offered for SVG, which opens as an image but stays editable as text. */
+  onViewSource?: () => void
 }) {
   useLanguage()
   const { invoke } = useHost()
@@ -73,6 +78,11 @@ export function MediaFileView({
         <span className="tabular-nums">
           {[media.mimeType, size(media.size), dimensions].filter(Boolean).join(' · ')}
         </span>
+        {onViewSource && (
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={onViewSource}>
+            {t('View source')}
+          </Button>
+        )}
       </div>
       <div className="flex-1 min-h-0 overflow-auto grid place-items-center p-3 bg-canvas">
         {kind === 'image' ? (

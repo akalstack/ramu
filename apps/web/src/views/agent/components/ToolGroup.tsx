@@ -2,7 +2,7 @@ import { toolActivity } from '@ramu/shared/chat/toolActivity'
 import { ActivityText } from '../../../chat/ActivityText'
 import { useState } from 'react'
 import { t as translate, useLanguage } from '../../../i18n'
-import { isViewImageTool, toolImageName } from '../lib/toolImage'
+import { isViewImageTool, readImageContent, toolImageName } from '../lib/toolImage'
 import { splitToolContent } from '../lib/toolContent'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { toolKind, KIND_VERB } from '@ramu/shared/chat/agentTools'
@@ -124,10 +124,12 @@ export function ToolGroup({
               const bash = category === 'execute'
               const call = ramuTool(t)
               const row = call ? describeRamuTool(call, r?.summary) : undefined
-              const { images, details } = splitToolContent(r?.content ?? t.content)
-              const imageTitle = images.length || isViewImageTool(t.name) ? toolImageName(t) : undefined
+              const { images: sent, details } = splitToolContent(r?.content ?? t.content)
+              const imageTitle = sent.length || isViewImageTool(t.name) ? toolImageName(t) : undefined
               // Reads, edits and writes name just the file (and an edit its +/- lines) until the row is opened.
               const file = row || imageTitle ? null : fileToolLine(t, r)
+              const readImage = file?.verb === 'Read' && !sent.length ? readImageContent(file.path) : undefined
+              const images = readImage ? [readImage] : sent
               const fileTitle = file
                 ? `${translate(toolVerb(file.verb, toolRunning))} ${file.name}${file.others ? ` ${translate('+{count} more', { count: file.others })}` : ''}`
                 : undefined

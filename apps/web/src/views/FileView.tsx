@@ -19,7 +19,7 @@ import { applyEditorConfig, normalizeForSave } from '../editor/editorConfig'
 import { errorText } from '../workspace/TaskPane'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { useHost } from '../workspace/HostProvider'
-import { MediaFileView, isMedia } from './MediaFileView'
+import { MediaFileView, isMedia, isSvg } from './MediaFileView'
 import { deviceStorage } from '../deviceStorage'
 import { editorThemeName } from '../editor/editorTheme'
 
@@ -41,7 +41,18 @@ interface Conflict {
   diskHash: string
 }
 
-function TextFileView({ taskId, view, binding }: { taskId: string; view: FileViewDesc; binding: RepositoryBinding }) {
+function TextFileView({
+  taskId,
+  view,
+  binding,
+  onViewImage,
+}: {
+  taskId: string
+  view: FileViewDesc
+  binding: RepositoryBinding
+  /** Offered for SVG, which opens as an image by default. */
+  onViewImage?: () => void
+}) {
   useLanguage()
   const { viewOnly, canWrite } = useHostWriteAccess()
   const ws = useWorkspace()
@@ -359,6 +370,11 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
           {view.path}
         </span>
         {markdown && <MarkdownViewControl mode={mode} onChange={setMode} />}
+        {onViewImage && (
+          <Button variant="ghost" size="sm" onClick={onViewImage}>
+            {t('View image')}
+          </Button>
+        )}
         {(!markdown || mode === 'source') && (
           <Button
             variant="ghost"
@@ -502,11 +518,20 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
   )
 }
 
-/** Images, PDFs, audio and video open in a preview; everything else opens in the editor. */
+/** Images, PDFs, audio and video open in a preview; SVG opens as an image with its source one click away. */
 export function FileView(props: { taskId: string; view: FileViewDesc; binding: RepositoryBinding }) {
+  const { path, selection } = props.view
+  const [source, setSource] = useState(!!selection)
+  // Jumping to a line (a finding, a search hit) means the person wants the code.
+  useEffect(() => setSource(!!selection), [path, selection])
+  const svg = isSvg(path)
   return (
     <WorkspaceAccessBoundary>
-      {isMedia(props.view.path) ? <MediaFileView {...props} /> : <TextFileView {...props} />}
+      {isMedia(path) && !(svg && source) ? (
+        <MediaFileView {...props} onViewSource={svg ? () => setSource(true) : undefined} />
+      ) : (
+        <TextFileView {...props} onViewImage={svg ? () => setSource(false) : undefined} />
+      )}
     </WorkspaceAccessBoundary>
   )
 }

@@ -1,6 +1,7 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
+import { SvgXml } from 'react-native-svg'
 import { Check, Copy, FileQuestion, FolderSearch, Pencil, X } from 'lucide-react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useT, useSay } from '../i18n'
@@ -23,6 +24,8 @@ type Mode = 'file' | 'changes' | 'staged' | 'revision'
 const IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i
 const OTHER_MEDIA = /\.(pdf|mp3|wav|ogg|m4a|flac|mp4|mov|webm)$/i
 const MARKDOWN = /\.(md|markdown|mdx)$/i
+// SVG opens as an image, like Markdown opens rendered; Source shows the code.
+const SVG = /\.svg$/i
 
 /**
  * One screen for every way the desktop opens a file: the file itself, its unstaged changes, or its staged changes.
@@ -139,6 +142,8 @@ export function FileViewer({
   const gitAvailable = !!binding && !binding.folderOnly && !binding.notGit
   const target = line && Number.isSafeInteger(Number(line)) && Number(line) > 0 ? Number(line) : undefined
   const [preview, setPreview] = useState(target === undefined)
+  const [svgBroken, setSvgBroken] = useState(false)
+  useEffect(() => setSvgBroken(false), [state])
   // The text being edited, or null while only viewing.
   const [draft, setDraft] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -256,7 +261,13 @@ export function FileViewer({
     [state, path],
   )
   useEffect(() => {
-    if (state.kind !== 'text' || !target || mode !== 'file' || (MARKDOWN.test(path ?? '') && preview)) return
+    if (
+      state.kind !== 'text' ||
+      !target ||
+      mode !== 'file' ||
+      ((MARKDOWN.test(path ?? '') || SVG.test(path ?? '')) && preview)
+    )
+      return
     const timer = setTimeout(
       () =>
         activeRead.current === readIdentity &&
@@ -356,6 +367,8 @@ export function FileViewer({
     })
   }
   const markdown = MARKDOWN.test(path) && mode === 'file'
+  const svg = SVG.test(path) && mode === 'file'
+  const rendered = (markdown || (svg && !svgBroken)) && preview
   // Editing on the phone: the whole file in one text field, saved only if nobody changed it on the host meanwhile.
   const viewOnly = store.computers.find((host) => host.id === computerId)?.access === 'viewer'
   const editable =
@@ -468,7 +481,7 @@ export function FileViewer({
             style={{ flex: 1 }}
           />
         )}
-        {markdown && state.kind === 'text' ? (
+        {(markdown || svg) && state.kind === 'text' ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => {
@@ -567,7 +580,7 @@ export function FileViewer({
             : draft}
         </TextInput>
       ) : null}
-      {draft !== null ? null : state.kind === 'text' && !(markdown && preview) ? (
+      {draft !== null ? null : state.kind === 'text' && !rendered ? (
         <PageFlatList
           ref={list}
           data={rows}
@@ -633,6 +646,24 @@ export function FileViewer({
             </ScrollView>
           ) : null}
           {state.kind === 'text' && markdown && preview ? <Markdown text={state.raw} /> : null}
+          {state.kind === 'text' && svg && !svgBroken && preview ? (
+            <ScrollView
+              maximumZoomScale={5}
+              minimumZoomScale={1}
+              bouncesZoom
+              centerContent
+              style={{ borderRadius: radius.m, backgroundColor: c.code }}
+              contentContainerStyle={{ alignItems: 'center', justifyContent: 'center', padding: space.m }}
+            >
+              <SvgXml
+                xml={state.raw}
+                width="100%"
+                height={320}
+                accessibilityLabel={name}
+                onError={() => setSvgBroken(true)}
+              />
+            </ScrollView>
+          ) : null}
           {state.kind === 'diff' ? (
             state.file ? (
               <DiffLines file={state.file} />

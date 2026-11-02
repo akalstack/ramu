@@ -491,6 +491,7 @@ export async function readImage(root: string, relPath: string): Promise<string> 
 }
 
 const MEDIA_TYPES: Record<string, string> = {
+  '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',

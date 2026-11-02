@@ -1,6 +1,8 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  'View source': 'Lihat sumber',
+  'View image': 'Lihat gambar',
   'Content preview unavailable.': 'Pratinjau isi tidak tersedia.',
   'File not present': 'File tidak ada',
   "Resolve the conflicting versions before saving.": "Selesaikan konflik versi sebelum menyimpan.",
