@@ -41,4 +41,11 @@ Some work only runs on one machine: a Windows-only bug, a GPU box, a server with
 
 ## Later options
 
-Decide these from use: spend and token totals merged across hosts, picking the host automatically from a project's platform, and letting a terminal agent such as Claude Code start and follow Ramu threads (behind its own approval and a security review).
+Decide these from use, one at a time. None is needed for the delivery above.
+
+- **Totals across hosts:** spend and token use merged across paired hosts, so a person sees one figure for the day. Build it only if people ask where usage went; it extends Plan usage and the all-hosts Inbox, with no new page.
+- **Host picked for the work:** when a project or request needs a platform (Windows, a GPU, production network), suggest the paired host that has it and ask first. Needs a host's platform and capabilities reported to its peers, so start only after **Continue on ‹host›** shows people choosing hosts by hand for the same reasons.
+- **Terminal agents and scripts:** let Claude Code, Codex or a script in a terminal start and follow Ramu threads through `ramu`, so work begun outside the app lands in the same place. It needs its own approval on first use, a fence on which threads it can reach, and a security review like the [host pairing review](HOST-PAIRING-REVIEW.md); it must not reuse the host-device path.
+- **Move instead of copy:** archive the original thread when the continued one finishes, offered as a prompt and never done by itself.
+- **Several continued threads:** continue one thread on more than one host at once (for example Windows and Linux). The first delivery allows one target per action.
+- **Scheduled work on a chosen host:** run a recurring task on a paired host instead of this one. It waits on how schedules behave on a host that is asleep or offline.
