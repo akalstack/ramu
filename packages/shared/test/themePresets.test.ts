@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkTheme, parseTheme } from '../src/theme'
+import { checkTheme, contrastRatio, parseTheme } from '../src/theme'
 import { mobilePalette } from '../src/themeMobile'
 import { THEME_PRESETS, themePreset } from '../src/themePresets'
 
@@ -9,6 +9,12 @@ describe('built-in themes', () => {
     for (const theme of THEME_PRESETS) {
       expect(parseTheme(theme).ok, theme.id).toBe(true)
       expect(checkTheme(theme).map((issue) => `${theme.id} ${issue.variant} ${issue.message}`)).toEqual([])
+    }
+  })
+  it('lift raised surfaces off the page equally in dark', () => {
+    for (const theme of THEME_PRESETS.filter(({ id }) => id !== 'ramu-high-contrast')) {
+      const { canvas, raised } = theme.dark.colors
+      expect(contrastRatio(canvas, raised), theme.id).toBeGreaterThanOrEqual(1.16)
     }
   })
   it('never take the id of Ramu Default and are found by id', () => {
