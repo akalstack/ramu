@@ -12,6 +12,7 @@ import {
   FolderPlus,
   Plus,
   type LucideIcon,
+  LoaderCircle,
 } from 'lucide-react'
 import { NO_PROJECT, type Computer, type Project, type Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
