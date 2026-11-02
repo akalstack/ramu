@@ -341,6 +341,8 @@ export default function SourceControl() {
       if (!chat || !binding || binding.notGit) return
       if (focused.current) void readRef.current().catch(() => {})
       focused.current = true
+      // The host decides whether a fetch is due; opening never pulls. It reports through fs:changed below.
+      void store.invoke(chat.computerId, 'git.refreshRemote', chat.taskId, binding.repoId, false).catch(() => {})
       let timer: ReturnType<typeof setTimeout> | undefined
       const unwatch = store.watch(chat.computerId, ['fs:changed'])
       const off = store.subscribe(chat.computerId, (channel, payload) => {

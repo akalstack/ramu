@@ -6,7 +6,8 @@ import type { AgentSettings, CommitBranchOptions, DiffContents, ModelPreferences
 import { discardPreview } from '../../workspace/discardPreview'
 import * as files from '../../workspace/files'
 import * as git from '../../workspace/git'
-import { assertNoActiveWriter, gitExclusive, lockCheckout, lockRepo } from '../helpers'
+import { RemoteRefresh } from '../../workspace/remoteRefresh'
+import { assertNoActiveWriter, gitExclusive, lockCheckout, lockRepo, repoKey } from '../helpers'
 import { agentSettings, fingerprintHash, gitOid, id, pullMode, relPath } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -17,8 +18,15 @@ const discardPaths = z.array(relPath).min(1).max(10_000)
 /** Git status, staging, commits, branches, stashes and remote sync for a task's repository. */
 export const registerGitHandlers: RegisterHandlers = (ctx) => {
   const { workspace, agents, lock, gitCwdOf, loadPreferences, storedPreferences } = ctx
+  const remoteRefresh = new RemoteRefresh()
   /** Pull and Sync follow the saved preference, so every entry point integrates the same way. */
   const savedPullMode = (): PullMode => storedPreferences().pullMode ?? DEFAULT_APP_PREFERENCES.pullMode
+
+  const autoPull = (t: string, r: string) =>
+    gitExclusive(ctx, t, r, async (cwd) => {
+      if (!loadPreferences().autoPull || agents.activeWriter([cwd])) return false
+      return git.autoPull(cwd)
+    })
 
   return {
     'git.status': {
@@ -255,15 +263,29 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
     },
     'git.fetch': {
       args: z.tuple([id, id]),
-      run: (t: string, r: string) => lockRepo(ctx, r, () => git.fetch(gitCwdOf(t, r))),
+      run: async (t: string, r: string) => {
+        await lockRepo(ctx, r, () => git.fetch(gitCwdOf(t, r)))
+        remoteRefresh.fetched(repoKey(ctx, r))
+      },
+    },
+    /**
+     * A client is looking at this repository. Fetches only when it is due, then tells every client if anything moved.
+     * `mayPull` is false on opening a project: looking at a checkout must not change it.
+     */
+    'git.refreshRemote': {
+      args: z.tuple([id, id, z.boolean()]),
+      run: async (t: string, r: string, mayPull: boolean) => {
+        const cwd = gitCwdOf(t, r)
+        const moved = await remoteRefresh.visit(repoKey(ctx, r), () => lockRepo(ctx, r, () => git.fetchCurrent(cwd)))
+        if (moved === null) return false
+        const pulled = mayPull && (await autoPull(t, r).catch(() => false))
+        if (moved || pulled) ctx.host.send('fs:changed', { cwd, path: '.git' })
+        return moved || pulled
+      },
     },
     'git.autoPull': {
       args: z.tuple([id, id]),
-      run: (t: string, r: string) =>
-        gitExclusive(ctx, t, r, async (cwd) => {
-          if (!loadPreferences().autoPull || agents.activeWriter([cwd])) return false
-          return git.autoPull(cwd)
-        }),
+      run: autoPull,
     },
     'git.push': {
       args: z.tuple([id, id, branchName.optional(), z.string().min(1).max(255).optional()]),

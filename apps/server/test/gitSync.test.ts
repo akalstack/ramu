@@ -162,6 +162,14 @@ describe('Automatic pull', () => {
     sh(theirs, 'push', '-q')
     await git.fetch(mine)
   }
+  it('background fetch follows the upstream remote and reports whether it moved', async () => {
+    sh(mine, 'remote', 'add', 'broken', join(tmp, 'missing.git'))
+    expect(await git.fetchCurrent(mine)).toBe(false)
+    commit(theirs, 'shared.txt', 'remote update\n', 'Remote update')
+    sh(theirs, 'push', '-q')
+    expect(await git.fetchCurrent(mine)).toBe(true)
+    expect(await git.fetchCurrent(mine)).toBe(false)
+  })
   it('fast-forwards a clean checkout without pushing or creating a merge commit', async () => {
     await incoming()
     sh(mine, 'config', 'pull.rebase', 'true')

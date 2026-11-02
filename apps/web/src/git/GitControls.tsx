@@ -129,44 +129,24 @@ export function SyncButton({
   )
 }
 
-/** Keeps ahead/behind counts current, like VS Code's autofetch: on window focus and every few minutes. Failures stay quiet. */
-const AUTH_FAILURE =
-  /Authentication failed|could not read (Username|Password)|terminal prompts disabled|Permission denied \(publickey/i
-
-export function useAutoFetch(fetch: (() => Promise<unknown>) | null) {
+/**
+ * Tells the host this repository is in view: on opening, on window focus and each minute while focused. The host decides
+ * whether a fetch is due, so these visits stay cheap and switching projects repeats nothing. Failures stay quiet.
+ */
+export function useAutoFetch(visit: ((opening: boolean) => Promise<unknown>) | null) {
   useLanguage()
   useEffect(() => {
-    if (!fetch) return
-    let last = 0
-    let running = false
-    let failures = 0
-    let stopped = false
-    // Like VS Code, only fetch while the window is focused; regaining focus fetches right away.
-    const run = () => {
-      // Offline or failing remotes back off (1, 2, 4… minutes, at most 30) instead of retrying every tick.
-      const gap = failures ? Math.min(60_000 * 2 ** failures, 30 * 60_000) : 60_000
-      if (stopped || running || !document.hasFocus() || Date.now() - last < gap) return
-      last = Date.now()
-      running = true
-      void fetch()
-        .then(() => {
-          failures = 0
-        })
-        .catch((error: unknown) => {
-          // Credentials won't fix themselves, so stop until the repository is reopened (as VS Code does).
-          if (AUTH_FAILURE.test(String(error instanceof Error ? error.message : error))) stopped = true
-          else failures++
-        })
-        .finally(() => {
-          running = false
-        })
+    if (!visit) return
+    const run = (opening: boolean) => {
+      if (document.hasFocus()) void visit(opening).catch(() => {})
     }
-    run()
-    const timer = setInterval(run, 3 * 60_000)
-    window.addEventListener('focus', run)
+    const tick = () => run(false)
+    run(true)
+    const timer = setInterval(tick, 60_000)
+    window.addEventListener('focus', tick)
     return () => {
       clearInterval(timer)
-      window.removeEventListener('focus', run)
+      window.removeEventListener('focus', tick)
     }
-  }, [fetch])
+  }, [visit])
 }

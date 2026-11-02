@@ -973,26 +973,25 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
     repoId,
     allowed: preferences.autoPull && !busy && !Object.values(ws.dirty).some(Boolean),
   }
-  const autoFetch = useCallback(async () => {
-    if (!taskId || !binding || binding.setupState !== 'ready') return
-    // Queued with user actions on this repo: skipped while one runs, and a user action that arrives waits for it.
-    await withGitBackground(taskId, binding.repoId, async () => {
-      await invoke('git.fetch', taskId, binding.repoId)
-      try {
+  const autoFetch = useCallback(
+    async (opening: boolean) => {
+      if (!taskId || !binding || binding.setupState !== 'ready') return
+      // Queued with user actions on this repo: skipped while one runs, and a user action that arrives waits for it.
+      await withGitBackground(taskId, binding.repoId, async () => {
         const current = autoPullContext.current
-        if (
+        const mayPull =
+          !opening &&
           current.allowed &&
           !isGitBusy(taskId, binding.repoId) &&
           current.taskId === taskId &&
           current.repoId === binding.repoId
-        )
-          await invoke('git.autoPull', taskId, binding.repoId)
-      } finally {
-        window.dispatchEvent(new Event('ramu:git-updated'))
-      }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [taskId, binding?.repoId, binding?.setupState, invoke] by design; the values it reads beyond these are current as of that run
-  }, [taskId, binding?.repoId, binding?.setupState, invoke])
+        if (await invoke('git.refreshRemote', taskId, binding.repoId, mayPull))
+          window.dispatchEvent(new Event('ramu:git-updated'))
+      })
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [taskId, binding?.repoId, binding?.setupState, invoke] by design; the values it reads beyond these are current as of that run
+    },
+    [taskId, binding?.repoId, binding?.setupState, invoke],
+  )
   useAutoFetch(binding?.setupState === 'ready' ? autoFetch : null)
 
   useEffect(() => {

@@ -615,6 +615,20 @@ export async function checkout(cwd: string, branch: string): Promise<void> {
 export async function fetch(cwd: string): Promise<void> {
   await git(cwd, ['fetch', '--all'])
 }
+/**
+ * Background fetch: only the remote the current branch follows, since that is what its ahead/behind counts read.
+ * Resolves whether the upstream moved. A repository with no remote is left alone.
+ */
+export async function fetchCurrent(cwd: string): Promise<boolean> {
+  const current = await status(cwd)
+  if (!current.remote) return false
+  const upstream = () => git(cwd, ['rev-parse', '--verify', '--quiet', '@{upstream}']).catch(() => null)
+  const tracked = current.branch ? await configValue(cwd, `branch.${current.branch}.remote`) : null
+  const remote = tracked && tracked !== '.' ? tracked : (await publishRemote(cwd, current.branch)).remote
+  const before = await upstream()
+  await git(cwd, remote ? ['fetch', '--', remote] : ['fetch', '--all'])
+  return before !== (await upstream())
+}
 /** Integrate fetched commits only when no local work needs to be reconciled. */
 export async function autoPull(cwd: string): Promise<boolean> {
   const current = await status(cwd)
