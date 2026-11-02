@@ -20,6 +20,7 @@ import type {
   BrowserTabAdjust,
 } from '@ramu/shared/browserBridge'
 import { BROWSER_INPUT_KEY } from '@ramu/shared/browserBridge'
+import type { ElectronCookie } from '@ramu/shared/browserImport'
 import { browserGuestScript } from '@ramu/shared/browserGuestScript'
 import { HostDownloads } from './hostDownloads'
 import { browserFaviconFrom } from '@ramu/shared/browserLinks'
@@ -521,6 +522,38 @@ export class HostGuestFactory implements GuestFactory {
     await Promise.all([...this.closing])
     await (await context)?.close()
     await rm(join(this.root, profileId), { recursive: true, force: true })
+  }
+  /** Adds one cookie copied from the person's own browser to a profile's website data. Chromium rejects an invalid one. */
+  async importCookie(profileId: string, cookie: ElectronCookie): Promise<void> {
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(profileId)) throw new Error('Invalid browser profile.')
+    const context = await this.context(`persist:ramu-browser:${profileId}`)
+    const sameSite: Record<ElectronCookie['sameSite'], 'Lax' | 'Strict' | 'None' | undefined> = {
+      lax: 'Lax',
+      strict: 'Strict',
+      no_restriction: 'None',
+      unspecified: undefined,
+    }
+    await context.addCookies([
+      {
+        name: cookie.name,
+        value: cookie.value,
+        // A leading dot applies the cookie to subdomains; without one it stays on that host.
+        domain: cookie.domain ?? new URL(cookie.url).hostname,
+        path: cookie.path,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        ...(sameSite[cookie.sameSite] ? { sameSite: sameSite[cookie.sameSite] } : {}),
+        ...(cookie.expirationDate !== undefined ? { expires: cookie.expirationDate } : {}),
+      },
+    ])
+  }
+  /** Closes a profile's browser so what was written to it is on disk before the caller reports success. */
+  async flushProfile(profileId: string): Promise<void> {
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(profileId)) throw new Error('Invalid browser profile.')
+    const partition = `persist:ramu-browser:${profileId}`
+    const context = this.contexts.get(partition)
+    this.contexts.delete(partition)
+    await (await context)?.close()
   }
   async close(): Promise<void> {
     this.closed = true

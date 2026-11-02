@@ -10,6 +10,8 @@ const NO_TRANSFERS =
   'The desktop browser cannot send or receive files from a phone yet. Use the browser on the computer for file transfers.'
 
 const tab = z.string().uuid()
+const importSource = z.enum(['chrome', 'edge', 'firefox'])
+const importText = z.string().min(1).max(200)
 const input = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('click'),
@@ -113,6 +115,22 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
             })
         }),
     },
+    'hostBrowser.importSources': { args: z.tuple([]), run: () => admin().importSources() },
+    'hostBrowser.importProfiles': {
+      args: z.tuple([importSource]),
+      run: (source) => admin().importProfiles(source),
+    },
+    'hostBrowser.importInspect': {
+      args: z.tuple([importSource, importText]),
+      run: (source, profileId) => admin().importInspect(source, profileId),
+    },
+    'hostBrowser.importRun': {
+      args: z.tuple([importText, z.array(z.string().max(253)).max(500), z.string().min(1).max(80)]),
+      run: (token, domains, name) => admin().importRun(token, domains, name),
+    },
+    'hostBrowser.importCancel': { args: z.tuple([importText]), run: (token) => admin().importCancel(token) },
+    'hostBrowser.importKeep': { args: z.tuple([importText]), run: (profileId) => admin().importKeep(profileId) },
+    'hostBrowser.importDiscard': { args: z.tuple([importText]), run: (profileId) => admin().importDiscard(profileId) },
     'hostBrowser.setup': { args: z.tuple([]), run: () => admin().setup() },
     'hostBrowser.disable': { args: z.tuple([]), run: () => admin().disable() },
     'hostBrowser.setEngine': {

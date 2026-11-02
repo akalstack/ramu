@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BrowserImporter, sourceRoot } from '../src/main/browserImport'
-import { chromiumKey } from '../src/main/browserImportReaders'
-import { BrowserProfiles } from '../src/main/browserProfiles'
+import { BrowserImporter, sourceRoot } from '../src/browser/browserImport'
+import { chromiumKey } from '../src/browser/browserImportReaders'
+import { BrowserProfiles } from '../src/browser/browserProfiles'
 
 let home: string
 let profilesPath: string

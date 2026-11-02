@@ -19,6 +19,7 @@ import {
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { Switch } from '@/components/ui/switch'
 import { Dropdown } from '../Menu'
+import { BrowserImportPanel } from './BrowserImportPanel'
 
 /** Runtime preferences and profile administration stay on the owning host. */
 export function HostBrowserSettings({
@@ -236,6 +237,13 @@ export function HostBrowserSettings({
                 )}
               </div>
             ))}
+          <BrowserImportPanel
+            hostId={hostId}
+            scope="host"
+            existing={profiles?.profiles ?? []}
+            busy={busy}
+            onChanged={() => void act(async () => {})}
+          />
         </>
       )}
       <Dialog

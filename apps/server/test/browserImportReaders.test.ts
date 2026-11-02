@@ -14,7 +14,7 @@ import {
   keychainPassword,
   readChromiumCookies,
   readFirefoxCookies,
-} from '../src/main/browserImportReaders'
+} from '../src/browser/browserImportReaders'
 
 let dir: string
 beforeEach(() => {

@@ -16,7 +16,9 @@
     "./browserUploads": "./src/browser/browserUploads.ts",
     "./browserDownloads": "./src/browser/browserDownloads.ts",
     "./browserBridge": "./src/browser/browserBridge.ts",
-    "./browserProfiles": "./src/browser/browserProfiles.ts"
+    "./browserProfiles": "./src/browser/browserProfiles.ts",
+    "./browserImport": "./src/browser/browserImport.ts",
+    "./browserImportSources": "./src/browser/browserImportSources.ts"
   },
   "engines": {
     "node": ">=24 <25"

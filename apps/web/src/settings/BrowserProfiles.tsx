@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { BrowserProfileCatalog, BrowserProfileInfo, BrowserImportSource } from '@ramu/shared/types/browser'
+import type { BrowserProfileCatalog, BrowserProfileInfo } from '@ramu/shared/types/browser'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -8,7 +8,7 @@ import { ramu } from '../ipc'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { addressFrom } from '@ramu/shared/browserLinks'
-import { BrowserImportWizard } from './BrowserImportWizard'
+import { BrowserImportPanel } from './BrowserImportPanel'
 
 /** Profile metadata and user-only sign-in. Site data and administration stay on this desktop. */
 export function BrowserProfilesSettings({
@@ -28,8 +28,6 @@ export function BrowserProfilesSettings({
   const [error, setError] = useState<string | null>(null)
   const [signIn, setSignIn] = useState<BrowserProfileInfo | null>(null)
   const [address, setAddress] = useState('')
-  const [sources, setSources] = useState<BrowserImportSource[] | null>(null)
-  const [importing, setImporting] = useState<BrowserImportSource | null>(null)
   const scope = useRef({ hostId, epoch: 0 })
   const acting = useRef(false)
   if (scope.current.hostId !== hostId) {
@@ -41,8 +39,6 @@ export function BrowserProfilesSettings({
     setError(null)
     setSignIn(null)
     setBusy(false)
-    setSources(null)
-    setImporting(null)
   }, [hostId])
   const run = async (operation: (valid: () => boolean) => Promise<void>) => {
     if (acting.current) return
@@ -139,46 +135,13 @@ export function BrowserProfilesSettings({
           </Button>
         </div>
       )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        disabled={busy}
-        onClick={() =>
-          void run(async (valid) => {
-            const sources = await ramu.invoke('browser.profiles.importSources', hostId)
-            if (valid()) setSources(sources)
-          })
-        }
-      >
-        {t('Import signed-in sessions')}
-      </Button>
-      {sources && (
-        <div className="space-y-2 text-caption">
-          <p className="text-muted-foreground">
-            {t(
-              'Import copies sign-in cookies once into a new profile. Nothing is read until you choose a browser, and the source browser is never changed.',
-            )}
-          </p>
-          {sources.map((source) => (
-            <div key={source.id} className="flex flex-wrap items-center gap-2">
-              <span className="min-w-0 flex-1">
-                {source.name} · {t(source.installed ? 'Installed' : 'Not installed')}
-                {!source.supported && ` · ${t(source.reason ?? 'Unavailable')}`}
-              </span>
-              {source.supported && source.installed && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => setImporting(source)}
-                >
-                  {t('Import…')}
-                </Button>
-              )}
-            </div>
-          ))}
+      <BrowserImportPanel
+        hostId={hostId}
+        scope="desktop"
+        existing={catalog?.profiles ?? []}
+        busy={busy}
+        onChanged={() => void refresh()}
+        alternative={
           <Button
             type="button"
             variant="secondary"
@@ -194,17 +157,8 @@ export function BrowserProfilesSettings({
           >
             {t('Sign in instead')}
           </Button>
-        </div>
-      )}
-      {importing && (
-        <BrowserImportWizard
-          hostId={hostId}
-          source={importing}
-          existing={catalog?.profiles ?? []}
-          onClose={() => setImporting(null)}
-          onChanged={() => void refresh()}
-        />
-      )}
+        }
+      />
       <Dialog
         open={!!signIn}
         onOpenChange={(open) => {

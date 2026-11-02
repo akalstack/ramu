@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
@@ -11,6 +12,8 @@ import type {
   BrowserTabAdjust,
 } from '@ramu/shared/browserBridge'
 import { BrowserProfiles } from './browserProfiles'
+import { BrowserImporter, type ImportSourceId } from './browserImport'
+import { browserImportSources } from './browserImportSources'
 import { BrowserRuntime } from './browserRuntime'
 import { executeBrowserBridge } from './browserBridge'
 import { HostGuestFactory } from './hostGuest'
@@ -175,6 +178,8 @@ export class HostBrowser implements HostedBrowserBackend {
         new BrowserDownloads(join(this.root, 'downloads'), this.changed),
       )
       this.runtime.startIdleSweep()
+      // A copy the person never kept before a restart is not left behind.
+      void this.imports().cleanup()
       this.enabled = true
       this.reason = ''
       this.changed()
@@ -256,6 +261,53 @@ export class HostBrowser implements HostedBrowserBackend {
     this.profiles.rename(id, name)
     this.changed()
   }
+  private async clearProfileData(id: string): Promise<void> {
+    if (this.factory) await this.factory.clearProfile(id)
+    else await rm(join(this.root, 'profiles', id), { recursive: true, force: true })
+  }
+  private importer?: BrowserImporter
+  /** Copies sign-ins from this host's own browsers into a new profile; cookie values never leave this process. */
+  private imports(): BrowserImporter {
+    this.importer ??= new BrowserImporter({
+      profiles: this.profiles,
+      home: homedir(),
+      setCookie: (id, cookie) => {
+        if (!this.factory) throw new Error(this.reason)
+        return this.factory.importCookie(id, cookie)
+      },
+      flush: (id) => this.factory?.flushProfile(id) ?? Promise.resolve(),
+      clearData: (id) => this.clearProfileData(id),
+    })
+    return this.importer
+  }
+  importSources() {
+    return browserImportSources()
+  }
+  importProfiles(source: ImportSourceId) {
+    return this.imports().profiles(source)
+  }
+  importInspect(source: ImportSourceId, profileId: string) {
+    return this.imports().inspect(source, profileId)
+  }
+  importCancel(token: string) {
+    this.imports().cancel(token)
+  }
+  async importRun(token: string, domains: string[], name: string) {
+    // The copy writes into Chromium's own profile directory, so the browser has to be installed and running.
+    await this.prepare()
+    const staged = await this.imports().run(token, domains, name)
+    this.changed()
+    return staged
+  }
+  importKeep(profileId: string) {
+    const kept = this.imports().keep(profileId)
+    this.changed()
+    return kept
+  }
+  async importDiscard(profileId: string) {
+    await this.imports().discard(profileId)
+    this.changed()
+  }
   /** Open tabs of a profile as a stable key. Without a running browser there are none, and its data can still be cleared. */
   private profileTabs(id: string): string {
     return (this.runtime?.list() ?? [])
@@ -288,8 +340,7 @@ export class HostBrowser implements HostedBrowserBackend {
       throw new Error('The profile or its tabs changed. Review the action again.')
     await this.profiles.withLock(review.id, async () => {
       const clear = async () => {
-        if (this.factory) await this.factory.clearProfile(review.id)
-        else await rm(join(this.root, 'profiles', review.id), { recursive: true, force: true })
+        await this.clearProfileData(review.id)
         if (review.remove) {
           await resetDefault(review.id)
           this.profiles.remove(review.id)

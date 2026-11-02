@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type {
   BrowserImportDomain,
   BrowserImportProfile,
@@ -9,7 +9,7 @@ import type {
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ramu } from '../ipc'
+import { invokeOn, ramu } from '../ipc'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import {
@@ -21,6 +21,29 @@ import {
   toggleDomain,
 } from './browserImportModel'
 
+/** Where the copy lands: the desktop's own browser, or the Chromium this host runs. */
+function importApi(scope: 'desktop' | 'host', hostId: string) {
+  return scope === 'host'
+    ? {
+        profiles: (source: string) => invokeOn(hostId, 'hostBrowser.importProfiles', source),
+        inspect: (source: string, profile: string) => invokeOn(hostId, 'hostBrowser.importInspect', source, profile),
+        run: (token: string, domains: string[], name: string) =>
+          invokeOn(hostId, 'hostBrowser.importRun', token, domains, name),
+        cancel: (token: string) => invokeOn(hostId, 'hostBrowser.importCancel', token),
+        keep: (profile: string) => invokeOn(hostId, 'hostBrowser.importKeep', profile),
+        discard: (profile: string) => invokeOn(hostId, 'hostBrowser.importDiscard', profile),
+      }
+    : {
+        profiles: (source: string) => ramu.invoke('browser.import.profiles', hostId, source),
+        inspect: (source: string, profile: string) => ramu.invoke('browser.import.inspect', hostId, source, profile),
+        run: (token: string, domains: string[], name: string) =>
+          ramu.invoke('browser.import.run', hostId, token, domains, name),
+        cancel: (token: string) => ramu.invoke('browser.import.cancel', hostId, token),
+        keep: (profile: string) => ramu.invoke('browser.import.keep', hostId, profile),
+        discard: (profile: string) => ramu.invoke('browser.import.discard', hostId, profile),
+      }
+}
+
 type Step = 'profile' | 'reading' | 'sites' | 'review' | 'importing' | 'result'
 
 /**
@@ -30,12 +53,14 @@ type Step = 'profile' | 'reading' | 'sites' | 'review' | 'importing' | 'result'
  */
 export function BrowserImportWizard({
   hostId,
+  scope = 'desktop',
   source,
   existing,
   onClose,
   onChanged,
 }: {
   hostId: string
+  scope?: 'desktop' | 'host'
   source: BrowserImportSource
   existing: readonly BrowserProfileInfo[]
   onClose(): void
@@ -50,23 +75,24 @@ export function BrowserImportWizard({
   const [name, setName] = useState('')
   const [staged, setStaged] = useState<BrowserImportStaged | null>(null)
   const [error, setError] = useState('')
+  const api = useMemo(() => importApi(scope, hostId), [scope, hostId])
 
   useEffect(() => {
     let active = true
-    ramu.invoke('browser.import.profiles', hostId, source.id).then(
+    api.profiles(source.id).then(
       (list) => active && setProfiles(list),
       (reason) => active && setError(t(errorText(reason))),
     )
     return () => {
       active = false
     }
-  }, [hostId, source.id])
+  }, [api, source.id])
 
   // Closing at any point gives up what was read, and removes a copy that was not kept.
   const finish = async (discardStaged: boolean) => {
     try {
-      if (token && step !== 'result') await ramu.invoke('browser.import.cancel', hostId, token)
-      if (discardStaged && staged) await ramu.invoke('browser.import.discard', hostId, staged.profileId)
+      if (token && step !== 'result') await api.cancel(token)
+      if (discardStaged && staged) await api.discard(staged.profileId)
     } catch {
       /* Nothing left to give up. */
     }
@@ -78,7 +104,7 @@ export function BrowserImportWizard({
     setError('')
     setStep('reading')
     try {
-      const read = await ramu.invoke('browser.import.inspect', hostId, source.id, entry.id)
+      const read = await api.inspect(source.id, entry.id)
       setToken(read.token)
       setDomains(read.domains)
       setName(defaultImportName(source.name, entry.name, existing))
@@ -94,7 +120,7 @@ export function BrowserImportWizard({
     setStep('importing')
     setError('')
     try {
-      setStaged(await ramu.invoke('browser.import.run', hostId, token, [...selected], name.trim()))
+      setStaged(await api.run(token, [...selected], name.trim()))
       setToken('')
       setStep('result')
     } catch (reason) {
@@ -106,7 +132,7 @@ export function BrowserImportWizard({
   const keep = async () => {
     if (!staged) return
     try {
-      await ramu.invoke('browser.import.keep', hostId, staged.profileId)
+      await api.keep(staged.profileId)
       onChanged()
       onClose()
     } catch (reason) {

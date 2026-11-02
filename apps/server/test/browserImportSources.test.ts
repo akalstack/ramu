@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { browserImportSources } from '../src/main/browserImportSources'
+import { browserImportSources } from '../src/browser/browserImportSources'
 
 const installed =
   (...names: string[]) =>

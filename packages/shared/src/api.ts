@@ -1,4 +1,12 @@
-import type { BrowserProfileCatalog, BrowserProfileInfo, BrowserTabInfo } from './types/browser'
+import type {
+  BrowserImportDomain,
+  BrowserImportProfile,
+  BrowserImportSource,
+  BrowserImportStaged,
+  BrowserProfileCatalog,
+  BrowserProfileInfo,
+  BrowserTabInfo,
+} from './types/browser'
 import type { RoutingCandidate, RoutingOutcome, SplitPlan } from './workspace/projectRouting'
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
 import type { ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
@@ -301,6 +309,13 @@ export interface RamuMethods {
   ): { token: string; id: string; name: string; tabs: number; remove: boolean }
   'hostBrowser.profileConfirm'(token: string): void
   'hostBrowser.disable'(): void
+  'hostBrowser.importSources'(): BrowserImportSource[]
+  'hostBrowser.importProfiles'(source: string): BrowserImportProfile[]
+  'hostBrowser.importInspect'(source: string, profileId: string): { token: string; domains: BrowserImportDomain[] }
+  'hostBrowser.importRun'(token: string, domains: string[], name: string): BrowserImportStaged
+  'hostBrowser.importCancel'(token: string): void
+  'hostBrowser.importKeep'(profileId: string): BrowserProfileInfo
+  'hostBrowser.importDiscard'(profileId: string): void
   /** Automatic uses the connected desktop's native browser; Host Chromium always uses this host's. */
   'hostBrowser.setEngine'(engine: 'auto' | 'chromium'): void
   'hostBrowser.grants'(): { device: string; thread: string; expires: number }[]
