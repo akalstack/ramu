@@ -11,6 +11,7 @@ import type {
   ForgeRepositoryAccount,
   ForgeRepositorySummary,
   ForgeStatus,
+  GitlabSummary,
   IssueSummary,
   PublishRepositoryInput,
   PullRequestFeedbackKind,
@@ -22,6 +23,7 @@ import { glabHosts, parseGitlabRemote, type GitlabProject } from '@ramu/shared/f
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
 import { registerForgeAdapter } from './adapter'
+import { findExecutable } from '../../providers/providerBinaries'
 import { ForgeError, failureExcerpt, pullRequestDraft } from './github'
 
 /** Where `glab` keeps its sign-ins: its own config directory, then the platform defaults. */
@@ -57,6 +59,42 @@ export async function gitlabToken(
     .toLowerCase()
   const token = env.GITLAB_TOKEN ?? env.GL_TOKEN
   return token && named === origin ? { token, source: 'environment' } : null
+}
+
+/** The GitLab servers this host can use and, when asked to check, who each sign-in is. */
+export async function gitlabSummary(
+  check: boolean,
+  options: { env?: NodeJS.ProcessEnv; fetch?: typeof fetch; hasCli?: boolean } = {},
+): Promise<GitlabSummary> {
+  const env = options.env ?? process.env
+  const found = new Map<string, { token: string; source: 'cli' | 'environment' }>()
+  for (const [origin, token] of await gitlabSignIns(env)) found.set(origin, { token, source: 'cli' })
+  const environment = env.GITLAB_TOKEN ?? env.GL_TOKEN
+  if (environment) {
+    const origin = (env.GITLAB_HOST ?? 'gitlab.com')
+      .replace(/^https?:\/\//, '')
+      .replace(/\/+$/, '')
+      .toLowerCase()
+    if (!found.has(origin)) found.set(origin, { token: environment, source: 'environment' })
+  }
+  const accounts = await Promise.all(
+    [...found].map(async ([origin, { token, source }]) => {
+      if (!check) return { origin, source, login: null, state: 'unchecked' as const }
+      try {
+        const user = await gitlabApi<{ username?: string }>({ origin, token, fetch: options.fetch ?? fetch }, '/user')
+        return { origin, source, login: user?.username ?? null, state: 'ok' as const }
+      } catch (error) {
+        return {
+          origin,
+          source,
+          login: null,
+          state: 'failed' as const,
+          error: redactSecrets(String((error as Error).message)),
+        }
+      }
+    }),
+  )
+  return { cli: (options.hasCli ?? findExecutable('glab') !== null) ? 'installed' : 'no-cli', accounts }
 }
 
 /** Self-managed GitLab servers the person has signed in to, so their remotes are recognised as GitLab. */

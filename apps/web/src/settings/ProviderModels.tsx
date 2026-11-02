@@ -48,7 +48,7 @@ export function ProviderModels({
   }
   return (
     <>
-      <SettingsRow className="mb-0">
+      <SettingsRow>
         <SettingsLabel
           title={t('Models')}
           help={t('{0} of {1} listed in model pickers', { 0: count, 1: models.length })}

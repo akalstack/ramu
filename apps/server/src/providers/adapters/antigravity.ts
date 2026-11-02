@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { defineAdapter, parseProviderVersion } from '../adapter'
+import { antigravityKeyName, antigravitySignInProblem } from '@ramu/shared/providers/environment'
 
 /** The Antigravity runtime Ramu downloaded itself: `active.json` names the version directory that holds the executable and its helper. */
 export const antigravityFileNames = () =>
@@ -55,7 +56,7 @@ export const antigravityAdapter = defineAdapter({
     updateCommand: null,
     setupCommand: null,
     setupNote:
-      "Ramu downloads Google's official ACP runtime for you: choose Install runtime, then Login (opens Google sign-in in your browser). To use your own copy, select agy_acp_server.par (or .exe) and its localharness_external helper under Advanced. The Antigravity IDE is a separate application.",
+      "Ramu downloads Google's official ACP runtime for you: choose Install runtime, then Login and pick a Google account, Gemini Enterprise, a Gemini API key or Agent Platform. To use your own copy, select agy_acp_server.par (or .exe) and its localharness_external helper under Advanced. The Antigravity IDE is a separate application.",
   }),
   async latestRelease(_current, fetchText) {
     const registry = JSON.parse(
@@ -125,9 +126,34 @@ export const antigravityAdapter = defineAdapter({
   loginArgs: null,
   // The ACP runtime scans `<cwd>/.gemini/skills` and `<cwd>/.agents/skills`; the first is Antigravity's own, so other agents that read `.agents` do not pick the links up.
   skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.gemini', 'skills')] : [] }),
-  async signIn({ installed, accountId, acpSignIn }) {
+  async signIn({ installed, accountId, acpSignIn, env, method }) {
     if (!installed) throw new Error('Select the Antigravity ACP runtime first.')
-    await acpSignIn('antigravity', 'oauth-personal', accountId)
+    const chosen = method ?? { method: 'oauth-personal' as const }
+    const problem = antigravitySignInProblem(chosen, !!env[antigravityKeyName(chosen.method)])
+    if (problem) throw new Error(problem)
+    // The runtime reads the method and the Google Cloud project from its own settings; keys stay in the environment.
+    const dir = join(env.GEMINI_HOME || join(homedir(), '.gemini'), 'antigravity-acp')
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    const project = chosen.gcpProject?.trim(),
+      location = chosen.gcpLocation?.trim()
+    const file = join(dir, 'settings.json')
+    const previous = existsSync(file) ? readFileSync(file, 'utf8') : null
+    writeFileSync(
+      file,
+      JSON.stringify({
+        auth: { type: chosen.method },
+        ...(project || location ? { gcp: { ...(project ? { project } : {}), ...(location ? { location } : {}) } } : {}),
+      }),
+      { mode: 0o600 },
+    )
+    try {
+      await acpSignIn('antigravity', chosen.method, accountId)
+    } catch (error) {
+      // A failed sign-in must not read as signed in with the new method.
+      if (previous === null) rmSync(file, { force: true })
+      else writeFileSync(file, previous, { mode: 0o600 })
+      throw error
+    }
   },
   updatePlan({ config, installRuntime }) {
     // Ramu downloads Google's official runtime itself; a runtime the user picked by path or env keeps its own updater.

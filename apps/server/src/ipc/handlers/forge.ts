@@ -9,6 +9,7 @@ import type {
   PullRequestInput,
 } from '@ramu/shared/types'
 import * as forge from '../../workspace/forge'
+import { gitlabSummary } from '../../workspace/forge/gitlab'
 import * as git from '../../workspace/git'
 import { gitExclusive } from '../helpers'
 import { id } from '../schemas'
@@ -113,6 +114,10 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     'forge.connections': {
       args: z.tuple([]),
       run: () => forge.connectionSummary(administrator()),
+    },
+    'forge.gitlab': {
+      args: z.tuple([z.boolean()]),
+      run: (check: boolean) => gitlabSummary(check),
     },
     // Credentials change only from the machine running the host: never from a paired client, an agent tool or a viewer.
     'forge.saveConnection': {

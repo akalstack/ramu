@@ -1,4 +1,8 @@
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { antigravityKeyName, antigravitySignInProblem } from '@ramu/shared/providers/environment'
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { PROVIDER_ADAPTERS, providerAdapter } from '../src/providers/adapters'
 import { defineAdapter, parseProviderVersion } from '../src/providers/adapter'
@@ -147,5 +151,62 @@ describe('login command shapes', () => {
 
   it('refuses in-app sign-in for providers that use the terminal command', async () => {
     await expect(service('/b/tool').signIn('codex')).rejects.toThrow('Use the Login command for this provider.')
+  })
+})
+
+describe('Antigravity sign-in methods', () => {
+  const signIn = providerAdapter('antigravity').signIn!
+  const home = () => mkdtempSync(join(tmpdir(), 'ramu-agy-'))
+
+  it('asks for what each method needs before starting the runtime', () => {
+    expect(antigravitySignInProblem({ method: 'oauth-personal' })).toBeNull()
+    expect(antigravitySignInProblem({ method: 'oauth-business', gcpProject: 'p' })).toMatch(/location/)
+    expect(antigravitySignInProblem({ method: 'gemini-api-key' })).toMatch(/API key/)
+    expect(antigravitySignInProblem({ method: 'gemini-api-key' }, true)).toBeNull()
+    expect(antigravitySignInProblem({ method: 'agent-platform', gcpProject: 'p', gcpLocation: 'l' })).toBeNull()
+    expect(antigravityKeyName('agent-platform')).toBe('GOOGLE_API_KEY')
+  })
+
+  it('records the method and Google Cloud project for the runtime, and authenticates with that method', async () => {
+    const dir = home()
+    try {
+      const calls: string[] = []
+      await signIn({
+        installed: true,
+        accountId: 'work',
+        env: { GEMINI_HOME: dir },
+        acpSignIn: async (_provider, method, account) => void calls.push(`${method}:${account}`),
+        method: { method: 'oauth-business', gcpProject: 'acme-ai', gcpLocation: 'us-central1' },
+      })
+      expect(calls).toEqual(['oauth-business:work'])
+      expect(JSON.parse(readFileSync(join(dir, 'antigravity-acp', 'settings.json'), 'utf8'))).toEqual({
+        auth: { type: 'oauth-business' },
+        gcp: { project: 'acme-ai', location: 'us-central1' },
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves the previous sign-in in place when the runtime refuses the new one', async () => {
+    const dir = home()
+    try {
+      mkdirSync(join(dir, 'antigravity-acp'), { recursive: true })
+      writeFileSync(join(dir, 'antigravity-acp', 'settings.json'), '{"auth":{"type":"oauth-personal"}}')
+      await expect(
+        signIn({
+          installed: true,
+          accountId: 'default',
+          env: { GEMINI_HOME: dir, GEMINI_API_KEY: 'k' },
+          acpSignIn: async () => {
+            throw new Error('Invalid API key')
+          },
+          method: { method: 'gemini-api-key' },
+        }),
+      ).rejects.toThrow('Invalid API key')
+      expect(readFileSync(join(dir, 'antigravity-acp', 'settings.json'), 'utf8')).toContain('oauth-personal')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

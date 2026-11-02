@@ -128,3 +128,34 @@ export const sameEnvironment = (a: ProviderEnvironmentValues, b: ProviderEnviron
       right = (b[scope] ?? []).filter((v) => v.key || v.value)
     return left.length === right.length && left.every((v, i) => v.key === right[i]!.key && v.value === right[i]!.value)
   })
+
+/** The ways the Antigravity runtime can sign in, as it advertises them over ACP. */
+export const ANTIGRAVITY_SIGN_IN_METHODS = [
+  'oauth-personal',
+  'oauth-business',
+  'gemini-api-key',
+  'agent-platform',
+] as const
+export type AntigravitySignInMethod = (typeof ANTIGRAVITY_SIGN_IN_METHODS)[number]
+export interface AntigravitySignIn {
+  method: AntigravitySignInMethod
+  /** A Gemini API key, or an Agent Platform API key. Kept with the host's provider variables, never in settings. */
+  apiKey?: string
+  gcpProject?: string
+  gcpLocation?: string
+}
+
+/** What a sign-in still needs, or null when it can go ahead. `hasKey` means a key is already saved on the host. */
+export function antigravitySignInProblem(input: AntigravitySignIn, hasKey = false): string | null {
+  const key = !!input.apiKey?.trim() || hasKey
+  const place = !!input.gcpProject?.trim() && !!input.gcpLocation?.trim()
+  if (input.method === 'oauth-business' && !place) return 'Enter the Google Cloud project and location.'
+  if (input.method === 'gemini-api-key' && !key) return 'Enter a Gemini API key.'
+  if (input.method === 'agent-platform' && !key && !place)
+    return 'Enter an API key, or a Google Cloud project and location.'
+  return null
+}
+
+/** The variable that carries a method's API key to the runtime. */
+export const antigravityKeyName = (method: AntigravitySignInMethod) =>
+  method === 'agent-platform' ? 'GOOGLE_API_KEY' : 'GEMINI_API_KEY'

@@ -5,12 +5,30 @@ import { claudeAdvisorModel } from '../../agent/advisor'
 import { providerBinaries } from '../preferences'
 import { agentSettings, relPath } from '../schemas'
 import type { RegisterHandlers } from '../types'
-import { ENVIRONMENT_SCOPES, type ProviderEnvironmentValues } from '@ramu/shared/providers/environment'
+import {
+  ANTIGRAVITY_SIGN_IN_METHODS,
+  ENVIRONMENT_SCOPES,
+  antigravityKeyName,
+  type AntigravitySignIn,
+  type ProviderEnvironmentValues,
+} from '@ramu/shared/providers/environment'
 
 const environmentValues = z.partialRecord(
   z.enum(ENVIRONMENT_SCOPES as [string, ...string[]]),
   z.array(z.object({ key: z.string().max(128), value: z.string().max(32 * 1024) })).max(500),
 )
+
+const cloudField = z
+  .string()
+  .max(128)
+  .regex(/^[A-Za-z0-9._:-]*$/)
+  .optional()
+const antigravitySignIn = z.object({
+  method: z.enum(ANTIGRAVITY_SIGN_IN_METHODS),
+  apiKey: z.string().max(512).optional(),
+  gcpProject: cloudField,
+  gcpLocation: cloudField,
+})
 
 /** Provider sign-in and updates, plus usage limits and provider-specific helpers. */
 export const registerProviderHandlers: RegisterHandlers = ({
@@ -29,8 +47,25 @@ export const registerProviderHandlers: RegisterHandlers = ({
   },
   'providers.accountEmails': { args: z.tuple([]), run: () => providers.accountEmails() },
   'providers.signIn': {
-    args: z.tuple([agentSettings.shape.provider, agentSettings.shape.accountId]),
-    run: (provider: ProviderStatus['provider'], accountId?: string) => providers.signIn(provider, accountId),
+    args: z.tuple([agentSettings.shape.provider, agentSettings.shape.accountId, antigravitySignIn.optional()]),
+    run: async (provider: ProviderStatus['provider'], accountId?: string, method?: AntigravitySignIn) => {
+      if (method && provider !== 'antigravity') throw new Error('This provider has one sign-in method')
+      const key = method?.apiKey?.trim()
+      if (method && key) {
+        // A key is a credential: it joins Antigravity's variables in the host credential store, like any other.
+        if (host.canAdministerIntegrations?.() !== true) throw new Error('Enter API keys on the host running Ramu')
+        const name = antigravityKeyName(method.method)
+        const current = environment.status(true).values ?? {}
+        await environment.save({
+          ...current,
+          antigravity: [
+            ...(current.antigravity ?? []).filter((entry) => entry.key !== name),
+            { key: name, value: key },
+          ],
+        })
+      }
+      return providers.signIn(provider, accountId, method && { ...method, apiKey: undefined })
+    },
   },
   'providers.loginCommand': {
     args: z.tuple([agentSettings.shape.provider, providerBinaries.optional()]),

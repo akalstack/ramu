@@ -1,3 +1,4 @@
+import type { AntigravitySignIn } from '@ramu/shared/providers/environment'
 import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import type { ProviderConfiguration, ProviderSignIn, ProviderStatus } from '@ramu/shared/providers/providers'
@@ -117,6 +118,8 @@ export interface ProviderAdapter {
     /** The account's provider environment, including where it keeps its own login. */
     env: NodeJS.ProcessEnv
     acpSignIn: (provider: 'antigravity', methodId: string, accountId: string) => Promise<void>
+    /** The sign-in method the person chose, for runtimes that offer more than one. */
+    method?: AntigravitySignIn
   }): Promise<void>
   readonly native?: NativeFeatures
   /** Loads the managed-skill export through the provider's own skills. `cwd`, when known, is the chat's working directory for providers that scan one. */

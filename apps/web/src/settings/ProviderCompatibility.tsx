@@ -33,16 +33,22 @@ export function ProviderCompatibility({
   const summary = compatibilitySummary(result)
   const checked = result.checkedAt ? new Date(result.checkedAt).toLocaleString() : null
   return (
-    <div className="grid gap-1.5">
-      <p
-        className={`small text-caption ${bad ? 'text-bad' : 'muted text-muted-foreground'}`}
-        role={bad ? 'alert' : 'status'}
-      >
-        {t(summary.key, summary.values)}
-        {result.affects?.length ? ` ${result.affects.join(', ')}.` : ''}
-        {result.recommend ? ` ${t('Recommended version: {0}', { '0': result.recommend })}` : ''}
-        {stale ? ` ${t('Showing the last result; the host is not reachable.')}` : ''}
-      </p>
+    <Collapsible className="grid gap-1.5">
+      <div className="flex items-center justify-between gap-6">
+        <span className="min-w-0">
+          <strong className="font-medium">{t('Compatibility')}</strong>
+          <span
+            className={`mt-1 block max-w-[420px] small text-caption leading-[18px] ${bad ? 'text-bad' : 'muted text-muted-foreground'}`}
+            role={bad ? 'alert' : 'status'}
+          >
+            {t(summary.key, summary.values)}
+            {result.affects?.length ? ` ${result.affects.join(', ')}.` : ''}
+            {result.recommend ? ` ${t('Recommended version: {0}', { '0': result.recommend })}` : ''}
+            {stale ? ` ${t('Showing the last result; the host is not reachable.')}` : ''}
+          </span>
+        </span>
+        <CollapsibleTrigger render={<Button size="sm" variant="ghost" />}>{t('Details')}</CollapsibleTrigger>
+      </div>
       {plan.manualInstall && (
         <p className="muted text-muted-foreground small text-caption">
           {t('Ramu cannot pick a compatible release for you. Install a compatible version manually, then check again.')}
@@ -72,34 +78,29 @@ export function ProviderCompatibility({
           )}
         </div>
       )}
-      <Collapsible>
-        <CollapsibleTrigger render={<Button size="sm" variant="ghost" className="small text-caption" />}>
-          {t('Compatibility details')}
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <dl className="muted text-muted-foreground small text-caption m-0 grid gap-0.5">
+      <CollapsibleContent>
+        <dl className="muted text-muted-foreground small text-caption m-0 grid gap-0.5">
+          <div>
+            {t('Runtime')}: {result.runtime}
+          </div>
+          <div>
+            {t('Observed version')}: {result.observedVersion ?? t('Unknown')}
+          </div>
+          <div>
+            {t('Policy revision')}: {result.policyRevision}
+          </div>
+          {result.evidence && (
             <div>
-              {t('Runtime')}: {result.runtime}
+              {t('Evidence')}: {result.evidence}
             </div>
+          )}
+          {checked && (
             <div>
-              {t('Observed version')}: {result.observedVersion ?? t('Unknown')}
+              {t('Checked')}: {checked}
             </div>
-            <div>
-              {t('Policy revision')}: {result.policyRevision}
-            </div>
-            {result.evidence && (
-              <div>
-                {t('Evidence')}: {result.evidence}
-              </div>
-            )}
-            {checked && (
-              <div>
-                {t('Checked')}: {checked}
-              </div>
-            )}
-          </dl>
-        </CollapsibleContent>
-      </Collapsible>
-    </div>
+          )}
+        </dl>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

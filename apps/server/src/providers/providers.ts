@@ -1,3 +1,4 @@
+import type { AntigravitySignIn } from '@ramu/shared/providers/environment'
 import type { ActivityService } from '../background/activity'
 import { execFile } from 'node:child_process'
 import {
@@ -190,7 +191,7 @@ export class ProviderService {
     return result
   }
 
-  async signIn(provider: AgentProvider, accountId = 'default'): Promise<void> {
+  async signIn(provider: AgentProvider, accountId = 'default', method?: AntigravitySignIn): Promise<void> {
     const adapter = providerAdapter(provider)
     if (!adapter.signIn) throw new Error('Use the Login command for this provider.')
     this.statusCache = undefined
@@ -199,6 +200,7 @@ export class ProviderService {
       accountId,
       env: providerEnvironment(provider, this.preferences().providerBinaries, accountId),
       acpSignIn,
+      method,
     })
     this.statusCache = undefined
   }

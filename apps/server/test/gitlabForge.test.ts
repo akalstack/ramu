@@ -1,7 +1,11 @@
-import { expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { expect, it, vi } from 'vitest'
 import {
   discussionsPrompt,
   gitlabApi,
+  gitlabSummary,
   gitlabToken,
   jobState,
   parseJobs,
@@ -146,4 +150,36 @@ it('uses GITLAB_TOKEN only for gitlab.com or the server GITLAB_HOST names', asyn
     token: 'env-token',
     source: 'environment',
   })
+})
+
+it('lists the GitLab servers a host can use and checks who each sign-in is without returning tokens', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-glab-'))
+  try {
+    writeFileSync(join(dir, 'config.yml'), 'hosts:\n  gitlab.example.com:\n    token: glpat-secret\n')
+    const env = { GLAB_CONFIG_DIR: dir, GITLAB_TOKEN: 'glpat-env' }
+    const listed = await gitlabSummary(false, { env, hasCli: true })
+    expect(listed).toEqual({
+      cli: 'installed',
+      accounts: [
+        { origin: 'gitlab.example.com', source: 'cli', login: null, state: 'unchecked' },
+        { origin: 'gitlab.com', source: 'environment', login: null, state: 'unchecked' },
+      ],
+    })
+    const fetch = vi.fn(async (url: string) =>
+      url.startsWith('https://gitlab.com/')
+        ? new Response('', { status: 401 })
+        : new Response(JSON.stringify({ username: 'ahxar' }), { status: 200 }),
+    )
+    const checked = await gitlabSummary(true, {
+      env,
+      hasCli: false,
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    })
+    expect(checked.cli).toBe('no-cli')
+    expect(checked.accounts[0]).toMatchObject({ login: 'ahxar', state: 'ok' })
+    expect(checked.accounts[1]).toMatchObject({ state: 'failed', error: expect.stringContaining('expired') })
+    expect(JSON.stringify(checked)).not.toContain('glpat')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

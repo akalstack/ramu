@@ -9,7 +9,7 @@ import type {
 } from './types/browser'
 import type { RoutingCandidate, RoutingOutcome, SplitPlan } from './workspace/projectRouting'
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
-import type { ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
+import type { AntigravitySignIn, ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
 import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
@@ -98,6 +98,7 @@ import type {
   ForgeRepositoryAccount,
   ForgeRepositorySummary,
   ForgeConnectionSummary,
+  GitlabSummary,
   ForgeSaveConnectionInput,
   ForgeSavedConnection,
   PullRequestWatchStatus,
@@ -871,7 +872,11 @@ export interface RamuMethods {
     configuration?: ProviderConfiguration,
   ): Promise<string | null>
   /** In-app sign-in for runtimes without a login command (Antigravity). Resolves after the browser flow completes. */
-  'providers.signIn'(provider: ProviderStatus['provider'], accountId?: string): Promise<void>
+  'providers.signIn'(
+    provider: ProviderStatus['provider'],
+    accountId?: string,
+    method?: AntigravitySignIn,
+  ): Promise<void>
   'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
   'providers.updates'(): Promise<ProviderStatus[]>
   'providers.dismissUpdate'(provider: ProviderStatus['provider'], binary: string, latestVersion: string): void
@@ -995,6 +1000,8 @@ export interface RamuMethods {
   /** Publishes the branch when needed, then opens the pull request. */
   /** GitHub sign-ins this host already holds (read-only). Pass nothing; the host runs `gh auth status`. */
   'forge.connections'(): ForgeConnectionSummary
+  /** GitLab servers this host can use; `check` asks each one who is signed in. */
+  'forge.gitlab'(check: boolean): GitlabSummary
   /** Instruction files providers read on their own (AGENTS.md, CLAUDE.md, rules folders) for a project and the user; read-only. */
   'rules.native'(projectId: string | null): NativeInstructions
   /** Saves or replaces a GitHub token on this host after the server vouches for it. Host administrators only. */

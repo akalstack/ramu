@@ -162,6 +162,20 @@ export interface ForgeConnectionSummary {
   selection?: Record<string, string>
 }
 
+/** GitLab on one host: the servers its `glab` sign-in or `GITLAB_TOKEN` covers. Tokens never leave the host. */
+export interface GitlabSummary {
+  /** `no-cli`: `glab` is not installed (a `GITLAB_TOKEN` still works). */
+  cli: 'no-cli' | 'installed'
+  accounts: {
+    origin: string
+    source: 'cli' | 'environment'
+    /** Filled by a connection check; null before one. */
+    login: string | null
+    state: 'unchecked' | 'ok' | 'failed'
+    error?: string
+  }[]
+}
+
 /** A GitHub repository the signed-in account can see, for choosing something to clone. */
 export interface ForgeRepositorySummary {
   /** `owner/name`. */

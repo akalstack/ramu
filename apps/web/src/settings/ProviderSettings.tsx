@@ -18,6 +18,8 @@ import { ProviderCard } from './ProviderCard'
 import { ProviderModels } from './ProviderModels'
 import { useModelSets } from '../models/ModelSets'
 import { providerStatusQuery } from './providerStatusQuery'
+import { AntigravitySignIn } from './AntigravitySignIn'
+import { antigravityKeyName } from '@ramu/shared/providers/environment'
 
 export function ProviderSettings({
   value,
@@ -36,6 +38,8 @@ export function ProviderSettings({
   const queryClient = useQueryClient()
   const [updating, setUpdating] = useState<AgentProvider | null>(null)
   const [signingIn, setSigningIn] = useState<AgentProvider | null>(null)
+  // Antigravity offers several sign-in methods; the account being signed in and the key names the host keeps.
+  const [antigravity, setAntigravity] = useState<{ accountId: string; keys: string[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const sequence = useRef(0),
@@ -186,7 +190,12 @@ export function ProviderSettings({
         runProviderCommand(`${providerName(provider)} · ${t('Login')}`, command)
         return
       }
-      // Cursor and Antigravity sign in inside Ramu: the browser opens, and the call returns once sign-in completes.
+      if (provider === 'antigravity') {
+        const environment = await Promise.resolve(invoke('providers.environment')).catch(() => null)
+        if (allowed()) setAntigravity({ accountId, keys: environment?.keys.antigravity ?? [] })
+        return
+      }
+      // Cursor signs in inside Ramu: the browser opens, and the call returns once sign-in completes.
       setSigningIn(provider)
       try {
         await invoke('providers.signIn', provider, accountId)
@@ -303,6 +312,21 @@ export function ProviderSettings({
           )
         })}
       </fieldset>
+      {antigravity && (
+        <AntigravitySignIn
+          hasKey={(method) => antigravity.keys.includes(antigravityKeyName(method))}
+          onClose={() => setAntigravity(null)}
+          onSubmit={async (input) => {
+            setSigningIn('antigravity')
+            try {
+              await invoke('providers.signIn', 'antigravity', antigravity.accountId, input)
+              void refresh()
+            } finally {
+              setSigningIn(null)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import type { ForgeConnectionSummary, ForgeSavedConnection } from '@ramu/shared/types'
+import type { ForgeConnectionSummary, ForgeSavedConnection, GitlabSummary } from '@ramu/shared/types'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
@@ -8,6 +8,8 @@ import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { useSettingsInvoke } from './SettingsScope'
+import { runProviderCommand } from '../models/ProviderSetupTerminal'
+import { invoke as openOnThisComputer } from '../ipc'
 import { accountDetail, connectionHeadline, savedDetail } from './hostingStatus'
 
 /** Providers shown for orientation only: no setup, no network calls, no background work until they are built. */
@@ -383,14 +385,7 @@ export function HostingAccounts() {
           </p>
         </Dialog>
       )}
-      <SettingsRow>
-        <SettingsLabel
-          title="GitLab"
-          help={t(
-            'Merge requests, pipelines and issues use the host’s glab sign-in (glab auth login) or its GITLAB_TOKEN, for gitlab.com and self-managed servers.',
-          )}
-        />
-      </SettingsRow>
+      <GitlabRow canAdminister={canAdminister} />
       {COMING_SOON.map((name) => (
         <SettingsRow key={name}>
           <SettingsLabel title={name} />
@@ -398,5 +393,83 @@ export function HostingAccounts() {
         </SettingsRow>
       ))}
     </>
+  )
+}
+
+function gitlabHeadline(summary: GitlabSummary | null, failed: string | null) {
+  if (failed) return failed
+  if (!summary) return t('Checking…')
+  if (!summary.accounts.length)
+    return summary.cli === 'no-cli'
+      ? t('Not signed in. Install glab and sign in, or set GITLAB_TOKEN on the host.')
+      : t('Not signed in. Sign in with glab for gitlab.com or a self-managed server.')
+  return summary.accounts
+    .map((account) => {
+      const via = account.source === 'cli' ? t('GitLab CLI') : 'GITLAB_TOKEN'
+      if (account.state === 'failed') return `${account.origin}: ${account.error ?? t('Could not connect')}`
+      return account.login
+        ? t('Connected as {0} on {1} ({2})', { 0: account.login, 1: account.origin, 2: via })
+        : t('Signed in on {0} ({1})', { 0: account.origin, 1: via })
+    })
+    .join(' · ')
+}
+
+/** GitLab merge requests, pipelines and issues use the host's own `glab` sign-in or `GITLAB_TOKEN`. */
+function GitlabRow({ canAdminister }: { canAdminister: boolean }) {
+  const invoke = useSettingsInvoke()
+  const [summary, setSummary] = useState<GitlabSummary | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
+  const load = useCallback(
+    (check: boolean) => {
+      setBusy(check)
+      setFailed(null)
+      void Promise.resolve(invoke('forge.gitlab', check)).then(
+        (next) => {
+          setSummary(next)
+          setBusy(false)
+        },
+        (reason) => {
+          setFailed(errorText(reason))
+          setBusy(false)
+        },
+      )
+    },
+    [invoke],
+  )
+  useEffect(() => load(false), [load])
+  return (
+    <SettingsRow>
+      <SettingsLabel title="GitLab" help={gitlabHeadline(summary, failed)} />
+      <span className="flex items-center gap-2">
+        <Button variant="secondary" size="sm" aria-busy={busy} disabled={!summary} onClick={() => load(true)}>
+          {busy ? t('Checking…') : t('Check connection')}
+        </Button>
+        {canAdminister && summary?.cli === 'installed' && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              runProviderCommand(t('Sign in to GitLab'), 'glab auth login')
+              // The terminal finishes on its own time; read the sign-ins again when the person comes back.
+              window.addEventListener('focus', () => load(false), { once: true })
+            }}
+          >
+            {summary.accounts.length ? t('Add account') : t('Sign in')}
+          </Button>
+        )}
+        {canAdminister && summary?.cli === 'no-cli' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              void openOnThisComputer('app.openExternal', 'https://gitlab.com/gitlab-org/cli#installation')
+            }
+          >
+            {t('Install glab')}
+          </Button>
+        )}
+      </span>
+    </SettingsRow>
   )
 }
