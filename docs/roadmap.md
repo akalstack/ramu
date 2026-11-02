@@ -1,6 +1,6 @@
 # Roadmap
 
-Unfinished work only. Completed items are removed; lasting behavior lives in the feature guides. Open an issue before starting anything here.
+Unfinished work only. Completed items are removed; lasting behavior lives in the [guide](README.md#guide). Open an issue before starting anything here.
 
 Every item needs scoped tests and typechecks for the packages it touches. Desktop-facing changes also run `pnpm build` then `pnpm test:desktop-smoke` ([contributing](../CONTRIBUTING.md#checks)). Checks that need a physical phone, a signed build, a live provider or a second host are listed under [Acceptance](#acceptance) and stay open until run; fake-provider tests do not close them.
 

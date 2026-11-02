@@ -79,7 +79,7 @@ The server's browser broker resolves a runtime per turn: the attached local desk
 - **Viewing:** paired owner devices view the host browser through the existing host connection, like terminals. A private CDP compositor feed keeps only the newest bounded JPEG per tab, shared across viewers. No CDP endpoint or page JavaScript authority reaches clients, and viewer-role devices cannot control it.
 - **Desktop browser:** Electron owns sandboxed, context-isolated guest contents, the non-secret profile catalog, partitions, native input and sign-in windows. Fixed isolated-world scripts read the DOM and act on elements; there is no general evaluation or debugging endpoint. Website data never enters host preferences.
 
-User-facing behavior is in [UI](../guide/browser-and-computer.md#browser).
+User-facing behavior is in the [browser guide](../guide/browser-and-computer.md#browser).
 
 ## Server layout (`apps/server/src`)
 
