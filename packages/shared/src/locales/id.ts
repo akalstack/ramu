@@ -10,6 +10,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open providers': 'Buka provider',
   'Favorites': 'Favorit',
   'Brief': 'Ringkas',
+  'Other hosts': 'Host lain',
+  'Account on {0}': 'Akun di {0}',
   'Runs on': 'Berjalan di',
   'Saved on {0}. Remove it from {1}?': 'Tersimpan di {0}. Hapus dari {1}?',
   'Keep both': 'Simpan keduanya',

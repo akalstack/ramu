@@ -31,7 +31,7 @@ Stage 1, **Continue on ‹host›**, has shipped ([Agents and routing](AGENT-ROU
 
 ### Stage 3: Outside the app
 
-- **Totals across hosts:** Plan usage shows each login once, because a login's percentage is the same quota seen from every host and percentages never add up. Readings for one login use the newest; logins that cannot be matched across hosts are listed by host. A new per-day activity summary (tokens, and cost where the provider reports it) is added by the device across connected hosts, with a per-host breakdown. An offline host, or a provider that reports no cost, is marked and never counted as zero.
+- **Totals across hosts:** the desktop's Plan usage already lists logins from other hosts once, matched by sign-in email (`packages/shared/src/usageAcrossHosts.ts`); the phone's **All hosts** view still lists each host separately and should use the same merge. A new per-day activity summary (tokens, and cost where the provider reports it) is added by the device across connected hosts, with a per-host breakdown. An offline host, or a provider that reports no cost, is marked and never counted as zero.
 
 ## Services to extend
 
@@ -48,6 +48,6 @@ Every string goes through `t()` with an Indonesian translation, and the phone ge
 
 ### Stage 3
 
-- A login used on two hosts is shown once. Activity totals match each host's own figures, and missing figures are marked.
+- A login used on two hosts is shown once on the phone too. Activity totals match each host's own figures, and missing figures are marked.
 
 All stages run on two physical hosts before closing, including a phone.

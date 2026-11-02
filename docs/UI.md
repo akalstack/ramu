@@ -67,6 +67,8 @@ Home is only for starting work: the start box and, when something needs the pers
 
 Inbox's **Running** tab also answers "what is using my memory, and what can I stop?" for owner devices: one line per host with memory used of total and Ramu's total, then threads heaviest first, each expandable to its agent, terminals and commands with Stop. Figures are approximate resident memory, read only while the tab is open, and hidden rather than zero when a reading fails. Stopping work in progress asks first; stopping idle work does not. A terminal or command alive under finished or archived work reads **Still running**. When a host stays low on memory across two checks, the Brief gains a row after limits with **Stop idle**. Ramu never stops work by itself.
 
+With several hosts connected, the desktop's Plan usage popover adds **Other hosts**: logins this host does not use, each once with its newest reading, matched across hosts by sign-in email and listed by host when no email is known. Percentages are never added together.
+
 A thread at a usage limit is idle, not failed. Every surface reads **Limit reached · resumes around 5:00 PM** (or **resuming automatically** when the time is a guess); **Paused** means only a goal the person paused. The sidebar clock, Home and Inbox groups, goal bar and mobile transcript all read the thread's `provider-wait` event through `packages/shared/src/chat/providerWait.ts` and `limitPolicy.ts`.
 
 - **Settings → Models → When a usage limit is reached** is one choice: **Switch to another model**, **Wait on this model** or **Stop and let me decide**. It writes `defaultAutoFallback` and `fallback.autoResume` (`settings/LimitChoiceRow.tsx`).

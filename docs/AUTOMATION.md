@@ -12,10 +12,6 @@ Claude and Codex can ask questions while continuing independent work. Related qu
 
 Async questions and drafts survive reopening and service restarts. A dead process's blocking questions and approvals must be requested again. Dismissal and **No longer needed** close questions without supplying an answer.
 
-
-### Runs on
-
-A schedule lives on the host that fires it, so it follows that host's **Missed** setting and never runs twice. With several hosts connected, the editor's **Runs on** saves it on another host, and Schedules lists other hosts' schedules under **On ‹host›**. Moving a schedule saves it on the new host first, then asks before removing it from the old one. Projects are chosen from the new host, which checks the model when saving.
 ## Restart recovery
 
 **Continue threads after restart** is on by default. Unfinished threads resume their native provider session where available, otherwise use the stored transcript. Finished, failed, and manually stopped threads stay stopped.
@@ -44,6 +40,11 @@ A thread that is idle between goal continuations, has messages queued, or waits 
 **Run now** does not change the recurrence. Pause cancels queued runs, not work already running. Missed runs either execute the latest occurrence once or skip it. Busy checkouts wait and scheduled runs do not overlap.
 
 Recaps summarize recent threads and unfinished work. Home shows the ones that need your attention; **Inbox → Recaps** lists everything since your last visit and earlier, with **Refresh**. Items link to their source conversation and can be marked done, dismissed, or snoozed (in 3 hours, tomorrow morning, or next week). A toast with **Undo** follows each action, which puts the item back. Recaps use model tokens, but only when a thread's recent activity or the recap model changed since the last successful recap; otherwise the daily run just shows up to date. **Refresh** always asks the model unless there is no activity to summarize. Their daily time follows the current system timezone. A phone that switched on **Settings → Notifications → Daily recap** gets one generic push ("Your daily recap is ready.", no content) per local day when the scheduled run produces items, never for a manual **Refresh**; it is off by default. A scheduled run that fails to start three times in a row (no thread ever exists) pushes the **scheduled** category once, and the phone opens the Schedules tab. Mobile recap cards swipe for Done, Snooze and Dismiss with the same durations and Undo.
+
+
+### Runs on
+
+A schedule lives on the host that fires it, so it follows that host's **Missed** setting and never runs twice. With several hosts connected, the editor's **Runs on** saves it on another host, and Schedules lists other hosts' schedules under **On ‹host›**. Moving a schedule saves it on the new host first, then asks before removing it from the old one. Projects are chosen from the new host, which checks the model when saving.
 
 ## File context
 

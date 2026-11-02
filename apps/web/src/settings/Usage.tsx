@@ -1,3 +1,5 @@
+import { loginsAcrossHosts, peakOf, type LoginUsage } from '@ramu/shared/usageAcrossHosts'
+import { useComputers } from '../workspace/computers'
 import { LocalInlineAction } from '@/components/inline-action'
 import { usageTone, usagePercent, usageScopeHint } from '@ramu/shared/usage/presentation'
 export { usageTone } from '@ramu/shared/usage/presentation'
@@ -18,7 +20,7 @@ import {
   providerName,
   type ProviderConfiguration,
 } from '@ramu/shared/providers/providers'
-import { bridge, invokerFor } from '../ipc'
+import { bridge, invokeOn, invokerFor } from '../ipc'
 import { ownHostId } from '../hosts'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
@@ -520,12 +522,78 @@ function UsagePopover({
             <UsageDetail {...group} {...accountsOf(group.provider)} />
           </Fragment>
         ))}
+        {open && <OtherHostLogins />}
         <Separator className="h-px bg-line" />
         <p className="m-0 text-caption leading-normal whitespace-normal text-muted-foreground">
           {t('Fallback continues the thread when a usage limit is reached.')}
         </p>
       </PopoverContent>
     </Popover>
+  )
+}
+
+/**
+ * Logins seen from other connected hosts that this host does not already show, each once. A login used here too is
+ * matched by sign-in email and left out; percentages are never added together.
+ */
+function OtherHostLogins() {
+  const host = useHost()
+  const computers = useComputers()
+  const [logins, setLogins] = useState<LoginUsage[]>([])
+  const ids = (computers?.computers ?? [])
+    .filter((computer) => computer.status === 'connected')
+    .map((computer) => computer.id)
+    .join(',')
+  useEffect(() => {
+    let live = true
+    const list = (computers?.computers ?? []).filter((computer) => ids.split(',').includes(computer.id))
+    if (list.length < 2) return
+    void Promise.all(
+      list.map(async (computer) => ({
+        hostId: computer.id,
+        host: computer.name,
+        readings: await invokeOn(computer.id, 'usage.accounts').catch(() => []),
+        emails: await invokeOn(computer.id, 'providers.accountEmails').catch(() => ({})),
+      })),
+    ).then((hosts) => {
+      if (!live) return
+      // A login this host also uses is already shown above, from its own readings.
+      const here = hosts.find((entry) => entry.hostId === host.id)?.host
+      setLogins(loginsAcrossHosts(hosts).filter((login) => !here || !login.hosts.includes(here)))
+    })
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the connected host ids
+  }, [ids, host.id])
+  if (!logins.length) return null
+  return (
+    <>
+      <Separator className="h-px bg-line" />
+      <section className="flex flex-col gap-1.5" aria-label={t('Other hosts')}>
+        <p className="m-0 text-caption text-muted-foreground">{t('Other hosts')}</p>
+        {logins.map((login) => {
+          const peak = peakOf(login)
+          return (
+            <div
+              key={`${login.provider}:${login.email ?? login.hosts.join(',')}`}
+              className="flex items-center gap-2 text-caption"
+            >
+              <span className="min-w-0 flex-1 truncate">
+                {[providerName(login.provider), login.email ?? t('Account on {0}', { 0: login.hosts.join(', ') })].join(
+                  ' · ',
+                )}
+              </span>
+              {peak && (
+                <span className="flex-none text-muted-foreground tabular-nums">
+                  {`${Math.round(peak.usedPercent)}% · ${windowLabel(peak, true)}`}
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </section>
+    </>
   )
 }
 
