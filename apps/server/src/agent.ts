@@ -716,6 +716,10 @@ export class AgentService {
     return this.parts.analysis.draftCommit(...args)
   }
 
+  draftPullRequest(...args: Parameters<BackgroundAnalysis['draftPullRequest']>) {
+    return this.parts.analysis.draftPullRequest(...args)
+  }
+
   continuationPrompt(...args: Parameters<BackgroundAnalysis['continuationPrompt']>) {
     return this.parts.analysis.continuationPrompt(...args)
   }

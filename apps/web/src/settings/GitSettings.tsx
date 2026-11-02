@@ -130,29 +130,14 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
         title="Automatically watch pull requests"
         description="Watch pull requests you create from a thread. New failures and requested changes return to that thread. You review and push. Existing watches are controlled in Source Control."
       />
-      <SettingsGroupTitle>{t('Commits')}</SettingsGroupTitle>
-      <SettingsRow setting="commitStyle">
-        <SettingsLabel title={t('Commit messages')} help={t('Style for generated commit messages.')} />
-        <Dropdown
-          label={t('Commit message style')}
-          value={draft.commitStyle}
-          options={[
-            { value: 'conventional', label: t('Conventional commits') },
-            { value: 'repository', label: t('Repository convention') },
-            { value: 'custom', label: t('Custom instructions') },
-          ]}
-          onChange={(value) =>
-            onChange({ ...draft, commitStyle: value === 'repository' || value === 'custom' ? value : 'conventional' })
-          }
-        />
-      </SettingsRow>
+      <SettingsGroupTitle>{t('Generated text')}</SettingsGroupTitle>
       <SettingsRow setting="commitModel">
         <SettingsLabel
-          title={t('Commit message model')}
-          help={t('Model that drafts commit messages. Default follows the default model in Models & fallback.')}
+          title={t('Writing model')}
+          help={t('Writes commit messages and pull request titles and descriptions. Default uses your default model.')}
         />
         <Dropdown
-          label={t('Commit message model')}
+          label={t('Writing model')}
           value={commitStepId}
           options={[
             { value: '', label: t('Default model') },
@@ -167,24 +152,40 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
           }}
         />
       </SettingsRow>
+      <SettingsRow setting="commitStyle">
+        <SettingsLabel title={t('Style')} help={t('How commit messages and pull request titles are worded.')} />
+        <Dropdown
+          label={t('Writing style')}
+          value={draft.commitStyle}
+          options={[
+            { value: 'conventional', label: t('Conventional commits') },
+            { value: 'repository', label: t('Match this repository') },
+            { value: 'custom', label: t('My own instructions') },
+          ]}
+          onChange={(value) =>
+            onChange({ ...draft, commitStyle: value === 'repository' || value === 'custom' ? value : 'conventional' })
+          }
+        />
+      </SettingsRow>
       {draft.commitStyle === 'custom' && (
         <SettingsRow setting="commitInstructions" className="settings-stack">
           <SettingsLabel
-            title={t('Commit instructions')}
+            title={t('Writing instructions')}
             help={t(
-              'For example: start with a ticket key like ABC-123, write in English, keep the subject under 50 characters.',
+              'Used for commit messages and pull requests. For example: start with a ticket key like ABC-123, write in English, keep the subject under 50 characters.',
             )}
           />
           <Textarea
             rows={4}
             maxLength={2000}
             value={draft.commitInstructions}
-            aria-label={t('Commit message instructions')}
-            placeholder={t('Describe how commit messages should be written')}
+            aria-label={t('Writing instructions')}
+            placeholder={t('Describe how commit messages and pull requests should be written')}
             onChange={(event) => onChange({ ...draft, commitInstructions: event.target.value })}
           />
         </SettingsRow>
       )}
+      <SettingsGroupTitle>{t('Commits')}</SettingsGroupTitle>
       <SettingsRow setting="defaultCommitBranch">
         <SettingsLabel
           title={t('Commit from default branch')}

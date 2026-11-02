@@ -563,6 +563,27 @@ async function baseRef(cwd: string, branch: string, base: string): Promise<strin
   throw new Error(`The base branch ${base} does not exist here. Fetch and try again.`)
 }
 
+/**
+ * What a pull request would carry, for a model to describe: the branch's commits, its file summary and as much of
+ * its diff as is asked for. Null when the branch has nothing to propose.
+ */
+export async function pullRequestSource(
+  cwd: string,
+  maxPatch = 40_000,
+): Promise<{ commits: string; files: string; patch: string } | null> {
+  const { branch, defaultBranch } = await commitBranchInfo(cwd)
+  if (!branch) return null
+  const range = `${await baseRef(cwd, branch, defaultBranch ?? 'main')}..HEAD`
+  const commits = (await git(cwd, ['log', '--reverse', '--format=- %s%n%b', range, '--'])).trim()
+  if (!commits) return null
+  const files = (await git(cwd, ['diff', '--stat=200', range, '--']).catch(() => '')).trim()
+  const patch = (await git(cwd, ['diff', '--no-color', '--no-ext-diff', range, '--']).catch(() => '')).slice(
+    0,
+    maxPatch,
+  )
+  return { commits, files, patch }
+}
+
 /** Title and body from the branch's commits, closing the linked issue when there is one. */
 export async function pullRequestDraft(cwd: string, issue: IssueLink | null): Promise<PullRequestDraft> {
   const { branch, defaultBranch } = await commitBranchInfo(cwd)

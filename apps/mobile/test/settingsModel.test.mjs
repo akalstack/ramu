@@ -149,7 +149,7 @@ test('search finds host and phone settings by title, words and section', () => {
   assert.ok(hit('pull').includes('Automatic pull'))
   assert.ok(hit('haptic').includes('Haptic feedback'))
   assert.ok(hit('dynamic island').includes('Live Activities'))
-  assert.ok(hit('git commit').includes('Commit messages'))
+  assert.ok(hit('git commit').includes('Style'))
   assert.deepEqual(hit('   '), [])
   assert.deepEqual(hit('zzzz'), [])
 })

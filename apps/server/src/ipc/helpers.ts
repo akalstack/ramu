@@ -1,4 +1,10 @@
 import type { HandlerContext, MethodTable } from './types'
+import {
+  DEFAULT_AGENT_SETTINGS,
+  type AgentSettings,
+  type AppPreferences,
+  type ModelPreferences,
+} from '@ramu/shared/types'
 
 /** Lock key for work inside one checkout directory. */
 const checkoutKey = (cwd: string) => `checkout:${cwd}`
@@ -57,4 +63,29 @@ export const mergeMethods = (...tables: MethodTable[]): MethodTable => {
       merged[name] = method
     }
   return merged
+}
+
+/**
+ * The model that writes commit messages and pull request drafts: the one chosen in Settings → Git, else the default
+ * step of the default model set, else `base` (the thread's own settings, or the defaults).
+ */
+export function writingSettings(
+  workspace: Pick<HandlerContext['workspace'], 'getAppState'>,
+  prefs: Partial<AppPreferences>,
+  base: AgentSettings = DEFAULT_AGENT_SETTINGS,
+): AgentSettings | null {
+  const modelPrefs = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
+  const defaultStep = modelPrefs?.sets
+    .find((set) => set.id === modelPrefs.defaultSetId)
+    ?.steps.find((step) => step.id === modelPrefs.defaultStepId)
+  const chosen = prefs.commitModel ?? defaultStep
+  if (!chosen) return base === DEFAULT_AGENT_SETTINGS ? null : base
+  return {
+    ...base,
+    provider: chosen.provider,
+    model: chosen.model,
+    effort: chosen.effort,
+    accountId: chosen.provider === base.provider ? base.accountId : undefined,
+    serviceTier: undefined,
+  }
 }

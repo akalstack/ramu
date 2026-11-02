@@ -1,3 +1,4 @@
+import { LoadingDots } from '@/components/loading-dots'
 import { useEffect, useState } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -124,7 +125,12 @@ export function CreatePullRequestDialog({
           </label>
         </fieldset>
       ) : (
-        !error && <p className="muted text-muted-foreground">{t('Drafting from your commits…')}</p>
+        !error && (
+          <p className="muted m-0 flex items-center gap-2 text-muted-foreground" role="status">
+            <LoadingDots />
+            {t('Writing the title and description from your commits…')}
+          </p>
+        )
       )}
     </Dialog>
   )

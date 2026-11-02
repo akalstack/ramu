@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import type {
   ForgeSaveConnectionInput,
   IssueLink,
@@ -12,7 +13,7 @@ import * as forge from '../../workspace/forge'
 import { gitlabSummary } from '../../workspace/forge/gitlab'
 import { bitbucketApi, bitbucketSummary } from '../../workspace/forge/bitbucket'
 import * as git from '../../workspace/git'
-import { gitExclusive } from '../helpers'
+import { gitExclusive, writingSettings } from '../helpers'
 import { id } from '../schemas'
 import type { HandlerContext, RegisterHandlers } from '../types'
 
@@ -107,9 +108,27 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     },
     'forge.pullRequestDraft': {
       args: z.tuple([id, id]),
-      run: (taskId: string, repoId: string) => {
+      run: async (taskId: string, repoId: string) => {
         const cwd = gitCwdOf(taskId, repoId)
-        return forge.pullRequestDraft(cwd, linkedIssue(ctx, cwd, repoId))
+        const issue = linkedIssue(ctx, cwd, repoId)
+        // The commit list makes a usable draft on its own; the writing model improves it when it answers.
+        const draft = await forge.pullRequestDraft(cwd, issue)
+        const prefs = ctx.storedPreferences()
+        const settings = writingSettings(ctx.workspace, prefs)
+        const source = settings ? await forge.pullRequestSource(cwd).catch(() => null) : null
+        if (!settings || !source) return draft
+        const config = ctx.workspace.projectConfiguration(ctx.workspace.projectIdOf(taskId)).config.commit
+        try {
+          const written = await ctx.agents.draftPullRequest(source, settings, {
+            style: config?.commitStyle ?? prefs.commitStyle ?? DEFAULT_APP_PREFERENCES.commitStyle,
+            instructions: config?.commitInstructions ?? prefs.commitInstructions ?? '',
+          })
+          const closes = issue ? `Closes #${issue.number}` : ''
+          const body = closes && !written.body.includes(closes) ? `${written.body}\n\n${closes}`.trim() : written.body
+          return { ...draft, title: written.title, body }
+        } catch {
+          return draft
+        }
       },
     },
     'forge.connections': {

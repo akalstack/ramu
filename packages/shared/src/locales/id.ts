@@ -812,7 +812,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Akses awal untuk thread baru. Thread yang ada tetap memakai aksesnya.',
   'Steer adds your message after the current tools finish. Queue waits for the whole turn. Cmd/Ctrl+Enter does the other one.':
     'Steer menambahkan pesanmu setelah tool yang berjalan selesai. Queue menunggu giliran selesai. Cmd/Ctrl+Enter memakai yang satunya.',
-  'Style for generated commit messages.': 'Gaya pesan commit yang dibuat otomatis.',
   'What to do when you commit and push while on the default branch.':
     'Yang dilakukan saat commit dan push dari branch bawaan.',
   'After a thread, look for lasting notes and reusable skills. Uses model tokens when idle.':
@@ -2604,13 +2603,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Replace the latest commit; leave the message empty to keep its message':
     'Ganti commit terakhir; kosongkan pesan untuk mempertahankan pesannya',
   'Commit actions': 'Aksi commit',
-  'Commit messages': 'Pesan commit',
-  'Commit message model': 'Model pesan commit',
-  'Model that drafts commit messages. Default follows the default model in Models & fallback.':
-    'Model untuk menyusun pesan commit. Default mengikuti model default di Model & fallback.',
-  'Commit instructions': 'Instruksi commit',
-  'Commit message instructions': 'Instruksi pesan commit',
-  'Commit message style': 'Gaya pesan commit',
   'Draft a commit message from staged changes': 'Buat draf pesan commit dari perubahan staged',
   'Drafting message…': 'Menyiapkan pesan…',
   'Drafts a message with AI, then commits': 'Buat pesan dengan AI, lalu commit',
@@ -2648,11 +2640,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'This saved stash will be permanently removed.': 'Stash ini akan dihapus permanen.',
   'Fast-forward only': 'Fast-forward saja',
   'Conventional commits': 'Conventional Commits',
-  'Repository convention': 'Gaya repository',
   'Custom instructions': 'Instruksi sendiri',
-  'Describe how commit messages should be written': 'Jelaskan cara menulis pesan commit',
-  'For example: start with a ticket key like ABC-123, write in English, keep the subject under 50 characters.':
-    'Misalnya: mulai dengan kode tiket seperti ABC-123, tulis dalam bahasa Inggris, dan batasi judul sampai 50 karakter.',
   'Choose Conventional Commits, the repository’s recent style, or your own instructions for generated messages.':
     'Pilih Conventional Commits, gaya commit terbaru repository, atau instruksimu untuk pesan otomatis.',
   'How Pull and Sync bring in remote commits. Rebase replays your local commits on top for a linear history. If a rebase or merge stops on a conflict, Source Control offers Continue and Abort.':
@@ -3321,6 +3309,21 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Answering a sub-agent': 'Menjawab sub-agen',
   Used: 'Memakai',
   Details: 'Detail',
+  'Generated text': 'Teks yang dibuat',
+  'Writing model': 'Model penulis',
+  'Writes commit messages and pull request titles and descriptions. Default uses your default model.':
+    'Menulis pesan commit serta judul dan deskripsi pull request. Default memakai model default Anda.',
+  Style: 'Gaya',
+  'How commit messages and pull request titles are worded.': 'Cara pesan commit dan judul pull request ditulis.',
+  'Writing style': 'Gaya penulisan',
+  'Match this repository': 'Ikuti repository ini',
+  'My own instructions': 'Instruksi saya sendiri',
+  'Writing instructions': 'Instruksi penulisan',
+  'Used for commit messages and pull requests. For example: start with a ticket key like ABC-123, write in English, keep the subject under 50 characters.':
+    'Dipakai untuk pesan commit dan pull request. Misalnya: awali dengan kunci tiket seperti ABC-123, tulis dalam bahasa Inggris, buat subjek kurang dari 50 karakter.',
+  'Describe how commit messages and pull requests should be written':
+    'Jelaskan bagaimana pesan commit dan pull request harus ditulis',
+  'Writing the title and description from your commits…': 'Menulis judul dan deskripsi dari commit Anda…',
   'Choosing a project…': 'Memilih project…',
   'Starting the agent…': 'Memulai agent…',
   'Starting in {0}…': 'Memulai di {0}…',
@@ -3674,7 +3677,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Ke {0}. Branch dipublikasikan dulu kalau belum ada di remote.',
   Description: 'Deskripsi',
   'Open as draft': 'Buka sebagai draf',
-  'Drafting from your commits…': 'Menyusun dari commit kamu…',
   'Start from an issue': 'Mulai dari issue',
   'Search issues…': 'Cari issue…',
   'No issue': 'Tanpa issue',
@@ -4956,6 +4958,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Sign in with the Google or GitHub account your hosts use for Ramu Link. They appear here and connect from anywhere, end-to-end encrypted.': 'Masuk dengan akun Google atau GitHub yang dipakai host Anda untuk Ramu Link. Host akan tampil di sini dan terhubung dari mana saja, terenkripsi ujung ke ujung.',
   'Signed in as {0}': 'Masuk sebagai {0}',
   'Allow this phone on {0} if it shows this number': 'Izinkan ponsel ini di {0} jika menampilkan angka ini',
-}
   'Reach this host from anywhere without a VPN or open ports. Devices signed in to the same Google or GitHub account find it; the relay cannot read the connection.':
     'Jangkau host ini dari mana saja tanpa VPN atau port terbuka. Perangkat yang masuk ke akun Google atau GitHub yang sama akan menemukannya; relay tidak dapat membaca koneksinya.',
+}
