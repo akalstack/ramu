@@ -272,7 +272,7 @@ export function EventRow({
         </div>
       )
     case 'error':
-      return <ErrorNote>{e.message}</ErrorNote>
+      return <ErrorNote message={e.message} />
     default:
       return null
   }

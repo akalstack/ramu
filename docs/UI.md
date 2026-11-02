@@ -49,7 +49,9 @@ The renderer uses shadcn/ui on Base UI, Tailwind 4 and shared theme tokens. `com
 
 ## Usage limits
 
-The composer shows Markdown as it is typed (bold, italic, code, headings, lists, links) and keeps every character, so what is sent is exactly what was written. Sent messages render as Markdown with their file and skill references still chips; on mobile a message with inline references stays plain text. The mobile composer is plain text.
+Errors in a thread are a quiet card: a plain title, the provider's message, Copy, and the step that fixes it when there is one (**Change model** opens the model list, **Open providers** goes to sign-in).
+
+The composer shows Markdown as it is typed (bold, italic, code, headings, lists, links) and keeps every character, so what is sent is exactly what was written. While writing, ⌘B, ⌘I and ⌘E wrap the selection in bold, italic and code; ⌘B toggles the side bar everywhere else, and on Windows and Linux Ctrl+B stays with a focused terminal. Sent messages render as Markdown with their file and skill references still chips; on mobile a message with inline references stays plain text. The mobile composer is plain text.
 
 Session checkpoints are Markdown sections (Objective, Done, Verified, Open, Next). One saved as a single paragraph is split into those sections when shown.
 

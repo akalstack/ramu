@@ -1,6 +1,12 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  'This model isn’t available': 'Model ini tidak tersedia',
+  'Sign-in needed': 'Perlu masuk',
+  'The provider is limiting requests': 'Provider sedang membatasi permintaan',
+  'Connection problem': 'Masalah koneksi',
+  'The agent stopped with an error': 'Agent berhenti karena kesalahan',
+  'Open providers': 'Buka provider',
   'Favorites': 'Favorit',
   'Choose models': 'Pilih model',
   '{0} of {1} listed in model pickers': '{0} dari {1} tampil di pemilih model',

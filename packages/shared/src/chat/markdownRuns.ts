@@ -81,3 +81,27 @@ export function markdownRuns(source: string): MarkdownRun[] {
   }
   return runs
 }
+
+/**
+ * Wraps a selection in a Markdown marker, or removes the marker when it is already there, so one shortcut does both.
+ * With nothing selected the caret lands between the markers, ready to type.
+ */
+export function toggleMarkdownWrap(value: string, start: number, end: number, marker: string) {
+  const size = marker.length
+  const selected = value.slice(start, end)
+  if (value.slice(start - size, start) === marker && value.slice(end, end + size) === marker)
+    return {
+      value: value.slice(0, start - size) + selected + value.slice(end + size),
+      start: start - size,
+      end: end - size,
+    }
+  if (selected.length >= size * 2 && selected.startsWith(marker) && selected.endsWith(marker)) {
+    const inner = selected.slice(size, -size)
+    return { value: value.slice(0, start) + inner + value.slice(end), start, end: start + inner.length }
+  }
+  return {
+    value: value.slice(0, start) + marker + selected + marker + value.slice(end),
+    start: start + size,
+    end: end + size,
+  }
+}

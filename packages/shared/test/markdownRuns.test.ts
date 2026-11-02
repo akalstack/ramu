@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { markdownRuns } from '../src/chat/markdownRuns'
+import { markdownRuns, toggleMarkdownWrap } from '../src/chat/markdownRuns'
 
 const styled = (source: string) =>
   markdownRuns(source)
@@ -44,4 +44,11 @@ it('leaves ordinary text and code contents alone', () => {
 it('leaves a very long paste unstyled', () => {
   const source = `**${'a'.repeat(30_000)}**`
   expect(markdownRuns(source)).toEqual([{ text: source, marks: [] }])
+})
+
+it('wraps and unwraps a selection, and leaves the caret between markers with none', () => {
+  expect(toggleMarkdownWrap('a b c', 2, 3, '**')).toEqual({ value: 'a **b** c', start: 4, end: 5 })
+  expect(toggleMarkdownWrap('a **b** c', 4, 5, '**')).toEqual({ value: 'a b c', start: 2, end: 3 })
+  expect(toggleMarkdownWrap('a **b** c', 2, 7, '**')).toEqual({ value: 'a b c', start: 2, end: 3 })
+  expect(toggleMarkdownWrap('', 0, 0, '`')).toEqual({ value: '``', start: 1, end: 1 })
 })

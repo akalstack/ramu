@@ -269,7 +269,7 @@ export function AgentTaskPanel({
                 ) : block.event.kind === 'thinking' ? (
                   <ThinkingRow text={block.event.text} active={status === 'running' && live && block === own.at(-1)} />
                 ) : block.event.kind === 'error' ? (
-                  <ErrorNote>{block.event.message}</ErrorNote>
+                  <ErrorNote message={block.event.message} />
                 ) : null}
               </div>
             ))}

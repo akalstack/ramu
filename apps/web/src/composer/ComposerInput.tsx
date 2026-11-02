@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { FileIcon } from '../editor/FileIcon'
 import { REFERENCE_CHIP_CLASS } from '../chat/ReferenceChipView'
 import { composerDraft, deleteDraftAtom, type DraftChip } from '@ramu/shared/chat/composerDraft'
-import { markdownRuns } from '@ramu/shared/chat/markdownRuns'
+import { markdownRuns, toggleMarkdownWrap } from '@ramu/shared/chat/markdownRuns'
 
 export interface ComposerInputHandle {
   focus(): void
@@ -98,6 +98,9 @@ function InlineChip({ chip }: { chip: DraftChip }) {
   )
 }
 
+/** Formatting shortcuts while writing. They wrap the text in Markdown, so the draft stays plain characters. */
+const WRAP: Record<string, string> = { b: '**', i: '*', e: '`' }
+
 type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> & {
   value: string
   onChange: (value: string, caret: number) => void
@@ -113,6 +116,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
   const root = useRef<HTMLDivElement>(null),
     composing = useRef(false),
     pendingCaret = useRef<number | null>(null),
+    pendingSelectionEnd = useRef<number | null>(null),
     mounted = useRef(false)
   const current = useRef(value)
   current.current = value
@@ -173,6 +177,8 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
     internalChange.current = false
     lastRendered.current = value
     pendingCaret.current = null
+    const selectionEnd = pendingSelectionEnd.current ?? caret
+    pendingSelectionEnd.current = null
     const nodes: Node[] = [],
       chips: { node: HTMLElement; chip: DraftChip }[] = []
     for (const segment of composerDraft(value).segments) {
@@ -202,7 +208,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
     // Autofocus also covers a box that mounts with a draft already in it.
     if (focused || (autoFocus && (!value || !mounted.current))) {
       element.focus()
-      selectComposerInput(element, Math.min(caret, value.length))
+      selectComposerInput(element, Math.min(caret, value.length), Math.min(selectionEnd, value.length))
     }
     mounted.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [value] by design; the values it reads beyond these are current as of that run
@@ -251,6 +257,15 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
               internalChange.current = true
               onChange(target.value, target.caret)
             }
+            return
+          }
+          const marker =
+            (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && WRAP[event.key.toLowerCase()]
+          if (marker) {
+            event.preventDefault()
+            const next = toggleMarkdownWrap(value, position.start, position.end, marker)
+            pendingSelectionEnd.current = next.end
+            commit(next.value, next.start)
             return
           }
           if (event.key === 'Enter') {

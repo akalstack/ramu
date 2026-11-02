@@ -4,6 +4,7 @@ import { SETTINGS_SECTIONS } from './settings/SettingsPage'
 import { t, useLanguage } from './i18n'
 // Commands and keyboard shortcuts. The command palette lives in palette/.
 import { useEffect, useRef } from 'react'
+import { focusKeepsKey } from './shortcutFocus'
 import { notifyError } from './chat/Notifications'
 import { errorText } from './workspace/TaskPane'
 import type { RamuBridge } from '@ramu/shared/api'
@@ -24,6 +25,8 @@ export interface Command {
   keys?: string
   run: () => void
   when?: () => boolean
+  /** Text being written or a terminal keeps this key when it has its own use for it. */
+  yieldsToFocus?: boolean
 }
 
 /** Task-scoped UI actions that live in TaskPane's own state. */
@@ -430,6 +433,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       title: t('Toggle primary side bar'),
       category: t('View'),
       keys: 'mod+b',
+      yieldsToFocus: true,
       run: shell.toggleSidebar,
     },
     {
@@ -566,6 +570,7 @@ export function useKeybindings(commands: Command[], enabled: boolean) {
         return
       for (const c of ref.current) {
         if (c.keys && matches(e, c.keys) && (!c.when || c.when())) {
+          if (c.yieldsToFocus && focusKeepsKey(e.target, isMac)) return
           e.preventDefault()
           e.stopPropagation()
           void Promise.resolve()

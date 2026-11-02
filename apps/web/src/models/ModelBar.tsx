@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { AgentSettings, ReasoningEffort } from '@ramu/shared/types'
 import { ReasoningPicker } from './ReasoningPicker'
 import { ModelPicker } from './ModelPicker'
+import { takeOpeningPage } from './modelPickerRequest'
 import { ProviderIcon } from './ProviderIcon'
 import { Menu } from '../Menu'
 import { effortDisplayName, modelDisplayName, useModelSets } from './ModelSets'
@@ -189,7 +190,7 @@ export function ModelBar({
         label={t('Model and effort controls')}
         className="control-btn model-bar-trigger h-8 min-w-0 gap-2 px-2 text-sm [&>span]:truncate"
         disabled={disabled}
-        onOpen={() => setPicker('bar')}
+        onOpen={() => setPicker(takeOpeningPage())}
         menuClassName={`model-controls-menu ${picker === 'model' ? 'model-menu w-[256px] max-h-[min(420px,_calc(100vh_-_24px))] overflow-y-auto embedded-model-menu [&:has(.model-picker)]:w-[420px] [&:has(.model-picker)]:p-0 [&:has(.model-picker)]:max-h-[none] [&:has(.model-picker)]:overflow-hidden [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.07)] w-[300px] max-w-[calc(100vw_-_16px)] max-h-[min(480px,_calc(100vh_-_16px))] overflow-y-auto' : picker === 'effort' ? 'reasoning-menu w-[240px]' : 'model-bar-menu [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.07)] max-w-[calc(100vw_-_16px)] w-[340px] p-0'}`}
         icon={
           <>
