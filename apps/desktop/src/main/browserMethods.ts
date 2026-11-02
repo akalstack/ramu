@@ -103,6 +103,10 @@ export function browserMethod(runtime: BrowserRuntime, method: string, args: unk
       if (method === 'browser.takeControl') return runtime.takeControl(tabId, LOCAL_DEVICE)
       return runtime[method.slice('browser.'.length) as 'back' | 'forward' | 'reload' | 'close' | 'hide'](tabId)
     }
+    case 'browser.preview': {
+      const owner = { hostId: text(args[0], 'host', 200), threadId: text(args[1], 'thread', 200) }
+      return runtime.previewForViewer(text(args[2], 'tab', 100), owner)
+    }
     case 'browser.show': {
       const [hostId, threadId, tabId] = [
         text(args[0], 'host', 200),

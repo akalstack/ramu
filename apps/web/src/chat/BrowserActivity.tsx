@@ -1,6 +1,6 @@
 import { RowButton } from '@/components/row-button'
 import { useEffect, useState } from 'react'
-import { Globe, Plus } from 'lucide-react'
+import { Globe, PictureInPicture2, Plus } from 'lucide-react'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { ramu } from '../ipc'
 import { ownHostId } from '../hosts'
@@ -10,6 +10,7 @@ import { useWorkspace, useHostRuntime } from '../workspace/workspace'
 import { Button } from '@/components/desktop-button'
 import { openBrowser } from '../views/browserPane'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
+import { floatLiveView } from '../liveView/liveViewStore'
 
 /** Native tabs remain discoverable after an agent turn, without activating background threads or hosts. */
 export function useBrowserActivity(taskId: string | undefined, visible: boolean) {
@@ -75,6 +76,7 @@ const controllerLabel = (tab: BrowserTabInfo) =>
 export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowserActivity> }) {
   useLanguage()
   const ws = useWorkspace()
+  const { id: host } = useHost()
   if (!state.taskId || !state.tabs.length) return null
   const taskId = state.taskId
   return (
@@ -90,16 +92,28 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
         state.stale ? (
           <span className="text-muted-foreground text-caption">{t('Last-known activity')}</span>
         ) : (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="icon small-icon"
-            aria-label={t('New browser tab')}
-            title={t('New browser tab')}
-            onClick={() => openBrowser(ws, taskId, 'new')}
-          >
-            <Plus size={14} />
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="icon small-icon"
+              aria-label={t('Float')}
+              title={t('Float: keep a live view in the corner')}
+              onClick={() => floatLiveView(host, taskId)}
+            >
+              <PictureInPicture2 size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="icon small-icon"
+              aria-label={t('New browser tab')}
+              title={t('New browser tab')}
+              onClick={() => openBrowser(ws, taskId, 'new')}
+            >
+              <Plus size={14} />
+            </Button>
+          </>
         )
       }
     >

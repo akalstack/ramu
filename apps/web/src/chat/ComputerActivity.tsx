@@ -1,6 +1,7 @@
 import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Ellipsis, Keyboard, Monitor } from 'lucide-react'
+import { Ellipsis, Keyboard, Monitor, PictureInPicture2 } from 'lucide-react'
+import { floatLiveView } from '../liveView/liveViewStore'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
 import { COMPUTER_FRAME_STALE_MS, type ComputerAction } from '@ramu/shared/computerBridge'
 import {
@@ -515,7 +516,25 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   }
   if (!taskId || (!enabled && !viewOnly)) return null
   return (
-    <ComposerTraySection aria-label={t('Computer')} title={t('Computer')} icon={<Monitor />}>
+    <ComposerTraySection
+      aria-label={t('Computer')}
+      title={t('Computer')}
+      icon={<Monitor />}
+      actions={
+        session ? (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="icon small-icon"
+            aria-label={t('Float')}
+            title={t('Float: keep a live view in the corner')}
+            onClick={() => floatLiveView(hostId, taskId, { kind: 'computer' })}
+          >
+            <PictureInPicture2 size={14} />
+          </Button>
+        ) : undefined
+      }
+    >
       <div className="flex flex-col gap-2 text-control">
         {viewOnly && (
           <p role="status" className="text-caption text-muted-foreground">

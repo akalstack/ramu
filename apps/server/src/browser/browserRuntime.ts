@@ -834,6 +834,20 @@ export class BrowserRuntime {
     }
   }
 
+  /**
+   * A picture for a person watching the tab from a live view. It reads only: no lease, snapshot or control changes,
+   * and it waits rather than racing an agent's own capture.
+   */
+  async previewForViewer(
+    id: string,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+  ): Promise<BrowserScreenshot | null> {
+    const tab = this.tab(id)
+    this.assertOwner(tab, owner)
+    if (!tab.page.screenshot || tab.crashed || tab.replacing || tab.observing) return null
+    return tab.page.screenshot()
+  }
+
   diagnosticsForAgent(id: string, owner: Pick<BrowserOwner, 'hostId' | 'threadId'>): BrowserDiagnostics {
     const tab = this.tab(id)
     this.assertOwner(tab, owner)

@@ -64,6 +64,7 @@ import type { SettingsSection } from './settings/SettingsPage'
 import { SchedulesPage } from './Automation'
 import { InboxPage } from './inbox/InboxPage'
 import { useInboxModel } from './inbox/useBrief'
+import { LiveView } from './liveView/LiveView'
 import { AUTO_PROJECT, DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
 import { SettingsPanel } from './settings/SettingsPanel'
 import { UsageFooter, UsageRings } from './settings/Usage'
@@ -133,6 +134,7 @@ function ReadyShell({ onReady }: { onReady?: () => void }) {
   return (
     <>
       <Shell />
+      <LiveView />
       <Onboarding key={host} />
     </>
   )

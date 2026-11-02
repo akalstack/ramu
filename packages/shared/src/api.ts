@@ -438,6 +438,8 @@ export interface RamuMethods {
     bounds: { x: number; y: number; width: number; height: number },
   ): void
   'browser.hide'(hostId: string, threadId: string, tabId: string): void
+  /** A small picture of a tab for a live view; reading it changes nothing. Null while the page cannot be captured. */
+  'browser.preview'(hostId: string, threadId: string, tabId: string): import('./browserBridge').BrowserScreenshot | null
   'browser.takeControl'(hostId: string, threadId: string, tabId: string): BrowserTabInfo
   /** The desktop resolves the active run from the execution server; the renderer never supplies a run identity. */
   'browser.giveControl'(hostId: string, threadId: string, tabId: string): BrowserTabInfo

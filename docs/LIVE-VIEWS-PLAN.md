@@ -37,15 +37,14 @@ Pills and headers show the device's own name (**iPhone 17 · iOS 26**), so **Tes
 
 Each stage is useful alone. Stage 1 ships first because it needs no new runtime.
 
-### Stage 1: Live view for Browser and Computer
+### Stage 1: Live view above other apps
 
-- **Float:** on the Browser and Computer pills, panes and viewers. The view is pinned to its thread, so it stays while the person opens other threads.
-- **Follows the work:** it shows the surface the agent last used, and a person can pin one with a small switcher. Only surfaces the thread has are listed.
-- **Always shown:** thread title, host, state, **Stop the agent**, **Open** and Close. When the agent needs the person, the state says so in text and **Open** goes to the exact thread. **Stop computer use** appears while computer use is active.
-- **Desktop:** one small Electron window that remembers its size and corner per device, with **Keep on top** on by default so it stays above other apps. It is a window rather than a panel inside the app because the desktop browser is a native view that hides under menus (`browserOverlay.ts`). A desktop browser page moves into this window, and its pane shows **Showing in live view** with **Bring back**. Host Chromium and computer video need no move.
-- **Phone:** a small view inside the app that drags to any corner, stays across screens, and expands on tap. Stop stays visible on the view itself.
-- **Ending:** when the agent finishes, the view keeps its last frame and state until closed. A revoked grant or lost permission clears the picture immediately. A disconnect shows **Reconnecting** with Close still available.
-- **Privacy:** a viewer-role device sees only what it may already see. A setting hides live views from the desktop's screen sharing where the system supports it.
+The in-app live view has shipped ([UI](UI.md)). Still to build:
+
+- **Desktop window:** the live view as a small Electron window with **Keep on top**, remembering its size and corner, so it stays above other apps. The main process trusts invokes only from the main window today, so a second window needs its own narrow allowlist (session reads, frames, Stop) before it can call anything.
+- **Moving the desktop browser:** the native page moves into that window, with **Showing in live view** and **Bring back** in its pane, keeping page and control state.
+- **Screen sharing:** a setting that hides live views from screen sharing where the system supports it.
+- **Phone:** dragging the view to any corner, rather than the corner button.
 
 ### Stage 2: Test devices
 
@@ -79,12 +78,8 @@ Validate every input with `zod` and bound paths, logs and gestures. Keep new met
 
 ### Stage 1
 
-- **Representative task:** with an agent working in Browser, a person floats it, reads another thread and works in another app, notices it needs them, and stops or opens it from the live view without searching for the thread.
-- Agent activity never opens a live view, and closing it stops its stream.
-- A desktop browser page keeps its state and control through floating and **Bring back**, and control rules are unchanged while it floats.
-- Stop and Close remain visible and working during a disconnect.
-- After a revoked grant, no picture of that target remains on screen.
-- A viewer-role device cannot control anything from a live view.
+- **Representative task:** with an agent working in Browser, a person floats it, works in another app, notices it needs them, and stops or opens it from the live view.
+- A desktop browser page keeps its state and control through floating and **Bring back**.
 
 ### Stage 2
 

@@ -23,7 +23,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Activity tokens:** the weekly activity counts turns and reported cost; providers do not record per-turn token counts yet.
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live, which needs an event channel between hosts; a thread started there with its report covers the need until then.
 - **Teammates:** a dedicated `teammate_message` tool so the lead and teammate address each other by name, and changes and usage shown per teammate.
-- **Test devices and live views:** a floating view of Browser, Computer or a test device that stays beside other work; agents run and check apps on iOS Simulators and Android emulators; system picture-in-picture on the phone ([plan](LIVE-VIEWS-PLAN.md)).
+- **Test devices and live views:** the live view as a window above other apps; agents run and check apps on iOS Simulators and Android emulators; system picture-in-picture on the phone ([plan](LIVE-VIEWS-PLAN.md)).
 - **Git hosting:** Bitbucket Cloud and Azure DevOps adapters, and saved GitLab tokens with clone and publish in Settings. A new forge adds an adapter beside GitHub's and GitLab's in `apps/server/src/workspace/forge/` and a case in `forge/route.ts`.
 - **Code quality:** validate push payloads and RPC results on the clients (`any` remains in the phone's transport and push listeners, the desktop's host bridge and its preload). About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
