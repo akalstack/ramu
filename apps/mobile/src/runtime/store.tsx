@@ -1,3 +1,4 @@
+import { mayConnect, restoredStatus } from './hostConnection'
 import { appForeground } from './chatViewport'
 import { PairRequestUnsupported, requestPairing } from '@ramu/shared/pairRequest'
 import { secureRandom } from './secureRandom'
@@ -281,11 +282,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...saved,
       ready: false,
       chats: saved.chats.map((chat) => ({ ...chat, items: normalizeHelperGroups(chat.items) })),
-      // A revoked pairing and a connection the person turned off keep their state; every other host reconnects.
-      computers: saved.computers.map((c) => ({
-        ...c,
-        status: c.status === 'revoked' || c.status === 'paused' ? c.status : 'connecting',
-      })),
+      computers: saved.computers.map((c) => ({ ...c, status: restoredStatus(c.status) })),
       outbox: restoreOutbox(saved.outbox, sendJournal),
     }
   })
@@ -1268,8 +1265,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           reconnectTimers.current.delete(computer.id)
           if (!active.current || generations.current.get(computer.id) !== generation) return
           const saved = ref.current.computers.find((c) => c.id === computer.id)
-          if (saved && saved.status !== 'revoked' && saved.status !== 'paused')
-            void connect(saved, false, backoff + 1).catch(report)
+          if (saved && mayConnect(saved.status)) void connect(saved, false, backoff + 1).catch(report)
         },
         Math.min(30_000, 1000 * 2 ** Math.min(backoff, 5)) + Math.random() * 500,
       )
@@ -1278,8 +1274,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
   useEffect(() => {
     active.current = AppState.currentState !== 'background'
-    for (const computer of ref.current.computers)
-      if (computer.status !== 'revoked' && computer.status !== 'paused') void connect(computer).catch(report)
+    for (const computer of ref.current.computers) if (mayConnect(computer.status)) void connect(computer).catch(report)
     change((s) => ({ ...s, ready: true }))
     if (ref.current.drafts['push-enabled'] === 'yes')
       void import('./push')
@@ -1318,7 +1313,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       else
         for (const computer of ref.current.computers)
-          if (computer.status !== 'revoked' && computer.status !== 'paused') void connect(computer, true).catch(report)
+          if (mayConnect(computer.status)) void connect(computer, true).catch(report)
     })
     const poll = setInterval(() => {
       if (active.current)

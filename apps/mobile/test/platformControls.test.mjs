@@ -1,4 +1,5 @@
 import { runsBy } from '../src/runtime/groupRuns.ts'
+import * as hostConnection from '../src/runtime/hostConnection.ts'
 import * as toolActivity from '../../../packages/shared/src/chat/toolActivity.ts'
 import * as recentThreads from '../src/runtime/recentThreads.ts'
 import * as sendJournal from '../src/runtime/sendJournal.ts'
@@ -3146,6 +3147,7 @@ for (const ambiguous of [false, true]) {
       outbox: [],
     }
     const { StoreProvider } = load('runtime/store.tsx', 'ios', {
+      './hostConnection': hostConnection,
       react: {
         memo: (component) => component,
         ...hooks.react,
@@ -5563,6 +5565,7 @@ for (const os of ['ios', 'android']) {
       outbox: [],
     }
     const { StoreProvider } = load('runtime/store.tsx', os, {
+      './hostConnection': hostConnection,
       react: {
         ...hooks.react,
         createContext: () => ({ Provider: 'Store' }),
@@ -5636,6 +5639,7 @@ for (const os of ['ios', 'android']) {
       outbox: [],
     }
     const { StoreProvider } = load('runtime/store.tsx', os, {
+      './hostConnection': hostConnection,
       react: {
         ...hooks.react,
         createContext: () => ({ Provider: 'Store' }),
@@ -6978,6 +6982,7 @@ function deliveryStoreHarness() {
     return []
   }
   const { StoreProvider } = load('runtime/store.tsx', 'ios', {
+    './hostConnection': hostConnection,
     react: {
       ...hooks.react,
       createContext: () => ({ Provider: 'Store' }),
