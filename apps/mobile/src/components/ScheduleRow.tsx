@@ -65,6 +65,7 @@ export function ScheduleRow({
   return (
     <SwipeRow
       background={c.raised2}
+      fullSwipe
       actions={
         commands.disabled
           ? []

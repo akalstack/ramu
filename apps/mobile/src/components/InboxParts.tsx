@@ -189,7 +189,7 @@ export function RecapCard({
       ]
   return (
     <View style={{ marginHorizontal: space.l, marginBottom: space.s, borderRadius: radius.l, overflow: 'hidden' }}>
-      <SwipeRow actions={swipe} background={c.raised2}>
+      <SwipeRow actions={swipe} background={c.raised2} fullSwipe>
         <View style={{ padding: space.l, gap: 6, backgroundColor: tint }}>
           {project ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
