@@ -18,7 +18,7 @@ Every enabled account of a provider is tried before another model.
 
 The agent can start helpers for parts of a task. Helper cards show progress; open one to read, message or stop it. Stopping the thread stops its helpers.
 
-- **Routing** (Settings → Workflows → Sub-agents) can send helpers to another provider or model, or keep each provider's own.
+- **Routing** (Settings → Goals & delegation → Sub-agents) can send helpers to another provider or model, or keep each provider's own.
 - **Isolation** gives a helper its own checkout and applies its changes back when it finishes.
 
 ## Teammates
@@ -32,7 +32,7 @@ After four teammate reports without you writing, the exchange pauses; a message 
 
 ## Custom agents
 
-**Settings → Workflows → Custom agents** keeps reusable agents: a name, when to use it, instructions, an optional model and a read-only switch. **New agent** drafts one from a sentence for you to edit. The thread's agent uses one when a task fits, and its helper card shows **custom: ‹name›**. A teammate can start from one too.
+**Settings → Goals & delegation → Custom agents** keeps reusable agents: a name, when to use it, instructions, an optional model and a read-only switch. **New agent** drafts one from a sentence for you to edit. The thread's agent uses one when a task fits, and its helper card shows **custom: ‹name›**. A teammate can start from one too.
 
 ## Threads started by agents
 
