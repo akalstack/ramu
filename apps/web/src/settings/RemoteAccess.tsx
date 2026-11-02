@@ -50,7 +50,7 @@ import { copyText, invoke, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
 import { t, useLanguage } from '../i18n'
-import { StatusDot, activityText, statusText, useComputers } from '../workspace/computers'
+import { activityText, hostRoute, StatusDot, statusText, useComputers } from '../workspace/computers'
 import { workspaceVisible } from '../workspace/workspaceLifetime'
 import { onPairLink, takePairLink } from '../pairLink'
 import { NearbyHosts } from './NearbyHosts'
@@ -831,7 +831,11 @@ function Computers({ state }: { state: ComputerList }) {
                   title={computer.ssh ?? computer.url ?? state.deviceName}
                 >
                   <StatusDot status={computer.status} />
-                  <span className="flex-none">{activityText(computer) || statusText(computer.status)}</span>
+                  <span className="flex-none">
+                    {[activityText(computer) || statusText(computer.status), hostRoute(computer)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
                   <span className="truncate">
                     · {computer.ssh ? `ssh ${computer.ssh}` : (computer.url ?? state.deviceName)}
                   </span>
