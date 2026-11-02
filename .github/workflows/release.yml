@@ -80,6 +80,9 @@ jobs:
         env:
           RAMU_PACKAGED_EXECUTABLE: ${{ github.workspace }}/dist/Ramu-darwin-${{ matrix.arch }}/Ramu.app/Contents/MacOS/Ramu
         run: pnpm test:desktop-smoke
+      - name: Smoke test installed Linux package
+        if: runner.os == 'Linux'
+        run: scripts/smoke/linux-deb-smoke.sh
       - name: Remove signing material
         if: always() && runner.os == 'macOS'
         run: scripts/release/macos-signing.sh cleanup
