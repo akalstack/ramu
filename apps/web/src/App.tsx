@@ -695,7 +695,7 @@ function Shell() {
         )}
         <ResizablePanel id="main" minSize={360}>
           <main className="main flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] bg-canvas rounded-(--radius-m) [box-shadow:inset_0_1px_0_rgb(var(--ink)_/_0.025),_0_8px_28px_rgba(0,_0,_0,_0.28)]">
-            <div key={shownHost} className="task-area flex-1 min-h-0 flex">
+            <div key={`task-area:${shownHost}`} className="task-area flex-1 min-h-0 flex">
               {landing && <HomePage />}
               {ui.sidebar === 'inbox' && <InboxPage />}
               {ui.sidebar === 'schedules' && (
@@ -718,13 +718,13 @@ function Shell() {
                 />
               ))}
             </div>
-            <StatusBar key={shownHost} usage={sidebarHidden ? <UsageRings /> : null} />
+            <StatusBar key={`status:${shownHost}`} usage={sidebarHidden ? <UsageRings /> : null} />
           </main>
         </ResizablePanel>
       </ResizablePanelGroup>
       {settingsOpen && (
         <SettingsPanel
-          key={shownHost}
+          key={`settings:${shownHost}`}
           initialSection={settingsSection}
           initialTarget={settingsTarget}
           shortcuts={commands
@@ -737,7 +737,7 @@ function Shell() {
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
       <Notifications />
       <TitleTooltips />
-      <Fragment key={shownHost}>
+      <Fragment key={`dialogs:${shownHost}`}>
         <ProviderSetupTerminal />
         <SummaryHost />
         <CommitBranchDialog />
