@@ -71,7 +71,18 @@ module.exports = {
     {
       name: '@electron-forge/maker-deb',
       platforms: ['linux'],
-      config: { options: { maintainer: 'Ramu contributors' } },
+      // The npm name (@ramu/desktop) is not a package or executable name; the binary is packagerConfig.executableName.
+      config: {
+        options: {
+          name: 'ramu',
+          productName: 'Ramu',
+          bin: 'Ramu',
+          maintainer: 'Ramu contributors',
+          homepage: 'https://github.com/ahxar/ramu',
+          icon: join(repoRoot, 'assets', 'icon.png'),
+          categories: ['Development'],
+        },
+      },
     },
     { name: '@electron-forge/maker-squirrel', platforms: ['win32'], config: { name: 'ramu' } },
   ],
