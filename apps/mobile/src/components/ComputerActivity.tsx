@@ -1,4 +1,3 @@
-import { floatLiveView } from '../runtime/liveView'
 import { VIEW_ONLY_COMPUTER_NOTICE } from '../runtime/viewerAccess'
 import { PermissionNeeded, RequestPermission } from './DevicePermissions'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -12,7 +11,6 @@ import {
   Monitor as MonitorIcon,
   Power,
   Command,
-  PictureInPicture2,
 } from 'lucide-react-native'
 import { clampPan, pinchZoom, screenPoint, screenRect } from '../runtime/computerGestures'
 import { translate } from '@ramu/shared/i18n'
@@ -392,15 +390,6 @@ function ComputerViewer({
     ...(zoom > 1
       ? [{ key: 'fit', title: t('Fit screen'), icon: Minimize2, onPress: () => setView({ zoom: 1, pan: ORIGIN }) }]
       : []),
-    {
-      key: 'float',
-      title: t('Float'),
-      icon: PictureInPicture2,
-      onPress: () => {
-        floatLiveView(chat.computerId, chat.taskId, { kind: 'computer' })
-        onClose()
-      },
-    },
     ...(viewOnly
       ? []
       : [

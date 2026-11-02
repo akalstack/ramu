@@ -1,4 +1,3 @@
-import { LiveView } from '../components/LiveView'
 import { ComputerUseProvider } from '../runtime/computerUse'
 import { LiveActivityMonitor } from '../components/LiveActivityMonitor'
 import { StartupScreen } from '../components/StartupScreen'
@@ -82,7 +81,6 @@ function Navigator() {
           <Stack.Screen name="settings" options={{ presentation: 'modal', headerShown: false }} />
         </Stack>
       </NavigationThemeProvider>
-      <LiveView />
     </StartupScreen>
   )
 }

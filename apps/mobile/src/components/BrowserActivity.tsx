@@ -1,4 +1,3 @@
-import { floatLiveView } from '../runtime/liveView'
 import { VIEW_ONLY_BROWSER_NOTICE } from '../runtime/viewerAccess'
 import { useEffect, useRef, useState } from 'react'
 import { Linking, ScrollView, View } from 'react-native'
@@ -127,16 +126,6 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
                   </View>
                 ))}
                 {!status && online && !tabs.length ? <T tone="muted">{t('No browser tabs in this thread.')}</T> : null}
-                {hosted && tabs.length ? (
-                  <Button
-                    kind="secondary"
-                    title={t('Float')}
-                    onPress={() => {
-                      floatLiveView(chat.computerId, chat.taskId)
-                      onClose()
-                    }}
-                  />
-                ) : null}
                 <Button
                   kind="ghost"
                   title={t('Refresh')}
