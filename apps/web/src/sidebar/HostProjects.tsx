@@ -1,5 +1,6 @@
 import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useHeld, useSteadySpin } from '../lib/steadyActivity'
 import {
   CheckCheck,
   CircleAlert,
@@ -81,12 +82,21 @@ export function HostProjects() {
   )
 }
 
+function SteadyLoader() {
+  const ref = useSteadySpin<SVGSVGElement>()
+  return <LoaderCircle ref={ref} size={12} className="animate-spin" aria-hidden />
+}
+
 function HostGroup({ computer, current, grouped }: { computer: Computer; current: boolean; grouped: boolean }) {
   const tree = useSidebarExpansion(computer.id)
   const { select } = useHostSelection()
   const addProject = useAddProject(computer.id)
   const open = !grouped || tree.isExpanded('host')
   const available = computer.status === 'connected'
+  // The count drops to zero between a turn's steps; keep the last number through that gap.
+  const lastWorking = useRef(0)
+  if (computer.running > 0) lastWorking.current = computer.running
+  const working = useHeld(computer.running > 0) ? lastWorking.current : 0
   return (
     <section
       aria-label={computer.name}
@@ -115,13 +125,13 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
                 {computer.needsInput}
               </span>
             )}
-            {available && computer.running > 0 && (
+            {available && working > 0 && (
               <span
                 className="inline-flex flex-none items-center gap-1 text-caption tabular-nums text-muted-foreground"
-                title={t('{0} working', { 0: computer.running })}
+                title={t('{0} working', { 0: working })}
               >
-                <LoaderCircle size={12} className="animate-spin" aria-hidden />
-                {computer.running}
+                <SteadyLoader />
+                {working}
               </span>
             )}
           </SidebarDisclosureButton>
