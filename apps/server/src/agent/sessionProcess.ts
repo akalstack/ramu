@@ -1,4 +1,5 @@
 import { asProcessOwner, claudeSpawn } from './processOwners'
+import { READ_ONLY_DENIED } from './permissions'
 import { createHash } from 'node:crypto'
 import { serversDigest, sessionMcpServers } from '../providers/discoveredMcp'
 import { ruleDelivery } from '@ramu/shared/rules'
@@ -429,43 +430,51 @@ export class SessionProcess {
     const request = explicitGoal ? prompt.replace(/^\s*\/goal\s+/, 'Work toward this Ramu goal: ') : prompt
     const actualPrompt = `${rulesUpdate ?? ''}${carried ? `${carried.built.prompt}\n\nNext request: ${request}` : request}`
     const deltaResume = carried?.built.info.mode === 'delta' && !!carried.resume
+    // A Review teammate never writes, whatever the thread allows; its session records that it is one.
+    const reviewOnly = this.host.events(id).findLast((event) => event.kind === 'teammate')
+    const readOnly = reviewOnly?.kind === 'teammate' && reviewOnly.mode === 'review'
     if (this.host.usesRunner(s.provider)) {
       let runner: AgentRunner
       try {
-        runner = this.host.runnerFactory(s.provider)(s, s.settings, (event, limit) => {
-          if (this.host.runners.get(id) !== runner) return
-          if (event.kind === 'usage') {
-            this.host.usage()?.update(event.readings)
-            return
-          }
-          if (event.kind === 'title') {
-            if (!s.parentId) this.host.providerTitle()?.(id, event.title)
-            return
-          }
-          if (event.kind === 'context') {
-            this.host.setContext(id, event.used, event.max)
-            return
-          }
-          if (event.kind === 'init')
-            this.db
-              .prepare('UPDATE agent_sessions SET provider_session_id = ? WHERE id = ?')
-              .run(event.providerSessionId, id)
-          if (event.kind === 'state')
-            this.host.setState(
-              id,
-              event.state === 'running' && this.host.hasBlockingQuestions(id) ? 'needs-input' : event.state,
-            )
-          else if (event.kind === 'agent') {
-            const { kind: _, at: __, ...task } = event
-            if (this.host.task(id, task.agentId)?.status !== 'stopped') this.host.updateTask(id, task.agentId, task)
-          } else {
-            this.host.record(id, event.kind === 'init' ? { ...event, provider: s.provider } : event)
-            if (event.kind === 'result') {
-              if (limit && event.isError) void this.host.fallback(id, limit === 'low' ? 'low' : 'high')
-              else this.host.setState(id, event.isError ? 'failed' : 'idle')
+        runner = this.host.runnerFactory(s.provider)(
+          s,
+          s.settings,
+          (event, limit) => {
+            if (this.host.runners.get(id) !== runner) return
+            if (event.kind === 'usage') {
+              this.host.usage()?.update(event.readings)
+              return
             }
-          }
-        })
+            if (event.kind === 'title') {
+              if (!s.parentId) this.host.providerTitle()?.(id, event.title)
+              return
+            }
+            if (event.kind === 'context') {
+              this.host.setContext(id, event.used, event.max)
+              return
+            }
+            if (event.kind === 'init')
+              this.db
+                .prepare('UPDATE agent_sessions SET provider_session_id = ? WHERE id = ?')
+                .run(event.providerSessionId, id)
+            if (event.kind === 'state')
+              this.host.setState(
+                id,
+                event.state === 'running' && this.host.hasBlockingQuestions(id) ? 'needs-input' : event.state,
+              )
+            else if (event.kind === 'agent') {
+              const { kind: _, at: __, ...task } = event
+              if (this.host.task(id, task.agentId)?.status !== 'stopped') this.host.updateTask(id, task.agentId, task)
+            } else {
+              this.host.record(id, event.kind === 'init' ? { ...event, provider: s.provider } : event)
+              if (event.kind === 'result') {
+                if (limit && event.isError) void this.host.fallback(id, limit === 'low' ? 'low' : 'high')
+                else this.host.setState(id, event.isError ? 'failed' : 'idle')
+              }
+            }
+          },
+          readOnly,
+        )
         if (connection) runner.setTools?.(connection)
         if (runner.setTerminals && providerAdapter(s.provider).native?.terminals) {
           const terminals = acpTerminalHostFor({ taskId: s.taskId, repoId: null, cwd: s.cwd })
@@ -542,6 +551,7 @@ export class SessionProcess {
       record: (event) => this.host.record(id, event),
       setState: (state) => this.host.setState(id, state),
       restricted: connection?.restricted,
+      readOnly,
     })
     const query = this.host.providerQuery({
       prompt: input,
@@ -557,6 +567,7 @@ export class SessionProcess {
           hooks: !s.parentId && this.host.preferencesSource() ? this.host.subagentHooks(id) : undefined,
         }),
         spawnClaudeCodeProcess: claudeSpawn(id),
+        ...(readOnly ? { disallowedTools: [...READ_ONLY_DENIED, 'AskUserQuestion'] } : {}),
       },
     })
     this.host.live.set(id, { query, input, abort, pending })

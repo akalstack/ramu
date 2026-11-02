@@ -38,19 +38,7 @@ Teammate is not a sub-agent: the difference is who starts it and how long it sta
 
 ## Delivery
 
-### 1. Teammates in a thread
-
-- **Adding one:** **Add teammate** in the model menu, or `/teammate`, picks a model or a custom agent. The composer shows both, and the person chooses who gets each message by chip or `@sol`. The lead stays the default.
-- **Two ways of working**, chosen when adding and changeable:
-  - **Review** (default): read-only. It reads the lead's latest changes and replies with findings when asked, so an idle teammate costs nothing. **Review every turn** is an option.
-  - **Take over**: the teammate edits while the lead waits, then hands back with a summary. For "Sol rewrites this".
-- **One writer at a time:** the two models never edit at once. Take over passes the turn, using the existing workspace-writer rule.
-- **Talking to each other:** visible messages in the transcript, labelled by sender, through a `teammate_message` tool and `thread_message`'s limits. Each exchange costs a turn, so a back-and-forth stops after 4 rounds without the person, and the count is shown.
-- **Context:** the teammate starts from the existing handoff (`buildHandoff`), with secrets redacted, and receives only events it has not seen, the same delta rule as provider returns. It keeps its own provider session, so neither model loses its working memory.
-- **Transcript:** one thread, one timeline. Each message shows its model's mark. Changes, usage and Stop are per teammate; stopping the thread stops all.
-- **Access:** a teammate cannot exceed the thread's access. Review is read-only whatever the thread's access.
-- **Limits:** one teammate per thread. Usage limits and fallback apply per teammate, and a limited teammate waits without stopping the lead.
-- **Phone:** the same chips, labels and Stop.
+Teammates have shipped ([Agents and routing](AGENT-ROUTING.md#teammates)): Review and Take over, `@name` routing, the round limit and read-only review. A teammate's own messages to the lead through a dedicated `teammate_message` tool, per-teammate changes and usage, and choosing a custom agent as a teammate remain.
 
 ### 2. Custom agents
 

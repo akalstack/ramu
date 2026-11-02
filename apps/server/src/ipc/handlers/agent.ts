@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
-import type { AgentSettings, FileContext, PermissionScope } from '@ramu/shared/types'
+import type { AgentSettings, FileContext, PermissionScope, TeammateMode } from '@ramu/shared/types'
 import { MAX_ATTACHMENT_BYTES } from '../../attachments'
 import {
   chooseDuplicate,
@@ -212,6 +212,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         const taskId = agents.get(s).taskId
         workspace.setDone(taskId, false)
         t = await withContext(workspace, taskId, t, context)
+        agents.resetTeammateRounds(s)
         return lockSession(ctx, s, () => {
           workspace.getTask(taskId)
           ctx.terminals?.assertTaskAvailable(taskId)
@@ -279,7 +280,17 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.messageTask': {
       args: z.tuple([id, z.string().min(1).max(200), z.string().min(1).max(100_000)]),
       run: (s: string, agentId: string, text: string) =>
-        lockSession(ctx, s, () => agents.messageTask(s, agentId, text)),
+        lockSession(ctx, s, () => {
+          agents.resetTeammateRounds(s)
+          return agents.messageTask(s, agentId, text)
+        }),
+    },
+    'agent.addTeammate': {
+      args: z.tuple([id, agentSettings, z.enum(['review', 'take-over']), z.string().max(20_000)]),
+      run: async (s: string, settings: AgentSettings, mode: TeammateMode, request: string) => {
+        await agents.validateSettings(settings)
+        return agents.addTeammate(s, settings, mode, request)
+      },
     },
     'agent.replyPermission': {
       args: z.tuple([

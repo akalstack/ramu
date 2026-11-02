@@ -35,7 +35,14 @@ import { reviewsByTurn } from '@ramu/shared/review/reviewGroups'
 import { useReviews } from '../git/reviews'
 import { FILE_DRAG_TYPE } from '../composer/ComposerSuggestions'
 import { ChatFind } from '../chat/ChatFind'
-import { effectiveStatus, latestTasks, parseTaskMessage, parseTaskStop } from '@ramu/shared/chat/agentTasks'
+import {
+  activeTeammate,
+  effectiveStatus,
+  latestTasks,
+  parseTaskMessage,
+  parseTaskStop,
+  teammateMention,
+} from '@ramu/shared/chat/agentTasks'
 import type { AgentTask } from '@ramu/shared/types'
 import { ProviderRouteChip } from '../models/ProviderRoute'
 import { limitPlaceholder, limitResume } from '../models/limitCopy'
@@ -67,6 +74,7 @@ import { useSidePanels } from './agent/hooks/useSidePanels'
 import { useTurnPaging } from './agent/hooks/useTurnPaging'
 import { useContinueInNewChat } from './agent/hooks/useContinueInNewChat'
 import { ContinueOnHostDialog } from './agent/components/ContinueOnHostDialog'
+import { AddTeammateDialog, TeammateBar } from './agent/components/TeammateControls'
 import { useModelChange } from './agent/hooks/useModelChange'
 import { useJsonDraft } from '../composer/useJsonDraft'
 import { settingsMatch } from './agent/settingsMatch'
@@ -208,6 +216,8 @@ export const AgentView = memo(function AgentView({
   const helperSelection = useMemo(() => helperGroups(events), [events])
   const allTasks = useMemo(() => latestTasks(events), [events])
   const tasks = useMemo(() => allTasks.filter((task) => task.taskType !== 'local_bash'), [allTasks])
+  const teammate = useMemo(() => activeTeammate(allTasks), [allTasks])
+  const [addingTeammate, setAddingTeammate] = useState(false)
   const commands = allTasks.filter(
     (task) => task.taskType === 'local_bash' && task.background && effectiveStatus(task, live) === 'running',
   )
@@ -461,6 +471,14 @@ export const AgentView = memo(function AgentView({
       setMcpOpen(true)
       return
     }
+    const forTeammate = teammate && !attachments.length ? teammateMention(draft, teammate.name) : null
+    if (teammate && forTeammate)
+      return act(async () => {
+        const submitted = draft
+        await invoke('agent.messageTask', view.sessionId, teammate.agentId, forTeammate)
+        const consumed = consumeDraft()
+        if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
+      }, true)
     const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(draft.trim())
     return side && !attachments.length && !attached.length && !contentAttachments.length
       ? askAside(side[1]!.trim())
@@ -626,6 +644,7 @@ export const AgentView = memo(function AgentView({
         continuing={continuing}
         onContinue={() => setConfirmContinue(true)}
         onContinueOnHost={setContinueHost}
+        onAddTeammate={teammate || viewOnly ? undefined : () => setAddingTeammate(true)}
         latestRequest={
           events.findLast(
             (event): event is Extract<typeof event, { kind: 'user' }> => event.kind === 'user' && !event.agentId,
@@ -678,6 +697,14 @@ export const AgentView = memo(function AgentView({
               onConfirm={() => void continueInNewChat()}
             />
           )}
+          {addingTeammate && session && (
+            <AddTeammateDialog
+              sessionId={session.id}
+              initial={session.settings}
+              onClose={() => setAddingTeammate(false)}
+            />
+          )}
+          {teammate && session && <TeammateBar sessionId={session.id} teammate={teammate} />}
           {continueHost && session && (
             <ContinueOnHostDialog
               taskId={session.taskId}

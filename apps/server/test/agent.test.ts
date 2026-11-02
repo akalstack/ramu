@@ -2481,6 +2481,19 @@ describe('sub-agents Ramu runs', () => {
     return s
   }
 
+  it('adds one Review teammate on the model the person chose, read-only whatever the thread allows', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc)
+    const settings = { ...full, provider: 'codex' as const, model: 'codex-test', effort: 'high' as const }
+    const result = await svc.addTeammate(parent.id, settings, 'review', '')
+    const marker = svc.events(result.agentId).find((event) => event.kind === 'teammate')
+    expect(marker).toMatchObject({ kind: 'teammate', mode: 'review', name: 'codex-test' })
+    expect(svc.get(result.agentId).settings).toMatchObject({ provider: 'codex', access: 'edits' })
+    expect(svc.task(parent.id, result.agentId)).toMatchObject({ teammate: 'review', canMessage: true })
+    await expect(svc.addTeammate(parent.id, settings, 'take-over', '')).rejects.toThrow(/already has a teammate/)
+    svc.stopAll()
+  })
+
   it('selects effort on the destination provider and records the capped result', async () => {
     const svc = routed({ autoSelect: 'effort-only', maxEffort: 'medium' })
     const parent = await parentOf(svc)

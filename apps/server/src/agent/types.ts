@@ -23,6 +23,7 @@ export interface ChildRun {
   lastText: string
   toolUses: number
   startedAt: number
+  teammate?: import('@ramu/shared/types').TeammateMode
 }
 export interface SubagentInput {
   description: string
@@ -30,6 +31,9 @@ export interface SubagentInput {
   type?: string
   background?: boolean
   name?: string
+  /** The person chose the model, so routing and automatic selection are skipped. */
+  settings?: import('@ramu/shared/types').AgentSettings
+  teammate?: import('@ramu/shared/types').TeammateMode
 }
 export interface SubagentResult {
   agentId: string

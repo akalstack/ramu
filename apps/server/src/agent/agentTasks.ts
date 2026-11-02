@@ -25,7 +25,7 @@ export interface AgentTasksHost
     Pick<SessionRegistry, 'live' | 'runners'>,
     Pick<SessionStore, 'emit' | 'get' | 'hasRunningTasks' | 'task'>,
     Pick<ProviderWaits, 'providerWait'>,
-    Pick<SubagentRunner, 'children' | 'continueNative'> {}
+    Pick<SubagentRunner, 'children' | 'continueNative' | 'wakeTeammate'> {}
 
 /** The sub-agents and background commands inside a chat: recording their state and stopping or messaging them. */
 export class AgentTasks {
@@ -138,6 +138,7 @@ export class AgentTasks {
   async messageTask(id: string, agentId: string, text: string): Promise<void> {
     const task = this.host.task(id, agentId)
     if (!task?.canMessage) throw new Error('This agent cannot receive messages.')
+    if (task.teammate) this.host.wakeTeammate(id, agentId)
     const run = this.host.children.get(agentId)
     if (run?.parentId === id) {
       // Straight to the sub-agent; its next report comes back as a message.

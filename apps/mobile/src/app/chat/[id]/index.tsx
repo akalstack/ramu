@@ -49,6 +49,8 @@ import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { translate } from '@ramu/shared/i18n'
 import { Composer } from '../../../components/Composer'
 import { ContinueOnHostSheet } from '../../../components/ContinueOnHost'
+import { AddTeammateSheet, teammateOf } from '../../../components/Teammate'
+import { teammateMention } from '@ramu/shared/chat/agentTasks'
 import type { TranscriptItem } from '../../../runtime/types'
 import type { AgentSettings } from '@ramu/shared/types'
 import {
@@ -81,6 +83,7 @@ export default function ChatScreen() {
   const chat = useChat(id)
   const { seeFailure } = useAutomation()
   const [continueHost, setContinueHost] = useState<string | null>(null)
+  const [addingTeammate, setAddingTeammate] = useState(false)
   const failedAt = chat?.status === 'failed' ? chat.lastActiveAt : null
   useFocusEffect(
     useCallback(() => {
@@ -617,6 +620,17 @@ export default function ChatScreen() {
     group: 'tools' | 'info'
     symbol?: import('../../../components/Screen').HeaderMenuAction['icon']
   }[] = [
+    ...(computer?.access !== 'viewer' && !teammateOf(chat)
+      ? [
+          {
+            icon: GitFork,
+            label: tr('Add teammate'),
+            symbol: 'person.2' as const,
+            group: 'tools' as const,
+            onPress: () => setAddingTeammate(true),
+          },
+        ]
+      : []),
     ...store.computers
       .filter((pc) => pc.id !== chat.computerId && pc.status === 'online' && computer?.access !== 'viewer')
       .map((pc) => ({
@@ -1138,6 +1152,12 @@ export default function ChatScreen() {
                         .then(() => {
                           router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
                         })
+                    const teammate = teammateOf(chat)
+                    const forTeammate = teammate && !attachments?.length ? teammateMention(text, teammate.name) : null
+                    if (teammate && forTeammate && chat.sessionId)
+                      return store
+                        .invoke(chat.computerId, 'agent.messageTask', chat.sessionId, teammate.agentId, forTeammate)
+                        .then(() => {})
                     following.current = true
                     smoothSendScroll.current = true
                     return store.send(chat.id, text, mode, attachments, context)
@@ -1352,6 +1372,7 @@ export default function ChatScreen() {
         ))}
       </Sheet>
       <ContinueOnHostSheet chat={chat} targetId={continueHost} onClose={() => setContinueHost(null)} />
+      <AddTeammateSheet chat={chat} open={addingTeammate} onClose={() => setAddingTeammate(false)} />
     </Screen>
   )
 }

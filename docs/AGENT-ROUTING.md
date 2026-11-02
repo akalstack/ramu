@@ -41,6 +41,15 @@ Sub-agent cards show progress and transcripts; open one to inspect it, message i
 - **Automatic selection** (Settings → Workflows → Sub-agents, off by default): **Model and effort** lets the destination provider pick from its catalog per cross-provider task; **Effort only** keeps the configured model. It uses an isolated request with a 30-second timeout and no fallback, and falls back to the configured settings if the pick is invalid. **Maximum sub-agent effort** and **Per-model effort caps** apply to Ramu-managed sub-agents (the lower ceiling wins); the helper card records what was chosen.
 - **Activity row:** states are ordered connection, pending input, provider holds, parent work, helpers, goals, advisor, queue; secondary actions stay reachable. Helper groups keep their launch position and show each helper's latest state (current-turn helpers plus older active ones; earlier work is under History). A parent going idle does not stop a separately owned child; stopped and failed differ, and late progress cannot revive a settled helper. The server rechecks Stop and Message. Forwarded requests keep their IDs and child-origin labels, so answers route correctly, and a request in the desktop popover opens its owning session.
 
+## Teammates
+
+**Add teammate** in the thread menu (desktop and phone) brings a second model into the thread. It starts from the conversation so far with secrets removed, keeps its own provider session, and appears in the thread as a helper card. Start a message with `@name` (or `@teammate`) to talk to it; anything else goes to the lead. One teammate per thread.
+
+- **Review** (default) reads the latest changes and replies with findings. It is read-only whatever the thread allows: Codex, Cursor and ACP runtimes start in their read-only modes, and Claude has its editing and shell tools removed.
+- **Take over** edits while the lead waits, then hands back with a summary. It never exceeds the thread's access.
+
+Each report reaches the lead as a message. After 4 reports without the person writing, the exchange pauses and says so; a message to either one continues it. A teammate idle between requests costs nothing, wakes when messaged, survives restarts, and stops with the thread or from the bar above the composer.
+
 ## Threads started by agents
 
 A main-thread agent can start threads the person owns, when asked for separate work: a follow-up in this project, the matching change in another project, or several parts in parallel. Unlike a helper, a started thread appears in the sidebar, keeps working on its own and does not stop with the thread that started it (`background/agentThreads.ts`).

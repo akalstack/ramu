@@ -159,3 +159,15 @@ export const BACKGROUND_PREAMBLE =
   "Long-running commands: when a command may take more than about 30 seconds (dev servers, watchers, full builds, large test suites, installs) and you have other work to do, start it in the background with your shell tool's background option instead of waiting for it. Carry on with the other work, then read its output or wait for it to finish before you rely on its result. Run short commands in the foreground."
 export const SUBAGENT_PREAMBLE =
   'You are a sub-agent started by another agent that works in the same workspace. Do the task below, then finish with a concise report of what you did and found: files you changed, results, and anything left open. Ask nothing unless you are blocked; your report goes straight back to the agent that started you. While you work, message_parent sends the agent that started you a short note without stopping, and ask_parent asks it a question and waits for the answer; use ask_parent only when you cannot go on without it, and still end with your report.'
+
+/** The person's teammate in this thread, if one is still around to talk to. */
+export const activeTeammate = (tasks: readonly AgentTask[]) =>
+  tasks.find((task) => task.teammate && task.status !== 'stopped' && task.status !== 'failed')
+
+/** A message that starts with `@name` (or `@teammate`) goes to the teammate instead of the lead. */
+export function teammateMention(text: string, name: string): string | null {
+  const match = /^@(\S+)\s+([\s\S]+)$/.exec(text.trim())
+  if (!match) return null
+  const handle = match[1]!.toLowerCase()
+  return handle === 'teammate' || handle === name.toLowerCase().replace(/\s+/g, '-') ? match[2]!.trim() : null
+}

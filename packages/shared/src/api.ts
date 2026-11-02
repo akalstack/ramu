@@ -1190,6 +1190,13 @@ export interface RamuMethods {
   'agent.stopTask'(sessionId: string, agentId: string): void
   /** Sends a message to a sub-agent through the main agent (Claude SendMessage, Codex send_input). */
   'agent.messageTask'(sessionId: string, agentId: string, text: string): void
+  /** Adds a teammate: a second model the person chose, working in this thread. One per thread. */
+  'agent.addTeammate'(
+    sessionId: string,
+    settings: AgentSettings,
+    mode: import('./types').TeammateMode,
+    request: string,
+  ): { agentId: string; name: string }
   'agent.replyPermission'(
     sessionId: string,
     requestId: string,

@@ -14,12 +14,26 @@ export interface PermissionHost {
   setState(state: AgentSessionState): void
   /** A review chat about learned memories: Ramu's own tools only. */
   restricted?: boolean
+  /** A Review teammate: it may read, never write. */
+  readOnly?: boolean
 }
 
+/** Claude tools a read-only session may not use, even with full access, because each can change files. */
+export const READ_ONLY_DENIED = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']
+
 /** Claude's `canUseTool` hook: auto-allows Ramu's own tools and full access, otherwise asks the user. */
-export function createCanUseTool({ settings, pending, record, setState, restricted }: PermissionHost): CanUseTool {
+export function createCanUseTool({
+  settings,
+  pending,
+  record,
+  setState,
+  restricted,
+  readOnly,
+}: PermissionHost): CanUseTool {
   return (toolName, toolInput, { signal, title, decisionReason, suggestions, suppressAlwaysAllowRule, blockedPath }) =>
     new Promise<PermissionResult>((resolve) => {
+      if (readOnly && READ_ONLY_DENIED.includes(toolName))
+        return resolve({ behavior: 'deny', message: 'You are a read-only reviewer. Read files and report findings.' })
       if (restricted)
         return resolve(
           /^mcp__ramu__/.test(toolName)

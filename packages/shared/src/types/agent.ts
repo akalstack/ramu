@@ -254,6 +254,9 @@ export type AgentEvent = AgentEventBody & {
 
 export type AgentTaskStatus = 'running' | 'completed' | 'failed' | 'stopped'
 /** A sub-agent or background task the main agent started. Recorded once and updated in place as it progresses. */
+/** A teammate the person adds: Review reads and reports; Take over edits while the lead waits, then hands back. */
+export type TeammateMode = 'review' | 'take-over'
+
 export interface AgentTask {
   /** Ramu-owned session; absent for native provider helpers without a separate session. */
   childSessionId?: string
@@ -269,6 +272,8 @@ export interface AgentTask {
   agentType?: string
   /** Claude task kind: local_agent, local_bash, … Absent for Codex sub-agents. */
   taskType?: string
+  /** Set for a teammate the person added, rather than a helper the agent started. */
+  teammate?: TeammateMode
   status: AgentTaskStatus
   /** Keeps running after the main turn ends. */
   background?: boolean
@@ -340,6 +345,8 @@ type AgentEventBody =
   | { kind: 'queue'; messages: QueuedMessage[]; paused?: boolean }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
+  /** Recorded on a teammate's own session: how it works beside the lead. Review is read-only whatever the thread allows. */
+  | { kind: 'teammate'; mode: TeammateMode; name: string }
   /** This thread continues on another host. The original stays and links to it. */
   | { kind: 'continued'; hostId: string; host: string; taskId: string; title: string }
   | { kind: 'background-terminal-stop'; terminalId: string; command: string }

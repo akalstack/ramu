@@ -14,6 +14,7 @@ import {
   Search,
   ShieldQuestion,
   Square,
+  Users,
 } from 'lucide-react'
 import type { AgentSessionState, AgentTask } from '@ramu/shared/types'
 import { formatKeys } from '../../../commands'
@@ -50,6 +51,7 @@ export function AgentHeader({
   onContinue,
   onContinueOnHost,
   latestRequest,
+  onAddTeammate,
 }: {
   history?: React.ReactNode
   sessionId: string
@@ -76,6 +78,8 @@ export function AgentHeader({
   onContinueOnHost: (hostId: string) => void
   /** The person's latest message, for suggesting a host whose platform it names. */
   latestRequest?: string
+  /** Absent when the thread already has a teammate or this device may only view. */
+  onAddTeammate?: () => void
 }) {
   useLanguage()
   const host = useHost()
@@ -211,6 +215,19 @@ export function AgentHeader({
               ),
               onSelect: onContinue,
             },
+            ...(onAddTeammate
+              ? [
+                  {
+                    key: 'teammate',
+                    label: (
+                      <>
+                        <Users size={13} /> {translate('Add teammate')}
+                      </>
+                    ),
+                    onSelect: onAddTeammate,
+                  },
+                ]
+              : []),
             ...otherHosts.map(({ host: computer, suggested, low }) => ({
               key: `continue:${computer.id}`,
               disabled: readOnly,

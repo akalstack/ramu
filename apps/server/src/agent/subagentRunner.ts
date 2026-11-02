@@ -1,3 +1,5 @@
+import type { TeammateMode } from '@ramu/shared/types'
+import { redactSecrets } from '../memory/secrets'
 import { selectSubagentSettings } from './subagentSelection'
 import type { BackgroundAnalysis } from './backgroundAnalysis'
 import { capSubagentEffort } from '@ramu/shared/providers/routing'
@@ -61,6 +63,14 @@ export interface SubagentRunnerHost
 }
 
 /** Sub-agents Ramu runs as sessions of their own: spawning, reporting back, mirroring into the parent chat, and redirecting native sub-agent tools. */
+const TEAMMATE_ROUNDS = 4
+
+function teammatePreamble(mode: TeammateMode): string {
+  return mode === 'review'
+    ? "You are a teammate the person added to this thread, working beside its main agent (the lead). You are read-only: read the files and the lead's latest changes and reply with concrete findings, most important first. Do not edit files. When you have nothing to add, say so briefly."
+    : 'You are a teammate the person added to this thread, taking over from its main agent (the lead), which waits while you work. Make the change asked for in this checkout, then hand back with a short summary of what you changed and what is left, so the lead can continue without re-reading everything.'
+}
+
 export class SubagentRunner {
   constructor(private readonly host: SubagentRunnerHost) {}
 
@@ -122,6 +132,17 @@ export class SubagentRunner {
         waiter(result)
         return
       }
+      if (run.teammate) {
+        // A back-and-forth costs a turn on each side, so it pauses for the person after a few rounds.
+        const rounds = (this.teammateRounds.get(run.parentId) ?? 0) + 1
+        this.teammateRounds.set(run.parentId, rounds)
+        if (rounds > TEAMMATE_ROUNDS) {
+          this.host.updateTask(run.parentId, id, {
+            summary: `Paused after ${TEAMMATE_ROUNDS} rounds without you. Message either one to continue.`,
+          })
+          return
+        }
+      }
       if (run.report) void this.reportToParent(run.parentId, taskReportPrompt(run.name, status, result.report))
     }
     // The task stays "running" in its chat until the work is back in the checkout, so the checkout stays reserved and the change capture waits.
@@ -130,6 +151,41 @@ export class SubagentRunner {
         finish(`\n\n(Bringing its changes back failed: ${errorMessage(error)})`),
       )
     else finish('')
+  }
+
+  /** Teammate reports since the person last wrote, per lead. */
+  private readonly teammateRounds = new Map<string, number>()
+
+  /** The person wrote to the lead or the teammate, so the exchange may go on. */
+  resetTeammateRounds(parentId: string) {
+    this.teammateRounds.delete(parentId)
+  }
+
+  /** A teammate keeps its session across turns: a message wakes it, and its next report comes back again. */
+  wakeTeammate(parentId: string, childId: string): boolean {
+    let run = this.children.get(childId)
+    const marker = this.host.events(childId).findLast((event) => event.kind === 'teammate')
+    if (!run && marker?.kind === 'teammate') {
+      // After a restart the run is gone but the session remembers it is a teammate.
+      run = {
+        parentId,
+        name: marker.name,
+        teammate: marker.mode,
+        prompt: '',
+        report: true,
+        settled: true,
+        promptSeen: true,
+        lastText: '',
+        toolUses: 0,
+        startedAt: Date.now(),
+      }
+      this.children.set(childId, run)
+    }
+    if (!run?.teammate || run.parentId !== parentId) return false
+    run.settled = false
+    run.report = true
+    this.host.updateTask(parentId, childId, { status: 'running', summary: undefined })
+    return true
   }
 
   private readonly pendingStarts = new Map<symbol, string>()
@@ -178,16 +234,21 @@ export class SubagentRunner {
     const cap = this.host.preferences()?.subagents.maxConcurrent ?? 3
     if ([...this.children.values()].filter((run) => run.parentId === parentId && !run.settled).length >= cap)
       throw new Error(`${cap} sub-agents are already running. Wait for one to finish, then try again.`)
-    const target = forced
-      ? {
-          settings: { ...this.host.withStep(parent.settings, forced.step), autoFallback: parent.settings.autoFallback },
-          reason: forced.reason,
-          from: parent.provider,
-        }
-      : await this.host.subagentSettings(parentId, input.type)
+    const target = input.settings
+      ? { settings: input.settings, reason: '', from: parent.provider }
+      : forced
+        ? {
+            settings: {
+              ...this.host.withStep(parent.settings, forced.step),
+              autoFallback: parent.settings.autoFallback,
+            },
+            reason: forced.reason,
+            from: parent.provider,
+          }
+        : await this.host.subagentSettings(parentId, input.type)
     const catalogs = await this.host.catalog()
     const selectionPrefs = this.host.preferences()?.subagents
-    if (selectionPrefs) {
+    if (selectionPrefs && !input.settings) {
       if (
         target.settings.provider !== parent.provider &&
         selectionPrefs.autoSelect &&
@@ -254,9 +315,11 @@ export class SubagentRunner {
     } catch {
       // The note is informational; a helper still starts without it.
     }
+    if (input.teammate) this.host.record(child.id, { kind: 'teammate', mode: input.teammate, name })
     const run: ChildRun = {
       parentId,
       name,
+      ...(input.teammate ? { teammate: input.teammate } : {}),
       ...(isolation ? { isolation } : {}),
       ...(input.type ? { type: input.type } : {}),
       prompt: input.prompt,
@@ -275,6 +338,7 @@ export class SubagentRunner {
       name,
       agentType: input.type,
       taskType: 'ramu_agent',
+      ...(input.teammate ? { teammate: input.teammate } : {}),
       childSessionId: child.id,
       status: 'running',
       background: !!input.background,
@@ -297,12 +361,16 @@ export class SubagentRunner {
         : {}),
     })
     const prefs = this.host.preferences()
-    const context = prefs?.subagents.shareContext
-      ? `<chat-context>\nThe conversation so far, for background only:\n${transcriptOf(this.host.events(parentId)).slice(-20_000)}\n</chat-context>\n\n`
-      : ''
+    const context = input.teammate
+      ? `<chat-context>\nThe conversation so far:\n${redactSecrets(transcriptOf(this.host.events(parentId)).slice(-60_000))}\n</chat-context>\n\n`
+      : prefs?.subagents.shareContext
+        ? `<chat-context>\nThe conversation so far, for background only:\n${transcriptOf(this.host.events(parentId)).slice(-20_000)}\n</chat-context>\n\n`
+        : ''
     this.host.launch(
       child.id,
-      `${SUBAGENT_PREAMBLE}\n\n${context}Task: ${input.description.trim()}\n\n${input.prompt}`,
+      input.teammate
+        ? `${teammatePreamble(input.teammate)}\n\n${context}${input.prompt}`
+        : `${SUBAGENT_PREAMBLE}\n\n${context}Task: ${input.description.trim()}\n\n${input.prompt}`,
       null,
       true,
       [],

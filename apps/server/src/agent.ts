@@ -2,6 +2,7 @@
 // queue, goals, routing, sub-agents, ...); this class builds them, wires their hosts and exposes the public API.
 import { mcpRequest, mcpServerDetails } from './agent/mcpStatus'
 import { latestTasks } from '@ramu/shared/chat/agentTasks'
+import { clipText } from '@ramu/shared/text'
 import { PermissionApprovals } from './agent/permissionApprovals'
 import { providerBinary } from './providers/providerBinaries'
 import { DEFAULT_RUNNERS, sameRunnerForAll } from './providers/runners'
@@ -21,6 +22,7 @@ import type {
   SetupOmission,
   Schedule,
   StartedThread,
+  TeammateMode,
 } from '@ramu/shared/types'
 import type { UsageService } from './providers/usage'
 import { loadHelperHistory, type HelperHistoryLoader } from './agent/helperHistory'
@@ -158,6 +160,7 @@ export class AgentService {
       },
       clearProviderWait: (...a) => parts.providerWaits.clearProviderWait(...a),
       continueNative: (...a) => parts.subagents.continueNative(...a),
+      wakeTeammate: (...a) => parts.subagents.wakeTeammate(...a),
       controlGoal: (...a) => parts.goals.controlGoal(...a),
       createSession: (...a) => parts.store.createSession(...a),
       dispatchQueued: (...a) => parts.dispatcher.dispatchQueued(...a),
@@ -821,6 +824,36 @@ export class AgentService {
 
   subagentSettings(...args: Parameters<FallbackRouter['subagentSettings']>) {
     return this.parts.router.subagentSettings(...args)
+  }
+
+  /** Adds a second model the person chose, working beside this thread's agent. One per thread. */
+  async addTeammate(sessionId: string, settings: AgentSettings, mode: TeammateMode, request: string) {
+    const lead = this.get(sessionId)
+    if (lead.parentId) throw new Error('Add a teammate to the main thread, not to a helper.')
+    const existing = latestTasks(this.events(sessionId)).find(
+      (task) => task.teammate && task.status !== 'stopped' && task.status !== 'failed',
+    )
+    if (existing) throw new Error(`This thread already has a teammate, ${existing.name}. Stop it first.`)
+    // Review never writes, whatever the thread allows; Take over cannot exceed the thread's own access.
+    const access = mode === 'review' ? 'edits' : lead.settings.access
+    const name = clipText(settings.model || settings.provider, 60)
+    return this.parts.subagents.spawnSubagent(sessionId, {
+      description: 'Teammate',
+      prompt:
+        request.trim() ||
+        (mode === 'review'
+          ? 'Review what the lead has done so far and reply with your findings.'
+          : 'Take over the latest request and hand back when done.'),
+      background: true,
+      name,
+      settings: { ...settings, access },
+      teammate: mode,
+    })
+  }
+
+  /** The person wrote, so a teammate exchange that paused may continue. */
+  resetTeammateRounds(sessionId: string) {
+    this.parts.subagents.resetTeammateRounds(sessionId)
   }
 
   spawnSubagent(...args: Parameters<SubagentRunner['spawnSubagent']>) {

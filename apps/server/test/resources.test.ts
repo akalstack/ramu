@@ -46,3 +46,21 @@ it('keeps terminal thread methods to this host’s own socket', () => {
   expect(deviceMayInvoke(owner, 'threads.continueHere')).toBe(true)
   expect(deviceMayInvoke(host, 'threads.continueHere')).toBe(false)
 })
+
+it('refuses writing tools to a read-only reviewer, even with full access', async () => {
+  const { createCanUseTool } = await import('../src/agent/permissions')
+  const canUse = createCanUseTool({
+    settings: { provider: 'claude-code', model: '', effort: null, access: 'full', autoFallback: false },
+    pending: new Map(),
+    record: () => {},
+    setState: () => {},
+    readOnly: true,
+  })
+  const signal = new AbortController().signal
+  await expect(canUse('Edit', { file_path: 'a' }, { signal, toolUseID: 't' } as never)).resolves.toMatchObject({
+    behavior: 'deny',
+  })
+  await expect(canUse('Bash', { command: 'rm -rf x' }, { signal, toolUseID: 't' } as never)).resolves.toMatchObject({
+    behavior: 'deny',
+  })
+})
