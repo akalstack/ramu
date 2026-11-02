@@ -5,6 +5,7 @@ import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../../i18n'
 import { useHost } from '../../workspace/HostProvider'
 import { useComputers } from '../../workspace/computers'
+import { offerThreadUndo } from './threadUndo'
 import { animateThreadListChange } from '../../workspace/threadListMotion'
 import { useWorkspace } from '../../workspace/workspace'
 import { errorText } from '../../workspace/TaskPane'
@@ -26,8 +27,8 @@ export function useBulkThreadActions() {
   const { viewOnly, canWrite } = useHostWriteAccess()
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Task[]>([])
-  const run = async (work: () => Promise<unknown>) => {
-    if (!canWrite()) return
+  const run = async (work: () => Promise<unknown>): Promise<boolean> => {
+    if (!canWrite()) return false
     setError(null)
     try {
       await animateThreadListChange(async () => {
@@ -35,8 +36,10 @@ export function useBulkThreadActions() {
         await work()
         await ws.refresh()
       })
+      return true
     } catch (reason) {
       setError(errorText(reason))
+      return false
     }
   }
   const pick = (ids: ReadonlySet<string>) => ws.tasks.filter((task) => ids.has(task.id))
@@ -56,24 +59,45 @@ export function useBulkThreadActions() {
     },
     done(tasks: Task[]) {
       const done = !tasks.every((task) => task.doneAt)
-      void run(async () => {
-        for (const task of tasks) {
-          if (!canWrite()) return
-          if (task.status !== 'archived' && !!task.doneAt !== done && (done ? !busy(task) : true))
-            await host.invoke('tasks.done', task.id, done)
-        }
-        threadSelection.clear()
-      })
+      void (async () => {
+        const changed: string[] = []
+        const finished = await run(async () => {
+          for (const task of tasks) {
+            if (!canWrite()) return
+            if (task.status !== 'archived' && !!task.doneAt !== done && (done ? !busy(task) : true)) {
+              await host.invoke('tasks.done', task.id, done)
+              changed.push(task.id)
+            }
+          }
+          threadSelection.clear()
+        })
+        if (finished && done && changed.length)
+          offerThreadUndo('done', changed.length, () =>
+            run(async () => {
+              for (const id of changed) await host.invoke('tasks.done', id, false)
+            }),
+          )
+      })()
     },
     archive(tasks: Task[]) {
-      void run(async () => {
-        for (const task of tasks) {
-          if (!canWrite()) return
-          await host.invoke('tasks.archive', task.id, true)
-          ws.forgetTask(task.id)
-        }
-        threadSelection.clear()
-      })
+      void (async () => {
+        const archived: string[] = []
+        const finished = await run(async () => {
+          for (const task of tasks) {
+            if (!canWrite()) return
+            await host.invoke('tasks.archive', task.id, true)
+            archived.push(task.id)
+            ws.forgetTask(task.id)
+          }
+          threadSelection.clear()
+        })
+        if (finished && archived.length)
+          offerThreadUndo('archived', archived.length, () =>
+            run(async () => {
+              for (const id of archived) await host.invoke('tasks.archive', id, false)
+            }),
+          )
+      })()
     },
     requestDelete: (tasks: Task[]) => {
       if (canWrite()) setDeleting(tasks)

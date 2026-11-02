@@ -1,4 +1,5 @@
 import { animateThreadListChange } from './workspace/threadListMotion'
+import { offerThreadUndo } from './sidebar/projects/threadUndo'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { DateTime } from 'luxon'
@@ -242,10 +243,16 @@ export function AgentRow({
                 title={task?.doneAt ? t('Reopen') : t('Mark done')}
                 onClick={(e) => {
                   e.stopPropagation()
-                  void animateThreadListChange(async () => {
-                    await invoke('tasks.done', session.taskId, !task?.doneAt)
-                    await ws.refresh()
-                  }).catch((error) => notifyError(errorText(error)))
+                  const marking = !task?.doneAt
+                  const change = (done: boolean) =>
+                    animateThreadListChange(async () => {
+                      await invoke('tasks.done', session.taskId, done)
+                      await ws.refresh()
+                    })
+                  void change(marking).then(
+                    () => marking && offerThreadUndo('done', 1, () => change(false)),
+                    (error) => notifyError(errorText(error)),
+                  )
                 }}
               >
                 {task?.doneAt ? <RotateCcw size={14} /> : <Check size={14} />}

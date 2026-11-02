@@ -24,6 +24,7 @@ import type { MobileProject } from '../runtime/types'
 import { font, radius, space, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
+import { showError, showToast } from '../runtime/toast'
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { useT } from '../i18n'
 import { Button, Sheet, T, type Icon } from './ui'
@@ -135,6 +136,22 @@ export async function confirmChatDeletion(
   }
 }
 
+/**
+ * Offers to bring a thread back after it left the list (marked done or archived). Pinning, reopening and unarchiving
+ * stay where you can see them, so they get no toast.
+ */
+export function offerThreadUndo(store: ReturnType<typeof useStore>, chat: Chat, kind: 'done' | 'archived') {
+  showToast(kind === 'done' ? 'recapDone' : 'threadArchived', {
+    label: 'undo',
+    run: () => {
+      void store
+        .invoke(chat.computerId, kind === 'done' ? 'tasks.done' : 'tasks.archive', chat.taskId, false)
+        .then(() => store.refresh(chat.computerId))
+        .catch((error) => showError(error instanceof Error ? error.message : String(error)))
+    },
+  })
+}
+
 /** One-shot pin/done/archive commands shared by the row's swipe actions. */
 export function useChatCommands(chat: Chat) {
   const store = useStore()
@@ -167,9 +184,17 @@ export function useChatCommands(chat: Chat) {
     archived: chat.status === 'archived',
     done: !!chat.doneAt,
     togglePin: () => run(() => store.invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null)),
-    toggleDone: () => run(() => store.invoke(chat.computerId, 'tasks.done', chat.taskId, !chat.doneAt)),
+    toggleDone: () =>
+      run(async () => {
+        await store.invoke(chat.computerId, 'tasks.done', chat.taskId, !chat.doneAt)
+        if (!chat.doneAt) offerThreadUndo(latestStore.current, chat, 'done')
+      }),
     toggleArchive: () =>
-      run(() => store.invoke(chat.computerId, 'tasks.archive', chat.taskId, chat.status !== 'archived')),
+      run(async () => {
+        const archiving = chat.status !== 'archived'
+        await store.invoke(chat.computerId, 'tasks.archive', chat.taskId, archiving)
+        if (archiving) offerThreadUndo(latestStore.current, chat, 'archived')
+      }),
     /** Asks first; `done` runs after the chat is gone (a chat screen leaves itself). */
     confirmDelete: (done?: () => void, presented?: () => void) => {
       if (!writable() || loading.current) return
@@ -300,7 +325,10 @@ export function ChatActionsSheet({
       onPress: () =>
         void run(async () => {
           await store.invoke(chat.computerId, 'tasks.archive', chat.taskId, !archived)
-          if (!archived) onGone?.()
+          if (!archived) {
+            offerThreadUndo(store, chat, 'archived')
+            onGone?.()
+          }
         }),
     },
     { icon: Trash2, label: say('Delete…'), danger: true, onPress: confirmDelete, group: 'danger' },

@@ -49,6 +49,8 @@ The renderer uses shadcn/ui on Base UI, Tailwind 4 and shared theme tokens. `com
 
 ## Usage limits
 
+Marking threads done or archiving them (one, a project's, or a selection) shows an **Undo** toast on desktop and mobile. Pin, Reopen and Unarchive have none: the thread stays where the person is looking and one click reverses them.
+
 A thread at a usage limit is idle, not failed. Every surface reads **Limit reached · resumes around 5:00 PM** (or **resuming automatically** when the time is a guess); **Paused** means only a goal the person paused. The sidebar clock, Home and Inbox groups, goal bar and mobile transcript all read the thread's `provider-wait` event through `packages/shared/src/chat/providerWait.ts` and `limitPolicy.ts`.
 
 - **Settings → Models → When a usage limit is reached** is one choice: **Switch to another model**, **Wait on this model** or **Stop and let me decide**. It writes `defaultAutoFallback` and `fallback.autoResume` (`settings/LimitChoiceRow.tsx`).

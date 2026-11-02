@@ -31,6 +31,7 @@ vi.mock('../src/workspace/computers', () => ({ useComputers: () => null }))
 vi.mock('../src/workspace/workspace', () => ({
   useWorkspace: () => ({ tasks: state.rows, projects: [], refresh: state.refresh, forgetTask: state.forget }),
 }))
+vi.mock('../src/sidebar/projects/threadUndo', () => ({ offerThreadUndo: vi.fn() }))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: String }))
 vi.mock('../src/sidebar/projects/threadSelection', () => ({
   threadSelection: { clear: state.clear },

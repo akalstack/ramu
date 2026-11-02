@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   notifyError: vi.fn(),
   buttons: [] as ComponentProps<'button'>[],
 }))
+vi.mock('../src/sidebar/projects/threadUndo', () => ({ offerThreadUndo: vi.fn() }))
 vi.mock('../src/i18n', () => ({ useLanguage: () => {}, t: (text: string) => text }))
 vi.mock('../src/ipc', () => ({ invoke: state.invoke }))
 vi.mock('../src/workspace/HostProvider', () => ({

@@ -2,6 +2,7 @@ import { useHostWriteAccess } from './composer/useHostWriteAccess'
 import { ownHostId } from './hosts'
 import { openBrowser, presentBrowser } from './views/browserPane'
 import { animateThreadListChange } from './workspace/threadListMotion'
+import { offerThreadUndo } from './sidebar/projects/threadUndo'
 import { Onboarding } from './Onboarding'
 import { offerPairLink } from './pairLink'
 import { BackgroundActivity } from './chat/BackgroundActivity'
@@ -809,13 +810,24 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
                       {t('Archive')}
                     </>
                   ),
-                  onSelect: () =>
-                    animateThreadListChange(async () => {
+                  onSelect: async () => {
+                    let archived = false
+                    await animateThreadListChange(async () => {
                       if (!canWrite()) return
                       await invoke('tasks.archive', task.id, true)
+                      archived = true
                       ws.forgetTask(task.id)
                       await ws.refresh()
-                    }),
+                    })
+                    if (archived)
+                      offerThreadUndo('archived', 1, () =>
+                        animateThreadListChange(async () => {
+                          if (!canWrite()) return
+                          await invoke('tasks.archive', task.id, false)
+                          await ws.refresh()
+                        }),
+                      )
+                  },
                 },
               ]
             : []),

@@ -62,7 +62,7 @@ import { PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
 import { Arrive, Presence, animateLayout, useReducedMotion } from '../../../components/Motion'
-import { ChatActionsSheet, confirmChatDeletion } from '../../../components/ChatActions'
+import { ChatActionsSheet, confirmChatDeletion, offerThreadUndo } from '../../../components/ChatActions'
 import * as Clipboard from 'expo-clipboard'
 
 /** Turns drawn at a time; a chat can have hundreds. */
@@ -821,7 +821,11 @@ export default function ChatScreen() {
                               .invoke(chat.computerId, 'tasks.archive', chat.taskId, archiving)
                               .then(() => store.refresh(chat.computerId))
                               // Archiving leaves the thread, as the sheet's Archive does.
-                              .then(() => archiving && goBackOrHome(router))
+                              .then(() => {
+                                if (!archiving) return
+                                offerThreadUndo(latestStore.current, chat, 'archived')
+                                goBackOrHome(router)
+                              })
                               .catch((error) => say(String(error)))
                           },
                         },

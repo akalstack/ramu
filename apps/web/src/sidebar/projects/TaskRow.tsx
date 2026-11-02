@@ -34,6 +34,7 @@ import { WorkspaceNameDialog } from '../../workspace/WorkspaceNameDialog'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS } from './constants'
 import { InlineEdit } from './InlineEdit'
 import { TaskStateIcon } from './TaskStateIcon'
+import { offerThreadUndo } from './threadUndo'
 import { ThreadHoverCard } from './ThreadHoverCard'
 import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
@@ -107,8 +108,8 @@ export function TaskRow({
   const { viewOnly, canWrite } = useHostWriteAccess()
   const titleRequest = useRef(false)
 
-  const run = async (fn: () => Promise<unknown>) => {
-    if (!canWrite()) return
+  const run = async (fn: () => Promise<unknown>): Promise<boolean> => {
+    if (!canWrite()) return false
     setError(null)
     try {
       await animateThreadListChange(async () => {
@@ -116,9 +117,22 @@ export function TaskRow({
         await fn()
         await refresh()
       })
+      return true
     } catch (e) {
       setError(errorText(e))
+      return false
     }
+  }
+  const markDone = async () => {
+    const changed = await run(() => host.invoke('tasks.done', task.id, true))
+    if (changed) offerThreadUndo('done', 1, () => run(() => host.invoke('tasks.done', task.id, false)))
+  }
+  const archive = async () => {
+    const changed = await run(async () => {
+      await host.invoke('tasks.archive', task.id, true)
+      forget()
+    })
+    if (changed) offerThreadUndo('archived', 1, () => run(() => host.invoke('tasks.archive', task.id, false)))
   }
 
   const group = selected && picked.size > 1 && bulk ? bulk.pick(picked) : null
@@ -266,7 +280,7 @@ export function TaskRow({
               </>
             ),
             disabled: !done && (task.status === 'running' || task.status === 'needs-input'),
-            onSelect: () => void run(() => host.invoke('tasks.done', task.id, !done)),
+            onSelect: () => void (done ? run(() => host.invoke('tasks.done', task.id, false)) : markDone()),
           },
         ]
       : []),
@@ -287,11 +301,7 @@ export function TaskRow({
               <Archive size={14} /> {t(' Archive')}
             </>
           ),
-          onSelect: () =>
-            void run(async () => {
-              await host.invoke('tasks.archive', task.id, true)
-              forget()
-            }),
+          onSelect: () => void archive(),
         },
     ...(onScreen && ws?.ui.openTaskIds.includes(task.id)
       ? [
@@ -473,13 +483,9 @@ export function TaskRow({
               title={archived ? t('Unarchive') : done ? t('Reopen') : t('Mark done')}
               onClick={(e) => {
                 e.stopPropagation()
-                void run(async () => {
-                  if (archived) {
-                    await host.invoke('tasks.archive', task.id, false)
-                  } else {
-                    await host.invoke('tasks.done', task.id, !done)
-                  }
-                })
+                if (archived) void run(() => host.invoke('tasks.archive', task.id, false))
+                else if (done) void run(() => host.invoke('tasks.done', task.id, false))
+                else void markDone()
               }}
             >
               {archived ? <ArchiveRestore size={14} /> : done ? <RotateCcw size={14} /> : <Check size={14} />}

@@ -1,6 +1,7 @@
 import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../composer/viewerAccess'
 import { animateThreadListChange } from '../../workspace/threadListMotion'
+import { offerThreadUndo } from './threadUndo'
 import { Button } from '@/components/desktop-button'
 import {
   Archive,
@@ -78,8 +79,8 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
     }
   }
 
-  const act = async (fn: () => Promise<unknown>) => {
-    if (!canWrite()) return
+  const act = async (fn: () => Promise<unknown>): Promise<boolean> => {
+    if (!canWrite()) return false
     setError(null)
     try {
       await animateThreadListChange(async () => {
@@ -87,8 +88,10 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
         await fn()
         await ws.refresh()
       })
+      return true
     } catch (e) {
       setError(errorText(e))
+      return false
     }
   }
 
@@ -178,13 +181,23 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
       ),
       disabled: tasks.length === 0,
       onSelect: () =>
-        void act(async () => {
-          for (const t of tasks) {
-            if (!canWrite()) return
-            await host.invoke('tasks.archive', t.id, true)
-            ws.forgetTask(t.id)
-          }
-        }),
+        void (async () => {
+          const archived: string[] = []
+          const finished = await act(async () => {
+            for (const t of tasks) {
+              if (!canWrite()) return
+              await host.invoke('tasks.archive', t.id, true)
+              archived.push(t.id)
+              ws.forgetTask(t.id)
+            }
+          })
+          if (finished && archived.length)
+            offerThreadUndo('archived', archived.length, () =>
+              act(async () => {
+                for (const id of archived) await host.invoke('tasks.archive', id, false)
+              }),
+            )
+        })(),
     },
     { key: 'sep3', separator: true },
     {
