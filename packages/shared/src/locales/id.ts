@@ -3321,6 +3321,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Answering a sub-agent': 'Menjawab sub-agen',
   Used: 'Memakai',
   Details: 'Detail',
+  'Full access · {0} of {1} permissions': 'Akses penuh · {0} dari {1} izin',
+  '{0}, {1}, last seen {2}': '{0}, {1}, terakhir terlihat {2}',
+  'last seen {0}': 'terakhir terlihat {0}',
+  'Creates a one-time code for a phone or another host. With Discoverable on, nearby devices can also ask, and you allow them here.':
+    'Membuat kode sekali pakai untuk ponsel atau host lain. Saat Dapat ditemukan aktif, perangkat sekitar juga bisa meminta, dan Anda mengizinkannya di sini.',
+  'What this computer may do there': 'Yang boleh dilakukan komputer ini di sana',
   'Not connected. Pull requests, builds and issues need an Atlassian API token.':
     'Belum terhubung. Pull request, build, dan issue memerlukan API token Atlassian.',
   'saved on this host': 'tersimpan di host ini',

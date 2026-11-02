@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { SETTINGS_CARD_LINE, SettingsCard } from './cards'
+import { SETTINGS_CARD_LINE } from './cards'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -21,9 +21,12 @@ import type {
   AgentHostSummary,
   Computer,
   Computers as ComputerList,
+  NetworkDevice,
   NetworkStatus,
   PairingOffer,
 } from '@ramu/shared/types'
+import { DEVICE_PERMISSIONS } from '@ramu/shared/devicePermissions'
+import { RowButton } from '@/components/row-button'
 import { Dialog as ConfirmDialog, Dropdown, timeAgo } from '../Menu'
 import { learnedRoutes } from '@ramu/shared/hostProof'
 import { hostOfUrl, networkName, VIRTUAL_INTERFACE } from '@ramu/shared/networkLabel'
@@ -301,7 +304,9 @@ function ThisComputer() {
           title={t('Pair a device')}
           help={
             status.listening
-              ? t('Creates a one-time code for a phone or another host. Enter it on that device.')
+              ? t(
+                  'Creates a one-time code for a phone or another host. With Discoverable on, nearby devices can also ask, and you allow them here.',
+                )
               : t('Turn on access above first.')
           }
         />
@@ -318,39 +323,12 @@ function ThisComputer() {
       <SettingsGroupTitle className="mt-5">{t('Devices that can use this host')}</SettingsGroupTitle>
       <PermissionRequests status={status} invoke={changePermission} />
       {status.devices.map((device) => (
-        <SettingsCard
+        <PairedDeviceRow
           key={device.id}
-          className="mb-3 gap-2 px-4 py-3"
-          title={device.name}
-          meta={
-            <span className="whitespace-normal">
-              {`${device.kind === 'host' ? t('Another host’s agents: start and follow threads only') : device.role === 'viewer' ? t('Viewer') : t('Full access')} · ${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t(
-                'Paired {0} · last seen {1}',
-                {
-                  0: new Date(device.createdAt).toLocaleDateString(),
-                  1: device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never'),
-                },
-              )}`}
-            </span>
-          }
-          actions={
-            <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setRevoking(device.id)}>
-              {t('Revoke')}
-            </Button>
-          }
-        >
-          {device.kind === 'host' ? (
-            <div className={`${SETTINGS_CARD_LINE} mt-2 border-t border-border pt-3`}>
-              <SettingsLabel
-                title={t('Most access for its threads')}
-                help={t('Threads this host’s agents start here never get more, whatever they ask for.')}
-              />
-              <HostCeiling deviceId={device.id} value={device.maxAccess ?? 'edits'} invoke={changePermission} />
-            </div>
-          ) : (
-            <DevicePermissionList device={device} invoke={changePermission} />
-          )}
-        </SettingsCard>
+          device={device}
+          invoke={changePermission}
+          onRevoke={() => setRevoking(device.id)}
+        />
       ))}
       {!status.devices.length && (
         <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">{t('No devices paired yet.')}</p>
@@ -901,7 +879,19 @@ function Computers({ state }: { state: ComputerList }) {
               </div>
             </div>
             {!computer.local && computer.status === 'connected' && (
-              <ThisDevicePermissions computer={computer} agents={agents} />
+              <Collapsible className="mt-2">
+                <CollapsibleTrigger
+                  render={
+                    <Button variant="ghost" size="sm" className="group/perm -ml-2 text-caption text-muted-foreground" />
+                  }
+                >
+                  {t('What this computer may do there')}
+                  <ChevronDown size={14} className="transition-transform group-data-[panel-open]/perm:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <ThisDevicePermissions computer={computer} agents={agents} />
+                </CollapsibleContent>
+              </Collapsible>
             )}
           </article>
         ))}
@@ -1353,5 +1343,77 @@ function lifetimeOptions(current: number | 'never', saved: boolean) {
     (a, b) =>
       Number(a.value === 'never' || a.value === 'default') - Number(b.value === 'never' || b.value === 'default') ||
       Number(a.value) - Number(b.value),
+  )
+}
+
+/** What a paired device may do, in a few words for its collapsed row. */
+function deviceSummary(device: NetworkDevice): string {
+  if (device.kind === 'host') return t('Another host’s agents: start and follow threads only')
+  if (device.role === 'viewer') return t('Viewer')
+  if (!device.permissions) return t('Full access')
+  const allowed = DEVICE_PERMISSIONS.filter((permission) => device.permissions?.[permission]).length
+  return t('Full access · {0} of {1} permissions', { 0: allowed, 1: DEVICE_PERMISSIONS.length })
+}
+
+/**
+ * One paired device as a single row: name, what it may do and when it was last seen. Its permissions, dates and Revoke
+ * open below it, so a long list of devices stays scannable.
+ */
+function PairedDeviceRow({
+  device,
+  invoke,
+  onRevoke,
+}: {
+  device: NetworkDevice
+  invoke: Parameters<typeof DevicePermissionList>[0]['invoke']
+  onRevoke: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const seen = device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never')
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} render={<SettingsRow className="settings-stack gap-0 py-2.5" />}>
+      <CollapsibleTrigger
+        render={
+          <RowButton
+            size="lg"
+            className="-mx-2 w-[calc(100%+16px)] rounded-(--radius-s) px-2"
+            aria-label={t('{0}, {1}, last seen {2}', { 0: device.name, 1: deviceSummary(device), 2: seen })}
+          />
+        }
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate text-control font-medium text-foreground">{device.name}</span>
+          <span className="truncate text-caption text-muted-foreground">
+            {`${deviceSummary(device)} · ${t('last seen {0}', { 0: seen })}`}
+          </span>
+        </span>
+        <ChevronDown
+          size={16}
+          className={`flex-none text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-2 pt-2">
+        {device.kind === 'host' ? (
+          <div className={SETTINGS_CARD_LINE}>
+            <SettingsLabel
+              title={t('Most access for its threads')}
+              help={t('Threads this host’s agents start here never get more, whatever they ask for.')}
+            />
+            <HostCeiling deviceId={device.id} value={device.maxAccess ?? 'edits'} invoke={invoke} />
+          </div>
+        ) : (
+          <DevicePermissionList device={device} invoke={invoke} />
+        )}
+        <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+          <span className="text-caption text-muted-foreground">
+            {`${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t('Paired {0}', { 0: new Date(device.createdAt).toLocaleDateString() })}`}
+          </span>
+          <Button variant="secondary" size="sm" className="bg-fill hover:bg-fill-hover" onClick={onRevoke}>
+            {t('Revoke')}
+          </Button>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
