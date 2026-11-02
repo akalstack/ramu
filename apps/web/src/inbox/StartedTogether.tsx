@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
 import { groupSummary, startedGroups, type GroupMemberState } from '@ramu/shared/workspace/startedGroups'
-import { FadeText } from './FadeText'
-import { FeedSection } from './HomeSection'
-import { t, useLanguage } from './i18n'
-import { useComputers } from './workspace/computers'
-import { useHostSelection } from './workspace/HostSelection'
-import { useWorkspacesOf } from './workspace/workspace'
+import { FadeText } from '../FadeText'
+import { FeedSection } from '../HomeSection'
+import { t, useLanguage } from '../i18n'
+import { useComputers } from '../workspace/computers'
+import { useHostSelection } from '../workspace/HostSelection'
+import { useWorkspacesOf } from '../workspace/workspace'
 
 const STATE_LABEL: Record<GroupMemberState, string> = {
   running: 'Working',
@@ -15,8 +15,8 @@ const STATE_LABEL: Record<GroupMemberState, string> = {
   stopped: 'Stopped',
 }
 
-/** Threads one Home prompt started together, across connected hosts, each a click away. */
-export function HomeGroups() {
+/** Threads one prompt started together, across connected hosts, each a click away. */
+export function StartedTogether() {
   useLanguage()
   const computers = useComputers()
   const { select } = useHostSelection()
@@ -47,7 +47,7 @@ export function HomeGroups() {
             <p className="m-0 text-caption text-muted-foreground" role="status">
               {t(summary.text, summary.values)}
             </p>
-            {/* The same row as Home's other agent lists, so a group reads like the threads around it. */}
+            {/* The same row as other agent lists, so a group reads like the threads around it. */}
             <div className="@container -mx-2.5 flex flex-col gap-px">
               {group.members.map((member) => {
                 const open = () => select(member.hostId, { kind: 'task', taskId: member.task.id })
