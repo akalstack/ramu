@@ -19,7 +19,7 @@ import { AutomationProvider } from '../runtime/automation'
 
 // Deep links (and notification taps) into a sheet or chat still get the tabs underneath,
 // so sheets present as sheets and back always has somewhere to go.
-export const unstable_settings = { initialRouteName: '(tabs)' }
+export const unstable_settings = { anchor: '(tabs)' }
 
 function Navigator() {
   const { c, scheme } = useTheme()
