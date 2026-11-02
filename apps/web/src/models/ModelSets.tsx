@@ -71,6 +71,18 @@ export function ModelSetsProvider({ children }: { children: ReactNode }) {
   const requests = useRef(0)
   const edits = useRef(0)
   const pushed = useRef<ModelPreferences | null>(null)
+  // The shell stays mounted across hosts. An uncached host keeps the last answer for the moment its own takes to
+  // arrive, because clearing it would swap the whole shell for the boot screen.
+  const [shownHost, setShownHost] = useState(hostId)
+  if (shownHost !== hostId) {
+    const cached = cachedModelSets(hostId)
+    setShownHost(hostId)
+    setError(null)
+    if (cached) {
+      setPreferences(cached.preferences)
+      setCatalogs(cached.catalogs)
+    }
+  }
   const providerSelection = JSON.stringify(app.preferences.providerBinaries)
   useEffect(() => {
     let disposed = false

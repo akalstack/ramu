@@ -60,3 +60,26 @@ it('bounds local and remote project previews, keeps an older active thread, and 
   expect(projectThreadPreview(tasks, 'project', 3, true).tasks).toHaveLength(15)
   expect(projectThreadPreview(tasks, 'empty', 3, false)).toEqual({ tasks: [], hasMore: false })
 })
+
+it('bounds projectless threads like a project and keeps every host source when merging', async () => {
+  const { mergedThreads, projectThreadPreview } = await import('../src/sidebar/projects/threadLists')
+  const loose = Array.from({ length: 8 }, (_, i) => task(`loose-${i}`, { projectId: NO_PROJECT, lastActiveAt: 10 - i }))
+  const preview = projectThreadPreview(loose, NO_PROJECT, 5, false)
+  expect(preview.tasks).toHaveLength(5)
+  expect(preview.hasMore).toBe(true)
+
+  const merged = mergedThreads(
+    [
+      { host: 'a', done: [task('one')] },
+      { host: 'b', done: [task('two')] },
+    ],
+    (source) => source.done,
+  )
+  expect(merged.map(({ task, source }) => `${source.host}:${task.id}`)).toEqual(['a:one', 'b:two'])
+})
+
+it('keeps a host tree key independent of which host is on screen', async () => {
+  const { sidebarTreeKey } = await import('../src/sidebar/projects/threadLists')
+  expect(sidebarTreeKey('own', 'own', 'project:p')).toBe('project:p')
+  expect(sidebarTreeKey('mini', 'own', 'project:p')).toBe('host:mini:project:p')
+})

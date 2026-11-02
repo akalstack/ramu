@@ -338,7 +338,7 @@ export function TaskRow({
     : items
   const contextMenu = useContextMenu(`${task.title} actions`, group && !viewOnly ? groupItems : shownItems)
 
-  const status = threadStatus(task, onScreen && !!ws?.unread.has(task.id), task.goalState)
+  const status = threadStatus(task, !!ws?.unread.has(task.id), task.goalState)
   return (
     <>
       <HoverCard open={hover && !renaming} onOpenChange={setHover}>
@@ -491,7 +491,7 @@ export function TaskRow({
               {archived ? <ArchiveRestore size={14} /> : done ? <RotateCcw size={14} /> : <Check size={14} />}
             </Button>
           </span>
-          <TaskStateIcon task={task} unread={onScreen && !!ws?.unread.has(task.id)} />
+          <TaskStateIcon task={task} unread={!!ws?.unread.has(task.id)} />
         </HoverCardTrigger>
         <ThreadHoverCard
           task={task}

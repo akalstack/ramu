@@ -15,11 +15,10 @@ import { NO_PROJECT, type Computer, type Project, type Task } from '@ramu/shared
 import { Button } from '@/components/desktop-button'
 import { useComputers, StatusDot, activityText, statusText } from '../workspace/computers'
 import { rememberHostRows, useHostOverviews } from '../workspace/hostOverview'
-import { HostScope, useWorkspace, useWorkspaceOf, useWorkspacesOf, type WorkspaceApi } from '../workspace/workspace'
+import { HostScope, useWorkspaceOf, useWorkspacesOf } from '../workspace/workspace'
 import { useHostSelection } from '../workspace/HostSelection'
 import { useAppSettings } from '../settings/AppSettings'
 import { useAddProject } from '../workspace/addProject'
-import { ownHostId } from '../hosts'
 import { t, useLanguage } from '../i18n'
 import { FadeText } from '../FadeText'
 import { ProjectsPanel } from './ProjectsPanel'
@@ -27,17 +26,10 @@ import { TaskRow } from './projects/TaskRow'
 import { SectionHead } from './projects/SectionHead'
 import { Collapse } from './projects/Collapse'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, pinnedFirst, STICKY_PROJECT_CLASS } from './projects/constants'
-import { sidebarThreads, projectThreadPreview } from './projects/threadLists'
+import { mergedThreads, sidebarThreads } from './projects/threadLists'
+import { useSidebarExpansion } from './projects/sidebarExpansion'
+import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 import { hostRows } from './hostRows'
-
-/**
- * Where the sidebar keeps which host groups and sections are open: the window's own store, so the tree does not jump
- * when another host's store comes on screen.
- */
-function useSidebarChrome(): WorkspaceApi {
-  const active = useWorkspace()
-  return useWorkspaceOf(ownHostId()) ?? active
-}
 
 /** One host's rows: from its own store once loaded (live, no polling), else from its last known overview. */
 function useHostGroupRows(id: string) {
@@ -56,25 +48,40 @@ export function HostProjects() {
   const state = useComputers()
   const { preferences } = useAppSettings()
   const { activeHost } = useHostSelection()
+  // Relative labels keep aging even when no provider event re-renders the list.
+  const [, setTimeTick] = useState(0)
+  useEffect(() => {
+    const timer = window.setInterval(() => setTimeTick((tick) => tick + 1), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
   if (!state || state.computers.length < 2) return <ProjectsPanel />
-  if (!state.scope && preferences.recentChatMode)
-    return <MergedRecent computers={state.computers} current={activeHost} />
   const scoped = state.scope ? state.computers.filter((computer) => computer.id === state.scope) : state.computers
   return (
-    <div className={`flex flex-col gap-3 pb-4 pt-1 ${state.scope ? '' : 'px-2'}`}>
-      {scoped.map((computer) => (
-        <HostGroup key={computer.id} computer={computer} current={computer.id === activeHost} grouped={!state.scope} />
-      ))}
+    <div
+      className={`flex flex-col gap-2 pb-4 pt-1 ${state.scope ? '' : 'px-2 [&>section+section]:border-t [&>section+section]:border-border [&>section+section]:pt-2'}`}
+    >
+      {!state.scope && preferences.recentChatMode ? (
+        <MergedRecent computers={state.computers} />
+      ) : (
+        scoped.map((computer) => (
+          <HostGroup
+            key={computer.id}
+            computer={computer}
+            current={computer.id === activeHost}
+            grouped={!state.scope}
+          />
+        ))
+      )}
+      {!state.scope && <MergedDone computers={state.computers} />}
     </div>
   )
 }
 
 function HostGroup({ computer, current, grouped }: { computer: Computer; current: boolean; grouped: boolean }) {
-  const chrome = useSidebarChrome()
+  const tree = useSidebarExpansion(computer.id)
   const { select } = useHostSelection()
   const addProject = useAddProject(computer.id)
-  const key = `host:${computer.id}`
-  const open = !grouped || chrome.isExpanded(key)
+  const open = !grouped || tree.isExpanded('host')
   const available = computer.status === 'connected'
   return (
     <section
@@ -85,10 +92,10 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
       {grouped && (
         <div className="group/host sticky top-0 z-[6] flex min-h-8 items-center gap-0.5 bg-(--sidebar) px-1">
           <SidebarDisclosureButton
-            className="flex-1"
+            className="flex-1 text-foreground"
             title={computer.name}
             aria-expanded={open}
-            onClick={() => chrome.setExpanded(key, !open)}
+            onClick={() => tree.setExpanded('host', !open)}
           >
             <ChevronDown size={12} className={`flex-none transition-transform ${open ? '' : '-rotate-90'}`} />
             <span className="inline-flex flex-none items-center" title={activityText(computer)}>
@@ -146,7 +153,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
 
 /** A host that is not on screen: its rows act on that host's store and open there through the selection. */
 function OtherHostProjects({ computer, embedded }: { computer: Computer; embedded: boolean }) {
-  const chrome = useSidebarChrome()
+  const tree = useSidebarExpansion(computer.id)
   const { select } = useHostSelection()
   const { preferences } = useAppSettings()
   const rows = useHostGroupRows(computer.id)
@@ -156,12 +163,23 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
   const { active, done } = sidebarThreads(all)
   const pinned = active.filter((task) => task.pinnedAt).sort(pinnedFirst)
   const loose = active.filter((task) => task.projectId === NO_PROJECT && !task.pinnedAt).sort(pinnedFirst)
-  const projectsKey = `host:${computer.id}:projects`
-  const projectsOpen = embedded || chrome.isExpanded(projectsKey)
-  const section = (name: string, tasks: Task[], hidePin = false, action?: React.ReactNode) => {
+  const loosePreview = useThreadPreview(
+    computer.id,
+    all,
+    NO_PROJECT,
+    Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT),
+  )
+  const projectsDomId = `host:${computer.id}:projects`
+  const projectsOpen = embedded || tree.isExpanded('section:projects')
+  const section = (
+    name: string,
+    id: string,
+    tasks: Task[],
+    { hidePin = false, action, body }: { hidePin?: boolean; action?: React.ReactNode; body?: React.ReactNode } = {},
+  ) => {
     if (!tasks.length) return null
-    const key = `host:${computer.id}:${name}`
-    const open = chrome.isExpanded(key)
+    const key = `host:${computer.id}:${id}`
+    const open = tree.isExpanded(id)
     return (
       <>
         <SectionHead
@@ -169,20 +187,21 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
           icon={name === 'Done' ? CheckCheck : name === 'Pinned' ? Pin : MessageCircle}
           count={name === 'Done' ? tasks.length : undefined}
           open={open}
-          onToggle={() => chrome.setExpanded(key, !open)}
+          onToggle={() => tree.setExpanded(id, !open)}
           controls={key}
         >
           {action}
         </SectionHead>
         <Collapse id={key} open={open} className="flex flex-col gap-0.5">
-          {tasks.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              hidePin={hidePin}
-              projectName={name === 'Threads' ? undefined : projects.find((p) => p.id === task.projectId)?.name}
-            />
-          ))}
+          {body ??
+            tasks.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                hidePin={hidePin}
+                projectName={name === 'Threads' ? undefined : projects.find((p) => p.id === task.projectId)?.name}
+              />
+            ))}
         </Collapse>
       </>
     )
@@ -206,17 +225,17 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
             {t('Some host activity could not be loaded.')}
           </p>
         ) : null}
-        {section('Pinned', pinned, true)}
+        {section('Pinned', 'section:pinned', pinned, { hidePin: true })}
         {!embedded && (
           <SectionHead
             title={preferences.recentChatMode ? t('Recent threads') : t('Projects')}
             icon={preferences.recentChatMode ? MessageCircle : FolderClosed}
             open={projectsOpen}
-            onToggle={() => chrome.setExpanded(projectsKey, !projectsOpen)}
-            controls={projectsKey}
+            onToggle={() => tree.setExpanded('section:projects', !projectsOpen)}
+            controls={projectsDomId}
           />
         )}
-        <Collapse open={projectsOpen} id={projectsKey}>
+        <Collapse open={projectsOpen} id={projectsDomId}>
           {preferences.recentChatMode
             ? active
                 .filter((task) => !task.pinnedAt)
@@ -235,27 +254,27 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
                   project={project}
                   tasks={all}
                   available={available}
-                  limit={embedded ? Math.min(preferences.recentChats, 5) : preferences.recentChats}
+                  limit={embedded ? Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT) : preferences.recentChats}
                 />
               ))}
         </Collapse>
         {!preferences.recentChatMode &&
-          section(
-            'Threads',
-            loose,
-            false,
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={ICON_BUTTON_CLASS}
-              disabled={!available}
-              aria-label={t('New thread without a project')}
-              onClick={() => select(computer.id, { kind: 'new', projectId: NO_PROJECT })}
-            >
-              <Plus size={14} />
-            </Button>,
-          )}
-        {section('Done', done)}
+          section('Threads', 'section:chats', loose, {
+            body: embedded ? <ThreadPreviewList preview={loosePreview} /> : undefined,
+            action: (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={ICON_BUTTON_CLASS}
+                disabled={!available}
+                aria-label={t('New thread without a project')}
+                onClick={() => select(computer.id, { kind: 'new', projectId: NO_PROJECT })}
+              >
+                <Plus size={14} />
+              </Button>
+            ),
+          })}
+        {!embedded && section('Done', 'section:done', done)}
         {rows.known && !projects.length && !all.length && (
           <p className="px-2 py-1 text-caption text-muted-foreground">{t('No threads yet')}</p>
         )}
@@ -277,12 +296,11 @@ function OtherHostProject({
   available: boolean
   limit: number
 }) {
-  const chrome = useSidebarChrome()
+  const tree = useSidebarExpansion(host)
   const { select } = useHostSelection()
-  const key = `host:${host}:project:${project.id}`
-  const open = chrome.isExpanded(key)
-  const [showAll, setShowAll] = useState(false)
-  const { tasks, hasMore } = projectThreadPreview(all, project.id, limit, showAll)
+  const key = `project:${project.id}`
+  const open = tree.isExpanded(key)
+  const preview = useThreadPreview(host, all, project.id, limit)
   const openProject = () => select(host, { kind: 'project', projectId: project.id })
   return (
     <section className="project-group mb-0 [&:has(.task-list)]:mb-2.5 relative">
@@ -296,7 +314,7 @@ function OtherHostProject({
           className="project-row group/project flex min-h-[30px] items-center gap-2 rounded-(--radius-s) px-2 text-body leading-5 text-soft hover:bg-accent hover:text-foreground"
           onClick={() => {
             if (available) {
-              chrome.setExpanded(key, true)
+              tree.setExpanded(key, true)
               openProject()
             }
           }}
@@ -324,7 +342,7 @@ function OtherHostProject({
               title={open ? t('Collapse') : t('Expand')}
               onClick={(event) => {
                 event.stopPropagation()
-                chrome.setExpanded(key, !open)
+                tree.setExpanded(key, !open)
               }}
             >
               <ChevronRight size={14} className={open ? 'rotate-90' : ''} />
@@ -346,69 +364,74 @@ function OtherHostProject({
           </span>
         </div>
       </div>
-      {open && (
-        <div className="task-list relative flex flex-col gap-0.5 pt-0.5 before:pointer-events-none before:absolute before:bottom-2 before:left-[15px] before:top-1 before:w-px before:bg-border before:content-['']">
-          {tasks.map((task) => (
-            <TaskRow key={task.id} task={task} nested />
-          ))}
-          {!tasks.length && (
-            <div className="muted text-muted-foreground small text-caption empty-tasks p-[4px_10px_4px_31px]">
-              {t('No threads yet')}
-            </div>
-          )}
-          {hasMore && (
-            <Button
-              variant="tree"
-              className="h-[30px] min-h-[30px] gap-2 pl-[31px] pr-2 text-body leading-5 hover:bg-accent"
-              aria-expanded={showAll}
-              onClick={() => setShowAll(!showAll)}
-            >
-              {showAll ? t('Show less') : t('Show more')}
-              <ChevronDown size={14} className={showAll ? 'rotate-180' : ''} />
-            </Button>
-          )}
-        </div>
-      )}
+      {open && <ThreadPreviewList preview={preview} />}
     </section>
   )
 }
 
-/** Activity mode with every host selected: one list by recency, each row naming its project and host. */
-function MergedRecent({ computers, current }: { computers: Computer[]; current: string }) {
-  const ws = useWorkspace()
-  const remotes = computers.filter((computer) => computer.id !== current)
-  const ids = remotes.map((computer) => computer.id)
+/** Every host's threads on equal terms: the same stores and rows whichever host is on screen. */
+function useHostThreads(computers: Computer[]) {
+  const ids = computers.map((computer) => computer.id)
   const stores = useWorkspacesOf(ids)
   const overviews = useHostOverviews(ids, (id) => !!stores[ids.indexOf(id)])
-  const rows = [
-    ...sidebarThreads(ws.tasks).active.map((task) => ({
-      task,
-      projectName: ws.projects.find((p) => p.id === task.projectId)?.name,
-      host: null as string | null,
-      store: null as WorkspaceApi | null,
-    })),
-    ...remotes.flatMap((computer, index) => {
-      const store = stores[index] ?? null
-      const source = hostRows({ store, overview: overviews[index] })
-      return sidebarThreads(source.tasks).active.map((task) => ({
-        task,
-        projectName: source.projects.find((p) => p.id === task.projectId)?.name,
-        host: computer.id as string | null,
-        store,
-      }))
-    }),
-  ].sort((a, b) => Number(!!b.task.pinnedAt) - Number(!!a.task.pinnedAt) || b.task.lastActiveAt - a.task.lastActiveAt)
+  return computers.map((computer, index) => {
+    const source = hostRows({ store: stores[index] ?? null, overview: overviews[index] })
+    return {
+      host: computer.id,
+      store: stores[index] ?? null,
+      projects: source.projects,
+      ...sidebarThreads(source.tasks),
+    }
+  })
+}
+
+type HostThreads = ReturnType<typeof useHostThreads>[number]
+
+function MergedRow({ task, source }: { task: Task; source: HostThreads }) {
   return (
-    <div className="flex flex-col gap-0.5 px-2 pb-4 pt-1">
-      {rows.map(({ task, projectName, host, store }) =>
-        host ? (
-          <HostScope key={`${host}:${task.id}`} host={host} store={store}>
-            <TaskRow task={task} projectName={projectName} merged />
-          </HostScope>
-        ) : (
-          <TaskRow key={`${current}:${task.id}`} task={task} projectName={projectName} merged />
-        ),
-      )}
-    </div>
+    <HostScope host={source.host} store={source.store}>
+      <TaskRow task={task} projectName={source.projects.find((p) => p.id === task.projectId)?.name} merged />
+    </HostScope>
+  )
+}
+
+/** Activity mode with every host selected: one list by recency, each row naming its project and host. */
+function MergedRecent({ computers }: { computers: Computer[] }) {
+  const rows = mergedThreads(useHostThreads(computers), (source) => source.active).sort(
+    (a, b) => Number(!!b.task.pinnedAt) - Number(!!a.task.pinnedAt) || b.task.lastActiveAt - a.task.lastActiveAt,
+  )
+  return (
+    <section className="flex min-w-0 flex-col gap-0.5">
+      {rows.map(({ task, source }) => (
+        <MergedRow key={`${source.host}:${task.id}`} task={task} source={source} />
+      ))}
+    </section>
+  )
+}
+
+/** Finished work is one list across hosts, so it does not interrupt each host's projects. */
+function MergedDone({ computers }: { computers: Computer[] }) {
+  const tree = useSidebarExpansion()
+  const rows = mergedThreads(useHostThreads(computers), (source) => source.done).sort(
+    (a, b) => b.task.doneAt! - a.task.doneAt!,
+  )
+  if (!rows.length) return null
+  const open = tree.isExpanded('section:done')
+  return (
+    <section className="min-w-0">
+      <SectionHead
+        title={t('Done')}
+        icon={CheckCheck}
+        count={rows.length}
+        open={open}
+        onToggle={() => tree.setExpanded('section:done', !open)}
+        controls="all-hosts-done"
+      />
+      <Collapse open={open} id="all-hosts-done" className="flex flex-col gap-0.5">
+        {rows.map(({ task, source }) => (
+          <MergedRow key={`${source.host}:${task.id}`} task={task} source={source} />
+        ))}
+      </Collapse>
+    </section>
   )
 }

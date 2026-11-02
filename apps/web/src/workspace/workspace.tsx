@@ -258,6 +258,27 @@ export function useWorkspacesOf(hosts: readonly string[]): (WorkspaceApi | null)
   return useMemo(() => (key ? key.split('\n') : []).map((host) => published.get(host) ?? null), [key, version])
 }
 
+/** What the shell needs from a host's store, so the one shell can follow whichever host is on screen. */
+interface HostShell {
+  api: WorkspaceApi
+  actions: WorkspaceActions
+  runtime: HostRuntime
+  loaded: boolean
+}
+const shells = new Map<string, HostShell>()
+const shellListeners = new Set<() => void>()
+const publishShell = (host: string, shell: HostShell | null) => {
+  if (shell) shells.set(host, shell)
+  else shells.delete(host)
+  for (const listener of shellListeners) listener()
+}
+const subscribeShells = (listener: () => void) => {
+  shellListeners.add(listener)
+  return () => {
+    shellListeners.delete(listener)
+  }
+}
+
 const ScopeCtx = createContext<{ store: WorkspaceApi | null } | null>(null)
 /**
  * Rows of one host, shown inside another host's shell (the sidebar's host groups): below it `useHost()` is that host
@@ -288,8 +309,9 @@ export function useRowStore(): WorkspaceApi | null {
 
 /**
  * Holds one store per mounted host and renders `children` under the active host's store. `activeHost` defaults to the
- * window's own host, so a single-host window has exactly one store, as before. Switching `activeHost` keeps every
- * store's state; only the shell below remounts (phase 4 may lift the shell out to avoid that).
+ * window's own host, so a single-host window has exactly one store. The shell sits outside every store: switching
+ * hosts changes the contexts it reads and it stays mounted, so the window never reloads. Below it, host-bound content
+ * keys itself by host.
  */
 export function WorkspaceProvider({
   children,
@@ -324,24 +346,30 @@ export function WorkspaceProvider({
   return (
     <>
       {hosts.map((host) => (
-        <HostWorkspace key={host} hostId={host} active={host === active}>
-          {host === shown ? children : null}
-        </HostWorkspace>
+        <HostWorkspace key={host} hostId={host} active={host === active} />
       ))}
+      <ShownHost host={shown}>{children}</ShownHost>
     </>
   )
 }
 
+/** Stays in one place in the tree across hosts: this is what keeps the shell mounted during a switch. */
+function ShownHost({ host, children }: { host: string; children: (loaded: boolean) => ReactNode }) {
+  const shell = useSyncExternalStore(subscribeShells, () => shells.get(host) ?? null)
+  if (!shell) return null
+  return (
+    <HostProvider hostId={host}>
+      <RuntimeCtx.Provider value={shell.runtime}>
+        <ActionsCtx.Provider value={shell.actions}>
+          <Ctx.Provider value={shell.api}>{children(shell.loaded)}</Ctx.Provider>
+        </ActionsCtx.Provider>
+      </RuntimeCtx.Provider>
+    </HostProvider>
+  )
+}
+
 /** One host's store. Memoised: the host list changing must not re-render a store whose props did not change. */
-const HostWorkspace = memo(function HostWorkspace({
-  hostId,
-  active,
-  children,
-}: {
-  hostId: string
-  active: boolean
-  children: ((loaded: boolean) => ReactNode) | null
-}) {
+const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: string; active: boolean }) {
   const runtime = runtimes.get(hostId)
   const { invoke, storage } = runtime
   const activeRef = useRef(active)
@@ -1255,15 +1283,11 @@ const HostWorkspace = memo(function HostWorkspace({
   // Published for views of other hosts (`useWorkspaceOf`) once restored; the active store is also the context below.
   useLayoutEffect(() => publish(hostId, loaded ? animatedApi : null), [hostId, animatedApi, loaded])
   useLayoutEffect(() => () => publish(hostId, null), [hostId])
-
-  if (!children) return null
-  return (
-    <HostProvider hostId={hostId}>
-      <RuntimeCtx.Provider value={runtime}>
-        <ActionsCtx.Provider value={actions}>
-          <Ctx.Provider value={animatedApi}>{children(loaded)}</Ctx.Provider>
-        </ActionsCtx.Provider>
-      </RuntimeCtx.Provider>
-    </HostProvider>
+  useLayoutEffect(
+    () => publishShell(hostId, { api: animatedApi, actions, runtime, loaded }),
+    [hostId, animatedApi, actions, runtime, loaded],
   )
+  useLayoutEffect(() => () => publishShell(hostId, null), [hostId])
+
+  return null
 })

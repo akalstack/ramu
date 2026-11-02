@@ -6,7 +6,6 @@ import { Button } from '@/components/desktop-button'
 import {
   Archive,
   ChevronRight,
-  ChevronDown,
   FolderClosed,
   FolderOpen,
   FolderSearch,
@@ -35,8 +34,8 @@ import { CSS } from '@dnd-kit/utilities'
 import { InlineEdit } from './InlineEdit'
 import { ProjectHoverCard } from './ProjectHoverCard'
 import { ProjectRoutingDialog } from './ProjectRoutingDialog'
-import { TaskRow } from './TaskRow'
-import { projectThreadPreview } from './threadLists'
+import { useSidebarExpansion } from './sidebarExpansion'
+import { ThreadPreviewList, useThreadPreview } from './ThreadPreviewList'
 import { useSlideMount } from './useSlideMount'
 import { useHost } from '../../workspace/HostProvider'
 
@@ -49,11 +48,12 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   const { preferences } = useAppSettings()
   const recent = Math.min(preferences.recentChats, previewLimit ?? Infinity)
   const all = ws.tasks.filter((t) => t.projectId === project.id)
-  const [showAll, setShowAll] = useState(false)
-  const { tasks, hasMore } = projectThreadPreview(ws.tasks, project.id, recent, showAll, ws.ui.activeTaskId)
-  const open = ws.isExpanded(`project:${project.id}`)
+  const preview = useThreadPreview(host.id, ws.tasks, project.id, recent, ws.ui.activeTaskId)
+  const { tasks } = preview
+  const tree = useSidebarExpansion(host.id)
+  const open = tree.isExpanded(`project:${project.id}`)
   const setOpen = (next: boolean | ((current: boolean) => boolean)) =>
-    ws.setExpanded(`project:${project.id}`, typeof next === 'function' ? next(open) : next)
+    tree.setExpanded(`project:${project.id}`, typeof next === 'function' ? next(open) : next)
   // The chat list stays mounted while it slides closed, and slides open once it is mounted.
   const { ref: list, visible } = useSlideMount(open)
   const [renaming, setRenaming] = useState(false)
@@ -331,32 +331,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
         />
       )}
       {error && <div className={ROW_ERROR_CLASS}>{error}</div>}
-      {visible && (
-        <div
-          ref={list}
-          className="task-list relative flex flex-col gap-0.5 pt-0.5 before:pointer-events-none before:absolute before:bottom-2 before:left-[15px] before:top-1 before:w-px before:bg-border before:content-['']"
-        >
-          {tasks.length === 0 && (
-            <div className="muted text-muted-foreground small text-caption empty-tasks p-[4px_10px_4px_31px]">
-              {t('No threads yet')}
-            </div>
-          )}
-          {tasks.map((t) => (
-            <TaskRow key={t.id} task={t} nested />
-          ))}
-          {hasMore && (
-            <Button
-              variant="tree"
-              aria-expanded={showAll}
-              onClick={() => setShowAll((s) => !s)}
-              className="h-[30px] min-h-[30px] gap-2 pl-[31px] pr-2 text-body leading-5 hover:bg-accent"
-            >
-              {showAll ? t('Show less') : t('Show more')}
-              <ChevronDown className={`size-3.5 flex-none transition-transform${showAll ? ' rotate-180' : ''}`} />
-            </Button>
-          )}
-        </div>
-      )}
+      {visible && <ThreadPreviewList ref={list} preview={preview} />}
     </section>
   )
 }

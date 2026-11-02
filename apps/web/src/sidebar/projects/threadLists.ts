@@ -9,6 +9,14 @@ export function sidebarThreads(tasks: Task[]) {
   }
 }
 
+/** The window's own host keeps its plain keys, so a person's saved tree survives; other hosts are namespaced. */
+export const sidebarTreeKey = (host: string, own: string, key: string) => (host === own ? key : `host:${host}:${key}`)
+
+/** One list across hosts, each thread still carrying the source it came from. */
+export function mergedThreads<Source>(sources: Source[], threads: (source: Source) => Task[]) {
+  return sources.flatMap((source) => threads(source).map((task) => ({ task, source })))
+}
+
 /** Use the same bounded project preview for local and remote hosts. Keep the active thread visible. */
 export function projectThreadPreview(
   tasks: Task[],

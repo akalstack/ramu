@@ -1,6 +1,5 @@
 import { Button } from '@/components/desktop-button'
 import { CheckCheck, FolderClosed, FolderPlus, MessageCircle, Pin, Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { NO_PROJECT } from '@ramu/shared/types'
@@ -8,6 +7,7 @@ import { t, useLanguage } from '../i18n'
 import { useWorkspace } from '../workspace/workspace'
 import { useAppSettings } from '../settings/AppSettings'
 import { useAddProject } from '../workspace/addProject'
+import { useHost } from '../workspace/HostProvider'
 import { Collapse } from './projects/Collapse'
 import { ICON_BUTTON_CLASS, pinnedFirst } from './projects/constants'
 import { useProjectsDragDrop } from './projects/dnd'
@@ -16,26 +16,31 @@ import { SectionHead } from './projects/SectionHead'
 import { TaskRow } from './projects/TaskRow'
 import { BulkThreadActionsContext, ThreadSelectionBar, useBulkThreadActions } from './projects/ThreadSelectionBar'
 import { sidebarThreads } from './projects/threadLists'
+import { useSidebarExpansion } from './projects/sidebarExpansion'
+import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 
 export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
   useLanguage()
   const ws = useWorkspace()
   const addProject = useAddProject()
   const { active, done } = sidebarThreads(ws.tasks)
-  const showDone = ws.isExpanded('section:done')
+  const host = useHost()
+  const tree = useSidebarExpansion(host.id)
+  const showDone = tree.isExpanded('section:done')
   // Pinned chats from every project gather in one section above the projects.
-  const showPinned = ws.isExpanded('section:pinned'),
-    showProjects = embedded || ws.isExpanded('section:projects'),
-    showChats = ws.isExpanded('section:chats')
+  const showPinned = tree.isExpanded('section:pinned'),
+    showProjects = embedded || tree.isExpanded('section:projects'),
+    showChats = tree.isExpanded('section:chats')
   const pinned = active.filter((t) => t.pinnedAt).sort(pinnedFirst)
   const looseChats = active.filter((t) => t.projectId === NO_PROJECT && !t.pinnedAt).sort(pinnedFirst)
   const { preferences } = useAppSettings()
-  // Relative labels keep aging even when no provider event re-renders the list.
-  const [, setTimeTick] = useState(0)
-  useEffect(() => {
-    const timer = window.setInterval(() => setTimeTick((tick) => tick + 1), 30_000)
-    return () => window.clearInterval(timer)
-  }, [])
+  const loosePreview = useThreadPreview(
+    host.id,
+    ws.tasks,
+    NO_PROJECT,
+    Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT),
+    ws.ui.activeTaskId,
+  )
   // Recent mode: every chat in one list by activity, each led by its project's name.
   const recentMode = preferences.recentChatMode
   const latest = recentMode ? active.filter((t) => !t.pinnedAt).sort((a, b) => b.lastActiveAt - a.lastActiveAt) : []
@@ -52,7 +57,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
   return (
     <BulkThreadActionsContext.Provider value={bulk}>
       <div
-        className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_.empty-tasks]:pl-[31px] [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] ${embedded ? 'p-0' : 'p-[2px_8px_16px]'} tasks-panel${folderOver ? ' folder-drop' : ''}`}
+        className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_.scm-empty]:m-[8px_0] [&_.scm-empty]:p-2 [&_.scm-empty]:leading-[1.5] [&_.scm-empty]:[overflow-wrap:anywhere] ${embedded ? 'p-0' : 'p-[2px_8px_16px]'} tasks-panel${folderOver ? ' folder-drop' : ''}`}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
@@ -64,7 +69,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
               title={t('Pinned')}
               icon={Pin}
               open={showPinned}
-              onToggle={() => ws.setExpanded('section:pinned', !showPinned)}
+              onToggle={() => tree.setExpanded('section:pinned', !showPinned)}
               controls="pinned-chats"
             />
             <Collapse open={showPinned} id="pinned-chats" className="task-list flex flex-col gap-0.5">
@@ -84,7 +89,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
             title={recentMode ? t('Recent threads') : t('Projects')}
             icon={recentMode ? MessageCircle : FolderClosed}
             open={showProjects}
-            onToggle={() => ws.setExpanded('section:projects', !showProjects)}
+            onToggle={() => tree.setExpanded('section:projects', !showProjects)}
             controls="projects-list"
           >
             <Button
@@ -131,7 +136,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropProject}>
               <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
                 {ws.projects.map((p) => (
-                  <ProjectGroup key={p.id} project={p} previewLimit={embedded ? 5 : undefined} />
+                  <ProjectGroup key={p.id} project={p} previewLimit={embedded ? EMBEDDED_THREAD_LIMIT : undefined} />
                 ))}
               </SortableContext>
             </DndContext>
@@ -143,7 +148,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
               title={t('Threads')}
               icon={MessageCircle}
               open={showChats}
-              onToggle={() => ws.setExpanded('section:chats', !showChats)}
+              onToggle={() => tree.setExpanded('section:chats', !showChats)}
               controls="loose-chats"
             >
               <Button
@@ -157,20 +162,22 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
               </Button>
             </SectionHead>
             <Collapse open={showChats} id="loose-chats" className="flex flex-col gap-0.5">
-              {looseChats.map((t) => (
-                <TaskRow key={t.id} task={t} />
-              ))}
+              {embedded ? (
+                <ThreadPreviewList preview={loosePreview} />
+              ) : (
+                looseChats.map((t) => <TaskRow key={t.id} task={t} />)
+              )}
             </Collapse>
           </>
         )}
-        {done.length > 0 && (
+        {!embedded && done.length > 0 && (
           <>
             <SectionHead
               title={t('Done')}
               icon={CheckCheck}
               count={done.length}
               open={showDone}
-              onToggle={() => ws.setExpanded('section:done', !showDone)}
+              onToggle={() => tree.setExpanded('section:done', !showDone)}
               controls="done-chats"
             />
             <Collapse open={showDone} id="done-chats" className="task-list flex flex-col gap-0.5">

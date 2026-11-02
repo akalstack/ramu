@@ -36,7 +36,7 @@ import {
   Globe,
   Search,
 } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildCommands, formatKeys, useKeybindings } from './commands'
 import { Palette } from './palette/Palette'
 import type { PaletteMode } from './palette/sources'
@@ -125,6 +125,7 @@ export function App({ onReady }: { onReady?: () => void }) {
 
 function ReadyShell({ onReady }: { onReady?: () => void }) {
   useLanguage()
+  const { id: host } = useHost()
 
   useEffect(() => {
     onReady?.()
@@ -132,7 +133,7 @@ function ReadyShell({ onReady }: { onReady?: () => void }) {
   return (
     <>
       <Shell />
-      <Onboarding />
+      <Onboarding key={host} />
     </>
   )
 }
@@ -144,7 +145,7 @@ function Shell() {
   const computers = useComputers()
   const hostEvents = useHostRuntime()
   const { activeHost, select } = useHostSelection()
-  const { invoke: hostInvoke } = useHost()
+  const { id: shownHost, invoke: hostInvoke } = useHost()
   const { ui } = ws
   const addProject = useAddProject()
   const [createScheduleRequested, setCreateScheduleRequested] = useState(false)
@@ -416,6 +417,7 @@ function Shell() {
   const rightShown = terminalShown || !!workspaceTool || (!!ui.activeTaskId && ws.workspaceVisible(ui.activeTaskId))
   const toolButtons = (
     <nav
+      key={shownHost}
       className="workspace-tool-buttons [&_button[aria-pressed=true]]:text-brand [&_button[aria-pressed=true]]:bg-brand-wash [&_.icon]:[transition:background-color_140ms_ease,_color_140ms_ease] [&_>_button]:relative [&_>_button]:overflow-visible flex flex-none items-center ml-auto [-webkit-app-region:no-drag] gap-1"
       aria-label={t('Workspace controls')}
       onKeyDown={(event) => {
@@ -576,7 +578,7 @@ function Shell() {
             </span>
           </header>
         ) : (
-          <TaskHeader starting={!!startProject || landing} tools={toolButtons} />
+          <TaskHeader key={shownHost} starting={!!startProject || landing} tools={toolButtons} />
         )}
       </div>
       <ResizablePanelGroup
@@ -693,7 +695,7 @@ function Shell() {
         )}
         <ResizablePanel id="main" minSize={360}>
           <main className="main flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] bg-canvas rounded-(--radius-m) [box-shadow:inset_0_1px_0_rgb(var(--ink)_/_0.025),_0_8px_28px_rgba(0,_0,_0,_0.28)]">
-            <div className="task-area flex-1 min-h-0 flex">
+            <div key={shownHost} className="task-area flex-1 min-h-0 flex">
               {landing && <HomePage />}
               {ui.sidebar === 'inbox' && <InboxPage />}
               {ui.sidebar === 'schedules' && (
@@ -716,12 +718,13 @@ function Shell() {
                 />
               ))}
             </div>
-            <StatusBar usage={sidebarHidden ? <UsageRings /> : null} />
+            <StatusBar key={shownHost} usage={sidebarHidden ? <UsageRings /> : null} />
           </main>
         </ResizablePanel>
       </ResizablePanelGroup>
       {settingsOpen && (
         <SettingsPanel
+          key={shownHost}
           initialSection={settingsSection}
           initialTarget={settingsTarget}
           shortcuts={commands
@@ -732,17 +735,19 @@ function Shell() {
       )}
       {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
-      <ProviderSetupTerminal />
       <Notifications />
-      <SummaryHost />
-      <CommitBranchDialog />
-      <ProtectedSyncDialog />
-      <CommitDialog />
-      <CreatePullRequestHost />
-      <PublishRepositoryHost />
       <TitleTooltips />
-      <CreateEntryDialog />
-      <AddProjectDialog />
+      <Fragment key={shownHost}>
+        <ProviderSetupTerminal />
+        <SummaryHost />
+        <CommitBranchDialog />
+        <ProtectedSyncDialog />
+        <CommitDialog />
+        <CreatePullRequestHost />
+        <PublishRepositoryHost />
+        <CreateEntryDialog />
+        <AddProjectDialog />
+      </Fragment>
     </div>
   )
 }
