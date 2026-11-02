@@ -10,6 +10,7 @@ const words = forgeStatusText(t)
 const summary = (patch: Partial<ForgeConnectionSummary>): ForgeConnectionSummary => ({
   cli: 'signed-in',
   accounts: [],
+  saved: [],
   checkedAt: 0,
   ...patch,
 })

@@ -278,6 +278,7 @@ describe('detected GitHub sign-ins', () => {
     expect(await forge.forgeConnections({ executable: null, now: 1 })).toEqual({
       cli: 'no-cli',
       accounts: [],
+      saved: [],
       checkedAt: 1,
     })
     expect(
@@ -285,6 +286,7 @@ describe('detected GitHub sign-ins', () => {
     ).toMatchObject({
       cli: 'signed-out',
       accounts: [],
+      saved: [],
     })
     const signedIn = await forge.forgeConnections({
       executable: '/gh',

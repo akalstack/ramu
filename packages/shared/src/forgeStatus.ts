@@ -14,14 +14,14 @@ export function forgeStatusText(t: Translate) {
   function connectionHeadline(summary: ForgeConnectionSummary | null, failed: boolean): string {
     if (failed) return t('Could not check GitHub on this host.')
     if (!summary) return t('Checking…')
-    const chosen = summary.saved?.find((connection) => connection.selected && connection.enabled)
+    const chosen = summary.saved.find((connection) => connection.selected && connection.enabled)
     if (chosen?.state === 'connected')
       return t('Connected as {0} on {1} (saved token)', { '0': chosen.login ?? '', '1': chosen.origin })
     if (chosen) return t('The saved token for {0} needs attention.', { '0': chosen.origin })
-    if (summary.cli === 'no-cli' && !summary.saved?.length) return t('GitHub CLI not installed on this host.')
-    if (summary.cli === 'signed-out' && !summary.saved?.length) return t('Not signed in to GitHub on this host.')
+    if (summary.cli === 'no-cli' && !summary.saved.length) return t('GitHub CLI not installed on this host.')
+    if (summary.cli === 'signed-out' && !summary.saved.length) return t('Not signed in to GitHub on this host.')
     if (summary.cli === 'no-cli' || summary.cli === 'signed-out')
-      return t('{0} saved connections are not in use.', { '0': String(summary.saved?.length ?? 0) })
+      return t('{0} saved connections are not in use.', { '0': String(summary.saved.length ?? 0) })
     const active = summary.accounts.find((account) => account.active && account.state === 'ok')
     const usable = active ?? summary.accounts.find((account) => account.state === 'ok')
     return usable

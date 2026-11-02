@@ -235,9 +235,9 @@ export async function forgeConnections(
 ): Promise<ForgeConnectionSummary> {
   const checkedAt = options.now ?? Date.now()
   const executable = options.executable === undefined ? ghExecutable() : options.executable
-  if (!executable) return { cli: 'no-cli', accounts: [], checkedAt }
+  if (!executable) return { cli: 'no-cli', accounts: [], saved: [], checkedAt }
   const accounts = parseGhAuthStatus(await (options.status ?? authStatusText)(executable))
-  return { cli: accounts.length ? 'signed-in' : 'signed-out', accounts, checkedAt }
+  return { cli: accounts.length ? 'signed-in' : 'signed-out', accounts, saved: [], checkedAt }
 }
 
 /** Detected CLI sign-ins plus the credentials saved on this host. */
