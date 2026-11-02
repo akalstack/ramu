@@ -11,6 +11,7 @@ import {
 } from '@ramu/shared/types'
 
 const state = vi.hoisted(() => ({
+  projectOptions: [] as { value: string; label: string }[],
   prompt: 'Fix login',
   failMethod: '',
   route: { kind: 'unknown' } as Record<string, unknown>,
@@ -130,7 +131,13 @@ vi.mock('../src/workspace/BranchNameEditor', () => ({
     return null
   },
 }))
-vi.mock('../src/Menu', () => ({ Combobox: () => null, Menu: () => null }))
+vi.mock('../src/Menu', () => ({
+  Combobox: (props: { options: { value: string; label: string }[] }) => {
+    state.projectOptions = props.options
+    return null
+  },
+  Menu: () => null,
+}))
 vi.mock('../src/components/desktop-button', () => ({
   Button: ({ children }: { children?: ReactNode }) => createElement('button', null, children),
 }))
@@ -327,6 +334,11 @@ it('retains model intent when newer text survives a send acknowledgement or text
   render()
   await state.composer!.onSubmit([])
   expect(state.modelConsumed).toBe(0)
+})
+
+it('keeps Auto in the project picker once a project is selected', () => {
+  render('p')
+  expect(state.projectOptions.map((option) => option.value)).toContain(AUTO_PROJECT)
 })
 
 it('Auto creates the thread in the project the router resolved, without a speculative thread first', async () => {

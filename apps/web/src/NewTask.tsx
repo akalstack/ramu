@@ -226,17 +226,7 @@ export function HomePage() {
       projects: ws.projects,
       lastProject: lastStartProject(storage),
     })
-  return (
-    <NewTask
-      projectId={projectId}
-      onProjectChange={(id) => {
-        // The pick survives a restart with the draft, until that draft is sent.
-        rememberDraftDestination(id, storage)
-        ws.newTask(id)
-      }}
-      allowAuto
-    />
-  )
+  return <NewTask projectId={projectId} onProjectChange={(id) => ws.newTask(id)} />
 }
 
 /**
@@ -248,13 +238,10 @@ export function NewTask({
   projectId,
   onProjectChange,
   feed = true,
-  allowAuto = false,
 }: {
   projectId: string
   onProjectChange: (id: string) => void
   feed?: boolean
-  /** Only Home offers Auto: it has no project pane to open before a destination exists. */
-  allowAuto?: boolean
 }) {
   useLanguage()
   const ws = useWorkspace()
@@ -682,7 +669,7 @@ export function NewTask({
   }
 
   const projectOptions = [
-    ...((allowAuto && preferences.autoProjectSelection) || auto ? [{ value: AUTO_PROJECT, label: t('Auto') }] : []),
+    ...(preferences.autoProjectSelection || auto ? [{ value: AUTO_PROJECT, label: t('Auto') }] : []),
     { value: NO_PROJECT, label: t('No project') },
     ...ws.projects.map((p) => ({ value: p.id, label: p.name })),
   ]
@@ -878,7 +865,11 @@ export function NewTask({
                 bare
                 className={`${CHIP} max-w-[220px]`}
                 options={projectOptions}
-                onChange={onProjectChange}
+                onChange={(id) => {
+                  // The pick survives a restart with the draft, until that draft is sent.
+                  rememberDraftDestination(id, hostStorageFor(host.id))
+                  onProjectChange(id)
+                }}
               />
               {!general && (
                 <Menu

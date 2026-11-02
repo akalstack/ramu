@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import type { WorkspaceUiState } from '@ramu/shared/types'
-import { activateWorkspaceContext, projectCtx, worktreeCtx } from '../src/workspace/workspaceModel'
+import { AUTO_PROJECT, NO_PROJECT, type WorkspaceUiState } from '@ramu/shared/types'
+import { activateWorkspaceContext, composesOnHome, projectCtx, worktreeCtx } from '../src/workspace/workspaceModel'
 
 const state = (sidebar: WorkspaceUiState['sidebar']): WorkspaceUiState => ({
   openTaskIds: [projectCtx('project'), 'chat', worktreeCtx('isolated')],
@@ -41,3 +41,9 @@ it.each(['projects', 'explorer', 'search', 'scm'] as const)(
     expect(activateWorkspaceContext(state(sidebar), 'another-chat').sidebar).toBe(sidebar)
   },
 )
+
+it('keeps Auto and No project drafts on Home, and opens a pane only for a real project', () => {
+  expect(composesOnHome(AUTO_PROJECT)).toBe(true)
+  expect(composesOnHome(NO_PROJECT)).toBe(true)
+  expect(composesOnHome('project')).toBe(false)
+})

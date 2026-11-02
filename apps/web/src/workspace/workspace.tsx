@@ -62,6 +62,7 @@ import { createUiPersistence } from './uiPersistence'
 import {
   EMPTY_TASK_UI,
   activateWorkspaceContext,
+  composesOnHome,
   effectiveTaskUi,
   effectiveBindings,
   focus,
@@ -825,9 +826,9 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
         if (target) {
           const selectedWorkspace = target === current ? (isolated ?? null) : null
           setComposingWorkspace(selectedWorkspace)
-          if (target === NO_PROJECT) {
+          if (composesOnHome(target)) {
             setUi((u) => ({ ...u, activeTaskId: null, sidebar: 'projects' }))
-            setComposing(NO_PROJECT)
+            setComposing(target)
             return
           }
           const ctx = selectedWorkspace ? worktreeCtx(selectedWorkspace) : projectCtx(target)

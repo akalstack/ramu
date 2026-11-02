@@ -1,6 +1,6 @@
 // Pure workspace rules shared by every host's store: contexts, view identity and order, and how a chat's own views
 // combine with its workspace's shared ones. No React and no bridge, so the store's logic can be tested.
-import { NO_PROJECT } from '@ramu/shared/types'
+import { AUTO_PROJECT, NO_PROJECT } from '@ramu/shared/types'
 import type { RepositoryBinding, Task, TaskUiState, ViewDescriptor, WorkspaceUiState } from '@ramu/shared/types'
 
 export type ViewInput = ViewDescriptor extends infer V ? (V extends ViewDescriptor ? Omit<V, 'id'> : never) : never
@@ -71,6 +71,11 @@ export function activateWorkspaceContext(ui: WorkspaceUiState, context: string):
     activeTaskId: context,
     sidebar: ui.sidebar === 'inbox' || ui.sidebar === 'schedules' ? 'projects' : ui.sidebar,
   }
+}
+
+/** No project and Auto have no project pane to open, so their drafts stay on Home. */
+export function composesOnHome(destination: string): boolean {
+  return destination === NO_PROJECT || destination === AUTO_PROJECT
 }
 
 export const EMPTY_TASK_UI: TaskUiState = { views: [], activeViewId: null }
