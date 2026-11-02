@@ -2,7 +2,7 @@
 
 Google and GitHub sign-in, the list of hosts each account links, and the relay that joins a device's stream to its host. It runs on Cloudflare Workers with D1 and one Durable Object per host, all within the Workers free plan for personal use.
 
-The relay forwards sealed frames only: every stream is end-to-end encrypted between the device and the host (`packages/shared/src/link`). See [the plan](../../docs/plans/ramu-link.md) for the trust model.
+The relay forwards sealed frames only: every stream is end-to-end encrypted between the device and the host (`packages/shared/src/link`). See [Security](../../SECURITY.md#remote-access) for the trust model and [Remote hosts](../../docs/guide/remote-hosts.md#ramu-link) for using it.
 
 ## Deploy
 

@@ -33,6 +33,9 @@
         "ws"
       ]
     },
+    "apps/link": {
+      "ignoreDependencies": ["cloudflare"]
+    },
     "apps/mobile": {
       "ignoreBinaries": ["eas"],
       "ignoreDependencies": ["expo-updates", "escape-string-regexp"],
