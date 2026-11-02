@@ -36,7 +36,7 @@ export interface PullRequestWatchStatus {
 export interface ForgeStatus {
   availability: ForgeAvailability
   /** The hosting service, so a sign-in hint names the right one. Absent means GitHub. */
-  service?: 'github' | 'gitlab'
+  service?: 'github' | 'gitlab' | 'bitbucket'
   /** The pull request for the checked-out branch, if one exists. */
   pullRequest: PullRequestInfo | null
 }
@@ -174,6 +174,16 @@ export interface GitlabSummary {
     state: 'unchecked' | 'ok' | 'failed'
     error?: string
   }[]
+}
+
+/** Bitbucket Cloud on one host: the credential saved in Settings or given in its environment. Never the secret. */
+export interface BitbucketSummary {
+  source: 'saved' | 'environment' | null
+  /** The account email of an API token; null for an access token. */
+  email: string | null
+  login: string | null
+  state: 'unchecked' | 'ok' | 'failed'
+  error?: string
 }
 
 /** A GitHub repository the signed-in account can see, for choosing something to clone. */

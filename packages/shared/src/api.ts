@@ -99,6 +99,7 @@ import type {
   ForgeRepositorySummary,
   ForgeConnectionSummary,
   GitlabSummary,
+  BitbucketSummary,
   ForgeSaveConnectionInput,
   ForgeSavedConnection,
   PullRequestWatchStatus,
@@ -1002,6 +1003,11 @@ export interface RamuMethods {
   'forge.connections'(): ForgeConnectionSummary
   /** GitLab servers this host can use; `check` asks each one who is signed in. */
   'forge.gitlab'(check: boolean): GitlabSummary
+  /** Bitbucket Cloud's credential on this host; `check` asks Bitbucket whose it is. */
+  'forge.bitbucket'(check: boolean): BitbucketSummary
+  /** Checks and saves a Bitbucket API token (with its account email) or access token. Host only. */
+  'forge.saveBitbucket'(input: { email?: string; token: string }): BitbucketSummary
+  'forge.removeBitbucket'(): BitbucketSummary
   /** Instruction files providers read on their own (AGENTS.md, CLAUDE.md, rules folders) for a project and the user; read-only. */
   'rules.native'(projectId: string | null): NativeInstructions
   /** Saves or replaces a GitHub token on this host after the server vouches for it. Host administrators only. */

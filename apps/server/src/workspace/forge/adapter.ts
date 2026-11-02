@@ -11,8 +11,8 @@ import type {
   PullRequestInput,
 } from '@ramu/shared/types'
 
-/** The hosting services with an adapter. Bitbucket and Azure DevOps remotes are recognised but have none yet. */
-export type ForgeProviderId = 'github' | 'gitlab'
+/** The hosting services with an adapter. Azure DevOps remotes are recognised but have none yet. */
+export type ForgeProviderId = 'github' | 'gitlab' | 'bitbucket'
 
 /**
  * What a hosting provider must do for a checkout (`cwd`). Everything provider-specific lives behind this: how the

@@ -71,7 +71,7 @@ export const isHostInvokeAllowed = (method: unknown): method is string =>
 /** Operations the Settings window may run on a chosen host through `computers.settings.invoke`. */
 export const isSettingsActionAllowed = (operation: unknown): operation is string =>
   typeof operation === 'string' &&
-  /^(mcp\.|providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|rules\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.(list|setup)$|forge\.(connections|gitlab|saveConnection|checkConnection|setConnectionEnabled|removeConnection|selectAccount)$|computer\.(status|setEnabled|setGlobalPointer|installApps|lockedUse|lockedUseEnable|lockedUseDisable)$|diagnostics\.(export|clear)$)/.test(
+  /^(mcp\.|providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|rules\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.(list|setup)$|forge\.(connections|gitlab|bitbucket|saveBitbucket|removeBitbucket|saveConnection|checkConnection|setConnectionEnabled|removeConnection|selectAccount)$|computer\.(status|setEnabled|setGlobalPointer|installApps|lockedUse|lockedUseEnable|lockedUseDisable)$|diagnostics\.(export|clear)$)/.test(
     operation,
   )
 

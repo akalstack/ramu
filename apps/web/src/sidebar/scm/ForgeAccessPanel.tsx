@@ -12,7 +12,12 @@ export const openHostingSettings = () =>
   window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git', target: 'Hosting accounts' } }))
 
 /** Why pull requests are unavailable here, with the one action that fixes it. */
-export function forgeUnavailableText(availability: ForgeAvailability, service: 'github' | 'gitlab' = 'github'): string {
+export function forgeUnavailableText(
+  availability: ForgeAvailability,
+  service: 'github' | 'gitlab' | 'bitbucket' = 'github',
+): string {
+  if (service === 'bitbucket')
+    return t('Connect Bitbucket in Settings → Git, or set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN on the host.')
   if (service === 'gitlab')
     return t('Sign in to GitLab with glab auth login, or set GITLAB_TOKEN on the host, to open merge requests here.')
   switch (availability) {
@@ -37,7 +42,7 @@ export function ForgeAccessPanel({
   taskId: string
   repoId: string
   unavailable?: ForgeAvailability
-  service?: 'github' | 'gitlab'
+  service?: 'github' | 'gitlab' | 'bitbucket'
 }) {
   const { invoke } = useHost()
   const [report, setReport] = useState<ForgeAccessReport | null>(null)

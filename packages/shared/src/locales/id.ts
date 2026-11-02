@@ -3321,6 +3321,18 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Answering a sub-agent': 'Menjawab sub-agen',
   Used: 'Memakai',
   Details: 'Detail',
+  'Not connected. Pull requests, builds and issues need an Atlassian API token.':
+    'Belum terhubung. Pull request, build, dan issue memerlukan API token Atlassian.',
+  'saved on this host': 'tersimpan di host ini',
+  'Connected ({0})': 'Terhubung ({0})',
+  'Connected as {0} ({1})': 'Terhubung sebagai {0} ({1})',
+  'from the environment': 'dari environment',
+  'Create an API token with Bitbucket scopes in your Atlassian account settings and enter it with your account email. For a workspace or repository access token, leave the email empty.':
+    'Buat API token dengan scope Bitbucket di pengaturan akun Atlassian Anda, lalu masukkan bersama email akun Anda. Untuk access token workspace atau repository, kosongkan email.',
+  'Atlassian account email': 'Email akun Atlassian',
+  'API token': 'API token',
+  'Connect Bitbucket in Settings → Git, or set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN on the host.':
+    'Hubungkan Bitbucket di Pengaturan → Git, atau atur BITBUCKET_EMAIL dan BITBUCKET_API_TOKEN di host.',
   Summaries: 'Ringkasan',
   'Google account': 'Akun Google',
   'Sign in with Google in your browser.': 'Masuk dengan Google di browser Anda.',

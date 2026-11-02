@@ -10,7 +10,7 @@ For people using Ramu.
 - [Browser, computer use and test devices](guide/browser-and-computer.md): what agents can drive, and Float.
 - [Goals](guide/goals.md) and [Background work](guide/background-work.md): work that keeps going.
 - [Memory and learning](guide/memory-and-learning.md): what carries over between threads.
-- [GitHub and GitLab](guide/git-hosting.md), [Editor](guide/editor.md), [Interactive content](guide/interactive-content.md).
+- [GitHub, GitLab and Bitbucket](guide/git-hosting.md), [Editor](guide/editor.md), [Interactive content](guide/interactive-content.md).
 - [Remote hosts](guide/remote-hosts.md): connect devices, run a headless server, start threads from a terminal.
 - [Appearance and themes](guide/themes.md), [Configuration](guide/configuration.md), [Diagnostics](guide/diagnostics.md).
 - [Mobile app](../apps/mobile/README.md).

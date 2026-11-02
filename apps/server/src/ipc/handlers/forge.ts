@@ -10,6 +10,7 @@ import type {
 } from '@ramu/shared/types'
 import * as forge from '../../workspace/forge'
 import { gitlabSummary } from '../../workspace/forge/gitlab'
+import { bitbucketApi, bitbucketSummary } from '../../workspace/forge/bitbucket'
 import * as git from '../../workspace/git'
 import { gitExclusive } from '../helpers'
 import { id } from '../schemas'
@@ -118,6 +119,35 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     'forge.gitlab': {
       args: z.tuple([z.boolean()]),
       run: (check: boolean) => gitlabSummary(check),
+    },
+    'forge.bitbucket': {
+      args: z.tuple([z.boolean()]),
+      run: (check: boolean) => bitbucketSummary(check, ctx.bitbucket.saved()),
+    },
+    // Like GitHub tokens, a Bitbucket credential changes only from the machine running the host.
+    'forge.saveBitbucket': {
+      args: z.tuple([
+        z.object({
+          email: z.string().trim().email().max(320).optional(),
+          token: z.string().trim().min(8).max(4096),
+        }),
+      ]),
+      run: async (input: { email?: string; token: string }) => {
+        administrate()
+        const credential = { ...(input.email ? { email: input.email } : {}), token: input.token }
+        // Check it before saving, so a mistyped token never replaces a working one.
+        await bitbucketApi(credential, '/user')
+        await ctx.bitbucket.save(credential)
+        return bitbucketSummary(true, ctx.bitbucket.saved())
+      },
+    },
+    'forge.removeBitbucket': {
+      args: z.tuple([]),
+      run: async () => {
+        administrate()
+        await ctx.bitbucket.remove()
+        return bitbucketSummary(false, null)
+      },
     },
     // Credentials change only from the machine running the host: never from a paired client, an agent tool or a viewer.
     'forge.saveConnection': {

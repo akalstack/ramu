@@ -20,12 +20,12 @@ function checkout(remote: string | null) {
 
 it('routes a checkout to the adapter for its remote and keeps GitHub for anything else', async () => {
   expect((await adapterFor(checkout('git@gitlab.com:group/sub/app.git'))).id).toBe('gitlab')
+  expect((await adapterFor(checkout('git@bitbucket.org:team/app.git'))).id).toBe('bitbucket')
   expect((await adapterFor(checkout('https://github.com/owner/app.git'))).id).toBe('github')
   expect((await adapterFor(checkout('https://git.example.com/owner/app.git'))).id).toBe('github')
   expect((await adapterFor(checkout(null))).id).toBe('github')
 })
 
 it('says a recognised service without an adapter is not supported instead of trying GitHub', async () => {
-  await expect(adapterFor(checkout('git@bitbucket.org:team/app.git'))).rejects.toThrow('Bitbucket')
   await expect(adapterForOrigin('dev.azure.com')).rejects.toThrow('Azure DevOps')
 })

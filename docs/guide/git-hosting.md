@@ -1,4 +1,4 @@
-# GitHub and GitLab
+# GitHub, GitLab and Bitbucket
 
 ## GitHub
 
@@ -11,7 +11,11 @@ Ramu uses the [GitHub CLI](https://cli.github.com) sign-ins you already have (`g
 
 ## GitLab
 
-Repositories on gitlab.com, or a server your `glab` is signed in to, get merge requests, pipeline jobs, approvals and issues the same way.
+Repositories on gitlab.com, or a server your `glab` is signed in to, get merge requests, pipeline jobs, approvals and issues the same way. **Settings → Git** shows who each sign-in is and can start `glab auth login` for you; `GITLAB_TOKEN` on the host works too.
+
+## Bitbucket Cloud
+
+Bitbucket has no official CLI, so connect it in **Settings → Git** with an Atlassian API token that has Bitbucket scopes and your account email, or with a workspace or repository access token (leave the email empty). Ramu checks the credential before saving it in the host's OS credential store, and agents never see it. `BITBUCKET_EMAIL` with `BITBUCKET_API_TOKEN`, or `BITBUCKET_ACCESS_TOKEN`, on the host works too. Pull requests, build statuses, reviewers, open comments and issues work as on GitHub; Git itself still pushes with the host's own Git credentials.
 
 ## Branches and worktrees
 

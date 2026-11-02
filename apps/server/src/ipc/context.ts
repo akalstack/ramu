@@ -14,6 +14,7 @@ import { configureProviderAccounts, providerEnvironment } from '../providers/pro
 import { UsageService } from '../providers/usage'
 import { ProviderEnvironmentStore } from '../providers/environmentStore'
 import { ForgeAccountStore } from '../workspace/forgeAccounts'
+import { BitbucketCredentials, configureBitbucketCredentials } from '../workspace/forge/bitbucketCredentials'
 import { configureForgeAccounts } from '../workspace/forge'
 import { ExtraUsageReader, readAntigravityUsage, readCursorUsage } from '../providers/providerUsage'
 import { ACCOUNT_USAGE_INTERVAL_MS, AccountUsage } from '../providers/accountUsage'
@@ -48,6 +49,11 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     },
   )
   configureForgeAccounts(forgeAccounts)
+  const bitbucket = new BitbucketCredentials(
+    (key, fallback) => workspace.getAppState(key, fallback),
+    (key, value) => workspace.setAppState(key, value),
+  )
+  configureBitbucketCredentials(bitbucket)
   const storedPreferences = () => workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
   const managedSkills = (taskId: string) => learning?.catalog(workspace.projectIdOf(taskId)) ?? []
   const withContext = (ws: Workspace, taskId: string, prompt: string, context?: FileContext[]) =>
@@ -189,6 +195,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     accountUsage,
     environment,
     forgeAccounts,
+    bitbucket,
     loadPreferences,
     savePreferences,
     storedPreferences,

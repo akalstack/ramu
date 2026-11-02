@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import type { ForgeConnectionSummary, ForgeSavedConnection, GitlabSummary } from '@ramu/shared/types'
+import type { BitbucketSummary, ForgeConnectionSummary, ForgeSavedConnection, GitlabSummary } from '@ramu/shared/types'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
@@ -13,7 +13,7 @@ import { invoke as openOnThisComputer } from '../ipc'
 import { accountDetail, connectionHeadline, savedDetail } from './hostingStatus'
 
 /** Providers shown for orientation only: no setup, no network calls, no background work until they are built. */
-const COMING_SOON = ['Bitbucket Cloud', 'Azure DevOps'] as const
+const COMING_SOON = ['Azure DevOps'] as const
 
 type Form = { replace: ForgeSavedConnection | null }
 
@@ -386,6 +386,7 @@ export function HostingAccounts() {
         </Dialog>
       )}
       <GitlabRow canAdminister={canAdminister} />
+      <BitbucketRow canAdminister={canAdminister} />
       {COMING_SOON.map((name) => (
         <SettingsRow key={name}>
           <SettingsLabel title={name} />
@@ -471,5 +472,134 @@ function GitlabRow({ canAdminister }: { canAdminister: boolean }) {
         )}
       </span>
     </SettingsRow>
+  )
+}
+
+function bitbucketHeadline(summary: BitbucketSummary | null, failed: string | null) {
+  if (failed) return failed
+  if (!summary) return t('Checking…')
+  if (!summary.source) return t('Not connected. Pull requests, builds and issues need an Atlassian API token.')
+  if (summary.state === 'failed') return summary.error ?? t('Could not connect')
+  const via = summary.source === 'saved' ? t('saved on this host') : t('from the environment')
+  const who = summary.login ?? summary.email
+  return who ? t('Connected as {0} ({1})', { 0: who, 1: via }) : t('Connected ({0})', { 0: via })
+}
+
+/** Bitbucket Cloud has no official CLI: its credential is an API token saved here, or given in the environment. */
+function BitbucketRow({ canAdminister }: { canAdminister: boolean }) {
+  const invoke = useSettingsInvoke()
+  const [summary, setSummary] = useState<BitbucketSummary | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
+  const [form, setForm] = useState(false)
+  const [email, setEmail] = useState('')
+  const [token, setToken] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
+  const call = useCallback((work: () => Promise<BitbucketSummary> | BitbucketSummary) => {
+    setBusy(true)
+    setFailed(null)
+    void Promise.resolve()
+      .then(work)
+      .then(
+        (next) => {
+          setSummary(next)
+          setBusy(false)
+        },
+        (reason) => {
+          setFailed(errorText(reason))
+          setBusy(false)
+        },
+      )
+  }, [])
+  useEffect(() => call(() => invoke('forge.bitbucket', false)), [call, invoke])
+  const save = () => {
+    setBusy(true)
+    setFormError(null)
+    void Promise.resolve(
+      invoke('forge.saveBitbucket', { ...(email.trim() ? { email: email.trim() } : {}), token }),
+    ).then(
+      (next) => {
+        setSummary(next)
+        setBusy(false)
+        setForm(false)
+        setToken('')
+      },
+      (reason) => {
+        setBusy(false)
+        setFormError(errorText(reason))
+      },
+    )
+  }
+  return (
+    <>
+      <SettingsRow>
+        <SettingsLabel title="Bitbucket Cloud" help={bitbucketHeadline(summary, failed)} />
+        <span className="flex items-center gap-2">
+          {summary?.source && (
+            <Button
+              variant="secondary"
+              size="sm"
+              aria-busy={busy}
+              disabled={busy}
+              onClick={() => call(() => invoke('forge.bitbucket', true))}
+            >
+              {busy ? t('Checking…') : t('Check connection')}
+            </Button>
+          )}
+          {canAdminister && !form && (
+            <Button variant="secondary" size="sm" disabled={busy || !summary} onClick={() => setForm(true)}>
+              {summary?.source === 'saved' ? t('Replace credential') : t('Connect')}
+            </Button>
+          )}
+          {canAdminister && summary?.source === 'saved' && !form && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => call(() => invoke('forge.removeBitbucket'))}
+            >
+              {t('Disconnect')}
+            </Button>
+          )}
+        </span>
+      </SettingsRow>
+      {form && (
+        <SettingsRow className="settings-stack gap-3">
+          <p className="m-0 text-caption text-muted-foreground">
+            {t(
+              'Create an API token with Bitbucket scopes in your Atlassian account settings and enter it with your account email. For a workspace or repository access token, leave the email empty.',
+            )}
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1.5 text-caption">
+              {t('Atlassian account email')}
+              <Input type="email" autoComplete="off" value={email} onChange={(event) => setEmail(event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1.5 text-caption">
+              {t('API token')}
+              <Input
+                type="password"
+                autoComplete="off"
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+              />
+            </label>
+          </div>
+          {formError && (
+            <p role="alert" className="m-0 text-caption text-destructive">
+              {formError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setForm(false)}>
+              {t('Cancel')}
+            </Button>
+            <Button size="sm" disabled={busy || token.trim().length < 8} onClick={save}>
+              {busy ? t('Checking…') : t('Save')}
+            </Button>
+          </div>
+        </SettingsRow>
+      )}
+    </>
   )
 }
