@@ -70,7 +70,14 @@ import {
 import { probeReachableHosts, type ReachableHostProbe } from './reachableHosts'
 import { verifyHost, findHostRoute, chooseHostRoute, rememberRoutes, developmentHostRoute } from './hostRoutes'
 import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
-import { transcript, visibleText, deliveryBaseline, reconcileDelivered } from './transcript'
+import {
+  ACCEPTED_HOLD_MS,
+  deliveryBaseline,
+  holdsQueue,
+  reconcileDelivered,
+  transcript,
+  visibleText,
+} from './transcript'
 import type { Language } from './settingsModel'
 import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } from './pushCategories'
 import { GOAL_VERIFY_METHOD } from './goalVerify'
@@ -98,6 +105,8 @@ export interface OutboxItem {
   mode: 'send' | 'queue' | 'steer'
   createdAt: number
   state?: 'waiting' | 'sending' | 'accepted' | 'uncertain' | 'review'
+  /** When the host acknowledged it; an accepted message stops holding the queue after ACCEPTED_HOLD_MS. */
+  acceptedAt?: number
   deliveryBaseline?: { userCount: number; queueIds: string[] }
   error?: string
   settings?: AgentSettings
@@ -904,9 +913,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     change((s) => ({
       ...s,
-      outbox: s.outbox.map((o) => (o.id === item.id ? { ...o, state: 'accepted', error: undefined } : o)),
+      outbox: s.outbox.map((o) =>
+        o.id === item.id ? { ...o, state: 'accepted', acceptedAt: Date.now(), error: undefined } : o,
+      ),
       chats: s.chats.map((c) => (c.id === chat.id ? { ...c, sessionId, pending: false } : c)),
     }))
+    // If its history entry never appears (a renamed or archived thread), stop holding the queue once the hold ends.
+    setTimeout(() => {
+      change((s) => s)
+      void flush(item.computerId)
+    }, ACCEPTED_HOLD_MS + 500)
     // Keep the acknowledged bubble until the authoritative message or queue entry is mounted.
     // Finish reconciliation before another identical message takes its history baseline.
     const delivered = ref.current.chats.find((c) => c.id === chat.id)
@@ -920,8 +936,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await reconcile
   }
   const flush = async (id: string) => {
-    if (flushing.current.has(id) || ref.current.outbox.some((o) => o.computerId === id && o.state === 'accepted'))
-      return
+    if (flushing.current.has(id) || ref.current.outbox.some((o) => o.computerId === id && holdsQueue(o))) return
     flushing.current.add(id)
     try {
       while (
@@ -976,7 +991,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             break
           }
           await deliver(item)
-          if (ref.current.outbox.some((o) => o.computerId === id && o.state === 'accepted')) break
+          if (ref.current.outbox.some((o) => o.computerId === id && holdsQueue(o))) break
         } catch (error) {
           // Only a confirmed pre-allocation rejection can approve new bases. An unknown outcome
           // keeps its original request and plan until delivery is reconciled.

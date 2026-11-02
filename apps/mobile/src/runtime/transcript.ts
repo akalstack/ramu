@@ -371,9 +371,25 @@ export function deliveryVisible(item: OutboxItem, chat: Chat): boolean {
 }
 
 /** An acknowledgement alone cannot remove the only visible copy of a message. */
-export function reconcileDelivered(outbox: OutboxItem[], chats: Chat[]): OutboxItem[] {
+/** How long an acknowledged message may hold its host's queue while its history entry has not appeared. */
+export const ACCEPTED_HOLD_MS = 60_000
+
+/** An accepted message holds later sends to its host only briefly: the host already has it. */
+export function holdsQueue(item: OutboxItem, now = Date.now()): boolean {
+  // One saved before acknowledgements carried a time is already past its hold.
+  return item.state === 'accepted' && item.acceptedAt !== undefined && now - item.acceptedAt < ACCEPTED_HOLD_MS
+}
+
+/**
+ * Drops acknowledged messages once their thread shows them or once the hold has passed. Keeping one forever would
+ * stop every later message to that host.
+ */
+export function reconcileDelivered(outbox: OutboxItem[], chats: Chat[], now = Date.now()): OutboxItem[] {
   return outbox.filter((item) => {
+    if (item.state !== 'accepted') return true
+    if (!holdsQueue(item, now)) return false
+    // A refresh can briefly leave the thread out; the hold above still bounds how long that keeps it.
     const chat = chats.find((chat) => chat.id === item.chatId)
-    return item.state !== 'accepted' || !chat || !deliveryVisible(item, chat)
+    return !chat || !deliveryVisible(item, chat)
   })
 }

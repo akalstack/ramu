@@ -1,6 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { deliveryBaseline, deliveryVisible, reconcileDelivered } from '../src/runtime/transcript.ts'
+import {
+  ACCEPTED_HOLD_MS,
+  deliveryBaseline,
+  deliveryVisible,
+  holdsQueue,
+  reconcileDelivered,
+} from '../src/runtime/transcript.ts'
 
 const user = (text, id = 'event-1') => ({ kind: 'user', id, text, at: 1 })
 const chat = (items = [], queue = []) => ({ id: 'thread', items, queue })
@@ -9,6 +15,7 @@ const outgoing = (history, state = 'accepted') => ({
   chatId: 'thread',
   text: 'Go',
   state,
+  ...(state === 'accepted' ? { acceptedAt: Date.now() } : {}),
   deliveryBaseline: deliveryBaseline(history, 'Go'),
 })
 
@@ -51,4 +58,18 @@ test('uncertain delivery remains reviewable and host-added context does not bloc
     deliveryVisible(accepted, chat([], [{ id: 'q', text: 'Go\n\n<ramu-context>files</ramu-context>' }])),
     true,
   )
+})
+
+test('an acknowledged message never holds its host’s queue for good', () => {
+  const item = outgoing(chat())
+  const later = item.acceptedAt + ACCEPTED_HOLD_MS + 1
+  assert.equal(holdsQueue(item), true)
+  assert.equal(holdsQueue(item, later), false)
+  // Its history entry never appeared, or its thread left this phone: after the hold it is dropped.
+  assert.deepEqual(reconcileDelivered([item], [chat()], later), [])
+  assert.deepEqual(reconcileDelivered([item], [], later), [])
+  // One saved before acknowledgements carried a time no longer holds anything.
+  const { acceptedAt: _ignored, ...old } = item
+  assert.equal(holdsQueue(old), false)
+  assert.deepEqual(reconcileDelivered([old], [chat()]), [])
 })
