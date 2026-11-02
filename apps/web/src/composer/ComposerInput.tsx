@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Quote, SquareTerminal, WandSparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { FileIcon } from '../editor/FileIcon'
-import { REFERENCE_CHIP_CLASS } from '../chat/ReferenceChipView'
+import { REFERENCE_CHIP } from '../chat/ReferenceChipView'
 import { composerDraft, deleteDraftAtom, type DraftChip } from '@ramu/shared/chat/composerDraft'
 import { markdownRuns, toggleMarkdownWrap } from '@ramu/shared/chat/markdownRuns'
 
@@ -81,9 +81,9 @@ export function focusComposer(root: Element | null, caret?: number) {
   if (input && caret !== undefined) selectComposerInput(input, caret)
 }
 
-function InlineChip({ chip }: { chip: DraftChip }) {
+export function InlineChip({ chip }: { chip: DraftChip }) {
   return (
-    <Badge variant="secondary" className={REFERENCE_CHIP_CLASS} title={chip.target ?? chip.label}>
+    <Badge variant="secondary" {...REFERENCE_CHIP} title={chip.target ?? chip.label}>
       {chip.kind === 'skill' ? (
         <WandSparkles data-icon="inline-start" className="text-brand" aria-hidden="true" />
       ) : chip.kind === 'file' ? (

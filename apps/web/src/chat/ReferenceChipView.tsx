@@ -24,10 +24,17 @@ export function ReferenceChipIcon({ chip }: { chip: ReferenceChip }) {
 
 /**
  * The shadcn Badge as a plain accent-colored link with its icon, no fill or ring, so it reads like text in a line.
- * Code inside drops its own bubble. Shared by the transcript and the composer's inline references.
+ * Code inside drops its own bubble. The class reads the style's variables, so the two travel together, and a label at the width limit shortens without squeezing the icon; shared by the transcript and the composer's inline references.
  */
-export const REFERENCE_CHIP_CLASS =
-  'inline-flex h-auto min-h-0 max-w-[min(100%,var(--reference-chip-width))] items-baseline gap-(--reference-chip-gap) rounded-none border-0 bg-transparent p-0 align-baseline text-[length:inherit] leading-[inherit] font-normal whitespace-nowrap text-[color:var(--accent)]! no-underline! [&>svg]:self-center [&>span]:min-w-0 [&>span]:border-0 [&>span]:border-b [&>span]:border-solid [&>span]:border-b-transparent [&>span]:leading-[1.15] [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-[0.95em] [a&]:hover:bg-transparent [a&]:hover:[&>span]:border-b-current [a&]:hover:[&>span]:[border-bottom-style:dotted]'
+export const REFERENCE_CHIP = {
+  className:
+    'inline-flex h-auto min-h-0 max-w-[min(100%,var(--reference-chip-width))] items-baseline gap-(--reference-chip-gap) rounded-none border-0 bg-transparent p-0 align-baseline text-[length:inherit] leading-[inherit] font-normal whitespace-nowrap text-[color:var(--accent)]! no-underline! [&>:first-child]:flex-none [&>svg]:self-center [&>span]:min-w-0 [&>span]:border-0 [&>span]:border-b [&>span]:border-solid [&>span]:border-b-transparent [&>span]:leading-[1.15] [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-[0.95em] [a&]:hover:bg-transparent [a&]:hover:[&>span]:border-b-current [a&]:hover:[&>span]:[border-bottom-style:dotted]',
+  style: {
+    '--reference-chip-width': `${REFERENCE_APPEARANCE.maxWidth}px`,
+    '--reference-chip-gap': `${REFERENCE_APPEARANCE.gap}px`,
+    fontWeight: REFERENCE_APPEARANCE.fontWeight,
+  } as React.CSSProperties,
+}
 
 /**
  * A reference in chat (file, folder, skill, command, quote) as a small chip that sits in the line of text without making
@@ -51,15 +58,8 @@ export function ReferenceChipView({
   return (
     <Badge
       variant="secondary"
-      className={REFERENCE_CHIP_CLASS}
+      {...REFERENCE_CHIP}
       title={title ?? chip.title}
-      style={
-        {
-          '--reference-chip-width': `${REFERENCE_APPEARANCE.maxWidth}px`,
-          '--reference-chip-gap': `${REFERENCE_APPEARANCE.gap}px`,
-          fontWeight: REFERENCE_APPEARANCE.fontWeight,
-        } as React.CSSProperties
-      }
       {...(href !== undefined ? { render: <a href={href} />, onClick: onOpen } : {})}
     >
       <ReferenceChipIcon chip={chip} />
