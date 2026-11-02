@@ -612,6 +612,21 @@ export interface RamuMethods {
   /** Pairs this host with another as a host pairing, using a code from `ramu pair` there. */
   'network.addAgentHost'(address: string, code: string, name?: string): import('./types').AgentHostSummary[]
   'network.forgetAgentHost'(id: string): import('./types').AgentHostSummary[]
+  /** Starts signing this host in to Ramu Link; the status carries the code to approve. Host-only. */
+  'network.linkSignIn'(): NetworkStatus
+  'network.linkCancelSignIn'(): NetworkStatus
+  /** Unlinks this host from the account and forgets its Link credentials. */
+  'network.linkSignOut'(): NetworkStatus
+  'network.linkSetEnabled'(enabled: boolean): NetworkStatus
+  /** The Ramu Link service URL, or null for the default. Only while signed out. */
+  'network.linkSetService'(url: string | null): NetworkStatus
+  'network.tunnelConfigure'(input: {
+    mode: import('./types').TunnelMode
+    hostname?: string | null
+    originPort?: number
+  }): NetworkStatus
+  /** Saves (or with null removes) a named tunnel's token in the OS credential store. */
+  'network.tunnelSetToken'(token: string | null): NetworkStatus
   /** Computers this app is connected to, all at once. Handled by the desktop app itself. */
   'computers.settings.invoke'(id: string, method: string, args: unknown[]): unknown
   'computers.settings.get'(id: string): SettingsSnapshot
@@ -1286,6 +1301,8 @@ export type PushEvents = {
   'device:permissions': Record<string, never>
   /** Nearby devices waiting for the person at this host to allow them. Sent only to apps on the host itself. */
   'pairing:requests': { requests: NetworkStatus['requests'] }
+  /** Link or tunnel state changed; Settings reads `network.status` again. Sent only to apps on the host itself. */
+  'network:changed': Record<string, never>
   'notify:inapp': {
     hostId?: string
     sessionId: string

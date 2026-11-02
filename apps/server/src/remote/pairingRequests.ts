@@ -62,11 +62,13 @@ export class PairingRequests {
     private readonly options: {
       devices: DeviceStore
       hostId: string
-      /** Whether nearby devices may ask now. Defaults to while a pairing offer is open. */
-      accepting?: () => boolean
+      /** Whether a device at `peer` may ask now. Defaults to while a pairing offer is open. */
+      accepting?: (peer: string) => boolean
       changed?: () => void
       now?: () => number
       random?: (bytes: number) => Uint8Array
+      /** This host's Link identity key, once it has one; vouched for inside the approved answer. */
+      linkKey?: () => string | null
     },
   ) {}
 
@@ -92,7 +94,7 @@ export class PairingRequests {
     const input = body as { name?: unknown; commit?: unknown } | null
     if (typeof input?.commit !== 'string' || !/^[0-9a-f]{64}$/.test(input.commit))
       throw new PairingError(400, 'Invalid pairing request')
-    const accepting = this.options.accepting?.() ?? this.options.devices.offers(this.now()).length > 0
+    const accepting = this.options.accepting?.(peer) ?? this.options.devices.offers(this.now()).length > 0
     if (!accepting)
       throw new PairingError(
         403,
@@ -175,11 +177,13 @@ export class PairingRequests {
     const { offerId } = this.options.devices.createCode(now, access, `request:${id}`)
     const device = this.options.devices.redeemOffer(offerId, request.name || undefined, request.token!, now)
     if (!device) throw new Error('That request expired. Ask the device to try again.')
+    const linkKey = this.options.linkKey?.()
     const fields = {
       deviceId: device.id,
       role: device.role ?? ('owner' as const),
       hostId: this.options.hostId,
       expiresAt: device.expiresAt,
+      ...(linkKey ? { linkKey } : {}),
     }
     request.state = 'approved'
     request.result = { state: 'approved', ...fields, mac: pairResultMac(request.macKey!, fields) }

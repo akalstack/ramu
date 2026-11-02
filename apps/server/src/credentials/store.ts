@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 
 export interface HostCredentialScope {
   hostId: string
-  integration: 'mcp' | 'forge' | 'provider-env' | 'host-pairing'
+  integration: 'mcp' | 'forge' | 'provider-env' | 'host-pairing' | 'link'
   connectionId: string
   accountId: string
 }
@@ -41,7 +41,7 @@ export class HostCredentialStore {
   private entry(scope: HostCredentialScope, reference: string) {
     if (
       !referencePattern.test(reference) ||
-      !['mcp', 'forge', 'provider-env', 'host-pairing'].includes(scope.integration) ||
+      !['mcp', 'forge', 'provider-env', 'host-pairing', 'link'].includes(scope.integration) ||
       [scope.hostId, scope.connectionId, scope.accountId].some((value) => !value || value.length > 200)
     )
       throw new Error('Invalid host credential reference or scope')

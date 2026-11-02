@@ -84,6 +84,37 @@ export interface NetworkStatus {
     /** Name nearby devices see. */
     name: string
   }
+  link: LinkStatus
+  tunnel: TunnelStatus
+  /** Some route beyond this computer is up: the network listener, the tunnel or Ramu Link. */
+  reachable: boolean
+}
+/** Ramu Link on this host. */
+export interface LinkStatus {
+  service: string | null
+  /** True when `RAMU_LINK_URL` chose the service; Settings cannot change it then. */
+  serviceFixed: boolean
+  enabled: boolean
+  account: { name: string; email: string } | null
+  /** A sign-in waiting for the person to approve `userCode` at `url`. */
+  signIn: { userCode: string; url: string; expiresAt: number } | null
+  state: 'off' | 'connecting' | 'online' | 'offline' | 'unauthorized'
+  error: string | null
+  /** This host's Link address, for devices to save as a route. */
+  address: string
+  streams: number
+}
+export type TunnelMode = 'off' | 'quick' | 'named'
+/** The managed Cloudflare Tunnel. */
+export interface TunnelStatus {
+  mode: TunnelMode
+  state: 'off' | 'installing' | 'starting' | 'running' | 'error'
+  url: string | null
+  error: string | null
+  originPort: number
+  hostname: string | null
+  /** A named tunnel's token is saved; the token itself never leaves the host. */
+  hasToken: boolean
 }
 /** What became of one pairing offer. */
 export type PairingOfferStatus =

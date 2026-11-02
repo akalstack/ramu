@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { CHALLENGE_PATTERN, IDENTITY_PATH, PAIR_PATH, PROTOCOL_VERSION, RENEW_PATH } from '@ramu/contracts'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
-import { hostProof } from '@ramu/shared/hostProof'
+import { hostProof, linkKeyProof } from '@ramu/shared/hostProof'
 import type { DeviceInfo, DeviceStore } from './devices'
 import { PAIR_REQUEST_PATH, PAIR_REVEAL_PATH, PAIR_WAIT_PATH } from '@ramu/shared/pairRequest'
 import { PairingError, type PairingRequests } from './pairingRequests'
@@ -38,6 +38,8 @@ export class RemoteAccess {
       hostId?: string
       /** This host's own addresses, named in the identity answer so a paired device can find it when its address changes. */
       routes?: () => string[]
+      /** This host's Ramu Link identity key, vouched for in the identity answer so a paired device can pin it. */
+      linkKey?: () => string | null
       /** Pairing by request from a nearby device. Absent: those endpoints do not exist and devices type a code. */
       pairing?: PairingRequests
       /** A device paired with a typed code, so the host can stop advertising itself for pairing. */
@@ -105,8 +107,10 @@ export class RemoteAccess {
         rejected()
         return
       }
+      const linkKey = this.options.linkKey?.()
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(
         JSON.stringify({
+          ...(linkKey ? { linkKey, linkProof: linkKeyProof(key, this.options.hostId, challenge, linkKey) } : {}),
           hostId: this.options.hostId,
           proof: hostProof(key, this.options.hostId, challenge),
           // The same proof for a renewed token the device may not have used yet; a client that holds that token checks it.

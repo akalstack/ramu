@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { runtimeSocket } from '@ramu/client-runtime'
 import { isLoopbackHost } from '@ramu/contracts'
+import { linkServiceUrl } from '@ramu/shared/link/protocol'
 
 export interface ListenAddress {
   host: string
@@ -24,6 +25,8 @@ export interface ServerConfig {
   networkPath: string
   /** Certificate and key for serving the network listener over HTTPS. */
   tls: { cert: string; key: string } | null
+  /** `RAMU_LINK_URL`: the Ramu Link service, overriding Settings. */
+  linkService: string | null
 }
 
 /** The directory Electron uses for the desktop app, so a headless server and the desktop app share one profile. */
@@ -76,5 +79,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     devicesPath: env.RAMU_DEVICES_FILE || join(userData, 'remote-devices.json'),
     networkPath: join(userData, 'network.json'),
     discoverable: env.RAMU_DISCOVERABLE === '1',
+    linkService: env.RAMU_LINK_URL ? linkServiceUrl(env.RAMU_LINK_URL) : null,
   }
 }
