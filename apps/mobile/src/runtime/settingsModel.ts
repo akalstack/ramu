@@ -278,6 +278,13 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           help: "Agents can start threads in this project, other projects and hosts added for agents, and a paired host's agents can start threads here. Sub-agents are not affected. Turn off to start threads only yourself.",
           words: 'agent thread start delegate host',
         },
+        {
+          kind: 'toggle',
+          path: 'teammateSuggestions',
+          title: 'Let agents suggest teammates',
+          help: "The thread's agent may suggest bringing another model in, for example to review its work. Each suggestion asks you first and says which login it uses.",
+          words: 'teammate review second model suggest invite',
+        },
       ],
     },
     {

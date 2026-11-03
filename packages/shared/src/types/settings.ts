@@ -81,6 +81,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   autoProjectSplit: boolean
   /** Agents may start threads the person owns, here and on other hosts, and a paired host's agents may start them here. */
   agentThreads: boolean
+  /** The main agent may suggest a model to bring in as a teammate; each suggestion asks the person first. */
+  teammateSuggestions: boolean
   /** Inbox offers one box that proposes actions across threads and schedules. Off until someone wants it. */
   operator: boolean
   /** A few words the person writes about this host (`GPU box`, `office network`), matched when suggesting one. */
@@ -181,6 +183,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   autoProjectSelection: true,
   autoProjectSplit: true,
   agentThreads: true,
+  teammateSuggestions: true,
   operator: false,
   hostDescription: '',
   liveViewDesktop: true,

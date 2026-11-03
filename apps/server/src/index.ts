@@ -1169,6 +1169,29 @@ const mcpHttp = createServer(async (req, res) => {
     )
   if (!agents.get(source.id).parentId)
     server.registerTool(
+      'teammate_suggest',
+      {
+        description:
+          'Suggest bringing another model into this thread as a teammate, when a second opinion would help: a review of risky changes, or a model better suited to part of the work. The person approves or declines first and pays for it with their login, so suggest only when it clearly helps, at most once per request. It joins in Review (reads and reports, never edits) with your request; its report arrives as a message. model is a handle such as opus-5.5.',
+        inputSchema: {
+          model: z.string().min(1).max(80),
+          reason: z.string().min(1).max(600),
+          request: z.string().min(1).max(20000),
+        },
+      },
+      async (value, extra) => {
+        try {
+          return result(await agents.suggestTeammate(source.id, value, extra.signal))
+        } catch (error) {
+          return {
+            isError: true,
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+          }
+        }
+      },
+    )
+  if (!agents.get(source.id).parentId)
+    server.registerTool(
       'teammate_ask',
       {
         description:

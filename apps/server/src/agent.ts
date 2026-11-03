@@ -10,6 +10,8 @@ import {
   teammateHandle,
 } from '@ramu/shared/chat/agentTasks'
 import { clipText } from '@ramu/shared/text'
+import { providerName } from '@ramu/shared/providers/providers'
+import { modelHandle, teammateSettings } from '@ramu/shared/chat/teammateMentions'
 import { customAgentFor, type CustomAgent } from '@ramu/shared/customAgents'
 import type { ActivityRow } from '@ramu/shared/usageAcrossHosts'
 import { PermissionApprovals } from './agent/permissionApprovals'
@@ -917,6 +919,63 @@ export class AgentService {
       signal,
     )
     return { reply }
+  }
+
+  /**
+   * teammate_suggest: the main agent proposes bringing a model in, usually to review its work. The person approves or
+   * declines on the usual approval card, which says which login pays; a decline holds further suggestions until they
+   * write. Approved, the model joins in Review with the agent's request.
+   */
+  async suggestTeammate(
+    sessionId: string,
+    input: { model: string; reason: string; request: string },
+    signal?: AbortSignal,
+  ): Promise<{ added?: string; declined?: boolean; message: string }> {
+    const lead = this.get(sessionId)
+    if (lead.parentId) throw new Error('Only the main agent suggests teammates.')
+    if (this.preferences?.().teammateSuggestions === false)
+      throw new Error('The person turned teammate suggestions off. Do not suggest one.')
+    if (this.parts.subagents.suggestionDeclined.has(sessionId))
+      return {
+        declined: true,
+        message: 'The person declined a teammate already. Do not suggest another until they write.',
+      }
+    const models = (await this.catalog()).flatMap((catalog) => catalog.models)
+    const wanted = input.model.trim().replace(/^@/, '').toLowerCase()
+    const model =
+      models.find((entry) => !entry.isLegacy && modelHandle(entry) === wanted) ??
+      models.find((entry) => entry.id.toLowerCase() === wanted || modelHandle(entry) === wanted)
+    if (!model)
+      throw new Error(
+        `Name a model from: ${models
+          .filter((entry) => !entry.isLegacy)
+          .map((entry) => modelHandle(entry))
+          .join(', ')}.`,
+      )
+    const settings = teammateSettings(lead.settings, model)
+    const accounts = this.preferences?.().providerBinaries[model.provider]?.accounts ?? []
+    const login = settings.accountId
+      ? (accounts.find((entry) => entry.id === settings.accountId)?.name ?? settings.accountId)
+      : 'its default login'
+    const allowed = await this.parts.requests.requestPermission(
+      sessionId,
+      `bringing ${model.name || model.id} in as a teammate`,
+      [
+        clipText(input.reason.trim(), 600),
+        `Runs on ${providerName(model.provider)} with ${login}, in Review: it reads and reports, never edits.`,
+        `It is asked: ${clipText(input.request.trim(), 1200)}`,
+      ].join('\n\n'),
+      signal,
+    )
+    if (!allowed) {
+      this.parts.subagents.suggestionDeclined.add(sessionId)
+      return { declined: true, message: 'The person chose not to add it. Do not suggest another until they write.' }
+    }
+    const joined = await this.addTeammate(sessionId, settings, 'review', input.request)
+    return {
+      added: teammateHandle(joined.name),
+      message: `${joined.name} joined in Review. Its report arrives as a message; reach it with teammate_ask or teammate_message.`,
+    }
   }
 
   /** The person wrote, so a teammate exchange that paused may continue. */

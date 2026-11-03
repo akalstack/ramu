@@ -13,6 +13,7 @@ export type ToggleKey =
   | 'autoProjectSelection'
   | 'autoProjectSplit'
   | 'agentThreads'
+  | 'teammateSuggestions'
   | 'operator'
   | 'liveViewDesktop'
   | 'recapsEnabled'

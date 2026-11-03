@@ -31,6 +31,7 @@ import {
   type UsageReading,
 } from '@ramu/shared/types'
 import { fakeCodex, fakeQuery as demoQuery } from '../src/providers/fakeAgent'
+import { latestTasks } from '@ramu/shared/chat/agentTasks'
 import { USER_MESSAGE_PREAMBLE } from '../src/agent/agentInstructions'
 
 /** Minimal stand-in for the SDK: echoes each user message, asks permission once for the first one. */
@@ -2591,6 +2592,30 @@ describe('sub-agents Ramu runs', () => {
         svc.events(parent.id).filter((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Codex test" finished]'))
           .length === 2,
     )
+    svc.stopAll()
+  })
+
+  it('brings a suggested teammate in only when the person approves, says which login pays, and respects a no', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc)
+    const requests = (
+      svc as unknown as { parts: { requests: { requestPermission: (...a: unknown[]) => Promise<boolean> } } }
+    ).parts.requests
+    const ask = vi.spyOn(requests, 'requestPermission').mockResolvedValueOnce(false).mockResolvedValue(true)
+    const input = { model: 'codex-test', reason: 'A second look at the auth change', request: 'Review the auth diff' }
+    await expect(svc.suggestTeammate(parent.id, { ...input, model: 'nope' })).rejects.toThrow(/Name a model from: /)
+    expect(await svc.suggestTeammate(parent.id, input)).toMatchObject({ declined: true })
+    // Declined: no second card until the person writes.
+    expect(await svc.suggestTeammate(parent.id, input)).toMatchObject({ declined: true })
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(String(ask.mock.calls[0]![2])).toContain('Runs on Codex with its default login')
+    svc.resetTeammateRounds(parent.id)
+    expect(await svc.suggestTeammate(parent.id, input)).toMatchObject({ added: 'codex-test' })
+    const here = latestTasks(svc.events(parent.id)).filter((task) => task.teammate)
+    expect(here.map((task) => task.teammate)).toEqual(['review'])
+    // Turned off in Settings, the agent is told not to.
+    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, teammateSuggestions: false })
+    await expect(svc.suggestTeammate(parent.id, input)).rejects.toThrow(/turned teammate suggestions off/)
     svc.stopAll()
   })
 

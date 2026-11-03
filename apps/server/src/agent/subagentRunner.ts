@@ -172,7 +172,11 @@ export class SubagentRunner {
   /** The person wrote to the lead or the teammate, so the exchange may go on. */
   resetTeammateRounds(parentId: string) {
     this.teammateRounds.delete(parentId)
+    this.suggestionDeclined.delete(parentId)
   }
+
+  /** Leads whose teammate suggestion the person turned down; they may suggest again once the person writes. */
+  readonly suggestionDeclined = new Set<string>()
 
   /**
    * Counts one message from the teammate to the lead, a report or a note. A back-and-forth costs a turn on each side,

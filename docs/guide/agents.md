@@ -36,6 +36,8 @@ Once you talk to a teammate it becomes the recipient: the **To** chip in the com
 
 Before each message, a teammate gets a short catch-up on what the thread said and which files changed since it last took part. The main agent and teammates also message each other by name: `teammate_message` sends a note, and `teammate_ask` lets the main agent ask a teammate and get the reply inside its own turn. Each teammate's bar above the composer and its card show what it changed (files and lines) and its turns and reported cost.
 
+The main agent can also suggest a teammate, for example a second model to review risky changes. The suggestion is an approval card that says which model and login it would use; nothing joins until you allow it, and after a no it waits for your next message before suggesting again. **Let agents suggest teammates** (Settings → Threads) turns this off.
+
 After four teammate reports or notes without you writing, the exchange pauses; a message to any of them continues it.
 
 ## Custom agents
