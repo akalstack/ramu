@@ -186,7 +186,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         )
     }
     read()
-    const off = storeRef.current.subscribe(selected, (channel) => {
+    const off = storeRef.current.subscribe(selected, (...[channel]) => {
       if (channel === 'workspace:changed' || channel === 'settings:changed') read()
     })
     return () => {

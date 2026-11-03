@@ -34,7 +34,7 @@ export function useWorkspaces(host: string, enabled = true) {
       )
     }
     read()
-    const off = store.subscribe(host, (channel) => {
+    const off = store.subscribe(host, (...[channel]) => {
       if (channel === 'workspace:changed') setRevision((value) => value + 1)
     })
     return () => {

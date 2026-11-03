@@ -203,7 +203,7 @@ export function PlanUsageSheet({
       .filter((id) => store.isOnline(id))
       .map((id) => {
         read(id)
-        return store.subscribe(id, (channel) => {
+        return store.subscribe(id, (...[channel]) => {
           if (channel === 'usage:changed') read(id)
         })
       })

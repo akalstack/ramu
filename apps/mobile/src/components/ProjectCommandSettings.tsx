@@ -75,7 +75,7 @@ export function ProjectCommandSettings({
     setBusy(false)
     if (!open || !online || viewOnly) return
     void read(version)
-    const off = runtime.current.store.subscribe(hostId, (channel) => {
+    const off = runtime.current.store.subscribe(hostId, (...[channel]) => {
       if (channel === 'workspace:changed') void read(version)
     })
     return () => {

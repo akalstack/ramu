@@ -88,7 +88,7 @@ export function useAgentDraft(
     const version = ++lifecycle.version
     if (general || !online) return
     void read(version)
-    const off = runtime.current.store.subscribe(host, (channel) => {
+    const off = runtime.current.store.subscribe(host, (...[channel]) => {
       if (channel === 'workspace:changed' || channel === 'settings:changed') void read(version)
     })
     return () => {

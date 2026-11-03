@@ -34,7 +34,7 @@ export function useThreadBrowserTabs(chat: Chat | undefined) {
       }
     }
     void load()
-    const off = io.current.subscribe(host, (channel) => {
+    const off = io.current.subscribe(host, (...[channel]) => {
       if (['browser:changed', 'hostBrowser:changed', 'browser:present', 'hostBrowser:present'].includes(channel))
         void load()
     })

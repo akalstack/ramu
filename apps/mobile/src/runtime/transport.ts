@@ -1,5 +1,6 @@
 import { PROTOCOL_HEADER, PROTOCOL_VERSION, RECOVERABLE_MUTATIONS, isLoopbackHost } from '@ramu/contracts'
-import type { PushEvents, RamuMethods } from '@ramu/shared/api'
+import type { RamuMethods } from '@ramu/shared/api'
+import { pushMessage, type PushArgs } from '@ramu/shared/pushChannels'
 
 export class HostError extends Error {
   status: number
@@ -119,12 +120,14 @@ export class HostClient {
     method: M,
     ...args: Parameters<RamuMethods[M]>
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>> {
-    if (!RECOVERABLE_MUTATIONS.has(method)) return this.call(method, args)
+    // The one place a host's answer takes its method's declared type; the host validated the call and built the result.
+    type Result = Awaited<ReturnType<RamuMethods[M]>>
+    if (!RECOVERABLE_MUTATIONS.has(method)) return (await this.call(method, args)) as Result
     // One key across the attempts: a host that already ran the action returns its first result instead of running it again.
     const key = operationKey()
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.call(method, args, key)
+        return (await this.call(method, args, key)) as Result
       } catch (error) {
         if (this.lifetime.signal.aborted || !(error instanceof HostError) || !error.ambiguous || attempt >= 2)
           throw error
@@ -179,7 +182,7 @@ export class HostClient {
     }
   }
 
-  private async call(method: string, args: unknown[], operationKey?: string): Promise<any> {
+  private async call(method: string, args: unknown[], operationKey?: string): Promise<unknown> {
     if (this.lifetime.signal.aborted) throw new SuspendedError('Connection suspended before sending.')
     // One socket carries every call. There is no second transport: a call waits briefly for the socket, and a refused
     // token or a host without a socket is reported as that. A call lost after it was sent has an unknown outcome.
@@ -220,11 +223,7 @@ export class HostClient {
    * with the listener already attached so nothing that changes during the snapshot is missed. The socket reconnects on
    * its own; the caller starts another stream, and hydrates again, when this one ends.
    */
-  async stream(
-    receive: (channel: keyof PushEvents, payload: any) => void,
-    ready: () => Promise<void>,
-    signal: AbortSignal,
-  ) {
+  async stream(receive: (...args: PushArgs) => void, ready: () => Promise<void>, signal: AbortSignal) {
     if (signal.aborted) return
     const socket = socketOf(this.address, this.token)
     try {
@@ -241,7 +240,9 @@ export class HostClient {
     this.streams.add(abort)
     const stop = socket.listen({
       event: (channel, payload) => {
-        if (!signal.aborted) receive(channel as keyof PushEvents, payload)
+        // A channel this app does not know, or a payload that cannot be what it carries, is dropped here.
+        const message = pushMessage(channel, payload)
+        if (message && !signal.aborted) receive(...([message.channel, message.payload] as PushArgs))
       },
       state: (state) => {
         if (state !== 'ready') gone()

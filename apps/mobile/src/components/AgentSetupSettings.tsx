@@ -50,7 +50,7 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
         (reason: unknown) => active && setError(reason instanceof Error ? reason.message : String(reason)),
       )
     read()
-    const unsubscribe = runtime.current.subscribe(hostId, (channel) => {
+    const unsubscribe = runtime.current.subscribe(hostId, (...[channel]) => {
       if (channel === 'mcp:changed') read()
     })
     return () => {
@@ -183,7 +183,7 @@ export function MemoryList({ hostId }: { hostId: string }) {
       (snapshot) => active && setMemories(snapshot.memories),
       () => active && setMemories([]),
     )
-    const unsubscribe = runtime.current.subscribe(hostId, (channel) => {
+    const unsubscribe = runtime.current.subscribe(hostId, (...[channel]) => {
       if (channel === 'memory:changed') setReload((value) => value + 1)
     })
     return () => {

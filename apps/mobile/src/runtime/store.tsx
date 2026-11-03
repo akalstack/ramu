@@ -30,6 +30,7 @@ import { shareRows } from './shareRows'
 import * as Device from 'expo-device'
 import Constants from 'expo-constants'
 import type { PushEvents, RamuMethods, ReviewAddressResult } from '@ramu/shared/api'
+import type { PushArgs } from '@ramu/shared/pushChannels'
 import type { BackgroundActivity } from '@ramu/shared/chat/activity'
 import { isUserPaused } from '@ramu/shared/chat/goalHold'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
@@ -164,7 +165,7 @@ interface Store extends State {
     method: M,
     ...args: Parameters<RamuMethods[M]>
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>>
-  subscribe(computerId: string, listener: (channel: keyof PushEvents, payload: any) => void): () => void
+  subscribe(computerId: string, listener: (...args: PushArgs) => void): () => void
   /** Asks a host for on-demand channels (file changes, a thread's context size, terminal output) while a screen shows them. */
   watch(computerId: string, channels: readonly string[], keys?: Record<string, readonly string[]>): () => void
   /** `full` re-reads every transcript (after a reconnect); otherwise chats already streaming keep their live transcript. */
@@ -311,7 +312,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const changeCursors = useRef(new Map<string, number>())
   // Threads on screen, by scoped session id: they always read in full.
   const shownSessions = useRef(new Set<string>())
-  const listeners = useRef(new Map<string, Set<(channel: keyof PushEvents, payload: any) => void>>())
+  const listeners = useRef(new Map<string, Set<(...args: PushArgs) => void>>())
   const refreshing = useRef(new Map<string, Promise<void>>())
   const buffers = useRef(new Map<string, PushEvents['agent:event'][]>())
   const flushing = useRef(new Set<string>())
@@ -513,7 +514,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     if (!previous || !['text', 'thinking'].includes(payload.event.kind)) rebuild(computerId, payload.sessionId)
   }
-  const receive = (id: string, channel: keyof PushEvents, payload: any) => {
+  const receive = (id: string, ...[channel, payload]: PushArgs) => {
     if (channel === 'agent:event') {
       if (buffers.current.has(id)) buffers.current.get(id)!.push(payload)
       else {
@@ -570,7 +571,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ].slice(-30),
       )
     }
-    for (const listener of listeners.current.get(id) ?? []) listener(channel, payload)
+    for (const listener of listeners.current.get(id) ?? []) listener(...([channel, payload] as PushArgs))
   }
   const refresh = (id: string, depth: RefreshDepth = false): Promise<void> => {
     // A deeper refresh must not be satisfied by a light one already in flight.
@@ -1246,8 +1247,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           )
           .catch(() => {})
       await connection.client.stream(
-        (channel, payload) => {
-          if (current()) receive(computer.id, channel, payload)
+        (...args) => {
+          if (current()) receive(computer.id, ...args)
         },
         async () => {
           if (!current()) return

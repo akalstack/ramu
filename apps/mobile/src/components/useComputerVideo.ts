@@ -11,6 +11,14 @@ export interface ComputerVideo {
 }
 
 const OFF: ComputerVideo = { status: 'off', streamURL: null, width: 0, height: 0 }
+
+/** The event-target part of react-native-webrtc's peer connection, which its published types leave out. */
+interface PeerEvents<Track> {
+  connectionState: string
+  iceGatheringState: string
+  addEventListener(type: 'track', listener: (event: { streams?: { toURL(): string }[]; track: Track }) => void): void
+  addEventListener(type: 'connectionstatechange' | 'icegatheringstatechange', listener: () => void): void
+}
 const CONNECT_TIMEOUT_MS = 12_000
 
 /** The native WebRTC module is only in an EAS development or production build; Expo Go has none and gets the image frames. */
@@ -60,23 +68,21 @@ export function useComputerVideo(
     const timer = setTimeout(() => {
       if (mounted) setState((previous) => (previous.status === 'live' ? previous : { ...OFF, status: 'failed' }))
     }, CONNECT_TIMEOUT_MS)
-    ;(pc as any).addEventListener('track', (event: any) => {
+    const events = pc as unknown as PeerEvents<InstanceType<typeof native.MediaStreamTrack>>
+    events.addEventListener('track', (event) => {
       const stream = event.streams?.[0] ?? new native.MediaStream([event.track])
       if (mounted) setState((previous) => ({ ...previous, status: 'live', streamURL: stream.toURL() }))
     })
-    ;(pc as any).addEventListener('connectionstatechange', () => {
-      if (['failed', 'disconnected', 'closed'].includes((pc as any).connectionState)) fail()
+    events.addEventListener('connectionstatechange', () => {
+      if (['failed', 'disconnected', 'closed'].includes(events.connectionState)) fail()
     })
     setState({ ...OFF, status: 'connecting' })
     void (async () => {
       try {
-        await pc.setLocalDescription(await pc.createOffer({ offerToReceiveVideo: true } as any))
+        await pc.setLocalDescription(await pc.createOffer({ offerToReceiveVideo: true }))
         await new Promise<void>((resolve) => {
-          if ((pc as any).iceGatheringState === 'complete') return resolve()
-          ;(pc as any).addEventListener(
-            'icegatheringstatechange',
-            () => (pc as any).iceGatheringState === 'complete' && resolve(),
-          )
+          if (events.iceGatheringState === 'complete') return resolve()
+          events.addEventListener('icegatheringstatechange', () => events.iceGatheringState === 'complete' && resolve())
           setTimeout(resolve, 3000)
         })
         const answer = await io.current.invoke(computerId, 'computer.rtcOffer', taskId, pc.localDescription!.sdp)

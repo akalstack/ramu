@@ -163,7 +163,7 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
         clearTimeout(timer)
         timer = setTimeout(() => void load(id, what), 250)
       }
-      const off = storeRef.current.subscribe(id, (channel) => {
+      const off = storeRef.current.subscribe(id, (...[channel]) => {
         if (channel === 'automation:changed') soon(['recaps', 'schedules'])
         else if (channel === 'summaries:changed') soon(['summaries'])
       })

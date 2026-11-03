@@ -52,7 +52,7 @@ export function useThreadToolActivity(chat: Chat | undefined, visible: boolean) 
     }
     void load()
     const unwatch = session ? io.current.watch(host, ['context:changed'], { 'context:changed': [session] }) : () => {}
-    const off = io.current.subscribe(host, (channel) => {
+    const off = io.current.subscribe(host, (...[channel]) => {
       if (
         [
           'browser:changed',

@@ -46,7 +46,7 @@ export function RulesSettings({ hostId }: { hostId: string }) {
   useEffect(() => {
     void read()
     const unsubscribe = hostId
-      ? store.subscribe(hostId, (channel) => {
+      ? store.subscribe(hostId, (...[channel]) => {
           if (channel === 'rules:changed') void read()
         })
       : () => {}

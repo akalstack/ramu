@@ -235,6 +235,7 @@ export function TerminalScreen({
         })
     }
     const off = store.subscribe(chat.computerId, (channel, value) => {
+      if (channel !== 'term:data' && channel !== 'term:behind' && channel !== 'term:exit') return
       if (value.id !== terminal.id) return
       if (channel === 'term:data') {
         if (hydrating) buffer.push({ seq: 0, size: value.data.length, value })
