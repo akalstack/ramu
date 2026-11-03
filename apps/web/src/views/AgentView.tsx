@@ -716,7 +716,6 @@ export const AgentView = memo(function AgentView({
         continuing={continuing}
         onContinue={() => setConfirmContinue(true)}
         onContinueOnHost={setContinueHost}
-        onAddTeammate={viewOnly ? undefined : startTeammate}
         latestRequest={
           events.findLast(
             (event): event is Extract<typeof event, { kind: 'user' }> => event.kind === 'user' && !event.agentId,

@@ -34,7 +34,7 @@ interface Choice {
 }
 /**
  * Who `@` at the start of a message can reach: teammates already in the thread, and models and custom agents that join
- * it as one when the message is sent. `/teammate` opens the full Add teammate dialog.
+ * it as one when the message is sent. `/teammate` starts a message to the thread's model, with its settings in the composer.
  */
 export interface ComposerTeammate {
   teammates: { name: string; mode: TeammateMode }[]

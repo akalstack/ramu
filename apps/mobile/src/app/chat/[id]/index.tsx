@@ -24,6 +24,7 @@ import {
   Server,
   SquareTerminal,
   Users,
+  Plug,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
@@ -38,6 +39,7 @@ import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runti
 import { fill, useT, useSay } from '../../../i18n'
 import { LoadingMark } from '../../../components/AnimatedMark'
 import { ProviderIcon } from '../../../components/Logos'
+import { McpStatusSheet } from '../../../components/McpStatusSheet'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
@@ -96,6 +98,7 @@ export default function ChatScreen() {
   const chat = useChat(id)
   const { seeFailure } = useAutomation()
   const [continueHost, setContinueHost] = useState<string | null>(null)
+  const [mcpOpen, setMcpOpen] = useState(false)
   // What the composer changed for a teammate the draft brings in, kept for that target only.
   const [joinEdits, setJoinEdits] = useState<{
     key: string
@@ -698,14 +701,14 @@ export default function ChatScreen() {
     group: 'tools' | 'info'
     symbol?: import('../../../components/Screen').HeaderMenuAction['icon']
   }[] = [
-    ...(computer?.access !== 'viewer'
+    ...(chat.sessionId
       ? [
           {
-            icon: GitFork,
-            label: tr('Add teammate'),
-            symbol: 'person.2' as const,
+            icon: Plug,
+            label: tr('MCP servers'),
+            symbol: 'powerplug' as const,
             group: 'tools' as const,
-            onPress: startTeammate,
+            onPress: () => setMcpOpen(true),
           },
         ]
       : []),
@@ -1605,6 +1608,15 @@ export default function ChatScreen() {
         ))}
       </Sheet>
       <ContinueOnHostSheet chat={chat} targetId={continueHost} onClose={() => setContinueHost(null)} />
+      {chat.sessionId ? (
+        <McpStatusSheet
+          open={mcpOpen}
+          onClose={() => setMcpOpen(false)}
+          computerId={chat.computerId}
+          sessionId={chat.sessionId}
+          readOnly={computer?.access === 'viewer'}
+        />
+      ) : null}
     </Screen>
   )
 }

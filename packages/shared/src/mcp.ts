@@ -208,3 +208,21 @@ export function setupReachText(
   if (!item.nativeProviders.length) return t('Turned off in every provider')
   return t('Only in {providers}', { providers: item.nativeProviders.map(providerName).join(', ') })
 }
+
+/** How a thread's MCP connection reads in its status list, on the desktop and the phone alike. */
+export function mcpStatusLabel(status: string): string {
+  return (
+    {
+      configured: 'Configured',
+      unknown: 'Connection status unknown',
+      unsupported: 'Not supported by this runtime',
+      cancelled: 'Cancelled',
+      connected: 'Connected',
+      pending: 'Connecting',
+      connecting: 'Connecting',
+      failed: 'Failed',
+      'needs-auth': 'Needs authentication',
+      disabled: 'Disabled',
+    }[status] ?? status
+  )
+}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { mcpStatusLabel } from '@ramu/shared/mcp'
 import type { AgentMcpStatus } from '@ramu/shared/types'
 import { Dialog } from '../../../Menu'
 import { Button } from '@/components/desktop-button'
@@ -48,31 +49,7 @@ export function McpStatusDialog({ sessionId, onClose }: { sessionId: string; onC
       if (revision.current === request) setBusy(false)
     }
   }
-  const label = (value: string) => {
-    switch (value) {
-      case 'configured':
-        return t('Configured')
-      case 'unknown':
-        return t('Connection status unknown')
-      case 'unsupported':
-        return t('Not supported by this runtime')
-      case 'cancelled':
-        return t('Cancelled')
-      case 'connected':
-        return t('Connected')
-      case 'pending':
-      case 'connecting':
-        return t('Connecting')
-      case 'failed':
-        return t('Failed')
-      case 'needs-auth':
-        return t('Needs authentication')
-      case 'disabled':
-        return t('Disabled')
-      default:
-        return value
-    }
-  }
+  const label = (value: string) => t(mcpStatusLabel(value))
   return (
     <Dialog
       title={t('MCP servers')}
