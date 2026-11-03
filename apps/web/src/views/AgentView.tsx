@@ -10,7 +10,7 @@ import { useDeferredRequests } from './agent/hooks/useDeferredRequests'
 import { HelperBreadcrumb } from '../HomeAgents'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { focusComposer } from '../composer/ComposerInput'
-import { LoadingMark } from '../Brand'
+import { Spinner } from '@/components/ui/spinner'
 import { ChatMentions } from '../chat/ChatReferences'
 import { ThreadAgents } from './agent/lib/threadAgents'
 import { t as translate, useLanguage } from '../i18n'
@@ -200,6 +200,14 @@ export const AgentView = memo(function AgentView({
   const results = useMemo(() => toolResultsOf(events), [events])
   const blocks = useMemo(() => toBlocks(events), [events])
   const claimArrival = useTranscriptArrival(eventSequences, hydrating)
+  // Most chats load before a person would notice; only a slow load earns an indicator.
+  const [slowHydration, setSlowHydration] = useState(false)
+  useEffect(() => {
+    setSlowHydration(false)
+    if (!hydrating) return
+    const timer = window.setTimeout(() => setSlowHydration(true), 400)
+    return () => window.clearTimeout(timer)
+  }, [hydrating])
   const goalNotes = useMemo(() => goalChanges(events), [events])
   const latestAssistant = blocks.findLast((block) => block.kind === 'event' && block.event.kind === 'text')
   const live = session ? LIVE.includes(session.state) : false
@@ -297,7 +305,10 @@ export const AgentView = memo(function AgentView({
   const providerWait = useMemo(() => providerWaitState(events), [events])
   const reportError = useCallback((reason: unknown) => setError(errorText(reason)), [setError])
   const autoResume = useAutoResume(view.sessionId, session?.settings ?? {}, setSession, reportError)
-  const limitRetry = useLimitRetry(view.sessionId, providerWait, reportError)
+  // Assigned once the pending-settings helpers exist below; a retry sends a just-chosen login before trying.
+  const prepareRetry = useRef<() => Promise<void>>(async () => {})
+  const prepareLimitRetry = useCallback(() => prepareRetry.current(), [])
+  const limitRetry = useLimitRetry(view.sessionId, providerWait, reportError, prepareLimitRetry)
   const runningTasks = helperSelection.selected.filter(helperActive)
   const act = async (fn: () => Promise<unknown>, propagate = false) => {
     setError(null)
@@ -404,7 +415,9 @@ export const AgentView = memo(function AgentView({
     session,
     setSession,
     events,
-    busyAgent,
+    // At a usage limit nothing is running, but a change is made to get unblocked: it applies at once, so the next try or
+    // automatic resume uses it.
+    applyNow: busyAgent || !!providerWait,
     warnModelChange: preferences.warnModelChange,
   })
   const [continueHost, setContinueHost] = useState<string | null>(null)
@@ -421,6 +434,7 @@ export const AgentView = memo(function AgentView({
     setSession(await invoke('agent.configure', view.sessionId, pendingSettings))
     setPendingSettings(null)
   }
+  prepareRetry.current = applyPendingSettings
   /** Adds a Markdown quote to the message box and puts the cursor after it. */
   const quoteIntoDraft = (text: string) => {
     const quoted = quoteLines(text)
@@ -812,9 +826,11 @@ export const AgentView = memo(function AgentView({
                       <MessageScrollerContent
                         className={`${hydrating && !turns.length ? 'justify-center' : ''} transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5`}
                       >
-                        {hydrating && !turns.length && (
-                          <div className="flex items-center justify-center">
-                            <LoadingMark label={translate('Loading conversation')} />
+                        {/* The window already carries the brand; a chat that opens at once shows nothing, a slow one a
+                            small spinner. */}
+                        {slowHydration && !turns.length && (
+                          <div className="flex items-center justify-center text-muted-foreground">
+                            <Spinner aria-label={translate('Loading conversation')} />
                           </div>
                         )}
                         {pageTurns.map((turn, ti) => (

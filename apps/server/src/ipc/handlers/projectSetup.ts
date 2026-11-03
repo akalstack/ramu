@@ -31,6 +31,28 @@ function withProviderManaged(setup: ProjectSetup, seen: ProviderManaged): Projec
   return providerManaged.length ? { ...setup, providerManaged } : setup
 }
 
+/**
+ * The person's own setup and what applies in every project: no project folders are read, and each choice is the
+ * all-projects one, with a count of the projects that chose differently.
+ */
+export function everywhereSetupOf({ workspace, getSharedMcp }: Pick<HandlerContext, 'workspace' | 'getSharedMcp'>) {
+  const managed = (getSharedMcp?.().list().connections ?? [])
+    .filter(({ connection }) => connection.scope.hostWide)
+    .map(({ connection }) => ({ id: connection.id, transport: connection.transport }))
+  return withProviderManaged(
+    discoverProjectSetup(
+      null,
+      [],
+      managed,
+      workspace.getAppState<McpSharing>(MCP_SHARING_KEY, {}),
+      undefined,
+      undefined,
+      workspace.getAppState<SkillSharing>(SKILL_SHARING_KEY, {}),
+    ),
+    workspace.getAppState<ProviderManaged>(PROVIDER_MANAGED_KEY, {}),
+  )
+}
+
 /** Discovery for one project from its folders and the Shared MCP connections on this host. Nothing is executed. */
 export function projectSetupOf(
   { workspace, getSharedMcp }: Pick<HandlerContext, 'workspace' | 'getSharedMcp'>,
@@ -67,9 +89,10 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
   }
   const setupOf = (projectId: string) => projectSetupOf(ctx, projectId)
   return {
+    // No project: the person's own setup and the choices that apply in every project.
     'projects.setup': {
-      args: z.tuple([id]),
-      run: (projectId: string) => setupOf(projectId).setup,
+      args: z.tuple([id.nullable()]),
+      run: (projectId: string | null) => (projectId ? setupOf(projectId).setup : everywhereSetupOf(ctx)),
     },
     /**
      * Copies a declared server's non-secret definition into Shared MCP for this project. Values of its environment and

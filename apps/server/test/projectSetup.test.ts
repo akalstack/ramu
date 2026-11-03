@@ -361,3 +361,22 @@ it('reports an unusable server on its own and still loads the rest of its file',
     'Server "empty" has neither a url nor a command, so Ramu cannot share it.',
   ])
 })
+
+describe('every project at once', () => {
+  it('reads the person’s own servers with the all-projects choice and counts projects that chose differently', () => {
+    put(join(home, '.claude.json'), JSON.stringify({ mcpServers: { docs: { url: 'https://docs/mcp' } } }))
+    const key = discoverProjectSetup(null, [], [], {}, {}, home).mcp[0]!.key
+    const sharing = {
+      [key]: true,
+      [projectSharingKey('a', key)]: false,
+      [projectSharingKey('b', key)]: false,
+      [projectSharingKey('c', key)]: true,
+    }
+    const everywhere = discoverProjectSetup(null, [], [], sharing, {}, home).mcp[0]!
+    expect(everywhere).toMatchObject({ shared: true, shareScope: 'host', exceptions: 2 })
+    // Inside one project the count means nothing: that project's own choice is what applies there.
+    const inA = discoverProjectSetup('a', [], [], sharing, {}, home).mcp[0]!
+    expect(inA).toMatchObject({ shared: false, shareScope: 'project' })
+    expect(inA.exceptions).toBeUndefined()
+  })
+})

@@ -131,23 +131,33 @@ export function useAccountUsage(enabled = true): UsageReading[] {
   return all
 }
 
-/** Each login's sign-in email and whether it uses an API key, loaded while `enabled`, for naming logins without a label. */
+/**
+ * Each login's sign-in email and whether it uses an API key, loaded while `enabled`, for naming logins without a label.
+ * Read again when a login is signed in or given a key, or the list of logins changes, so every picker names it at once.
+ */
 export function useAccountLogins(enabled = true): Record<string, Record<string, AccountLogin>> {
   const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const [logins, setLogins] = useState<Record<string, Record<string, AccountLogin>>>({})
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
-    void invoke('providers.accountLogins').then(
-      (next) => {
-        if (!cancelled) setLogins(next)
-      },
-      () => {},
-    )
+    const load = () =>
+      void invoke('providers.accountLogins').then(
+        (next) => {
+          if (!cancelled) setLogins(next)
+        },
+        () => {},
+      )
+    load()
+    const offLogins = on('logins:changed', load)
+    const offSettings = on('settings:changed', load)
     return () => {
       cancelled = true
+      offLogins()
+      offSettings()
     }
-  }, [enabled, invoke])
+  }, [enabled, invoke, on])
   return logins
 }
 

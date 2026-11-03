@@ -24,7 +24,6 @@ import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { ramu } from '../ipc'
 import { ProviderIcon } from '../models/ProviderIcon'
-import { useWorkspace } from '../workspace/workspace'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { usePaged } from './cards'
 import { McpSettings } from './McpSettings'
@@ -77,7 +76,7 @@ function ProviderStrip({ providers }: { providers: AgentProvider[] }) {
 /** Where something is declared, briefly: the first two places and a count of the rest. */
 const fromText = (sources: ProjectSetupSource[]) => setupFromText(sources, t)
 
-type Shareable = Pick<ProjectMcpServer, 'shared' | 'shareBlocked' | 'nativeProviders' | 'shareScope'>
+type Shareable = Pick<ProjectMcpServer, 'shared' | 'shareBlocked' | 'nativeProviders' | 'shareScope' | 'exceptions'>
 
 /** One line on who has it now: shared, only some providers, or off everywhere. */
 const reach = (item: Shareable) => setupReachText(item, t, providerName)
@@ -92,7 +91,7 @@ function ShareRow({
   label,
   disabled,
   onShare,
-  onWiden,
+  onReset,
   extra,
 }: {
   name: string
@@ -103,8 +102,8 @@ function ShareRow({
   label: string
   disabled: boolean
   onShare(shared: boolean): void
-  /** Offered when the choice covers this project only: extends it to every project. */
-  onWiden?(): void
+  /** Offered when this project made its own choice: drops it so the all-projects setting applies again. */
+  onReset?(): void
   /** An item-specific action beside the switch. */
   extra?: ReactNode
 }) {
@@ -120,11 +119,20 @@ function ShareRow({
         </span>
         <span className="block small text-caption text-muted-foreground">
           {reach(item)} · {t('From {places}', { places: fromText(sources) })}
-          {onWiden && item.shared && item.shareScope === 'project' && (
+          {!!item.exceptions && (
+            <>
+              {' '}
+              ·{' '}
+              {t(item.exceptions === 1 ? 'Different in 1 project' : 'Different in {count} projects', {
+                count: item.exceptions,
+              })}
+            </>
+          )}
+          {onReset && item.shareScope === 'project' && (
             <>
               {' · '}
-              <InlineAction disabled={disabled} onClick={onWiden}>
-                {t('Share with every project')}
+              <InlineAction disabled={disabled} onClick={onReset}>
+                {t('Use the all-projects setting')}
               </InlineAction>
             </>
           )}
@@ -232,13 +240,14 @@ function Skills({
   skills,
   disabled,
   onShare,
-  onWiden,
+  onReset,
   query,
 }: {
   skills: ProjectSkill[]
   disabled: boolean
   onShare(name: string, shared: boolean): void
-  onWiden(name: string): void
+  /** Absent in the all-projects view, where there is no project choice to drop. */
+  onReset?(name: string): void
   /** Paging starts over when the search changes. */
   query: string
 }) {
@@ -258,7 +267,7 @@ function Skills({
           label={t('Share {name} with every provider and account', { name: skill.name })}
           disabled={disabled}
           onShare={(shared) => onShare(skill.name, shared)}
-          onWiden={() => onWiden(skill.name)}
+          onReset={onReset && (() => onReset(skill.name))}
         />
       ))}
       {paged.more}
@@ -279,7 +288,6 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
   const hostKey = scope?.primaryId ?? ''
   const viewOnly = scope?.targets?.some((target) => target.viewOnly) ?? false
   const ready = !scope || (scope.ready && !scope.stale)
-  const ws = useWorkspace()
   const projects = useQuery({
     queryKey: ['mcp-projects', hostKey],
     queryFn: () => invoke('projects.list'),
@@ -300,13 +308,14 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
     setPending(null)
     setError('')
   }, [hostKey])
-  const projectId =
-    projects.data?.find((project) => project.id === (picked ?? ws.composing))?.id ?? projects.data?.[0]?.id
+  // All projects unless one is picked: most choices are meant for every project, and a project is where exceptions go.
+  const projectId = projects.data?.find((project) => project.id === picked)?.id ?? null
   const setup = useQuery({
-    queryKey: ['project-setup', hostKey, projectId],
-    queryFn: () => invoke('projects.setup', projectId!),
-    enabled: !!projectId && ready,
+    queryKey: ['project-setup', hostKey, projectId ?? 'all'],
+    queryFn: () => invoke('projects.setup', projectId),
+    enabled: ready,
   })
+  const where = projectId ?? 'all'
   const refetch = setup.refetch
   useEffect(
     () =>
@@ -348,30 +357,27 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
             ? server.transport.url
             : [server.transport.command, ...server.transport.args].join(' ')
         }
-        item={{ ...server, shared: valueOf(`mcp-share:${projectId}:${server.key}`, server.shared) }}
+        item={{ ...server, shared: valueOf(`mcp-share:${where}:${server.key}`, server.shared) }}
         providers={server.providers}
         sources={server.sources}
         label={t('Share {name} with every provider and account', { name: server.name })}
         disabled={locked}
         onShare={(shared) =>
-          stage(`mcp-share:${projectId}:${server.key}`, shared, server.shared, (value) =>
-            share(server.key, () => invoke('mcp.share', server.key, value, projectId)),
+          stage(`mcp-share:${where}:${server.key}`, shared, server.shared, (value) =>
+            share(server.key, () => invoke('mcp.share', server.key, value, projectId ?? undefined)),
           )
         }
         extra={
           server.managedConnectionId ? (
             <span className="text-caption text-muted-foreground">{t('Connected through Ramu')}</span>
-          ) : (
+          ) : projectId ? (
             <Button size="sm" variant="ghost" disabled={locked} onClick={() => setImporting(server)}>
               {t('Connect through Ramu')}
             </Button>
-          )
+          ) : null
         }
-        onWiden={() =>
-          void share(server.key, async () => {
-            await invoke('mcp.share', server.key, true)
-            await invoke('mcp.share', server.key, null, projectId)
-          })
+        onReset={
+          projectId ? () => void share(server.key, () => invoke('mcp.share', server.key, null, projectId)) : undefined
         }
       />
     ))
@@ -379,24 +385,19 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
     <Skills
       skills={skillsIn(scopeName).map((skill) => ({
         ...skill,
-        shared: valueOf(`skill-share:${projectId}:${skill.name}`, skill.shared),
+        shared: valueOf(`skill-share:${where}:${skill.name}`, skill.shared),
       }))}
       query={query}
       disabled={locked}
       onShare={(name, shared) =>
         stage(
-          `skill-share:${projectId}:${name}`,
+          `skill-share:${where}:${name}`,
           shared,
           skillsIn(scopeName).find((skill) => skill.name === name)?.shared ?? false,
-          (value) => share(name, () => invoke('skills.share', name, value, projectId)),
+          (value) => share(name, () => invoke('skills.share', name, value, projectId ?? undefined)),
         )
       }
-      onWiden={(name) =>
-        void share(name, async () => {
-          await invoke('skills.share', name, true)
-          await invoke('skills.share', name, null, projectId)
-        })
-      }
+      onReset={projectId ? (name) => void share(name, () => invoke('skills.share', name, null, projectId)) : undefined}
     />
   )
   const projectName = projects.data?.find((project) => project.id === projectId)?.name
@@ -418,11 +419,21 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
       </TabsList>
       {view !== 'rules' && projects.data && projects.data.length > 0 && (
         <SettingsRow className="mb-0">
-          <SettingsLabel title={t('Project')} help={t('Choose a project to see what its agents get.')} />
+          <SettingsLabel
+            title={t('Applies to')}
+            help={
+              projectId
+                ? t('A switch here makes an exception for {project} only.', { project: projectName ?? '' })
+                : t('Every project. Choose one to see its own servers and skills, or to make an exception.')
+            }
+          />
           <Dropdown
-            label={t('Project')}
+            label={t('Applies to')}
             value={projectId ?? ''}
-            options={projects.data.map((project) => ({ value: project.id, label: project.name }))}
+            options={[
+              { value: '', label: t('All projects') },
+              ...projects.data.map((project) => ({ value: project.id, label: project.name })),
+            ]}
             onChange={setPicked}
           />
         </SettingsRow>
@@ -432,7 +443,7 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
           <AlertDescription>{error || errorText(setup.error ?? projects.error)}</AlertDescription>
         </Alert>
       )}
-      {view !== 'rules' && !data && !setup.error && !!projectId && (
+      {view !== 'rules' && !data && !setup.error && (
         <p role="status" className={CAPTION}>
           {t('Loading…')}
         </p>
@@ -440,9 +451,13 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
 
       <TabsContent value="mcp" className="flex flex-col">
         <p className={`${CAPTION} mb-4`}>
-          {t(
-            'Tools agents can call. Sharing a server gives it to every provider and account in this project. New threads pick up changes.',
-          )}
+          {projectId
+            ? t(
+                'Tools agents can call. Sharing a server gives it to every provider and account in this project. New threads pick up changes.',
+              )
+            : t(
+                'Tools agents can call. Sharing a server gives it to every provider and account in every project. New threads pick up changes.',
+              )}
         </p>
         {data && mcpCount === 0 && <EmptyNote>{t('No MCP servers found yet.')}</EmptyNote>}
         {mcp('user').length > 0 && (
@@ -529,9 +544,13 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
 
       <TabsContent value="skills" className="flex flex-col">
         <p className={`${CAPTION} mb-4`}>
-          {t(
-            'Instructions agents can load. Sharing a skill copies it to every provider and account in this project that lacks it. Original files stay unchanged.',
-          )}
+          {projectId
+            ? t(
+                'Instructions agents can load. Sharing a skill copies it to every provider and account in this project that lacks it. Original files stay unchanged.',
+              )
+            : t(
+                'Instructions agents can load. Sharing a skill copies it to every provider and account in every project that lacks it. Original files stay unchanged.',
+              )}
         </p>
         {(data?.skills.length ?? 0) > 10 && (
           <div className="mb-4">

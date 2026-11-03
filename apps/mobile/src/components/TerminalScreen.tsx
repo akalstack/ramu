@@ -220,8 +220,12 @@ export function TerminalScreen({
     // `since` fetches only what this view has not shown; without it the view starts again from the held output.
     const hydrate = (since?: number) => {
       hydrating = true
-      store
-        .invoke(chat.computerId, 'term.snapshot', terminal.id, since)
+      // An absent `since` must not be sent as an empty slot: it crosses the link as null, which no snapshot form accepts.
+      const request =
+        since === undefined
+          ? store.invoke(chat.computerId, 'term.snapshot', terminal.id)
+          : store.invoke(chat.computerId, 'term.snapshot', terminal.id, since)
+      request
         .then((snapshot) => {
           if (!alive) return
           const queued = buffer.drain()

@@ -1,6 +1,6 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useStaging } from './stagedChanges'
-import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
+import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { errorText } from '../lib/errors'
 import { SettingsRow } from '@/components/settings-row'
 import { t, useLanguage } from '../i18n'
@@ -34,6 +34,7 @@ export function ProviderSettings({
   onOpenSection?: (section: 'system') => void
 }) {
   const invoke = useSettingsInvoke()
+  const on = useSettingsEvents()
   useLanguage()
   const { catalogs } = useModelSets()
   const scope = useContext(SettingsScopeContext)
@@ -129,6 +130,12 @@ export function ProviderSettings({
       setError(errorText(reason))
     }
   }
+  // A login signed in from another device or a terminal shows its new account here without a manual refresh.
+  useEffect(() => {
+    if (viewOnly) return
+    return on('logins:changed', () => void refresh(false, false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [config, invoke, viewOnly] by design; the values it reads beyond these are current as of that run
+  }, [config, invoke, viewOnly, on])
   useEffect(() => {
     if (viewOnly) return
     const onFocus = () => void refresh(false, true)

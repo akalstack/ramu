@@ -151,6 +151,8 @@ export interface ProjectMcpServer {
   nameConflict: boolean
   /** Shared MCP connection on this host with the same transport, when one exists. */
   managedConnectionId?: string
+  /** In the all-projects view: how many projects chose differently for themselves. */
+  exceptions?: number
 }
 
 export interface ProjectSkill {
@@ -169,11 +171,16 @@ export interface ProjectSkill {
   sources: ProjectSetupSource[]
   /** The same name has different content in different places. */
   nameConflict: boolean
+  /** In the all-projects view: how many projects chose differently for themselves. */
+  exceptions?: number
 }
 
-/** Read-only inventory of the setup agents get in one project. Nothing here is executed, imported or enabled. */
+/**
+ * Read-only inventory of the setup agents get in one project, or with no project the person's own setup and the choices
+ * that apply in every project. Nothing here is executed, imported or enabled.
+ */
 export interface ProjectSetup {
-  projectId: string
+  projectId: string | null
   /** The folders inspected: each repository, plus the workspace folder when it is not itself a repository. */
   roots: { label: string; path: string }[]
   mcp: ProjectMcpServer[]

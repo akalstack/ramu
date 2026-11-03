@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
 import { providerName } from '@ramu/shared/providers/providers'
-import { setupFromText, setupReachText, type ProjectSkill, type SharedMcpManagement } from '@ramu/shared/mcp'
+import { setupFromText, setupReachText, type ProjectSetup, type SharedMcpManagement } from '@ramu/shared/mcp'
 import type { Memory } from '@ramu/shared/types'
 import { matchesWords, searchWords } from '@ramu/shared/listView'
 import { useStore } from '../runtime/store'
@@ -26,8 +26,9 @@ const STATUS_LABEL: Record<SharedMcpManagement['connections'][number]['status'],
 const hostProjectId = (id: string) => id.slice(id.indexOf(':') + 1)
 
 /**
- * What agents on a host start with beyond the prompt: the skills a project's threads can use and the MCP servers Ramu
- * shares with them. Adding servers, signing in and approving tools stay on the host, which holds the credentials.
+ * What agents on a host start with beyond the prompt, as on the desktop's Agent setup: for every project or one of them,
+ * the MCP servers and skills agents get and who has each. Sharing, adding servers, signing in and approving tools stay on
+ * the host, which holds the credentials.
  */
 export function AgentSetupSettings({ hostId }: { hostId: string }) {
   const store = useStore()
@@ -35,8 +36,9 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
   const t = (text: string, values?: Record<string, string | number>) => translate(store.language, text, values)
   const online = store.isOnline(hostId)
   const projects = store.projects.filter((project) => project.computerId === hostId)
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
-  const [skills, setSkills] = useState<ProjectSkill[] | null>(null)
+  // Every project unless one is picked, as on the desktop: a project is where its own servers and exceptions show.
+  const [projectId, setProjectId] = useState<string | null>(null)
+  const [setup, setSetup] = useState<ProjectSetup | null>(null)
   const [mcp, setMcp] = useState<SharedMcpManagement | null>(null)
   const [error, setError] = useState('')
   const runtime = useRef(store)
@@ -59,18 +61,31 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
     }
   }, [hostId, online])
   useEffect(() => {
-    setSkills(null)
-    if (!online || !projectId) return
+    setSetup(null)
+    if (!online) return
     let active = true
-    // The same inventory the desktop's Agent setup reads: who has each skill and where it comes from.
-    void runtime.current.invoke(hostId, 'projects.setup', hostProjectId(projectId)).then(
-      (setup) => active && setSkills([...setup.skills].sort((a, b) => a.name.localeCompare(b.name))),
-      () => active && setSkills([]),
-    )
+    // The same inventory the desktop's Agent setup reads: who has each server and skill, and where it comes from.
+    const read = () =>
+      void runtime.current.invoke(hostId, 'projects.setup', projectId ? hostProjectId(projectId) : null).then(
+        (next) => active && setSetup(next),
+        () => active && setSetup({ projectId: null, roots: [], mcp: [], skills: [], diagnostics: [] }),
+      )
+    read()
+    const unsubscribe = runtime.current.subscribe(hostId, (...[channel]) => {
+      if (channel === 'mcp:changed') read()
+    })
     return () => {
       active = false
+      unsubscribe()
     }
   }, [hostId, online, projectId])
+  const skills = setup ? [...setup.skills].sort((a, b) => a.name.localeCompare(b.name)) : null
+  const exceptions = (count?: number) =>
+    count ? t(count === 1 ? 'Different in 1 project' : 'Different in {count} projects', { count }) : null
+  const transport = (server: ProjectSetup['mcp'][number]) =>
+    server.transport.type === 'http'
+      ? server.transport.url
+      : [server.transport.command, ...server.transport.args].join(' ')
   return (
     <View style={{ gap: space.s, paddingBottom: space.l }}>
       {!online ? (
@@ -83,7 +98,54 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
           {error}
         </T>
       ) : null}
+      {projects.length ? (
+        <>
+          <SectionLabel>{t('Applies to')}</SectionLabel>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, paddingHorizontal: space.l }}>
+            <Chip label={t('All projects')} selected={!projectId} small onPress={() => setProjectId(null)} />
+            {projects.map((project) => (
+              <Chip
+                key={project.id}
+                label={project.name}
+                selected={project.id === projectId}
+                small
+                onPress={() => setProjectId(project.id)}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
       <SectionLabel>{t('MCP servers')}</SectionLabel>
+      <Card style={{ marginHorizontal: space.l }}>
+        {setup === null && online ? <ActivityIndicator color={c.accent} style={{ padding: space.m }} /> : null}
+        {setup && !setup.mcp.length ? (
+          <Row style={{ paddingVertical: space.m }}>
+            <RowLabel title={t('No MCP servers found yet.')} />
+          </Row>
+        ) : null}
+        {setup?.mcp.map((server, index) => (
+          <View key={server.key}>
+            {index ? <Divider inset={space.l} /> : null}
+            <Row style={{ paddingVertical: space.m }}>
+              <RowLabel
+                title={server.name}
+                help={[
+                  transport(server),
+                  setupReachText(server, t, providerName),
+                  exceptions(server.exceptions),
+                  server.scope === 'project' ? t('This project only') : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              />
+            </Row>
+          </View>
+        ))}
+      </Card>
+      <T size={13} tone="muted" style={{ paddingHorizontal: space.l }}>
+        {t('Sharing is changed in Settings → Agent setup on the host.')}
+      </T>
+      <SectionLabel>{t('Ramu connections')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         {!mcp && online && !error ? <ActivityIndicator color={c.accent} style={{ padding: space.m }} /> : null}
         {mcp && !mcp.connections.length && !mcp.providerManaged?.length ? (
@@ -125,24 +187,9 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
         {t('Adding servers, signing in and approving their tools happen on the host, which keeps the credentials.')}
       </T>
       <SectionLabel>{t('Skills')}</SectionLabel>
-      {projects.length > 1 ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, paddingHorizontal: space.l }}>
-          {projects.map((project) => (
-            <Chip
-              key={project.id}
-              label={project.name}
-              selected={project.id === projectId}
-              small
-              onPress={() => setProjectId(project.id)}
-            />
-          ))}
-        </View>
-      ) : null}
       <Card style={{ marginHorizontal: space.l }}>
-        {projectId && skills === null && online ? (
-          <ActivityIndicator color={c.accent} style={{ padding: space.m }} />
-        ) : null}
-        {!projectId || (skills && !skills.length) ? (
+        {skills === null && online ? <ActivityIndicator color={c.accent} style={{ padding: space.m }} /> : null}
+        {skills && !skills.length ? (
           <Row style={{ paddingVertical: space.m }}>
             <RowLabel
               title={t('No skills found')}
@@ -160,6 +207,7 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
                   skill.description,
                   setupReachText(skill, t, providerName),
                   skill.sources.length ? t('From {places}', { places: setupFromText(skill.sources, t) }) : null,
+                  exceptions(skill.exceptions),
                   skill.nameConflict ? t('Different content shares this name') : null,
                 ]
                   .filter(Boolean)

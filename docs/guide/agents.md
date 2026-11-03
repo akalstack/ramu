@@ -87,6 +87,7 @@ Hosts whose platform or description (**Settings → Threads → Describe this ho
 ## Rules and MCP
 
 - **Settings → Agent setup → Rules** holds your own instructions. **Always** rules reach every new thread (24,000 characters per scope); **Manual** rules stay stored. Ramu also lists the instruction files providers read (`AGENTS.md`, `CLAUDE.md` and rules folders), read-only.
+- **Settings → Agent setup → MCP servers** and **Skills** open on **All projects**: your own servers and skills, and one switch each that shares it with every provider and account in every project. Each says how many projects chose differently. Choose a project under **Applies to** to see its own servers and skills too; a switch there makes an exception for that project, and **Use the all-projects setting** drops it. **Connect through Ramu** is offered in a project. The phone shows the same lists read-only.
 - **/mcp** in a thread shows each MCP server's status. Repository `.mcp.json` files and Claude's local entries are shared with every provider.
 
 ## Thread titles

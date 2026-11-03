@@ -223,6 +223,11 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
       void accountUsage.refresh(provider).catch(() => {})
     }
     providers.onPlanChange = planChanged
+    // Another account behind a login reads its plan, models and usage afresh, and every device names it again.
+    providers.onLoginChange = (provider, accountId) => {
+      planChanged(provider, accountId)
+      host.send('logins:changed', {})
+    }
     onAcpPlanChange(planChanged)
     agents.onContext = (sessionId, context) => host.send('context:changed', { sessionId, context })
   }

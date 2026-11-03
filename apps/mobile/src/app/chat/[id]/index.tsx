@@ -585,8 +585,9 @@ export default function ChatScreen() {
     if (found && key !== joining.key) writeDraft(draftText.replace(/^@\S+/, `@${modelHandle(found)}`))
   }
   const applyModel = (m: import('../../../components/Composer').ModelChoice) => {
-    // As on the desktop: while the agent works the change applies now; otherwise it waits for the next message.
-    if (running || !chat.sessionId) {
+    // As on the desktop: while the agent works, or is held at a usage limit (a change made to get unblocked, which the
+    // next try or automatic resume must use), the change applies now; otherwise it waits for the next message.
+    if (running || limitWait || !chat.sessionId) {
       setStaged(null)
       void store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
     } else

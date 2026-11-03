@@ -23,6 +23,7 @@ export const HOST_PUSH_CHANNELS = [
   'summaries:changed',
   'rules:changed',
   'usage:changed',
+  'logins:changed',
   'settings:changed',
   'settings:models',
   'activity:changed',

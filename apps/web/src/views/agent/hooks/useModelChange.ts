@@ -7,21 +7,23 @@ import { useJsonDraft } from '../../../composer/useJsonDraft'
 
 /**
  * Settings changes made in the controls under the message box. They stay pending until the next message, except
- * while the agent is working, when they take effect right away; switching models mid-conversation asks first.
+ * while the agent is working or held at a usage limit, when they take effect right away; switching models
+ * mid-conversation asks first.
  */
 export function useModelChange({
   sessionId,
   session,
   setSession,
   events,
-  busyAgent,
+  applyNow,
   warnModelChange,
 }: {
   sessionId: string
   session: AgentSessionInfo | null
   setSession: (session: AgentSessionInfo) => void
   events: AgentEvent[]
-  busyAgent: boolean
+  /** The agent is working or held at a usage limit, so a change is sent to the host now rather than with the next message. */
+  applyNow: boolean
   warnModelChange: boolean
 }) {
   const { invoke, id: host } = useHost()
@@ -57,7 +59,7 @@ export function useModelChange({
   }
   const applySettings = (next: AgentSettings) => {
     setPendingSettings(next)
-    if (!busyAgent) return
+    if (!applyNow) return
     void invoke('agent.configure', sessionId, next).then(
       (updated) => {
         setSession(updated)

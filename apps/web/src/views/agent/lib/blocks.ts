@@ -5,6 +5,16 @@ import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { goalChanges } from '@ramu/shared/chat/goalHistory'
 import type { AgentTask } from '@ramu/shared/types'
 
+const SILENT = new Set<AgentEvent['kind']>([
+  'provider-wait',
+  'init',
+  'usage',
+  'title',
+  'context',
+  'custom-agent',
+  'teammate',
+])
+
 /** Consecutive tool calls collapse into one line, like "Ran 2 commands". */
 export function toBlocks(events: AgentEvent[]): Block[] {
   const blocks: Block[] = []
@@ -54,6 +64,9 @@ export function toBlocks(events: AgentEvent[]): Block[] {
       blocks.push({ kind: 'event', event })
       continue
     }
+    // Bookkeeping with no row of its own. Each would still be an empty block, and the gap between blocks would add up:
+    // every "Try anyway" records a provider-wait.
+    if (SILENT.has(event.kind)) continue
     if (
       event.kind === 'goal' ||
       event.kind === 'queue' ||

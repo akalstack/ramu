@@ -382,6 +382,25 @@ export function ModelChip({
           )
         ) : (
           <View>
+            {/* The login is part of what runs the model, so it is chosen here, with each login's room for it. */}
+            <AccountRows
+              computerId={computerId ?? store.selected}
+              provider={value.provider}
+              model={value.model}
+              accountId={value.settings?.accountId}
+              onPick={(accountId) => {
+                onChange({
+                  ...value,
+                  settings: {
+                    access: value.settings?.access ?? 'auto',
+                    autoFallback: value.settings?.autoFallback ?? true,
+                    serviceTier: value.settings?.serviceTier,
+                    accountId,
+                  },
+                })
+                close()
+              }}
+            />
             <QuickSteps
               value={value}
               models={models}
@@ -1460,22 +1479,6 @@ export function Composer({
         </SheetGroup>
       </Sheet>
       <Sheet open={menu === 'settings'} onClose={() => setMenu(null)} title={say('Agent settings')}>
-        <AccountRows
-          computerId={pc}
-          provider={model.provider}
-          accountId={model.settings?.accountId}
-          onPick={(accountId) =>
-            onModel({
-              ...model,
-              settings: {
-                access: model.settings?.access ?? 'auto',
-                autoFallback: model.settings?.autoFallback ?? true,
-                serviceTier: model.settings?.serviceTier,
-                accountId,
-              },
-            })
-          }
-        />
         <SheetGroup title={say('Permissions')} footer={say('Applies to this thread from its next step.')}>
           {ACCESS_MODES.map((mode) => (
             <SheetOption

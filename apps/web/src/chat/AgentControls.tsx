@@ -2,7 +2,6 @@ import { t, useLanguage } from '../i18n'
 import { ChevronDown, LockOpen, Pencil, Sparkles } from 'lucide-react'
 import type { AgentProvider, AgentSettings } from '@ramu/shared/types'
 import { ModelBar } from '../models/ModelBar'
-import { AccountPicker } from '../models/AccountPicker'
 import { Menu } from '../Menu'
 
 const asksInAuto = (provider?: AgentProvider) => provider === 'antigravity'
@@ -52,7 +51,6 @@ export function AgentControls({
     <div className="agent-controls flex items-center flex-wrap gap-[4px_8px] w-full min-w-0">
       <ModelBar settings={settings} current={current} onChange={changeModel} disabled={disabled} running={running} />
       <div className="agent-control-options [&_.control-btn]:min-h-7 [&_.control-btn]:text-control flex items-center flex-wrap gap-[4px_8px]">
-        <AccountPicker settings={settings} onChange={onChange} disabled={disabled} />
         {showAccess && (
           <Menu
             standard

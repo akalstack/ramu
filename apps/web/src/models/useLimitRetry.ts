@@ -16,6 +16,8 @@ export function useLimitRetry(
   sessionId: string,
   wait: ProviderWaitState | null,
   onError: (reason: unknown) => void,
+  /** Sends settings chosen in the controls but not yet applied, such as another login, so the try uses them. */
+  prepare: () => Promise<void> = async () => {},
 ): LimitRetry {
   const { invoke } = useHost()
   const [busy, setBusy] = useState(false)
@@ -28,7 +30,8 @@ export function useLimitRetry(
   }, [sessionId, wait?.retryAt, wait?.guessed])
   const tryNow = useCallback(() => {
     setBusy(true)
-    invoke('agent.retryLimitNow', sessionId)
+    prepare()
+      .then(() => invoke('agent.retryLimitNow', sessionId))
       .then((result) => {
         if (result.resumed) return
         setStillLimited(true)
@@ -36,6 +39,6 @@ export function useLimitRetry(
       })
       .catch(onError)
       .finally(() => setBusy(false))
-  }, [sessionId, onError, invoke])
+  }, [sessionId, onError, invoke, prepare])
   return { busy, stillLimited, wait: wait && latest ? { ...wait, ...latest } : wait, tryNow }
 }

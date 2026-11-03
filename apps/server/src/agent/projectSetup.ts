@@ -407,6 +407,21 @@ const shareScope = (key: string, sharing: Record<string, boolean>, projectId: st
       ? ('host' as const)
       : ('default' as const)
 
+/** With no project in view, how many projects chose differently from the all-projects setting, when any did. */
+function exceptionsOf(
+  projectId: string | null,
+  key: string,
+  sharing: Record<string, boolean>,
+  everywhere: boolean,
+): { exceptions?: number } {
+  if (projectId) return {}
+  const exceptions = Object.entries(sharing).filter(
+    ([entry, value]) =>
+      entry.endsWith(`/${key}`) && entry.indexOf('/') === entry.length - key.length - 1 && value !== everywhere,
+  ).length
+  return exceptions ? { exceptions } : {}
+}
+
 const order = (providers: Iterable<AgentProvider>) => AGENT_PROVIDERS.filter((p) => [...providers].includes(p))
 
 /**
@@ -416,7 +431,7 @@ const order = (providers: Iterable<AgentProvider>) => AGENT_PROVIDERS.filter((p)
  * source. Env and header values never leave the host; the result carries their names only.
  */
 export function discoverProjectSetup(
-  projectId: string,
+  projectId: string | null,
   roots: { label: string; path: string }[],
   managed: { id: string; transport: SharedMcpConnection['transport'] }[] = [],
   sharing: McpSharing = {},
@@ -446,6 +461,7 @@ export function discoverProjectSetup(
       shared,
       shareScope: shareScope(key, sharing, projectId),
       ...(blocked ? { shareBlocked: blocked } : {}),
+      ...exceptionsOf(projectId, key, sharing, sharing[key] ?? sharedByDefault(declared.transport)),
       managedConnectionId: managed.find(({ transport: m }) =>
         declared.transport.type === 'http'
           ? m.type === 'http' && m.url === declared.transport.url
@@ -478,6 +494,7 @@ export function discoverProjectSetup(
           nameConflict: digests.size > 1,
           shared,
           shareScope: shareScope(skill.name, skillSharing, projectId),
+          ...exceptionsOf(projectId, skill.name, skillSharing, skillSharing[skill.name] === true),
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name)),

@@ -6,7 +6,6 @@ import { ModelBar } from '../src/models/ModelBar'
 
 vi.mock('../src/i18n', () => ({ t: (text: string) => text, useLanguage: () => 'en' }))
 vi.mock('../src/models/ModelBar', () => ({ ModelBar: () => null }))
-vi.mock('../src/models/AccountPicker', () => ({ AccountPicker: () => null }))
 vi.mock('../src/Menu', () => ({ Menu: () => null }))
 
 const elements = (node: ReactNode): ReactElement<Record<string, unknown>>[] => {

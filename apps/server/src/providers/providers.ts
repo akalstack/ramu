@@ -168,6 +168,8 @@ export class ProviderService {
   private plans = new Map<string, string>()
   /** Told when a login's plan changed, so its models and usage are read again. */
   onPlanChange?: (provider: AgentProvider, accountId: string) => void
+  /** A login's identity may have changed: another account signed in, or a key was set or removed. */
+  onLoginChange?: (provider: AgentProvider, accountId: string) => void
   private notePlan(provider: AgentProvider, accountId: string, plan: string | undefined) {
     if (!plan) return
     const key = `${provider}:${accountId}`,
@@ -211,6 +213,21 @@ export class ProviderService {
     )
     return result
   }
+  /**
+   * Reads every login again, as when a person refreshes Providers after signing one in from a terminal: a login now on
+   * another account is reported like a sign-in through Ramu.
+   */
+  private async relogin(): Promise<void> {
+    const before = new Map([...this.logins].map(([key, login]) => [key, `${login.email ?? ''}:${!!login.apiKey}`]))
+    this.logins.clear()
+    await this.accountLogins().catch(() => undefined)
+    for (const [key, login] of this.logins) {
+      const previous = before.get(key)
+      if (previous === undefined || previous === `${login.email ?? ''}:${!!login.apiKey}`) continue
+      const [provider, accountId] = key.split(':') as [AgentProvider, string]
+      this.onLoginChange?.(provider, accountId)
+    }
+  }
   /** The sign-in email of each login that reports one, for naming accounts without a label. */
   async accountEmails(): Promise<Record<string, Record<string, string>>> {
     const logins = await this.accountLogins()
@@ -234,6 +251,9 @@ export class ProviderService {
       method,
     })
     this.statusCache = undefined
+    // Signing in may put a different account behind this login: its cached email and usage are no longer its own.
+    this.logins.delete(`${provider}:${accountId}`)
+    this.onLoginChange?.(provider, accountId)
   }
   /**
    * Signs one login in with an API key, or with `key` null removes it so the login falls back to its subscription.
@@ -259,6 +279,7 @@ export class ProviderService {
     } else await keys.set(provider, accountId, variable, key)
     this.logins.delete(`${provider}:${accountId}`)
     this.statusCache = undefined
+    this.onLoginChange?.(provider, accountId)
   }
   /** Shell-free updater, shared by manual actions and the detached service timer. */
   update(provider: AgentProvider): Promise<ProviderStatus> {
@@ -352,6 +373,7 @@ export class ProviderService {
     refresh = false,
   ): Promise<ProviderStatus[]> {
     const key = JSON.stringify(overrides ?? this.preferences().providerBinaries ?? {})
+    if (refresh) void this.relogin()
     // Automatic release checks omit login probes, so they must not replace the full settings result.
     if (!refresh && !checkLatest && force && this.statusCache?.key === key && Date.now() - this.statusCache.at < 60_000)
       return this.statusCache.result

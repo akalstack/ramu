@@ -785,7 +785,7 @@ export interface RamuMethods {
     request: string,
     snapshot: import('./operator').OperatorSnapshot,
   ): import('./operator').OperatorPlan | null
-  'projects.setup'(projectId: string): ProjectSetup
+  'projects.setup'(projectId: string | null): ProjectSetup
   'projects.create'(name: string): Project
   'projects.inspect'(dir: string): FolderInspection
   'projects.addFolder'(dir: string, repos?: string[]): { project: Project; repositories: Repository[] }
@@ -1386,6 +1386,8 @@ export type PushEvents = {
   /** The chat's transcript was cut back: events from `seq` on are gone. */
   'agent:rewound': { sessionId: string; seq: number }
   'usage:changed': UsageReading[]
+  /** A login was signed in, signed out or given a key: names, emails and usage are read again. */
+  'logins:changed': Record<string, never>
   'context:changed': { sessionId: string; context: ContextUsage }
   'aside:changed': { sessionId: string; aside: Aside | null; asideId: string }
   'term:data': { id: string; data: string; cursor?: number }

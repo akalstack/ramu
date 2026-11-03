@@ -46,8 +46,9 @@ function render(setup: Partial<ProjectSetup>, viewer = false, view: SetupView = 
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(['mcp-projects', ''], [{ id: 'project', name: 'Lionparcel' }])
   client.setQueryData(['mcp-settings', ''], { canAdminister: true, connections: [] })
-  client.setQueryData(['project-setup', '', 'project'], {
-    projectId: 'project',
+  // The screen opens on every project; a project is picked to see its own items or make an exception.
+  client.setQueryData(['project-setup', '', 'all'], {
+    projectId: null,
     roots: [],
     mcp: [],
     skills: [],
@@ -141,22 +142,16 @@ it('lists skills with where they come from', () => {
   expect(html).toContain('From agent-knowledge-workflow/.claude/skills/review-pr/SKILL.md')
 })
 
-it('separates your own settings from the project and names the project', () => {
+it('opens on every project, says so, and counts the projects that chose differently', () => {
   const html = render({
-    mcp: [
-      server({ name: 'atlassian' }),
-      server({
-        name: 'local-db',
-        key: 'db',
-        scope: 'project',
-        sources: [{ scope: 'project', label: 'api', file: '.mcp.json', enabled: true }],
-      }),
-    ],
+    mcp: [server({ name: 'atlassian', shared: true, shareScope: 'host', exceptions: 2 })],
   })
   expect(html).toContain('Your settings')
-  expect(html).toContain('Lionparcel only')
-  expect(html.indexOf('atlassian')).toBeLessThan(html.indexOf('Lionparcel only'))
-  expect(html.indexOf('Lionparcel only')).toBeLessThan(html.indexOf('local-db'))
+  expect(html).toContain('Every project. Choose one to see its own servers and skills, or to make an exception.')
+  expect(html).toContain('gives it to every provider and account in every project')
+  expect(html).toContain('Different in 2 projects')
+  // Connecting through Ramu creates a connection for one project, so it is offered once a project is chosen.
+  expect(html).not.toContain('Connect through Ramu')
 })
 
 it('lists provider-managed servers apart from declared ones, with a connectors link only where one exists', () => {

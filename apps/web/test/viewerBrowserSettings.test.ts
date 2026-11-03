@@ -39,6 +39,7 @@ vi.mock('react', async () => ({
 vi.mock('../src/settings/SettingsScope', async () => ({
   SettingsScopeContext: (await import('react')).createContext(null),
   useSettingsInvoke: () => state.invoke,
+  useSettingsEvents: () => () => () => {},
 }))
 vi.mock('../src/hosts', () => ({ ownHostId: () => 'local' }))
 vi.mock('../src/deviceStorage', () => ({ deviceStorage: { getItem: () => null, setItem: state.localPreference } }))

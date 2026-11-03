@@ -6,6 +6,7 @@ import { Check, ChevronDown, ChevronRight, Clock3, Gauge, Settings, SlidersHoriz
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { AgentSettings, ReasoningEffort } from '@ramu/shared/types'
 import { ReasoningPicker } from './ReasoningPicker'
+import { AccountList, AccountRow, useLoginChoices } from './AccountPicker'
 import { ModelPicker } from './ModelPicker'
 import { takeModelListRequest } from './modelPickerRequest'
 import { ProviderIcon } from './ProviderIcon'
@@ -92,7 +93,8 @@ export function ModelBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [pending?.deadline, running, disabled] by design; the values it reads beyond these are current as of that run
   }, [pending?.deadline, running, disabled])
 
-  const [picker, setPicker] = useState<'bar' | 'model' | 'effort'>('bar')
+  const [picker, setPicker] = useState<'bar' | 'model' | 'effort' | 'account'>('bar')
+  const logins = useLoginChoices(value)
   const [setId, setSetId] = useState(preferences.defaultSetId)
   // While the slider is held, the bar previews the step under the thumb; the choice is applied when it is released.
   const [drag, setDrag] = useState<AgentSettings | null>(null)
@@ -193,13 +195,19 @@ export function ModelBar({
         // With "Model then effort" the model list comes first and picking one returns to the slider for its effort;
         // with Steps the bar opens on its steps.
         onOpen={() => setPicker(takeModelListRequest() || mode === 'effort' ? 'model' : 'bar')}
-        menuClassName={`model-controls-menu ${picker === 'model' ? 'model-menu w-[256px] max-h-[min(420px,_calc(100vh_-_24px))] overflow-y-auto embedded-model-menu [&:has(.model-picker)]:w-[420px] [&:has(.model-picker)]:p-0 [&:has(.model-picker)]:max-h-[none] [&:has(.model-picker)]:overflow-hidden [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.07)] w-[300px] max-w-[calc(100vw_-_16px)] max-h-[min(480px,_calc(100vh_-_16px))] overflow-y-auto' : picker === 'effort' ? 'reasoning-menu w-[240px]' : 'model-bar-menu [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.07)] max-w-[calc(100vw_-_16px)] w-[340px] p-0'}`}
+        menuClassName={`model-controls-menu ${picker === 'model' ? 'model-menu w-[256px] max-h-[min(420px,_calc(100vh_-_24px))] overflow-y-auto embedded-model-menu [&:has(.model-picker)]:w-[420px] [&:has(.model-picker)]:p-0 [&:has(.model-picker)]:max-h-[none] [&:has(.model-picker)]:overflow-hidden [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.07)] w-[300px] max-w-[calc(100vw_-_16px)] max-h-[min(480px,_calc(100vh_-_16px))] overflow-y-auto' : picker === 'effort' ? 'reasoning-menu w-[240px]' : picker === 'account' ? 'w-[300px] max-w-[calc(100vw_-_16px)]' : 'model-bar-menu [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.07)] max-w-[calc(100vw_-_16px)] w-[340px] p-0'}`}
         icon={
           <>
             {fast ? <Zap size={13} /> : <ProviderIcon provider={settings.provider} size={14} />}
             <span
               className="flex min-w-0 items-baseline gap-1"
-              title={pending ? t('Applying model in {0}s', { 0: seconds }) : modelName}
+              title={
+                pending
+                  ? t('Applying model in {0}s', { 0: seconds })
+                  : logins
+                    ? `${modelName} · ${logins.name(logins.current)}`
+                    : modelName
+              }
             >
               {/* A long model id (an OpenCode route) is cut short so the effort and the rest of the bar stay visible. */}
               <span className="max-w-[180px] truncate">{modelName}</span>
@@ -219,6 +227,14 @@ export function ModelBar({
               }}
               onDone={() => setPicker('bar')}
               onSet={chooseSet}
+            />
+          ) : picker === 'account' && logins ? (
+            <AccountList
+              settings={value}
+              choices={logins}
+              // A login is not a model: it applies like any other setting, not through the running-model countdown.
+              onChange={(next) => latest.current.onChange(next)}
+              onDone={() => setPicker('bar')}
             />
           ) : picker === 'effort' ? (
             <ReasoningPicker
@@ -362,6 +378,7 @@ export function ModelBar({
                   }}
                 />
               </div>
+              {logins && <AccountRow choices={logins} disabled={disabled} onOpen={() => setPicker('account')} />}
             </div>
           )
         }

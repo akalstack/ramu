@@ -54,7 +54,8 @@ export const registerTerminalHandlers: RegisterHandlers = ({ workspace, terminal
     },
   },
   'term.snapshot': {
-    args: z.union([z.tuple([id]), z.tuple([id, z.number().int().min(0)])]),
-    run: (termId: string, since?: number) => terminals.snapshot(termId, since),
+    // A client may send an absent `since` as null (JSON has no undefined in arrays); both mean the whole held output.
+    args: z.union([z.tuple([id]), z.tuple([id, z.number().int().min(0).nullable()])]),
+    run: (termId: string, since?: number | null) => terminals.snapshot(termId, since ?? undefined),
   },
 })

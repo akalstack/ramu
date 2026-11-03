@@ -1061,58 +1061,6 @@ kbd {
     transform: translate(var(--dot-end-x), var(--dot-end-y)) scale(1);
   }
 }
-.loading-mark-stem {
-  stroke-dasharray: 1 1;
-  animation: ramu-loading-stem 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-}
-.loading-mark-dot {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: ramu-loading-dot 1.8s ease-in-out infinite;
-}
-@keyframes ramu-loading-stem {
-  0% {
-    stroke-dashoffset: 1;
-  }
-  45%,
-  60% {
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dashoffset: -1;
-  }
-}
-@keyframes ramu-loading-dot {
-  0%,
-  30% {
-    opacity: 0.2;
-    transform: scale(0.6);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-  62% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0.2;
-    transform: scale(0.6);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .loading-mark-stem,
-  .loading-mark-dot {
-    animation: none;
-    stroke-dashoffset: 0;
-  }
-}
-:root[data-reduce-motion] .loading-mark-stem,
-:root[data-reduce-motion] .loading-mark-dot {
-  animation: none;
-  stroke-dashoffset: 0;
-}
 
 @keyframes ramu-stem {
   0% {

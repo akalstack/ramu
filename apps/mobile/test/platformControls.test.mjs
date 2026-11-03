@@ -7990,7 +7990,7 @@ test('a phone without the Terminals permission is offered a request, never a she
   hooks.dispose()
 })
 
-test('the Skills & MCP page reads shared servers and a project’s skills without offering host administration', async () => {
+test('the Skills & MCP page reads every project’s servers and skills without offering host administration', async () => {
   const hooks = hookHarness(),
     calls = []
   const store = {
@@ -8014,6 +8014,20 @@ test('the Skills & MCP page reads shared servers and a project’s skills withou
         }
       if (args[1] === 'projects.setup')
         return {
+          mcp: [
+            {
+              key: 'k1',
+              name: 'atlassian',
+              transport: { type: 'http', url: 'https://mcp.example/a' },
+              providers: ['codex'],
+              nativeProviders: ['codex'],
+              shared: false,
+              shareScope: 'host',
+              scope: 'user',
+              sources: [],
+              exceptions: 1,
+            },
+          ],
           skills: [
             {
               name: 'deploy',
@@ -8046,6 +8060,8 @@ test('the Skills & MCP page reads shared servers and a project’s skills withou
     .filter((node) => node.type === 'RowLabel')
     .map((node) => [node.props.title, node.props.help])
   assert.deepEqual(labels, [
+    // Declared servers for every project, with the projects that chose differently.
+    ['atlassian', 'https://mcp.example/a · Only in codex · Different in 1 project'],
     ['Issues', 'Sign-in required · 3 tools · codex'],
     ['figma', 'Only claude-code has it, from its own settings'],
     // Who loads it, where it comes from, and a name two places use for different content.
@@ -8053,7 +8069,7 @@ test('the Skills & MCP page reads shared servers and a project’s skills withou
   ])
   assert.deepEqual(
     calls.find(([, method]) => method === 'projects.setup'),
-    ['a', 'projects.setup', 'p1'],
+    ['a', 'projects.setup', null],
   )
   assert.equal(
     calls.some(([, method]) => /^mcp\.(save|approve|signIn|setSecret|remove)/.test(method)),
