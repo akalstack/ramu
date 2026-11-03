@@ -57,6 +57,7 @@ import { CommitDialog } from './git/CommitDialog'
 import { CreatePullRequestHost } from './git/CreatePullRequestHost'
 import { openPublishRepository, PublishRepositoryHost } from './git/PublishRepositoryHost'
 import { PairingRequestDialog } from './settings/PairingRequestDialog'
+import { PermissionRequestDialog } from './settings/PermissionRequestDialog'
 import { Notifications, notifyError } from './chat/Notifications'
 import { SummaryHost } from './summaries/SummaryHost'
 import { TitleTooltips } from './TitleTooltips'
@@ -760,6 +761,7 @@ function Shell() {
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
       <Notifications />
       <PairingRequestDialog />
+      <PermissionRequestDialog />
       <TitleTooltips />
       <Fragment key={`dialogs:${shownHost}`}>
         <ProviderSetupTerminal />

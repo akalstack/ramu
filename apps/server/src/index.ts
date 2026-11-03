@@ -147,7 +147,11 @@ const pairingRequests = new PairingRequests({
   changed: () => pairingNotice(pairingRequests.list()),
   linkKey: () => link.hostKey(),
 })
-const permissionRequests = new PermissionRequests()
+// Only the desktop apps on this machine answer permission requests, like pairing; paired devices never see them.
+const permissionRequests = new PermissionRequests(Date.now, (requests) => {
+  const message = `data: ${JSON.stringify({ channel: 'permission:requests', payload: { requests } })}\n\n`
+  for (const client of hostClients) if (!client.destroyed) writeEvent(client, message)
+})
 const remoteAccess = new RemoteAccess({
   devices,
   hostId,

@@ -1334,6 +1334,8 @@ export type PushEvents = {
   'device:permissions': Record<string, never>
   /** Nearby devices waiting for the person at this host to allow them. Sent only to apps on the host itself. */
   'pairing:requests': { requests: NetworkStatus['requests'] }
+  /** Paired devices asking for a permission, waiting for the person here. Sent only to apps on the host itself. */
+  'permission:requests': { requests: NetworkStatus['permissionRequests'] }
   /** Link or tunnel state changed; Settings reads `network.status` again. Sent only to apps on the host itself. */
   'network:changed': Record<string, never>
   /** This desktop's Ramu Link account changed. */

@@ -199,7 +199,16 @@ interface Store extends State {
   cancelOutbox(id: string): string | undefined
   stop(id: string): void
   answer(id: string, request: string, answers: Record<string, string>): void
-  decide(id: string, request: string, decision: 'allow' | 'deny'): void
+  /** Answers an approval; `project` or `user` also saves it, for this exact request or the chosen `pattern`. */
+  decide(
+    id: string,
+    request: string,
+    decision: 'allow' | 'deny',
+    scope?: 'once' | 'project' | 'user',
+    pattern?: string,
+  ): void
+  /** Removes a saved approval, so the same request asks again. */
+  forgetApproval(id: string, request: string, scope: 'project' | 'user'): void
   elicitation(
     id: string,
     request: string,
@@ -1853,8 +1862,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ? invoke(pc, 'agent.dismissQuestion', session, request)
           : invoke(pc, 'agent.replyQuestion', session, request, answers),
       ),
-    decide: (id, request, decision) =>
-      sessionAction(id, (pc, session) => invoke(pc, 'agent.replyPermission', session, request, decision === 'allow')),
+    decide: (id, request, decision, scope = 'once', pattern) =>
+      sessionAction(id, (pc, session) =>
+        invoke(pc, 'agent.replyPermission', session, request, decision === 'allow', undefined, scope, pattern),
+      ),
+    forgetApproval: (id, request, scope) =>
+      sessionAction(id, (pc, session) => invoke(pc, 'agent.forgetPermission', session, request, scope)),
     elicitation: (id, request, action, answers) =>
       sessionAction(id, (pc, session) => invoke(pc, 'agent.replyElicitation', session, request, action, answers)),
     removeQueued: (id, message) =>

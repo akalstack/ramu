@@ -241,6 +241,14 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
             ? 'allow'
             : 'deny'
           : undefined,
+        ...(resolved.get(e.requestId) === 'allowed-project'
+          ? { saved: 'project' as const }
+          : resolved.get(e.requestId) === 'allowed-user'
+            ? { saved: 'user' as const }
+            : {}),
+        ...(e.approvalKey && !e.approvalOnceOnly ? { rememberable: { project: !!e.approvalProjectId } } : {}),
+        ...(e.approvalPatterns?.length ? { patterns: e.approvalPatterns } : {}),
+        ...(e.approvalReviewRule ? { reviewRule: e.approvalReviewRule } : {}),
       })
     else if (e.kind === 'elicitation')
       items.push({ kind: 'elicitation', id: e.requestId, request: e, outcome: resolved.get(e.requestId) })

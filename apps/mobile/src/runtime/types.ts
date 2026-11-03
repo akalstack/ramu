@@ -88,7 +88,21 @@ export type TranscriptItem = (
       responseMode?: 'message' | 'ramu'
       grouping?: 'together' | 'independent'
     }
-  | { kind: 'permission'; id: string; title: string; command: string; decision?: 'allow' | 'deny' }
+  | {
+      kind: 'permission'
+      id: string
+      title: string
+      command: string
+      decision?: 'allow' | 'deny'
+      /** Where an approval was saved, so it can be forgotten. */
+      saved?: 'project' | 'user'
+      /** The request can be remembered: for this user, and also for this project when it names one. */
+      rememberable?: { project: boolean }
+      /** Wider rules the agent offers beside this exact request. */
+      patterns?: string[]
+      /** A rule that makes this host always ask, shown so the person knows why. */
+      reviewRule?: string
+    }
   | { kind: 'elicitation'; id: string; request: import('@ramu/shared/types').AgentElicitation; outcome?: string }
   | {
       kind: 'changes'

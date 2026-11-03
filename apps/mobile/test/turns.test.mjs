@@ -177,6 +177,40 @@ test('a provider may reuse an approval id after its previous request was resolve
   assert.equal(rows.filter((row) => row.kind === 'permission').length, 1)
 })
 
+test('an approval the host can remember offers its rules on the phone, and a saved one can be forgotten', () => {
+  const rows = transcript([
+    {
+      kind: 'permission-request',
+      requestId: 'save',
+      title: 'Run?',
+      detail: 'pnpm test',
+      approvalKey: 'k',
+      approvalProjectId: 'p1',
+      approvalPatterns: ['pnpm test *'],
+      approvalReviewRule: 'rm -rf',
+    },
+    {
+      kind: 'permission-request',
+      requestId: 'once',
+      title: 'Use the screen?',
+      detail: 'Computer use',
+      approvalKey: 'k2',
+      approvalOnceOnly: true,
+    },
+    { kind: 'permission-request', requestId: 'done', title: 'Run?', detail: 'ls', approvalKey: 'k3' },
+    { kind: 'request-resolved', requestId: 'done', outcome: 'allowed-project' },
+  ]).filter((row) => row.kind === 'permission')
+  assert.deepEqual(
+    rows.map((row) => [row.id, row.rememberable, row.patterns, row.reviewRule, row.saved]),
+    [
+      ['save', { project: true }, ['pnpm test *'], 'rm -rf', undefined],
+      // Computer use and other app capabilities ask every time, so nothing is offered to remember.
+      ['once', undefined, undefined, undefined, undefined],
+      ['done', { project: false }, undefined, undefined, 'project'],
+    ],
+  )
+})
+
 test('mobile groups consecutive tools inside live turns and finished work, preserving each result', () => {
   const events = [
     { kind: 'user', text: 'check', at: 1000 },

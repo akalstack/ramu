@@ -66,6 +66,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Not connected. Pull requests, builds and work items need a personal access token.':
     'Belum terhubung. Pull request, build dan work item memerlukan personal access token.',
   Organization: 'Organisasi',
+  'Open Ramu to allow or deny it.': 'Buka Ramu untuk mengizinkan atau menolaknya.',
+  'Don’t ask again…': 'Jangan tanya lagi…',
   'Provider CLIs update on each host, then Ramu installs where a newer release exists and restarts there.':
     'CLI penyedia diperbarui di setiap host, lalu Ramu dipasang di tempat yang punya rilis baru dan dimulai ulang di sana.',
   'Ramu {0} installs on {1}, which restarts and reconnects.': 'Ramu {0} dipasang di {1}, yang dimulai ulang dan tersambung lagi.',

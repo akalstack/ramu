@@ -30,7 +30,7 @@ Codex and OpenCode can hold several accounts; a saved account applies to new thr
 - **Auto:** Ramu's own tools run without asking; everything else follows the provider's automatic review, so risky commands still ask.
 - **Full access:** nothing asks. Use it only for work you trust.
 
-Approvals default to **Allow once**. For a command you can save a prefix rule (such as `git diff *`) for the project or for every project. **Settings → Permissions → Saved approvals** lists and removes them.
+Approvals default to **Allow once**. For a command you can save a prefix rule (such as `git diff *`) for the project or for every project, from the card in the thread on desktop or on the phone (**Don't ask again…**). A saved approval can be forgotten from the card. **Settings → Permissions → Saved approvals** lists and removes them.
 
 ## Plan usage
 

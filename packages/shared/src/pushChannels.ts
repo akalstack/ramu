@@ -30,6 +30,7 @@ export const HOST_PUSH_CHANNELS = [
   'mcp:changed',
   'device:permissions',
   'pairing:requests',
+  'permission:requests',
   'network:changed',
   'background:connection',
 ] as const satisfies readonly (keyof PushEvents)[]

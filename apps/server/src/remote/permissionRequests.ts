@@ -16,7 +16,11 @@ export interface PermissionRequestView {
 /** Permissions paired devices asked for, waiting for a person at the host. One per device and permission. */
 export class PermissionRequests {
   private readonly requests = new Map<string, PermissionRequestView>()
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly now: () => number = Date.now,
+    /** Told the waiting requests whenever one is added or answered, so the person at the host sees it at once. */
+    private readonly changed: (requests: PermissionRequestView[]) => void = () => {},
+  ) {}
 
   private sweep() {
     for (const [id, request] of this.requests) if (this.now() - request.at > REQUEST_MS) this.requests.delete(id)
@@ -27,6 +31,7 @@ export class PermissionRequests {
     this.clear(device.id, permission)
     const id = randomUUID()
     this.requests.set(id, { id, deviceId: device.id, deviceName: device.name, permission, at: this.now() })
+    this.changed(this.list())
   }
 
   list(): PermissionRequestView[] {
@@ -44,7 +49,7 @@ export class PermissionRequests {
   take(id: string): PermissionRequestView | undefined {
     this.sweep()
     const request = this.requests.get(id)
-    this.requests.delete(id)
+    if (this.requests.delete(id)) this.changed(this.list())
     return request
   }
 

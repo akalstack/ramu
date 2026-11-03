@@ -1499,18 +1499,40 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
 function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 'permission' }>; chatId: string }) {
   const say = useSay()
   const { c } = useTheme()
-  const { decide } = useStore()
+  const { decide, forgetApproval } = useStore()
+  const [remembering, setRemembering] = useState(false)
+  const [rule, setRule] = useState('exact')
   if (item.decision) {
     const allowed = item.decision === 'allow'
     return (
       <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
         {allowed ? <Check size={14} color={c.ok} /> : <X size={14} color={c.bad} />}
         <T size={font.control} tone="muted" mono numberOfLines={1} style={{ flex: 1 }}>
-          {allowed ? 'Allowed' : 'Denied'} · {item.command}
+          {item.saved === 'project'
+            ? say('Allowed for this project')
+            : item.saved === 'user'
+              ? say('Allowed for this user')
+              : say(allowed ? 'Allowed' : 'Denied')}{' '}
+          · {item.command}
         </T>
+        {item.saved ? (
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => {
+              tap()
+              forgetApproval(chatId, item.id, item.saved!)
+            }}
+          >
+            <T size={font.caption} tone="accent">
+              {say('Forget')}
+            </T>
+          </Pressable>
+        ) : null}
       </View>
     )
   }
+  const pattern = rule === 'exact' ? undefined : rule
   return (
     <Card style={{ padding: space.m, gap: space.m }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
@@ -1524,6 +1546,11 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
           {item.command}
         </T>
       </View>
+      {item.reviewRule ? (
+        <T size={font.caption} tone="muted">
+          {say('Always ask')}: {item.reviewRule}
+        </T>
+      ) : null}
       <View style={{ flexDirection: 'row', gap: space.s }}>
         <Button
           kind="secondary"
@@ -1533,6 +1560,52 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
         />
         <Button title={say('Allow once')} style={{ flex: 1 }} onPress={() => decide(chatId, item.id, 'allow')} />
       </View>
+      {item.rememberable ? (
+        remembering ? (
+          <View style={{ gap: space.s }}>
+            {item.patterns?.length ? (
+              <>
+                <T size={font.caption} tone="muted">
+                  {say('Don’t ask again for')}
+                </T>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
+                  {['exact', ...item.patterns].map((value) => (
+                    <Chip
+                      key={value}
+                      small
+                      label={value === 'exact' ? say('This exact request') : value}
+                      selected={rule === value}
+                      maxLabelWidth={220}
+                      onPress={() => setRule(value)}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : null}
+            {item.rememberable.project ? (
+              <Button
+                kind="secondary"
+                title={say('Allow for this project')}
+                onPress={() => decide(chatId, item.id, 'allow', 'project', pattern)}
+              />
+            ) : null}
+            <Button
+              kind="secondary"
+              title={say('Allow for this user')}
+              onPress={() => decide(chatId, item.id, 'allow', 'user', pattern)}
+            />
+            <T size={font.caption} tone="muted">
+              {say('Saved approvals apply to the selected rule. Allow once applies only to this request.')}
+            </T>
+          </View>
+        ) : (
+          <Pressable accessibilityRole="button" hitSlop={6} onPress={() => setRemembering(true)}>
+            <T size={font.control} tone="accent">
+              {say('Don’t ask again…')}
+            </T>
+          </Pressable>
+        )
+      ) : null}
     </Card>
   )
 }

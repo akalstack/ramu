@@ -64,6 +64,7 @@ import { attachmentActions } from './attachmentActions'
 import { terminalMenu } from './terminalMenu'
 import { createAgentNotifier } from './agentNotifier'
 import { createPairingNotifier } from './pairingNotifier'
+import { createPermissionNotifier } from './permissionNotifier'
 import {
   runtimeInvoke,
   runtimeInvokeRecoverable,
@@ -495,6 +496,7 @@ async function main() {
 
   const notifiers = new Map<string, ReturnType<typeof createAgentNotifier>>()
   const pairing = createPairingNotifier({ window: win, launchedForRequest: launchedForPairing, quit: () => app.quit() })
+  const permissions = createPermissionNotifier({ window: win, reveal: () => pairing.reveal() })
   // macOS also activates an app as it launches; only a later activation (Dock, Finder) is the person opening it.
   const pairingLaunchAt = Date.now()
   app.on('activate', () => {
@@ -637,6 +639,7 @@ async function main() {
     renew: (url, token) => runtimeRenew(url, token),
     deliver: (id, ...[channel, payload]) => {
       if (id === LOCAL && channel === 'pairing:requests') pairing.receive(payload.requests)
+      if (id === LOCAL && channel === 'permission:requests') permissions.receive(payload.requests)
       observeHostActivity(id, ...([channel, payload] as PushArgs))
       sendTo(id, channel, payload)
       notifierFor(id).observe(channel, payload)
