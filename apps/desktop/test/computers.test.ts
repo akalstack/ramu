@@ -335,6 +335,26 @@ it('shows an SSH host as offline and retries when its tunnel cannot open', async
   expect([...streams.keys()]).toEqual(['http://127.0.0.1:49200'])
 })
 
+it('keeps an unreachable SSH host offline through its retries instead of flickering to connecting', async () => {
+  const { servers, registry, ssh } = setup()
+  let fail: (error: Error) => void = () => {}
+  ssh.ensure.mockRejectedValueOnce(new Error('down'))
+  ssh.ensure.mockImplementationOnce(() => new Promise<void>((_, reject) => (fail = reject)))
+  const saved = servers.add('http://127.0.0.1:49200', 'Build box', 'tok', 1, {
+    target: 'build',
+    remote: '127.0.0.1:7788',
+  })
+  registry.start()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(registry.status(saved.id)).toBe('offline')
+  await vi.advanceTimersByTimeAsync(20_000)
+  expect(ssh.ensure).toHaveBeenCalledTimes(2)
+  expect(registry.status(saved.id)).toBe('offline')
+  fail(new Error('still down'))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(registry.status(saved.id)).toBe('offline')
+})
+
 it('defaults browsing to all hosts and shares the filter without changing workspace ownership', () => {
   const { registry, servers } = setup()
   const remote = servers.add('10.0.0.9:7788', 'Studio', 'token')

@@ -1,4 +1,4 @@
-import { mayConnect, restoredStatus } from './hostConnection'
+import { attemptStatus, failureStatus, mayConnect, restoredStatus } from './hostConnection'
 import { appForeground } from './chatViewport'
 import { PairRequestUnsupported, requestPairing } from '@ramu/shared/pairRequest'
 import { secureRandom } from './secureRandom'
@@ -1181,7 +1181,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     generations.current.set(computer.id, generation)
     // A connection the person turned off stays off: no connecting and no retries.
     if (!active.current || ref.current.computers.find((c) => c.id === computer.id)?.status === 'paused') return
-    if (!resuming || computer.status !== 'online') status(computer.id, 'connecting')
+    const shown = ref.current.computers.find((c) => c.id === computer.id)?.status ?? computer.status
+    const starting = attemptStatus(shown, retries > 0)
+    if (starting && (!resuming || shown !== 'online')) status(computer.id, starting)
     const token = await readToken(computer.id)
     if (generations.current.get(computer.id) !== generation || !active.current) return
     if (!token) {
@@ -1299,13 +1301,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         connection.controller.signal,
       )
     } catch (error) {
+      const wasLive = !!connection.live
       connection.live = false
       if (!current()) return
       if (error instanceof HostError && [401, 426].includes(error.status)) {
         status(computer.id, 'revoked', error.message)
         return
       }
-      status(computer.id, 'offline', error instanceof Error ? error.message : 'Host unreachable')
+      status(computer.id, failureStatus(wasLive), error instanceof Error ? error.message : 'Host unreachable')
       // Retire this generation now, so late history reads cannot hold up or overwrite the next connection.
       connection.controller.abort()
       connection.client.close()

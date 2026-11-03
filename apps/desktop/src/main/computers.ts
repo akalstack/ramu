@@ -92,7 +92,9 @@ export class ComputerRegistry {
     this.deps.ssh.closeAll()
   }
 
-  private connect(id: string) {
+  /** `retry` is a timed retry: a host already shown offline stays offline until it answers, rather than flickering. */
+  private connect(id: string, retry = false) {
+    const previous = this.live.get(id)
     this.clearCount(id)
     clearTimeout(this.timers.get(`ssh:${id}`))
     this.timers.delete(`ssh:${id}`)
@@ -104,7 +106,10 @@ export class ComputerRegistry {
       return
     }
     if (saved?.ssh) {
-      const live: Live = { status: 'connecting', running: 0, needsInput: 0, stop: () => {} }
+      const live: Live =
+        retry && previous?.status === 'offline'
+          ? { status: 'offline', waiting: previous.waiting, running: 0, needsInput: 0, stop: () => {} }
+          : { status: 'connecting', running: 0, needsInput: 0, stop: () => {} }
       this.live.set(id, live)
       let cancelled = false,
         detach = () => {}
@@ -134,7 +139,7 @@ export class ComputerRegistry {
             `ssh:${id}`,
             setTimeout(() => {
               this.timers.delete(`ssh:${id}`)
-              if (!cancelled && !this.stopped && this.live.get(id) === live) this.connect(id)
+              if (!cancelled && !this.stopped && this.live.get(id) === live) this.connect(id, true)
             }, SSH_RETRY_MS),
           )
         },

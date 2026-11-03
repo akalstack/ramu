@@ -9,3 +9,13 @@ export const restoredStatus = (status: ComputerStatus): ComputerStatus =>
 
 /** Whether the app may connect to, or retry, a host on its own. */
 export const mayConnect = (status: ComputerStatus) => status !== 'revoked' && status !== 'paused'
+
+/**
+ * The status to show as an attempt starts. A background retry of a host already shown offline keeps "Offline", so the
+ * status does not flicker between Connecting and Offline on every retry; only a first or manual attempt says Connecting.
+ */
+export const attemptStatus = (current: ComputerStatus, retry: boolean): ComputerStatus | null =>
+  retry && current === 'offline' ? null : 'connecting'
+
+/** The status after a failed attempt: a link that was just live is reconnecting, not yet offline. */
+export const failureStatus = (wasLive: boolean): ComputerStatus => (wasLive ? 'connecting' : 'offline')

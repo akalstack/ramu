@@ -1476,10 +1476,11 @@ export default function ChatScreen() {
                       setAway(false)
                       toEnd(true)
                     }}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
                   >
+                    {/* Not interactive glass: its press bulge balloons a button this small over the transcript. */}
                     <Glass
                       radius={radius.full}
-                      interactive
                       style={{
                         width: 32,
                         height: 32,
