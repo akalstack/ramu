@@ -23,12 +23,16 @@ The agent can start helpers for parts of a task. Helper cards show progress; ope
 
 ## Teammates
 
-**Add teammate** (thread menu, desktop and phone) brings a second model into the thread with the conversation so far. Start a message with `@name` or `@teammate` to talk to it; anything else goes to the main agent. One teammate per thread.
+**Add teammate** brings a second model into the thread with the conversation so far. Open it from the thread menu, from `@` at the start of a message, or with `/teammate` (desktop and phone). One teammate per thread.
+
+Type `@` at the start of a message to pick the teammate, or write `@name` or `@teammate`; anything else goes to the main agent.
 
 - **Review** (default) reads the latest changes and replies with findings. It never edits, whatever the thread allows.
 - **Take over** edits while the main agent waits, then hands back with a summary.
 
-After four teammate reports without you writing, the exchange pauses; a message to either one continues it.
+The main agent and the teammate also message each other by name with the `teammate_message` tool: the main agent's note wakes the teammate, and the teammate can send a note before its report. The bar above the composer and the teammate's card show what it changed (files and lines) and its turns and reported cost.
+
+After four teammate reports or notes without you writing, the exchange pauses; a message to either one continues it.
 
 ## Custom agents
 

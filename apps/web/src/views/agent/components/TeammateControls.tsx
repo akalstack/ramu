@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Square, Users } from 'lucide-react'
 import type { AgentSettings, AgentTask, TeammateMode } from '@ramu/shared/types'
+import { teammateHandle } from '@ramu/shared/chat/agentTasks'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import { Dropdown } from '../../../Menu'
 import { Button } from '@/components/desktop-button'
@@ -18,6 +19,7 @@ import { notifyError } from '../../../chat/Notifications'
 import { t, useLanguage } from '../../../i18n'
 import { errorText } from '../../../lib/errors'
 import { useHost } from '../../../workspace/HostProvider'
+import { workSummary } from './TaskStatus'
 
 /** Picks a second model and how it works beside the lead: Review reads and reports, Take over edits while the lead waits. */
 export function AddTeammateDialog({
@@ -129,11 +131,11 @@ export function AddTeammateDialog({
   )
 }
 
-/** Above the composer while a teammate is here: who it is, how to address it, and Stop. */
+/** Above the composer while a teammate is here: who it is, how to address it, what it did so far, and Stop. */
 export function TeammateBar({ sessionId, teammate }: { sessionId: string; teammate: AgentTask }) {
   useLanguage()
   const { invoke } = useHost()
-  const handle = teammate.name.toLowerCase().replace(/\s+/g, '-')
+  const handle = teammateHandle(teammate.name)
   return (
     <div className="flex items-center gap-2 px-3 py-1 text-caption text-muted-foreground" role="status">
       <Users size={13} aria-hidden="true" />
@@ -144,6 +146,11 @@ export function TeammateBar({ sessionId, teammate }: { sessionId: string; teamma
           2: handle,
         })}
       </span>
+      {teammate.work && (
+        <span className="shrink-0 tabular-nums" title={teammate.work.paths.join('\n') || undefined}>
+          {workSummary(teammate.work)}
+        </span>
+      )}
       {teammate.status === 'running' && (
         <Button
           variant="ghost"

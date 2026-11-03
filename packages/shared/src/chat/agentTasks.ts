@@ -1,4 +1,5 @@
-import type { AgentEvent, AgentProvider, AgentTask, AgentTaskStatus } from '../types'
+import type { AgentEvent, AgentProvider, AgentTask, AgentTaskStatus, AgentWork } from '../types'
+import { fileToolLine } from '@ramu/shared/chat/fileTools'
 
 // Neither SDK lets a client write to a sub-agent directly, so a message for one goes to the main
 // agent, which relays it with its own tool: Claude's SendMessage or Codex's send_input.
@@ -164,10 +165,55 @@ export const SUBAGENT_PREAMBLE =
 export const activeTeammate = (tasks: readonly AgentTask[]) =>
   tasks.find((task) => task.teammate && task.status !== 'stopped' && task.status !== 'failed')
 
+/** How the lead and the person address a teammate: its name in lower case, spaces as dashes. */
+export const teammateHandle = (name: string) => name.trim().toLowerCase().replace(/\s+/g, '-')
+
+/** Whether `to` names this teammate: its handle, or plain `teammate`. */
+export const namesTeammate = (to: string, name: string) => {
+  const handle = to.trim().replace(/^@/, '').toLowerCase()
+  return handle === 'teammate' || handle === teammateHandle(name)
+}
+
 /** A message that starts with `@name` (or `@teammate`) goes to the teammate instead of the lead. */
 export function teammateMention(text: string, name: string): string | null {
   const match = /^@(\S+)\s+([\s\S]+)$/.exec(text.trim())
-  if (!match) return null
-  const handle = match[1]!.toLowerCase()
-  return handle === 'teammate' || handle === name.toLowerCase().replace(/\s+/g, '-') ? match[2]!.trim() : null
+  return match && namesTeammate(match[1]!, name) ? match[2]!.trim() : null
+}
+
+/** Files the card lists by name; the counts still cover every file. */
+const WORK_PATHS = 20
+
+/** What a helper's own session did: files its edits and writes changed with line counts, its turns and reported cost. */
+export function helperWork(events: readonly AgentEvent[]): AgentWork {
+  const uses = new Map<string, Extract<AgentEvent, { kind: 'tool-use' }>>()
+  const files = new Set<string>()
+  let added = 0
+  let removed = 0
+  let turns = 0
+  let costUsd: number | null = null
+  for (const event of events) {
+    if (event.kind === 'tool-use') uses.set(event.toolUseId, event)
+    else if (event.kind === 'tool-result' && !event.isError && !event.running) {
+      const use = uses.get(event.toolUseId)
+      const line = use && fileToolLine(use, event)
+      if (!line || line.verb === 'Read') continue
+      files.add(line.path)
+      added += line.added ?? 0
+      removed += line.removed ?? 0
+    } else if (event.kind === 'result') {
+      turns++
+      if (event.costUsd !== null) costUsd = (costUsd ?? 0) + event.costUsd
+    }
+  }
+  return { files: files.size, paths: [...files].slice(0, WORK_PATHS), added, removed, turns, costUsd }
+}
+
+/** A teammate's note to the lead, sent with teammate_message; the lead answers the same way. */
+export function teammateNotePrompt(name: string, text: string): string {
+  return `[Teammate "${name.replace(/"/g, "'")}" says]\n${text.trim()}\n\n(Reply with teammate_message, to "${teammateHandle(name)}", only if it needs an answer.)`
+}
+
+/** The lead's note to its teammate, delivered as the teammate's next message. */
+export function leadNotePrompt(text: string): string {
+  return `[The lead says]\n${text.trim()}\n\n(Reply with teammate_message, to "lead", only if it needs an answer before your report.)`
 }

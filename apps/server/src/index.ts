@@ -1145,6 +1145,28 @@ const mcpHttp = createServer(async (req, res) => {
         }
       },
     )
+  // The lead and a teammate the person added address each other by name. A lead may gain a teammate mid-thread, so it always has the tool.
+  const teammateSession = agents.events(source.id).some((event) => event.kind === 'teammate')
+  if (!agents.get(source.id).parentId || teammateSession)
+    server.registerTool(
+      'teammate_message',
+      {
+        description: teammateSession
+          ? 'Send the lead (to "lead") a short note before your report: a finding it should act on now, or a question. It does not wait for a reply; finish with your report as usual.'
+          : 'Message the teammate the person added to this thread, by its name (as in @name) or "teammate". It wakes the teammate and its next report comes back to you as a message. Use it only when the thread has a teammate; for your own sub-agents use their tools.',
+        inputSchema: { to: z.string().min(1).max(80), text: z.string().min(1).max(20000) },
+      },
+      async ({ to, text }) => {
+        try {
+          return result(await agents.teammateMessage(source.id, to, text))
+        } catch (error) {
+          return {
+            isError: true,
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+          }
+        }
+      },
+    )
   // A Ramu-run sub-agent talks to the chat that started it; the chat answers its questions.
   if (agents.get(source.id).parentId) {
     server.registerTool(

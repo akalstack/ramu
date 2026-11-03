@@ -1,7 +1,13 @@
 // Structured agent service: the façade over the collaborators in ./agent/. Each owns one slice of the state (sessions,
 // queue, goals, routing, sub-agents, ...); this class builds them, wires their hosts and exposes the public API.
 import { mcpRequest, mcpServerDetails } from './agent/mcpStatus'
-import { latestTasks } from '@ramu/shared/chat/agentTasks'
+import {
+  activeTeammate,
+  latestTasks,
+  leadNotePrompt,
+  namesTeammate,
+  teammateHandle,
+} from '@ramu/shared/chat/agentTasks'
 import { clipText } from '@ramu/shared/text'
 import { customAgentFor, type CustomAgent } from '@ramu/shared/customAgents'
 import type { ActivityRow } from '@ramu/shared/usageAcrossHosts'
@@ -43,7 +49,7 @@ import { CatalogService } from './agent/catalogService'
 import { FallbackRouter } from './agent/fallbackRouter'
 import { BackgroundAnalysis } from './agent/backgroundAnalysis'
 import { AdvisorService } from './agent/advisorService'
-import { SubagentRunner } from './agent/subagentRunner'
+import { SubagentRunner, TEAMMATE_PAUSED } from './agent/subagentRunner'
 import { AgentTasks } from './agent/agentTasks'
 import { SessionProcess } from './agent/sessionProcess'
 import { ClaudeStreamPump } from './agent/claudeStreamPump'
@@ -855,6 +861,24 @@ export class AgentService {
       settings: { ...settings, access },
       teammate: mode,
     })
+  }
+
+  /**
+   * teammate_message: the lead and its teammate address each other by name. The lead's note wakes the teammate, whose
+   * next report comes back; the teammate's note reaches the lead at once. Both count toward the pause for the person.
+   */
+  async teammateMessage(fromId: string, to: string, text: string): Promise<{ to: string }> {
+    if (this.get(fromId).parentId) {
+      await this.parts.subagents.messageLead(fromId, to, text)
+      return { to: 'lead' }
+    }
+    const teammate = activeTeammate(latestTasks(this.events(fromId)))
+    if (!teammate) throw new Error('This thread has no teammate. The person adds one from the thread menu.')
+    if (!namesTeammate(to, teammate.name))
+      throw new Error(`This thread's teammate is "${teammateHandle(teammate.name)}".`)
+    if (this.parts.subagents.teammatePaused(fromId)) throw new Error(TEAMMATE_PAUSED)
+    await this.parts.tasks.messageTask(fromId, teammate.agentId, leadNotePrompt(text))
+    return { to: teammateHandle(teammate.name) }
   }
 
   /** The person wrote, so a teammate exchange that paused may continue. */

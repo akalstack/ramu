@@ -39,7 +39,7 @@ vi.mock('../src/chat/Notifications', () => ({ notifyError() {} }))
 vi.mock('../src/git/reviews', () => ({ openReview() {} }))
 vi.mock('../src/components/desktop-button', () => ({ Button: 'button' }))
 vi.mock('../src/components/ui/badge', () => ({ Badge: 'span' }))
-import { ComposerSuggestions, useComposerSuggestions } from '../src/composer/ComposerSuggestions'
+import { ComposerSuggestions, useComposerSuggestions, type ComposerTeammate } from '../src/composer/ComposerSuggestions'
 
 beforeEach(() => {
   state.values = []
@@ -48,15 +48,15 @@ beforeEach(() => {
   state.list = null
   state.invoke.mockReset()
 })
-function RenderSuggestions(value: string) {
+function RenderSuggestions(value: string, team?: ComposerTeammate) {
   state.index = 0
-  return useComposerSuggestions(value, value.length, 'task')
+  return useComposerSuggestions(value, value.length, 'task', true, team)
 }
-async function load(value: string) {
-  RenderSuggestions(value)
+async function load(value: string, team?: ComposerTeammate) {
+  RenderSuggestions(value, team)
   state.effects.splice(0).forEach((run) => run())
   for (let i = 0; i < 8; i++) await Promise.resolve()
-  return RenderSuggestions(value)
+  return RenderSuggestions(value, team)
 }
 
 it('loads file suggestions without requiring skills and preserves full paths on insertion', async () => {
@@ -139,4 +139,28 @@ it('keeps focus in the composer when clicking an option and chooses its original
   ;(option.onClick as () => void)()
   expect(preventDefault).toHaveBeenCalledOnce()
   expect(onChoose).toHaveBeenCalledWith(0)
+})
+
+it('offers the teammate first after @ at the start of a message, and inserts its handle', async () => {
+  state.invoke.mockResolvedValue([{ repoId: 'repo', path: 'codex.ts' }])
+  const team = { current: { name: 'GPT Sol', mode: 'review' as const } }
+  const suggestions = await load('@gpt', team)
+  expect(suggestions.choices.map((choice) => [choice.label, choice.kind])).toEqual([['@gpt-sol', 'Teammate']])
+  expect(suggestions.choose(suggestions.choices[0]!).value).toBe('@gpt-sol ')
+  // Mid-message the mention would not reach the teammate, so only files are offered there.
+  const later = await load('look at @co', team)
+  expect(later.choices.map((choice) => choice.kind)).toEqual(['File'])
+})
+
+it('offers Add teammate after @ and as /teammate when the thread has none', async () => {
+  state.invoke.mockResolvedValue([])
+  const onAdd = vi.fn()
+  const at = await load('@', { onAdd })
+  expect(at.choices.map((choice) => choice.label)).toEqual(['Add teammate'])
+  expect(at.choose(at.choices[0]!).value).toBe('')
+  expect(onAdd).toHaveBeenCalledOnce()
+  const slash = await load('/teammate', { onAdd })
+  expect(slash.choices.map((choice) => choice.label)).toContain('/teammate')
+  // A device that may only view gets neither.
+  expect((await load('/teammate')).choices.map((choice) => choice.label)).not.toContain('/teammate')
 })

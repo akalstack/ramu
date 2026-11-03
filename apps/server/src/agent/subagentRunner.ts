@@ -21,7 +21,13 @@ import type {
   ProviderCatalog,
 } from '@ramu/shared/types'
 import { subagentTarget, settingsKey, accountKey, nextStep } from '@ramu/shared/providers/routing'
-import { SUBAGENT_PREAMBLE, subagentNotePrompt, taskReportPrompt } from '@ramu/shared/chat/agentTasks'
+import {
+  SUBAGENT_PREAMBLE,
+  helperWork,
+  subagentNotePrompt,
+  taskReportPrompt,
+  teammateNotePrompt,
+} from '@ramu/shared/chat/agentTasks'
 import { applyIsolation, collectPatch, createIsolation, removeIsolation } from '../workspace/isolation'
 import type { ChildRun, SubagentInput, SubagentResult } from './types'
 import { FOREGROUND_WAIT_MS, ASK_WAIT_MS } from './constants'
@@ -68,9 +74,15 @@ const TEAMMATE_ROUNDS = 4
 
 function teammatePreamble(mode: TeammateMode): string {
   return mode === 'review'
-    ? "You are a teammate the person added to this thread, working beside its main agent (the lead). You are read-only: read the files and the lead's latest changes and reply with concrete findings, most important first. Do not edit files. When you have nothing to add, say so briefly."
-    : 'You are a teammate the person added to this thread, taking over from its main agent (the lead), which waits while you work. Make the change asked for in this checkout, then hand back with a short summary of what you changed and what is left, so the lead can continue without re-reading everything.'
+    ? `You are a teammate the person added to this thread, working beside its main agent (the lead). You are read-only: read the files and the lead's latest changes and reply with concrete findings, most important first. Do not edit files. When you have nothing to add, say so briefly. ${TEAMMATE_TOOL}`
+    : `You are a teammate the person added to this thread, taking over from its main agent (the lead), which waits while you work. Make the change asked for in this checkout, then hand back with a short summary of what you changed and what is left, so the lead can continue without re-reading everything. ${TEAMMATE_TOOL}`
 }
+
+const TEAMMATE_TOOL =
+  'Your final reply goes to the lead as your report. To reach the lead before that, use teammate_message with to "lead".'
+
+/** Why a teammate exchange refuses another message until the person writes. */
+export const TEAMMATE_PAUSED = `The exchange with the teammate paused after ${TEAMMATE_ROUNDS} rounds without the person. Wait for them to write.`
 
 function customPreamble(agent: CustomAgent): string {
   return `You are the custom agent "${agent.name}": ${agent.description}\n${agent.instructions}${agent.readOnly ? '\nYou are read-only: read and report, never edit files.' : ''}`
@@ -122,6 +134,7 @@ export class SubagentRunner {
         endedAt: Date.now(),
         ...(status === 'failed' ? { error: failure || 'The sub-agent failed.' } : {}),
         ...(run.isolation ? { canMessage: false } : {}),
+        ...(run.teammate ? { work: helperWork(this.host.events(id)) } : {}),
       })
       const result: SubagentResult = {
         agentId: id,
@@ -137,16 +150,11 @@ export class SubagentRunner {
         waiter(result)
         return
       }
-      if (run.teammate) {
-        // A back-and-forth costs a turn on each side, so it pauses for the person after a few rounds.
-        const rounds = (this.teammateRounds.get(run.parentId) ?? 0) + 1
-        this.teammateRounds.set(run.parentId, rounds)
-        if (rounds > TEAMMATE_ROUNDS) {
-          this.host.updateTask(run.parentId, id, {
-            summary: `Paused after ${TEAMMATE_ROUNDS} rounds without you. Message either one to continue.`,
-          })
-          return
-        }
+      if (run.teammate && !this.teammateRound(run.parentId)) {
+        this.host.updateTask(run.parentId, id, {
+          summary: `Paused after ${TEAMMATE_ROUNDS} rounds without you. Message either one to continue.`,
+        })
+        return
       }
       if (run.report) void this.reportToParent(run.parentId, taskReportPrompt(run.name, status, result.report))
     }
@@ -164,6 +172,30 @@ export class SubagentRunner {
   /** The person wrote to the lead or the teammate, so the exchange may go on. */
   resetTeammateRounds(parentId: string) {
     this.teammateRounds.delete(parentId)
+  }
+
+  /**
+   * Counts one message from the teammate to the lead, a report or a note. A back-and-forth costs a turn on each side,
+   * so it pauses for the person after a few rounds: false once it has.
+   */
+  private teammateRound(parentId: string): boolean {
+    const rounds = (this.teammateRounds.get(parentId) ?? 0) + 1
+    this.teammateRounds.set(parentId, rounds)
+    return rounds <= TEAMMATE_ROUNDS
+  }
+
+  /** The exchange already paused, so the lead should not wake the teammate again until the person writes. */
+  teammatePaused(parentId: string): boolean {
+    return (this.teammateRounds.get(parentId) ?? 0) >= TEAMMATE_ROUNDS
+  }
+
+  /** A teammate's note to the lead, sent with teammate_message before its report. */
+  async messageLead(childId: string, to: string, text: string): Promise<void> {
+    const run = this.children.get(childId)
+    if (!run?.teammate || run.settled) throw new Error('Only a working teammate can message the lead.')
+    if (to.trim().replace(/^@/, '').toLowerCase() !== 'lead') throw new Error('A teammate messages only "lead".')
+    if (!this.teammateRound(run.parentId)) throw new Error(TEAMMATE_PAUSED)
+    await this.reportToParent(run.parentId, teammateNotePrompt(run.name, text))
   }
 
   /** A teammate keeps its session across turns: a message wakes it, and its next report comes back again. */
@@ -189,7 +221,8 @@ export class SubagentRunner {
     if (!run?.teammate || run.parentId !== parentId) return false
     run.settled = false
     run.report = true
-    this.host.updateTask(parentId, childId, { status: 'running', summary: undefined })
+    // A finished card only goes back to running with a resume time; without one the update reads as stale progress.
+    this.host.updateTask(parentId, childId, { status: 'running', resumedAt: Date.now() })
     return true
   }
 

@@ -10,7 +10,7 @@ import {
   helperStatusLabel,
   sortHelpers,
 } from '@ramu/shared/chat/helperPresentation'
-import type { AgentTask } from '@ramu/shared/types'
+import type { AgentTask, AgentWork } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import { providerNames, type Chat, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
@@ -34,6 +34,16 @@ const copy = (key: string, id: boolean) =>
         'Recovered activity': 'Aktivitas dipulihkan',
       }[key] ?? key)
     : key
+/** A teammate's changes and usage, e.g. "2 files +40 −5 · 3 turns · $0.12". */
+function workLine(work: AgentWork, id: boolean): string {
+  const files = work.files
+    ? `${work.files} ${id ? 'file' : work.files === 1 ? 'file' : 'files'} +${work.added} −${work.removed}`
+    : id
+      ? 'Tidak ada perubahan'
+      : 'No changes'
+  const turns = `${work.turns} ${id ? 'giliran' : work.turns === 1 ? 'turn' : 'turns'}`
+  return [files, turns, ...(work.costUsd ? [`$${work.costUsd.toFixed(2)}`] : [])].join(' · ')
+}
 /** Only this visible label ticks; backgrounding or leaving the route stops its timer. */
 /** How much of a helper's output the sheet reveals at a time, counted from the end. */
 const OUTPUT_PAGE = 6000
@@ -159,6 +169,19 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
                 onPress={() => setShown((current) => current + OUTPUT_PAGE)}
               />
             ) : null}
+          </>
+        ) : null}
+        {task.work ? (
+          <>
+            <T weight="600">{id ? 'Perubahan' : 'Changes'}</T>
+            <T tone="muted" size={font.caption}>
+              {workLine(task.work, id)}
+            </T>
+            {task.work.paths.map((path) => (
+              <T key={path} size={font.caption} mono numberOfLines={1}>
+                {path}
+              </T>
+            ))}
           </>
         ) : null}
         {task.summary || task.error ? (

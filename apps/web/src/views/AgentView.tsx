@@ -218,6 +218,15 @@ export const AgentView = memo(function AgentView({
   const tasks = useMemo(() => allTasks.filter((task) => task.taskType !== 'local_bash'), [allTasks])
   const teammate = useMemo(() => activeTeammate(allTasks), [allTasks])
   const [addingTeammate, setAddingTeammate] = useState(false)
+  const composerTeammate = useMemo(
+    () =>
+      teammate
+        ? { current: { name: teammate.name, mode: teammate.teammate ?? ('review' as const) } }
+        : viewOnly
+          ? undefined
+          : { onAdd: () => setAddingTeammate(true) },
+    [teammate, viewOnly],
+  )
   const commands = allTasks.filter(
     (task) => task.taskType === 'local_bash' && task.background && effectiveStatus(task, live) === 'running',
   )
@@ -950,6 +959,7 @@ export const AgentView = memo(function AgentView({
                 onChange={setDraft}
                 onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
                 chat
+                teammate={composerTeammate}
                 onSubmit={(context) => send(action, context)}
                 onAlternateSubmit={
                   busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined

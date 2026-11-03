@@ -1,8 +1,8 @@
 import { Spinner } from '@/components/ui/spinner'
-import { useLanguage } from '../../../i18n'
+import { formatLocale, t, useLanguage } from '../../../i18n'
 import { CircleCheck, CircleSlash, CircleX, Clock } from 'lucide-react'
 import { providerName } from '../../../chat/AgentControls'
-import type { AgentTask } from '@ramu/shared/types'
+import type { AgentTask, AgentWork } from '@ramu/shared/types'
 import { modelDisplayName } from '../../../models/ModelSets'
 import { formatDuration } from '../lib/format'
 
@@ -46,4 +46,16 @@ export function taskMeta(task: AgentTask, status: AgentTask['status']): string {
   ]
     .filter(Boolean)
     .join(' · ')
+}
+
+/** What the teammate changed and what it cost so far, e.g. "2 files +40 −5 · 3 turns · $0.12". */
+export function workSummary(work: AgentWork): string {
+  const changes = work.files
+    ? `${work.files === 1 ? t('1 file') : t('{0} files', { 0: work.files })} +${work.added} −${work.removed}`
+    : t('No changes')
+  const turns = work.turns === 1 ? t('1 turn') : t('{0} turns', { 0: work.turns })
+  const cost = work.costUsd
+    ? [new Intl.NumberFormat(formatLocale(), { style: 'currency', currency: 'USD' }).format(work.costUsd)]
+    : []
+  return [changes, turns, ...cost].join(' · ')
 }

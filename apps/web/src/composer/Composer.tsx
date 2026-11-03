@@ -9,7 +9,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Attachment, FileContext } from '@ramu/shared/types'
 import { invoke as ownInvoke, ramu } from '../ipc'
-import { ComposerSuggestions, FILE_DRAG_TYPE, MAX_PINNED_FILES, useComposerSuggestions } from './ComposerSuggestions'
+import {
+  ComposerSuggestions,
+  FILE_DRAG_TYPE,
+  MAX_PINNED_FILES,
+  useComposerSuggestions,
+  type ComposerTeammate,
+} from './ComposerSuggestions'
 import { Attachments } from './Attachments'
 import { registerWorkspaceCheckpoint } from '../workspace/workspaceCheckpoint'
 import { useHost } from '../workspace/HostProvider'
@@ -49,6 +55,7 @@ export function Composer({
   chips,
   allowEmpty = false,
   chat = false,
+  teammate,
 }: {
   value: string
   scopeId?: string
@@ -81,10 +88,12 @@ export function Composer({
   onArrowUpEmpty?: () => void
   /** A chat's own composer, which offers chat-only commands such as /aside. */
   chat?: boolean
+  /** The thread's teammate, or how to add one, for `@` and `/teammate`. */
+  teammate?: ComposerTeammate
 }) {
   useLanguage()
   const [caret, setCaret] = useState(value.length)
-  const suggestions = useComposerSuggestions(value, caret, scopeId, chat)
+  const suggestions = useComposerSuggestions(value, caret, scopeId, chat, teammate)
   const [submitting, setSubmitting] = useState(false)
   const submissionPending = useRef(false)
   const submissionOrigin = useRef<{ host: string; scope: string | null } | null>(null)

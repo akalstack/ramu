@@ -2520,6 +2520,50 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
+  it('lets the lead and its teammate message each other by name, and pauses after four rounds without you', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc)
+    await expect(svc.teammateMessage(parent.id, 'teammate', 'x')).rejects.toThrow(/no teammate/)
+    const settings = { ...full, provider: 'codex' as const, model: 'codex-test', effort: 'high' as const }
+    const { agentId } = await svc.addTeammate(parent.id, settings, 'review', '')
+    // Review never writes, so the fake runtime holds it on an approval and it keeps working.
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
+    await svc.teammateMessage(agentId, 'lead', 'Tests fail on main')
+    await until(() =>
+      svc
+        .events(parent.id)
+        .some((e) => e.kind === 'user' && e.text.startsWith('[Teammate "codex-test" says]\nTests fail on main')),
+    )
+    await expect(svc.teammateMessage(agentId, 'codex-test', 'x')).rejects.toThrow(/only "lead"/)
+    for (const note of ['two', 'three', 'four']) await svc.teammateMessage(agentId, 'lead', note)
+    await expect(svc.teammateMessage(agentId, 'lead', 'five')).rejects.toThrow(/paused after 4 rounds/)
+    await expect(svc.teammateMessage(parent.id, 'teammate', 'more')).rejects.toThrow(/paused after 4 rounds/)
+    // You wrote, so the exchange goes on and the teammate's report carries what it did.
+    svc.resetTeammateRounds(parent.id)
+    const request = svc.events(parent.id).find((e) => e.kind === 'permission-request') as { requestId: string }
+    svc.replyPermission(parent.id, request.requestId, true)
+    await until(() => svc.task(parent.id, agentId)?.status === 'completed')
+    expect(svc.task(parent.id, agentId)?.work).toMatchObject({ files: 0, paths: [], turns: 1 })
+    // The lead addresses it by its handle; the note wakes it for another turn.
+    await expect(svc.teammateMessage(parent.id, 'someone', 'x')).rejects.toThrow(/teammate is "codex-test"/)
+    expect(await svc.teammateMessage(parent.id, '@codex-test', 'Check a.ts too')).toEqual({ to: 'codex-test' })
+    await until(() =>
+      svc.events(agentId).some((e) => e.kind === 'user' && e.text.startsWith('[The lead says]\nCheck a.ts too')),
+    )
+    expect(svc.task(parent.id, agentId)).toMatchObject({ status: 'running' })
+    expect(svc.task(parent.id, agentId)?.endedAt).toBeUndefined()
+    // Its next report comes back to the lead as before, once its approval is answered.
+    await until(() => svc.events(parent.id).filter((e) => e.kind === 'permission-request').length === 2)
+    const again = svc.events(parent.id).findLast((e) => e.kind === 'permission-request') as { requestId: string }
+    svc.replyPermission(parent.id, again.requestId, true)
+    await until(
+      () =>
+        svc.events(parent.id).filter((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "codex-test" finished]'))
+          .length === 2,
+    )
+    svc.stopAll()
+  })
+
   it('runs a custom agent named as the type, on its model, read-only, and shows which ran', async () => {
     const svc = routed()
     svc.customAgents = () => [

@@ -257,6 +257,20 @@ export type AgentTaskStatus = 'running' | 'completed' | 'failed' | 'stopped'
 /** A teammate the person adds: Review reads and reports; Take over edits while the lead waits, then hands back. */
 export type TeammateMode = 'review' | 'take-over'
 
+/** What a helper's own session did, read from its events. */
+export interface AgentWork {
+  /** Files its edits and writes changed. */
+  files: number
+  /** The first of those files, as the provider named them. */
+  paths: string[]
+  added: number
+  removed: number
+  /** Turns it finished. */
+  turns: number
+  /** Cost the provider reported for those turns; null when it reported none. */
+  costUsd: number | null
+}
+
 export interface AgentTask {
   /** Ramu-owned session; absent for native provider helpers without a separate session. */
   childSessionId?: string
@@ -274,6 +288,8 @@ export interface AgentTask {
   taskType?: string
   /** Set for a teammate the person added, rather than a helper the agent started. */
   teammate?: TeammateMode
+  /** A teammate's changes and usage so far, updated as each turn ends. */
+  work?: AgentWork
   status: AgentTaskStatus
   /** Keeps running after the main turn ends. */
   background?: boolean

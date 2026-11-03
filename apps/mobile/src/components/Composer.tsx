@@ -16,7 +16,7 @@ import {
 } from 'react-native'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
-import { SuggestionList, useComposerSuggest } from './ComposerSuggest'
+import { SuggestionList, useComposerSuggest, type ComposerTeammate } from './ComposerSuggest'
 import {
   ArrowUp,
   Pencil,
@@ -584,6 +584,7 @@ export function Composer({
   taskId,
   scope,
   chatId,
+  teammate,
 }: {
   draftKey?: string
   computerId?: string
@@ -629,6 +630,8 @@ export function Composer({
   /** The thread is held at a usage limit: the send button reads Queue and the model chip carries a marker. */
   limited?: boolean
   onCancelEdit?: () => void
+  /** The chat's teammate, or how to add one, for `@` and `/teammate`. */
+  teammate?: ComposerTeammate
 }) {
   const textInput = useRef<import('react-native').TextInputInstance>(null)
   useEffect(() => {
@@ -672,7 +675,14 @@ export function Composer({
   // The Auto-resume choice belongs to the thread's session, so it is offered once the thread has one.
   const limitChat = chatId ? store.chats.find((entry) => entry.id === chatId) : undefined
   const split = useMemo(() => splitQuotes(text), [text])
-  const suggest = useComposerSuggest({ computerId: pc, scope: scope ?? taskId, chatId, text: split.body, caret })
+  const suggest = useComposerSuggest({
+    computerId: pc,
+    scope: scope ?? taskId,
+    chatId,
+    text: split.body,
+    caret,
+    teammate,
+  })
   // Takes the editable body (without quotes) and keeps the quotes in front of it in the draft.
   const save = (next: string) => {
     setText(next)

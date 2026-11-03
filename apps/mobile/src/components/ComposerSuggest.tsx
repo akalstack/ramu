@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Command, FileText, Sparkles } from 'lucide-react-native'
-import type { SkillInfo } from '@ramu/shared/types'
+import { Command, FileText, Sparkles, Users } from 'lucide-react-native'
+import type { SkillInfo, TeammateMode } from '@ramu/shared/types'
+import { teammateHandle } from '@ramu/shared/chat/agentTasks'
 import { acceptComposerTrigger, composerTrigger } from '@ramu/shared/chat/composerTrigger'
 import { font, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
@@ -12,10 +13,16 @@ export interface Choice {
   id: string
   label: string
   description: string
-  kind: 'Command' | 'Skill' | 'File'
+  kind: 'Command' | 'Skill' | 'File' | 'Teammate'
   insertion?: string
   file?: { repoId: string; path: string }
   run?: () => void
+}
+/** The chat's teammate, or how to add one, offered after `@` at the start of a message and as `/teammate`. */
+export interface ComposerTeammate {
+  current?: { name: string; mode: TeammateMode }
+  /** Opens Add teammate; absent when this phone may only view. */
+  onAdd?: () => void
 }
 interface Loaded {
   computerId: string
@@ -35,12 +42,14 @@ export function useComposerSuggest({
   chatId,
   text,
   caret,
+  teammate,
 }: {
   computerId: string
   scope?: string
   chatId?: string
   text: string
   caret: number
+  teammate?: ComposerTeammate
 }) {
   const store = useStore()
   const router = useRouter()
@@ -96,8 +105,29 @@ export function useComposerSuggest({
   }, [visible, scope, online, computerId])
   const data = loaded && loaded.scope === scope && loaded.computerId === computerId ? loaded : undefined
 
+  const current = teammate?.current
+  const onAddTeammate = teammate?.onAdd
   const choices = useMemo<Choice[]>(() => {
     if (!mode) return []
+    const handle = current ? teammateHandle(current.name) : ''
+    const talk = current
+      ? `Talk to teammate ${current.name} · ${current.mode === 'take-over' ? 'Take over' : 'Review'}`
+      : ''
+    // Only a message that starts with the mention goes to the teammate, so it is offered only there.
+    const teammates: Choice[] = current
+      ? [{ id: 'teammate', label: `@${handle}`, description: talk, kind: 'Teammate', insertion: `@${handle} ` }]
+      : onAddTeammate
+        ? [
+            {
+              id: 'add-teammate',
+              label: 'Add teammate',
+              description: 'Bring a second model into this thread',
+              kind: 'Teammate',
+              insertion: '',
+              run: onAddTeammate,
+            },
+          ]
+        : []
     const go = (to: Parameters<typeof router.push>[0]) => () => router.push(to)
     const commands: Choice[] = [
       { id: 'new', label: '/new', description: 'Start a new thread', kind: 'Command', run: go('/new') },
@@ -207,19 +237,44 @@ export function useComposerSuggest({
           )
         },
       },
+      ...(current
+        ? [
+            {
+              id: 'teammate',
+              label: '/teammate',
+              description: talk,
+              kind: 'Command' as const,
+              insertion: `@${handle} `,
+            },
+          ]
+        : onAddTeammate
+          ? [
+              {
+                id: 'teammate',
+                label: '/teammate',
+                description: 'Add teammate',
+                kind: 'Command' as const,
+                insertion: '',
+                run: onAddTeammate,
+              },
+            ]
+          : []),
       { id: 'clear', label: '/clear', description: 'Clear this draft', kind: 'Command', insertion: '' },
     ]
     const names = data?.names ?? {}
     const options: Choice[] =
       mode === '@'
-        ? (data?.files ?? []).map((file) => ({
-            id: `${file.repoId}:${file.path}`,
-            label: `${names[file.repoId] ?? ''}${names[file.repoId] ? '/' : ''}${file.path}`,
-            description: 'Add file context',
-            kind: 'File' as const,
-            insertion: `@"${names[file.repoId] ? `${names[file.repoId]}/` : ''}${file.path}" `,
-            file,
-          }))
+        ? [
+            ...(trigger?.start === 0 ? teammates : []),
+            ...(data?.files ?? []).map((file) => ({
+              id: `${file.repoId}:${file.path}`,
+              label: `${names[file.repoId] ?? ''}${names[file.repoId] ? '/' : ''}${file.path}`,
+              description: 'Add file context',
+              kind: 'File' as const,
+              insertion: `@"${names[file.repoId] ? `${names[file.repoId]}/` : ''}${file.path}" `,
+              file,
+            })),
+          ]
         : [
             ...(mode === '/' ? commands : []),
             ...(data?.skills ?? []).map((s): Choice => ({
@@ -233,8 +288,8 @@ export function useComposerSuggest({
     return options
       .filter((choice) => `${choice.label} ${choice.description}`.toLowerCase().includes(query))
       .slice(0, 30)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mode, query, data, chatId, computerId] by design; the values it reads beyond these are current as of that run
-  }, [mode, query, data, chatId, computerId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mode, query, data, chatId, computerId, current, onAddTeammate, trigger start] by design; the values it reads beyond these are current as of that run
+  }, [mode, query, data, chatId, computerId, current, onAddTeammate, trigger?.start])
 
   return {
     // `$` is ordinary text unless a skill matches, so it never shows an empty picker.
@@ -294,6 +349,8 @@ export function SuggestionList({
           >
             {choice.kind === 'File' ? (
               <FileText size={15} color={c.soft} />
+            ) : choice.kind === 'Teammate' ? (
+              <Users size={15} color={c.accent} />
             ) : choice.kind === 'Skill' ? (
               <Sparkles size={15} color={c.accent} />
             ) : (

@@ -3,7 +3,8 @@ import { errorText } from '../lib/errors'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { FileContext, SkillInfo } from '@ramu/shared/types'
+import type { FileContext, SkillInfo, TeammateMode } from '@ramu/shared/types'
+import { teammateHandle } from '@ramu/shared/chat/agentTasks'
 import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
 import { readBuffer, readSelection } from '../editor/editorBuffers'
@@ -22,12 +23,26 @@ interface Choice {
   id: string
   label: string
   description: string
-  kind: 'Command' | 'Skill' | 'File'
+  kind: 'Command' | 'Skill' | 'File' | 'Teammate'
   insertion?: string
   file?: { repoId: string; path: string }
   action?: () => void
 }
-export function useComposerSuggestions(value: string, caret: number, scopeId?: string, chat = false) {
+/** A thread's teammate, or how to add one, offered after `@` at the start of a message and as `/teammate`. */
+export interface ComposerTeammate {
+  /** The teammate still around to talk to. */
+  current?: { name: string; mode: TeammateMode }
+  /** Opens Add teammate; absent when this device may only view. */
+  onAdd?: () => void
+}
+
+export function useComposerSuggestions(
+  value: string,
+  caret: number,
+  scopeId?: string,
+  chat = false,
+  team?: ComposerTeammate,
+) {
   const language = useLanguage()
 
   const listId = useId()
@@ -89,7 +104,34 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
     Object.values(ws.repos)
       .flat()
       .find((r) => r.id === repoId)?.name ?? repoId
+  const current = team?.current
+  const onAddTeammate = team?.onAdd
   const choices = useMemo(() => {
+    const handle = current ? teammateHandle(current.name) : ''
+    const modeLabel = current?.mode === 'take-over' ? t('Take over') : t('Review')
+    // Only a message that starts with the mention goes to the teammate, so it is offered only there.
+    const teammates: Choice[] = current
+      ? [
+          {
+            id: 'teammate',
+            label: `@${handle}`,
+            description: t('Talk to teammate {0} · {1}', { 0: current.name, 1: modeLabel }),
+            kind: 'Teammate',
+            insertion: `@${handle} `,
+          },
+        ]
+      : onAddTeammate
+        ? [
+            {
+              id: 'add-teammate',
+              label: t('Add teammate'),
+              description: t('Bring a second model into this thread'),
+              kind: 'Teammate',
+              insertion: '',
+              action: onAddTeammate,
+            },
+          ]
+        : []
     const commands: Choice[] = [
       { id: 'new', label: '/new', description: t('Start a new thread'), kind: 'Command', action: () => ws.newTask() },
       {
@@ -206,6 +248,28 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
             },
           ]
         : []),
+      ...(current
+        ? [
+            {
+              id: 'teammate',
+              label: '/teammate',
+              description: t('Talk to teammate {0} · {1}', { 0: current.name, 1: modeLabel }),
+              kind: 'Command' as const,
+              insertion: `@${handle} `,
+            },
+          ]
+        : onAddTeammate
+          ? [
+              {
+                id: 'teammate',
+                label: '/teammate',
+                description: t('Add teammate'),
+                kind: 'Command' as const,
+                insertion: '',
+                action: onAddTeammate,
+              },
+            ]
+          : []),
       { id: 'clear', label: '/clear', description: t('Clear this draft'), kind: 'Command', insertion: '' },
       // A chat's composer only: the question goes to an aside, never to the agent.
       ...(chat
@@ -229,14 +293,17 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
     ]
     const options: Choice[] =
       mode === '@'
-        ? files.map((file) => ({
-            id: `${file.repoId}:${file.path}`,
-            label: `${repoName(file.repoId)}/${file.path}`,
-            description: t('Add file context'),
-            kind: 'File',
-            insertion: `@"${repoName(file.repoId)}/${file.path}" `,
-            file,
-          }))
+        ? [
+            ...(trigger?.start === 0 ? teammates : []),
+            ...files.map((file): Choice => ({
+              id: `${file.repoId}:${file.path}`,
+              label: `${repoName(file.repoId)}/${file.path}`,
+              description: t('Add file context'),
+              kind: 'File',
+              insertion: `@"${repoName(file.repoId)}/${file.path}" `,
+              file,
+            })),
+          ]
         : [
             ...(mode === '/' ? commands : []),
             ...skills.map((s): Choice => ({
@@ -260,6 +327,9 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
     chat,
     preferences.memory.enabled,
     preferences.intelligence.learning,
+    current,
+    onAddTeammate,
+    trigger?.start,
   ])
   const hydrate = (): FileContext[] => {
     const state = scope ? ws.taskUi[scope] : undefined

@@ -10,7 +10,7 @@ import { ProviderIcon } from '../../../models/ProviderIcon'
 import { modelDisplayName } from '../../../models/ModelSets'
 import { toolLabel } from '../lib/toolSummary'
 import { useElapsed } from '../hooks/useElapsed'
-import { TASK_STATUS, TaskStatusIcon, taskMeta } from './TaskStatus'
+import { TASK_STATUS, TaskStatusIcon, taskMeta, workSummary } from './TaskStatus'
 import { CARET_CLASS, ICON_BUTTON_CLASS } from '../styles'
 
 /** A sub-agent in the main transcript, where the main agent started it. */
@@ -80,6 +80,14 @@ export function AgentTaskCard({
           {taskMeta(task, status) && (
             <span className="agent-task-meta text-muted-foreground text-caption overflow-hidden text-ellipsis whitespace-nowrap">
               {taskMeta(task, status)}
+            </span>
+          )}
+          {task.work && (
+            <span
+              className="agent-task-work text-muted-foreground text-caption overflow-hidden text-ellipsis whitespace-nowrap tabular-nums"
+              title={task.work.paths.join('\n') || undefined}
+            >
+              {workSummary(task.work)}
             </span>
           )}
           {!!task.steps?.length && (

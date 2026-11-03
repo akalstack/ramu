@@ -294,6 +294,17 @@ export default function ChatScreen() {
     if (focused && hasNotice && chat) store.acknowledge(chat.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [focused, hasNotice, chat?.id] by design; the values it reads beyond these are current as of that run
   }, [focused, hasNotice, chat?.id])
+  const currentTeammate = useMemo(() => (chat ? teammateOf(chat) : undefined), [chat])
+  const viewer = computer?.access === 'viewer'
+  const composerTeammate = useMemo(
+    () =>
+      currentTeammate
+        ? { current: { name: currentTeammate.name, mode: currentTeammate.teammate ?? ('review' as const) } }
+        : viewer
+          ? undefined
+          : { onAdd: () => setAddingTeammate(true) },
+    [currentTeammate, viewer],
+  )
   // Editing a sent message keeps its place with the draft text: leaving the chat or restarting does not drop it.
   const editDraftKey = chat ? `${chat.computerId}:chat:${chat.taskId || chat.id}:editing` : null
   const storedEdit = editDraftKey ? store.drafts[editDraftKey] : undefined
@@ -1203,6 +1214,7 @@ export default function ChatScreen() {
                   }}
                   taskId={chat.taskId || undefined}
                   chatId={chat.id}
+                  teammate={composerTeammate}
                   computerId={chat.computerId}
                   draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
                   onStop={() => store.stop(chat.id)}
