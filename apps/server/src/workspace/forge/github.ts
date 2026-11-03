@@ -1,7 +1,9 @@
 // GitHub pull requests and issues through the `gh` CLI, which brings the user's own sign-in.
 // Like git.ts, every call uses an argument array (never a shell string) and an explicit working directory.
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import type {
   ForgeAccessReport,
@@ -1082,3 +1084,62 @@ registerForgeAdapter({
   publishRepository,
   searchRepositories,
 })
+
+/** A repository webhook Ramu created for a schedule, so it can update or remove it later. */
+export interface RepoHook {
+  origin: string
+  owner: string
+  repo: string
+  id: number
+}
+export interface RepoHookConfig {
+  url: string
+  secret: string
+  events: string[]
+}
+
+/**
+ * One call to the repository-hooks API, through a saved token or `gh`. The body (which holds the secret) reaches `gh`
+ * through a private temporary file, never its arguments, where other processes could read it.
+ */
+async function hookCall<T>(cwd: string, method: string, path: string, body?: unknown): Promise<T> {
+  const direct = await directAccess(cwd)
+  if (direct) return apiRequest<T>(direct, path, { method, ...(body === undefined ? {} : { body }) }).catch(directFailure)
+  if (body === undefined) {
+    const out = await gh(cwd, ['api', path.slice(1), '--method', method])
+    return (out.trim() ? JSON.parse(out) : null) as T
+  }
+  const dir = await mkdtemp(join(tmpdir(), 'ramu-hook-'))
+  const file = join(dir, 'body.json')
+  try {
+    await writeFile(file, JSON.stringify(body), { mode: 0o600 })
+    return JSON.parse(await gh(cwd, ['api', path.slice(1), '--method', method, '--input', file])) as T
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
+const hookBody = (config: RepoHookConfig) => ({
+  active: true,
+  events: config.events,
+  config: { url: config.url, content_type: 'json', secret: config.secret, insecure_ssl: '0' },
+})
+
+/** Creates a webhook on the checkout's GitHub repository. Needs admin rights on it (or a token with repository hooks). */
+export async function createRepoHook(cwd: string, config: RepoHookConfig): Promise<RepoHook> {
+  const remote = await forgeRemoteOf(cwd)
+  if (!remote) throw new ForgeError('This checkout has no GitHub remote.', 'no-remote')
+  const created = await hookCall<{ id: number }>(cwd, 'POST', `/repos/${remote.owner}/${remote.repo}/hooks`, {
+    name: 'web',
+    ...hookBody(config),
+  })
+  return { origin: remote.origin, owner: remote.owner, repo: remote.repo, id: created.id }
+}
+
+export async function updateRepoHook(cwd: string, hook: RepoHook, config: RepoHookConfig): Promise<void> {
+  await hookCall(cwd, 'PATCH', `/repos/${hook.owner}/${hook.repo}/hooks/${hook.id}`, hookBody(config))
+}
+
+export async function deleteRepoHook(cwd: string, hook: RepoHook): Promise<void> {
+  await hookCall(cwd, 'DELETE', `/repos/${hook.owner}/${hook.repo}/hooks/${hook.id}`)
+}

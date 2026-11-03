@@ -181,8 +181,6 @@ export interface WebhookPreset {
   label: string
   description: string
   filters: WebhookFilter[]
-  /** GitHub events to subscribe to when Ramu creates the webhook on a repository. */
-  githubEvents?: string[]
   fields: string[]
   coalesceKey: string | null
   prompt: string
@@ -225,7 +223,6 @@ export const WEBHOOK_PRESETS: WebhookPreset[] = [
       { path: 'body.workflow_run.conclusion', op: 'equals', value: 'failure' },
       { path: 'body.workflow_run.pull_requests[].number', op: 'exists' },
     ],
-    githubEvents: ['workflow_run'],
     fields: [
       'body.repository.full_name',
       'body.workflow_run.name',
@@ -248,7 +245,6 @@ export const WEBHOOK_PRESETS: WebhookPreset[] = [
       { path: 'body.action', op: 'in', value: ['submitted', 'created'] },
       { path: 'body.sender.type', op: 'notEquals', value: 'Bot' },
     ],
-    githubEvents: ['pull_request_review', 'pull_request_review_comment'],
     fields: [
       'body.repository.full_name',
       'body.pull_request.number',
@@ -275,7 +271,6 @@ export const WEBHOOK_PRESETS: WebhookPreset[] = [
       { path: 'body.action', op: 'equals', value: 'labeled' },
       { path: 'body.label.name', op: 'equals', value: 'ramu' },
     ],
-    githubEvents: ['issues'],
     fields: [
       'body.repository.full_name',
       'body.issue.number',
@@ -378,4 +373,19 @@ export function sampleRequest(preset: WebhookPreset): WebhookRequest {
     else if (filter.op === 'in') set(filter.path, filter.value[0])
     else if (filter.op === 'exists' && readPath(request, filter.path).length === 0) set(filter.path, 1)
   return request
+}
+
+/**
+ * The GitHub events a rule needs, so a webhook Ramu creates sends only those: the events its filters name, its
+ * preset's, or every event when nothing narrows it (the filters still decide what runs).
+ */
+export function githubEventsFor(rule: Pick<WebhookTrigger, 'filters'>): string[] {
+  const named = rule.filters.flatMap((filter) =>
+    filter.path.toLowerCase() === 'headers.x-github-event' && (filter.op === 'equals' || filter.op === 'in')
+      ? Array.isArray(filter.value)
+        ? filter.value
+        : [filter.value]
+      : [],
+  )
+  return named.length ? [...new Set(named)] : ['*']
 }

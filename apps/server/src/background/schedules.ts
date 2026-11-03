@@ -147,13 +147,22 @@ interface ScheduleRow {
 interface StoredWebhook {
   webhookToken?: string
   webhookSecret?: string | null
+  /** A GitHub repository webhook Ramu created for this schedule, kept current when the address changes. */
+  githubHook?: import('../workspace/forge/github').RepoHook & { repoId: string }
 }
 /** The secret never leaves the host this way; `schedules.webhook` hands it out to someone setting up the sender. */
 const mapSchedule = (r: ScheduleRow): Schedule => {
-  const { webhookToken, webhookSecret, ...data } = JSON.parse(r.data) as ScheduleInput & StoredWebhook
+  const { webhookToken, webhookSecret, githubHook, ...data } = JSON.parse(r.data) as ScheduleInput & StoredWebhook
   return {
     ...data,
-    ...(webhookToken ? { webhook: { hasSecret: Boolean(webhookSecret) } } : {}),
+    ...(webhookToken
+      ? {
+          webhook: {
+            hasSecret: Boolean(webhookSecret),
+            ...(githubHook ? { github: `${githubHook.owner}/${githubHook.repo}` } : {}),
+          },
+        }
+      : {}),
     id: r.id,
     state: r.state,
     nextRunAt: r.next_run_at,
@@ -282,6 +291,14 @@ export class ScheduleService {
         .run(id)
     this.changed()
     return this.get(schedule.id)
+  }
+  /** Remembers (or with null forgets) the repository webhook made for a schedule. */
+  setGithubHook(id: string, hook: StoredWebhook['githubHook'] | null): void {
+    this.patchData(id, { githubHook: hook ?? undefined })
+    this.changed()
+  }
+  githubHook(id: string): StoredWebhook['githubHook'] | null {
+    return this.stored(id).githubHook ?? null
   }
   private stored(id: string): StoredWebhook {
     const row = this.db.prepare('SELECT data FROM schedules WHERE id = ?').get(id) as { data: string } | undefined

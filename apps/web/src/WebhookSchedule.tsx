@@ -271,6 +271,18 @@ export function WebhookPanel({
   const [secretDraft, setSecretDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const rule = schedule.rule as WebhookTrigger
+  const [repos, setRepos] = useState<{ repoId: string; name: string; slug: string }[]>([])
+  const [repoId, setRepoId] = useState('')
+  useEffect(() => {
+    if (readOnly || rule.source !== 'github') return
+    void invoke('schedules.githubRepos', schedule.id).then(
+      (found) => {
+        setRepos(found)
+        setRepoId((current) => current || found[0]?.repoId || '')
+      },
+      () => {},
+    )
+  }, [invoke, schedule.id, readOnly, rule.source])
   const load = useCallback(() => {
     if (readOnly) return
     void invoke('schedules.webhook', schedule.id).then(setAddress, () => {})
@@ -367,6 +379,41 @@ export function WebhookPanel({
           >
             {t('Save')}
           </Button>
+        </div>
+      )}
+      {rule.source === 'github' && (
+        <div className="flex min-h-7 flex-wrap items-center gap-2">
+          {schedule.webhook?.github ? (
+            <span className="text-soft">{t('Set up on GitHub for {0}', { 0: schedule.webhook.github })}</span>
+          ) : repos.length === 0 ? (
+            <span className="text-muted-foreground">
+              {t(
+                'Add the address and secret to the repository’s webhooks on GitHub, or add a GitHub repository to this project.',
+              )}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">{t('Ramu can create the webhook on GitHub for you.')}</span>
+          )}
+          {repos.length > 1 && (
+            <Dropdown
+              label={t('Repository')}
+              value={repoId}
+              onChange={setRepoId}
+              options={repos.map((repo) => ({ value: repo.repoId, label: repo.slug }))}
+            />
+          )}
+          {repos.length > 0 && (
+            <Button
+              size="sm"
+              variant={schedule.webhook?.github ? 'ghost' : 'secondary'}
+              disabled={busy || !repoId}
+              onClick={() => void act(() => invoke('schedules.connectGithub', schedule.id, repoId))}
+            >
+              {schedule.webhook?.github
+                ? t('Create again')
+                : t('Create on {0}', { 0: repos.find((repo) => repo.repoId === repoId)?.slug ?? 'GitHub' })}
+            </Button>
+          )}
         </div>
       )}
       <div className="flex flex-wrap gap-1">

@@ -32,7 +32,11 @@ export interface Schedule extends ScheduleInput {
    * Set on a webhook schedule. Its address is a credential (anyone holding it can send requests), so it is not here,
    * where viewer devices can read it; `schedules.webhook` gives it to full-access devices.
    */
-  webhook?: { hasSecret: boolean }
+  webhook?: {
+    hasSecret: boolean
+    /** `owner/repo` when Ramu created the webhook on that GitHub repository. */
+    github?: string
+  }
 }
 /** One request a webhook schedule received, and what came of it. */
 export interface WebhookDelivery {

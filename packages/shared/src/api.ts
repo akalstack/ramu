@@ -724,6 +724,10 @@ export interface RamuMethods {
   'schedules.rotateWebhook'(id: string): Schedule
   /** A secret the sender chose (Sentry gives you one), or null to sign nothing. */
   'schedules.setWebhookSecret'(id: string, secret: string | null): Schedule
+  /** The schedule project's repositories on GitHub, to create its webhook on. */
+  'schedules.githubRepos'(id: string): { repoId: string; name: string; slug: string }[]
+  /** Creates the webhook on that repository with the schedule's Ramu Link address, secret and events. */
+  'schedules.connectGithub'(id: string, repoId: string): Schedule
   'recaps.get'(): RecapSnapshot
   'recaps.refresh'(): RecapSnapshot
   'recaps.act'(id: string, action: 'open' | 'done' | 'dismissed' | 'snoozed', until?: number): void

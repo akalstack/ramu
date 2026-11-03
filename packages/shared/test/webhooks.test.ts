@@ -4,6 +4,7 @@ import {
   describeRequest,
   excerpt,
   failedFilter,
+  githubEventsFor,
   filterMatches,
   isWebhookPath,
   readPath,
@@ -88,4 +89,10 @@ describe('presets', () => {
       for (const field of preset.fields) expect(readPath(request, field).length).toBeGreaterThan(0)
     },
   )
+})
+
+it('subscribes a GitHub webhook to the events its filters name, or to all', () => {
+  const review = WEBHOOK_PRESETS.find((preset) => preset.id === 'github-pr-review')!
+  expect(githubEventsFor(review)).toEqual(['pull_request_review', 'pull_request_review_comment'])
+  expect(githubEventsFor({ filters: [] })).toEqual(['*'])
 })

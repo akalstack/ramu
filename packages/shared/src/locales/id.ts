@@ -5213,4 +5213,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Sentry created a new issue.': 'Sentry membuat issue baru.',
   'Any request': 'Permintaan apa pun',
   'Any POST to the address starts a run. Add filters to narrow it.': 'Setiap POST ke alamat ini memulai run. Tambahkan filter untuk mempersempitnya.',
+  'Set up on GitHub for {0}': 'Sudah diatur di GitHub untuk {0}',
+  'Add the address and secret to the repository’s webhooks on GitHub, or add a GitHub repository to this project.': 'Tambahkan alamat dan secret ke webhook repositori di GitHub, atau tambahkan repositori GitHub ke proyek ini.',
+  'Ramu can create the webhook on GitHub for you.': 'Ramu bisa membuatkan webhook di GitHub untuk Anda.',
+  'Create again': 'Buat ulang',
+  'Create on {0}': 'Buat di {0}',
+}
   'What starts it, its address and its secret are set up on a computer, where they can be copied into the sender.': 'Pemicunya, alamatnya, dan secret-nya diatur di komputer, tempat semuanya bisa disalin ke pengirim.',

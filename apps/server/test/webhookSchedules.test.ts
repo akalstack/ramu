@@ -7,6 +7,7 @@ import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import { ScheduleService } from '../src/background/schedules'
 import { WebhookReceiver, parseBody, signatureMatches } from '../src/background/webhookReceiver'
+import { WebhookSetup } from '../src/background/webhookSetup'
 import { DEFAULT_AGENT_SETTINGS, NO_PROJECT, type ScheduleInput } from '@ramu/shared/types'
 import { SOURCE_DEFAULTS, WEBHOOK_PRESETS, type WebhookTrigger } from '@ramu/shared/webhooks'
 import type { AgentService } from '../src/agent'
@@ -208,5 +209,63 @@ describe('reading what senders send', () => {
       parseBody(Buffer.from(`payload=${encodeURIComponent('{"a":1}')}`), 'application/x-www-form-urlencoded'),
     ).toEqual({ a: 1 })
     expect(parseBody(Buffer.from('hello'), 'text/plain')).toBe('hello')
+  })
+})
+
+describe('setting up a GitHub webhook for the person', () => {
+  const project = () => {
+    db.prepare("INSERT INTO projects (id, name, created_at) VALUES ('p1', 'Ramu', 0)").run()
+    db.prepare("INSERT INTO repositories (id, project_id, name, root) VALUES ('r1', 'p1', 'ramu', '/code/ramu')").run()
+    db.prepare("INSERT INTO repositories (id, project_id, name, root) VALUES ('r2', 'p1', 'docs', '/code/docs')").run()
+  }
+  const calls: { kind: string; root: string; config?: unknown }[] = []
+  const github = {
+    remoteOf: async (root: string) =>
+      root === '/code/ramu' ? { origin: 'github.com', protocol: 'https' as const, owner: 'ahxar', repo: 'ramu' } : null,
+    isGithub: async (origin: string) => origin === 'github.com',
+    create: async (root: string, config: unknown) => {
+      calls.push({ kind: 'create', root, config })
+      return { origin: 'github.com', owner: 'ahxar', repo: 'ramu', id: 42 }
+    },
+    update: async (root: string, _hook: unknown, config: unknown) => void calls.push({ kind: 'update', root, config }),
+    remove: async (root: string) => void calls.push({ kind: 'remove', root }),
+  }
+  beforeEach(() => void calls.splice(0))
+
+  it('offers only the project’s GitHub repositories', async () => {
+    project()
+    const schedule = service.save({ ...input(), projectId: 'p1' })
+    const setup = new WebhookSetup(service, ws, github)
+    expect(await setup.githubRepos(schedule.id)).toEqual([{ repoId: 'r1', name: 'ramu', slug: 'ahxar/ramu' }])
+  })
+
+  it('needs an address GitHub can reach', async () => {
+    project()
+    service.webhookBases = () => [{ url: 'http://192.168.1.4:7788', via: 'en0' }]
+    const schedule = service.save({ ...input(), projectId: 'p1' })
+    await expect(new WebhookSetup(service, ws, github).connectGithub(schedule.id, 'r1')).rejects.toThrow('Ramu Link')
+  })
+
+  it('creates the webhook with the Link address, secret and the events its filters name, and keeps it current', async () => {
+    project()
+    service.webhookBases = () => [
+      { url: 'https://link.example.com/h/abc', via: 'Ramu Link' },
+      { url: 'http://192.168.1.4:7788', via: 'en0' },
+    ]
+    const schedule = service.save({ ...input(), projectId: 'p1' })
+    const setup = new WebhookSetup(service, ws, github)
+    const connected = await setup.connectGithub(schedule.id, 'r1')
+    const { path, secret } = service.webhook(schedule.id)
+    expect(connected.webhook).toMatchObject({ github: 'ahxar/ramu' })
+    expect(calls[0]).toEqual({
+      kind: 'create',
+      root: '/code/ramu',
+      config: { url: `https://link.example.com/h/abc${path}`, secret, events: ['workflow_run'] },
+    })
+    service.rotateWebhook(schedule.id)
+    await setup.refresh(schedule.id)
+    expect(calls.at(-1)).toMatchObject({ kind: 'update', config: { secret: service.webhook(schedule.id).secret } })
+    await setup.beforeDelete(schedule.id)
+    expect(calls.at(-1)).toEqual({ kind: 'remove', root: '/code/ramu' })
   })
 })
