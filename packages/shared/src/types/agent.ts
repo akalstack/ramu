@@ -50,6 +50,10 @@ export interface AgentModel {
   serviceTiers?: string[]
   /** Context capacity reported by the provider, in tokens; absent when not exposed. */
   contextWindow?: number
+  /** ISO date the model came out, from public model catalogs when the host may look them up. */
+  releasedAt?: string
+  /** ISO date its provider retires it, when one is announced and still ahead. */
+  retiresAt?: string
 }
 export interface ProviderCatalog {
   provider: AgentProvider

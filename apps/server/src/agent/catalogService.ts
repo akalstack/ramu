@@ -1,4 +1,5 @@
 import { classifyLegacyCatalog } from '../providers/modelLifecycle'
+import { applyModelSignals, type ModelSignals } from '../providers/modelSignals'
 import { providerAccountId } from '../providers/providerBinaries'
 import { acpModels } from '../providers/acp'
 import { launchCompatibility } from '../providers/launchCompatibility'
@@ -9,6 +10,9 @@ import type { QueryFn } from './types'
 import { fakeCatalogs, discoverCatalogs } from './catalog'
 import type { ContextUsageTracker } from './contextUsage'
 
+/** No signals: one shared empty set, so an unchanged catalog keeps its classified result. */
+const EMPTY: ModelSignals = {}
+
 /** What CatalogService needs from the rest of the service. */
 export interface CatalogServiceHost extends Partial<
   Pick<ContextUsageTracker, 'rememberModelContext' | 'modelContextWindow'>
@@ -16,6 +20,8 @@ export interface CatalogServiceHost extends Partial<
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   preferences(): AppPreferences | undefined
   providerQuery: QueryFn
+  /** Release and retirement dates from public catalogs, when the host may read them. */
+  modelSignals?(): ModelSignals
 }
 
 /** Model catalog discovery (cached) and validation of a chat's settings against it. */
@@ -23,6 +29,7 @@ export class CatalogService {
   constructor(private readonly host: CatalogServiceHost) {}
 
   private catalogs: Promise<ProviderCatalog[]> | null = null
+  private classified: { raw: ProviderCatalog[]; signals: ModelSignals; result: ProviderCatalog[] } | null = null
 
   providerOff(provider: AgentProvider): boolean {
     return !providerEnabled(this.host.preferences()?.providerBinaries, provider)
@@ -30,12 +37,24 @@ export class CatalogService {
 
   discoverCatalog(refresh: boolean): Promise<ProviderCatalog[]> {
     if (refresh) this.catalogs = null
-    if (process.env.RAMU_FAKE_AGENT === '1') return Promise.resolve(fakeCatalogs().map(classifyLegacyCatalog))
+    // Signals apply on read, so a fresh download shows up without asking each provider again; the result is reused
+    // until the catalog or the signals change.
+    const classify = (catalogs: ProviderCatalog[]) => {
+      const signals = this.host.modelSignals?.() ?? EMPTY
+      if (this.classified?.raw !== catalogs || this.classified.signals !== signals)
+        this.classified = {
+          raw: catalogs,
+          signals,
+          result: catalogs.map((catalog) => classifyLegacyCatalog(applyModelSignals(catalog, signals))),
+        }
+      return this.classified.result
+    }
+    if (process.env.RAMU_FAKE_AGENT === '1') return Promise.resolve(classify(fakeCatalogs()))
     this.catalogs ??= discoverCatalogs({
       providerOff: (provider) => this.providerOff(provider),
       providerQuery: (args) => this.host.providerQuery(args),
-    }).then((catalogs) => catalogs.map(classifyLegacyCatalog))
-    return this.catalogs
+    })
+    return this.catalogs.then(classify)
   }
 
   invalidateCatalog() {

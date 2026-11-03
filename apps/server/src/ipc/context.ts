@@ -11,6 +11,7 @@ import { KeepAwakeService } from '../background/keepAwake'
 import { AttachmentStore } from '../attachments'
 import { AppUpdateService } from '../background/appUpdates'
 import { HostUpdater, isSupervised, runCommand, sourceCheckout } from '../background/hostUpdate'
+import { ModelSignalSource } from '../providers/modelSignals'
 import { runtimeVersion } from '../build'
 import { configureProviderAccounts, providerEnvironment } from '../providers/providerBinaries'
 import { UsageService } from '../providers/usage'
@@ -201,6 +202,11 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     agents.isolationRoot = join(host.userData, 'subagent-worktrees')
     agents.usage = usage
     agents.preferences = loadPreferences
+    const signals = new ModelSignalSource(
+      join(host.userData, 'model-signals.json'),
+      () => loadPreferences().modelCatalogLookups !== false,
+    )
+    agents.modelSignals = () => signals.current()
     agents.refreshAccountUsage = (provider) => accountUsage.refresh(provider)
     agents.onContext = (sessionId, context) => host.send('context:changed', { sessionId, context })
   }

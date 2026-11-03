@@ -68,6 +68,9 @@ export { conversationHandoff } from './agent/handoff'
 export { claudeDefaultEffort, sameSettings } from './agent/settings'
 export { isUsageLimit } from './agent/usageLimit'
 
+/** No model signals yet; one object, so the catalog's classified result is reused. */
+const NO_SIGNALS = {}
+
 /** Teammates one thread holds at once; each is a model the person pays for. */
 const MAX_TEAMMATES = 4
 
@@ -113,6 +116,8 @@ export class AgentService {
   usage: (Pick<UsageService, 'list' | 'update'> & Partial<Pick<UsageService, 'all'>>) | undefined
   /** The saved app preferences: fallback chains, threshold and sub-agent routing. */
   preferences: (() => AppPreferences) | undefined
+  /** Release and retirement dates from public model catalogs; set by the host, absent in tests. */
+  modelSignals: (() => import('./providers/modelSignals').ModelSignals) | undefined
   /** Told when a chat's transcript is cut back, so clients drop the events from `seq` on. */
   onRewound: ((id: string, seq: number) => void) | undefined
   /** Told whenever a chat's context window usage changes. */
@@ -166,6 +171,7 @@ export class AgentService {
       },
       cancelPendingStarts: (...a) => parts.subagents.cancelPendingStarts(...a),
       catalog: (...a) => this.catalog(...a),
+      modelSignals: () => this.modelSignals?.() ?? NO_SIGNALS,
       get childRequests() {
         return parts.requests.childRequests
       },

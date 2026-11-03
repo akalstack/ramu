@@ -55,7 +55,8 @@ import { sharedValue } from '@ramu/shared/sharedFields'
 import { useModelFlow } from '../runtime/useModelFlow'
 import { fill, useT, useSay } from '../i18n'
 import { translate } from '@ramu/shared/i18n'
-import { Chip, IconButton, Row, Segmented, Sheet, T, Toggle, tap, type Icon } from './ui'
+import { Chip, IconButton, Pill, Row, Segmented, Sheet, T, Toggle, tap, type Icon } from './ui'
+import { modelTags } from '@ramu/shared/providers/modelTags'
 import { SheetGroup, SheetOption } from './SheetOptions'
 
 const ACCESS_MODES = [
@@ -111,6 +112,7 @@ type ModelRow = {
   efforts: string[]
   isDefault: boolean
   defaultEffort: string
+  tags: import('@ramu/shared/providers/modelTags').ModelTags
 }
 
 /**
@@ -131,6 +133,7 @@ export function ModelChip({
 }) {
   const store = useStore()
   const t = useT()
+  const say = useSay()
   const catalog = store.catalogs[computerId ?? store.selected]
   const visible = store.appPreferences[computerId ?? store.selected]?.visibleModels
   const models = useMemo<ModelRow[]>(
@@ -148,6 +151,7 @@ export function ModelChip({
             efforts: m.efforts as string[],
             isDefault: m.isDefault,
             defaultEffort: (m.defaultEffort ?? '') as string,
+            tags: modelTags(m),
           })),
       ),
     [catalog, visible, value.provider, value.model],
@@ -217,9 +221,24 @@ export function ModelChip({
         }}
       >
         <View style={{ flex: 1 }}>
-          <T weight={selected ? '600' : '400'} numberOfLines={1}>
-            {m.label}
-          </T>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+            <T weight={selected ? '600' : '400'} numberOfLines={1} style={{ flexShrink: 1 }}>
+              {m.label}
+            </T>
+            {m.tags.legacy ? <Pill>{say('Legacy')}</Pill> : null}
+            {m.tags.isNew ? (
+              <Pill tone="accent" wash={c.accentWash}>
+                {say('New')}
+              </Pill>
+            ) : null}
+            {m.tags.retires ? (
+              <Pill tone="warn" wash={c.warnWash}>
+                {say('Retires {0}', {
+                  0: new Date(m.tags.retires).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                })}
+              </Pill>
+            ) : null}
+          </View>
           <T size={font.caption} tone="muted" mono numberOfLines={1}>
             {m.model}
           </T>

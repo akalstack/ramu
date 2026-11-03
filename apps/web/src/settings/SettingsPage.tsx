@@ -171,6 +171,11 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'chats', title: 'Agent notifications', words: 'notify notification alert done finished system toast' },
   { section: 'chats', title: 'Let agents suggest teammates', words: 'teammate review second model suggest invite' },
   {
+    section: 'models',
+    title: 'Look up model dates online',
+    words: 'legacy new retire deprecated models.dev litellm catalog',
+  },
+  {
     section: 'chats',
     title: 'Continue threads after restart',
     words: 'resume recover recovery interrupted progress startup crash',

@@ -14,6 +14,7 @@ export type ToggleKey =
   | 'autoProjectSplit'
   | 'agentThreads'
   | 'teammateSuggestions'
+  | 'modelCatalogLookups'
   | 'operator'
   | 'liveViewDesktop'
   | 'recapsEnabled'

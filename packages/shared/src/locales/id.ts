@@ -66,6 +66,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Not connected. Pull requests, builds and work items need a personal access token.':
     'Belum terhubung. Pull request, build dan work item memerlukan personal access token.',
   Organization: 'Organisasi',
+  'Look up model dates online': 'Cari tanggal model secara daring',
+  'This host reads public model lists (models.dev and LiteLLM) once a day to tag new models and ones their provider is retiring or calls deprecated. Nothing about you is sent. Off, Ramu tags older versions as legacy on its own.':
+    'Host ini membaca daftar model publik (models.dev dan LiteLLM) sekali sehari untuk menandai model baru dan yang akan dipensiunkan atau disebut usang oleh penyedianya. Tidak ada data tentang Anda yang dikirim. Bila mati, Ramu menandai versi lama sebagai lawas sendiri.',
+  'Retires {0}': 'Pensiun {0}',
+  New: 'Baru',
+  'Its provider retires this model on {0}.': 'Penyedianya memensiunkan model ini pada {0}.',
   'Show terminal · {0} opened on another device': 'Tampilkan terminal · {0} dibuka di perangkat lain',
   'Keep paired': 'Tetap tersandingkan',
   'Keep {0} paired': 'Biarkan {0} tetap tersandingkan',

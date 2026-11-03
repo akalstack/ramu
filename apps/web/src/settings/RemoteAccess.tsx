@@ -15,17 +15,7 @@ import { SETTINGS_CARD_LINE } from './cards'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import {
-  Check,
-  ChevronDown,
-  Copy,
-  Globe,
-  Link2,
-  Plus,
-  Radar,
-  Settings2,
-  Terminal,
-} from 'lucide-react'
+import { Check, ChevronDown, Copy, Globe, Link2, Plus, Radar, Settings2, Terminal } from 'lucide-react'
 import { useContext, useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AgentHostSummary,

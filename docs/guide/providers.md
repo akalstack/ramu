@@ -16,6 +16,12 @@ A new profile opens a short setup that finds installed tools and offers their si
 
 Each provider card shows whether its installed version is **Supported**, **Limited**, **Incompatible** or **Unverified**, with **Update** when a tested release exists.
 
+## Models
+
+The model picker lists each provider's models. **Legacy** marks an older version once a newer one of the same family is listed, or a model its provider calls deprecated or has retired; **Show legacy models** reveals them. **New** marks a model released in the last two weeks, and **Retires ‹date›** one whose retirement is announced within 90 days.
+
+Release and retirement dates come from public model lists, [models.dev](https://models.dev) and [LiteLLM's](https://github.com/BerriAI/litellm), which each host reads once a day and keeps a small copy of. Nothing about you is sent. Offline it uses its last copy. **Look up model dates online** (Settings → Models) turns the lookups off; Legacy then comes from versions alone.
+
 ## Accounts
 
 Codex and OpenCode can hold several accounts; a saved account applies to new threads. When a thread hits a limit, every enabled account is tried before another model. A provider or account turned off in **Settings → Providers** starts nothing: new threads, threads continuing after a stop or restart, and fallback switches all refuse it and say why.

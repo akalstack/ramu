@@ -276,6 +276,14 @@ export function SettingsPanel({
                 />
               )}
               {page === 'models' && <ProviderFallbackSettings {...draftProps} />}
+              {page === 'models' && (
+                <ToggleRow
+                  {...draftProps}
+                  setting="modelCatalogLookups"
+                  title="Look up model dates online"
+                  description="This host reads public model lists (models.dev and LiteLLM) once a day to tag new models and ones their provider is retiring or calls deprecated. Nothing about you is sent. Off, Ramu tags older versions as legacy on its own."
+                />
+              )}
               {pageKeys && (
                 <div className="settings-maintenance flex items-center gap-2 pt-3 justify-between">
                   <Button variant="ghost" className={GHOST_BUTTON_CLASS} disabled={busy} onClick={() => setReset(page)}>

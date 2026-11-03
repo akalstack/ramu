@@ -1,5 +1,6 @@
 import { DragHandle } from '@/components/drag-handle'
 import { useShowLegacyModels, visiblePickerModels } from './modelVisibility'
+import { modelTags } from '@ramu/shared/providers/modelTags'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { Kbd } from '@/components/ui/kbd'
@@ -474,9 +475,29 @@ export function ModelPicker({
                       <span className="mp-name min-w-0 truncate text-control font-medium">
                         {modelDisplayName(model.name)}
                       </span>
-                      {model.isLegacy && (
+                      {modelTags(model).legacy && (
                         <span className="flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
                           {t('Legacy')}
+                        </span>
+                      )}
+                      {modelTags(model).isNew && (
+                        <span className="flex-none rounded-full bg-primary/10 px-1.5 text-caption text-(--accent)">
+                          {t('New')}
+                        </span>
+                      )}
+                      {modelTags(model).retires && (
+                        <span
+                          className="flex-none rounded-full bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] px-1.5 text-caption text-warn"
+                          title={t('Its provider retires this model on {0}.', {
+                            0: new Date(modelTags(model).retires!).toLocaleDateString(),
+                          })}
+                        >
+                          {t('Retires {0}', {
+                            0: new Date(modelTags(model).retires!).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            }),
+                          })}
                         </span>
                       )}
                     </span>
@@ -490,30 +511,40 @@ export function ModelPicker({
                         )}
                       </span>
                     )}
-                    {selected(model) && <Check size={15} className="flex-none text-brand" aria-hidden="true" />}
-                    {!editingFavorites && (
-                      <Button
-                        variant="secondary"
-                        type="button"
-                        className={
-                          favorites.includes(keyOf(model))
-                            ? 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none on'
-                            : 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none opacity-0 group-hover:opacity-100 group-focus:opacity-100 focus-visible:opacity-100'
-                        }
-                        aria-label={
-                          favorites.includes(keyOf(model))
-                            ? t('Remove {0} from favorites', { '0': modelDisplayName(model.name) })
-                            : t('Add {0} to favorites', { '0': modelDisplayName(model.name) })
-                        }
-                        aria-pressed={favorites.includes(keyOf(model))}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          toggleFavorite(model)
-                        }}
-                      >
-                        <Star size={15} fill={favorites.includes(keyOf(model)) ? 'currentColor' : 'none'} />
-                      </Button>
-                    )}
+                    {/* One spot at the end: the check marks the chosen model and gives way to the star on hover; a
+                    favorite's filled star takes the spot and the row's highlight still shows it is chosen. */}
+                    <span className="relative flex size-[26px] flex-none items-center justify-center">
+                      {selected(model) && !favorites.includes(keyOf(model)) && (
+                        <Check
+                          size={15}
+                          className={`pointer-events-none absolute text-brand ${editingFavorites ? '' : 'group-hover:opacity-0 group-focus:opacity-0'}`}
+                          aria-hidden="true"
+                        />
+                      )}
+                      {!editingFavorites && (
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          className={
+                            favorites.includes(keyOf(model))
+                              ? 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none on'
+                              : 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none opacity-0 group-hover:opacity-100 group-focus:opacity-100 focus-visible:opacity-100'
+                          }
+                          aria-label={
+                            favorites.includes(keyOf(model))
+                              ? t('Remove {0} from favorites', { '0': modelDisplayName(model.name) })
+                              : t('Add {0} to favorites', { '0': modelDisplayName(model.name) })
+                          }
+                          aria-pressed={favorites.includes(keyOf(model))}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            toggleFavorite(model)
+                          }}
+                        >
+                          <Star size={15} fill={favorites.includes(keyOf(model)) ? 'currentColor' : 'none'} />
+                        </Button>
+                      )}
+                    </span>
                   </div>
                 )
                 return favoriteKeys.has(keyOf(model)) && editingFavorites ? (
