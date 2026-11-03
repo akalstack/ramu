@@ -12,6 +12,7 @@ import { NO_PROJECT } from '@ramu/shared/types'
 import { focusComposer } from '../composer/ComposerInput'
 import { LoadingMark } from '../Brand'
 import { ChatMentions } from '../chat/ChatReferences'
+import { ThreadAgents } from './agent/lib/threadAgents'
 import { t as translate, useLanguage } from '../i18n'
 import { ScrollToLatestButton } from './agent/components/ScrollToLatestButton'
 import { isCompacting } from '@ramu/shared/chat/compaction'
@@ -784,88 +785,90 @@ export const AgentView = memo(function AgentView({
             />
           )}
           <ChatMentions.Provider value={composerTeammate.mentions}>
-            <MessageScrollerProvider autoScroll defaultScrollPosition="end">
-              <TranscriptScrollApi apiRef={scrollToEnd} />
-              <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
-                <MessageScroller
-                  className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length ? 'chat-loading' : ''}`}
-                >
-                  <MessageScrollerViewport
-                    ref={scroller}
-                    onScroll={onScroll}
-                    aria-label={translate('Conversation')}
-                    className={`scroll-fade-y px-6 pt-3 pb-7 ${showingSubmission ? 'motion-safe:scroll-smooth' : ''}`}
+            <ThreadAgents.Provider value={allTasks}>
+              <MessageScrollerProvider autoScroll defaultScrollPosition="end">
+                <TranscriptScrollApi apiRef={scrollToEnd} />
+                <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
+                  <MessageScroller
+                    className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length ? 'chat-loading' : ''}`}
                   >
-                    {hiddenTurns > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mx-auto mb-2 flex text-muted-foreground"
-                        onClick={showEarlierTurns}
-                      >
-                        {hiddenTurns === 1
-                          ? translate('Show 1 earlier turn')
-                          : translate('Show {0} earlier turns', { '0': hiddenTurns })}
-                      </Button>
-                    )}
-                    <MessageScrollerContent
-                      className={`${hydrating && !turns.length ? 'justify-center' : ''} transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5`}
+                    <MessageScrollerViewport
+                      ref={scroller}
+                      onScroll={onScroll}
+                      aria-label={translate('Conversation')}
+                      className={`scroll-fade-y px-6 pt-3 pb-7 ${showingSubmission ? 'motion-safe:scroll-smooth' : ''}`}
                     >
-                      {hydrating && !turns.length && (
-                        <div className="flex items-center justify-center">
-                          <LoadingMark label={translate('Loading conversation')} />
-                        </div>
-                      )}
-                      {pageTurns.map((turn, ti) => (
-                        <MessageScrollerItem
-                          key={turn.key}
-                          messageId={String(turn.key)}
-                          className="[content-visibility:visible]"
+                      {hiddenTurns > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mx-auto mb-2 flex text-muted-foreground"
+                          onClick={showEarlierTurns}
                         >
-                          <TranscriptTurn
-                            turn={turn}
-                            isLast={ti === pageTurns.length - 1}
-                            dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
-                            dateNow={dateNow}
-                            reviews={turnReviews.get(turn.key)}
-                            completedGoals={completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)}
-                            ctx={transcript}
-                          />
-                        </MessageScrollerItem>
-                      ))}
-                      {pendingSettings &&
-                        session &&
-                        !busyAgent &&
-                        !settingsMatch(pendingSettings, session.settings) && (
-                          <MessageScrollerItem messageId="pending-settings">
-                            <PendingSettingsChange
-                              next={pendingSettings}
-                              previous={session.settings}
-                              onCancel={() => setPendingSettings(null)}
+                          {hiddenTurns === 1
+                            ? translate('Show 1 earlier turn')
+                            : translate('Show {0} earlier turns', { '0': hiddenTurns })}
+                        </Button>
+                      )}
+                      <MessageScrollerContent
+                        className={`${hydrating && !turns.length ? 'justify-center' : ''} transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5`}
+                      >
+                        {hydrating && !turns.length && (
+                          <div className="flex items-center justify-center">
+                            <LoadingMark label={translate('Loading conversation')} />
+                          </div>
+                        )}
+                        {pageTurns.map((turn, ti) => (
+                          <MessageScrollerItem
+                            key={turn.key}
+                            messageId={String(turn.key)}
+                            className="[content-visibility:visible]"
+                          >
+                            <TranscriptTurn
+                              turn={turn}
+                              isLast={ti === pageTurns.length - 1}
+                              dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
+                              dateNow={dateNow}
+                              reviews={turnReviews.get(turn.key)}
+                              completedGoals={completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)}
+                              ctx={transcript}
                             />
                           </MessageScrollerItem>
+                        ))}
+                        {pendingSettings &&
+                          session &&
+                          !busyAgent &&
+                          !settingsMatch(pendingSettings, session.settings) && (
+                            <MessageScrollerItem messageId="pending-settings">
+                              <PendingSettingsChange
+                                next={pendingSettings}
+                                previous={session.settings}
+                                onCancel={() => setPendingSettings(null)}
+                              />
+                            </MessageScrollerItem>
+                          )}
+                        {showingSubmission && pendingSubmission && (
+                          <MessageScrollerItem messageId="pending-submission">
+                            <PendingSubmission submission={pendingSubmission} />
+                          </MessageScrollerItem>
                         )}
-                      {showingSubmission && pendingSubmission && (
-                        <MessageScrollerItem messageId="pending-submission">
-                          <PendingSubmission submission={pendingSubmission} />
-                        </MessageScrollerItem>
-                      )}
-                      {activityLabel && (compacting || !statusGroup) && (
-                        <ChatStatus label={translate(activityLabel)} compacting={compacting} />
-                      )}
-                    </MessageScrollerContent>
-                  </MessageScrollerViewport>
-                  <ScrollToLatestButton working={working} />
-                </MessageScroller>
-                <SelectionActions
-                  scroller={scroller}
-                  readOnly={viewOnly}
-                  onQuote={quoteIntoDraft}
-                  onQuoteNew={quoteIntoNewChat}
-                  onAside={(quote, from) => setOpenAside({ id: null, quote, from })}
-                />
-              </div>
-            </MessageScrollerProvider>
+                        {activityLabel && (compacting || !statusGroup) && (
+                          <ChatStatus label={translate(activityLabel)} compacting={compacting} />
+                        )}
+                      </MessageScrollerContent>
+                    </MessageScrollerViewport>
+                    <ScrollToLatestButton working={working} />
+                  </MessageScroller>
+                  <SelectionActions
+                    scroller={scroller}
+                    readOnly={viewOnly}
+                    onQuote={quoteIntoDraft}
+                    onQuoteNew={quoteIntoNewChat}
+                    onAside={(quote, from) => setOpenAside({ id: null, quote, from })}
+                  />
+                </div>
+              </MessageScrollerProvider>
+            </ThreadAgents.Provider>
           </ChatMentions.Provider>
           <div className="composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]">
             <ComposerStack>

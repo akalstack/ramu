@@ -318,6 +318,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} joins this thread': '{0} bergabung ke utas ini',
   'Teammates': 'Rekan',
   'Start a message with @{0} to talk to it': 'Mulai pesan dengan @{0} untuk berbicara dengannya',
+  'Still working': 'Masih bekerja',
   'Upgrade plan': 'Tingkatkan paket',
   'Hide details': 'Sembunyikan detail',
   'Coming soon': 'Segera hadir',

@@ -1,3 +1,4 @@
+import { useContext } from 'react'
 import { ReferenceText } from '../../../chat/ChatReferences'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
@@ -5,7 +6,7 @@ import { AppWindow, Bot, ChevronRight, Lightbulb, Pencil, ShieldQuestion, Square
 import { sentInteractiveAttachments } from '@ramu/shared/interactive'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { AgentEvent, Attachment } from '@ramu/shared/types'
+import type { AgentEvent, AgentTask, Attachment } from '@ramu/shared/types'
 import { ChatActivityButton } from '../../../chat/ChatActivity'
 import {
   advisorAgentId,
@@ -18,6 +19,9 @@ import { sentComments } from '../../../git/ReviewChip'
 import { Attachments } from '../../../composer/Attachments'
 import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { visibleText } from '../lib/messages'
+import { ThreadAgents } from '../lib/threadAgents'
+import { ProviderIcon } from '../../../models/ProviderIcon'
+import { TASK_STATUS, TaskStatusIcon } from './TaskStatus'
 import { MessageTime } from './MessageTime'
 import { CopyButton } from './CopyButton'
 import { UserBubble } from '../../../chat/UserBubble'
@@ -153,20 +157,7 @@ export function UserMessage({
         <ChevronRight size={13} className={CARET_CLASS} />
       </ChatActivityButton>
     )
-  if (report)
-    return (
-      <div className="task-report [&_.msg.assistant]:p-0 m-[8px_0] p-[10px_14px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised">
-        <div className="task-report-title flex items-center gap-1.5 mb-1 font-semibold text-control">
-          <Bot size={13} />
-          {report.name} <span className="muted text-muted-foreground">{report.verb}</span>
-        </div>
-        <div className={`${MSG_CLASS} assistant`}>
-          <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
-            {report.body}
-          </Markdown>
-        </div>
-      </div>
-    )
+  if (report) return <TaskReport report={report} onOpenAgent={onOpenAgent} />
   // Stopping a Codex sub-agent goes through the main agent; the chat shows it as a note.
   const stop = parseTaskStop(e.text)
   if (stop)
@@ -246,5 +237,61 @@ export function UserMessage({
       )}
       <UserMessageActions event={e} text={text} latest={latest} onEdit={onEdit} />
     </UserShell>
+  )
+}
+
+const REPORT_STATUS: Record<string, AgentTask['status'] | undefined> = {
+  finished: 'completed',
+  failed: 'failed',
+  stopped: 'stopped',
+}
+const REPORT_LABEL: Record<string, string> = {
+  'is still working': 'Still working',
+  says: 'Note',
+  asks: 'Question',
+}
+
+/**
+ * What a sub-agent or teammate sent back, drawn like its card where it started: its model's icon, its name, the same
+ * status words, and the report. Opening it shows that agent's conversation.
+ */
+function TaskReport({
+  report,
+  onOpenAgent,
+}: {
+  report: { name: string; verb: string; body: string }
+  onOpenAgent?: (agentId: string) => void
+}) {
+  useLanguage()
+  const agents = useContext(ThreadAgents)
+  const agent = agents.findLast((task) => task.name === report.name)
+  const status = REPORT_STATUS[report.verb]
+  return (
+    <Button
+      variant="ghost"
+      type="button"
+      className="task-report m-[8px_0] flex h-auto w-full items-start justify-start gap-2.5 whitespace-normal rounded-(--radius-m) bg-raised p-[10px_12px] text-left font-normal disabled:opacity-100"
+      disabled={!agent}
+      onClick={() => agent && onOpenAgent?.(agent.agentId)}
+      title={agent ? translate('Open agent {0}', { 0: report.name }) : undefined}
+    >
+      <span className="grid size-7 flex-none place-items-center rounded-(--radius-s) bg-accent text-soft">
+        {agent?.provider ? <ProviderIcon provider={agent.provider} size={14} /> : <Bot size={15} />}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-semibold text-foreground">{report.name}</span>
+          <span className="inline-flex flex-none items-center gap-1 text-caption text-muted-foreground">
+            {status && <TaskStatusIcon status={status} />}
+            {translate(status ? TASK_STATUS[status] : (REPORT_LABEL[report.verb] ?? report.verb))}
+          </span>
+        </span>
+        <span className={`${MSG_CLASS} assistant text-soft`}>
+          <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
+            {report.body}
+          </Markdown>
+        </span>
+      </span>
+    </Button>
   )
 }
