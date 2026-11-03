@@ -1308,7 +1308,18 @@ export type PushEvents = {
   'summaries:changed': { created: string | null }
   'rules:changed': Record<string, never>
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
-  'background:connection': { connected: boolean; rejected?: boolean; restarted?: boolean }
+  'background:connection': {
+    connected: boolean
+    rejected?: boolean
+    restarted?: boolean
+    /** Turned off on this desktop; it does not try to connect. */
+    paused?: boolean
+    /** What a lost connection waits for: the network to return, or the host itself. */
+    waiting?: 'network' | 'computer'
+    /** When the next attempt is due, for a host reached over SSH. */
+    retryAt?: number
+    error?: string
+  }
   'computers:changed': Computers
   /** The number a nearby host shows while this computer asks it to pair (see `computers.pairByRequest`). */
   'computers:pairCode': { address: string; code: string }

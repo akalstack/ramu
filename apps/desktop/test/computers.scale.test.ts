@@ -1,3 +1,4 @@
+import type { PushArgs } from '@ramu/shared/pushChannels'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -36,7 +37,7 @@ it('keeps 100 remote connections independent and measures full-list broadcast ov
   )
   const servers = new RemoteServers(path, { available: false, seal: (s) => s, open: (s) => s })
   const read = vi.spyOn(servers as any, 'read')
-  const streams = new Map<string, (channel: string, payload: any) => void>()
+  const streams = new Map<string, (...args: PushArgs) => void>()
   let snapshots = 0
   const deps: ComputerDeps = {
     servers,
@@ -51,7 +52,7 @@ it('keeps 100 remote connections independent and measures full-list broadcast ov
         streams.delete(url)
       }
     },
-    invoke: async () => ({ running: 0, needsInput: 0 }),
+    invoke: (async () => ({ running: 0, needsInput: 0 })) as ComputerDeps['invoke'],
     pair: async () => ({ token: 'token' }),
     renew: async () => null,
     ssh: {

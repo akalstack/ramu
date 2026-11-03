@@ -23,7 +23,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Host facts for agents:** `hostThreads.projects` could add each host's platform, architecture and description so `project_list` lets an agent recommend a host; it changes what a paired host learns, so it needs the same scrutiny as the rest of [host pairing](../SECURITY.md#host-pairing).
 - **Activity tokens:** Claude and Codex turns record tokens; OpenCode, Cursor and ACP runtimes need a documented per-turn token count in their protocols first.
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live, which needs an event channel between hosts; a thread started there with its report covers the need until then.
-- **Code quality:** the phone checks each push event's channel and shape and types its payload; per-method RPC result schemas, and the same for the desktop's host bridge and preload (where `any` remains), are still to do. About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
+- **Code quality:** push events are checked for channel and shape where they enter the phone and the desktop, and RPC results take each method's declared type; checking RPC results against runtime schemas is still to do. About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
 ## Acceptance
 

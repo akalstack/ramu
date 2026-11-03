@@ -1,12 +1,13 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
+import type { RuntimeResult } from '@ramu/client-runtime'
 
-type Invoke = (
+type Invoke = <M extends string>(
   target: unknown,
-  method: string,
+  method: M,
   args: unknown[],
   policy?: { timeoutMs?: number; signal?: AbortSignal },
-) => Promise<any>
+) => Promise<RuntimeResult<M>>
 
 export interface ScreenSharingDeps {
   /** Calls a method on a host (a paired computer's endpoint) or on this computer's own service. */

@@ -1,3 +1,4 @@
+import type { PushArgs } from '@ramu/shared/pushChannels'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,7 +29,7 @@ function setup() {
     seal: (t) => t,
     open: (t) => t,
   })
-  const streams = new Map<string, (channel: string, payload: any) => void>(),
+  const streams = new Map<string, (...args: PushArgs) => void>(),
     stops: string[] = [],
     delivered: [string, string][] = []
   const counts = new Map<string, { running: number; needsInput: number }>()
@@ -49,11 +50,13 @@ function setup() {
     invoke: vi.fn(async (target: string | RuntimeEndpoint, method: string) => {
       if (method === 'agent.counts') return counts.get(urlOf(target)) ?? { running: 0, needsInput: 0 }
       return { running: true }
-    }),
+    }) as unknown as ComputerDeps['invoke'],
     pair: vi.fn(async () => ({ token: 'tok' })),
     renew: vi.fn(async (): Promise<{ token: string } | null> => null),
     ssh,
-    deliver: (id, channel) => delivered.push([id, channel]),
+    deliver: (id, ...[channel]) => {
+      delivered.push([id, channel])
+    },
     changed: vi.fn(),
   }
   return { servers, streams, stops, delivered, counts, deps, ssh, registry: new ComputerRegistry(deps) }
@@ -99,7 +102,7 @@ it('retrying an offline host keeps the other host connected and delivering event
   expect(stops).toEqual(['http://10.0.0.2:7788'])
   expect(streams.get('http://10.0.0.3:7788')).toBe(other)
   expect(registry.status(b.id)).toBe('connected')
-  other('fs:changed', {})
+  other('fs:changed', { cwd: '/repo', path: 'a.ts' })
   expect(delivered.at(-1)).toEqual([b.id, 'fs:changed'])
 })
 
@@ -116,7 +119,7 @@ it('counts working and waiting threads per host when their state changes', async
   await vi.advanceTimersByTimeAsync(1000)
   expect(registry.list(LOCAL).computers.find((c) => c.id === a.id)).toMatchObject({ running: 2, needsInput: 1 })
   counts.set('/tmp/local.sock', { running: 1, needsInput: 0 })
-  registry.observe(LOCAL, 'agent:event', { event: { kind: 'state', state: 'running' } })
+  registry.observe(LOCAL, 'agent:event', { sessionId: 's', event: { kind: 'state', state: 'running' } })
   await vi.advanceTimersByTimeAsync(1000)
   expect(registry.list(a.id).computers[0]).toMatchObject({ id: LOCAL, running: 1 })
   expect(registry.list(a.id).current).toBe(a.id)
@@ -126,7 +129,7 @@ it('delivers each host’s events to that host only', () => {
   const { servers, streams, delivered, registry } = setup()
   const a = servers.add('10.0.0.2:7788', 'Studio', 'a')
   registry.start()
-  streams.get('http://10.0.0.2:7788')!('fs:changed', {})
+  streams.get('http://10.0.0.2:7788')!('fs:changed', { cwd: '/repo', path: 'a.ts' })
   expect(delivered).toEqual([[a.id, 'fs:changed']])
 })
 
@@ -253,7 +256,7 @@ it('keeps only one activity request in flight and coalesces further changes', as
   receive('background:connection', { connected: true })
   await vi.advanceTimersByTimeAsync(1000)
   for (let i = 0; i < 100; i++) {
-    receive('agent:event', { event: { kind: 'state' } })
+    receive('agent:event', { sessionId: 's', event: { kind: 'state', state: 'running' } })
     await vi.advanceTimersByTimeAsync(20)
   }
   expect(deps.invoke).toHaveBeenCalledTimes(1)

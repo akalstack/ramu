@@ -13,6 +13,7 @@ import { BrowserProfiles } from './browserProfiles'
 import { BrowserSignInWindows } from './browserSignIn'
 import { browserProfileMethod } from './browserProfileMethods'
 import { executeBrowserBridge } from './browserBridge'
+import type { BrowserBridgeRequest } from '@ramu/shared/browserBridge'
 import { randomUUID } from 'node:crypto'
 import { ElectronGuestFactory } from './electronGuest'
 import { browserMethod, isBrowserMethod } from './browserMethods'
@@ -74,7 +75,7 @@ import {
   PresenceListener,
   hostSocket,
 } from '@ramu/client-runtime'
-import { HOST_PUSH_CHANNELS, STREAMING_KINDS } from '@ramu/shared/pushChannels'
+import { HOST_PUSH_CHANNELS, STREAMING_KINDS, pushMessage, type PushArgs } from '@ramu/shared/pushChannels'
 import { SshComputers } from './sshComputers'
 import { NearbyBrowser } from './discovery'
 import { RemoteServers } from './remoteServers'
@@ -467,10 +468,10 @@ async function main() {
   nativeTheme.on('updated', applyAppearance)
   const activityHosts = new Set<string>()
   let activityTimer: NodeJS.Timeout | undefined
-  const observeHostActivity = (id: string, channel: string, payload: any) => {
+  const observeHostActivity = (id: string, ...[channel, payload]: PushArgs) => {
     if (
       !['workspace:changed', 'automation:changed', 'summaries:changed', 'background:connection'].includes(channel) &&
-      !(channel === 'agent:event' && payload?.event?.kind === 'state')
+      !(channel === 'agent:event' && payload.event.kind === 'state')
     )
       return
     activityHosts.add(id)
@@ -617,18 +618,26 @@ async function main() {
         true,
       ),
     subscribe: (target, receive, options) =>
-      subscribeRuntime(target, receive, runtimeNetwork, {
-        ...options,
-        presencePort: presence.port,
-        ...(target.kind === 'http' ? { watchWake: (wake: () => void) => presence.watch(target.token, wake) } : {}),
-      }),
+      subscribeRuntime(
+        target,
+        // A host's event reaches windows and notifiers only on a channel this app knows, in the shape it carries.
+        (channel, payload) => {
+          const message = pushMessage(channel, payload)
+          if (message) receive(...([message.channel, message.payload] as PushArgs))
+        },
+        runtimeNetwork,
+        {
+          ...options,
+          presencePort: presence.port,
+          ...(target.kind === 'http' ? { watchWake: (wake: () => void) => presence.watch(target.token, wake) } : {}),
+        },
+      ),
     invoke: runtimeInvoke,
     pair: runtimePair,
     renew: (url, token) => runtimeRenew(url, token),
-    deliver: (id, channel, payload) => {
-      if (id === LOCAL && channel === 'pairing:requests')
-        pairing.receive((payload as { requests: Parameters<typeof pairing.receive>[0] }).requests)
-      observeHostActivity(id, channel, payload)
+    deliver: (id, ...[channel, payload]) => {
+      if (id === LOCAL && channel === 'pairing:requests') pairing.receive(payload.requests)
+      observeHostActivity(id, ...([channel, payload] as PushArgs))
       sendTo(id, channel, payload)
       notifierFor(id).observe(channel, payload)
     },
@@ -696,114 +705,125 @@ async function main() {
   const browserClientId = randomUUID()
   let browserToken: string | null = null
   let browserConnection = 0
-  const unsubscribe = subscribeRuntime(
-    runtime,
-    (channel, payload) => {
-      if (channel === 'background:connection') {
-        const epoch = ++browserConnection
-        browserToken = null
-        if (!payload.connected) browser.pauseForDisconnect()
-        else
-          void (async () => {
-            // The connection can race the event stream registering, so a failed attach is retried briefly.
-            for (let attempt = 0; attempt < 5; attempt++) {
-              if (browserConnection !== epoch) return
-              try {
-                const result = await runtimeInvoke(runtime, 'browser.bridge.attach', [browserClientId])
-                if (browserConnection !== epoch) return
-                browserToken = result.token
-                await runtimeInvoke(runtime, 'browser.bridge.ready', [browserClientId, result.token])
-                if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
-                return
-              } catch {
-                await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt))
-              }
-            }
-            if (browserConnection === epoch) {
-              browserToken = null
-              if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
-            }
-          })()
-      }
-      if (channel === 'browser:operation') {
-        const token = browserToken
-        if (!token || payload.clientId !== browserClientId) return
-        void executeBrowserBridge(browser, LOCAL, payload, () => browserProfiles.catalog())
-          .then(
-            (result) => {
-              if (!win.isDestroyed() && result && typeof result === 'object') {
-                if (payload.command.kind === 'present' && 'id' in result)
-                  win.webContents.send('browser:present', result)
-                else if (
-                  payload.command.kind === 'open' &&
-                  payload.command.presentation === 'foreground' &&
-                  'tab' in result
-                )
-                  win.webContents.send('browser:present', result.tab)
-              }
-              return runtimeInvoke(runtime, 'browser.bridge.reply', [browserClientId, token, payload.requestId, result])
-            },
-            (error) =>
-              runtimeInvoke(runtime, 'browser.bridge.reply', [
-                browserClientId,
-                token,
-                payload.requestId,
-                null,
-                error instanceof Error ? error.message : 'Browser operation failed',
-              ]),
-          )
-          .catch(() => {})
-        return
-      }
-
-      observeHostActivity(LOCAL, channel, payload)
-      if (channel === 'background:connection') computers.setLocalStatus(payload.connected)
-      computers.observe(LOCAL, channel, payload)
-      if (channel === 'updates:changed') {
-        updateStatus = payload
-        void desktopUpdater.prepare(payload)
-        sendAll(channel, updateView(payload))
-        return
-      }
-      if (channel !== 'host:request') {
-        send(channel, payload)
-        notifierFor(LOCAL).observe(channel, payload)
-        return
-      }
-      void (async () => {
-        try {
-          let value: unknown
-          if (payload.method === 'pickDirectory') {
-            // Test runs answer the folder dialog through RAMU_TEST_PICK_DIRECTORY instead of a native sheet.
-            if (process.env.RAMU_TEST_PICK_DIRECTORY) value = process.env.RAMU_TEST_PICK_DIRECTORY
-            else {
-              const result = await dialog.showOpenDialog(win, {
-                properties: ['openDirectory', 'createDirectory'],
-                title: payload.path === 'repository' ? t('Connect a repository') : t('Add project'),
-                buttonLabel: payload.path === 'repository' ? t('Connect') : t('Add project'),
-              })
-              value = result.canceled ? null : (result.filePaths[0] ?? null)
-            }
-          } else if (payload.method === 'pickExecutable') {
+  /** The local service asks this desktop to drive its own browser for an agent. */
+  const onBrowserOperation = (payload: BrowserBridgeRequest) => {
+    const token = browserToken
+    if (!token || payload.clientId !== browserClientId) return
+    void executeBrowserBridge(browser, LOCAL, payload, () => browserProfiles.catalog())
+      .then(
+        (result) => {
+          if (!win.isDestroyed() && result && typeof result === 'object') {
+            if (payload.command.kind === 'present' && 'id' in result) win.webContents.send('browser:present', result)
+            else if (
+              payload.command.kind === 'open' &&
+              payload.command.presentation === 'foreground' &&
+              'tab' in result
+            )
+              win.webContents.send('browser:present', result.tab)
+          }
+          return runtimeInvoke(runtime, 'browser.bridge.reply', [browserClientId, token, payload.requestId, result])
+        },
+        (error) =>
+          runtimeInvoke(runtime, 'browser.bridge.reply', [
+            browserClientId,
+            token,
+            payload.requestId,
+            null,
+            error instanceof Error ? error.message : 'Browser operation failed',
+          ]),
+      )
+      .catch(() => {})
+  }
+  /** The local service asks for a native dialog or action that only this desktop can show. */
+  const onHostRequest = (payload: { requestId: string; method: string; path?: string }) => {
+    void (async () => {
+      try {
+        let value: unknown
+        if (payload.method === 'pickDirectory') {
+          // Test runs answer the folder dialog through RAMU_TEST_PICK_DIRECTORY instead of a native sheet.
+          if (process.env.RAMU_TEST_PICK_DIRECTORY) value = process.env.RAMU_TEST_PICK_DIRECTORY
+          else {
             const result = await dialog.showOpenDialog(win, {
-              properties: ['openFile'],
-              title: t('Select provider binary'),
-              buttonLabel: t('Use binary'),
+              properties: ['openDirectory', 'createDirectory'],
+              title: payload.path === 'repository' ? t('Connect a repository') : t('Add project'),
+              buttonLabel: payload.path === 'repository' ? t('Connect') : t('Add project'),
             })
             value = result.canceled ? null : (result.filePaths[0] ?? null)
-          } else if (payload.method === 'pickAttachments') {
-            const result = await dialog.showOpenDialog(win, {
-              properties: ['openFile', 'multiSelections'],
-              title: t('Attach files'),
-            })
-            value = result.canceled ? [] : result.filePaths
-          } else if (payload.method === 'reveal') shell.showItemInFolder(payload.path)
-          else throw new Error('Unknown desktop action')
-          await runtimeInvoke(runtime, 'host.reply', [payload.requestId, value])
-        } catch (error) {
-          await runtimeInvoke(runtime, 'host.reply', [payload.requestId, null, String(error)]).catch(() => {})
-        }
-      })()
+          }
+        } else if (payload.method === 'pickExecutable') {
+          const result = await dialog.showOpenDialog(win, {
+            properties: ['openFile'],
+            title: t('Select provider binary'),
+            buttonLabel: t('Use binary'),
+          })
+          value = result.canceled ? null : (result.filePaths[0] ?? null)
+        } else if (payload.method === 'pickAttachments') {
+          const result = await dialog.showOpenDialog(win, {
+            properties: ['openFile', 'multiSelections'],
+            title: t('Attach files'),
+          })
+          value = result.canceled ? [] : result.filePaths
+        } else if (payload.method === 'reveal' && payload.path) shell.showItemInFolder(payload.path)
+        else throw new Error('Unknown desktop action')
+        await runtimeInvoke(runtime, 'host.reply', [payload.requestId, value])
+      } catch (error) {
+        await runtimeInvoke(runtime, 'host.reply', [payload.requestId, null, String(error)]).catch(() => {})
+      }
+    })()
+  }
+  /** Every event this app knows, typed by its channel. */
+  const onLocalEvent = (...[channel, payload]: PushArgs) => {
+    if (channel === 'background:connection') {
+      const epoch = ++browserConnection
+      browserToken = null
+      if (!payload.connected) browser.pauseForDisconnect()
+      else
+        void (async () => {
+          // The connection can race the event stream registering, so a failed attach is retried briefly.
+          for (let attempt = 0; attempt < 5; attempt++) {
+            if (browserConnection !== epoch) return
+            try {
+              // A desktop-only method outside the shared table: the local service answers with this desktop's token.
+              const result = (await runtimeInvoke(runtime, 'browser.bridge.attach', [browserClientId])) as {
+                token: string
+              }
+              if (browserConnection !== epoch) return
+              browserToken = result.token
+              await runtimeInvoke(runtime, 'browser.bridge.ready', [browserClientId, result.token])
+              if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+              return
+            } catch {
+              await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt))
+            }
+          }
+          if (browserConnection === epoch) {
+            browserToken = null
+            if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+          }
+        })()
+    }
+    observeHostActivity(LOCAL, ...([channel, payload] as PushArgs))
+    if (channel === 'background:connection') computers.setLocalStatus(payload.connected)
+    computers.observe(LOCAL, ...([channel, payload] as PushArgs))
+    if (channel === 'updates:changed') {
+      updateStatus = payload
+      void desktopUpdater.prepare(payload)
+      sendAll(channel, updateView(payload))
+      return
+    }
+    {
+      send(channel, payload)
+      notifierFor(LOCAL).observe(channel, payload)
+    }
+  }
+  const unsubscribe = subscribeRuntime(
+    runtime,
+    // Two channels are private to this desktop and its local service; anything else must be a known push event.
+    (channel, raw) => {
+      if (channel === 'browser:operation') return onBrowserOperation(raw as BrowserBridgeRequest)
+      if (channel === 'host:request') return onHostRequest(raw as { requestId: string; method: string; path?: string })
+      const message = pushMessage(channel, raw)
+      if (message) onLocalEvent(...([message.channel, message.payload] as PushArgs))
     },
     runtimeNetwork,
     { localClientId: browserClientId },
@@ -1318,7 +1338,7 @@ async function main() {
       return
     }
     if (['updates.status', 'updates.check', 'updates.download'].includes(method)) {
-      updateStatus = await runtimeInvoke(runtime, method, args)
+      updateStatus = (await runtimeInvoke(runtime, method, args)) as AppUpdateStatus
       await desktopUpdater.prepare(updateStatus!)
       return updateView(updateStatus!)
     }

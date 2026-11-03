@@ -10,6 +10,8 @@ import { type HostPushChannel } from '@ramu/shared/pushChannels'
 export type HostChannel = HostPushChannel
 
 type Listener<E extends HostChannel> = (payload: PushEvents[E]) => void
+/** How listeners of every channel are kept together; each only ever receives its own channel's payload. */
+type AnyListener = (payload: never) => void
 
 export interface HostEventRouter {
   /** Listens to `channel`, but only to events of `host`. */
@@ -21,15 +23,15 @@ export interface HostEventRouter {
  * host events, or delivers per window) belongs to the window's own host, so a single-host window behaves as before.
  */
 export function createHostEventRouter(bridge: Pick<RamuBridge, 'on'>, ownHost: () => string): HostEventRouter {
-  const channels = new Map<HostChannel, { off: () => void; hosts: Map<string, Set<Listener<any>>> }>()
+  const channels = new Map<HostChannel, { off: () => void; hosts: Map<string, Set<AnyListener>> }>()
   return {
     on(host, channel, listener) {
       let entry = channels.get(channel)
       if (!entry) {
-        const hosts = new Map<string, Set<Listener<any>>>()
+        const hosts = new Map<string, Set<AnyListener>>()
         const off = bridge.on(channel, (payload, from) => {
           const listeners = hosts.get(from ?? ownHost())
-          if (listeners) for (const deliver of [...listeners]) deliver(payload)
+          if (listeners) for (const deliver of [...listeners]) (deliver as Listener<typeof channel>)(payload)
         })
         entry = { off, hosts }
         channels.set(channel, entry)

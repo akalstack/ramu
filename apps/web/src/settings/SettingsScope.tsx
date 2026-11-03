@@ -379,13 +379,15 @@ export function useScopedInvoke(scope: SettingsScope | null): typeof invoke {
   current.current = scope
   const origin = scope?.primaryId
   const scoped = scope !== null
+  // Forwards whatever method a settings screen calls; the typed `invoke` it returns checks the call site.
+  const forward = invoke as unknown as (method: string, ...args: unknown[]) => Promise<unknown>
   return useMemo(() => {
     return (async (method: string, ...args: unknown[]) => {
       const scope = current.current
-      if (method.startsWith('computers.')) return (invoke as any)(method, ...args)
+      if (method.startsWith('computers.')) return forward(method, ...args)
       if ((scope?.primaryId ?? null) !== (origin ?? null) || (scope !== null) !== scoped)
         throw new Error(t('The selected host changed. Reopen this action before continuing.'))
-      if (!scope) return (invoke as any)(method, ...args)
+      if (!scope) return forward(method, ...args)
       if (!scope.ready || scope.stale) throw new Error(t('Select a connected host.'))
       const readOnly = /\.(get|list|status|history|catalog|connections)$/.test(method) || method === 'advisor.claude'
       if (scope.target === 'all' && scope.targets.length > 1 && !readOnly)
@@ -393,7 +395,7 @@ export function useScopedInvoke(scope: SettingsScope | null): typeof invoke {
       const id = scope.primaryId
       if (scope.targets.find((entry) => entry.id === id)?.viewOnly && !VIEWER_SETTINGS_READS.has(method))
         throw new Error(t(VIEW_ONLY_WRITE_NOTICE))
-      return id ? invoke('computers.settings.invoke', id, method, args) : (invoke as any)(method, ...args)
+      return id ? invoke('computers.settings.invoke', id, method, args) : forward(method, ...args)
     }) as typeof invoke
     // eslint-disable-next-line react-hooks/exhaustive-deps -- route identity invalidates host-bound loads; retained callbacks read live access above.
   }, [origin, scoped, scope?.target, scope?.ready, scope?.stale, scope?.revision, scope?.targets])

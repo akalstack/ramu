@@ -4,6 +4,7 @@ import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { tmpdir } from 'node:os'
 import { remoteRequests, WorkLimiter } from './limits'
+import type { RamuMethods } from '@ramu/shared/api'
 
 // Local startup hydrates many panels at once. Stay below the service's per-connection request budget.
 const localRequests = new WorkLimiter(24, 24)
@@ -55,12 +56,17 @@ export interface InvokeOptions {
   /** Marks one logical mutation across retries; a host that advertises `operation-keys` runs it once. */
   operationKey?: string
 }
-export async function runtimeInvoke(
+/** A method's result as the API table declares it; the host validated the call and built the result. */
+export type RuntimeResult<M extends string> = M extends keyof RamuMethods
+  ? Awaited<ReturnType<RamuMethods[M]>>
+  : unknown
+
+export async function runtimeInvoke<M extends string>(
   target: string | RuntimeEndpoint,
-  method: string,
+  method: M,
   args: unknown[] = [],
   policy: InvokeOptions = {},
-): Promise<any> {
+): Promise<RuntimeResult<M>> {
   const endpoint = toEndpoint(target)
   const release =
     endpoint.kind === 'http'
@@ -86,7 +92,7 @@ export async function runtimeInvoke(
         throw error
       }
       try {
-        return await socket.invoke(method, args, options)
+        return (await socket.invoke(method, args, options)) as RuntimeResult<M>
       } catch (error) {
         if (!(error as { notSent?: boolean }).notSent || attempt >= 1) throw error
       }
@@ -141,12 +147,12 @@ export interface RecoverableInvokeOptions extends InvokeOptions {
  * a method outside the list and an answer from the host (an error reply) are never retried: the outcome stays the
  * caller's to reconcile.
  */
-export async function runtimeInvokeRecoverable(
+export async function runtimeInvokeRecoverable<M extends string>(
   target: string | RuntimeEndpoint,
-  method: string,
+  method: M,
   args: unknown[] = [],
   policy: RecoverableInvokeOptions = {},
-): Promise<any> {
+): Promise<RuntimeResult<M>> {
   if (
     policy.operationKey ||
     !RECOVERABLE_MUTATIONS.has(method) ||
@@ -280,7 +286,7 @@ export interface SubscribeOptions {
 }
 export function subscribeRuntime(
   target: string | RuntimeEndpoint,
-  receive: (channel: string, payload: any) => void,
+  receive: (channel: string, payload: unknown) => void,
   monitor: NetworkMonitor = runtimeNetwork,
   policy: SubscribeOptions = {},
 ): () => void {
@@ -295,7 +301,7 @@ export function subscribeRuntime(
  */
 function subscribeSocket(
   endpoint: RuntimeEndpoint,
-  receive: (channel: string, payload: any) => void,
+  receive: (channel: string, payload: unknown) => void,
   monitor: NetworkMonitor,
   policy: SubscribeOptions,
 ): () => void {

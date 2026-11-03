@@ -14,6 +14,10 @@ export interface BackgroundStatus {
   bundledVersion?: string
   bundledBuild?: string
   updateAvailable?: boolean
+  /** `host:port` while the host accepts devices over the network; absent while it does not. */
+  listening?: string
+  /** Whether that listener serves HTTPS. */
+  tls?: boolean
 }
 
 /** A device that has paired with this computer's server and holds its own access token. */

@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 // Exposes a narrow bridge; the renderer never sees ipcRenderer or Node APIs.
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
-import type { PushEvents, RamuBridge } from '@ramu/shared/api'
+import type { PushEvents, RamuBridge, RamuMethods } from '@ramu/shared/api'
 import { HOST_PUSH_CHANNELS, WINDOW_PUSH_CHANNELS } from '@ramu/shared/pushChannels'
 
 const PUSH_EVENTS = new Set<string>([...HOST_PUSH_CHANNELS, ...WINDOW_PUSH_CHANNELS])
@@ -25,7 +25,7 @@ const deviceState = (() => {
 })()
 
 // Electron wraps handler failures as "Error invoking remote method '...': Error: <message>"; people should only see the message.
-const call = (method: string, args: unknown[], host?: string): Promise<any> =>
+const call = (method: string, args: unknown[], host?: string): Promise<unknown> =>
   (host === undefined
     ? ipcRenderer.invoke('ramu:invoke', method, args)
     : ipcRenderer.invoke('ramu:invoke', method, args, host)
@@ -38,10 +38,14 @@ const call = (method: string, args: unknown[], host?: string): Promise<any> =>
     )
   })
 
+/** The one place a host's answer takes its method's declared type; the host validated the call and built the result. */
+const typed = <M extends keyof RamuMethods>(method: M, args: unknown[], host?: string) =>
+  call(method, args, host) as Promise<Awaited<ReturnType<RamuMethods[M]>>>
+
 const bridge: RamuBridge = {
   hostId: 'local',
-  invoke: (method, ...args) => call(method, args),
-  invokeOn: (host, method, ...args) => call(method, args, host),
+  invoke: (method, ...args) => typed(method, args),
+  invokeOn: (host, method, ...args) => typed(method, args, host),
   on(event, listener) {
     if (!PUSH_EVENTS.has(event)) throw new Error(`Unknown event ${event}`)
     // The host follows the payload so one shell can route every host independently.

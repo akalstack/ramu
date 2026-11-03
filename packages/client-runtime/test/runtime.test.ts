@@ -45,10 +45,10 @@ const host = async (options?: Parameters<typeof socketHost>[0]) => {
 
 it('sends the operation key only when the caller gives one', async () => {
   const running = await host({ answer: (call) => call })
-  expect((await runtimeInvoke(running.endpoint, 'x.y')).operationKey).toBeUndefined()
-  expect((await runtimeInvoke(running.endpoint, 'x.y', [], { operationKey: 'op-12345678' })).operationKey).toBe(
-    'op-12345678',
-  )
+  const call = async (options?: { operationKey: string }) =>
+    (await runtimeInvoke(running.endpoint, 'x.y', [], options)) as { operationKey?: string }
+  expect((await call()).operationKey).toBeUndefined()
+  expect((await call({ operationKey: 'op-12345678' })).operationKey).toBe('op-12345678')
 })
 
 it('carries every call over one socket and surfaces host errors', async () => {
@@ -58,7 +58,7 @@ it('carries every call over one socket and surfaces host errors', async () => {
       return { method: call.method }
     },
   })
-  expect((await runtimeInvoke(running.endpoint, 'ok')).method).toBe('ok')
+  expect(((await runtimeInvoke(running.endpoint, 'ok')) as { method: string }).method).toBe('ok')
   await expect(runtimeInvoke(running.endpoint, 'fail')).rejects.toThrow('nope')
   await runtimeInvoke(running.endpoint, 'ok')
   expect(running.connections).toHaveLength(1)
@@ -85,7 +85,9 @@ it('flags a restart only when the host announces a different run after reconnect
   let connections = 0
   const running = await host({ epoch: () => (connections++ < 2 ? 'run-a' : 'run-b') })
   const seen: { channel: string; payload: { connected?: boolean; restarted?: boolean } }[] = []
-  const stop = subscribeRuntime(running.endpoint, (channel, payload) => seen.push({ channel, payload }))
+  const stop = subscribeRuntime(running.endpoint, (channel, payload) =>
+    seen.push({ channel, payload: payload as { connected?: boolean; restarted?: boolean } }),
+  )
   await expect.poll(() => running.open()).toBe(1)
   running.drop()
   // The same run again is a reconnect, not a restart.
@@ -102,7 +104,9 @@ it('flags a restart only when the host announces a different run after reconnect
 it('stops retrying when the server rejects the token, so a revoked device is not locked out of pairing', async () => {
   const running = await host()
   const seen: { connected: boolean; rejected?: boolean }[] = []
-  const stop = subscribeRuntime({ ...running.endpoint, token: 'revoked' }, (_channel, payload) => seen.push(payload))
+  const stop = subscribeRuntime({ ...running.endpoint, token: 'revoked' }, (_channel, payload) =>
+    seen.push(payload as { connected: boolean; rejected?: boolean }),
+  )
   await expect.poll(() => seen).toEqual([{ connected: false, rejected: true }])
   await new Promise((resolve) => setTimeout(resolve, 1500))
   expect(running.upgrades).toHaveLength(1)

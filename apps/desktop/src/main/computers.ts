@@ -1,7 +1,9 @@
 // Every computer this app talks to: the one it runs on and each one it was paired with, all connected at once.
 // All computers share one shell; this module owns the connections, their health and their activity counts.
 import type { RuntimeEndpoint } from '@ramu/contracts'
+import type { RuntimeResult } from '@ramu/client-runtime'
 import type { Computer, ComputerStatus, Computers } from '@ramu/shared/types'
+import type { PushArgs } from '@ramu/shared/pushChannels'
 import type { ComputerUpdate, RemoteServers, SavedServer } from './remoteServers'
 import type { SshComputers } from './sshComputers'
 
@@ -29,22 +31,22 @@ export interface ComputerDeps {
   follow(target: RuntimeEndpoint, sessionIds: string[]): Promise<unknown>
   subscribe(
     target: RuntimeEndpoint,
-    receive: (channel: string, payload: any) => void,
+    receive: (...args: PushArgs) => void,
     options?: { retryMode: 'events' | 'periodic' },
   ): () => void
-  invoke(
+  invoke<M extends string>(
     target: string | RuntimeEndpoint,
-    method: string,
+    method: M,
     args?: unknown[],
     options?: { signal?: AbortSignal; timeoutMs?: number },
-  ): Promise<any>
+  ): Promise<RuntimeResult<M>>
   pair(url: string, code: string, deviceName: string): Promise<{ token: string; deviceId?: string; hostId?: string }>
   /** Swaps a computer's token for a fresh one; null when it declines (no longer paired). */
   renew(url: string, token: string): Promise<{ token: string } | null>
   /** Computers reached over SSH keep a tunnel; the registry asks for it before connecting. */
   ssh: Pick<SshComputers, 'ensure' | 'connect' | 'close' | 'closeAll'>
   /** An event from a computer, for its window and its notifier. */
-  deliver(id: string, channel: string, payload: any): void
+  deliver(id: string, ...args: PushArgs): void
   /** The list, a status or a count changed. */
   changed(): void
 }
@@ -157,7 +159,7 @@ export class ComputerRegistry {
     }
     return this.deps.subscribe(
       endpoint,
-      (channel, payload) => {
+      (...[channel, payload]) => {
         if (this.live.get(id) !== live) return
         if (channel === 'background:connection') {
           live.status = payload.rejected ? 'rejected' : payload.connected ? 'connected' : 'offline'
@@ -176,8 +178,8 @@ export class ComputerRegistry {
             live.needsInput = 0
           }
           this.deps.changed()
-        } else this.observe(id, channel, payload)
-        this.deps.deliver(id, channel, payload)
+        } else this.observe(id, ...([channel, payload] as PushArgs))
+        this.deps.deliver(id, ...([channel, payload] as PushArgs))
       },
       { retryMode: saved?.retryMode ?? 'events' },
     )
@@ -207,8 +209,8 @@ export class ComputerRegistry {
   }
 
   /** Chats starting, finishing or asking something change what the switcher shows. */
-  observe(id: string, channel: string, payload: any) {
-    if (channel === 'agent:event' && payload?.event?.kind === 'state') this.countSoon(id)
+  observe(id: string, ...[channel, payload]: PushArgs) {
+    if (channel === 'agent:event' && payload.event.kind === 'state') this.countSoon(id)
   }
 
   /** The local computer's connection, which the app itself already holds. */
@@ -249,7 +251,7 @@ export class ComputerRegistry {
         void this.deps
           .invoke(this.endpoint(id), 'agent.counts', [], { signal: request.signal, timeoutMs: 10000 })
           .then(
-            (counts: { running: number; needsInput: number }) => {
+            (counts) => {
               const target = id === LOCAL ? this.local : this.live.get(id)
               if (
                 this.stopped ||

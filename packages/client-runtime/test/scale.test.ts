@@ -18,7 +18,7 @@ it('holds 100 simultaneous host sockets and delivers 10000 events', async () => 
     for (let i = 0; i < count; i++)
       stops.push(
         subscribeRuntime({ ...running.endpoint, token: `token-${i}` }, (channel, payload) => {
-          if (channel === 'background:connection' && payload.connected) connected++
+          if (channel === 'background:connection' && (payload as { connected: boolean }).connected) connected++
           else if (channel === 'agent:event') received++
         }),
       )
