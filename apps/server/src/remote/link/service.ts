@@ -21,6 +21,7 @@ import {
   type SignInStart,
 } from '@ramu/shared/link/account'
 import { generateKeyPair, keyPairFromSecret, type KeyPair } from '@ramu/shared/link/noise'
+import type { LinkHook } from '@ramu/shared/link/hooks'
 import {
   DEFAULT_LINK_SERVICE,
   linkAddress,
@@ -51,6 +52,8 @@ export interface LinkServiceOptions {
   fixedService?: string | null
   credentials?: HostCredentialStore
   fetcher?: typeof fetch
+  /** A webhook request that arrived through Ramu Link. */
+  hook?(hook: LinkHook): void
 }
 
 const random = (bytes: number) => new Uint8Array(randomBytes(bytes))
@@ -111,6 +114,13 @@ export class LinkService {
   }
   address(): string {
     return linkAddress(this.options.hostId)
+  }
+  /** The public address senders post webhooks to for this host, while Link is on; schedules add their own path. */
+  hookBase(): string | null {
+    const service = this.service()
+    return service && this.saved.account && this.saved.enabled
+      ? new URL(`/h/${this.options.hostId}`, service).toString()
+      : null
   }
   /** The identity key in hex, once one exists; it is created at the first sign-in. */
   hostKey(): string | null {
@@ -317,6 +327,7 @@ export class LinkService {
       secret,
       identity: this.identity,
       server: this.options.server,
+      onHook: (hook) => this.options.hook?.(hook),
       onState: (state, error) => {
         if (this.relay !== relay) return
         this.relayState = state

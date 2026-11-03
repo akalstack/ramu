@@ -8,6 +8,7 @@ import { registerHost, removeHost, type HostRow } from './hosts'
 import { applyEvent, cancelSubscription, createCheckout, verifySignature } from './paddle'
 import { entitlementOf, monthOf, planStatus, relayedSeconds, sellsPlus, streamRefusal, usageDays } from './plans'
 import { addShare, isSharedWith, listShares, ownsHost, removeShare } from './shares'
+import { acceptHook } from './hooks'
 
 export { HostRelay } from './relay'
 
@@ -96,6 +97,25 @@ export default {
     }
 
     if (path === '/health') return json({ ok: true })
+
+    // A webhook sender's public address for one host's schedule. Anyone may post; only the host can open what arrives.
+    const hook = /^\/h\/([0-9a-f]{32})\/hooks\/([^/]{1,100})$/.exec(path)
+    if (hook && request.method === 'POST') {
+      const [hostId, token] = [hook[1]!, decodeURIComponent(hook[2]!)]
+      const outcome = await acceptHook(env, hostId, token, request, async (sealed) => {
+        const answer = await relay(
+          env,
+          hostId,
+          { role: 'hook' },
+          new Request('https://relay/', { method: 'POST', body: sealed }),
+        )
+        return answer.status === 202
+      })
+      if (outcome.status === 202) return json({ accepted: true, held: outcome.held }, 202)
+      const response = failure(outcome.error, outcome.status)
+      if ('retryAfter' in outcome && outcome.retryAfter) response.headers.set('retry-after', String(outcome.retryAfter))
+      return response
+    }
 
     // Paddle's webhooks, signed with the endpoint's secret; anything unsigned or stale is refused before it is read.
     if (path === '/v1/paddle/webhook' && request.method === 'POST') {

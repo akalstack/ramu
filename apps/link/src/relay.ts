@@ -18,6 +18,7 @@ import {
 } from '@ramu/shared/link/protocol'
 import type { Env } from './auth'
 import { dayOf, recordUsage } from './plans'
+import { takeHeld } from './hooks'
 
 const HOST = 'host'
 const DEVICE = 'device'
@@ -65,6 +66,13 @@ export class HostRelay extends DurableObject<Env> {
       }
       return new Response(null, { status: 204 })
     }
+    if (role === 'hook') {
+      // A sealed webhook request: passed to the host if it is connected; otherwise the Worker decides whether to hold it.
+      const host = this.host()
+      if (!host) return new Response(null, { status: 409 })
+      host.send(encodeMux(MUX.hook, 0, encoder.encode(await request.text())))
+      return new Response(null, { status: 202 })
+    }
     const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket]
     const answer = () =>
       new Response(null, { status: 101, webSocket: client, headers: { 'Sec-WebSocket-Protocol': LINK_PROTOCOL } })
@@ -74,6 +82,9 @@ export class HostRelay extends DurableObject<Env> {
       this.ctx.acceptWebSocket(server, [HOST])
       await this.ctx.storage.put('hostId', hostId)
       await this.presence(hostId, true)
+      // Requests held while the host was away go first, oldest first.
+      for (const held of await takeHeld(this.env, hostId).catch(() => []))
+        server.send(encodeMux(MUX.hook, 0, encoder.encode(held.sealed)))
       return answer()
     }
     const host = this.host()

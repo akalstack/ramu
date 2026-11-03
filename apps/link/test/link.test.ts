@@ -7,6 +7,10 @@ import { checkoutPage, devicePage, language, legalPage } from '../src/page'
 import { entitlementOf, hostLimit, planStatus, recordUsage, relayedSeconds, streamRefusal } from '../src/plans'
 import { RENEWAL_GRACE_MS, applyEvent, verifySignature } from '../src/paddle'
 import { addShare, isSharedWith, listShares, removeShare } from '../src/shares'
+import { acceptHook, takeHeld } from '../src/hooks'
+import { openHook } from '@ramu/shared/link/hooks'
+import { generateKeyPair } from '@ramu/shared/link/noise'
+import { randomBytes } from 'node:crypto'
 
 const HOST = '0123456789abcdef0123456789abcdef'
 const KEY = 'a'.repeat(64)
@@ -15,7 +19,7 @@ const KEY = 'a'.repeat(64)
 function database() {
   const db = new DatabaseSync(':memory:')
   db.exec('PRAGMA foreign_keys = ON')
-  for (const migration of ['0001_init.sql', '0002_plans.sql'])
+  for (const migration of ['0001_init.sql', '0002_plans.sql', '0003_hooks.sql'])
     db.exec(readFileSync(join(import.meta.dirname, '../migrations', migration), 'utf8'))
   const now = new Date().toISOString()
   for (const id of ['u1', 'u2', 'u3'])
@@ -336,5 +340,70 @@ describe('checkout and notices', () => {
     expect(legalPage('privacy', 'en', 'n')).toContain('end-to-end encrypted')
     expect(legalPage('terms', 'id', 'n')).toContain('60 jam')
     expect(legalPage('terms', 'en', 'n')).not.toContain('<script')
+  })
+})
+
+describe('webhooks through Link', () => {
+  const keys = generateKeyPair((bytes) => new Uint8Array(randomBytes(bytes)))
+  const TOKEN = 'a'.repeat(32)
+  const post = (body = '{"action":"completed"}') =>
+    new Request('https://link.example.com/h/x/hooks/y', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-hub-signature-256': 'sha256=abc', cookie: 'no' },
+      body,
+    })
+  const linked = async (env: Parameters<typeof registerHost>[0]) => {
+    await registerHost(env, 'u1', {
+      hostId: HOST,
+      name: 'Studio',
+      publicKey: Buffer.from(keys.publicKey).toString('hex'),
+    })
+  }
+
+  it('hands an online host the request sealed to its key, signature header and exact body intact', async () => {
+    const { env } = database()
+    await linked(env)
+    let handed = ''
+    const outcome = await acceptHook(env, HOST, TOKEN, post(), async (sealed) => ((handed = sealed), true))
+    expect(outcome).toEqual({ status: 202, held: false })
+    const hook = openHook(handed, keys.secret, keys.publicKey)!
+    expect(hook).toMatchObject({ token: TOKEN, headers: { 'x-hub-signature-256': 'sha256=abc' } })
+    expect(hook.headers.cookie).toBeUndefined()
+    expect(Buffer.from(hook.body, 'base64').toString()).toBe('{"action":"completed"}')
+  })
+
+  it('answers the same for an unknown host and a malformed address', async () => {
+    const { env } = database()
+    await linked(env)
+    const offline = async () => false
+    expect(await acceptHook(env, id(9), TOKEN, post(), offline)).toMatchObject({ status: 404 })
+    expect(await acceptHook(env, HOST, 'short', post(), offline)).toMatchObject({ status: 404 })
+  })
+
+  it('holds requests for an offline host on Plus, and asks Free senders to retry', async () => {
+    const free = selling()
+    await linked(free.env)
+    expect(await acceptHook(free.env, HOST, TOKEN, post(), async () => false)).toMatchObject({
+      status: 503,
+      retryAfter: 300,
+    })
+    const own = database()
+    await linked(own.env)
+    expect(await acceptHook(own.env, HOST, TOKEN, post(), async () => false, 1000)).toEqual({ status: 202, held: true })
+    expect(await acceptHook(own.env, HOST, TOKEN, post('{"n":2}'), async () => false, 2000)).toEqual({
+      status: 202,
+      held: true,
+    })
+    const held = await takeHeld(own.env, HOST, 3000)
+    expect(held.map((entry) => entry.receivedAt)).toEqual([1000, 2000])
+    expect(JSON.stringify(held)).not.toContain('completed')
+    expect(await takeHeld(own.env, HOST, 3000)).toEqual([])
+  })
+
+  it('lets held requests lapse after a day', async () => {
+    const { env } = database()
+    await linked(env)
+    await acceptHook(env, HOST, TOKEN, post(), async () => false, 0)
+    expect(await takeHeld(env, HOST, 25 * 60 * 60 * 1000)).toEqual([])
   })
 })

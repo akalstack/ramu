@@ -16,6 +16,7 @@ import {
   hostProtocol,
   type StreamOpen,
 } from '@ramu/shared/link/protocol'
+import { openHook, type LinkHook } from '@ramu/shared/link/hooks'
 import { bridge, parseLinkRequest, type Bridge } from './bridge'
 import { SHARED_LINK_PEER } from '../sharedPeer'
 
@@ -35,6 +36,8 @@ export interface RelayClientOptions {
   identity: KeyPair
   server: Server
   onState(state: RelayState, error?: string): void
+  /** A webhook request that came through Ramu Link, opened with this host's identity key. */
+  onHook?(hook: LinkHook): void
   /** Test seam. */
   WebSocketImpl?: typeof WebSocket
 }
@@ -147,6 +150,11 @@ export class RelayClient {
     const frame = decodeMux(bytes)
     if (!frame) return
     const { stream: id, payload } = frame
+    if (frame.type === MUX.hook) {
+      const hook = openHook(decoder.decode(payload), this.options.identity.secret, this.options.identity.publicKey)
+      if (hook) this.options.onHook?.(hook)
+      return
+    }
     if (frame.type === MUX.open) {
       if (this.streams.size >= MAX_STREAMS_PER_HOST) return this.send(id, MUX.close)
       let account = ''

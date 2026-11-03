@@ -58,6 +58,8 @@ export const LINK_PATHS = {
   checkout: '/v1/checkout',
   relayHost: '/v1/relay/host',
   relayConnect: (hostId: string) => `/v1/relay/connect/${hostId}`,
+  /** Public: a webhook sender posts here; `path` is the host's own (`/hooks/<token>`). */
+  hook: (hostId: string, path: string) => `/h/${hostId}${path}`,
 } as const
 
 export const HOST_ID = /^[0-9a-f]{32}$/
@@ -121,8 +123,11 @@ export const LINK_CLOSE = {
   hostClosed: 4000,
 } as const
 
-/** Frames between the relay and a host: `[type u8][stream u32][payload]`. */
-export const MUX = { open: 1, data: 2, close: 3 } as const
+/**
+ * Frames between the relay and a host: `[type u8][stream u32][payload]`. `hook` carries one sealed webhook request
+ * (`link/hooks.ts`) on stream 0, outside any device stream; a host that predates it ignores the frame.
+ */
+export const MUX = { open: 1, data: 2, close: 3, hook: 4 } as const
 export type MuxType = (typeof MUX)[keyof typeof MUX]
 export const MAX_STREAMS_PER_HOST = 64
 /** Kept well under every platform's WebSocket message limit; records are fragmented to fit. */
@@ -138,7 +143,7 @@ export function encodeMux(type: MuxType, stream: number, payload: Uint8Array = n
 export function decodeMux(frame: Uint8Array): { type: MuxType; stream: number; payload: Uint8Array } | null {
   if (frame.length < 5) return null
   const type = frame[0]
-  if (type !== MUX.open && type !== MUX.data && type !== MUX.close) return null
+  if (type !== MUX.open && type !== MUX.data && type !== MUX.close && type !== MUX.hook) return null
   const stream = new DataView(frame.buffer, frame.byteOffset, frame.byteLength).getUint32(1)
   return { type, stream, payload: frame.subarray(5) }
 }

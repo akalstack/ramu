@@ -444,12 +444,17 @@ const schedules = new ScheduleService(
 )
 const webhooks = new WebhookReceiver(schedules)
 // Where a sender can reach this host: every address the listener serves, then Ramu Link's public address.
-schedules.webhookBases = () => [
-  ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []).map((candidate) => ({
-    url: candidate.url,
-    via: candidate.interface,
-  })),
-]
+schedules.webhookBases = () => {
+  const linkBase = link.hookBase()
+  return [
+    // Ramu Link first: it reaches the host from anywhere, and holds requests while the host sleeps.
+    ...(linkBase ? [{ url: linkBase, via: 'Ramu Link' }] : []),
+    ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []).map((candidate) => ({
+      url: candidate.url,
+      via: candidate.interface,
+    })),
+  ]
+}
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
 schedules.recover()
 // eslint-disable-next-line prefer-const -- declared earlier because closures built before this point reference it
@@ -1551,6 +1556,15 @@ const link = new LinkService({
   changed: networkChanged,
   fixedService: config.linkService,
   credentials: linkCredentials,
+  // Webhooks through Link arrive sealed to this host and are opened by the relay client; held ones carry their age.
+  hook: (hook) => {
+    const now = Date.now()
+    webhooks.receive(hook.token, hook.headers, Buffer.from(hook.body, 'base64'), {
+      receivedAt: hook.receivedAt,
+      heldMs: Math.max(0, now - hook.receivedAt),
+      now,
+    })
+  },
 })
 void link.start()
 /** Any way a device can reach this host right now, beyond this computer. */

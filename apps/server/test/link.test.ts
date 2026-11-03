@@ -19,6 +19,7 @@ import {
   linkAddress,
 } from '@ramu/shared/link/protocol'
 import { requestPairing } from '@ramu/shared/pairRequest'
+import { sealHook, type LinkHook } from '@ramu/shared/link/hooks'
 import { RemoteAccess } from '../src/remote/access'
 import { DeviceStore } from '../src/remote/devices'
 import { PairingRequests } from '../src/remote/pairingRequests'
@@ -28,6 +29,8 @@ import { serveSockets } from '../src/remote/socket'
 const random = (bytes: number) => new Uint8Array(randomBytes(bytes))
 const HOST = 'abcdefabcdefabcdefabcdefabcdef12'
 const cleanup: (() => unknown)[] = []
+/** The host's socket on the fake relay, so a test can send it frames as the relay would. */
+let relayHost: NodeWebSocket | null = null
 afterEach(async () => {
   for (const close of cleanup.splice(0).reverse()) await close()
 })
@@ -44,6 +47,7 @@ async function fakeRelay(open = { account: 'u1' } as { account: string; shared?:
       if (credentialFromProtocols(req.headers['sec-websocket-protocol'] ?? null, 'host') !== 'secret')
         return ws.close(LINK_CLOSE.unauthorized)
       host = ws
+      relayHost = ws
       ws.on('message', (data) => {
         const frame = decodeMux(new Uint8Array(data as Buffer))
         if (!frame) return
@@ -101,6 +105,7 @@ async function fixture(
   cleanup.push(() => sockets.close())
   const service = await fakeRelay(options.shared ? { account: 'u2', shared: true } : undefined)
   const states: string[] = []
+  const hooks: LinkHook[] = []
   const relay = new RelayClient({
     service,
     hostId: HOST,
@@ -108,6 +113,7 @@ async function fixture(
     identity,
     server,
     onState: (state) => states.push(state),
+    onHook: (hook) => hooks.push(hook),
   })
   cleanup.push(() => relay.stop())
   if (options.connectHost !== false) {
@@ -124,6 +130,7 @@ async function fixture(
     devices,
     pairing,
     hostKey,
+    hooks,
     peers,
     states,
     relay,
@@ -260,4 +267,19 @@ describe('a host shared with another account', () => {
     })
     expect(await paired.json()).toMatchObject({ role: 'viewer' })
   })
+})
+
+it('opens a webhook the relay passes on, and drops one sealed to another host', async () => {
+  const f = await fixture()
+  const hook: LinkHook = { token: 'x'.repeat(32), headers: { 'x-event': 'ping' }, body: 'e30=', receivedAt: 5 }
+  const stranger = generateKeyPair(random)
+  relayHost!.send(
+    encodeMux(
+      MUX.hook,
+      0,
+      new TextEncoder().encode(sealHook(hook, Buffer.from(stranger.publicKey).toString('hex'), random)),
+    ),
+  )
+  relayHost!.send(encodeMux(MUX.hook, 0, new TextEncoder().encode(sealHook(hook, f.hostKey, random))))
+  await expect.poll(() => f.hooks).toEqual([hook])
 })
