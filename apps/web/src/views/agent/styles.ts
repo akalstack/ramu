@@ -16,7 +16,7 @@ export const CARET_CLASS =
 
 /** Leading icon of a tool row. */
 export const TOOL_ICON_CLASS =
-  'tool-icon [&.running]:text-brand [&.running]:[animation:pulse_1.6s_ease-in-out_infinite] flex-none text-muted-foreground'
+  'tool-icon flex-none text-muted-foreground'
 
 /** One-line summary text of a tool row. */
 export const TOOL_SUMMARY_CLASS =

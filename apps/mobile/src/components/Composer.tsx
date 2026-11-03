@@ -1190,15 +1190,6 @@ export function Composer({
             style={{ borderRadius: radius.full }}
             onPress={() => setMenu('actions')}
           />
-          {mic.kind !== 'hidden' ? (
-            <MicButton
-              active={dictating}
-              disabled={viewOnly || (dictating && dictation.snapshot.state.phase !== 'recording')}
-              onPress={() =>
-                dictation.snapshot.state.phase === 'recording' ? dictation.session.stop() : startDictation()
-              }
-            />
-          ) : null}
           <ModelChip value={model} onChange={onModel} computerId={computerId} limited={limited} />
 
           <View style={{ flex: 1 }} />
@@ -1210,6 +1201,16 @@ export function Composer({
               tone="muted"
               onPress={() => void submit(otherMode)}
               disabled={busy || uploading || viewOnly || dictating}
+            />
+          ) : null}
+          {/* Dictation sits beside sending, where the words it writes go next. */}
+          {mic.kind !== 'hidden' ? (
+            <MicButton
+              active={dictating}
+              disabled={viewOnly || (dictating && dictation.snapshot.state.phase !== 'recording')}
+              onPress={() =>
+                dictation.snapshot.state.phase === 'recording' ? dictation.session.stop() : startDictation()
+              }
             />
           ) : null}
           {running && !has && !offline ? (

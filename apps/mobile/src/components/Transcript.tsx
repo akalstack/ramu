@@ -992,7 +992,8 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
   // A group of Ramu's own tools wears its mark, as each of its rows does.
   const ramuGroup = item.tools.every((tool) => tool.ramu)
   const Icon = current ? toolIcons[current.tool] : Wrench
-  const tint = failed ? c.bad : running ? c.accent : c.muted
+  // While working, only the words shimmer; the icon stays still, as on the desktop.
+  const tint = failed ? c.bad : c.muted
   // Tools already here when the group appeared stay still; ones that arrive later fade in.
   const initial = useRef(new Set(item.tools.map((tool) => tool.id))).current
   return (
@@ -1007,9 +1008,7 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
-        <Breathe active={running > 0}>
-          {ramuGroup || current?.ramu ? <RamuGlyph size={14} color={tint} /> : <Icon size={14} color={tint} />}
-        </Breathe>
+        {ramuGroup || current?.ramu ? <RamuGlyph size={14} color={tint} /> : <Icon size={14} color={tint} />}
         <View style={{ flex: 1, minWidth: 0 }}>
           {/* The headline follows the current tool; each change fades instead of jumping. */}
           <Arrive animate={false} identity={headline}>
@@ -1133,13 +1132,11 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 3 }}
       >
-        <Breathe active={running}>
-          {item.ramu ? (
-            <RamuGlyph size={14} color={failed ? c.bad : running ? c.accent : c.muted} />
-          ) : (
-            <I size={14} color={failed ? c.bad : running ? c.accent : c.muted} strokeWidth={1.8} />
-          )}
-        </Breathe>
+        {item.ramu ? (
+          <RamuGlyph size={14} color={failed ? c.bad : c.muted} />
+        ) : (
+          <I size={14} color={failed ? c.bad : c.muted} strokeWidth={1.8} />
+        )}
         <View style={{ flex: 1, minWidth: 0 }}>
           <ActivityText active={running}>{title}</ActivityText>
         </View>
@@ -1539,7 +1536,6 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
   const say = useSay()
   const { c } = useTheme()
   const { decide, forgetApproval } = useStore()
-  const [remembering, setRemembering] = useState(false)
   const [rule, setRule] = useState('exact')
   if (item.decision) {
     const allowed = item.decision === 'allow'
@@ -1590,61 +1586,51 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
           {say('Always ask')}: {item.reviewRule}
         </T>
       ) : null}
-      <View style={{ flexDirection: 'row', gap: space.s }}>
-        <Button
-          kind="secondary"
-          title={say('Deny')}
-          style={{ flex: 1 }}
-          onPress={() => decide(chatId, item.id, 'deny')}
-        />
-        <Button title={say('Allow once')} style={{ flex: 1 }} onPress={() => decide(chatId, item.id, 'allow')} />
-      </View>
-      {item.rememberable ? (
-        remembering ? (
-          <View style={{ gap: space.s }}>
-            {item.patterns?.length ? (
-              <>
-                <T size={font.caption} tone="muted">
-                  {say('Don’t ask again for')}
-                </T>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
-                  {['exact', ...item.patterns].map((value) => (
-                    <Chip
-                      key={value}
-                      small
-                      label={value === 'exact' ? say('This exact request') : value}
-                      selected={rule === value}
-                      maxLabelWidth={220}
-                      onPress={() => setRule(value)}
-                    />
-                  ))}
-                </View>
-              </>
-            ) : null}
-            {item.rememberable.project ? (
-              <Button
-                kind="secondary"
-                title={say('Allow for this project')}
-                onPress={() => decide(chatId, item.id, 'allow', 'project', pattern)}
+      {/* As on the desktop: the rule a saved approval covers, then every choice at once, Allow once first. */}
+      {item.rememberable && item.patterns?.length ? (
+        <View style={{ gap: space.s }}>
+          <T size={font.caption} tone="muted">
+            {say('Don’t ask again for')}
+          </T>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
+            {['exact', ...item.patterns].map((value) => (
+              <Chip
+                key={value}
+                small
+                label={value === 'exact' ? say('This exact request') : value}
+                selected={rule === value}
+                maxLabelWidth={220}
+                onPress={() => setRule(value)}
               />
-            ) : null}
-            <Button
-              kind="secondary"
-              title={say('Allow for this user')}
-              onPress={() => decide(chatId, item.id, 'allow', 'user', pattern)}
-            />
-            <T size={font.caption} tone="muted">
-              {say('Saved approvals apply to the selected rule. Allow once applies only to this request.')}
-            </T>
+            ))}
           </View>
-        ) : (
-          <Pressable accessibilityRole="button" hitSlop={6} onPress={() => setRemembering(true)}>
-            <T size={font.control} tone="accent">
-              {say('Don’t ask again…')}
-            </T>
-          </Pressable>
-        )
+        </View>
       ) : null}
+      <View style={{ gap: space.s }}>
+        <Button title={say('Allow once')} onPress={() => decide(chatId, item.id, 'allow')} />
+        {item.rememberable?.project ? (
+          <Button
+            kind="secondary"
+            title={say('Allow for this project')}
+            onPress={() => decide(chatId, item.id, 'allow', 'project', pattern)}
+          />
+        ) : null}
+        {item.rememberable ? (
+          <Button
+            kind="secondary"
+            title={say('Allow for this user')}
+            onPress={() => decide(chatId, item.id, 'allow', 'user', pattern)}
+          />
+        ) : null}
+        <Button kind="secondary" title={say('Deny')} onPress={() => decide(chatId, item.id, 'deny')} />
+      </View>
+      <T size={font.caption} tone="muted">
+        {say(
+          item.rememberable
+            ? 'Saved approvals apply to the selected rule. Allow once applies only to this request.'
+            : 'Applies to this request only.',
+        )}
+      </T>
     </Card>
   )
 }

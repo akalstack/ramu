@@ -97,7 +97,7 @@ export function ToolGroup({
             <ToolIcon
               tool={primaryTool}
               content={results.get(primaryTool.toolUseId)?.content}
-              className={running ? `${TOOL_ICON_CLASS} running` : TOOL_ICON_CLASS}
+              className={TOOL_ICON_CLASS}
             />
             <ActivityText active={running} className="tool-group-label truncate text-left">
               {activity && !running ? activity : headline}
@@ -167,7 +167,7 @@ export function ToolGroup({
                     <ToolIcon
                       tool={t}
                       content={r?.content ?? t.content}
-                      className={`tool-icon flex-none ${failed ? 'text-bad' : 'text-muted-foreground'}${toolRunning ? ' running text-brand motion-safe:[animation:pulse_1.6s_ease-in-out_infinite]' : ''}`}
+                      className={`tool-icon flex-none ${failed ? 'text-bad' : 'text-muted-foreground'}`}
                     />
                     <ActivityText active={toolRunning} className={TOOL_SUMMARY_CLASS}>
                       {humanTitle ??
