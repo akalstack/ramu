@@ -243,6 +243,8 @@ export function ThreadActivity({
             onClearGoal={online ? () => store.clearGoal(chat.id) : undefined}
             onVerifyGoal={online ? (command) => store.setGoalVerify(chat.id, command) : undefined}
             onRemove={online ? (message) => store.removeQueued(chat.id, message) : undefined}
+            onSendNow={online ? (message) => store.sendQueuedNow(chat.id, message) : undefined}
+            running={chat.status === 'running'}
             onResumeQueue={
               online && chat.sessionId
                 ? () => void store.invoke(chat.computerId, 'agent.resumeQueue', chat.sessionId!).catch(() => {})

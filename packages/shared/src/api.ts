@@ -1169,7 +1169,8 @@ export interface RamuMethods {
   'agent.removeQueued'(sessionId: string, messageId: string): void
   'agent.reorderQueued'(sessionId: string, order: string[]): void
   'agent.resumeQueue'(sessionId: string): void
-  'agent.sendQueuedNow'(sessionId: string, messageId: string): void
+  /** `interrupt` stops a running turn first and sends the message as the next one. */
+  'agent.sendQueuedNow'(sessionId: string, messageId: string, interrupt?: boolean): void
   'agent.interrupt'(sessionId: string): void
   /**
    * Try again now for a thread held at a usage limit: re-checks usage and, only if there is room or the provider has no

@@ -1772,6 +1772,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   Queue: 'Antrekan',
   Steer: 'Arahkan',
   'Send now': 'Kirim sekarang',
+  'Stop turn and send now': 'Hentikan giliran dan kirim sekarang',
   'Queued messages': 'Pesan dalam antrean',
   'Queued message actions': 'Aksi pesan dalam antrean',
   'Remove queued message': 'Hapus pesan dari antrean',

@@ -238,10 +238,10 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     },
     'agent.resumeQueue': { args: z.tuple([id]), run: (s: string) => agents.resumeQueue(s) },
     'agent.sendQueuedNow': {
-      args: z.tuple([id, id]),
-      run: (s: string, messageId: string) => {
+      args: z.tuple([id, id, z.boolean().optional()]),
+      run: (s: string, messageId: string, interrupt?: boolean) => {
         workspace.setDone(agents.get(s).taskId, false)
-        return lockSession(ctx, s, () => agents.sendQueuedNow(s, messageId))
+        return lockSession(ctx, s, () => agents.sendQueuedNow(s, messageId, interrupt))
       },
     },
     'agent.continuationPrompt': { args: z.tuple([id]), run: (s: string) => agents.continuationPrompt(s) },

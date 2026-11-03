@@ -43,17 +43,19 @@ import { ICON_BUTTON_CLASS, QUEUED_MESSAGE_CLASS, GHOST_TEXT_BUTTON_CLASS } from
 /** Runs an action and shows its failure above the message box. */
 type Act = (fn: () => Promise<unknown>) => Promise<void>
 
-/** Remove and "Edit message" for a queued row. */
+/** Remove, "Edit message" and, while a turn runs, "Stop turn and send now" for a queued row. */
 function QueuedRowActions({
   removeDisabled,
   onRemove,
   editDisabled,
   onEdit,
+  onSendNow,
 }: {
   removeDisabled: boolean
   onRemove: () => void
   editDisabled?: boolean
   onEdit: () => void
+  onSendNow?: () => void
 }) {
   return (
     <>
@@ -74,6 +76,20 @@ function QueuedRowActions({
         className={ICON_BUTTON_CLASS}
         align="end"
         items={[
+          ...(onSendNow
+            ? [
+                {
+                  key: 'send-now',
+                  label: (
+                    <>
+                      <Send size={14} /> {translate('Stop turn and send now')}
+                    </>
+                  ),
+                  ...(editDisabled === undefined ? {} : { disabled: editDisabled }),
+                  onSelect: onSendNow,
+                },
+              ]
+            : []),
           {
             key: 'edit',
             label: (
@@ -120,6 +136,8 @@ function HostQueuedRow({
     })
   // Steering keeps the row until the active tools finish; an idle chat sends it straight away, even with the queue paused.
   const sendNow = () => void act(() => invoke('agent.sendQueuedNow', sessionId, message.id))
+  // Waiting for tools to finish is the wrong call when the turn is heading the wrong way; this stops it instead.
+  const interruptAndSend = () => void act(() => invoke('agent.sendQueuedNow', sessionId, message.id, true))
   // Steering stays visible but disabled while it waits; the hover tip says why.
   const steering = message.mode === 'steer'
   const sendTip = steering
@@ -177,6 +195,7 @@ function HostQueuedRow({
         editDisabled={configuring}
         onRemove={() => void act(() => invoke('agent.removeQueued', sessionId, message.id))}
         onEdit={recall}
+        {...(busyAgent ? { onSendNow: interruptAndSend } : {})}
       />
     </div>
   )

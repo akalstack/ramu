@@ -1804,12 +1804,14 @@ describe('busy agent messages', () => {
         },
         send,
         steer,
-        interrupt: async () => {},
+        interrupt,
         stop: async () => {},
         replyPermission: () => {},
         replyQuestion: () => {},
       }
     }
+    // Like a real provider, an interrupted turn ends with a result.
+    const interrupt = vi.fn(async () => emit({ kind: 'result', text: 'stopped', isError: false, costUsd: null }))
     const service = new AgentService(db, () => {}, fakeQuery([]), factory)
     const session = service.start('t', scopeOf(cwd), 'initial', {
       ...DEFAULT_AGENT_SETTINGS,
@@ -1821,6 +1823,7 @@ describe('busy agent messages', () => {
       session,
       send,
       steer,
+      interrupt,
       complete: () => emit({ kind: 'result', text: 'done', isError: false, costUsd: null }),
     }
   }
@@ -1957,6 +1960,22 @@ describe('busy agent messages', () => {
     expect(send).not.toHaveBeenCalled()
     expect(service.queued(session.id).map((m) => m.text)).toEqual(['later'])
     await expect(service.sendQueuedNow(session.id, 'gone')).rejects.toThrow(/already/)
+    service.stopAll()
+  })
+
+  it('stops the running turn to send one queued message now, and the rest still follow', async () => {
+    const { service, session, steer, send, interrupt, complete } = setup()
+    await service.submit(session.id, 'later', 'queue')
+    await service.submit(session.id, 'stop and do this', 'queue')
+    await service.sendQueuedNow(session.id, service.queued(session.id)[1]!.id, true)
+    expect(interrupt).toHaveBeenCalledTimes(1)
+    expect(steer).not.toHaveBeenCalled()
+    expect(send).toHaveBeenNthCalledWith(1, 'stop and do this', [])
+    expect(service.queued(session.id).map((m) => m.text)).toEqual(['later'])
+    expect(service.queuePaused(session.id)).toBe(false)
+    complete()
+    await until(() => send.mock.calls.length === 2)
+    expect(send).toHaveBeenNthCalledWith(2, 'later', [])
     service.stopAll()
   })
 

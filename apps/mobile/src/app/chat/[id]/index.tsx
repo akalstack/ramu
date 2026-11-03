@@ -1314,6 +1314,7 @@ export default function ChatScreen() {
                   onClearGoal={() => store.clearGoal(chat.id)}
                   onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
                   onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
+                  onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
                   offline={offline}
                   restore={restore}
                   limited={!!limit && !running}

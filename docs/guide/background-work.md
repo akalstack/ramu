@@ -4,7 +4,7 @@ The desktop app connects to a local service that owns threads, terminals and sch
 
 ## Messages while an agent works
 
-Enter uses your Steer or Queue choice; Cmd/Ctrl+Enter uses the other. **Steer** adds your message to the running turn; **Queue** waits for the turn to end. Agents can ask questions and keep working on independent parts while they wait for your answer.
+Enter uses your Steer or Queue choice; Cmd/Ctrl+Enter uses the other. **Steer** adds your message to the running turn; **Queue** waits for the turn to end. A steered message waits for running tools to finish. To redirect the agent sooner, choose **Stop turn and send now** from a queued message's menu, or tap its send button on the phone: the turn stops, that message starts the next one, and the rest of the queue follows. Agents can ask questions and keep working on independent parts while they wait for your answer.
 
 ## Restart recovery
 

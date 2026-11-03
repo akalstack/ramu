@@ -215,6 +215,8 @@ interface Store extends State {
   /** This thread's own auto-resume choice at a limit; null clears it so the thread follows the host's default. */
   setAutoResume(id: string, autoResume: boolean | null): void
   removeQueued(id: string, message: string): void
+  /** Sends one queued message now, stopping a running turn first. */
+  sendQueuedNow(id: string, message: string): void
   /** Resolves once the computer has applied it (or refused, which restores the old values and reports why). */
   setModel(
     id: string,
@@ -1857,6 +1859,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       sessionAction(id, (pc, session) => invoke(pc, 'agent.replyElicitation', session, request, action, answers)),
     removeQueued: (id, message) =>
       sessionAction(id, (pc, session) => invoke(pc, 'agent.removeQueued', session, message)),
+    sendQueuedNow: (id, message) =>
+      sessionAction(id, (pc, session) => invoke(pc, 'agent.sendQueuedNow', session, message, true)),
     toggleGoal: (id) =>
       sessionAction(id, (pc, session) =>
         invoke(

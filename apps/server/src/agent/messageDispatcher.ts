@@ -12,6 +12,9 @@ import type { SessionStarter } from './sessionStarter'
 import type { SessionStore } from './sessionStore'
 import type { AgentService } from '../agent'
 
+/** How long Send now waits for a stopped turn to end before giving up. */
+const STOP_WAIT_MS = 15_000
+
 /** What MessageDispatcher needs from the rest of the service. */
 export interface MessageDispatcherHost
   extends
@@ -85,8 +88,11 @@ export class MessageDispatcher {
     this.updateQueue(id, sorted)
   }
 
-  /** Sends one queued message ahead of the rest: steers a running turn, or starts a turn now even while the queue is paused. */
-  async sendQueuedNow(id: string, messageId: string): Promise<void> {
+  /**
+   * Sends one queued message ahead of the rest: steers a running turn, or starts a turn now even while the queue is
+   * paused. With `interrupt`, a running turn is stopped first and the message starts the next one.
+   */
+  async sendQueuedNow(id: string, messageId: string, interrupt = false): Promise<void> {
     const session = this.host.get(id)
     if (this.sendingMessages.has(messageId)) throw new Error('This message is already being sent.')
     const message = this.host.queued(id).find((entry) => entry.id === messageId)
@@ -104,6 +110,7 @@ export class MessageDispatcher {
       }
     }
     if (WRITING_STATES.includes(session.state)) {
+      if (interrupt) return this.interruptAndSend(id, message)
       if (!this.canSteer(session, true))
         throw new Error(
           `${providerName(session.provider)} can't take a message mid-turn. Stop the turn to send it now.`,
@@ -124,6 +131,40 @@ export class MessageDispatcher {
     } catch (error) {
       this.updateQueue(id, [message, ...this.host.queued(id)])
       throw error
+    }
+  }
+
+  /**
+   * Stops the running turn and sends `message` as the next one. The rest of the queue is held meanwhile so it cannot
+   * go out first, and keeps its own paused state afterwards; if the send fails, the message returns to the front of a
+   * paused queue. Goals keep running: this redirects the turn, not the goal.
+   */
+  private async interruptAndSend(id: string, message: QueuedMessage): Promise<void> {
+    let paused = this.host.queuePaused(id)
+    this.sendingMessages.add(message.id)
+    this.updateQueue(
+      id,
+      this.host.queued(id).filter((entry) => entry.id !== message.id),
+      true,
+    )
+    try {
+      const runner = this.host.runners.get(id)
+      if (runner) await runner.interrupt()
+      else await this.host.live.get(id)?.query.interrupt()
+      const deadline = Date.now() + STOP_WAIT_MS
+      while (WRITING_STATES.includes(this.host.get(id).state)) {
+        if (this.host.shutdown() || Date.now() > deadline)
+          throw new Error('The turn did not stop in time. Stop it, then send the message.')
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+      await this.host.send(id, message.text, message.attachments, message.reviewId)
+    } catch (error) {
+      paused = true
+      this.updateQueue(id, [message, ...this.host.queued(id)], true)
+      throw error
+    } finally {
+      this.sendingMessages.delete(message.id)
+      if (!this.host.shutdown()) this.updateQueue(id, this.host.queued(id), paused)
     }
   }
 

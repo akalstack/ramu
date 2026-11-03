@@ -34,6 +34,7 @@ import {
   Play,
   Plus,
   Quote,
+  Send,
   ShieldCheck,
   Square,
   X,
@@ -438,6 +439,8 @@ export function GoalQueueTray({
   onVerifyGoal,
   verifyOffered,
   onRemove,
+  onSendNow,
+  running,
 }: {
   goal: ChatGoal | null
   queue: QueuedMessage[]
@@ -450,6 +453,9 @@ export function GoalQueueTray({
   /** False once the host has shown it cannot do this: the button goes, an open sheet stays to say why. */
   verifyOffered?: boolean
   onRemove?: (id: string) => void
+  /** Sends a queued message now; while a turn runs, the host stops it first. */
+  onSendNow?: (id: string) => void
+  running?: boolean
 }) {
   const say = useSay()
   const { c } = useTheme()
@@ -544,6 +550,15 @@ export function GoalQueueTray({
           <T size={font.caption} tone="muted">
             {q.mode === 'steer' ? t.steer : t.queued}
           </T>
+          {onSendNow ? (
+            <IconButton
+              icon={Send}
+              label={say(running ? 'Stop turn and send now' : 'Send now')}
+              size={28}
+              tone="muted"
+              onPress={() => onSendNow(q.id)}
+            />
+          ) : null}
           <IconButton icon={X} label={say('Remove')} size={28} tone="muted" onPress={() => onRemove?.(q.id)} />
         </View>
       ))}
@@ -568,6 +583,7 @@ export function Composer({
   onClearGoal,
   onVerifyGoal,
   onRemoveQueued,
+  onSendQueuedNow,
   placeholder,
   autoFocus,
   header,
@@ -612,6 +628,7 @@ export function Composer({
   /** Sets the goal's verification command (null removes it). The shield button shows only on hosts that have it. */
   onVerifyGoal?: (command: string | null) => Promise<void>
   onRemoveQueued?: (id: string) => void
+  onSendQueuedNow?: (id: string) => void
   placeholder?: string
   autoFocus?: boolean
   /** Extra controls above the input, e.g. the project and checkout pickers. */
@@ -1001,6 +1018,8 @@ export function Composer({
           onVerifyGoal={onVerifyGoal}
           verifyOffered={canEditVerify(goal)}
           onRemove={onRemoveQueued}
+          onSendNow={onSendQueuedNow}
+          running={running}
         />
       )}
       {attachments.length || context.length || split.quotes.length ? (
