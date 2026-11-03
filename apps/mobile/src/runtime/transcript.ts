@@ -1,6 +1,7 @@
 import type { AgentEvent } from '@ramu/shared/types'
 import { helperGroups } from '@ramu/shared/chat/helperPresentation'
 import { toolKind } from '@ramu/shared/chat/agentTools'
+import { visibleMessage } from '@ramu/shared/chat/visibleMessage'
 import { describeRamuTool, ramuTool, ramuToolHasOwnUi } from '@ramu/shared/chat/ramuTools'
 import { fileToolDiffs, fileToolLine } from '@ramu/shared/chat/fileTools'
 import type { Chat, ToolKind, TranscriptItem } from './types'
@@ -29,8 +30,8 @@ export function limitNoteTitle(wait: Pick<ProviderWaitState, 'retryAt' | 'guesse
   return `Limit reached · resumes around ${at}`
 }
 
-/** What the person typed: the file context Ramu appends for the agent (`<ramu-context>…`) is hidden, as on the desktop. */
-export const visibleText = (text: string) => text.split(/\n*<ramu-context>/)[0]!.trimEnd()
+/** What the person typed, without what Ramu added around it for the agent, as on the desktop. */
+export const visibleText = (text: string) => visibleMessage(text)
 
 /** Mutable text stays off screen until the next block, tool, request or end of the turn. */
 function pendingTextBlocks(events: AgentEvent[]): Set<number> {

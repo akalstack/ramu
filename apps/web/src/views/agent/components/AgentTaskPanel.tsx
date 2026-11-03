@@ -4,7 +4,8 @@ import { useHostConnection } from '../../../workspace/computers'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { Button } from '@/components/desktop-button'
-import { ArrowLeft, Bot, Send, Square, X } from 'lucide-react'
+import { ArrowLeft, ArrowUp, Bot, Square, X } from 'lucide-react'
+import { visibleText } from '../lib/messages'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -263,7 +264,7 @@ export function AgentTaskPanel({
                 ) : block.event.kind === 'user' ? (
                   <Message align="end">
                     <MessageContent className="items-end">
-                      <UserBubble>{block.event.text}</UserBubble>
+                      <UserBubble>{visibleText(block.event.text)}</UserBubble>
                     </MessageContent>
                   </Message>
                 ) : block.event.kind === 'thinking' ? (
@@ -327,16 +328,17 @@ export function AgentTaskPanel({
                   }
                 }}
               />
+              {/* The thread composer's send button, so sending reads the same in both places. */}
               <Button
-                variant="secondary"
+                variant="default"
                 size="icon-sm"
                 type="submit"
-                className="bg-fill hover:bg-fill-hover icon p-0 size-(--action-size) flex-none justify-center agent-panel-send [&:hover:not(:disabled)]:[background:var(--soft)] [&:hover:not(:disabled)]:[border:0] absolute right-2 bottom-2 w-7 h-7 rounded-full [background:var(--text)] [color:var(--canvas)] [border:0]"
+                className="send agent-panel-send absolute right-2 bottom-2 rounded-full"
                 aria-label={translate('Send to agent')}
                 title={translate('Send through the main agent')}
                 disabled={readOnly || !draft.trim() || sending}
               >
-                <Send size={14} />
+                <ArrowUp size={16} strokeWidth={2.25} />
               </Button>
             </form>
           ) : (

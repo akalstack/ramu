@@ -1,7 +1,12 @@
 import { useState } from 'react'
-import { Square, Users } from 'lucide-react'
+import { Users } from 'lucide-react'
+import { RowButton } from '@/components/row-button'
+import { ComposerTraySection } from '../../../composer/ComposerTraySection'
+import { ActivityText } from '../../../chat/ActivityText'
+import { ProviderIcon } from '../../../models/ProviderIcon'
 import type { AgentModel, AgentSettings, AgentTask, TeammateMode } from '@ramu/shared/types'
 import { teammateHandle } from '@ramu/shared/chat/agentTasks'
+import { helperStatusLabel } from '@ramu/shared/chat/helperPresentation'
 import { draftMention, joiningTeammate, modelHandle, type MentionTarget } from '@ramu/shared/chat/teammateMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import { Menu } from '../../../Menu'
@@ -112,39 +117,80 @@ export function TeammateJoinControls({ joining, disabled }: { joining: JoiningTe
   )
 }
 
-/** Above the composer while a teammate is here: who it is, how to address it, what it did so far, and Stop. */
-export function TeammateBar({ sessionId, teammate }: { sessionId: string; teammate: AgentTask }) {
+/**
+ * The thread's teammates in the composer tray, beside its other live work: each one's model, how it works, what it
+ * changed and cost, and Stop. Opening a row shows its conversation; the tooltip says how to address it.
+ */
+export function TeammatesSection({
+  sessionId,
+  teammates,
+  onOpen,
+  readOnly,
+}: {
+  sessionId: string
+  teammates: AgentTask[]
+  onOpen: (agentId: string) => void
+  readOnly?: boolean
+}) {
   useLanguage()
   const { invoke } = useHost()
-  const handle = teammateHandle(teammate.name)
+  const working = teammates.filter((task) => task.status === 'running').length
   return (
-    <div className="flex items-center gap-2 px-3 py-1 text-caption text-muted-foreground" role="status">
-      <Users size={13} aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate">
-        {t('Teammate {0} · {1} · start a message with @{2} to talk to it', {
-          0: teammate.name,
-          1: teammate.teammate === 'review' ? t('Review') : t('Take over'),
-          2: handle,
-        })}
-      </span>
-      {teammate.work && (
-        <span className="shrink-0 tabular-nums" title={teammate.work.paths.join('\n') || undefined}>
-          {workSummary(teammate.work)}
-        </span>
-      )}
-      {teammate.status === 'running' && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={t('Stop {0}', { 0: teammate.name })}
-          onClick={() =>
-            void invoke('agent.stopTask', sessionId, teammate.agentId).catch((error) => notifyError(errorText(error)))
-          }
-        >
-          <Square size={11} />
-        </Button>
-      )}
-    </div>
+    <ComposerTraySection
+      aria-label={t('Teammates')}
+      title={
+        <>
+          {t('Teammates')} <span className="text-muted-foreground tabular-nums">{teammates.length}</span>
+        </>
+      }
+      icon={<Users />}
+      actions={
+        working > 0 && (
+          <ActivityText active className="text-caption text-muted-foreground">
+            {t('{0} working', { 0: working })}
+          </ActivityText>
+        )
+      }
+    >
+      <ul className="m-0 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
+        {teammates.map((task) => (
+          <li key={task.agentId} className="flex min-h-8 items-center gap-2 text-control">
+            <RowButton
+              size="sm"
+              stacked
+              className="w-auto flex-1 min-w-0 px-0 py-1"
+              title={t('Start a message with @{0} to talk to it', { 0: teammateHandle(task.name) })}
+              onClick={() => onOpen(task.agentId)}
+            >
+              <span className="flex w-full min-w-0 items-center gap-1.5">
+                {task.provider ? <ProviderIcon provider={task.provider} size={13} /> : <Users size={13} />}
+                <span className="truncate text-foreground">{task.name}</span>
+                <span className="flex-none rounded-(--radius-s) bg-fill px-1.5 text-caption text-muted-foreground">
+                  {task.teammate === 'take-over' ? t('Take over') : t('Review')}
+                </span>
+              </span>
+              <span className="w-full truncate text-caption text-muted-foreground tabular-nums">
+                <ActivityText active={task.status === 'running'}>{t(helperStatusLabel(task))}</ActivityText>
+                {task.work ? ` · ${workSummary(task.work)}` : ''}
+              </span>
+            </RowButton>
+            {task.status === 'running' && !readOnly && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="min-h-6 px-2 py-0 text-caption"
+                aria-label={t('Stop {0}', { 0: task.name })}
+                onClick={() =>
+                  void invoke('agent.stopTask', sessionId, task.agentId).catch((error) => notifyError(errorText(error)))
+                }
+              >
+                {t('Stop')}
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </ComposerTraySection>
   )
 }
 

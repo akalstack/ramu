@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { useHost } from '../../../workspace/HostProvider'
 import { useHostConnection } from '../../../workspace/computers'
-import { Spinner } from '@/components/ui/spinner'
 import { t as translate, useLanguage } from '../../../i18n'
 import { ChevronRight } from 'lucide-react'
 import { ChatActivityButton } from '../../../chat/ChatActivity'
@@ -10,6 +9,7 @@ import { providerName } from '../../../chat/AgentControls'
 import { effectiveStatus } from '@ramu/shared/chat/agentTasks'
 import type { AgentTask } from '@ramu/shared/types'
 import { modelDisplayName } from '../../../models/ModelSets'
+import { ActivityText } from '../../../chat/ActivityText'
 import { formatDuration } from '../lib/format'
 import { useElapsed } from '../hooks/useElapsed'
 import { TaskStatusIcon } from './TaskStatus'
@@ -68,14 +68,12 @@ export function AdvisorActivity({
       onClick={onOpen}
       title={task.error ?? translate("Open the advisor's answer")}
     >
-      {!offline && helperActive(task) && !task.waitingFor ? (
-        <Spinner className="size-3.5 flex-none" />
-      ) : (
-        <TaskStatusIcon status={status} active={!offline && helperActive(task) && !task.waitingFor} />
-      )}
+      <TaskStatusIcon status={status} active={!offline && helperActive(task) && !task.waitingFor} />
       <span role="status">
-        {offline ? `${translate('Last known')} · ` : ''}
-        {translate(label)}
+        <ActivityText active={!offline && helperActive(task) && !task.waitingFor}>
+          {offline ? `${translate('Last known')} · ` : ''}
+          {translate(label)}
+        </ActivityText>
       </span>
       {(task.model || task.provider) && (
         <span className="chat-activity-meta truncate">

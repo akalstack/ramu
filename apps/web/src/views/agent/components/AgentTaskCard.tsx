@@ -12,6 +12,7 @@ import { toolLabel } from '../lib/toolSummary'
 import { useElapsed } from '../hooks/useElapsed'
 import { TASK_STATUS, TaskStatusIcon, taskMeta, workSummary } from './TaskStatus'
 import { CARET_CLASS, ICON_BUTTON_CLASS } from '../styles'
+import { ActivityText } from '../../../chat/ActivityText'
 
 /** A sub-agent in the main transcript, where the main agent started it. */
 export function AgentTaskCard({
@@ -35,7 +36,8 @@ export function AgentTaskCard({
   const final = task.error ?? task.summary
   const detail =
     status === 'running'
-      ? (task.summary ?? (task.lastTool ? `Using ${toolLabel(task.lastTool)}` : 'Starting…'))
+      ? (task.summary ??
+        (task.lastTool ? translate('Using {0}', { 0: toolLabel(task.lastTool) }) : translate('Starting…')))
       : final && final.toLowerCase() !== TASK_STATUS[status].toLowerCase()
         ? final
         : undefined
@@ -68,8 +70,10 @@ export function AgentTaskCard({
               className={`agent-task-state flex-none inline-flex items-center gap-1 text-muted-foreground text-caption ${status}`}
             >
               <TaskStatusIcon status={status} active={!offline && helperActive(task)} />
-              {offline ? `${translate('Last known')} · ` : ''}
-              {translate(helperStatusLabel(task))}
+              <ActivityText active={status === 'running' && !offline && helperActive(task)}>
+                {offline ? `${translate('Last known')} · ` : ''}
+                {translate(helperStatusLabel(task))}
+              </ActivityText>
             </span>
           </span>
           {detail && (
@@ -109,7 +113,7 @@ export function AgentTaskCard({
         <Button
           variant="ghost"
           size="icon-xs"
-          className={`${ICON_BUTTON_CLASS} agent-task-stop absolute top-[50%] right-8 [translate:0_-50%] text-muted-foreground`}
+          className={`${ICON_BUTTON_CLASS} agent-task-stop absolute top-[50%] right-3 [translate:0_-50%] text-muted-foreground`}
           aria-label={translate('Stop agent {0}', { '0': task.name })}
           title={translate('Stop this agent')}
           onClick={() => onStop(task)}

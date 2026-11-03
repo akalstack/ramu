@@ -1,9 +1,8 @@
-import { Spinner } from '@/components/ui/spinner'
 import { formatLocale, t, useLanguage } from '../../../i18n'
 import { CircleCheck, CircleSlash, CircleX, Clock } from 'lucide-react'
 import { providerName } from '../../../chat/AgentControls'
 import type { AgentTask, AgentWork } from '@ramu/shared/types'
-import { modelDisplayName } from '../../../models/ModelSets'
+import { effortDisplayName, modelDisplayName } from '../../../models/ModelSets'
 import { formatDuration } from '../lib/format'
 
 /** Display name of each sub-agent status. */
@@ -18,11 +17,15 @@ export const TASK_STATUS: Record<AgentTask['status'], string> = {
 export function TaskStatusIcon({ status, active = true }: { status: AgentTask['status']; active?: boolean }) {
   useLanguage()
   if (status === 'running' && !active) return <Clock size={14} aria-hidden="true" />
-  if (status === 'running') return <Spinner className="size-3.5 task-status running" aria-hidden="true" />
+  // A working helper says so in words that shimmer, as tool rows do; no spinner beside them.
+  if (status === 'running') return null
   if (status === 'completed') return <CircleCheck size={14} className="task-status completed" aria-hidden="true" />
   if (status === 'failed') return <CircleX size={14} className="task-status failed" aria-hidden="true" />
   return <CircleSlash size={14} className="task-status stopped" aria-hidden="true" />
 }
+
+/** A teammate named for its model (Sonnet 5.5 for `sonnet`) need not name the model again. */
+const namesModel = (name: string, model: string) => name.toLowerCase().includes(modelDisplayName(model).toLowerCase())
 
 /** Tool uses, time and tokens, as far as the provider reports them. */
 export function taskMeta(task: AgentTask, status: AgentTask['status']): string {
@@ -33,9 +36,9 @@ export function taskMeta(task: AgentTask, status: AgentTask['status']): string {
       : undefined)
   return [
     task.provider
-      ? `${providerName(task.provider)}${task.model ? ` · ${modelDisplayName(task.model)}` : ''}`
+      ? `${providerName(task.provider)}${task.model && !namesModel(task.name, task.model) ? ` · ${modelDisplayName(task.model)}` : ''}`
       : undefined,
-    task.effort,
+    task.effort ? effortDisplayName(task.effort, task.provider ?? 'claude-code') : undefined,
     task.agentType,
     task.taskType === 'local_bash' ? 'Command' : undefined,
     task.isolated ? 'Own copy' : undefined,

@@ -79,7 +79,7 @@ import { useContinueInNewChat } from './agent/hooks/useContinueInNewChat'
 import { ContinueOnHostDialog } from './agent/components/ContinueOnHostDialog'
 import {
   RecipientChip,
-  TeammateBar,
+  TeammatesSection,
   TeammateJoinControls,
   useJoiningTeammate,
 } from './agent/components/TeammateControls'
@@ -768,8 +768,6 @@ export const AgentView = memo(function AgentView({
               onConfirm={() => void continueInNewChat()}
             />
           )}
-          {session &&
-            teammates.map((task) => <TeammateBar key={task.agentId} sessionId={session.id} teammate={task} />)}
           {continueHost && session && (
             <ContinueOnHostDialog
               taskId={session.taskId}
@@ -887,6 +885,7 @@ export const AgentView = memo(function AgentView({
                 liveGoal ||
                 queued.length > 0 ||
                 pending.length > 0 ||
+                (!!session && teammates.length > 0) ||
                 dockQuestions.length > 0) && (
                 <ComposerTray className="chat-tray">
                   {dockQuestions.length > 0 && (
@@ -900,6 +899,14 @@ export const AgentView = memo(function AgentView({
                     />
                   )}
                   {hostOffline && <HostWaitNote name={hostName} />}
+                  {session && teammates.length > 0 && (
+                    <TeammatesSection
+                      sessionId={session.id}
+                      teammates={teammates}
+                      readOnly={viewOnly}
+                      onOpen={(agentId) => setOpenAgent(agentId)}
+                    />
+                  )}
                   {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
                   <ComputerActivity
                     taskId={session && !session.parentId ? session.taskId : undefined}
