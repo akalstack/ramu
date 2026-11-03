@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { DraftMention } from '@ramu/shared/chat/composerDraft'
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Command, FileText, Sparkles, Users } from 'lucide-react-native'
@@ -29,7 +30,9 @@ export interface ComposerTeammate {
   teammates: { name: string; mode: TeammateMode }[]
   models: AgentModel[]
   agents: CustomAgent[]
-  /** Opens Add teammate; absent when this phone may only view. */
+  /** Who a message can start with, so `@sonnet-5.5` draws as that model rather than a file. */
+  mentions?: DraftMention[]
+  /** Starts a message to a new teammate; absent when this phone may only view. */
   onAdd?: () => void
 }
 interface Loaded {

@@ -313,6 +313,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Permissions: {0}': 'Izin: {0}',
   'Copy details': 'Salin detail',
   'Show details': 'Tampilkan detail',
+  'Tell {0} what to do': 'Beri tahu {0} apa yang harus dikerjakan',
+  '{0} joins this thread': '{0} bergabung ke utas ini',
   'Upgrade plan': 'Tingkatkan paket',
   'Hide details': 'Sembunyikan detail',
   'Coming soon': 'Segera hadir',

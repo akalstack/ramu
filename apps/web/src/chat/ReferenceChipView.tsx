@@ -1,10 +1,11 @@
 import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import type { ReactNode } from 'react'
-import { Folder, Quote, SquareTerminal, WandSparkles } from 'lucide-react'
+import { Folder, Quote, SquareTerminal, Users, WandSparkles } from 'lucide-react'
 import type { ReferenceChip } from '@ramu/shared/chat/referenceChip'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { Badge } from '@/components/ui/badge'
 import { FileIcon } from '../editor/FileIcon'
+import { ProviderIcon } from '../models/ProviderIcon'
 
 /** The icon of a chip: the file's own icon, a folder, or the glyph of its kind. */
 export function ReferenceChipIcon({ chip }: { chip: ReferenceChip }) {
@@ -19,6 +20,8 @@ export function ReferenceChipIcon({ chip }: { chip: ReferenceChip }) {
       return <Quote aria-hidden="true" />
     case 'command':
       return <SquareTerminal aria-hidden="true" />
+    case 'mention':
+      return chip.provider ? <ProviderIcon provider={chip.provider} size={14} /> : <Users aria-hidden="true" />
   }
 }
 

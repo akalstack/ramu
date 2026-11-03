@@ -53,13 +53,20 @@ import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { translate } from '@ramu/shared/i18n'
 import { Composer } from '../../../components/Composer'
 import { ContinueOnHostSheet } from '../../../components/ContinueOnHost'
-import { AddTeammateSheet, teammatesOf } from '../../../components/Teammate'
-import { resolveMention, teammateSettings } from '@ramu/shared/chat/teammateMentions'
+import { teammatesOf } from '../../../components/Teammate'
+import {
+  draftMention,
+  draftMentions,
+  joiningTeammate,
+  modelHandle,
+  resolveMention,
+} from '@ramu/shared/chat/teammateMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import type { TranscriptItem } from '../../../runtime/types'
-import type { AgentSettings } from '@ramu/shared/types'
+import type { AgentSettings, TeammateMode } from '@ramu/shared/types'
 import {
   CancelPendingSettings,
+  ChatMentions,
   MessageMenu,
   type MessageSelection,
   RowToggle,
@@ -67,7 +74,7 @@ import {
   type ItemMeta,
 } from '../../../components/Transcript'
 import { SelectionBar } from '../../../components/SelectionBar'
-import { Chip, ConnectionDot, Sheet, T, tap } from '../../../components/ui'
+import { Chip, ConnectionDot, Segmented, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { PendingBubble } from '../../../components/Outbox'
@@ -88,7 +95,12 @@ export default function ChatScreen() {
   const chat = useChat(id)
   const { seeFailure } = useAutomation()
   const [continueHost, setContinueHost] = useState<string | null>(null)
-  const [addingTeammate, setAddingTeammate] = useState(false)
+  // What the composer changed for a teammate the draft brings in, kept for that target only.
+  const [joinEdits, setJoinEdits] = useState<{
+    key: string
+    model?: import('../../../components/Composer').ModelChoice
+    mode?: TeammateMode
+  }>({ key: '' })
   const failedAt = chat?.status === 'failed' ? chat.lastActiveAt : null
   useFocusEffect(
     useCallback(() => {
@@ -315,13 +327,31 @@ export default function ChatScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [hostId, viewer] by design; the store is current as of that run
   }, [hostId, viewer])
   const agents = useMemo(() => (viewer ? [] : customAgents), [customAgents, viewer])
+  const chatDraftKey = chat ? `${chat.computerId}:chat:${chat.taskId || chat.id}` : ''
+  const draftText = (chatDraftKey && store.drafts[chatDraftKey]) || ''
+  // Puts a draft in the box and the store at once, so who it brings in follows straight away.
+  const writeDraft = (next: string) => {
+    if (chatDraftKey) store.setDraft(chatDraftKey, next)
+    setRestore({ text: next, n: Date.now() })
+  }
+  // Adding a teammate starts a message to the thread's own model; the composer then shows its settings to change.
+  const startTeammate = () => {
+    if (!chat) return
+    const model =
+      models.find((m) => m.provider === chat.provider && m.id === chat.model) ??
+      models.find((m) => !m.isLegacy) ??
+      models[0]
+    if (model) writeDraft(`@${modelHandle(model)} ${draftText.replace(/^@\S+\s*/, '')}`)
+  }
   const composerTeammate = useMemo(
     () => ({
       teammates: teammates.map((task) => ({ name: task.name, mode: task.teammate ?? ('review' as const) })),
       models,
       agents,
-      ...(viewer ? {} : { onAdd: () => setAddingTeammate(true) }),
+      mentions: draftMentions(teammates, models, agents),
+      ...(viewer ? {} : { onAdd: startTeammate }),
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startTeammate reads the draft and chat current at the tap
     [teammates, models, agents, viewer],
   )
   // Editing a sent message keeps its place with the draft text: leaving the chat or restarting does not drop it.
@@ -514,6 +544,30 @@ export default function ChatScreen() {
     ? limitTrayModel(limitWait, chat.settings, store.appPreferences[chat.computerId]?.fallback)
     : null
   const currentModel = { provider: chat.provider, model: chat.model, effort: chat.effort, settings: chat.settings }
+  // While the draft starts with `@model` or `@custom-agent`, the composer's model chip and mode are that teammate's.
+  const joinTarget =
+    chat.settings && chat.sessionId && !viewer ? draftMention(draftText, teammates, models, agents) : null
+  const joinStart = joinTarget && joinTarget.kind !== 'teammate' ? joiningTeammate(joinTarget, chat.settings!) : null
+  const joinOwn = joinStart && joinEdits.key === joinStart.key ? joinEdits : null
+  const joining = joinStart
+    ? {
+        ...joinStart,
+        mode: joinOwn?.mode ?? joinStart.mode,
+        model: joinOwn?.model ?? {
+          provider: joinStart.settings.provider,
+          model: joinStart.settings.model,
+          effort: joinStart.settings.effort ?? '',
+          settings: joinStart.settings,
+        },
+      }
+    : null
+  const chooseJoinModel = (m: import('../../../components/Composer').ModelChoice) => {
+    if (!joining) return
+    const found = models.find((entry) => entry.provider === m.provider && entry.id === m.model)
+    const key = found && joinTarget?.kind === 'model' ? `model:${modelHandle(found)}` : joining.key
+    setJoinEdits({ key, model: m, mode: joinOwn?.mode })
+    if (found && key !== joining.key) writeDraft(draftText.replace(/^@\S+/, `@${modelHandle(found)}`))
+  }
   const applyModel = (m: import('../../../components/Composer').ModelChoice) => {
     // As on the desktop: while the agent works the change applies now; otherwise it waits for the next message.
     if (running || !chat.sessionId) {
@@ -689,7 +743,7 @@ export default function ChatScreen() {
             label: tr('Add teammate'),
             symbol: 'person.2' as const,
             group: 'tools' as const,
-            onPress: () => setAddingTeammate(true),
+            onPress: startTeammate,
           },
         ]
       : []),
@@ -1041,365 +1095,398 @@ export default function ChatScreen() {
           },
         }}
       >
-        <CancelPendingSettings.Provider value={() => setStaged(null)}>
-          <RowToggle.Provider value={holdScroll}>
-            <PageLegendList
-              key={chat.id}
-              ref={scroll}
-              contentInsetAdjustmentBehavior="automatic"
-              automaticallyAdjustsScrollIndicatorInsets
-              ListHeaderComponent={
-                <View style={{ gap: space.s, paddingBottom: space.m }}>
-                  {chat.branchNamingFallback ? (
-                    <T size={font.caption} tone="muted">
-                      {t.branchNamingFallback}
-                    </T>
-                  ) : null}
-                  {hiddenTurns > 0 ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => {
-                        tap()
-                        following.current = false
-                        setPagedBack(true)
-                        setTurnsShown((n) => n + TURN_PAGE)
-                      }}
-                      style={{
-                        alignSelf: 'center',
-                        minHeight: 44,
-                        paddingHorizontal: space.l,
-                        borderRadius: radius.full,
-                        justifyContent: 'center',
-                        backgroundColor: c.fill,
-                      }}
-                    >
-                      <T size={font.control} weight="500" tone="soft">
-                        {store.language === 'id' ? 'Tampilkan giliran sebelumnya' : 'Show earlier turns'}
+        <ChatMentions.Provider value={composerTeammate.mentions}>
+          <CancelPendingSettings.Provider value={() => setStaged(null)}>
+            <RowToggle.Provider value={holdScroll}>
+              <PageLegendList
+                key={chat.id}
+                ref={scroll}
+                contentInsetAdjustmentBehavior="automatic"
+                automaticallyAdjustsScrollIndicatorInsets
+                ListHeaderComponent={
+                  <View style={{ gap: space.s, paddingBottom: space.m }}>
+                    {chat.branchNamingFallback ? (
+                      <T size={font.caption} tone="muted">
+                        {t.branchNamingFallback}
                       </T>
-                    </Pressable>
-                  ) : null}
-                </View>
-              }
-              data={pageRows}
-              viewabilityConfig={contentViewability}
-              onViewableItemsChanged={contentViewabilityChanged}
-              // Earlier turns arrive above what you are reading; they must not move it.
-              maintainVisibleContentPosition={pagedBack ? { data: true, size: true } : undefined}
-              keyExtractor={(item) => item.id}
-              renderItem={renderRow}
-              // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
-              getItemType={(item) => item.kind}
-              estimatedItemSize={260}
-              drawDistance={400}
-              // Lays out the newest rows first instead of the whole page from the top.
-              initialScrollAtEnd
-              ItemSeparatorComponent={RowSeparator}
-              style={{ flex: 1 }}
-              contentInset={ios ? { bottom: cover } : undefined}
-              scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
-              contentContainerStyle={{
-                padding: space.l,
-                paddingBottom: ios ? space.l : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height,
-              }}
-              onLayout={(event) => {
-                metrics.current.viewport = event.nativeEvent.layout.height
-                if (following.current) toEnd(false)
-              }}
-              onScroll={(event) => {
-                const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
-                metrics.current.offset = contentOffset.y
-                const gap = contentSize.height - contentOffset.y - layoutMeasurement.height + metrics.current.cover
-                // Only the reader's own scrolling decides whether to follow the end. The list's first, programmatic offset
-                // (resting at the top before it is measured) used to switch following off, so a chat opened at its top.
-                const position = transcriptScrollState(
-                  following.current,
-                  gap,
-                  userScrolling.current,
-                  !!settling.current,
-                )
-                following.current = position.following
-                setAway(position.away)
-                setScrolled(contentOffset.y > 8 - topInset)
-              }}
-              scrollEventThrottle={16}
-              onScrollBeginDrag={() => {
-                userScrolling.current = true
-              }}
-              onScrollEndDrag={(event) => {
-                if (!event.nativeEvent.velocity?.y) userScrolling.current = false
-              }}
-              onMomentumScrollEnd={() => {
-                userScrolling.current = false
-              }}
-              onContentSizeChange={(_, height) => {
-                metrics.current.content = height
-                settleReveal()
-                if (following.current && !settling.current && Date.now() - held.current > 600) {
-                  toEnd(smoothSendScroll.current && !reducedMotion)
-                  smoothSendScroll.current = false
-                }
-              }}
-              keyboardDismissMode="on-drag"
-              keyboardShouldPersistTaps="handled"
-              ListFooterComponent={
-                <View style={{ gap: space.m, paddingTop: space.m }}>
-                  {pending.map((o) => (
-                    <Arrive key={o.id} animate={o.createdAt >= openedAt.current}>
-                      <PendingBubble item={o} computer={computer?.name ?? 'the host'} onEdit={editPending} />
-                    </Arrive>
-                  ))}
-                </View>
-              }
-            />
-            {/* Covers the transcript while it settles at its end, then fades away; the composer stays above it. */}
-            <OpeningCover visible={!revealed} color={c.window} spinner={c.muted} />
-            {ios ? null : <TopFade visible={scrolled} color={c.window} />}
-            <KeyboardLift keyboard={keyboard}>
-              <BottomFade height={composerHeight * 0.75} color={c.window} />
-              {selection ? (
-                <View style={{ position: 'absolute', left: 0, right: 0, bottom: composerHeight }}>
-                  <SelectionBar selection={selection} />
-                </View>
-              ) : null}
-              {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
-              <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
-                <Composer
-                  activity={
-                    <>
-                      <ThreadActivity
-                        chat={chat}
-                        leading={
-                          <>
-                            <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
-                            <BrowserNotice chat={chat} tabs={browserTabs.tabs} onOpen={() => setTool('browser')} />
-                          </>
-                        }
-                        actions={[
-                          ...(toolActivity.terminal
-                            ? [{ label: 'Terminal', icon: SquareTerminal, onPress: openTerminal }]
-                            : []),
-                        ]}
+                    ) : null}
+                    {hiddenTurns > 0 ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          tap()
+                          following.current = false
+                          setPagedBack(true)
+                          setTurnsShown((n) => n + TURN_PAGE)
+                        }}
+                        style={{
+                          alignSelf: 'center',
+                          minHeight: 44,
+                          paddingHorizontal: space.l,
+                          borderRadius: radius.full,
+                          justifyContent: 'center',
+                          backgroundColor: c.fill,
+                        }}
                       >
-                        <BackgroundTerminals
-                          key={`${chat.computerId}:${chat.taskId}`}
+                        <T size={font.control} weight="500" tone="soft">
+                          {store.language === 'id' ? 'Tampilkan giliran sebelumnya' : 'Show earlier turns'}
+                        </T>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                }
+                data={pageRows}
+                viewabilityConfig={contentViewability}
+                onViewableItemsChanged={contentViewabilityChanged}
+                // Earlier turns arrive above what you are reading; they must not move it.
+                maintainVisibleContentPosition={pagedBack ? { data: true, size: true } : undefined}
+                keyExtractor={(item) => item.id}
+                renderItem={renderRow}
+                // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
+                getItemType={(item) => item.kind}
+                estimatedItemSize={260}
+                drawDistance={400}
+                // Lays out the newest rows first instead of the whole page from the top.
+                initialScrollAtEnd
+                ItemSeparatorComponent={RowSeparator}
+                style={{ flex: 1 }}
+                contentInset={ios ? { bottom: cover } : undefined}
+                scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
+                contentContainerStyle={{
+                  padding: space.l,
+                  paddingBottom: ios
+                    ? space.l
+                    : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height,
+                }}
+                onLayout={(event) => {
+                  metrics.current.viewport = event.nativeEvent.layout.height
+                  if (following.current) toEnd(false)
+                }}
+                onScroll={(event) => {
+                  const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+                  metrics.current.offset = contentOffset.y
+                  const gap = contentSize.height - contentOffset.y - layoutMeasurement.height + metrics.current.cover
+                  // Only the reader's own scrolling decides whether to follow the end. The list's first, programmatic offset
+                  // (resting at the top before it is measured) used to switch following off, so a chat opened at its top.
+                  const position = transcriptScrollState(
+                    following.current,
+                    gap,
+                    userScrolling.current,
+                    !!settling.current,
+                  )
+                  following.current = position.following
+                  setAway(position.away)
+                  setScrolled(contentOffset.y > 8 - topInset)
+                }}
+                scrollEventThrottle={16}
+                onScrollBeginDrag={() => {
+                  userScrolling.current = true
+                }}
+                onScrollEndDrag={(event) => {
+                  if (!event.nativeEvent.velocity?.y) userScrolling.current = false
+                }}
+                onMomentumScrollEnd={() => {
+                  userScrolling.current = false
+                }}
+                onContentSizeChange={(_, height) => {
+                  metrics.current.content = height
+                  settleReveal()
+                  if (following.current && !settling.current && Date.now() - held.current > 600) {
+                    toEnd(smoothSendScroll.current && !reducedMotion)
+                    smoothSendScroll.current = false
+                  }
+                }}
+                keyboardDismissMode="on-drag"
+                keyboardShouldPersistTaps="handled"
+                ListFooterComponent={
+                  <View style={{ gap: space.m, paddingTop: space.m }}>
+                    {pending.map((o) => (
+                      <Arrive key={o.id} animate={o.createdAt >= openedAt.current}>
+                        <PendingBubble item={o} computer={computer?.name ?? 'the host'} onEdit={editPending} />
+                      </Arrive>
+                    ))}
+                  </View>
+                }
+              />
+              {/* Covers the transcript while it settles at its end, then fades away; the composer stays above it. */}
+              <OpeningCover visible={!revealed} color={c.window} spinner={c.muted} />
+              {ios ? null : <TopFade visible={scrolled} color={c.window} />}
+              <KeyboardLift keyboard={keyboard}>
+                <BottomFade height={composerHeight * 0.75} color={c.window} />
+                {selection ? (
+                  <View style={{ position: 'absolute', left: 0, right: 0, bottom: composerHeight }}>
+                    <SelectionBar selection={selection} />
+                  </View>
+                ) : null}
+                {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
+                <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+                  <Composer
+                    activity={
+                      <>
+                        <ThreadActivity
                           chat={chat}
-                          open={backgroundFor === chat.id}
-                          onOpen={() => setBackgroundFor(chat.id)}
-                          onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
-                        />
-                      </ThreadActivity>
-                    </>
-                  }
-                  running={running}
-                  model={staged?.chatId === chat.id ? staged.model : currentModel}
-                  onModel={changeModel}
-                  onSend={async (text, mode, attachments, context) => {
-                    if (editing) return submitEdit(text, mode, attachments, context)
-                    if (staged?.chatId === chat.id) {
-                      const m = staged.model
-                      setStaged(null)
-                      await store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
-                    }
-                    // "/aside question" (or "/btw") asks beside the chat: the agent keeps working and never sees it.
-                    const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(text.trim())
-                    if (side && !attachments?.length && chat.sessionId)
-                      // One side chat per thread: /btw continues it rather than starting another.
-                      return store
-                        .invoke(chat.computerId, 'aside.list', chat.sessionId)
-                        .then((asides) => {
-                          const latest = asides.find((aside) => aside.id === sideChat(asides).continueId)
-                          return store.invoke(
-                            chat.computerId,
-                            'aside.ask',
-                            chat.sessionId!,
-                            latest?.id ?? null,
-                            latest?.quote ?? '',
-                            latest?.quoteFrom ?? 'assistant',
-                            side[1]!.trim(),
-                          )
-                        })
-                        .then(() => {
-                          router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
-                        })
-                    // `@lead` goes to the main agent; `@name` talks to a teammate here or brings a model or custom
-                    // agent in; without a mention, a teammate chosen as the recipient gets it.
-                    const lead = /^@(?:lead|main)\s+/i.test(text.trim())
-                    if (lead) setRecipientId(null)
-                    const mention =
-                      chat.sessionId && chat.settings && !attachments?.length && !lead
-                        ? resolveMention(text, teammates, models, agents)
-                        : null
-                    const target =
-                      mention ??
-                      (recipient && !lead && !attachments?.length && text.trim() && !text.trim().startsWith('/')
-                        ? ({ kind: 'teammate', task: recipient, body: text.trim() } as const)
-                        : null)
-                    if (target && chat.sessionId && chat.settings) {
-                      const base = chat.settings
-                      const sessionId = chat.sessionId
-                      if (target.kind === 'teammate')
-                        return store
-                          .invoke(chat.computerId, 'agent.messageTask', sessionId, target.task.agentId, target.body)
-                          .then(() => setRecipientId(target.task.agentId))
-                      const agent = target.kind === 'agent' ? target.agent : null
-                      const settings =
-                        target.kind === 'model'
-                          ? teammateSettings(base, target.model)
-                          : agent?.model
-                            ? teammateSettings(base, {
-                                provider: agent.model.provider,
-                                id: agent.model.model,
-                                defaultEffort: agent.model.effort ?? null,
-                              })
-                            : base
-                      return store
-                        .invoke(
-                          chat.computerId,
-                          'agent.addTeammate',
-                          sessionId,
-                          settings,
-                          agent && !agent.readOnly ? 'take-over' : 'review',
-                          agent ? `${agent.instructions}\n\n${target.body}` : target.body,
-                        )
-                        .then((joined) => setRecipientId(joined.agentId))
-                    }
-                    following.current = true
-                    smoothSendScroll.current = true
-                    return store.send(chat.id, text, mode, attachments, context)
-                  }}
-                  taskId={chat.taskId || undefined}
-                  chatId={chat.id}
-                  teammate={composerTeammate}
-                  header={
-                    teammates.length && !viewer ? (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always">
-                        <View style={{ flexDirection: 'row', gap: space.xs }}>
-                          <Chip
-                            small
-                            label={tr('Main agent')}
-                            selected={!recipient}
-                            onPress={() => setRecipientId(null)}
+                          leading={
+                            <>
+                              <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
+                              <BrowserNotice chat={chat} tabs={browserTabs.tabs} onOpen={() => setTool('browser')} />
+                            </>
+                          }
+                          actions={[
+                            ...(toolActivity.terminal
+                              ? [{ label: 'Terminal', icon: SquareTerminal, onPress: openTerminal }]
+                              : []),
+                          ]}
+                        >
+                          <BackgroundTerminals
+                            key={`${chat.computerId}:${chat.taskId}`}
+                            chat={chat}
+                            open={backgroundFor === chat.id}
+                            onOpen={() => setBackgroundFor(chat.id)}
+                            onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
                           />
-                          {teammates.map((task) => (
-                            <Chip
-                              key={task.agentId}
-                              small
-                              icon={Users}
-                              label={task.name}
-                              maxLabelWidth={140}
-                              selected={recipient?.agentId === task.agentId}
-                              accessibilityLabel={tr('To {0}', { 0: task.name })}
-                              onPress={() => setRecipientId(task.agentId)}
-                            />
-                          ))}
+                        </ThreadActivity>
+                      </>
+                    }
+                    running={running}
+                    model={joining ? joining.model : staged?.chatId === chat.id ? staged.model : currentModel}
+                    onModel={joining ? chooseJoinModel : changeModel}
+                    onSend={async (text, mode, attachments, context) => {
+                      if (editing) return submitEdit(text, mode, attachments, context)
+                      if (staged?.chatId === chat.id) {
+                        const m = staged.model
+                        setStaged(null)
+                        await store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
+                      }
+                      // "/aside question" (or "/btw") asks beside the chat: the agent keeps working and never sees it.
+                      const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(text.trim())
+                      if (side && !attachments?.length && chat.sessionId)
+                        // One side chat per thread: /btw continues it rather than starting another.
+                        return store
+                          .invoke(chat.computerId, 'aside.list', chat.sessionId)
+                          .then((asides) => {
+                            const latest = asides.find((aside) => aside.id === sideChat(asides).continueId)
+                            return store.invoke(
+                              chat.computerId,
+                              'aside.ask',
+                              chat.sessionId!,
+                              latest?.id ?? null,
+                              latest?.quote ?? '',
+                              latest?.quoteFrom ?? 'assistant',
+                              side[1]!.trim(),
+                            )
+                          })
+                          .then(() => {
+                            router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
+                          })
+                      // `@lead` goes to the main agent; `@name` talks to a teammate here or brings a model or custom
+                      // agent in; without a mention, a teammate chosen as the recipient gets it.
+                      const lead = /^@(?:lead|main)\s+/i.test(text.trim())
+                      if (lead) setRecipientId(null)
+                      const mention =
+                        chat.sessionId && chat.settings && !attachments?.length && !lead
+                          ? resolveMention(text, teammates, models, agents)
+                          : null
+                      const target =
+                        mention ??
+                        (recipient && !lead && !attachments?.length && text.trim() && !text.trim().startsWith('/')
+                          ? ({ kind: 'teammate', task: recipient, body: text.trim() } as const)
+                          : null)
+                      if (target && chat.sessionId && chat.settings) {
+                        const base = chat.settings
+                        const sessionId = chat.sessionId
+                        if (target.kind === 'teammate')
+                          return store
+                            .invoke(chat.computerId, 'agent.messageTask', sessionId, target.task.agentId, target.body)
+                            .then(() => setRecipientId(target.task.agentId))
+                        // What the composer showed for this teammate is what it joins with.
+                        const start = joiningTeammate(target, base)
+                        const shown = joining?.key === start.key ? joining : null
+                        const chosen = shown?.model
+                        const settings: AgentSettings = chosen
+                          ? {
+                              ...start.settings,
+                              ...chosen.settings,
+                              provider: chosen.provider,
+                              model: chosen.model,
+                              effort: (chosen.effort || null) as AgentSettings['effort'],
+                            }
+                          : start.settings
+                        return store
+                          .invoke(
+                            chat.computerId,
+                            'agent.addTeammate',
+                            sessionId,
+                            settings,
+                            shown?.mode ?? start.mode,
+                            target.kind === 'agent' ? `${target.agent.instructions}\n\n${target.body}` : target.body,
+                          )
+                          .then((joined) => setRecipientId(joined.agentId))
+                      }
+                      following.current = true
+                      smoothSendScroll.current = true
+                      return store.send(chat.id, text, mode, attachments, context)
+                    }}
+                    taskId={chat.taskId || undefined}
+                    chatId={chat.id}
+                    teammate={composerTeammate}
+                    header={
+                      joining ? (
+                        <View style={{ gap: space.xs }}>
+                          <T size={font.caption} tone="muted">
+                            {tr('{0} joins this thread', { 0: joining.name })}
+                          </T>
+                          <Segmented<TeammateMode>
+                            value={joining.mode}
+                            onChange={(mode) => setJoinEdits({ key: joining.key, model: joinOwn?.model, mode })}
+                            options={[
+                              { key: 'review', label: tr('Review') },
+                              { key: 'take-over', label: tr('Take over') },
+                            ]}
+                          />
+                          <T size={font.caption} tone="muted">
+                            {joining.mode === 'review'
+                              ? tr(
+                                  'Reads the latest changes and replies with findings. It never edits, whatever this thread allows.',
+                                )
+                              : tr('Edits while the lead waits, then hands back with a summary.')}
+                          </T>
                         </View>
-                      </ScrollView>
-                    ) : undefined
-                  }
-                  computerId={chat.computerId}
-                  draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
-                  onStop={() => store.stop(chat.id)}
-                  goal={chat.goal}
-                  queue={chat.queue}
-                  queuePaused={chat.queuePaused}
-                  onResumeQueue={
-                    chat.sessionId
-                      ? () =>
-                          void store
-                            .invoke(chat.computerId, 'agent.resumeQueue', chat.sessionId!)
-                            .then(() => store.refresh(chat.computerId))
-                            .catch(() => {})
-                      : undefined
-                  }
-                  onToggleGoal={() => store.toggleGoal(chat.id)}
-                  onClearGoal={() => store.clearGoal(chat.id)}
-                  onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
-                  onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
-                  onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
-                  offline={offline}
-                  restore={restore}
-                  limited={!!limit && !running}
-                  resumeLabel={limit && !stopped ? (limit.action === 'resume' ? t.resume : t.tryAgain) : undefined}
-                  onResume={
-                    limit && !running && limit.primary && !stopped
-                      ? () => {
-                          following.current = true
-                          void store.retryLimitNow(chat.id)
-                        }
-                      : stopped
+                      ) : teammates.length && !viewer ? (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          keyboardShouldPersistTaps="always"
+                        >
+                          <View style={{ flexDirection: 'row', gap: space.xs }}>
+                            <Chip
+                              small
+                              label={tr('Main agent')}
+                              selected={!recipient}
+                              onPress={() => setRecipientId(null)}
+                            />
+                            {teammates.map((task) => (
+                              <Chip
+                                key={task.agentId}
+                                small
+                                icon={Users}
+                                label={task.name}
+                                maxLabelWidth={140}
+                                selected={recipient?.agentId === task.agentId}
+                                accessibilityLabel={tr('To {0}', { 0: task.name })}
+                                onPress={() => setRecipientId(task.agentId)}
+                              />
+                            ))}
+                          </View>
+                        </ScrollView>
+                      ) : undefined
+                    }
+                    computerId={chat.computerId}
+                    draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
+                    onStop={() => store.stop(chat.id)}
+                    goal={chat.goal}
+                    queue={chat.queue}
+                    queuePaused={chat.queuePaused}
+                    onResumeQueue={
+                      chat.sessionId
+                        ? () =>
+                            void store
+                              .invoke(chat.computerId, 'agent.resumeQueue', chat.sessionId!)
+                              .then(() => store.refresh(chat.computerId))
+                              .catch(() => {})
+                        : undefined
+                    }
+                    onToggleGoal={() => store.toggleGoal(chat.id)}
+                    onClearGoal={() => store.clearGoal(chat.id)}
+                    onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
+                    onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
+                    onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
+                    offline={offline}
+                    restore={restore}
+                    limited={!!limit && !running}
+                    resumeLabel={limit && !stopped ? (limit.action === 'resume' ? t.resume : t.tryAgain) : undefined}
+                    onResume={
+                      limit && !running && limit.primary && !stopped
                         ? () => {
                             following.current = true
-                            void store.send(
-                              chat.id,
-                              '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
-                              'steer',
-                            )
+                            void store.retryLimitNow(chat.id)
                           }
+                        : stopped
+                          ? () => {
+                              following.current = true
+                              void store.send(
+                                chat.id,
+                                '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
+                                'steer',
+                              )
+                            }
+                          : undefined
+                    }
+                    editing={
+                      editing
+                        ? { label: `Editing your message · the agent is told it replaces the earlier one` }
                         : undefined
-                  }
-                  editing={
-                    editing
-                      ? { label: `Editing your message · the agent is told it replaces the earlier one` }
-                      : undefined
-                  }
-                  onCancelEdit={() => {
-                    setEditing(null)
-                    setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
-                  }}
-                  placeholder={
-                    offline
-                      ? `Message · sends when ${computer?.name ?? 'it'} is back`
-                      : limit && !running
-                        ? fill(
-                            t[limitPlaceholderKey(limit)],
-                            limit.resetAt !== undefined
-                              ? new Date(limit.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                              : '',
-                          )
-                        : undefined
-                  }
-                />
-              </ComposerDock>
-              <Presence
-                visible={away}
-                fade={false}
-                style={{ position: 'absolute', alignSelf: 'center', bottom: composerHeight + space.s }}
-              >
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={tr('Scroll to latest')}
-                  // A small button keeps the transcript visible; the slop keeps the touch target at 44 points.
-                  hitSlop={6}
-                  onPress={() => {
-                    tap()
-                    following.current = true
-                    userScrolling.current = false
-                    setAway(false)
-                    toEnd(true)
-                  }}
+                    }
+                    onCancelEdit={() => {
+                      setEditing(null)
+                      setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
+                    }}
+                    placeholder={
+                      offline
+                        ? `Message · sends when ${computer?.name ?? 'it'} is back`
+                        : limit && !running
+                          ? fill(
+                              t[limitPlaceholderKey(limit)],
+                              limit.resetAt !== undefined
+                                ? new Date(limit.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : '',
+                            )
+                          : joining
+                            ? tr('Tell {0} what to do', { 0: joining.name })
+                            : undefined
+                    }
+                  />
+                </ComposerDock>
+                <Presence
+                  visible={away}
+                  fade={false}
+                  style={{ position: 'absolute', alignSelf: 'center', bottom: composerHeight + space.s }}
                 >
-                  <Glass
-                    radius={radius.full}
-                    interactive
-                    style={{
-                      width: 32,
-                      height: 32,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: floatingChrome ? undefined : c.raised,
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={tr('Scroll to latest')}
+                    // A small button keeps the transcript visible; the slop keeps the touch target at 44 points.
+                    hitSlop={6}
+                    onPress={() => {
+                      tap()
+                      following.current = true
+                      userScrolling.current = false
+                      setAway(false)
+                      toEnd(true)
                     }}
                   >
-                    {running ? (
-                      <ActivityIndicator size="small" color={c.text} style={{ transform: [{ scale: 0.75 }] }} />
-                    ) : (
-                      <ArrowDown size={16} color={c.text} strokeWidth={2} />
-                    )}
-                  </Glass>
-                </Pressable>
-              </Presence>
-            </KeyboardLift>
-          </RowToggle.Provider>
-        </CancelPendingSettings.Provider>
+                    <Glass
+                      radius={radius.full}
+                      interactive
+                      style={{
+                        width: 32,
+                        height: 32,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: floatingChrome ? undefined : c.raised,
+                      }}
+                    >
+                      {running ? (
+                        <ActivityIndicator size="small" color={c.text} style={{ transform: [{ scale: 0.75 }] }} />
+                      ) : (
+                        <ArrowDown size={16} color={c.text} strokeWidth={2} />
+                      )}
+                    </Glass>
+                  </Pressable>
+                </Presence>
+              </KeyboardLift>
+            </RowToggle.Provider>
+          </CancelPendingSettings.Provider>
+        </ChatMentions.Provider>
       </MessageMenu.Provider>
       <Presence
         visible={Boolean(toast)}
@@ -1505,7 +1592,6 @@ export default function ChatScreen() {
         ))}
       </Sheet>
       <ContinueOnHostSheet chat={chat} targetId={continueHost} onClose={() => setContinueHost(null)} />
-      <AddTeammateSheet chat={chat} open={addingTeammate} onClose={() => setAddingTeammate(false)} />
     </Screen>
   )
 }

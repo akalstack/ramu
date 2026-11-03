@@ -1,8 +1,9 @@
 // Who a message that starts with `@handle` goes to: a teammate already in the thread, or a model or custom agent that
 // joins it as one. Shared by the desktop and phone composers so both route a message the same way.
-import type { AgentModel, AgentSettings, AgentTask } from '../types'
+import type { AgentModel, AgentSettings, AgentTask, TeammateMode } from '../types'
 import type { CustomAgent } from '../customAgents'
 import { namesTeammate, teammateHandle } from './agentTasks'
+import type { DraftMention } from './composerDraft'
 
 /** The handle a model is addressed by: its display name, as the model menu shows it, in lower case with dashes. */
 export const modelHandle = (model: Pick<AgentModel, 'id' | 'name'>) => teammateHandle(model.name || model.id)
@@ -24,9 +25,62 @@ export function resolveMention(
   agents: readonly CustomAgent[] = [],
 ): MentionTarget | null {
   const match = /^@(\S+)\s+([\s\S]+)$/.exec(text.trim())
-  if (!match) return null
-  const handle = match[1]!.toLowerCase()
-  const body = match[2]!.trim()
+  return match ? resolveHandle(match[1]!, match[2]!.trim(), teammates, models, agents) : null
+}
+
+/**
+ * Who a draft is addressed to while it is still being written: a leading `@handle` and a space, with or without words
+ * yet. The composer shows a new teammate's settings while this names a model or custom agent.
+ */
+export function draftMention(
+  text: string,
+  teammates: readonly AgentTask[],
+  models: readonly AgentModel[],
+  agents: readonly CustomAgent[] = [],
+): MentionTarget | null {
+  const match = /^@(\S+)\s([\s\S]*)$/.exec(text)
+  return match ? resolveHandle(match[1]!, match[2]!.trim(), teammates, models, agents) : null
+}
+
+/** Everyone a message can start with, for drawing `@handle` as who it is: teammates, custom agents, then models. */
+export function draftMentions(
+  teammates: readonly AgentTask[],
+  models: readonly AgentModel[],
+  agents: readonly CustomAgent[] = [],
+): DraftMention[] {
+  const seen = new Set<string>()
+  const mentions: DraftMention[] = []
+  const add = (mention: DraftMention) => {
+    if (seen.has(mention.handle)) return
+    seen.add(mention.handle)
+    mentions.push(mention)
+  }
+  for (const task of teammates)
+    add({
+      handle: teammateHandle(task.name),
+      label: task.name,
+      ...(task.provider ? { provider: task.provider } : {}),
+    })
+  for (const agent of agents)
+    add({
+      handle: teammateHandle(agent.name),
+      label: agent.name,
+      ...(agent.model ? { provider: agent.model.provider } : {}),
+    })
+  // A current model before a legacy one of the same name, matching how a message is routed.
+  for (const model of [...models].sort((a, b) => Number(!!a.isLegacy) - Number(!!b.isLegacy)))
+    add({ handle: modelHandle(model), label: model.name || model.id, provider: model.provider })
+  return mentions
+}
+
+function resolveHandle(
+  raw: string,
+  body: string,
+  teammates: readonly AgentTask[],
+  models: readonly AgentModel[],
+  agents: readonly CustomAgent[],
+): MentionTarget | null {
+  const handle = raw.toLowerCase()
   if (handle === 'teammate') return teammates.length === 1 ? { kind: 'teammate', task: teammates[0]!, body } : null
   const task = teammates.find((entry) => namesTeammate(handle, entry.name))
   if (task) return { kind: 'teammate', task, body }
@@ -71,5 +125,35 @@ export function teammateSettings(
     effort: model.defaultEffort,
     serviceTier: same ? base.serviceTier : 'standard',
     accountId: same ? base.accountId : undefined,
+  }
+}
+
+/**
+ * A model or custom agent a draft brings in, as it starts out: the thread's settings on that model, reviewing; or a
+ * custom agent's recipe. `key` tells one target from another, so changes made in the composer stay with that target.
+ */
+export function joiningTeammate(
+  target: Extract<MentionTarget, { kind: 'model' | 'agent' }>,
+  base: AgentSettings,
+): { key: string; name: string; settings: AgentSettings; mode: TeammateMode } {
+  if (target.kind === 'model')
+    return {
+      key: `model:${modelHandle(target.model)}`,
+      name: target.model.name || target.model.id,
+      settings: teammateSettings(base, target.model),
+      mode: 'review',
+    }
+  const agent = target.agent
+  return {
+    key: `agent:${agent.id}`,
+    name: agent.name,
+    settings: agent.model
+      ? teammateSettings(base, {
+          provider: agent.model.provider,
+          id: agent.model.model,
+          defaultEffort: agent.model.effort ?? null,
+        })
+      : base,
+    mode: agent.readOnly ? 'review' : 'take-over',
   }
 }

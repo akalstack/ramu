@@ -1,3 +1,4 @@
+import type { AgentProvider } from '../types'
 import type { DraftChip } from './composerDraft'
 import { localFileLink } from '../workspace/fileLinks'
 
@@ -6,7 +7,7 @@ import { localFileLink } from '../workspace/fileLinks'
  * draw it with their own inline widgets, using chat/presentation as the shared visual reference. What the chip says, which kind it is and
  * what it opens come from here, so the two cannot drift apart.
  */
-export type ReferenceChipKind = 'file' | 'folder' | 'skill' | 'command' | 'quote'
+export type ReferenceChipKind = 'file' | 'folder' | 'skill' | 'command' | 'quote' | 'mention'
 
 export interface ReferenceChip {
   kind: ReferenceChipKind
@@ -18,6 +19,8 @@ export interface ReferenceChip {
   target?: string
   line?: number
   column?: number
+  /** A model mention: whose icon it wears. */
+  provider?: AgentProvider
 }
 
 const FILE_WITHOUT_EXTENSION = /(?:^|\/)(?:README|LICENSE|Makefile|Dockerfile)$/i
@@ -44,7 +47,14 @@ export function fileChip(target: string, label?: string): ReferenceChip | null {
 export const skillChip = (name: string): ReferenceChip => ({ kind: 'skill', label: name, title: name })
 
 /** The chip for a reference found in a message or the composer draft. */
-export function draftChip(part: Pick<DraftChip, 'kind' | 'label' | 'target'>): ReferenceChip {
+export function draftChip(part: Pick<DraftChip, 'kind' | 'label' | 'target' | 'provider'>): ReferenceChip {
+  if (part.kind === 'mention')
+    return {
+      kind: 'mention',
+      label: part.label,
+      title: `@${part.target ?? part.label}`,
+      ...(part.provider ? { provider: part.provider } : {}),
+    }
   if (part.kind === 'skill') return skillChip(part.target ?? part.label)
   if (part.kind === 'file')
     return fileChip(part.target ?? part.label) ?? { kind: 'file', label: part.label, title: part.label }

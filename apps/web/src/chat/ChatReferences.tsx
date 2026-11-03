@@ -1,11 +1,11 @@
-import type { ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { chatMarkdownComponents } from './ChatMarkdown'
 import { ReferenceChipView } from './ReferenceChipView'
 import { draftChip, fileChip, skillChip } from '@ramu/shared/chat/referenceChip'
 import { parseThreadReference, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
-import { composerDraft } from '@ramu/shared/chat/composerDraft'
+import { composerDraft, type DraftMention } from '@ramu/shared/chat/composerDraft'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
@@ -122,6 +122,9 @@ export function ChatLink({ href, children, taskId }: { href?: string; children: 
   )
 }
 
+/** Who a thread's messages can start with, so a sent `@sonnet-5.5` reads as that model, as it did in the composer. */
+export const ChatMentions = createContext<readonly DraftMention[]>([])
+
 const CHIP_LINK = 'ramu-chip:'
 
 /**
@@ -129,7 +132,7 @@ const CHIP_LINK = 'ramu-chip:'
  * the message, so a reference inside a list or heading lands where it was written.
  */
 export function ReferenceText({ text, taskId }: { text: string; taskId?: string }) {
-  const segments = composerDraft(text + ' ').segments
+  const segments = composerDraft(text + ' ', useContext(ChatMentions)).segments
   const source = segments
     .map((part, index) => (part.kind === 'text' ? part.source : `[chip](${CHIP_LINK}${index})`))
     .join('')

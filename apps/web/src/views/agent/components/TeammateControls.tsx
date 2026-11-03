@@ -1,20 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Square, Users } from 'lucide-react'
-import type { AgentSettings, AgentTask, TeammateMode } from '@ramu/shared/types'
+import type { AgentModel, AgentSettings, AgentTask, TeammateMode } from '@ramu/shared/types'
 import { teammateHandle } from '@ramu/shared/chat/agentTasks'
+import { draftMention, joiningTeammate, modelHandle, type MentionTarget } from '@ramu/shared/chat/teammateMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
-import { Dropdown, Menu } from '../../../Menu'
+import { Menu } from '../../../Menu'
 import { CHIP } from '../../../models/ProviderRoute'
 import { Button } from '@/components/desktop-button'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { AgentControls } from '../../../chat/AgentControls'
 import { notifyError } from '../../../chat/Notifications'
 import { t, useLanguage } from '../../../i18n'
@@ -22,113 +14,101 @@ import { errorText } from '../../../lib/errors'
 import { useHost } from '../../../workspace/HostProvider'
 import { workSummary } from './TaskStatus'
 
-/** Picks a second model and how it works beside the lead: Review reads and reports, Take over edits while the lead waits. */
-export function AddTeammateDialog({
-  sessionId,
-  initial,
-  onClose,
+/** A model or custom agent the draft brings in: its settings start from the thread's and change in the composer. */
+export interface JoiningTeammate {
+  target: Extract<MentionTarget, { kind: 'model' | 'agent' }>
+  name: string
+  settings: AgentSettings
+  mode: TeammateMode
+  setSettings: (settings: AgentSettings) => void
+  setMode: (mode: TeammateMode) => void
+}
+
+/**
+ * While the draft starts with `@model` or `@custom-agent`, who joins and how: the thread's own settings on that model,
+ * reviewing by default, or a custom agent's recipe. Choosing another model in the composer writes its `@handle` into the
+ * draft, so what the message says and who receives it never disagree.
+ */
+export function useJoiningTeammate({
+  draft,
+  setDraft,
+  base,
+  teammates,
+  models,
+  agents,
 }: {
-  sessionId: string
-  initial: AgentSettings
-  onClose: () => void
-}) {
+  draft: string
+  setDraft: (draft: string) => void
+  /** The thread's settings; absent while it loads or on a device that may only view. */
+  base: AgentSettings | undefined
+  teammates: readonly AgentTask[]
+  models: readonly AgentModel[]
+  agents: readonly CustomAgent[]
+}): JoiningTeammate | null {
+  const found = base ? draftMention(draft, teammates, models, agents) : null
+  const target = found && found.kind !== 'teammate' ? found : null
+  const start = target && base ? joiningTeammate(target, base) : null
+  const key = start?.key ?? ''
+  const [edits, setEdits] = useState<{ key: string; settings?: AgentSettings; mode?: TeammateMode }>({ key: '' })
+  if (!target || !start) return null
+  const own = edits.key === key ? edits : { key }
+  const settings = own.settings ?? start.settings
+  const mode = own.mode ?? start.mode
+  return {
+    target,
+    name: start.name,
+    settings,
+    mode,
+    setMode: (next) => setEdits({ key, settings: own.settings, mode: next }),
+    setSettings: (next) => {
+      const model = models.find((entry) => entry.provider === next.provider && entry.id === next.model)
+      const handle = model ? modelHandle(model) : null
+      if (target.kind === 'model' && handle && `model:${handle}` !== key) {
+        setEdits({ key: `model:${handle}`, settings: next, mode: own.mode })
+        setDraft(draft.replace(/^@\S+/, `@${handle}`))
+        return
+      }
+      setEdits({ key, settings: next, mode: own.mode })
+    },
+  }
+}
+
+/**
+ * In the composer's controls while a message brings a teammate in: its model, effort and access, and whether it reviews
+ * (reads and reports, never edits) or takes over (edits while the lead waits). The words of the message are its brief.
+ */
+export function TeammateJoinControls({ joining, disabled }: { joining: JoiningTeammate; disabled?: boolean }) {
   useLanguage()
-  const { invoke } = useHost()
-  const [settings, setSettings] = useState(initial)
-  const [mode, setMode] = useState<TeammateMode>('review')
-  const [request, setRequest] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [custom, setCustom] = useState<CustomAgent[]>([])
-  const [chosen, setChosen] = useState('')
-  useEffect(() => {
-    void invoke('customAgents.list').then(setCustom, () => {})
-  }, [invoke])
-  // A custom agent is a recipe: its model, its read-only choice and its instructions become this teammate's.
-  const chooseCustom = (id: string) => {
-    setChosen(id)
-    const agent = custom.find((entry) => entry.id === id)
-    if (!agent) return
-    if (agent.model) setSettings((current) => ({ ...current, ...agent.model, effort: agent.model?.effort ?? null }))
-    setMode(agent.readOnly ? 'review' : 'take-over')
-  }
-  const add = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      const agent = custom.find((entry) => entry.id === chosen)
-      const brief = agent ? `${agent.instructions}\n\n${request}`.trim() : request
-      await invoke('agent.addTeammate', sessionId, settings, mode, brief)
-      onClose()
-    } catch (cause) {
-      setError(errorText(cause))
-    } finally {
-      setBusy(false)
-    }
-  }
   return (
-    <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('Add teammate')}</DialogTitle>
-          <DialogDescription>
-            {t('A second model joins this thread with the conversation so far, and keeps its own session.')}
-          </DialogDescription>
-        </DialogHeader>
-        {custom.length > 0 && (
-          <Dropdown
-            label={t('Custom agent')}
-            value={chosen}
-            onChange={chooseCustom}
-            options={[
-              { value: '', label: t('A model') },
-              ...custom.map((agent) => ({ value: agent.id, label: agent.name })),
-            ]}
-          />
-        )}
-        <AgentControls settings={settings} onChange={setSettings} disabled={busy} />
-        <div className="flex gap-1.5" role="radiogroup" aria-label={t('How it works')}>
+    <AgentControls
+      settings={joining.settings}
+      onChange={joining.setSettings}
+      disabled={disabled}
+      trailing={
+        <div className="flex items-center gap-1" role="radiogroup" aria-label={t('How it works')}>
           {(['review', 'take-over'] as const).map((value) => (
             <Button
               key={value}
               role="radio"
-              aria-checked={mode === value}
+              aria-checked={joining.mode === value}
               size="sm"
-              variant={mode === value ? 'secondary' : 'ghost'}
-              onClick={() => setMode(value)}
+              variant={joining.mode === value ? 'secondary' : 'ghost'}
+              disabled={disabled}
+              title={
+                value === 'review'
+                  ? t(
+                      'Reads the latest changes and replies with findings. It never edits, whatever this thread allows.',
+                    )
+                  : t('Edits while the lead waits, then hands back with a summary.')
+              }
+              onClick={() => joining.setMode(value)}
             >
               {value === 'review' ? t('Review') : t('Take over')}
             </Button>
           ))}
         </div>
-        <p className="m-0 text-caption text-muted-foreground">
-          {mode === 'review'
-            ? t('Reads the latest changes and replies with findings. It never edits, whatever this thread allows.')
-            : t('Edits while the lead waits, then hands back with a summary.')}
-        </p>
-        <Textarea
-          rows={2}
-          maxLength={20_000}
-          aria-label={t('What should it do?')}
-          placeholder={t('What should it do?')}
-          value={request}
-          onChange={(event) => setRequest(event.target.value)}
-        />
-        {error && (
-          <p role="alert" className="m-0 text-caption text-bad">
-            {error}
-          </p>
-        )}
-        <DialogFooter>
-          <Button variant="ghost" disabled={busy} onClick={onClose}>
-            {t('Cancel')}
-          </Button>
-          <Button disabled={busy} onClick={() => void add()}>
-            {t('Add teammate')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      }
+    />
   )
 }
 

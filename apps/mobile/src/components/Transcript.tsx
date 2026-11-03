@@ -40,7 +40,7 @@ import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '..
 import { useStore } from '../runtime/store'
 import { Markdown, MessageTextSelection, ReferenceBadge, ReferenceContext } from './Markdown'
 import { draftChip } from '@ramu/shared/chat/referenceChip'
-import { composerDraft } from '@ramu/shared/chat/composerDraft'
+import { composerDraft, type DraftMention } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Chip, Sheet, T, tap, type Icon } from './ui'
 import type { ElicitationField } from '@ramu/shared/types'
@@ -66,6 +66,9 @@ import { RamuGlyph } from './AnimatedMark'
 
 /** Drops the model change waiting for the next send; set by the chat screen that holds it. */
 export const CancelPendingSettings = createContext<() => void>(() => {})
+
+/** Who the thread's messages can start with, so a sent `@sonnet-5.5` reads as that model, as it did in the composer. */
+export const ChatMentions = createContext<readonly DraftMention[]>([])
 
 /** Gives every badge in a chat the chat's file opener. */
 export function ChatReferences({ chat, children }: { chat: Chat; children: ReactNode }) {
@@ -844,7 +847,7 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
   const toggled = useContext(RowToggle)
   const [expanded, setExpanded] = useState(false)
   const actions = useContext(ReferenceContext)
-  const segments = composerDraft(text + ' ').segments
+  const segments = composerDraft(text + ' ', useContext(ChatMentions)).segments
   // Quotes stand above the message as their own block, like the desktop's quoted reply; the rest flows as text with badges.
   const quotes = segments.filter(
     (part): part is import('@ramu/shared/chat/composerDraft').DraftChip => part.kind === 'quote',

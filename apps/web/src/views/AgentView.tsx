@@ -11,6 +11,7 @@ import { HelperBreadcrumb } from '../HomeAgents'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { focusComposer } from '../composer/ComposerInput'
 import { LoadingMark } from '../Brand'
+import { ChatMentions } from '../chat/ChatReferences'
 import { t as translate, useLanguage } from '../i18n'
 import { ScrollToLatestButton } from './agent/components/ScrollToLatestButton'
 import { isCompacting } from '@ramu/shared/chat/compaction'
@@ -42,7 +43,7 @@ import {
   parseTaskMessage,
   parseTaskStop,
 } from '@ramu/shared/chat/agentTasks'
-import { resolveMention, teammateSettings } from '@ramu/shared/chat/teammateMentions'
+import { draftMentions, modelHandle, resolveMention, teammateSettings } from '@ramu/shared/chat/teammateMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import { useModelSets } from '../models/ModelSets'
 import type { AgentTask } from '@ramu/shared/types'
@@ -76,7 +77,12 @@ import { useSidePanels } from './agent/hooks/useSidePanels'
 import { useTurnPaging } from './agent/hooks/useTurnPaging'
 import { useContinueInNewChat } from './agent/hooks/useContinueInNewChat'
 import { ContinueOnHostDialog } from './agent/components/ContinueOnHostDialog'
-import { AddTeammateDialog, RecipientChip, TeammateBar } from './agent/components/TeammateControls'
+import {
+  RecipientChip,
+  TeammateBar,
+  TeammateJoinControls,
+  useJoiningTeammate,
+} from './agent/components/TeammateControls'
 import { useModelChange } from './agent/hooks/useModelChange'
 import { useJsonDraft } from '../composer/useJsonDraft'
 import { settingsMatch } from './agent/settingsMatch'
@@ -222,7 +228,6 @@ export const AgentView = memo(function AgentView({
   // Kept on this device for this thread: after talking to a teammate, plain messages keep going to it.
   const [recipientId, setRecipientId] = useState<string | null>(null)
   const recipient = teammates.find((task) => task.agentId === recipientId) ?? null
-  const [addingTeammate, setAddingTeammate] = useState(false)
   const { catalogs } = useModelSets()
   const [customAgents, setCustomAgents] = useState<CustomAgent[]>([])
   useEffect(() => {
@@ -231,15 +236,36 @@ export const AgentView = memo(function AgentView({
   // A device that may only view can talk to no one, so it is offered nothing to bring in either.
   const models = useMemo(() => (viewOnly ? [] : catalogs.flatMap((catalog) => catalog.models)), [catalogs, viewOnly])
   const agents = useMemo(() => (viewOnly ? [] : customAgents), [customAgents, viewOnly])
+  // Adding a teammate starts a message to the thread's own model; the composer then shows its settings to change.
+  const startTeammate = () => {
+    const own =
+      session && models.find((m) => m.provider === session.settings.provider && m.id === session.settings.model)
+    const model = own ?? models.find((m) => !m.isLegacy) ?? models[0]
+    if (!model) return
+    const rest = draft.replace(/^@\S+\s*/, '')
+    const next = `@${modelHandle(model)} ${rest}`
+    setDraft(next)
+    requestAnimationFrame(() => focusComposer(root.current, next.length))
+  }
   const composerTeammate = useMemo(
     () => ({
       teammates: teammates.map((task) => ({ name: task.name, mode: task.teammate ?? ('review' as const) })),
       models,
       agents,
-      ...(viewOnly ? {} : { onAdd: () => setAddingTeammate(true) }),
+      mentions: draftMentions(teammates, models, agents),
+      ...(viewOnly ? {} : { onAdd: startTeammate }),
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startTeammate reads the draft and session current at the click
     [teammates, models, agents, viewOnly],
   )
+  const joining = useJoiningTeammate({
+    draft,
+    setDraft,
+    base: viewOnly ? undefined : session?.settings,
+    teammates,
+    models,
+    agents,
+  })
   const commands = allTasks.filter(
     (task) => task.taskType === 'local_bash' && task.background && effectiveStatus(task, live) === 'running',
   )
@@ -510,30 +536,15 @@ export const AgentView = memo(function AgentView({
         if (target.kind === 'teammate') {
           await invoke('agent.messageTask', view.sessionId, target.task.agentId, target.body)
           setRecipientId(target.task.agentId)
-        } else if (target.kind === 'model') {
-          const joined = await invoke(
-            'agent.addTeammate',
-            view.sessionId,
-            teammateSettings(session.settings, target.model),
-            'review',
-            target.body,
-          )
-          setRecipientId(joined.agentId)
         } else {
-          const agent = target.agent
-          const joined = await invoke(
-            'agent.addTeammate',
-            view.sessionId,
-            agent.model
-              ? teammateSettings(session.settings, {
-                  provider: agent.model.provider,
-                  id: agent.model.model,
-                  defaultEffort: agent.model.effort ?? null,
-                })
-              : session.settings,
-            agent.readOnly ? 'review' : 'take-over',
-            `${agent.instructions}\n\n${target.body}`,
-          )
+          // What the composer showed for this teammate is what it joins with.
+          const join = joining && joining.target.kind === target.kind ? joining : null
+          const settings =
+            join?.settings ??
+            (target.kind === 'model' ? teammateSettings(session.settings, target.model) : session.settings)
+          const mode = join?.mode ?? (target.kind === 'agent' && !target.agent.readOnly ? 'take-over' : 'review')
+          const brief = target.kind === 'agent' ? `${target.agent.instructions}\n\n${target.body}` : target.body
+          const joined = await invoke('agent.addTeammate', view.sessionId, settings, mode, brief)
           setRecipientId(joined.agentId)
         }
         const consumed = consumeDraft()
@@ -704,7 +715,7 @@ export const AgentView = memo(function AgentView({
         continuing={continuing}
         onContinue={() => setConfirmContinue(true)}
         onContinueOnHost={setContinueHost}
-        onAddTeammate={viewOnly ? undefined : () => setAddingTeammate(true)}
+        onAddTeammate={viewOnly ? undefined : startTeammate}
         latestRequest={
           events.findLast(
             (event): event is Extract<typeof event, { kind: 'user' }> => event.kind === 'user' && !event.agentId,
@@ -757,13 +768,6 @@ export const AgentView = memo(function AgentView({
               onConfirm={() => void continueInNewChat()}
             />
           )}
-          {addingTeammate && session && (
-            <AddTeammateDialog
-              sessionId={session.id}
-              initial={session.settings}
-              onClose={() => setAddingTeammate(false)}
-            />
-          )}
           {session &&
             teammates.map((task) => <TeammateBar key={task.agentId} sessionId={session.id} teammate={task} />)}
           {continueHost && session && (
@@ -781,85 +785,90 @@ export const AgentView = memo(function AgentView({
               onOpenQuestion={openQuestion}
             />
           )}
-          <MessageScrollerProvider autoScroll defaultScrollPosition="end">
-            <TranscriptScrollApi apiRef={scrollToEnd} />
-            <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
-              <MessageScroller
-                className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length ? 'chat-loading' : ''}`}
-              >
-                <MessageScrollerViewport
-                  ref={scroller}
-                  onScroll={onScroll}
-                  aria-label={translate('Conversation')}
-                  className={`scroll-fade-y px-6 pt-3 pb-7 ${showingSubmission ? 'motion-safe:scroll-smooth' : ''}`}
+          <ChatMentions.Provider value={composerTeammate.mentions}>
+            <MessageScrollerProvider autoScroll defaultScrollPosition="end">
+              <TranscriptScrollApi apiRef={scrollToEnd} />
+              <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
+                <MessageScroller
+                  className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length ? 'chat-loading' : ''}`}
                 >
-                  {hiddenTurns > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mx-auto mb-2 flex text-muted-foreground"
-                      onClick={showEarlierTurns}
-                    >
-                      {hiddenTurns === 1
-                        ? translate('Show 1 earlier turn')
-                        : translate('Show {0} earlier turns', { '0': hiddenTurns })}
-                    </Button>
-                  )}
-                  <MessageScrollerContent
-                    className={`${hydrating && !turns.length ? 'justify-center' : ''} transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5`}
+                  <MessageScrollerViewport
+                    ref={scroller}
+                    onScroll={onScroll}
+                    aria-label={translate('Conversation')}
+                    className={`scroll-fade-y px-6 pt-3 pb-7 ${showingSubmission ? 'motion-safe:scroll-smooth' : ''}`}
                   >
-                    {hydrating && !turns.length && (
-                      <div className="flex items-center justify-center">
-                        <LoadingMark label={translate('Loading conversation')} />
-                      </div>
-                    )}
-                    {pageTurns.map((turn, ti) => (
-                      <MessageScrollerItem
-                        key={turn.key}
-                        messageId={String(turn.key)}
-                        className="[content-visibility:visible]"
+                    {hiddenTurns > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mx-auto mb-2 flex text-muted-foreground"
+                        onClick={showEarlierTurns}
                       >
-                        <TranscriptTurn
-                          turn={turn}
-                          isLast={ti === pageTurns.length - 1}
-                          dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
-                          dateNow={dateNow}
-                          reviews={turnReviews.get(turn.key)}
-                          completedGoals={completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)}
-                          ctx={transcript}
-                        />
-                      </MessageScrollerItem>
-                    ))}
-                    {pendingSettings && session && !busyAgent && !settingsMatch(pendingSettings, session.settings) && (
-                      <MessageScrollerItem messageId="pending-settings">
-                        <PendingSettingsChange
-                          next={pendingSettings}
-                          previous={session.settings}
-                          onCancel={() => setPendingSettings(null)}
-                        />
-                      </MessageScrollerItem>
+                        {hiddenTurns === 1
+                          ? translate('Show 1 earlier turn')
+                          : translate('Show {0} earlier turns', { '0': hiddenTurns })}
+                      </Button>
                     )}
-                    {showingSubmission && pendingSubmission && (
-                      <MessageScrollerItem messageId="pending-submission">
-                        <PendingSubmission submission={pendingSubmission} />
-                      </MessageScrollerItem>
-                    )}
-                    {activityLabel && (compacting || !statusGroup) && (
-                      <ChatStatus label={translate(activityLabel)} compacting={compacting} />
-                    )}
-                  </MessageScrollerContent>
-                </MessageScrollerViewport>
-                <ScrollToLatestButton working={working} />
-              </MessageScroller>
-              <SelectionActions
-                scroller={scroller}
-                readOnly={viewOnly}
-                onQuote={quoteIntoDraft}
-                onQuoteNew={quoteIntoNewChat}
-                onAside={(quote, from) => setOpenAside({ id: null, quote, from })}
-              />
-            </div>
-          </MessageScrollerProvider>
+                    <MessageScrollerContent
+                      className={`${hydrating && !turns.length ? 'justify-center' : ''} transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5`}
+                    >
+                      {hydrating && !turns.length && (
+                        <div className="flex items-center justify-center">
+                          <LoadingMark label={translate('Loading conversation')} />
+                        </div>
+                      )}
+                      {pageTurns.map((turn, ti) => (
+                        <MessageScrollerItem
+                          key={turn.key}
+                          messageId={String(turn.key)}
+                          className="[content-visibility:visible]"
+                        >
+                          <TranscriptTurn
+                            turn={turn}
+                            isLast={ti === pageTurns.length - 1}
+                            dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
+                            dateNow={dateNow}
+                            reviews={turnReviews.get(turn.key)}
+                            completedGoals={completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)}
+                            ctx={transcript}
+                          />
+                        </MessageScrollerItem>
+                      ))}
+                      {pendingSettings &&
+                        session &&
+                        !busyAgent &&
+                        !settingsMatch(pendingSettings, session.settings) && (
+                          <MessageScrollerItem messageId="pending-settings">
+                            <PendingSettingsChange
+                              next={pendingSettings}
+                              previous={session.settings}
+                              onCancel={() => setPendingSettings(null)}
+                            />
+                          </MessageScrollerItem>
+                        )}
+                      {showingSubmission && pendingSubmission && (
+                        <MessageScrollerItem messageId="pending-submission">
+                          <PendingSubmission submission={pendingSubmission} />
+                        </MessageScrollerItem>
+                      )}
+                      {activityLabel && (compacting || !statusGroup) && (
+                        <ChatStatus label={translate(activityLabel)} compacting={compacting} />
+                      )}
+                    </MessageScrollerContent>
+                  </MessageScrollerViewport>
+                  <ScrollToLatestButton working={working} />
+                </MessageScroller>
+                <SelectionActions
+                  scroller={scroller}
+                  readOnly={viewOnly}
+                  onQuote={quoteIntoDraft}
+                  onQuoteNew={quoteIntoNewChat}
+                  onAside={(quote, from) => setOpenAside({ id: null, quote, from })}
+                />
+              </div>
+            </MessageScrollerProvider>
+          </ChatMentions.Provider>
           <div className="composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]">
             <ComposerStack>
               {error && <ErrorNote message={error} title={translate('That didn’t work')} />}
@@ -995,7 +1004,10 @@ export const AgentView = memo(function AgentView({
                 }
                 disabled={configuring || !session}
                 controls={
-                  session && (
+                  session &&
+                  (joining ? (
+                    <TeammateJoinControls joining={joining} disabled={viewOnly} />
+                  ) : (
                     <>
                       <AgentControls
                         settings={pendingSettings ?? session.settings}
@@ -1006,7 +1018,7 @@ export const AgentView = memo(function AgentView({
                         trailing={<ContextMeter sessionId={view.sessionId} />}
                       />
                     </>
-                  )
+                  ))
                 }
                 onChange={setDraft}
                 onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
@@ -1023,11 +1035,13 @@ export const AgentView = memo(function AgentView({
                     ? translate('Message · sends when {0} is back', { 0: hostName })
                     : limitView
                       ? limitPlaceholder(limitView, autoResume.effective.value)
-                      : recipient
-                        ? translate('Message {0}', { 0: recipient.name })
-                        : live || busyAgent
-                          ? translate('Reply to the agent')
-                          : translate('Message the agent')
+                      : joining
+                        ? translate('Tell {0} what to do', { 0: joining.name })
+                        : recipient
+                          ? translate('Message {0}', { 0: recipient.name })
+                          : live || busyAgent
+                            ? translate('Reply to the agent')
+                            : translate('Message the agent')
                 }
                 submitLabel={
                   hostOffline || limitView ? 'Queue' : busyAgent ? (action === 'queue' ? 'Queue' : 'Steer') : 'Send'

@@ -1,18 +1,45 @@
+import type { AgentProvider } from '../types'
 import { chatReferences } from './chatReferences'
 
 export interface DraftChip {
-  kind: 'skill' | 'file' | 'command' | 'quote'
+  kind: 'skill' | 'file' | 'command' | 'quote' | 'mention'
   start: number
   end: number
   source: string
   label: string
   target?: string
+  /** A mention of a model: whose icon it wears. A teammate or custom agent has none. */
+  provider?: AgentProvider
 }
 export type DraftSegment = { kind: 'text'; source: string } | DraftChip
 
-/** Completed references become inline atoms; their source text is preserved for the agent. */
-export function composerDraft(value: string) {
+/** Someone a message can start with: a teammate here, a model, or a custom agent. */
+export interface DraftMention {
+  /** As typed after `@`, lower case (`sonnet-5.5`). */
+  handle: string
+  /** As people read it (`Sonnet 5.5`). */
+  label: string
+  provider?: AgentProvider
+}
+
+/**
+ * Completed references become inline atoms; their source text is preserved for the agent. A message that starts with
+ * `@handle` naming one of `mentions` shows who it goes to, not a file of that name.
+ */
+export function composerDraft(value: string, mentions: readonly DraftMention[] = []) {
   const chips: DraftChip[] = []
+  const lead = mentions.length ? /^@(\S+)(?=\s)/.exec(value) : null
+  const mention = lead && mentions.find((entry) => entry.handle === lead[1]!.toLowerCase())
+  if (lead && mention)
+    chips.push({
+      kind: 'mention',
+      start: 0,
+      end: lead[0].length,
+      source: lead[0],
+      label: mention.label,
+      target: mention.handle,
+      ...(mention.provider ? { provider: mention.provider } : {}),
+    })
   const code = [...value.matchAll(/```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)/g)].map((match) => ({
     start: match.index!,
     end: match.index! + match[0].length,
@@ -64,8 +91,13 @@ export function composerDraft(value: string) {
 }
 
 /** Backspace/Delete remove an adjacent atom as one unit. */
-export function deleteDraftAtom(value: string, caret: number, key: 'Backspace' | 'Delete') {
-  const chip = composerDraft(value).chips.find((entry) =>
+export function deleteDraftAtom(
+  value: string,
+  caret: number,
+  key: 'Backspace' | 'Delete',
+  mentions: readonly DraftMention[] = [],
+) {
+  const chip = composerDraft(value, mentions).chips.find((entry) =>
     key === 'Backspace' ? entry.end === caret : entry.start === caret,
   )
   return chip ? { value: value.slice(0, chip.start) + value.slice(chip.end), caret: chip.start } : null

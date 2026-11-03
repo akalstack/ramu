@@ -1,4 +1,5 @@
 import { t, useLanguage } from '../i18n'
+import type { DraftMention } from '@ramu/shared/chat/composerDraft'
 import { errorText } from '../lib/errors'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/desktop-button'
@@ -39,7 +40,9 @@ export interface ComposerTeammate {
   teammates: { name: string; mode: TeammateMode }[]
   models: AgentModel[]
   agents: CustomAgent[]
-  /** Opens Add teammate; absent when this device may only view. */
+  /** Who a message can start with, so `@sonnet-5.5` draws as that model rather than a file. */
+  mentions?: DraftMention[]
+  /** Starts a message to a new teammate; absent when this device may only view. */
   onAdd?: () => void
 }
 

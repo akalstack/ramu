@@ -832,7 +832,7 @@ export function Composer({
     setCaret(next.caret)
     setForced({ start: next.caret, end: next.caret })
   }
-  const chips = useMemo(() => composerDraft(split.body).segments, [split.body])
+  const chips = useMemo(() => composerDraft(split.body, teammate?.mentions).segments, [split.body, teammate?.mentions])
   const append = (value: string) => {
     const next = text + value
     setText(next)

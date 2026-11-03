@@ -7,7 +7,15 @@ import {
   teammateHandle,
   teammateNotePrompt,
 } from '../src/chat/agentTasks'
-import { resolveMention, teammateCatchUp, teammateSettings } from '../src/chat/teammateMentions'
+import {
+  draftMention,
+  draftMentions,
+  joiningTeammate,
+  resolveMention,
+  teammateCatchUp,
+  teammateSettings,
+} from '../src/chat/teammateMentions'
+import { composerDraft } from '../src/chat/composerDraft'
 import { DEFAULT_AGENT_SETTINGS, type AgentModel } from '../src/types'
 import type { CustomAgent } from '../src/customAgents'
 import { describeRamuTool, ramuTool } from '../src/chat/ramuTools'
@@ -140,4 +148,36 @@ it('shows teammate_message as a message to the main agent or to the named teamma
     )
   expect(row('lead')).toMatchObject({ done: 'Messaged the main agent' })
   expect(row('gpt-sol')).toMatchObject({ done: 'Messaged teammate', subject: 'gpt-sol' })
+})
+
+it('draws a leading @model as that model with its icon, and leaves a real file mention a file', () => {
+  const sonnet = model({ provider: 'claude-code', id: 'claude-sonnet-5-5', name: 'Sonnet 5.5' })
+  const mentions = draftMentions([], [sonnet])
+  const [chip] = composerDraft('@sonnet-5.5 review this', mentions).chips
+  expect(chip).toMatchObject({ kind: 'mention', label: 'Sonnet 5.5', provider: 'claude-code', source: '@sonnet-5.5' })
+  expect(composerDraft('@sonnet-5.5 review this').chips[0]?.kind).toBe('file')
+  expect(composerDraft('see @src/app.ts now', mentions).chips[0]?.kind).toBe('file')
+})
+
+it('knows who a draft brings in before its words are written, and how they start out', () => {
+  const sonnet = model({
+    provider: 'claude-code',
+    id: 'claude-sonnet-5-5',
+    name: 'Sonnet 5.5',
+    defaultEffort: 'medium',
+  })
+  const target = draftMention('@sonnet-5.5 ', [], [sonnet])
+  expect(target?.kind).toBe('model')
+  expect(draftMention('@sonnet-5.5', [], [sonnet])).toBeNull()
+  const start = joiningTeammate(target as Extract<typeof target & {}, { kind: 'model' }>, {
+    ...DEFAULT_AGENT_SETTINGS,
+    provider: 'codex',
+  })
+  expect(start).toMatchObject({ key: 'model:sonnet-5.5', name: 'Sonnet 5.5', mode: 'review' })
+  expect(start.settings).toMatchObject({ provider: 'claude-code', model: 'claude-sonnet-5-5', effort: 'medium' })
+  const agent = { id: 'fixer', name: 'Fixer', instructions: 'Fix it', readOnly: false } as CustomAgent
+  const fixer = draftMention('@fixer go', [], [], [agent])
+  expect(joiningTeammate(fixer as Extract<typeof fixer & {}, { kind: 'agent' }>, DEFAULT_AGENT_SETTINGS).mode).toBe(
+    'take-over',
+  )
 })

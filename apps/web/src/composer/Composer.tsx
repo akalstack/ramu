@@ -555,6 +555,7 @@ export function Composer({
         )}
         <ComposerInput
           ref={ref}
+          mentions={teammate?.mentions}
           readOnly={dictating || submitting}
           autoFocus={autoFocus}
           value={

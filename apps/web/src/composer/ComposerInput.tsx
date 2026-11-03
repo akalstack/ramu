@@ -1,10 +1,11 @@
 import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState, type HTMLAttributes } from 'react'
 import { createPortal } from 'react-dom'
-import { Quote, SquareTerminal, WandSparkles } from 'lucide-react'
+import { Quote, SquareTerminal, Users, WandSparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { FileIcon } from '../editor/FileIcon'
+import { ProviderIcon } from '../models/ProviderIcon'
 import { REFERENCE_CHIP } from '../chat/ReferenceChipView'
-import { composerDraft, deleteDraftAtom, type DraftChip } from '@ramu/shared/chat/composerDraft'
+import { composerDraft, deleteDraftAtom, type DraftChip, type DraftMention } from '@ramu/shared/chat/composerDraft'
 import { markdownRuns, toggleMarkdownWrap } from '@ramu/shared/chat/markdownRuns'
 
 export interface ComposerInputHandle {
@@ -83,13 +84,23 @@ export function focusComposer(root: Element | null, caret?: number) {
 
 export function InlineChip({ chip }: { chip: DraftChip }) {
   return (
-    <Badge variant="secondary" {...REFERENCE_CHIP} title={chip.target ?? chip.label}>
+    <Badge
+      variant="secondary"
+      {...REFERENCE_CHIP}
+      title={chip.kind === 'mention' ? `@${chip.target}` : (chip.target ?? chip.label)}
+    >
       {chip.kind === 'skill' ? (
         <WandSparkles data-icon="inline-start" className="text-brand" aria-hidden="true" />
       ) : chip.kind === 'file' ? (
         <FileIcon path={chip.target!} />
       ) : chip.kind === 'quote' ? (
         <Quote data-icon="inline-start" aria-hidden="true" />
+      ) : chip.kind === 'mention' ? (
+        chip.provider ? (
+          <ProviderIcon provider={chip.provider} size={14} />
+        ) : (
+          <Users data-icon="inline-start" aria-hidden="true" />
+        )
       ) : (
         <SquareTerminal data-icon="inline-start" aria-hidden="true" />
       )}
@@ -108,11 +119,16 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> & {
   autoFocus?: boolean
   /** The draft is frozen, e.g. while a dictation take is running, so the insertion point cannot move under it. */
   readOnly?: boolean
+  /** Who a message can start with; a leading `@handle` naming one draws as that model or teammate. */
+  mentions?: readonly DraftMention[]
 }
+const NO_MENTIONS: readonly DraftMention[] = []
 export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function ComposerInput(
-  { value, onChange, placeholder, autoFocus, readOnly, onKeyDown, onPaste, ...props },
+  { value, onChange, placeholder, autoFocus, readOnly, mentions = NO_MENTIONS, onKeyDown, onPaste, ...props },
   forwarded,
 ) {
+  // The list is rebuilt on every render upstream; its contents decide when the chips are drawn again.
+  const mentionKey = mentions.map((entry) => `${entry.handle}=${entry.label}:${entry.provider ?? ''}`).join('|')
   const root = useRef<HTMLDivElement>(null),
     composing = useRef(false),
     pendingCaret = useRef<number | null>(null),
@@ -181,7 +197,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
     pendingSelectionEnd.current = null
     const nodes: Node[] = [],
       chips: { node: HTMLElement; chip: DraftChip }[] = []
-    for (const segment of composerDraft(value).segments) {
+    for (const segment of composerDraft(value, mentions).segments) {
       if (segment.kind === 'text') {
         for (const run of markdownRuns(segment.source)) {
           if (!run.marks.length) {
@@ -211,8 +227,8 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
       selectComposerInput(element, Math.min(caret, value.length), Math.min(selectionEnd, value.length))
     }
     mounted.current = true
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [value] by design; the values it reads beyond these are current as of that run
-  }, [value])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [value, mentionKey] by design; the values it reads beyond these are current as of that run
+  }, [value, mentionKey])
   const insert = (text: string) => {
     const position = root.current ? offsets(root.current) : { start: value.length, end: value.length }
     commit(value.slice(0, position.start) + text + value.slice(position.end), position.start + text.length)
@@ -274,7 +290,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
             return
           }
           if (position.start === position.end && (event.key === 'Backspace' || event.key === 'Delete')) {
-            const next = deleteDraftAtom(value, position.start, event.key)
+            const next = deleteDraftAtom(value, position.start, event.key, mentions)
             if (next) {
               event.preventDefault()
               commit(next.value, next.caret)
