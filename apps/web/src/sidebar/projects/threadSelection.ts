@@ -22,13 +22,18 @@ export const threadSelection = {
     }
     publish(next)
   },
-  /** Selects everything between the last toggled thread and this one, in the order the list shows them. */
-  range(id: string, ordered: readonly string[]) {
-    const from = anchor ? ordered.indexOf(anchor) : -1
+  /**
+   * Selects everything between the last toggled thread and this one, in the order the list shows them. With nothing
+   * picked yet, the range starts at `start` (the open thread), as Shift-click does in a file list.
+   */
+  range(id: string, ordered: readonly string[], start: string | null = null) {
+    const first = anchor ?? (selected.size ? null : start)
+    const from = first ? ordered.indexOf(first) : -1
     const to = ordered.indexOf(id)
     if (from < 0 || to < 0) return threadSelection.toggle(id)
-    const [start, end] = from < to ? [from, to] : [to, from]
-    publish(new Set([...selected, ...ordered.slice(start, end + 1)]))
+    const [low, high] = from < to ? [from, to] : [to, from]
+    anchor = first
+    publish(new Set([...selected, ...ordered.slice(low, high + 1)]))
   },
   set(ids: readonly string[]) {
     anchor = ids.at(-1) ?? null

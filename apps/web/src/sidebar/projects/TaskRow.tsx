@@ -376,7 +376,7 @@ export function TaskRow({
                   [...document.querySelectorAll<HTMLElement>('[data-task-row]')].map((row) => row.dataset.taskId!),
                 ),
               ]
-              return threadSelection.range(task.id, ordered)
+              return threadSelection.range(task.id, ordered, onScreen ? (ws?.ui.activeTaskId ?? null) : null)
             }
             // A plain click leaves selection mode and opens the thread, as in a file list.
             if (picked.size) threadSelection.clear()

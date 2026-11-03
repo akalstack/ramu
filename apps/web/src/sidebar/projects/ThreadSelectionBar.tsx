@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Archive, Check, Pin, PinOff, Trash2, X } from 'lucide-react'
 import type { Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
@@ -126,16 +126,23 @@ export function ThreadSelectionBar({ actions }: { actions: BulkThreadActions }) 
   const host = useHost()
   const ws = useWorkspace()
   const tasks = actions.pick(ids)
+  const deleteSelected = useRef(() => {})
+  deleteSelected.current = () => {
+    if (tasks.length && !actions.viewOnly && !actions.deleting.length) actions.requestDelete(tasks)
+  }
   useEffect(() => {
     if (!ids.size) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
+      if (event.defaultPrevented || !['Escape', 'Delete', 'Backspace'].includes(event.key)) return
       if (
         event.target instanceof Element &&
         event.target.closest('input, textarea, [contenteditable="true"], [role="dialog"]')
       )
         return
-      threadSelection.clear()
+      if (event.key === 'Escape') return threadSelection.clear()
+      // Delete and Backspace open each thread's own delete review, as the toolbar's Delete does.
+      event.preventDefault()
+      deleteSelected.current()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -195,7 +202,7 @@ export function ThreadSelectionBar({ actions }: { actions: BulkThreadActions }) 
             className={ICON_BUTTON_CLASS}
             disabled={actions.viewOnly}
             aria-label={t('Delete selected…')}
-            title={t('Delete selected…')}
+            title={t('Delete selected… (Delete)')}
             onClick={() => actions.requestDelete(tasks)}
           >
             <Trash2 size={14} />

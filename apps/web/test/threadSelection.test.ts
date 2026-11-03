@@ -24,6 +24,13 @@ it('selects a range in list order from the last toggled thread, in either direct
   expect([...threadSelection.ids()].sort()).toEqual(['a', 'b', 'c', 'd'])
 })
 
+it('starts a range at the open thread when nothing is picked yet', () => {
+  threadSelection.range('d', order, 'b')
+  expect([...threadSelection.ids()].sort()).toEqual(['b', 'c', 'd'])
+  threadSelection.range('e', order, 'a')
+  expect([...threadSelection.ids()].sort()).toEqual(['b', 'c', 'd', 'e'])
+})
+
 it('falls back to a single toggle when there is no anchor or the thread is not listed', () => {
   threadSelection.range('c', order)
   expect([...threadSelection.ids()]).toEqual(['c'])

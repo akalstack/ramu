@@ -2068,6 +2068,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Custom search address': 'Alamat pencarian kustom',
   Declined: 'Ditolak',
   'Delete selected…': 'Hapus yang dipilih…',
+  'Delete selected… (Delete)': 'Hapus yang dipilih… (Delete)',
   'Delete “{name}”?': 'Hapus “{name}”?',
   'Discussed in thread': 'Dibahas di thread',
   'Document navigation is unavailable. Reset to reload the saved version.':
