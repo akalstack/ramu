@@ -48,7 +48,8 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     (key, fallback) => workspace.getAppState(key, fallback),
     (key, value) => workspace.setAppState(key, value),
   )
-  void apiKeys.load()
+  // Like the environment above: a locked credential store is reported where the keys are managed, not at startup.
+  void apiKeys.load().catch(() => {})
   const forgeAccounts = new ForgeAccountStore(
     (key, fallback) => workspace.getAppState(key, fallback),
     (key, value) => workspace.setAppState(key, value),
