@@ -10,7 +10,7 @@ export function useHostedWidth() {
   const window = useWindowDimensions().width
   const [measured, setMeasured] = useState<number>()
   return {
-    value: measured ?? window,
+    width: measured ?? window,
     onLayout: (event: LayoutChangeEvent) => {
       const next = Math.round(event.nativeEvent.layout.width)
       if (next > 0) setMeasured((current) => (current === next ? current : next))

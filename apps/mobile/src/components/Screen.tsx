@@ -90,13 +90,23 @@ export function PageFlatList<T>({ ref, ...props }: FlatListProps<T> & { ref?: Re
 
 /**
  * A long, growing list (a thread's transcript): only the rows near the screen are mounted, rows of one kind share a size
- * estimate, and it can open at its end without laying out everything above it.
+ * estimate, and it can open at its end without laying out everything above it. Rows keep their own state (an open tool
+ * call, words still fading in), so a row is remounted rather than reused for another item unless a list opts in.
  */
-export function PageLegendList<T>({ ref, ...props }: LegendListProps<T> & { ref?: Ref<LegendListRef> }) {
+export function PageLegendList<T>({
+  ref,
+  recycleItems = false,
+  ...props
+}: LegendListProps<T> & { ref?: Ref<LegendListRef> }) {
   const { c } = useTheme()
   return (
     <PrimaryScroll>
-      <LegendList {...props} ref={ref} style={[{ backgroundColor: c.window }, props.style]} />
+      <LegendList
+        {...props}
+        ref={ref}
+        recycleItems={recycleItems}
+        style={[{ backgroundColor: c.window }, props.style]}
+      />
     </PrimaryScroll>
   )
 }

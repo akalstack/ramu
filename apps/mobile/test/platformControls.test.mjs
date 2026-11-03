@@ -133,7 +133,7 @@ function load(file, os, overrides = {}, globals = {}) {
     },
     'expo-blur': { BlurView: 'BlurView' },
     // Sheets size their hosted content to the sheet; a fixed phone width keeps their trees plain to inspect.
-    './hostedWidth': { useHostedWidth: () => ({ value: 390, onLayout() {} }) },
+    './hostedWidth': { useHostedWidth: () => ({ width: 390, onLayout() {} }) },
     ...overrides,
   }
   mocks['react-native'] = { ...native, ...mocks['react-native'] }

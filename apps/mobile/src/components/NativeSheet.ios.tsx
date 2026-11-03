@@ -38,12 +38,12 @@ import { useHostedWidth } from './hostedWidth'
 /** Native presentation, navigation chrome, dismissal and scroll-edge material for every iOS dialog. */
 export function NativeSheet({ open, onClose, title, children, scroll = true, presentation, search }: NativeSheetProps) {
   const { c, scheme } = useTheme()
-  const width = useHostedWidth()
+  const hosted = useHostedWidth()
   const content = (
-    <RNHostView matchContents={scroll ? { vertical: true } : false} onLayout={width.onLayout}>
+    <RNHostView matchContents={scroll ? { vertical: true } : false} onLayout={hosted.onLayout}>
       <View
         style={{
-          width: width.value,
+          width: hosted.width,
           backgroundColor: c.window,
           paddingBottom: space.l,
           ...(scroll ? {} : { flex: 1 }),

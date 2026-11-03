@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { Image, Linking, Platform, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native'
+import { Image, Linking, Platform, ScrollView, StyleSheet, Text, UIManager, View, type TextStyle } from 'react-native'
 import { ReferenceBadge } from './ReferenceChip'
 export { ReferenceBadge } from './ReferenceChip'
 import { CodeBlock } from './Code'
@@ -47,10 +47,23 @@ export const ReferenceContext = createContext<ReferenceActions>({
 export const MessageTextSelection = createContext<((block: string, text: string | null) => void) | null>(null)
 
 /**
+ * Whether this app binary has the native text view behind word-by-word selection. Expo Go and builds made before it
+ * was added do not, and drawing it there fails with "UnimplementedView"; those keep React Native's Text instead.
+ */
+const nativeSelection = (() => {
+  if (Platform.OS !== 'ios') return false
+  try {
+    return UIManager.hasViewManagerConfig('RNUITextView') && UIManager.hasViewManagerConfig('RNUITextViewChild')
+  } catch {
+    return false
+  }
+})()
+
+/**
  * Spans inside a block. Under a selectable block they join its native text; anywhere else this is React Native's own
  * Text, so one renderer serves both.
  */
-const Span = UITextView
+const Span = nativeSelection ? UITextView : Text
 
 // Match desktop: a brief fade on new words, with no stagger or delayed typing queue.
 const FADE_MS = CHAT_MOTION.durationMs
@@ -275,7 +288,7 @@ function Inline({ text, style, stream }: { text: string; style?: TextStyle; stre
   })
   const look = [{ color: c.body, fontSize: font.body, lineHeight: 22 }, style]
   // Words still fading in repaint every frame; the block becomes selectable once they have settled.
-  if (Platform.OS === 'ios' && report && !settling && !stream)
+  if (nativeSelection && report && !settling && !stream)
     return (
       <UITextView
         selectable

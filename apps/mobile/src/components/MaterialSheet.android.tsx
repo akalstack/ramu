@@ -19,7 +19,7 @@ export function MaterialSheet({
 }) {
   const { c, scheme } = useTheme()
   const { height } = useWindowDimensions()
-  const width = useHostedWidth()
+  const hosted = useHostedWidth()
   const sheet = useRef<ModalBottomSheetRef>(null)
   const [mounted, setMounted] = useState(open)
   const [generation, setGeneration] = useState(0)
@@ -64,8 +64,8 @@ export function MaterialSheet({
         scrimColor="rgba(0,0,0,0.32)"
         skipPartiallyExpanded
       >
-        <RNHostView matchContents={{ vertical: true }} onLayout={width.onLayout}>
-          <View style={{ width: width.value, maxHeight: height * 0.72 }}>{children}</View>
+        <RNHostView matchContents={{ vertical: true }} onLayout={hosted.onLayout}>
+          <View style={{ width: hosted.width, maxHeight: height * 0.72 }}>{children}</View>
         </RNHostView>
       </ModalBottomSheet>
     </Host>
