@@ -23,13 +23,13 @@ import {
 import { font, radius, space, useTheme } from '../../../theme'
 import { useStore, type OutboxItem } from '../../../runtime/store'
 import { STANDALONE, type Chat, type MobileProject } from '../../../runtime/types'
-import { useT } from '../../../i18n'
+import { ago, useT } from '../../../i18n'
 import { Header, HeaderButton, LargeTitle, Screen, useScrolledUnderBar, PageFlatList } from '../../../components/Screen'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ChatRow } from '../../../components/ChatRow'
 import { ProjectActionsSheet } from '../../../components/ChatActions'
 import { Disclosure, animateLayout } from '../../../components/Motion'
-import { Chip, IconButton, Row, SectionLabel, Sheet, T, tap } from '../../../components/ui'
+import { Chip, ConnectionDot, IconButton, Row, SectionLabel, Sheet, T, tap } from '../../../components/ui'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { confirmCancel } from '../../../components/Outbox'
 import { TopFade } from '../../../components/Glass'
@@ -585,12 +585,20 @@ export default function Threads() {
         <SheetGroup>
           {[
             { id: null as string | null, name: t.allHosts },
-            ...computers.map((x) => ({ id: x.id as string | null, name: x.name })),
+            ...computers.map((x) => ({
+              id: x.id as string | null,
+              name: x.name,
+              status: x.status,
+              help:
+                x.status === 'online' || !x.lastSeen ? t[x.status] : `${t[x.status]} · ${ago(x.lastSeen)}`,
+            })),
           ].map((o) => (
             <SheetOption
               key={o.id ?? 'all'}
               icon={Network}
               title={o.name}
+              help={'help' in o ? o.help : undefined}
+              trailing={'status' in o ? <ConnectionDot status={o.status} /> : undefined}
               selected={o.id === null ? merged : !merged && o.id === selected}
               onPress={() => {
                 if (o.id) select(o.id)

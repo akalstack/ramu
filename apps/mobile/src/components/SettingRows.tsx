@@ -80,11 +80,28 @@ export function ChoiceRow({
         style={{ paddingVertical: space.m, opacity: disabled ? 0.5 : 1 }}
         onPress={() => setOpen(true)}
       >
-        <RowLabel title={title} help={help} />
-        <T size={font.control} tone="muted" numberOfLines={1} style={{ maxWidth: '40%' }}>
-          {current?.label ?? String(value ?? '')}
-        </T>
-        <ChevronsUpDown size={15} color={c.muted} />
+        {/* The value sits under the explanation, not beside it, so neither is squeezed into a narrow column and cut off. */}
+        <View style={{ flex: 1, gap: space.s }}>
+          <RowLabel title={title} help={help} />
+          <View
+            style={{
+              alignSelf: 'flex-start',
+              maxWidth: '100%',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.xs,
+              backgroundColor: c.fill,
+              borderRadius: radius.s + 2,
+              paddingHorizontal: space.m,
+              paddingVertical: space.xs + 2,
+            }}
+          >
+            <T size={font.control} weight="500" numberOfLines={2} style={{ flexShrink: 1 }}>
+              {current?.label ?? String(value ?? '')}
+            </T>
+            <ChevronsUpDown size={14} color={c.muted} />
+          </View>
+        </View>
       </Row>
       <Sheet open={open} onClose={() => setOpen(false)} title={title}>
         <SheetGroup footer={help}>
