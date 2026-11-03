@@ -6,16 +6,27 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { Server } from 'node:http'
 import {
+  addLinkShare,
+  linkCheckout,
   linkMe,
+  linkShares,
   registerLinkHost,
+  removeLinkShare,
   signOutLink,
   startSignIn,
   unlinkHost,
   waitForSignIn,
+  type LinkShare,
   type SignInStart,
 } from '@ramu/shared/link/account'
 import { generateKeyPair, keyPairFromSecret, type KeyPair } from '@ramu/shared/link/noise'
-import { DEFAULT_LINK_SERVICE, linkAddress, linkServiceUrl } from '@ramu/shared/link/protocol'
+import {
+  DEFAULT_LINK_SERVICE,
+  linkAddress,
+  linkServiceUrl,
+  type LinkBillingInterval,
+  type LinkPlanStatus,
+} from '@ramu/shared/link/protocol'
 import type { LinkStatus } from '@ramu/shared/types/remote'
 import { HostCredentialStore, type HostCredentialScope } from '../../credentials/store'
 import { RelayClient, type RelayState } from './relayClient'
@@ -52,6 +63,7 @@ export class LinkService {
   private relayState: RelayState | null = null
   private error: string | null = null
   private pending: { start: SignInStart; abort: AbortController } | null = null
+  private plan: LinkPlanStatus | null = null
   private readonly credentials: HostCredentialStore
   private readonly fetcher: typeof fetch
 
@@ -121,7 +133,44 @@ export class LinkService {
       error: this.error,
       address: this.address(),
       streams: this.relay?.streamCount() ?? 0,
+      plan: this.saved.account ? this.plan : null,
     }
+  }
+
+  private async session(): Promise<{ service: string; token: string }> {
+    const service = this.service()
+    const reference = this.saved.refs.session
+    if (!service || !reference || !this.saved.account) throw new Error('Sign in to Ramu Link first')
+    return { service, token: await this.credentials.read(this.scope('session'), reference) }
+  }
+
+  /** Asks the service for the plan and this month's relayed time; a service that predates plans leaves it empty. */
+  async refreshPlan(): Promise<LinkStatus> {
+    if (!this.saved.account) return this.status()
+    const { service, token } = await this.session()
+    this.plan = (await linkMe(this.fetcher, service, token)).plan ?? null
+    this.notify()
+    return this.status()
+  }
+
+  async checkout(interval: LinkBillingInterval): Promise<{ url: string }> {
+    const { service, token } = await this.session()
+    return linkCheckout(this.fetcher, service, token, interval)
+  }
+
+  async shares(): Promise<LinkShare[]> {
+    const { service, token } = await this.session()
+    return (await linkShares(this.fetcher, service, token, this.options.hostId)).shares
+  }
+  async share(email: string): Promise<LinkShare[]> {
+    const { service, token } = await this.session()
+    await addLinkShare(this.fetcher, service, token, this.options.hostId, email)
+    return this.shares()
+  }
+  async unshare(userId: string): Promise<LinkShare[]> {
+    const { service, token } = await this.session()
+    await removeLinkShare(this.fetcher, service, token, this.options.hostId, userId)
+    return this.shares()
   }
 
   /** Restores the identity and, when Link was on, reconnects. Never throws: a locked keychain is shown as an error. */
@@ -132,6 +181,7 @@ export class LinkService {
         hexToBytes(await this.credentials.read(this.scope('identity'), this.saved.refs.identity)),
       )
       if (this.saved.enabled) await this.connect()
+      void this.refreshPlan().catch(() => {})
     } catch (error) {
       this.error = error instanceof Error ? error.message : String(error)
       this.notify()
@@ -194,6 +244,8 @@ export class LinkService {
     this.saved.enabled = true
     this.write()
     await this.connect()
+    // Read after linking, so the count includes this host.
+    await this.refreshPlan().catch(() => {})
   }
 
   private async replace(kind: 'session' | 'secret', value: string) {
@@ -230,6 +282,7 @@ export class LinkService {
     }
     this.saved.account = null
     this.saved.enabled = false
+    this.plan = null
     this.error = null
     this.write()
     this.notify()

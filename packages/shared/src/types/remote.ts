@@ -93,7 +93,8 @@ export interface NetworkStatus {
    * Nearby devices asking to pair while an offer is open, each with the six-digit code it shows. Approve only when the
    * codes match.
    */
-  requests: { id: string; name: string; address: string; code: string; expiresAt: number }[]
+  /** `viewerOnly`: asked through Ramu Link by an account this host was shared with, so it pairs only as a viewer. */
+  requests: { id: string; name: string; address: string; code: string; expiresAt: number; viewerOnly?: true }[]
   /** What a newly paired full-access device holds. */
   defaultPermissions: import('../devicePermissions').DevicePermission[]
   /** Paired devices asking for a permission, waiting for a person here. */
@@ -134,6 +135,8 @@ export interface LinkStatus {
   /** This host's Link address, for devices to save as a route. */
   address: string
   streams: number
+  /** The account's plan and this month's relayed time, once the service has answered. */
+  plan: import('../link/protocol').LinkPlanStatus | null
 }
 /** What became of one pairing offer. */
 export type PairingOfferStatus =
@@ -222,4 +225,6 @@ export interface LinkAccountHost {
   lastSeenAt: number | null
   /** This device already paired it; the id of that saved host. */
   pairedId?: string
+  /** Another account owns it and shared it with this one, so it pairs only as a viewer. */
+  sharedBy?: string
 }

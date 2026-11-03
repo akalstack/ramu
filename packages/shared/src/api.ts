@@ -627,6 +627,14 @@ export interface RamuMethods {
   'network.linkSetEnabled'(enabled: boolean): NetworkStatus
   /** The Ramu Link service URL, or null for the default. Only while signed out. */
   'network.linkSetService'(url: string | null): NetworkStatus
+  /** Asks the service again for the account's plan and relayed time, after a checkout or when Settings opens. */
+  'network.linkRefresh'(): NetworkStatus
+  /** A Plus checkout to open in the browser. */
+  'network.linkCheckout'(interval: import('./link/protocol').LinkBillingInterval): { url: string }
+  /** Accounts this host is shared with (a Plus feature); they can reach it through Ramu Link and pair as viewers. */
+  'network.linkShares'(): import('./link/account').LinkShare[]
+  'network.linkShare'(email: string): import('./link/account').LinkShare[]
+  'network.linkUnshare'(userId: string): import('./link/account').LinkShare[]
   /** Computers this app is connected to, all at once. Handled by the desktop app itself. */
   'computers.settings.invoke'(id: string, method: string, args: unknown[]): unknown
   'computers.settings.get'(id: string): SettingsSnapshot

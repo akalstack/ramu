@@ -52,7 +52,9 @@ const closeMessage = (code: number) =>
       ? 'Sign in to Ramu Link again.'
       : code === LINK_CLOSE.limit
         ? 'Too many connections to this host through Ramu Link.'
-        : 'The Ramu Link connection closed.'
+        : code === LINK_CLOSE.plan
+          ? 'The Ramu Link plan of this host’s account does not cover new connections right now (relayed hours used up, or a host beyond its plan). Connect over the host’s own network, or get Plus in Settings → Remote access.'
+          : 'The Ramu Link connection closed.'
 
 const UNPINNED = 'Connect to this host once over Ramu Link or its network so this device learns its Link key.'
 

@@ -2,6 +2,7 @@
 // Link, and a person at that host allows it after comparing a six-digit number, as with a nearby host.
 import { useCallback, useEffect, useState } from 'react'
 import { ExternalLink, LogIn, Monitor, RefreshCw } from 'lucide-react'
+import { DEFAULT_LINK_SERVICE } from '@ramu/shared/link/protocol'
 import type { LinkAccountHost, LinkAccountStatus } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,8 @@ export function AccountHosts({ onConnect }: { onConnect: (host: LinkAccountHost)
   const [hosts, setHosts] = useState<LinkAccountHost[] | null>(null)
   const [service, setService] = useState('')
   const [busy, setBusy] = useState(false)
+  // With a hosted service to fall back on, typing another address is an advanced step.
+  const [showService, setShowService] = useState(DEFAULT_LINK_SERVICE === null)
   const load = useCallback(async () => {
     const next = await invoke('linkAccount.status')
     setStatus(next)
@@ -40,6 +43,7 @@ export function AccountHosts({ onConnect }: { onConnect: (host: LinkAccountHost)
     }
   }
   if (!status) return null
+  const serviceField = showService || (status.service !== null && status.service !== DEFAULT_LINK_SERVICE)
   const caption = 'm-[0_0_12px] text-caption text-muted-foreground'
 
   if (!status.account)
@@ -50,7 +54,12 @@ export function AccountHosts({ onConnect }: { onConnect: (host: LinkAccountHost)
             'Sign in with the Google or GitHub account your hosts use for Ramu Link. They appear here and connect from anywhere, end-to-end encrypted.',
           )}
         </p>
-        {!status.signIn && (
+        {!status.signIn && !serviceField && (
+          <Button variant="ghost" size="sm" className="self-start" onClick={() => setShowService(true)}>
+            {t('Use my own service…')}
+          </Button>
+        )}
+        {!status.signIn && serviceField && (
           <div className="flex gap-2">
             <Input
               className="bg-background"
@@ -145,6 +154,7 @@ export function AccountHosts({ onConnect }: { onConnect: (host: LinkAccountHost)
             <span className="flex min-w-0 flex-1 flex-col items-start">
               <span className="text-control">{host.name}</span>
               <span className="text-caption text-muted-foreground">
+                {host.sharedBy ? `${t('Shared by {0}', { 0: host.sharedBy })} · ` : ''}
                 {host.pairedId
                   ? t('Already connected')
                   : host.online

@@ -426,10 +426,17 @@ export class DeviceStore {
     name: string | undefined,
     now = Date.now(),
     kind?: 'host',
+    viewerOnly = false,
   ): { device: DeviceInfo; token: string } | null {
     const hash = sha256(normalizeCode(code))
     const token = randomBytes(32).toString('hex')
-    const device = this.spend((p) => p.codeHash === hash, name, token, now, kind)
+    const device = this.spend(
+      (p) => p.codeHash === hash && (!viewerOnly || p.role === 'viewer'),
+      name,
+      token,
+      now,
+      kind,
+    )
     return device ? { device, token } : null
   }
 

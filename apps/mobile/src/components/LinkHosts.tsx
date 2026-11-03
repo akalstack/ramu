@@ -1,17 +1,20 @@
 // The pairing screen's Ramu Link tab: sign in with the account your hosts use, then choose one. The host's person allows
 // it after both screens show the same six-digit number, exactly as for a nearby host.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Linking, Pressable, TextInput, View } from 'react-native'
+import { Alert, AppState, Linking, Pressable, TextInput, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Monitor } from 'lucide-react-native'
 import type { LinkHost } from '@ramu/shared/link/account'
-import { linkAddress } from '@ramu/shared/link/protocol'
+import { planSummary } from '@ramu/shared/link/plan'
+import { DEFAULT_LINK_SERVICE, linkAddress, type LinkPlanStatus } from '@ramu/shared/link/protocol'
 import { font, radius, space, useTheme } from '../theme'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import {
   accountHosts,
+  accountPlan,
   cancelLinkSignIn,
+  plusCheckoutUrl,
   setLinkService,
   signInToLink,
   signOutOfLink,
@@ -28,19 +31,33 @@ export function LinkHosts() {
   const link = useLinkAccount()
   const [service, setService] = useState(link.service ?? '')
   const [hosts, setHosts] = useState<LinkHost[] | null>(null)
+  const [plan, setPlan] = useState<LinkPlanStatus | null>(null)
+  // With a hosted service, typing another address is an advanced step.
+  const [showService, setShowService] = useState(
+    DEFAULT_LINK_SERVICE === null || (link.service !== null && link.service !== DEFAULT_LINK_SERVICE),
+  )
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState<{ name: string; code: string | null } | null>(null)
   const abort = useRef<AbortController | null>(null)
   useEffect(() => () => abort.current?.abort(), [])
 
   const refresh = useCallback(() => {
-    if (!link.account) return setHosts(null)
+    if (!link.account) {
+      setPlan(null)
+      return setHosts(null)
+    }
     accountHosts().then(setHosts, (error: unknown) => {
       setHosts([])
       Alert.alert(say('Ramu Link'), error instanceof Error ? error.message : String(error))
     })
+    accountPlan().then(setPlan, () => {})
   }, [link.account, say])
   useEffect(refresh, [refresh])
+  // Coming back from checkout in the browser is when Plus may have arrived.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => next === 'active' && refresh())
+    return () => subscription.remove()
+  }, [refresh])
 
   const run = async (work: () => Promise<unknown>) => {
     setBusy(true)
@@ -126,24 +143,27 @@ export function LinkHosts() {
           </Card>
         ) : (
           <>
-            <TextInput
-              accessibilityLabel={say('Service')}
-              placeholder="https://link.example.com"
-              placeholderTextColor={c.placeholder}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              value={service}
-              onChangeText={setService}
-              style={field}
-            />
+            {!showService && <GlassButton title={say('Use my own service…')} onPress={() => setShowService(true)} />}
+            {showService && (
+              <TextInput
+                accessibilityLabel={say('Service')}
+                placeholder="https://link.example.com"
+                placeholderTextColor={c.placeholder}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                value={service}
+                onChangeText={setService}
+                style={field}
+              />
+            )}
             <GlassButton
               primary
               title={say('Sign in…')}
-              disabled={busy || !service.trim()}
+              disabled={busy || !(service.trim() || DEFAULT_LINK_SERVICE)}
               onPress={() =>
                 void run(async () => {
-                  if (service.trim() !== (link.service ?? '')) setLinkService(service.trim())
+                  if (showService && service.trim() !== (link.service ?? '')) setLinkService(service.trim())
                   await Linking.openURL(await signInToLink())
                 })
               }
@@ -164,6 +184,7 @@ export function LinkHosts() {
       <T size={font.caption} tone="muted">
         {say('Signed in as {0}', { 0: link.account.email })}
       </T>
+      {plan ? <PlanCard plan={plan} busy={busy} run={run} /> : null}
       {hosts?.length
         ? hosts.map((host) => {
             const already = paired.has(host.hostId)
@@ -191,6 +212,7 @@ export function LinkHosts() {
                     {host.name}
                   </T>
                   <T size={font.caption} tone="muted">
+                    {host.sharedBy ? `${say('Shared by {0}', { 0: host.sharedBy })} · ` : ''}
                     {already ? say('Already connected') : host.online ? say('Online') : say('Offline')}
                   </T>
                 </View>
@@ -207,5 +229,54 @@ export function LinkHosts() {
       <GlassButton title={say('Refresh')} disabled={busy} onPress={refresh} />
       <GlassButton title={say('Sign out')} disabled={busy} onPress={() => void run(signOutOfLink)} />
     </View>
+  )
+}
+
+/** The same plan line as the desktop's Settings, and Get Plus, which opens Paddle's checkout in the browser. */
+function PlanCard({
+  plan,
+  busy,
+  run,
+}: {
+  plan: LinkPlanStatus
+  busy: boolean
+  run: (work: () => Promise<unknown>) => Promise<void>
+}) {
+  const say = useSay()
+  const summary = planSummary(plan)
+  const hosts =
+    plan.hostLimit === null
+      ? say('{0} hosts linked', { 0: plan.hosts })
+      : say('{0} of {1} hosts', { 0: plan.hosts, 1: plan.hostLimit })
+  const line =
+    plan.plan === 'free'
+      ? [
+          say('Free'),
+          hosts,
+          say('{0} of {1} relayed hours this month', { 0: summary.hoursUsed, 1: summary.hoursLimit ?? 0 }),
+        ]
+      : [say('Plus'), hosts]
+  const checkout = (interval: 'year' | 'month') =>
+    void run(async () => {
+      await Linking.openURL(await plusCheckoutUrl(interval))
+    })
+  return (
+    <Card style={{ padding: space.m, gap: space.s }}>
+      <T weight="600">{say('Plan')}</T>
+      <T size={font.control} tone="soft">
+        {line.join(' · ')}
+      </T>
+      {summary.outOfHours ? (
+        <T size={font.control} tone="warn">
+          {say('Ramu Link takes no new connections until the 1st; this host’s own network still works.')}
+        </T>
+      ) : null}
+      {summary.canGetPlus ? (
+        <>
+          <GlassButton primary title={say('Get Plus yearly')} disabled={busy} onPress={() => checkout('year')} />
+          <GlassButton title={say('Monthly')} disabled={busy} onPress={() => checkout('month')} />
+        </>
+      ) : null}
+    </Card>
   )
 }

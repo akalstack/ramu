@@ -5,6 +5,7 @@ import { hostProof, linkKeyProof } from '@ramu/shared/hostProof'
 import type { DeviceInfo, DeviceStore } from './devices'
 import { PAIR_REQUEST_PATH, PAIR_REVEAL_PATH, PAIR_WAIT_PATH } from '@ramu/shared/pairRequest'
 import { PairingError, type PairingRequests } from './pairingRequests'
+import { isSharedLinkPeer } from './sharedPeer'
 
 /**
  * Everything a paired host may call here: start, check and message the threads it started, and list projects to name
@@ -182,6 +183,7 @@ export class RemoteAccess {
               typeof request.name === 'string' ? request.name : undefined,
               now,
               request.kind === 'host' ? 'host' : undefined,
+              isSharedLinkPeer(peer),
             )
           : null
       if (!paired) {

@@ -114,7 +114,7 @@ async function answerNearby(offerId: string, role: 'owner' | 'viewer') {
       }
       answered.add(request.id)
       const reply = await prompt.question(
-        `\n${request.name || 'A device'} (${request.address}) wants to pair and shows ${request.code}. Allow? [y/N] `,
+        `\n${request.name || 'A device'} (${request.address}) wants to pair and shows ${request.code}.${request.viewerOnly ? ' It reaches this host through a Ramu Link share, so it pairs as a viewer.' : ''} Allow? [y/N] `,
       )
       if (/^y(es)?$/i.test(reply.trim()))
         await runtimeInvoke(config.socketPath, 'network.approveRequest', [request.id, role]).catch((error) =>

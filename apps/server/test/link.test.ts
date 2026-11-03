@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { WebSocketServer, type WebSocket as NodeWebSocket } from 'ws'
 import { RuntimeSocket } from '@ramu/client-runtime/socket'
 import { nodeSocketFactory } from '@ramu/client-runtime'
@@ -33,7 +33,7 @@ afterEach(async () => {
 })
 
 /** The Durable Object's routing, in Node: one host socket, one socket per device stream. */
-async function fakeRelay() {
+async function fakeRelay(open = { account: 'u1' } as { account: string; shared?: boolean }) {
   const wss = new WebSocketServer({ port: 0, handleProtocols: () => LINK_PROTOCOL })
   await new Promise<void>((resolve) => wss.once('listening', resolve))
   let host: NodeWebSocket | null = null
@@ -57,7 +57,7 @@ async function fakeRelay() {
     if (!host) return ws.close(LINK_CLOSE.hostOffline)
     const stream = next++
     devices.set(stream, ws)
-    host.send(encodeMux(MUX.open, stream, new TextEncoder().encode('{"account":"u1"}')))
+    host.send(encodeMux(MUX.open, stream, new TextEncoder().encode(JSON.stringify(open))))
     ws.on('message', (data) => host?.send(encodeMux(MUX.data, stream, new Uint8Array(data as Buffer))))
     ws.on('close', () => {
       devices.delete(stream)
@@ -68,7 +68,9 @@ async function fakeRelay() {
   return `http://127.0.0.1:${(wss.address() as { port: number }).port}`
 }
 
-async function fixture(options: { connectHost?: boolean } = {}) {
+async function fixture(
+  options: { connectHost?: boolean; shared?: boolean; accepting?: (peer: string) => boolean } = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), 'ramu-link-'))
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }))
   const identity = generateKeyPair(random)
@@ -77,7 +79,7 @@ async function fixture(options: { connectHost?: boolean } = {}) {
   const pairing = new PairingRequests({
     devices,
     hostId: HOST,
-    accepting: (peer) => peer.startsWith('link:'),
+    accepting: options.accepting ?? ((peer) => peer.startsWith('link:')),
     linkKey: () => hostKey,
   })
   const access = new RemoteAccess({ devices, hostId: HOST, browserOrigins: [], pairing, linkKey: () => hostKey })
@@ -97,7 +99,7 @@ async function fixture(options: { connectHost?: boolean } = {}) {
     detach: () => {},
   })
   cleanup.push(() => sockets.close())
-  const service = await fakeRelay()
+  const service = await fakeRelay(options.shared ? { account: 'u2', shared: true } : undefined)
   const states: string[] = []
   const relay = new RelayClient({
     service,
@@ -213,4 +215,49 @@ it('stops reconnecting when the relay no longer accepts the host', async () => {
   cleanup.push(() => relay.stop())
   relay.start()
   await expect.poll(() => relay.state).toBe('unauthorized')
+})
+
+describe('a host shared with another account', () => {
+  const pairByRequest = (f: Awaited<ReturnType<typeof fixture>>, approve: boolean) =>
+    requestPairing({
+      post: async (path, body, signal) => {
+        const response = await f.fetch(`${linkAddress(HOST)}${path}`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+          signal,
+        })
+        return { status: response.status, body: await response.json().catch(() => null) }
+      },
+      name: 'Friend',
+      random,
+      onCode: () => {
+        const [request] = f.pairing.list()
+        if (request && approve) f.pairing.approve(request.id, 'owner')
+      },
+      signal: AbortSignal.timeout(5000),
+    })
+
+  it('reaches the host under its own peer name, without the owner’s standing leave to ask', async () => {
+    const f = await fixture({ shared: true })
+    await f.fetch(`${linkAddress(HOST)}/health`)
+    expect(f.peers.at(-1)).toBe('link-shared:u2')
+    await expect(pairByRequest(f, false)).rejects.toThrow()
+  })
+
+  it('pairs only as a viewer, by request or by code, whatever the host chooses', async () => {
+    const f = await fixture({ shared: true, accepting: () => true })
+    await expect(pairByRequest(f, true)).resolves.toMatchObject({ role: 'viewer' })
+    const owner = f.devices.createCode(Date.now(), 'owner').code
+    const refused = await f.fetch(`${linkAddress(HOST)}/pair`, {
+      method: 'POST',
+      body: JSON.stringify({ code: owner }),
+    })
+    expect(refused.status).toBe(401)
+    const viewer = f.devices.createCode(Date.now(), 'viewer').code
+    const paired = await f.fetch(`${linkAddress(HOST)}/pair`, {
+      method: 'POST',
+      body: JSON.stringify({ code: viewer }),
+    })
+    expect(await paired.json()).toMatchObject({ role: 'viewer' })
+  })
 })

@@ -17,11 +17,13 @@ import {
   type StreamOpen,
 } from '@ramu/shared/link/protocol'
 import { bridge, parseLinkRequest, type Bridge } from './bridge'
+import { SHARED_LINK_PEER } from '../sharedPeer'
 
 export type RelayState = 'connecting' | 'online' | 'offline' | 'unauthorized'
 
 interface Stream {
   account: string
+  shared: boolean
   channel: SecureChannel | null
   bridge: Bridge | null
 }
@@ -148,10 +150,13 @@ export class RelayClient {
     if (frame.type === MUX.open) {
       if (this.streams.size >= MAX_STREAMS_PER_HOST) return this.send(id, MUX.close)
       let account = ''
+      let shared = false
       try {
-        account = String((JSON.parse(decoder.decode(payload)) as StreamOpen).account ?? '').slice(0, 100)
+        const open = JSON.parse(decoder.decode(payload)) as StreamOpen
+        account = String(open.account ?? '').slice(0, 100)
+        shared = open.shared === true
       } catch {}
-      this.streams.set(id, { account, channel: null, bridge: null })
+      this.streams.set(id, { account, shared, channel: null, bridge: null })
       return
     }
     const stream = this.streams.get(id)
@@ -174,7 +179,9 @@ export class RelayClient {
       const request = parseLinkRequest(message)
       if (!request) return this.end(id)
       const channel = stream.channel
-      stream.bridge = bridge(this.options.server, `link:${stream.account || 'unknown'}`, request, {
+      // A shared account is another person: its own peer name keeps it out of the owner's pairing shortcuts.
+      const peer = `${stream.shared ? SHARED_LINK_PEER : 'link:'}${stream.account || 'unknown'}`
+      stream.bridge = bridge(this.options.server, peer, request, {
         send: (out) => {
           if (!this.streams.has(id)) return
           for (const record of channel.seal(out)) this.send(id, MUX.data, record)

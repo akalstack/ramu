@@ -1,6 +1,6 @@
 // Talking to a Ramu Link service's account API. Every client signs in with the device-code flow: it shows a short code
 // and a link, the person approves on any device, and the client keeps polling until it holds a session token.
-import { LINK_PATHS } from './protocol'
+import { LINK_PATHS, type LinkBillingInterval, type LinkPlanStatus } from './protocol'
 
 type Fetch = typeof fetch
 export type LinkClientId = 'ramu-host' | 'ramu-desktop' | 'ramu-mobile'
@@ -22,17 +22,30 @@ export interface LinkHost {
   publicKey: string
   online: boolean
   lastSeenAt: number | null
+  /** Another account owns this host and shared it with this one; this device can pair with it only as a viewer. */
+  sharedBy?: string
 }
 export interface LinkMe {
   user: { name: string; email: string }
   hosts: number
   limit: number | null
+  /** Absent from a service that predates plans. */
+  plan?: LinkPlanStatus
+}
+/** An account a host is shared with. */
+export interface LinkShare {
+  userId: string
+  name: string
+  email: string
+  createdAt: number
 }
 
 export class LinkApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Why the service refused, when the answer offers a way out: `host-limit` or `plus` both point to Get Plus. */
+    readonly code?: string,
   ) {
     super(message)
   }
@@ -56,13 +69,14 @@ async function call<T>(
     ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
     signal: withTimeout(init.signal),
   })
-  const value = (await response.json().catch(() => ({}))) as T & { error?: unknown; message?: unknown }
+  const value = (await response.json().catch(() => ({}))) as T & { error?: unknown; message?: unknown; code?: unknown }
   if (!response.ok) {
     const message =
       typeof value.error === 'string' ? value.error : typeof value.message === 'string' ? value.message : undefined
     throw new LinkApiError(
       response.status === 401 ? 'Sign in to Ramu Link again.' : (message ?? `Ramu Link answered ${response.status}`),
       response.status,
+      typeof value.code === 'string' ? value.code : undefined,
     )
   }
   return value
@@ -159,3 +173,12 @@ export const signOutLink = (fetcher: Fetch, service: string, token: string) =>
   call<unknown>(fetcher, service, '/api/auth/sign-out', { method: 'POST', token, body: {} }).catch(() => undefined)
 export const deleteLinkAccount = (fetcher: Fetch, service: string, token: string) =>
   call<{ deleted: boolean }>(fetcher, service, LINK_PATHS.me, { method: 'DELETE', token })
+/** A checkout page for Plus to open in the browser; the plan changes once Paddle confirms the payment. */
+export const linkCheckout = (fetcher: Fetch, service: string, token: string, interval: LinkBillingInterval) =>
+  call<{ url: string }>(fetcher, service, LINK_PATHS.checkout, { method: 'POST', token, body: { interval } })
+export const linkShares = (fetcher: Fetch, service: string, token: string, hostId: string) =>
+  call<{ shares: LinkShare[] }>(fetcher, service, LINK_PATHS.shares(hostId), { token })
+export const addLinkShare = (fetcher: Fetch, service: string, token: string, hostId: string, email: string) =>
+  call<{ share: LinkShare }>(fetcher, service, LINK_PATHS.shares(hostId), { method: 'POST', token, body: { email } })
+export const removeLinkShare = (fetcher: Fetch, service: string, token: string, hostId: string, userId: string) =>
+  call<{ removed: boolean }>(fetcher, service, LINK_PATHS.share(hostId, userId), { method: 'DELETE', token })

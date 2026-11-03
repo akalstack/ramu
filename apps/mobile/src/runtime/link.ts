@@ -5,6 +5,7 @@ import * as SecureStore from 'expo-secure-store'
 import { fetch as expoFetch } from 'expo/fetch'
 import { linkFetch, linkSocketFactory, type LinkClientOptions } from '@ramu/shared/link/client'
 import {
+  linkCheckout,
   linkHosts,
   linkMe,
   signOutLink,
@@ -13,7 +14,13 @@ import {
   type LinkHost,
   type SignInStart,
 } from '@ramu/shared/link/account'
-import { DEFAULT_LINK_SERVICE, isHostId, linkServiceUrl } from '@ramu/shared/link/protocol'
+import {
+  DEFAULT_LINK_SERVICE,
+  isHostId,
+  linkServiceUrl,
+  type LinkBillingInterval,
+  type LinkPlanStatus,
+} from '@ramu/shared/link/protocol'
 import type { SocketFactory } from '@ramu/client-runtime/socket'
 import { readLinkStateText, saveLinkStateText } from '../storage'
 import { secureRandom } from './secureRandom'
@@ -162,6 +169,22 @@ export async function accountHosts(): Promise<LinkHost[]> {
   const url = service()
   if (!url || !token) return []
   return (await linkHosts(fetcher, url, token)).hosts
+}
+
+/** The account's plan and this month's relayed time; null from a service that predates plans. */
+export async function accountPlan(): Promise<LinkPlanStatus | null> {
+  await loadToken()
+  const url = service()
+  if (!url || !token) return null
+  return (await linkMe(fetcher, url, token)).plan ?? null
+}
+
+/** Plus is bought in the browser, never in the app, so store rules about in-app purchases do not apply. */
+export async function plusCheckoutUrl(interval: LinkBillingInterval): Promise<string> {
+  await loadToken()
+  const url = service()
+  if (!url || !token) throw new Error('Sign in to Ramu Link first')
+  return (await linkCheckout(fetcher, url, token, interval)).url
 }
 
 export function useLinkAccount(): LinkView {

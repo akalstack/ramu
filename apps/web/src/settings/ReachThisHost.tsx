@@ -2,6 +2,7 @@
 // on this host only.
 import { useState } from 'react'
 import { ExternalLink, LogIn } from 'lucide-react'
+import { DEFAULT_LINK_SERVICE } from '@ramu/shared/link/protocol'
 import type { NetworkStatus } from '@ramu/shared/types'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
@@ -13,6 +14,7 @@ import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
 import { t } from '../i18n'
 import { useSettingsInvoke } from './SettingsScope'
+import { LinkPlanSettings } from './LinkPlan'
 
 type Setter = (status: NetworkStatus) => void
 
@@ -39,6 +41,9 @@ export function LinkSettings({ status, setStatus }: { status: NetworkStatus; set
   const [service, setService] = useState(link.service ?? '')
   const [busy, setBusy] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  // Once a hosted service exists, choosing another one is an advanced step; until then it is the only way in.
+  const ownService = DEFAULT_LINK_SERVICE === null || (link.service !== null && link.service !== DEFAULT_LINK_SERVICE)
+  const [showService, setShowService] = useState(ownService)
   const run = async (work: () => Promise<NetworkStatus>) => {
     setBusy(true)
     try {
@@ -53,7 +58,12 @@ export function LinkSettings({ status, setStatus }: { status: NetworkStatus; set
   return (
     <>
       <SettingsGroupTitle className="mt-5">{t('Ramu Link')}</SettingsGroupTitle>
-      {!link.account && !link.serviceFixed && (
+      {!link.account && !link.serviceFixed && !showService && (
+        <Button variant="ghost" size="sm" className="self-start" onClick={() => setShowService(true)}>
+          {t('Use my own service…')}
+        </Button>
+      )}
+      {!link.account && !link.serviceFixed && showService && (
         <SettingsRow>
           <SettingsLabel
             title={t('Service')}
@@ -93,6 +103,7 @@ export function LinkSettings({ status, setStatus }: { status: NetworkStatus; set
               {t('Sign out…')}
             </Button>
           </SettingsRow>
+          <LinkPlanSettings status={status} setStatus={setStatus} />
         </>
       ) : link.signIn ? (
         <SettingsRow>
