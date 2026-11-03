@@ -775,9 +775,10 @@ export function Segmented<K extends string>({
   style?: StyleProp<ViewStyle>
 }) {
   const { c, scheme } = useTheme()
-  // iOS look: a gray track with a lifted segment (white in light, a lighter gray in dark).
-  const track = scheme === 'light' ? c.fill : c.raised2
-  const thumb = scheme === 'light' ? c.raised2 : c.raised
+  // iOS look: a gray track with a lifted segment (white in light, a lighter gray in dark). In dark both are white washes
+  // over whatever is underneath, so the track still shows on a card, which is the same gray as a solid track would be.
+  const track = scheme === 'light' ? c.fill : c.pressed
+  const thumb = scheme === 'light' ? c.raised2 : 'rgba(255,255,255,0.14)'
   return (
     <View
       accessibilityRole="tablist"
