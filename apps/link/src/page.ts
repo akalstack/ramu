@@ -208,6 +208,7 @@ const LEGAL = {
 <li>Relayed time: seconds and message counts per day, to apply the Free plan's hours and to measure what the service costs.</li>
 <li>Your plan: Free or Plus, until when, and the Paddle subscription it comes from.</li>
 <li>Accounts you share a computer with.</li>
+<li>Webhook requests for a computer that is offline, sealed so only that computer can open them, for at most a day.</li>
 </ul>
 <h2>What it never sees</h2>
 <p>Every connection between a device and a computer is end-to-end encrypted. Conversations, files, code, terminals, settings and device tokens pass through as sealed bytes. Ramu Link does not see payment details: Paddle is the seller and handles them under its own privacy notice.</p>
@@ -226,6 +227,7 @@ const LEGAL = {
 <li>Waktu relay: detik dan jumlah pesan per hari, untuk menerapkan jam paket Free dan mengukur biaya layanan.</li>
 <li>Paket Anda: Free atau Plus, sampai kapan, dan langganan Paddle asalnya.</li>
 <li>Akun yang Anda bagikan akses komputernya.</li>
+<li>Permintaan webhook untuk komputer yang sedang offline, tersegel sehingga hanya komputer itu yang bisa membukanya, paling lama satu hari.</li>
 </ul>
 <h2>Yang tidak pernah terlihat</h2>
 <p>Setiap koneksi antara perangkat dan komputer terenkripsi ujung ke ujung. Percakapan, berkas, kode, terminal, pengaturan, dan token perangkat lewat sebagai byte tersegel. Ramu Link tidak melihat detail pembayaran: Paddle adalah penjualnya dan mengurusnya menurut pemberitahuan privasinya sendiri.</p>

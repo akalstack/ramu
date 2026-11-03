@@ -37,6 +37,10 @@ The relay counts relayed time for each host's owner: the seconds the relay is aw
 
 When the service sells Plus, an account without Plus is on Free: 3 hosts and 60 relayed hours a month (UTC). Plus allows 20 hosts and unlimited relayed hours, and sharing a host with another account. Limits never cut off an open stream: past 60 hours, new streams are refused with close code 4402 until the 1st; hosts beyond the plan's limit (the most recently linked) stay listed and refuse new streams. The limits are in `LINK_PLANS` in `packages/shared/src/link/protocol.ts`.
 
+## Webhooks
+
+`POST /h/<hostId>/hooks/<token>` is public: it is the Ramu Link address of one webhook schedule on that host. The service seals the request (headers, minus cookies, authorization and Cloudflare's own, plus the exact body) to the host's identity key with a fresh X25519 key and ChaCha20-Poly1305, then passes it to the host over the relay. When the host is offline, an account with Plus (or any account on a service that sells nothing) gets it held in `held_hook` for a day, at most 200 per host, and delivered when the host reconnects; otherwise the sender gets a 503 with `Retry-After`. Bodies over 256 KB are refused. The host checks the token, signature and filters itself.
+
 ## Selling Plus with Paddle
 
 Paddle is the merchant of record: it charges, collects tax in the buyer's country and pays out. The service stores only what an account has and until when (the `entitlement` table), written by Paddle's webhooks.

@@ -63,6 +63,8 @@ Under Ramu Link, Settings shows the account's **Plan**: hosts used and, on Free,
 
 **Share this host** lets another Ramu Link account, entered by email, find this host in its own Ramu Link list. A shared account still has to pair, and only as a viewer: it can ask while **Pair a device** is open, or use a view-only code. The approval dialog says it can only view. Removing a share ends that account's open streams. Relayed time from shared accounts counts toward the owner's plan.
 
+Ramu Link also gives every host a public address for [webhook schedules](background-work.md#when-a-request-arrives). The service seals each request to the host's identity key as it arrives, so it never stores one readably. It passes the request to the host at once, or holds it for up to a day while the host is offline (Plus or your own service). On Free, an offline host's sender gets a 503 and retries later.
+
 **Delete account…** removes the Ramu Link account, every host it links and its shares, after cancelling a Plus subscription. If the subscription cannot be cancelled, the account is kept.
 
 ### As a service
