@@ -125,7 +125,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'To {0}': 'Ke {0}',
   'Add teammate…': 'Tambah rekan…',
   'Bring another model into this thread': 'Bawa model lain ke thread ini',
-  'Choose the model, how it works and what it should do': 'Pilih model, cara kerjanya dan apa yang harus dilakukan',
+  "Starts a message to this thread's model; change the model and Review or Take over below":
+    'Memulai pesan ke model utas ini; ubah model serta Tinjau atau Ambil alih di bawah',
   '{0} joins this thread and reviews': '{0} bergabung ke thread ini dan meninjau',
   'Bring a second model into this thread': 'Bawa model kedua ke thread ini',
   Teammate: 'Rekan',

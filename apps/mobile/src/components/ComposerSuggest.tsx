@@ -154,7 +154,7 @@ export function useComposerSuggest({
             {
               id: 'add-teammate',
               label: 'Add teammate…',
-              description: 'Choose the model, how it works and what it should do',
+              description: "Starts a message to this thread's model; change the model and Review or Take over below",
               kind: 'Teammate' as const,
               insertion: '',
               run: onAddTeammate,
