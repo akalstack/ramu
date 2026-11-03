@@ -1,8 +1,15 @@
 // Runs inside the bundled terminal surface; no host credentials or network calls.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- injected into the terminal bundle as source text by gen-terminal.mjs
-function installTerminalGesture(term, post, TerminalGesture, arrowSequence) {
+function installTerminalGesture(term, post, TerminalGesture, arrowSequence, pinchFontSize, refit) {
   const gesture = new TerminalGesture()
   const pointers = new Set()
+  // Two fingers pinch the text size; the phone stores the size it ends at.
+  const positions = new Map()
+  let pinch = null
+  const spread = () => {
+    const [a, b] = [...positions.values()]
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0
+  }
   let enabled = true,
     pointer = null,
     frame = 0,
@@ -49,6 +56,8 @@ function installTerminalGesture(term, post, TerminalGesture, arrowSequence) {
       if (!enabled) return
       if (event.pointerType === 'mouse' && event.button !== 0) return
       pointers.add(event.pointerId)
+      positions.set(event.pointerId, { x: event.clientX, y: event.clientY })
+      if (pointers.size === 2) pinch = { distance: spread(), size: term.options.fontSize }
       if (pointers.size !== 1) {
         cancel()
         return
@@ -62,6 +71,16 @@ function installTerminalGesture(term, post, TerminalGesture, arrowSequence) {
   document.addEventListener(
     'pointermove',
     (event) => {
+      if (positions.has(event.pointerId)) positions.set(event.pointerId, { x: event.clientX, y: event.clientY })
+      if (pinch && pointers.size === 2) {
+        const size = pinchFontSize(pinch.size, pinch.distance, spread())
+        if (size !== term.options.fontSize) {
+          term.options.fontSize = size
+          refit()
+        }
+        event.preventDefault()
+        return
+      }
       if (!pointer || pointer.id !== event.pointerId) return
       gesture.move(event.clientX, event.clientY, performance.now())
       if (reported) {
@@ -76,7 +95,7 @@ function installTerminalGesture(term, post, TerminalGesture, arrowSequence) {
   document.addEventListener(
     'touchmove',
     (event) => {
-      if (reported) {
+      if (reported || pinch) {
         event.preventDefault()
         event.stopImmediatePropagation()
       }
@@ -85,6 +104,11 @@ function installTerminalGesture(term, post, TerminalGesture, arrowSequence) {
   )
   function end(event) {
     pointers.delete(event.pointerId)
+    positions.delete(event.pointerId)
+    if (pinch && pointers.size < 2) {
+      if (term.options.fontSize !== pinch.size) post({ kind: 'font', size: term.options.fontSize })
+      pinch = null
+    }
     if (pointer && pointer.id === event.pointerId) {
       if (reported) {
         event.preventDefault()
@@ -125,6 +149,8 @@ function installTerminalGesture(term, post, TerminalGesture, arrowSequence) {
         if (!enabled) {
           term.blur?.()
           pointers.clear()
+          positions.clear()
+          pinch = null
           cancel()
         }
       }

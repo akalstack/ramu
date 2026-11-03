@@ -20,7 +20,7 @@ Use the host's LAN or VPN address, never `localhost`. The host must stay awake a
 - **Search:** threads on every host.
 - **Source Control:** status, staging, commits with AI drafts, branches, sync, stashes and undo.
 - **Files:** browse, view, edit and move files; add folders and clone projects on the host.
-- **Terminals:** real host terminals with an extra-key rail; hold and drag for arrow keys.
+- **Terminals:** real host terminals with an extra-key rail; hold and drag for arrow keys, pinch to change the text size (remembered on the phone).
 - **Browser and computer:** the Browser and Computer pills open full-screen viewers you can control by touch.
 - **Hosts:** several hosts connect at once. Each has a switch that turns its connection off and on, keeping its pairing.
 - **Offline:** drafts and an outbox stay on the phone and send in order when the host is back. A send that may or may not have arrived is marked **uncertain** and never retried by itself.

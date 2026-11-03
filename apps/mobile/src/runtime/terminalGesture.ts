@@ -114,3 +114,20 @@ export function gestureOverlayPosition(x: number, y: number, width: number, heig
     Math.max(0, Math.min(Math.max(margin, value), Math.max(0, available - size - margin)))
   return { left: clamp(left, width), top: clamp(top, height) }
 }
+
+/** The phone terminal's text sizes; pinching moves between them and the phone remembers the choice. */
+export const TERMINAL_FONT = { min: 9, max: 22, default: 13 } as const
+
+/** The size a pinch arrives at: the starting size scaled by how far the fingers moved apart, whole and within bounds. */
+export function pinchFontSize(start: number, startDistance: number, distance: number): number {
+  if (!(startDistance > 0) || !(distance > 0)) return start
+  return Math.min(TERMINAL_FONT.max, Math.max(TERMINAL_FONT.min, Math.round((start * distance) / startDistance)))
+}
+
+/** A stored size, or the default when it is missing or out of bounds. */
+export function terminalFontSize(stored: unknown): number {
+  const value = Number(stored)
+  return Number.isInteger(value) && value >= TERMINAL_FONT.min && value <= TERMINAL_FONT.max
+    ? value
+    : TERMINAL_FONT.default
+}

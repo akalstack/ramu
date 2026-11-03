@@ -17,6 +17,8 @@ export default function TerminalView({
   enabled = true,
   keyboardAction,
   keyAction,
+  fontSize,
+  onFontSize,
 }: TerminalViewProps) {
   const say = useSay()
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
@@ -61,6 +63,13 @@ export default function TerminalView({
     )
   }, [ready, enabled, appActive, keyAction])
   useEffect(() => {
+    if (!ready || !fontSize) return
+    const message = JSON.stringify({ kind: 'font', size: fontSize })
+    view.current?.injectJavaScript(
+      `window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify(message)}}));true;`,
+    )
+  }, [ready, fontSize])
+  useEffect(() => {
     if (!ready || !keyboardAction) return
     if (keyboardAction.visible) view.current?.requestFocus()
     const message = JSON.stringify({ kind: keyboardAction.visible ? 'focus' : 'blur' })
@@ -72,7 +81,7 @@ export default function TerminalView({
     <View style={{ flex: 1 }} onLayout={(event) => setSize(event.nativeEvent.layout)}>
       <WebView<object>
         accessibilityLabel={say('Host terminal')}
-        accessibilityHint="Hold, then drag to move the cursor. Drag farther to repeat faster."
+        accessibilityHint="Hold, then drag to move the cursor. Drag farther to repeat faster. Pinch to change the text size."
         ref={view}
         source={{ html: terminalHtml }}
         style={{ flex: 1, backgroundColor: '#0e0e10' }}
@@ -91,6 +100,7 @@ export default function TerminalView({
               setGesture(state)
             }
             if (value.kind === 'ready') setReady(true)
+            if (value.kind === 'font' && Number.isInteger(value.size)) onFontSize?.(value.size)
             if (enabled && appActive && value.kind === 'input' && typeof value.data === 'string') onInput(value.data)
             if (value.kind === 'resize' && Number.isInteger(value.cols) && Number.isInteger(value.rows))
               onResize(value.cols, value.rows)

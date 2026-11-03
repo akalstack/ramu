@@ -2,7 +2,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
-import { TerminalGesture, HOLD_MS, arrowSequence, gestureOverlayPosition } from '../src/runtime/terminalGesture.ts'
+import {
+  TerminalGesture,
+  HOLD_MS,
+  arrowSequence,
+  gestureOverlayPosition,
+  pinchFontSize,
+  terminalFontSize,
+} from '../src/runtime/terminalGesture.ts'
 
 test('short taps and ordinary swipes never activate cursor control', () => {
   const gesture = new TerminalGesture()
@@ -219,4 +226,15 @@ test('read-only control disables the terminal input and releases focus without b
   assert.equal(view.event('touchmove'), false)
   view.control(true)
   assert.equal(view.terminal.options.disableStdin, false)
+})
+
+test('pinching scales the terminal text within its bounds, and a stored size outside them falls back', () => {
+  assert.equal(pinchFontSize(13, 100, 150), 20)
+  assert.equal(pinchFontSize(13, 100, 50), 9)
+  assert.equal(pinchFontSize(13, 100, 400), 22)
+  assert.equal(pinchFontSize(13, 0, 120), 13)
+  assert.equal(terminalFontSize('16'), 16)
+  assert.equal(terminalFontSize(undefined), 13)
+  assert.equal(terminalFontSize('40'), 13)
+  assert.equal(terminalFontSize('12.5'), 13)
 })

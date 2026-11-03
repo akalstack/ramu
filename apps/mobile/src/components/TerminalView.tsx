@@ -12,6 +12,9 @@ export interface TerminalViewProps {
   keyAction?: { sequence: number; key: string }
   onInput(data: string): void
   onResize(cols: number, rows: number): void
+  /** Text size this phone remembers for terminals; pinching changes it and reports the new size. */
+  fontSize?: number
+  onFontSize?(size: number): void
 }
 export default function TerminalView({
   session,

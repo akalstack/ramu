@@ -10,6 +10,7 @@ import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import type { TerminalInfo } from '@ramu/shared/api'
 import TerminalView from './TerminalView'
+import { terminalFontSize } from '../runtime/terminalGesture'
 import * as Clipboard from 'expo-clipboard'
 import { DEFAULT_RAIL, parseRail, terminalKeyGroups, toggleRailKey } from '../runtime/terminalKeys'
 import { STANDALONE, type Chat } from '../runtime/types'
@@ -18,6 +19,9 @@ import { TerminalTabs } from './TerminalTabs'
 import { Button, Sheet, T, tap } from './ui'
 import { SheetGroup, SheetOption, SheetPanelGroup } from './SheetOptions'
 import { useSay } from '../i18n'
+
+/** The terminal text size this phone remembers, whatever host or thread it shows. */
+const TERMINAL_FONT_DEVICE_KEY = 'pref-device:terminalFontSize'
 
 /** Where a shell runs: a chat's checkout, or a whole project's folders (`project:<id>` on the host). */
 export interface TerminalTarget {
@@ -370,6 +374,8 @@ export function TerminalScreen({
               keyAction={keyAction}
               session={terminal.id}
               output={outputOwner === terminal.id ? output : ''}
+              fontSize={terminalFontSize(store.drafts?.[TERMINAL_FONT_DEVICE_KEY])}
+              onFontSize={(next) => store.setDraft(TERMINAL_FONT_DEVICE_KEY, String(terminalFontSize(next)))}
               onInput={(data) => {
                 if (latch === 'ctrl' && data.length === 1)
                   data = String.fromCharCode(data.toUpperCase().charCodeAt(0) & 31)

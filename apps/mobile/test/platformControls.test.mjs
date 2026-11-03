@@ -4715,6 +4715,7 @@ for (const os of ['ios', 'android']) {
       watch: () => () => {},
     }
     const { TerminalScreen } = load('components/TerminalScreen.tsx', os, {
+      '../runtime/terminalGesture': { terminalFontSize: () => 13 },
       react: hooks.react,
       'react-native': { Keyboard: { addListener: () => ({ remove() {} }) } },
       '../runtime/store': { useStore: () => store },
@@ -7415,6 +7416,7 @@ for (const os of ['ios', 'android']) {
       },
     }
     const { TerminalScreen } = load('components/TerminalScreen.tsx', os, {
+      '../runtime/terminalGesture': { terminalFontSize: () => 13 },
       react: hooks.react,
       'react-native': { Keyboard: { addListener: () => ({ remove() {} }) } },
       '../runtime/store': { useStore: () => store },
