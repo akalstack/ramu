@@ -258,6 +258,14 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           words: 'project auto routing home',
         },
         {
+          kind: 'text',
+          path: 'hostDescription',
+          title: 'Describe this host',
+          help: 'A few words such as GPU box or office network. Continue on another host suggests it when a request mentions them.',
+          words: 'host description continue another computer gpu office',
+          maxLength: 80,
+        },
+        {
           kind: 'toggle',
           path: 'autoProjectSplit',
           title: 'Split requests across projects',
@@ -360,6 +368,13 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
             { value: 'model', label: 'Steps' },
             { value: 'effort', label: 'Model then effort' },
           ],
+        },
+        {
+          kind: 'toggle',
+          path: 'modelCatalogLookups',
+          title: 'Look up model dates online',
+          help: 'This host reads public model lists (models.dev and LiteLLM) once a day to tag new models and ones their provider is retiring or calls deprecated. Nothing about you is sent. Off, Ramu tags older versions as legacy on its own.',
+          words: 'new legacy deprecated retiring release date models.dev litellm',
         },
       ],
     },

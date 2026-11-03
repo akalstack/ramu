@@ -10,7 +10,7 @@ import { useDeferredRequests } from './agent/hooks/useDeferredRequests'
 import { HelperBreadcrumb } from '../HomeAgents'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { focusComposer } from '../composer/ComposerInput'
-import { Spinner } from '@/components/ui/spinner'
+import { LoadingMark } from '../Brand'
 import { t as translate, useLanguage } from '../i18n'
 import { ScrollToLatestButton } from './agent/components/ScrollToLatestButton'
 import { isCompacting } from '@ramu/shared/chat/compaction'
@@ -810,10 +810,7 @@ export const AgentView = memo(function AgentView({
                   >
                     {hydrating && !turns.length && (
                       <div className="flex items-center justify-center">
-                        <Spinner
-                          className="size-5 text-muted-foreground"
-                          aria-label={translate('Loading conversation')}
-                        />
+                        <LoadingMark label={translate('Loading conversation')} />
                       </div>
                     )}
                     {pageTurns.map((turn, ti) => (

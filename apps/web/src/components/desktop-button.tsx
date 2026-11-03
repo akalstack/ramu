@@ -16,8 +16,11 @@ function textSizes(className: string) {
  * that sets `hover:bg-transparent` has its own hover treatment and keeps it.
  */
 function ghostHover(className: unknown) {
-  return typeof className === 'string' && /(^|\s)hover:bg-transparent(\s|$)/.test(className)
-    ? 'dark:hover:bg-transparent'
+  const own = typeof className === 'string' ? className : ''
+  if (/(^|\s)hover:bg-transparent(\s|$)/.test(own)) return 'dark:hover:bg-transparent'
+  // A toggle whose expanded state is its resting state (the sidebar button while the sidebar shows) sets its own.
+  return /(^|\s)aria-expanded:bg-/.test(own)
+    ? 'hover:bg-fill-hover dark:hover:bg-fill-hover'
     : 'hover:bg-fill-hover dark:hover:bg-fill-hover aria-expanded:bg-fill-hover'
 }
 

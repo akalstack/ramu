@@ -13,25 +13,10 @@ import {
   BookOpen,
   Search,
   SquareTerminal,
-  CalendarClock,
-  MessageSquareText,
-  ListChecks,
-  Sparkles,
 } from 'lucide-react'
-import { describeRamuTool, ramuTool, type RamuToolIcon } from '@ramu/shared/chat/ramuTools'
+import { ramuTool } from '@ramu/shared/chat/ramuTools'
+import { RamuGlyph } from '../../../Brand'
 import { type ToolResult, type ToolUse } from '../types'
-
-const RAMU_ICONS: Record<RamuToolIcon, typeof Wrench> = {
-  brain: Brain,
-  book: BookOpen,
-  search: Search,
-  sparkles: Sparkles,
-  calendar: CalendarClock,
-  message: MessageSquareText,
-  review: ListChecks,
-  terminal: SquareTerminal,
-  wrench: Wrench,
-}
 
 /** The icon for a tool call, by tool kind or Ramu tool. */
 export function ToolIcon({
@@ -44,24 +29,24 @@ export function ToolIcon({
   className?: string
 }) {
   const kind = toolKind(tool)
-  const ramu = ramuTool(tool)
+  // Ramu's own tools wear its mark, so the agent using Ramu reads apart from the agent using the machine; the row's
+  // words say which Ramu action it was.
+  if (ramuTool(tool) && !isViewImageTool(tool.name)) return <RamuGlyph size={14} className={className} />
   const Icon = isViewImageTool(tool.name)
     ? Eye
-    : ramu
-      ? RAMU_ICONS[describeRamuTool(ramu).icon]
-      : content?.some((c) => c.type === 'image') || /image/i.test(tool.name)
-        ? ImageIcon
-        : {
-            read: BookOpen,
-            edit: FilePenLine,
-            delete: FileMinus2,
-            move: ArrowRightLeft,
-            search: Search,
-            execute: SquareTerminal,
-            think: Brain,
-            fetch: Globe,
-            switch_mode: Settings2,
-            other: Wrench,
-          }[kind]
+    : content?.some((c) => c.type === 'image') || /image/i.test(tool.name)
+      ? ImageIcon
+      : {
+          read: BookOpen,
+          edit: FilePenLine,
+          delete: FileMinus2,
+          move: ArrowRightLeft,
+          search: Search,
+          execute: SquareTerminal,
+          think: Brain,
+          fetch: Globe,
+          switch_mode: Settings2,
+          other: Wrench,
+        }[kind]
   return <Icon size={14} className={className} aria-hidden="true" />
 }

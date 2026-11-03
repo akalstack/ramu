@@ -60,6 +60,42 @@ export function AnimatedMark({ size, className = '' }: { size: number; className
   )
 }
 
+const MARK_STEM = 'M356 694V518C356 402 434 334 548 334'
+
+/** The r + dot in the current text color: Ramu's own tool calls in a chat, sized like any other tool icon. */
+export function RamuGlyph({ size, className }: { size: number; className?: string }) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="240 240 540 540" fill="none" aria-hidden="true">
+      <path d={MARK_STEM} stroke="currentColor" strokeWidth="120" strokeLinecap="round" />
+      <circle cx="664" cy="622" r="72" fill="currentColor" />
+    </svg>
+  )
+}
+
+/**
+ * Waiting on Ramu itself, such as a chat loading: the mark in gray, its stem tracing over a faint copy while the dot
+ * settles, on a loop. With reduced motion it holds still at full strength.
+ */
+export function LoadingMark({ size = 28, label }: { size?: number; label: string }) {
+  useLanguage()
+  return (
+    <span role="status" aria-label={label} className="loading-mark inline-flex text-muted-foreground">
+      <svg width={size} height={size} viewBox="240 240 540 540" fill="none" aria-hidden="true">
+        <path d={MARK_STEM} stroke="currentColor" strokeOpacity="0.18" strokeWidth="120" strokeLinecap="round" />
+        <path
+          className="loading-mark-stem"
+          d={MARK_STEM}
+          pathLength="1"
+          stroke="currentColor"
+          strokeWidth="120"
+          strokeLinecap="round"
+        />
+        <circle className="loading-mark-dot" cx="664" cy="622" r="72" fill="currentColor" />
+      </svg>
+    </span>
+  )
+}
+
 export function BootScreen() {
   useLanguage()
   return (

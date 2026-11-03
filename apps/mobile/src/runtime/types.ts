@@ -42,6 +42,8 @@ export interface TranscriptTool {
   file?: import('@ramu/shared/chat/fileTools').FileToolLine
   /** An edit's changes, shown when its row is opened. */
   diffs?: { path: string; oldText: string | null; newText: string }[]
+  /** One of Ramu's own tools: what it did in words, and the few facts that matter, never the raw JSON. */
+  ramu?: { done: string; running: string; subject?: string; facts: { label: string; value: string }[] }
 }
 
 export type TranscriptItem = (

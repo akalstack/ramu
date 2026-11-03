@@ -60,3 +60,13 @@ it('leaves a button that opts out of the hover fill alone', () => {
   expect(list).toContain('dark:hover:bg-transparent')
   expect(list).not.toContain('hover:bg-fill-hover')
 })
+
+it('lets a toggle whose open state is its resting state keep no fill while expanded', () => {
+  const toggle = renderToStaticMarkup(
+    createElement(Button, { variant: 'ghost', 'aria-expanded': true, className: 'aria-expanded:bg-transparent' }),
+  )
+  expect(toggle).toContain('aria-expanded:bg-transparent')
+  expect(toggle).not.toContain('aria-expanded:bg-fill-hover')
+  const menu = renderToStaticMarkup(createElement(Button, { variant: 'ghost', 'aria-expanded': true }))
+  expect(menu).toContain('aria-expanded:bg-fill-hover')
+})

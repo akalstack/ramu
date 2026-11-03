@@ -122,3 +122,65 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
     </Pressable>
   )
 }
+
+const VIEW_BOX = `${ORIGIN} ${ORIGIN} ${VIEW} ${VIEW}`
+
+/** The r + dot in one color: Ramu's own tool calls in a chat, sized like any other tool icon. */
+export function RamuGlyph({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path d={STEM} stroke={color} strokeWidth={120} strokeLinecap="round" fill="none" />
+      <Circle cx={664} cy={622} r={72} fill={color} />
+    </Svg>
+  )
+}
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle)
+
+/**
+ * Waiting on Ramu itself, such as a thread opening: the desktop's loading mark. The stem traces over a faint copy while
+ * the dot settles, on a loop; with reduced motion it holds still at full strength.
+ */
+export function LoadingMark({ size = 28, color, label }: { size?: number; color: string; label: string }) {
+  const reduced = useReducedMotion()
+  const loop = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    if (reduced) return
+    const run = Animated.loop(
+      Animated.timing(loop, { toValue: 1, duration: 1800, easing: Easing.linear, useNativeDriver: false }),
+    )
+    run.start()
+    return () => run.stop()
+  }, [loop, reduced])
+  const ease = Easing.bezier(0.65, 0, 0.35, 1)
+  const offset = reduced
+    ? 0
+    : loop.interpolate({
+        inputRange: [0, 0.45, 0.6, 1],
+        outputRange: [STEM_LENGTH, 0, 0, -STEM_LENGTH],
+        easing: ease,
+      })
+  const dotOpacity = reduced
+    ? 1
+    : loop.interpolate({ inputRange: [0, 0.3, 0.5, 0.62, 1], outputRange: [0.2, 0.2, 1, 1, 0.2] })
+  const dotRadius = reduced
+    ? 72
+    : loop.interpolate({ inputRange: [0, 0.3, 0.5, 0.62, 1], outputRange: [43, 43, 79, 72, 43] })
+  return (
+    <View accessible accessibilityRole="progressbar" accessibilityLabel={label}>
+      <Svg width={size} height={size} viewBox={VIEW_BOX}>
+        <Path d={STEM} stroke={color} strokeOpacity={0.18} strokeWidth={120} strokeLinecap="round" fill="none" />
+        <AnimatedPath
+          d={STEM}
+          stroke={color}
+          strokeWidth={120}
+          strokeLinecap="round"
+          fill="none"
+          strokeDasharray={[STEM_LENGTH, STEM_LENGTH]}
+          strokeDashoffset={offset}
+        />
+        <AnimatedCircle cx={664} cy={622} r={dotRadius} fill={color} opacity={dotOpacity} />
+      </Svg>
+    </View>
+  )
+}

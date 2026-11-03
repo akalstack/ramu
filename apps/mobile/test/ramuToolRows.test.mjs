@@ -1,0 +1,27 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { transcript } from '../src/runtime/transcript.ts'
+
+const use = (toolUseId, name, input) => ({ kind: 'tool-use', toolUseId, name, summary: '', input: JSON.stringify(input) })
+const done = (toolUseId, isError = false) => ({ kind: 'tool-result', toolUseId, isError, summary: isError ? 'boom' : '{}' })
+
+test("Ramu's own tools read as what they did, with their facts, not as raw tool names", () => {
+  const rows = transcript([
+    use('m1', 'mcp__ramu__memory_save', { title: 'Prefers pnpm', kind: 'preference', content: 'Use pnpm' }),
+    done('m1'),
+  ])
+  const row = rows.find((item) => item.kind === 'tool')
+  assert.equal(row.ramu.done, 'Saved memory')
+  assert.equal(row.ramu.subject, '“Prefers pnpm”')
+  assert.deepEqual(
+    row.ramu.facts.map((fact) => fact.label),
+    ['Kind', 'Content'],
+  )
+})
+
+test('calls that already have a card in the chat stay out of the tool rows unless they failed', () => {
+  const quiet = transcript([use('g1', 'mcp__ramu__set_goal', { objective: 'Ship it' }), done('g1')])
+  assert.equal(quiet.filter((item) => item.kind === 'tool').length, 0)
+  const failed = transcript([use('g2', 'mcp__ramu__set_goal', { objective: 'Ship it' }), done('g2', true)])
+  assert.equal(failed.filter((item) => item.kind === 'tool').length, 1)
+})

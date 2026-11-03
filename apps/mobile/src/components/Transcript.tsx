@@ -62,6 +62,7 @@ const toolIcons: Record<ToolKind, Icon> = {
 export { RowToggle } from './rowToggle'
 import { messagePreview } from '../runtime/messagePreview'
 import { RowToggle } from './rowToggle'
+import { RamuGlyph } from './AnimatedMark'
 
 /** Drops the model change waiting for the next send; set by the chat screen that holds it. */
 export const CancelPendingSettings = createContext<() => void>(() => {})
@@ -1089,7 +1090,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
       ? item.subject.match(/[\w@~./-]+\.[A-Za-z0-9]+(?::\d+(?::\d+)?)?/)?.[0]
       : undefined)
   const diffs = item.diffs ?? []
-  const openable = Boolean(item.detail || item.input || diffs.length || item.file)
+  const openable = Boolean(item.detail || item.input || diffs.length || item.file || item.ramu?.facts.length)
   const I = toolIcons[item.tool]
   // A log is cropped to a few lines inline; the whole thing opens in a sheet (a bottom sheet on iOS and Android alike).
   const PREVIEW_LINES = 6
@@ -1097,6 +1098,11 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
   const long = Boolean(item.detail) && (lines > PREVIEW_LINES || item.detail!.length > 400)
   const running = item.status === 'in_progress'
   const failed = item.status === 'failed'
+  // Ramu's own tools read as what they did (Saved memory “…”), file tools as verb and file name, the rest as sent.
+  const title = item.ramu
+    ? `${translate(storeLanguage, running ? item.ramu.running : item.ramu.done)}${item.ramu.subject ? ` ${item.ramu.subject}` : ''}`
+    : `${item.file ? translate(storeLanguage, toolVerb(item.verb, running)) : item.verb} ${item.subject}`
+  const facts = item.ramu?.facts ?? []
   return (
     <View>
       <Pressable
@@ -1111,12 +1117,14 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 3 }}
       >
         <Breathe active={running}>
-          <I size={14} color={failed ? c.bad : running ? c.accent : c.muted} strokeWidth={1.8} />
+          {item.ramu ? (
+            <RamuGlyph size={14} color={failed ? c.bad : running ? c.accent : c.muted} />
+          ) : (
+            <I size={14} color={failed ? c.bad : running ? c.accent : c.muted} strokeWidth={1.8} />
+          )}
         </Breathe>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <ActivityText
-            active={running}
-          >{`${item.file ? translate(storeLanguage, toolVerb(item.verb, running)) : item.verb} ${item.subject}`}</ActivityText>
+          <ActivityText active={running}>{title}</ActivityText>
         </View>
         {item.file?.added || item.file?.removed ? (
           <T size={font.caption} mono>
@@ -1153,12 +1161,26 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
             </T>
           </Pressable>
         ) : null}
+        {facts.length ? (
+          <View style={{ marginLeft: 22, marginTop: 4, gap: 4 }}>
+            {facts.map((fact) => (
+              <View key={fact.label} style={{ flexDirection: 'row', gap: space.m }}>
+                <T size={font.caption} tone="muted" style={{ width: 64 }}>
+                  {translate(storeLanguage, fact.label)}
+                </T>
+                <T size={font.caption} tone="soft" style={{ flex: 1 }} numberOfLines={4}>
+                  {fact.value}
+                </T>
+              </View>
+            ))}
+          </View>
+        ) : null}
         {diffs.map((diff, index) => (
           <View key={index} style={{ marginLeft: 22, marginTop: 4 }}>
             <DiffLines file={changedFile(diff.path, '', diff.oldText ?? '', diff.newText)} />
           </View>
         ))}
-        {!diffs.length || failed ? (
+        {(!diffs.length && !facts.length) || failed ? (
           <View
             style={{
               marginLeft: 22,
@@ -1217,7 +1239,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         ) : null}
       </Collapse>
       {item.detail ? (
-        <Sheet open={full} onClose={() => setFull(false)} title={`${item.verb} ${item.subject}`.trim()}>
+        <Sheet open={full} onClose={() => setFull(false)} title={title.trim()}>
           <Card style={{ marginHorizontal: space.l, padding: space.m }}>
             <T
               size={font.caption}

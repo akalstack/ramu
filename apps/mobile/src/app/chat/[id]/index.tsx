@@ -36,6 +36,7 @@ import { withChangeCards } from '../../../runtime/changeCards'
 import { sideChat } from '../../../runtime/sideChat'
 import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
 import { fill, useT, useSay } from '../../../i18n'
+import { LoadingMark } from '../../../components/AnimatedMark'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
@@ -1509,8 +1510,9 @@ export default function ChatScreen() {
   )
 }
 
-/** A plain surface with a small spinner over a thread that is still settling, faded out once it is ready. */
+/** A plain surface with Ramu's loading mark over a thread that is still settling, faded out once it is ready. */
 function OpeningCover({ visible, color, spinner }: { visible: boolean; color: string; spinner: string }) {
+  const say = useSay()
   const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current
   const [mounted, setMounted] = useState(visible)
   useEffect(() => {
@@ -1532,7 +1534,7 @@ function OpeningCover({ visible, color, spinner }: { visible: boolean; color: st
         { backgroundColor: color, opacity, alignItems: 'center', justifyContent: 'center' },
       ]}
     >
-      <ActivityIndicator size="small" color={spinner} />
+      <LoadingMark color={spinner} label={say('Loading conversation')} />
     </Animated.View>
   )
 }

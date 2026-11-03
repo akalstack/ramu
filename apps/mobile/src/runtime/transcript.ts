@@ -1,6 +1,7 @@
 import type { AgentEvent } from '@ramu/shared/types'
 import { helperGroups } from '@ramu/shared/chat/helperPresentation'
 import { toolKind } from '@ramu/shared/chat/agentTools'
+import { describeRamuTool, ramuTool, ramuToolHasOwnUi } from '@ramu/shared/chat/ramuTools'
 import { fileToolDiffs, fileToolLine } from '@ramu/shared/chat/fileTools'
 import type { Chat, ToolKind, TranscriptItem } from './types'
 import type { OutboxItem } from './store'
@@ -194,8 +195,13 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       })
     else if (e.kind === 'tool-use') {
       const result = results.get(`:${e.toolUseId}`)
+      const failedCall = result ? result.isError : e.status === 'failed'
+      // As on desktop, a question, goal, schedule or sub-agent call has its own place in the chat; a failed one stays.
+      if (ramuToolHasOwnUi(e) && !failedCall) return
+      const call = ramuTool(e)
+      const ramu = call ? describeRamuTool(call, result?.summary) : undefined
       // As on desktop, file tools say only the file's name (and an edit its +/- lines) until opened.
-      const file = fileToolLine(e, result)
+      const file = ramu ? null : fileToolLine(e, result)
       const kind = toolKind(e)
       items.push({
         kind: 'tool',
@@ -203,6 +209,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         tool: isToolKind(kind) ? kind : 'other',
         verb: file?.verb ?? e.name,
         subject: file ? `${file.name}${file.others ? ` +${file.others}` : ''}` : e.title || e.summary,
+        ...(ramu ? { ramu: { done: ramu.done, running: ramu.running, subject: ramu.subject, facts: ramu.facts } } : {}),
         ...(file ? { file, diffs: fileToolDiffs(e, result) } : {}),
         status: result
           ? result.isError
