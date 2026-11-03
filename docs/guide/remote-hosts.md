@@ -53,7 +53,17 @@ A full-access device can do anything the desktop can, including run terminals an
 
 ### Ramu Link
 
-Ramu Link is a small service on Cloudflare Workers (`apps/link`): Better Auth for Google and GitHub sign-in, a list of the hosts each account links (5 per account), and a relay that joins a device's stream to its host. No hosted deployment exists yet, so point Ramu at your own: deploy it with [apps/link/README.md](../../apps/link/README.md), then set the service under Settings → Remote access → Ramu Link, or `RAMU_LINK_URL` on a headless host. Every client signs in with a short code approved in a browser, so it works over SSH and on a phone without a callback port.
+Ramu Link is a small service on Cloudflare Workers (`apps/link`): Better Auth for Google and GitHub sign-in, a list of the hosts each account links, and a relay that joins a device's stream to its host. No hosted deployment exists yet, so point Ramu at your own: deploy it with [apps/link/README.md](../../apps/link/README.md), then set it under Settings → Remote access → Ramu Link → **Service**, or `RAMU_LINK_URL` on a headless host. Once a hosted service exists, it is the default and another address goes under **Use my own service…**. Every client signs in with a short code approved in a browser, so it works over SSH and on a phone without a callback port.
+
+Under Ramu Link, Settings shows the account's **Plan**: hosts used and, on Free, relayed hours used this month. The phone's Ramu Link tab shows the same.
+
+- **Free** links 3 hosts and relays 60 hours a month. Only time the relay spends carrying a stream counts; an idle host or device and direct routes never do. Past 60 hours, Ramu Link takes no new connections until the 1st (UTC). Open connections continue, and devices keep their direct routes.
+- **Plus** links 20 hosts with unlimited relayed hours, and can **Share this host**. **Get Plus yearly** or **Monthly** opens Paddle's checkout in the browser, priced for your country (rupiah in Indonesia). Settings and the phone pick up Plus once Paddle confirms it. A cancelled subscription keeps Plus until its period ends. When Plus ends, hosts beyond 3 stay listed but take no new relayed connections until you unlink some or renew; nothing is deleted.
+- **Your own service** sells nothing: every account gets every feature, with only the host limit you set.
+
+**Share this host** lets another Ramu Link account, entered by email, find this host in its own Ramu Link list. A shared account still has to pair, and only as a viewer: it can ask while **Pair a device** is open, or use a view-only code. The approval dialog says it can only view. Removing a share ends that account's open streams. Relayed time from shared accounts counts toward the owner's plan.
+
+**Delete account…** removes the Ramu Link account, every host it links and its shares, after cancelling a Plus subscription. If the subscription cannot be cancelled, the account is kept.
 
 ### As a service
 

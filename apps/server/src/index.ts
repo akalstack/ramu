@@ -134,8 +134,8 @@ const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
 const pairingRequests = new PairingRequests({
   devices,
   hostId,
-  // Nearby devices may ask while this host lets itself be found, or while Pair a device is open. Through Ramu Link only
-  // devices signed in to this host's own account can reach it at all, so they may always ask.
+  // Nearby devices may ask while this host lets itself be found, or while Pair a device is open. Devices signed in to this
+  // host's own Ramu Link account may always ask; accounts it was shared with arrive as another peer and ask like anyone.
   accepting: (peer) =>
     network.discoverable || devices.offers().length > 0 || (peer.startsWith('link:') && link.active()),
   changed: () => pairingNotice(pairingRequests.list()),
