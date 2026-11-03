@@ -2,6 +2,7 @@
   "name": "@ramu/link",
   "version": "0.1.0-alpha.1",
   "private": true,
+  "license": "AGPL-3.0-only",
   "description": "Ramu Link: Google and GitHub sign-in and the end-to-end encrypted relay, on Cloudflare Workers.",
   "type": "module",
   "scripts": {

@@ -67,3 +67,7 @@ pnpm --filter @ramu/link dev
 ```
 
 Then set the service to `http://localhost:8787` on this computer; plain HTTP is accepted only for `localhost`.
+
+## License
+
+[AGPL-3.0](LICENSE). You can run, change and host your own copy; if you offer a modified copy as a service, make its source available to the people who use it. The rest of Ramu is [MIT](../../LICENSE).

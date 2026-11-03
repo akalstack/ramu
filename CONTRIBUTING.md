@@ -41,4 +41,4 @@ Read the [architecture overview](docs/contributing/architecture.md) before a lar
 
 Follow the [code conventions](docs/contributing/code-style.md), keep changes focused, and test behavior. See also [UI development](docs/contributing/ui.md), [localization](docs/contributing/localization.md), [the roadmap](docs/roadmap.md) and [release maintenance](docs/contributing/releasing.md).
 
-Contributions use the [MIT license](LICENSE). Follow the [Code of Conduct](CODE_OF_CONDUCT.md). For vulnerabilities, follow [SECURITY.md](SECURITY.md).
+Contributions use the [MIT license](LICENSE), except in `apps/link`, which uses the [AGPL-3.0](apps/link/LICENSE). Follow the [Code of Conduct](CODE_OF_CONDUCT.md). For vulnerabilities, follow [SECURITY.md](SECURITY.md).
