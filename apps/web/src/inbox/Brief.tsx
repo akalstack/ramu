@@ -26,7 +26,6 @@ import { useHostSelection } from '../workspace/HostSelection'
 import { invokeOn } from '../ipc'
 import { OperatorBox } from './OperatorBox'
 import { showInboxTab } from './navigation'
-import { StartedTogether } from './StartedTogether'
 import { useInboxModel } from './useBrief'
 
 type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<unknown>
@@ -306,7 +305,6 @@ export function Brief() {
         </Empty>
       )}
       {preferences.operator && <OperatorBox />}
-      <StartedTogether />
     </div>
   )
 }

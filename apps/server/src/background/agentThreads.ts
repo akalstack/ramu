@@ -89,15 +89,13 @@ interface Planned extends ThreadRequest {
 }
 
 export interface StartOptions {
-  /** The thread whose agent starts these, or null for one Home prompt split by a person. */
+  /** The thread whose agent starts these, or null for a thread a terminal starts. */
   source: { taskId: string; sessionId: string } | null
   settings: AgentSettings
   /** Seconds-old brief context: the starting thread's title and request. */
   context?: string
   groupId?: string
   depth: number
-  /** Titles of every thread in the group, on any host; defaults to the threads started here. */
-  together?: string[]
   /** The paired host whose agent asked for these threads, and its thread there. */
   sourceHost?: { deviceId: string; name: string; thread: string }
 }
@@ -211,7 +209,7 @@ export class AgentThreadService {
     server.registerTool(
       'thread_start',
       {
-        description: `Start new threads the person owns, when they ask for separate work: a follow-up here, a change in another project, or several parts in parallel. Each thread appears in the sidebar, keeps working on its own and reports back here when it finishes or needs input. This is not ramu_agent: a helper works for this thread and ends with it. Write each prompt as a complete brief (goal, what to change, what is already known, how to tell it is done) because the new thread has not seen this conversation. project takes a name or id and defaults to this one. checkout: default follows the project's setting; worktree gives a new branch (optional branch name); bringChanges copies this checkout's uncommitted changes into a new worktree of the same project. Threads that start together can coordinate through thread_status and thread_message. host starts them on another host your agents can use (see project_list with host); project is then required, and that host decides their model and the most access they get. Up to ${MAX_THREADS_PER_CALL} at once. The person may be asked to approve first; if they decline, do not retry.`,
+        description: `Start new threads the person owns, when they ask for separate work: a follow-up here, a change in another project, or several parts in parallel. Each thread appears in the sidebar, keeps working on its own and reports back here when it finishes or needs input. This is not ramu_agent: a helper works for this thread and ends with it. Write each prompt as a complete brief (goal, what to change, what is already known, how to tell it is done) because the new thread has not seen this conversation. project takes a name or id and defaults to this one. checkout: default follows the project's setting; worktree gives a new branch (optional branch name); bringChanges copies this checkout's uncommitted changes into a new worktree of the same project. host starts them on another host your agents can use (see project_list with host); project is then required, and that host decides their model and the most access they get. Up to ${MAX_THREADS_PER_CALL} at once. The person may be asked to approve first; if they decline, do not retry.`,
         inputSchema: {
           threads: z.array(thread).min(1).max(MAX_THREADS_PER_CALL),
           access: z.enum(['edits', 'auto', 'full']).optional(),
@@ -280,7 +278,7 @@ export class AgentThreadService {
       'thread_status',
       {
         description:
-          'Check on threads related to this one: those it started, the thread that started it, and threads started together with it. Returns each one’s state, its latest report and whether it waits for the person.',
+          'Check on threads related to this one: those it started and the thread that started it. Returns each one’s state, its latest report and whether it waits for the person.',
         inputSchema: { threadId: z.string().max(100).optional() },
       },
       ({ threadId }) =>
@@ -302,7 +300,7 @@ export class AgentThreadService {
       'thread_message',
       {
         description:
-          'Send a message to a related thread (one this thread started, the one that started it, or one started together with it), for instance when a shared contract changes. queue waits for its current turn; steer adds to it.',
+          'Send a message to a related thread (one this thread started or the one that started it), for instance when a shared contract changes. queue waits for its current turn; steer adds to it.',
         inputSchema: {
           threadId: z.string().max(100),
           text: z.string().min(1).max(20_000),
@@ -531,19 +529,21 @@ export class AgentThreadService {
   }
 
   /**
-   * Starts the reviewed parts of one Home prompt as a group a person started: no starting thread, so nothing reports
-   * back, but the threads see each other. Each uses its project's default checkout.
+   * One thread a person starts from Home in a project on this host, when Home runs on another one: no starting thread,
+   * so nothing reports back. It uses the project's default checkout.
    */
-  async startGroup(
-    input: { groupId: string; threads: { projectId: string; title: string; prompt: string }[]; together: string[] },
+  async startInProject(
+    input: { projectId: string; title: string; prompt: string },
     settings: AgentSettings,
-  ): Promise<StartedThread[]> {
+  ): Promise<StartedThread> {
     const planned = await this.plan(
-      input.threads.map((entry) => ({ prompt: entry.prompt, title: entry.title, project: entry.projectId })),
+      [{ prompt: input.prompt, title: input.title, project: input.projectId }],
       null,
       settings,
     )
-    return this.start(planned, { source: null, settings, groupId: input.groupId, depth: 0, together: input.together })
+    const [started] = await this.start(planned, { source: null, settings, depth: 0 })
+    if (!started) throw new Error('The thread did not start.')
+    return started
   }
 
   /** A thread a terminal agent or script started here, labelled with the name it gave, at Allow edits. */
@@ -562,7 +562,6 @@ export class AgentThreadService {
       sourceHost: { deviceId: TERMINAL_DEVICE, name, thread: '' },
       settings,
       depth: 0,
-      together: [],
       context: `Started from a terminal by ${JSON.stringify(name)}.`,
     })
     if (!started) throw new Error('The thread did not start.')
@@ -685,7 +684,6 @@ export class AgentThreadService {
         sourceHost: { deviceId: '', name: clipText(start.from.hostName, 80), thread: clipText(start.from.title, 200) },
         settings,
         depth: 0,
-        together: [],
       },
     )
     if (!started) throw new Error('That host could not start the thread.')
@@ -772,9 +770,6 @@ export class AgentThreadService {
     const started: StartedThread[] = []
     for (const [index, entry] of planned.entries()) {
       const title = titles[index]!
-      const siblings = options.together
-        ? options.together.filter((other, at) => other !== title || at !== options.together!.indexOf(title))
-        : titles.filter((_, other) => other !== index)
       let task: Task
       try {
         task = (await this.invoke('tasks.create', [
@@ -823,7 +818,7 @@ export class AgentThreadService {
         if (entry.mode === 'worktree') await this.invoke('tasks.setup', [task.id])
         const carried =
           entry.bringChanges && options.source ? await this.carryChanges(options.source.taskId, task.id) : ''
-        const brief = briefOf(entry.prompt, options.context, siblings, carried)
+        const brief = briefOf(entry.prompt, options.context, carried)
         const session = (await this.invoke('agent.start', [task.id, brief, options.settings])) as AgentSessionInfo
         this.db
           .prepare('UPDATE thread_links SET target_session_id = ? WHERE target_task_id = ?')
@@ -897,23 +892,16 @@ export class AgentThreadService {
     return row.n
   }
 
-  /** Threads this one started, the one that started it, and those started together with it. */
-  related(taskId: string): { taskId: string; relation: 'started' | 'starter' | 'sibling' }[] {
+  /** Threads this one started and the one that started it. */
+  related(taskId: string): { taskId: string; relation: 'started' | 'starter' }[] {
     const own = this.db.prepare('SELECT * FROM thread_links WHERE target_task_id = ?').get(taskId) as
       LinkRow | undefined
-    const out = new Map<string, 'started' | 'starter' | 'sibling'>()
+    const out = new Map<string, 'started' | 'starter'>()
     for (const row of this.db
       .prepare('SELECT target_task_id FROM thread_links WHERE source_task_id = ? ORDER BY created_at')
       .all(taskId) as { target_task_id: string }[])
       out.set(row.target_task_id, 'started')
     if (own?.source_task_id) out.set(own.source_task_id, 'starter')
-    if (own)
-      for (const row of this.db
-        .prepare(
-          'SELECT target_task_id FROM thread_links WHERE group_id = ? AND target_task_id != ? ORDER BY created_at',
-        )
-        .all(own.group_id, taskId) as { target_task_id: string }[])
-        if (!out.has(row.target_task_id)) out.set(row.target_task_id, 'sibling')
     return [...out].map(([id, relation]) => ({ taskId: id, relation }))
   }
 
@@ -1043,14 +1031,8 @@ function describe(entry: Planned): string {
   ].join('\n')
 }
 
-/** The first message of a started thread: its task, then where it came from and who works beside it. */
-export function briefOf(prompt: string, context: string | undefined, siblings: string[], carried = ''): string {
-  const about = [
-    context ?? '',
-    siblings.length
-      ? `Started together with: ${siblings.map((title) => JSON.stringify(title)).join(', ')}. Use thread_status and thread_message to coordinate with them.`
-      : '',
-    carried,
-  ].filter(Boolean)
+/** The first message of a started thread: its task, then where it came from and the changes it carries. */
+export function briefOf(prompt: string, context: string | undefined, carried = ''): string {
+  const about = [context ?? '', carried].filter(Boolean)
   return about.length ? `${prompt}\n\n${about.join('\n')}` : prompt
 }

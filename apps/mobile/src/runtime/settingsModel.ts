@@ -277,13 +277,6 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         },
         {
           kind: 'toggle',
-          path: 'autoProjectSplit',
-          title: 'Split requests across projects',
-          help: 'When a request needs work in several projects or hosts, Auto writes one thread for each and you review them before they start. Turn off to always start one thread.',
-          words: 'project auto split several threads hosts',
-        },
-        {
-          kind: 'toggle',
           path: 'operator',
           title: 'Operator',
           help: 'Inbox gets a box where one sentence proposes actions across threads and schedules on connected hosts. Nothing runs until you confirm. Each request uses one short model call; it costs nothing otherwise.',

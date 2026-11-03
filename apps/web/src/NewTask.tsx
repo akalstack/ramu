@@ -19,6 +19,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AUTO_PROJECT,
   NO_PROJECT,
+  type AgentSettings,
   type FileContext,
   type Attachment,
   type CheckoutMode,
@@ -58,7 +59,7 @@ import {
 } from './startProject'
 import { useAppSettings } from './settings/AppSettings'
 import { routingLabels, type RoutingOutcome } from '@ramu/shared/workspace/projectRouting'
-import { SplitReview, startSplit, useOtherHostTargets, useSplitDraft, type SplitDraft } from './SplitReview'
+import { useOtherHostTargets } from './workspace/otherHostTargets'
 import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
 
 /** A task's title is the first line of what you asked for. */
@@ -258,9 +259,9 @@ export function NewTask({
   const [choices, setChoicesState] = useState<RouteCandidate[] | null>(null)
   const [routeNote, setRouteNote] = useState<string | null>(null)
   const routeRevision = useRef(0)
-  // Auto also weighs projects on the other connected hosts, and a prompt that needs several of them is reviewed as a list.
+  // Auto also weighs projects on the other connected hosts; a request that belongs to one of them starts there.
   const otherHosts = useOtherHostTargets(host.id, auto)
-  const [split, setSplit] = useSplitDraft(host.id)
+  const hostSelection = useHostSelection()
   const currentHostName = useComputers()?.computers.find((c) => c.id === host.id)?.name ?? ''
   const repos = ws.repos[projectId] ?? []
   const project = ws.projects.find((p) => p.id === projectId)
@@ -400,75 +401,22 @@ export function NewTask({
       ? { ...remote, label: `${remote.name} · ${remote.hostName ?? ''}`, description: undefined as string | undefined }
       : null
   }
-  /** One brief per destination, written on this host; without one, each row starts from the person's own words. */
-  const splitDraftFor = async (ids: string[], original: string, sendSettings: SplitDraft['settings']) => {
-    const targets = ids.flatMap((id) => {
-      const target = targetOf(id)
-      return target ? [{ id, ...target }] : []
-    })
-    const plan =
-      targets.length > 1
-        ? await host
-            .invoke(
-              'projects.splitBriefs',
-              original,
-              targets.map((target) => ({
-                id: target.id,
-                name: target.name,
-                ...(target.hostId !== host.id ? { host: target.label } : {}),
-                ...(target.description ? { description: target.description } : {}),
-              })),
-              sendSettings,
-            )
-            .catch(() => null)
-        : null
-    return {
-      original,
-      contract: plan?.contract ?? '',
-      settings: sendSettings,
-      rows: targets.map((target) => {
-        const brief = plan?.briefs.find((entry) => entry.projectId === target.id)
-        return {
-          key: target.id,
-          hostId: target.hostId,
-          projectId: target.projectId,
-          label: target.label,
-          title: brief?.title ?? titleFrom(original),
-          brief: brief?.brief ?? original,
-        }
-      }),
-    }
-  }
-  const startReviewed = async () => {
-    if (!split || sending.current) return
-    sending.current = true
-    setBusy(true)
-    setError(null)
-    try {
-      const started = await startSplit(split)
-      const failed = started.filter((entry) => entry.error)
-      setSplit(null)
-      setChoices(null)
-      const consumed = consumeDraft()
-      if (consumed.unchanged && consumed.persisted) agentDraft.consume()
-      void ws.refresh()
-      setRouteNote(
-        failed.length
-          ? t('{0} of {1} threads started. {2}', {
-              '0': started.length - failed.length,
-              '1': started.length,
-              '2': failed.map((entry) => `${entry.title}: ${entry.error}`).join(' · '),
-            })
-          : t('Started {0} threads together.', { '0': started.length }),
-      )
-      const first = started.find((entry) => entry.hostId === host.id && entry.taskId && !entry.error)
-      if (first) ws.openTask(first.taskId)
-    } catch (error) {
-      setError(errorText(error))
-    } finally {
-      sending.current = false
-      setBusy(false)
-    }
+  /** A project on another connected host: the thread starts there, as it would here, and opens. Text only. */
+  const startElsewhere = async (id: string, original: string, sendSettings: AgentSettings) => {
+    const target = otherHosts.targets.get(id)
+    if (!target) throw new Error(t('That host is no longer connected.'))
+    const started = await ramu.invokeOn(
+      target.hostId,
+      'threads.startInProject',
+      { projectId: target.projectId, title: titleFrom(original), prompt: original },
+      sendSettings,
+    )
+    if (started.error || !started.taskId) throw new Error(started.error || t('The thread did not start.'))
+    setChoices(null)
+    const consumed = consumeDraft()
+    if (consumed.unchanged && consumed.persisted) agentDraft.consume()
+    setRouteNote(t('Started in {0} on {1}', { '0': target.name, '1': target.hostName ?? '' }))
+    hostSelection.select(target.hostId, { kind: 'task', taskId: started.taskId })
   }
 
   // `busy` is state and lags a frame; a double Enter must not create two chats.
@@ -520,16 +468,13 @@ export function NewTask({
         if (!destination) {
           const routed = prompt || messageTitle
           const outcome: RoutingOutcome = await host.invoke('projects.route', routed, sendSettings, {
-            split: preferences.autoProjectSplit !== false,
             others: otherHosts.candidates,
             localHost: currentHostName,
           })
           if (revision !== routeRevision.current)
             throw new Error(t('The message changed while choosing a project. Send again.'))
-          const remote = (id: string) => otherHosts.targets.get(id)
-          if (outcome.kind === 'split' || (outcome.kind === 'resolved' && remote(outcome.projectId))) {
-            const ids = outcome.kind === 'split' ? outcome.projects.map((p) => p.projectId) : [outcome.projectId]
-            setSplit(await splitDraftFor(ids, routed, sendSettings))
+          if (outcome.kind === 'resolved' && otherHosts.targets.has(outcome.projectId)) {
+            await startElsewhere(outcome.projectId, routed, sendSettings)
             return
           }
           if (outcome.kind === 'resolved') {
@@ -1023,19 +968,6 @@ export function NewTask({
             {routeNote}
           </p>
         )}
-        {split && auto && (
-          <SplitReview
-            draft={split}
-            busy={busy}
-            onChange={setSplit}
-            onStart={() => void startReviewed()}
-            onOneThread={() => {
-              setChoices(split.rows.map((row) => ({ projectId: row.key, reason: '' })))
-              setSplit(null)
-            }}
-            onCancel={() => setSplit(null)}
-          />
-        )}
         {choices && (
           <div className="flex flex-col gap-1 px-2 py-1.5" role="group" aria-label={t('Choose a project')}>
             <p className="m-0 text-caption text-muted-foreground">
@@ -1055,11 +987,7 @@ export function NewTask({
                     otherHosts.targets.has(choice.projectId)
                       ? void agentDraft
                           .verify()
-                          .then((verified) => splitDraftFor([choice.projectId], prompt, verified))
-                          .then((draft) => {
-                            setChoices(null)
-                            setSplit(draft)
-                          })
+                          .then((verified) => startElsewhere(choice.projectId, prompt, verified))
                           .catch((e) => setError(errorText(e)))
                       : void send([], choice.projectId).catch((e) => setError(errorText(e)))
                   }

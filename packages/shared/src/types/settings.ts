@@ -77,8 +77,6 @@ export interface AppPreferences extends WorkspaceDefaults {
   warnModelChange: boolean
   /** Home starts in Auto: Ramu picks the project from the first prompt and asks when it is unclear. */
   autoProjectSelection: boolean
-  /** Auto may turn one request into several reviewed threads across projects and hosts. */
-  autoProjectSplit: boolean
   /** Agents may start threads the person owns, here and on other hosts, and a paired host's agents may start them here. */
   agentThreads: boolean
   /** The main agent may suggest a model to bring in as a teammate; each suggestion asks the person first. */
@@ -183,7 +181,6 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   includeTabContext: true,
   warnModelChange: true,
   autoProjectSelection: true,
-  autoProjectSplit: true,
   agentThreads: true,
   teammateSuggestions: true,
   modelCatalogLookups: true,

@@ -1,5 +1,5 @@
 import { continuedFrom } from '@ramu/shared/continuation'
-import { startedFromTerminal } from '@ramu/shared/workspace/startedGroups'
+import { startedFromTerminal } from '@ramu/shared/workspace/threadOrigin'
 import { animateThreadListChange } from '../../workspace/threadListMotion'
 import { useComputers } from '../../workspace/computers'
 import { useHost } from '../../workspace/HostProvider'
@@ -441,9 +441,7 @@ export function TaskRow({
                           ? t('Started by an agent on {0}', { '0': task.startedFrom.host })
                           : task.startedFrom.title
                             ? t('Started by the agent in {0}', { '0': task.startedFrom.title })
-                            : task.startedFrom.groupSize === 2
-                              ? t('Started together with 1 other thread')
-                              : t('Started together with {0} other threads', { '0': task.startedFrom.groupSize - 1 })
+                            : t('Started by another thread')
                   }
                 />
               )}

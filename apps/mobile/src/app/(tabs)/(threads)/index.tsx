@@ -1,6 +1,5 @@
 import { translate } from '@ramu/shared/i18n'
 import { recentThreads } from '../../../runtime/recentThreads'
-import { groupSummary, startedGroups } from '@ramu/shared/workspace/startedGroups'
 import { groupThreads, type ThreadGroup } from '../../../runtime/threadGroups'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BackHandler, Platform, Pressable, ScrollView as HScroll, View } from 'react-native'
@@ -179,37 +178,6 @@ export default function Threads() {
         ),
       )
     }
-    // Threads one Auto prompt started together, across hosts, stay together until they settle.
-    if (!filtering)
-      startedGroups(
-        computers.map((computer) => ({
-          hostId: computer.id,
-          tasks: scoped.filter((chat) => chat.computerId === computer.id),
-        })),
-      )
-        .slice(0, 3)
-        .forEach((started) => {
-          const summary = groupSummary(started)
-          out.push({
-            key: `label:together:${started.groupId}`,
-            kind: 'label',
-            text: 'Started together',
-            right: translate(store.language, summary.text, summary.values),
-          })
-          group(
-            `together:${started.groupId}`,
-            started.members.map(
-              (member, i) =>
-                ({
-                  key: member.task.id,
-                  kind: 'chat',
-                  chat: member.task as Chat,
-                  project: labelOf(member.task as Chat),
-                  divider: i > 0,
-                }) as HomeRow,
-            ),
-          )
-        })
     if (filtering) {
       // A status filter answers "which threads are …?", so its results are one flat list labelled by project.
       const recent = recentThreads(unpinned, historyLimit)

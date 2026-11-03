@@ -54,7 +54,7 @@ const TASK_COLUMNS = `t.id, t.project_id AS projectId, t.title, t.title_generati
   (SELECT 'library-review' FROM library_summary_chats c WHERE c.task_id = t.id) AS kind,
   (SELECT r.schedule_id FROM schedule_runs r WHERE r.task_id = t.id LIMIT 1) AS scheduleId,
   (SELECT json_object('groupId', l.group_id, 'taskId', l.source_task_id, 'title', COALESCE(st.title, l.source_title),
-      'host', l.source_host, 'groupSize', (SELECT COUNT(*) FROM thread_links g WHERE g.group_id = l.group_id))
+      'host', l.source_host)
     FROM thread_links l LEFT JOIN tasks st ON st.id = l.source_task_id WHERE l.target_task_id = t.id) AS startedFrom`
 
 /** SQLite returns the origin as JSON text; a thread nobody else started has none, and a local origin names no host. */

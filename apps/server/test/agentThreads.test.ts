@@ -17,7 +17,6 @@ import {
 import { PENDING_MS, REMOTE_POLL_MS, RemoteThreads, type RemoteRequest } from '../src/background/remoteThreads'
 import type { AgentHostService } from '../src/remote/agentHosts'
 import type { DeviceInfo } from '../src/remote/devices'
-import { startedGroups } from '@ramu/shared/workspace/startedGroups'
 
 type Handler = (
   input: Record<string, unknown>,
@@ -177,7 +176,6 @@ describe('thread_start', () => {
       groupId: expect.any(String),
       taskId: task.id,
       title: task.title,
-      groupSize: 1,
     })
     expect(ws.getTask(task.id).startedFrom).toBeUndefined()
     expect(recorded).toEqual([{ id: 'caller', threads: [expect.objectContaining({ taskId: started.id })] }])
@@ -204,11 +202,10 @@ describe('thread_start', () => {
     expect(permissionDetails).toHaveLength(1)
     expect(out.started).toHaveLength(2)
     const [first, second] = out.started.map((entry: { threadId: string }) => ws.getTask(entry.threadId))
-    expect(first.startedFrom.groupId).toBe(second.startedFrom.groupId)
-    expect(first.startedFrom.groupSize).toBe(2)
+    expect(first.startedFrom.taskId).toBe(second.startedFrom.taskId)
   })
 
-  it('writes the brief with the starting request and the threads that work beside it', async () => {
+  it('writes the brief with the starting request, and names no other threads', async () => {
     await callerIn(api)
     approvals.push(true)
     const out = await tools('caller').call('thread_start', {
@@ -221,7 +218,7 @@ describe('thread_start', () => {
     expect(brief).toContain('API part')
     expect(brief).toContain('Plan the dueDate field')
     expect(brief).toContain('Add dueDate to the API')
-    expect(brief).toContain('"Web"')
+    expect(brief).not.toContain('"Web"')
     expect(out.started.map((entry: { title: string }) => entry.title)).toEqual(['API', 'Web'])
   })
 
@@ -309,7 +306,7 @@ describe('Let agents start threads', () => {
 })
 
 describe('related threads', () => {
-  it('lets threads started together see and message each other, but not unrelated threads', async () => {
+  it('lets a started thread see and message the thread that started it, but not its siblings or unrelated threads', async () => {
     await callerIn(api)
     approvals.push(true)
     const out = await tools('caller').call('thread_start', {
@@ -317,17 +314,13 @@ describe('related threads', () => {
     })
     const [apiThread, webThread] = out.started.map((entry: { threadId: string }) => entry.threadId)
     const status = await tools('started-1').call('thread_status', {})
+    const starter = ws.getTask(apiThread).startedFrom!.taskId!
     expect(status.map((entry: { threadId: string; relation: string }) => [entry.threadId, entry.relation])).toEqual([
-      [ws.getTask(apiThread).startedFrom!.taskId, 'starter'],
-      [webThread, 'sibling'],
+      [starter, 'starter'],
     ])
-    await tools('started-1').call('thread_message', {
-      threadId: webThread,
-      text: 'The field is dueDate (ISO date).',
-      mode: 'queue',
-    })
-    expect(submitted.at(-1)).toMatchObject({ id: 'started-2', mode: 'queue' })
-    expect(submitted.at(-1)!.text).toContain('The field is dueDate')
+    await expect(tools('started-1').call('thread_message', { threadId: webThread, text: 'hi' })).rejects.toThrow(
+      /not related/,
+    )
     const other = await ws.createTask({ projectId: web.id, title: 'Unrelated', mode: 'current' })
     await expect(tools('started-1').call('thread_message', { threadId: other.id, text: 'hi' })).rejects.toThrow(
       /not related/,
@@ -380,47 +373,22 @@ describe('related threads', () => {
     const { task } = await callerIn(api)
     const out = await tools('caller').call('thread_start', { threads: [{ prompt: 'Write the migration' }] })
     await ws.deleteTask(task.id, false)
-    expect(ws.getTask(out.started[0].threadId).startedFrom).toMatchObject({ taskId: null, title: null, groupSize: 1 })
+    expect(ws.getTask(out.started[0].threadId).startedFrom).toMatchObject({ taskId: null, title: null })
   })
 })
 
-describe('threads.startGroup', () => {
-  it('starts reviewed parts of one Home prompt as a group that knows every member, without a starting thread', async () => {
-    const groupId = '7b0a1f8e-8c1d-4c3e-9a51-0e9a1d0c4b11'
-    const out = await service.startGroup(
-      {
-        groupId,
-        threads: [
-          { projectId: api.id, title: 'Store dueDate', prompt: 'API brief' },
-          { projectId: web.id, title: 'Show dueDate', prompt: 'Web brief' },
-        ],
-        together: ['Store dueDate', 'Show dueDate', 'Ship dueDate on mobile'],
-      },
+describe('threads.startInProject', () => {
+  it('starts one thread in a project here for a person on another host, with nothing to report back to', async () => {
+    const out = await service.startInProject(
+      { projectId: web.id, title: 'Show dueDate', prompt: 'Show dueDate at checkout' },
       DEFAULT_AGENT_SETTINGS,
     )
-    expect(out.map((entry) => entry.error)).toEqual([undefined, undefined])
-    const tasks = out.map((entry) => ws.getTask(entry.taskId))
-    expect(tasks.map((task) => task.startedFrom)).toEqual([
-      { groupId, taskId: null, title: null, groupSize: 2 },
-      { groupId, taskId: null, title: null, groupSize: 2 },
-    ])
-    const brief = (events.get('started-1')![0] as { text: string }).text
-    expect(brief).toContain('"Show dueDate", "Ship dueDate on mobile"')
-    expect(brief).not.toContain('"Store dueDate"')
-    // Retrying the same group finds the same threads and starts no second agent.
-    const again = await service.startGroup(
-      {
-        groupId,
-        threads: [
-          { projectId: api.id, title: 'Store dueDate', prompt: 'API brief' },
-          { projectId: web.id, title: 'Show dueDate', prompt: 'Web brief' },
-        ],
-        together: ['Store dueDate', 'Show dueDate', 'Ship dueDate on mobile'],
-      },
-      DEFAULT_AGENT_SETTINGS,
-    )
-    expect(again.map((entry) => entry.taskId)).toEqual(out.map((entry) => entry.taskId))
-    expect(sessions.has('started-3')).toBe(false)
+    expect(out.error).toBeUndefined()
+    const task = ws.getTask(out.taskId)
+    expect(task.projectId).toBe(web.id)
+    expect(task.title).toBe('Show dueDate')
+    expect(task.startedFrom).toMatchObject({ taskId: null, title: null })
+    expect((events.get('started-1')![0] as { text: string }).text).toBe('Show dueDate at checkout')
     await service.tick()
     expect(submitted).toEqual([])
   })
@@ -445,7 +413,6 @@ describe('threads another host asks for', () => {
     // The label is this host's own name for the pairing, not what the asking host claims to be.
     expect(task.startedFrom).toMatchObject({ taskId: null, title: 'Plan dueDate', host: 'studio' })
     expect(sessions.get('started-1')!.settings.access).toBe('edits')
-    expect(startedGroups([{ hostId: 'h', tasks: ws.listTasks() }])).toEqual([])
     const brief = (events.get('started-1')![0] as { text: string }).text
     expect(brief).toContain('Started by an agent on the paired host "studio" (it calls itself "laptop")')
   })
@@ -596,6 +563,6 @@ describe('threads this host’s agents start on another host', () => {
 })
 
 it('leaves a brief without context unchanged', () => {
-  expect(briefOf('Do it', undefined, [])).toBe('Do it')
-  expect(briefOf('Do it', 'From X', ['Y'])).toContain('Started together with: "Y"')
+  expect(briefOf('Do it', undefined)).toBe('Do it')
+  expect(briefOf('Do it', 'From X')).toBe('Do it\n\nFrom X')
 })

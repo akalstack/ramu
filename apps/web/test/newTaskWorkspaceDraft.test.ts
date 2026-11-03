@@ -36,6 +36,8 @@ const state = vi.hoisted(() => ({
   editor: undefined as { choice?: BranchChoice; onChange: (choice?: BranchChoice) => void } | undefined,
   composer: undefined as { onSubmit: (context: FileContext[]) => Promise<void> } | undefined,
   calls: [] as { method: string; args: unknown[] }[],
+  elsewhere: [] as { host: string; method: string; args: unknown[] }[],
+  opened: [] as { host: string; taskId: string }[],
   workspaces: [] as { id: string; projectId: string; name: string }[],
 }))
 vi.mock('../src/i18n', () => ({
@@ -83,7 +85,18 @@ vi.mock('../src/workspace/HostProvider', () => ({
     },
   }),
 }))
-vi.mock('../src/workspace/HostSelection', () => ({ useHostSelection: () => ({ activeHost: 'a', select() {} }) }))
+vi.mock('../src/workspace/HostSelection', () => ({
+  useHostSelection: () => ({
+    activeHost: 'a',
+    select: (host: string, destination: { taskId: string }) => state.opened.push({ host, taskId: destination.taskId }),
+  }),
+}))
+vi.mock('../src/workspace/otherHostTargets', () => ({
+  useOtherHostTargets: () => ({
+    targets: new Map([['host0:jobs', { hostId: 'vps', projectId: 'jobs', name: 'Jobs', hostName: 'vps' }]]),
+    candidates: [{ id: 'host0:jobs', name: 'Jobs', host: 'vps' }],
+  }),
+}))
 vi.mock('../src/workspace/addProject', () => ({ useAddProject: () => ({ busy: false }) }))
 vi.mock('../src/workspace/computers', () => ({ useComputers: () => null, StatusDot: () => null }))
 vi.mock('../src/composer/useWorkspaceDraft', () => ({ useWorkspaceDraft: () => state.draft }))
@@ -112,7 +125,14 @@ vi.mock('../src/composer/drafts', () => ({
   },
 }))
 vi.mock('../src/hostStorage', () => ({ hostStorageFor: () => ({ getItem: () => null, setItem() {} }) }))
-vi.mock('../src/ipc', () => ({ ramu: {} }))
+vi.mock('../src/ipc', () => ({
+  ramu: {
+    invokeOn: async (host: string, method: string, ...args: unknown[]) => {
+      state.elsewhere.push({ host, method, args })
+      return { taskId: 'far-thread', title: 'Fix login', projectName: 'Jobs' }
+    },
+  },
+}))
 vi.mock('../src/chat/Notifications', () => ({ notifyError() {} }))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: String }))
 vi.mock('../src/Home', () => ({ HomeFeed: () => null }))
@@ -370,20 +390,24 @@ it('Auto creates nothing and keeps the draft when the router cannot pick one pro
   }
 })
 
-it('Auto asks for a split, and a request for several projects is written up for review without creating anything', async () => {
-  state.route = {
-    kind: 'split',
-    projects: [
-      { projectId: 'p', reason: 'x' },
-      { projectId: 'p', reason: 'x' },
-    ],
-  }
+it('Auto starts a request that belongs to a project on another host there, and opens it', async () => {
+  state.route = { kind: 'resolved', projectId: 'host0:jobs', reason: 'Mentions “Jobs”', via: 'name' }
+  state.elsewhere = []
+  state.opened = []
   render(AUTO_PROJECT)
   await state.composer!.onSubmit([])
   const route = state.calls.find((call) => call.method === 'projects.route')
-  expect(route?.args[2]).toMatchObject({ split: true, others: [] })
-  expect(state.calls.map((call) => call.method)).toEqual(['projects.route', 'projects.splitBriefs'])
-  expect(state.consumed).toBe(0)
+  expect(route?.args[2]).toEqual({ others: [{ id: 'host0:jobs', name: 'Jobs', host: 'vps' }], localHost: '' })
+  expect(state.calls.some((call) => call.method === 'tasks.create')).toBe(false)
+  expect(state.elsewhere).toEqual([
+    {
+      host: 'vps',
+      method: 'threads.startInProject',
+      args: [{ projectId: 'jobs', title: 'Fix login', prompt: 'Fix login' }, expect.anything()],
+    },
+  ])
+  expect(state.opened).toEqual([{ host: 'vps', taskId: 'far-thread' }])
+  expect(state.consumed).toBe(1)
 })
 
 it('Auto never sends a stale or missing destination to the server', async () => {

@@ -1,11 +1,11 @@
-import { GitFork, MessagesSquare } from 'lucide-react'
+import { GitFork } from 'lucide-react'
 import type { StartedThread } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../../../i18n'
 import { useWorkspace } from '../../../workspace/workspace'
 import { GHOST_TEXT_BUTTON_CLASS } from '../styles'
 
-/** The header chip on a thread an agent or one Home prompt started: it opens the starting thread. */
+/** The header chip on a thread an agent started: it opens the starting thread. */
 export function ThreadOriginChip({ taskId }: { taskId: string | undefined }) {
   useLanguage()
   const ws = useWorkspace()
@@ -24,19 +24,7 @@ export function ThreadOriginChip({ taskId }: { taskId: string | undefined }) {
         </span>
       </span>
     )
-  const together =
-    origin.groupSize === 2
-      ? t('Started together with 1 other thread')
-      : origin.groupSize > 2
-        ? t('Started together with {0} other threads', { '0': origin.groupSize - 1 })
-        : ''
-  if (!origin.taskId)
-    return together ? (
-      <span className="inline-flex items-center gap-1 text-caption text-muted-foreground">
-        <MessagesSquare size={13} aria-hidden="true" />
-        {together}
-      </span>
-    ) : null
+  if (!origin.taskId) return null
   const starter = origin.taskId
   const label = t('From {0}', { '0': origin.title ?? t('another thread') })
   return (
@@ -44,7 +32,7 @@ export function ThreadOriginChip({ taskId }: { taskId: string | undefined }) {
       variant="ghost"
       size="sm"
       className={`${GHOST_TEXT_BUTTON_CLASS} max-w-[260px]`}
-      title={[t('Started by the agent in {0}', { '0': origin.title ?? '' }), together].filter(Boolean).join(' · ')}
+      title={t('Started by the agent in {0}', { '0': origin.title ?? '' })}
       onClick={() => ws.openTask(starter)}
     >
       <GitFork size={13} aria-hidden="true" />

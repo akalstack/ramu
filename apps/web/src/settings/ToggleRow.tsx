@@ -11,7 +11,6 @@ export type ToggleKey =
   | 'includeTabContext'
   | 'warnModelChange'
   | 'autoProjectSelection'
-  | 'autoProjectSplit'
   | 'agentThreads'
   | 'teammateSuggestions'
   | 'modelCatalogLookups'

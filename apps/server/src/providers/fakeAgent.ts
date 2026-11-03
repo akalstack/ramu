@@ -899,18 +899,7 @@ export const fakeCodex: import('../agent/agentRunner').AgentRunnerFactory = (sco
     emit({ kind: 'text', text: `Fake Codex in ${scope.cwd} received: ${prompt}` })
     emit({ kind: 'result', isError: false, text: 'done', costUsd: null })
   }
-  const mcp = fakeMcpServers()
   return {
-    mcpStatus: async () => ({
-      supported: true,
-      live: true,
-      source: 'live' as const,
-      canReconnect: true,
-      canReload: true,
-      servers: mcp.list(),
-    }),
-    reconnectMcp: async (name: string) => mcp.reconnect(name),
-    reloadMcp: async () => {},
     setTools: (tools) => {
       connection = tools
     },
@@ -961,7 +950,10 @@ export const fakeCodex: import('../agent/agentRunner').AgentRunnerFactory = (sco
   }
 }
 
-/** Two MCP servers, one down until reconnected, so the MCP status views can be tried with Reconnect and Reload. */
+/**
+ * Two MCP servers on a fake Claude session, one down until reconnected, so the MCP status views can be tried with
+ * Reconnect. The fake Codex runner offers none, so the last-reported fallback stays covered too.
+ */
 function fakeMcpServers() {
   const servers: { name: string; status: string; toolCount?: number; error?: string }[] = [
     { name: 'ramu', status: 'connected', toolCount: 12 },

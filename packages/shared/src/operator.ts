@@ -2,7 +2,7 @@
 // bounded, tool-free call proposes, this module checks the proposal against what actually exists, the person confirms,
 // and each action then runs as the ordinary method on the host that owns it, with that device's own permissions.
 import type { AgentSessionInfo, Task } from './types'
-import { memberState } from './workspace/startedGroups'
+import { threadState } from './workspace/threadOrigin'
 
 export const OPERATOR_THREAD_LIMIT = 100
 export const OPERATOR_SCHEDULE_LIMIT = 30
@@ -86,7 +86,7 @@ export function operatorSnapshot(hosts: readonly OperatorHostInput[]): OperatorS
           taskId: task.id,
           title: task.title.slice(0, 120),
           project: projectName(task.projectId),
-          state: memberState(task),
+          state: threadState(task),
           at: task.lastActiveAt,
         })),
     )

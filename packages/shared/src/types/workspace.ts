@@ -138,8 +138,8 @@ export interface Task {
   /** The schedule whose run created this thread. Null for every other thread. */
   scheduleId?: string | null
   /**
-   * Who started this thread, when an agent or one Home prompt did: the starting thread (null for Home) and how many
-   * threads started together. Absent for threads a person started.
+   * Who started this thread, when an agent, a continuation or a terminal did: the starting thread, or null when it
+   * has none here. Absent for threads a person started.
    */
   startedFrom?: ThreadOrigin | null
 }
@@ -148,8 +148,6 @@ export interface ThreadOrigin {
   groupId: string
   taskId: string | null
   title: string | null
-  /** Threads started together, this one included. */
-  groupSize: number
   /** The other host whose agent started this thread; `title` then names its thread there. Absent for local origins. */
   host?: string | null
 }

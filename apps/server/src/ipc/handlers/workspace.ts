@@ -18,10 +18,9 @@ import {
   type BranchChoice,
   type BranchNamingIntent,
 } from '@ramu/shared/workspaceDefaults'
-import { planOperator, routeProject, splitBriefs } from '../../workspace/projectRouter'
+import { planOperator, routeProject } from '../../workspace/projectRouter'
 import { OPERATOR_SCHEDULE_LIMIT, OPERATOR_THREAD_LIMIT, type OperatorSnapshot } from '@ramu/shared/operator'
-import { SPLIT_LIMIT, type RoutingCandidate } from '@ramu/shared/workspace/projectRouting'
-import type { AgentThreadService } from '../../background/agentThreads'
+import type { RoutingCandidate } from '@ramu/shared/workspace/projectRouting'
 import type { ContinuationRepo, ContinuationStart, ContinuedEvent } from '@ramu/shared/continuation'
 import { agentSettings, id } from '../schemas'
 import type { RegisterHandlers } from '../types'
@@ -162,17 +161,12 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         agentSettings,
         z
           .object({
-            split: z.boolean().optional(),
             others: z.array(routingCandidate).max(50).optional(),
             localHost: z.string().max(200).optional(),
           })
           .optional(),
       ]),
-      run: (
-        prompt: string,
-        settings: AgentSettings,
-        options?: { split?: boolean; others?: RoutingCandidate[]; localHost?: string },
-      ) =>
+      run: (prompt: string, settings: AgentSettings, options?: { others?: RoutingCandidate[]; localHost?: string }) =>
         routeProject(
           prompt,
           settings,
@@ -187,8 +181,6 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
             ...(options?.others ?? []),
           ],
           (...args) => agents.analyze(...args),
-          undefined,
-          { split: options?.split },
         ),
     },
     'operator.plan': {
@@ -209,29 +201,15 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         )
       },
     },
-    'projects.splitBriefs': {
-      args: z.tuple([z.string().min(1).max(20_000), z.array(routingCandidate).min(2).max(SPLIT_LIMIT), agentSettings]),
-      run: (prompt: string, targets: RoutingCandidate[], settings: AgentSettings) =>
-        splitBriefs(prompt, targets, settings, (...args) => agents.analyze(...args)),
-    },
-    'threads.startGroup': {
+    'threads.startInProject': {
       args: z.tuple([
-        z.object({
-          groupId: z.string().uuid(),
-          threads: z
-            .array(
-              z.object({ projectId: id, title: z.string().min(1).max(200), prompt: z.string().min(1).max(100_000) }),
-            )
-            .min(1)
-            .max(SPLIT_LIMIT),
-          together: z.array(z.string().max(200)).max(SPLIT_LIMIT),
-        }),
+        z.object({ projectId: id, title: z.string().min(1).max(200), prompt: z.string().min(1).max(100_000) }),
         agentSettings,
       ]),
-      run: async (input: Parameters<AgentThreadService['startGroup']>[0], settings: AgentSettings) => {
-        if (!agentThreads) throw new Error('Starting several threads is unavailable on this host.')
+      run: async (input: { projectId: string; title: string; prompt: string }, settings: AgentSettings) => {
+        if (!agentThreads) throw new Error('Starting threads from another host is unavailable on this host.')
         await agents.validateSettings(settings)
-        return agentThreads.startGroup(input, settings)
+        return agentThreads.startInProject(input, settings)
       },
     },
     'threads.continuationPackage': {

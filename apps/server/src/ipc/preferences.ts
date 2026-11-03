@@ -156,7 +156,6 @@ export const appPreferences = z.object({
   includeTabContext: z.boolean().default(true),
   warnModelChange: z.boolean().default(true),
   autoProjectSelection: z.boolean().default(true),
-  autoProjectSplit: z.boolean().default(true),
   agentThreads: z.boolean().default(true),
   teammateSuggestions: z.boolean().default(true),
   modelCatalogLookups: z.boolean().default(true),

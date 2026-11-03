@@ -7,7 +7,7 @@ import type {
   BrowserProfileInfo,
   BrowserTabInfo,
 } from './types/browser'
-import type { RoutingCandidate, RoutingOutcome, SplitPlan } from './workspace/projectRouting'
+import type { RoutingCandidate, RoutingOutcome } from './workspace/projectRouting'
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
 import type { AntigravitySignIn, ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
@@ -776,15 +776,13 @@ export interface RamuMethods {
   'projects.route'(
     prompt: string,
     settings: AgentSettings,
-    options?: { split?: boolean; others?: RoutingCandidate[]; localHost?: string },
+    options?: { others?: RoutingCandidate[]; localHost?: string },
   ): RoutingOutcome
   /** Proposes actions for one sentence from the client's snapshot; nothing runs here. Null when no proposal came back. */
   'operator.plan'(
     request: string,
     snapshot: import('./operator').OperatorSnapshot,
   ): import('./operator').OperatorPlan | null
-  /** One brief per project of a split request, around one shared contract; null when it cannot be written. */
-  'projects.splitBriefs'(prompt: string, targets: RoutingCandidate[], settings: AgentSettings): SplitPlan | null
   'projects.setup'(projectId: string): ProjectSetup
   'projects.create'(name: string): Project
   'projects.inspect'(dir: string): FolderInspection
@@ -831,18 +829,11 @@ export interface RamuMethods {
     attachments?: string[],
     context?: FileContext[],
   ): { task: Task; session: AgentSessionInfo | null; error?: string }
-  /**
-   * Starts the reviewed threads of one split prompt on this host as one group. `together` names every thread of the
-   * group, on any host, so each brief says who works beside it.
-   */
-  'threads.startGroup'(
-    input: {
-      groupId: string
-      threads: { projectId: string; title: string; prompt: string }[]
-      together: string[]
-    },
+  /** Starts one thread in a project on this host for a person on another host's Home, at the project's default checkout. */
+  'threads.startInProject'(
+    input: { projectId: string; title: string; prompt: string },
     settings: AgentSettings,
-  ): StartedThread[]
+  ): StartedThread
   'tasks.rename'(taskId: string, title: string): Task
   /** AI-written title. An automatic call leaves a title the user typed alone; `force` replaces it. */
   'tasks.generateTitle'(taskId: string, settings: AgentSettings, force?: boolean): Task
