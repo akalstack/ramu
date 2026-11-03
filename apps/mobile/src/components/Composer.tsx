@@ -833,18 +833,29 @@ export function Composer({
     edit(next.text)
     setCaret(next.caret)
     setForced({ start: next.caret, end: next.caret })
-    // Picking who the message goes to turns it into the chip; typed by hand, it stays coloured text in the field,
-    // since rewriting a native field's text between keystrokes loses or repeats what was typed.
+    // Picking who the message goes to turns it into the chip straight away.
     const first = composerDraft(splitQuotes(next.text).body, teammate?.mentions).chips[0]
     setChipped(first?.kind === 'mention' && first.start === 0 ? (first.target ?? null) : null)
   }
   const [chipped, setChipped] = useState<string | null>(null)
-  // A message that starts with a picked @model or @teammate shows who it goes to as a chip before the text field, with
-  // the model's icon, since a native text field cannot hold one. The field edits what follows; the draft keeps it all.
-  const lead = useMemo(() => {
+  // A message that starts with an @model or @teammate shows who it goes to as a chip before the text field, with the
+  // model's icon, since a native text field cannot hold one. The field edits what follows; the draft keeps it all.
+  const named = useMemo(() => {
     const first = composerDraft(split.body, teammate?.mentions).chips[0]
-    return first?.kind === 'mention' && first.start === 0 && first.target === chipped ? first : null
-  }, [split.body, teammate?.mentions, chipped])
+    return first?.kind === 'mention' && first.start === 0 ? first : null
+  }, [split.body, teammate?.mentions])
+  const lead = named && named.target === chipped ? named : null
+  // Picked from the list it becomes the chip at once. Typed by hand, it does once typing pauses: rewriting a native
+  // field between keystrokes loses or repeats what was typed.
+  useEffect(() => {
+    if (!named || named.target === chipped) return
+    const timer = setTimeout(() => {
+      setChipped(named.target ?? null)
+      setForced({ start: caret, end: caret })
+    }, 700)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-armed on every edit and caret move by design; the setters are stable
+  }, [named?.target, chipped, text, caret])
   const prefix = lead ? split.body.slice(0, lead.end + (split.body[lead.end] === ' ' ? 1 : 0)) : ''
   const fieldText = split.body.slice(prefix.length)
   const editField = (value: string) => edit(prefix + value)
