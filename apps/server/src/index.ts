@@ -594,6 +594,32 @@ const agentThreads = new AgentThreadService(
   changed,
   new RemoteThreads(db, agents, agentHosts, changed),
 )
+/** Asks this host's own desktop app to do something only it can: a native dialog, or installing an update. */
+function askDesktop(method: string, path?: string): Promise<unknown> {
+  if (!hostClients.size) return Promise.reject(new Error('Open Ramu on this host to use this desktop action'))
+  const requestId = randomUUID()
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      nativeRequests.delete(requestId)
+      reject(new Error('Desktop action timed out'))
+    }, 120000)
+    nativeRequests.set(requestId, { resolve, reject, timer })
+    // Exactly one UI owns a desktop dialog/action.
+    const client = hostClients.values().next().value
+    if (
+      !client ||
+      !writeEvent(
+        client,
+        `data: ${JSON.stringify({ channel: 'host:request', payload: { requestId, method, path } })}\n\n`,
+      )
+    ) {
+      clearTimeout(timer)
+      nativeRequests.delete(requestId)
+      reject(new Error('Open Ramu on this host to use this desktop action'))
+    }
+  })
+}
+
 const dispatcher = createDispatcher(
   {
     userData,
@@ -608,29 +634,15 @@ const dispatcher = createDispatcher(
             'This opens a window on the host that runs Ramu, so it is not available from another host yet. Do it on that host.',
           ),
         )
-      if (!hostClients.size) return Promise.reject(new Error('Open Ramu on this host to use this desktop action'))
-      const requestId = randomUUID()
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          nativeRequests.delete(requestId)
-          reject(new Error('Desktop action timed out'))
-        }, 120000)
-        nativeRequests.set(requestId, { resolve, reject, timer })
-        // Exactly one UI owns a desktop dialog/action.
-        const client = hostClients.values().next().value
-        if (
-          !client ||
-          !writeEvent(
-            client,
-            `data: ${JSON.stringify({ channel: 'host:request', payload: { requestId, method, path } })}\n\n`,
-          )
-        ) {
-          clearTimeout(timer)
-          nativeRequests.delete(requestId)
-          reject(new Error('Open Ramu on this host to use this desktop action'))
-        }
-      })
+      return askDesktop(method, path)
     },
+    // Installing an update the person asked for from any device; the desktop app itself checks the build may install.
+    desktopApp: {
+      attached: () => hostClients.size > 0,
+      installUpdate: async (version) => void (await askDesktop('installUpdate', version)),
+    },
+    // 75 (try again): a service manager set to restart only on failure still starts the new build.
+    restartService: () => void stop(false, 75),
   },
   {
     workspace,
@@ -663,7 +675,7 @@ const dispatcher = createDispatcher(
 )
 const startedAt = Date.now()
 let stopping = false
-async function stop(intentional = false) {
+async function stop(intentional = false, exitCode = 0) {
   if (intentional) writeFileSync(stoppedPath, String(Date.now()))
   if (stopping) return
   stopping = true
@@ -713,7 +725,7 @@ async function stop(intentional = false) {
   try {
     unlinkSync(socketPath)
   } catch {}
-  process.exit(0)
+  process.exit(exitCode)
 }
 async function rawBody(req: import('node:http').IncomingMessage, limit = MAX_REQUEST_BYTES): Promise<string> {
   let bytes = 0

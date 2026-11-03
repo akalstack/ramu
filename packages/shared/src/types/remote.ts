@@ -20,6 +20,15 @@ export interface BackgroundStatus {
   tls?: boolean
 }
 
+/** What asking a host to update Ramu did. `built` means a supervisor-less host needs its service restarted by hand. */
+export interface HostUpdateResult {
+  outcome: 'current' | 'restarting' | 'built' | 'unavailable'
+  version: string
+  message: string
+  /** The release page, when the person installs it themselves. */
+  notesUrl?: string
+}
+
 /** A device that has paired with this computer's server and holds its own access token. */
 export interface NetworkDevice {
   id: string

@@ -104,6 +104,20 @@ export class DesktopUpdater {
       })
     return this.preparing
   }
+  /** Prepares a staged release and waits, bounded, until it can install; for an install asked from another device. */
+  async readyFor(status: AppUpdateStatus, timeoutMs = 120_000): Promise<void> {
+    if (!this.supported)
+      throw new Error(
+        'This Ramu build is not signed, so it cannot install updates itself. Install the release from GitHub on this host.',
+      )
+    await this.prepare(status)
+    const until = Date.now() + timeoutMs
+    while (!this.ready) {
+      if (this.error) throw new Error(this.error)
+      if (Date.now() > until) throw new Error('The update did not finish preparing on this host.')
+      await new Promise((resolve) => setTimeout(resolve, 500))
+    }
+  }
   install() {
     if (!this.ready) throw new Error(this.error ?? 'The native app update is not ready yet')
     autoUpdater.quitAndInstall()

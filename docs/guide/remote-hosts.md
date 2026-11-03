@@ -70,6 +70,14 @@ WantedBy=default.target
 
 On macOS the desktop app installs its own background service.
 
+### Keeping hosts up to date
+
+**Settings → Remote access** shows each connected host's Ramu version and provider CLIs, with **Update Ramu** and **Update providers** when something is newer; **Update all hosts** does every host at once, this computer last. The phone's host list has the same actions. Viewer devices see none of this.
+
+- **A host with Ramu's desktop app open** downloads the release and its app installs it, then restarts and reconnects. It installs only signed builds; until releases are signed, it says so and links the release.
+- **A headless host running from a checkout** (as above) moves to the release tag, runs `pnpm install` and `pnpm build`, and restarts if a service manager will start it again (systemd, launchd, or `RAMU_SUPERVISED=1`); otherwise it asks you to restart the service. A checkout with local changes is left alone, and a failed build is put back on the version that ran.
+- A release that failed to install on a host is not retried from another device; retry it on the host.
+
 ## Threads from a terminal
 
 Claude Code, Codex or a script on the host can place work where you'll see it:

@@ -66,6 +66,21 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Not connected. Pull requests, builds and work items need a personal access token.':
     'Belum terhubung. Pull request, build dan work item memerlukan personal access token.',
   Organization: 'Organisasi',
+  'Provider CLIs update on each host, then Ramu installs where a newer release exists and restarts there.':
+    'CLI penyedia diperbarui di setiap host, lalu Ramu dipasang di tempat yang punya rilis baru dan dimulai ulang di sana.',
+  'Ramu {0} installs on {1}, which restarts and reconnects.': 'Ramu {0} dipasang di {1}, yang dimulai ulang dan tersambung lagi.',
+  'Update all': 'Perbarui semua',
+  'Update all hosts ({0})': 'Perbarui semua host ({0})',
+  'Update providers': 'Perbarui penyedia',
+  'Update {0} hosts?': 'Perbarui {0} host?',
+  'Update {0}?': 'Perbarui {0}?',
+  'Updates for {0}': 'Pembaruan untuk {0}',
+  '{0} available': '{0} tersedia',
+  '{0} threads are working on those hosts. Threads continue after the restart when Continue threads after restart is on.':
+    '{0} thread sedang bekerja di host tersebut. Thread berlanjut setelah dimulai ulang bila Lanjutkan thread setelah mulai ulang aktif.',
+  '{0} threads are working there. Threads continue after the restart when Continue threads after restart is on.':
+    '{0} thread sedang bekerja di sana. Thread berlanjut setelah dimulai ulang bila Lanjutkan thread setelah mulai ulang aktif.',
+  'Open release': 'Buka rilis',
   'Different content shares this name': 'Isi yang berbeda memakai nama ini',
   'Your copy of {name}. Its source changes reach it only after you review them.':
     'Salinan Anda dari {name}. Perubahan sumbernya masuk hanya setelah Anda meninjaunya.',

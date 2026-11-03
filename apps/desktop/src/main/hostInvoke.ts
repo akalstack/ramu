@@ -60,6 +60,12 @@ export const isHostInvokeAllowed = (method: unknown): method is string =>
     // Read-only; tells this device its own role on that host.
     'background.status',
     'providers.status',
+    // Keeping that host current: its own Ramu release and its provider CLIs.
+    'updates.status',
+    'updates.check',
+    'updates.apply',
+    'providers.updates',
+    'providers.update',
     'mcp.status',
     'settings.app.get',
     'settings.app.set',

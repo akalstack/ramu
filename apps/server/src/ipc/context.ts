@@ -1,4 +1,5 @@
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import type { AppPreferences, FileContext, UsageReading, ModelPreferences } from '@ramu/shared/types'
 import { providerEnabled } from '@ramu/shared/providers/providers'
@@ -9,6 +10,7 @@ import { ProviderService } from '../providers/providers'
 import { KeepAwakeService } from '../background/keepAwake'
 import { AttachmentStore } from '../attachments'
 import { AppUpdateService } from '../background/appUpdates'
+import { HostUpdater, isSupervised, runCommand, sourceCheckout } from '../background/hostUpdate'
 import { runtimeVersion } from '../build'
 import { configureProviderAccounts, providerEnvironment } from '../providers/providerBinaries'
 import { UsageService } from '../providers/usage'
@@ -88,6 +90,18 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     () => ({ ...DEFAULT_APP_PREFERENCES, ...storedPreferences() }),
     (state) => host.send('updates:changed', state),
   )
+  const hostUpdates = new HostUpdater({
+    status: async () => updates.status(),
+    check: () => updates.check(),
+    download: () => updates.download(),
+    desktopAttached: () => host.desktopApp?.attached() === true,
+    installOnDesktop: (version) =>
+      host.desktopApp ? host.desktopApp.installUpdate(version) : Promise.reject(new Error('No desktop app here')),
+    sourceRoot: sourceCheckout(dirname(fileURLToPath(import.meta.url))),
+    run: runCommand,
+    supervised: isSupervised(),
+  })
+
   const usage = new UsageService(
     () => workspace.getAppState<UsageReading[]>('usage-limits', []),
     (readings) => workspace.setAppState('usage-limits', readings),
@@ -202,6 +216,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     awake,
     attachmentStore,
     updates,
+    hostUpdates,
     usage,
     extraUsage,
     accountUsage,

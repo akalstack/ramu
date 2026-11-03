@@ -553,6 +553,8 @@ export interface RamuMethods {
   'updates.check'(): Promise<AppUpdateStatus>
   'updates.download'(): Promise<AppUpdateStatus>
   'updates.restart'(): Promise<void>
+  /** Installs the newest release on this host: through its desktop app, or by rebuilding a headless source checkout. Owner devices only. */
+  'updates.apply'(): import('./types').HostUpdateResult
   /** Quits and reopens the desktop app; the background service keeps running. */
   'app.relaunch'(): void
   /** Chats working or waiting for the user. */

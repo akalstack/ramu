@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { HostAddressSheet } from '../components/HostAddressSheet'
+import { HostUpdates } from '../components/HostUpdates'
 import { goBackOrHome } from '../runtime/navigation'
 import { Alert, Pressable, Switch, View } from 'react-native'
 import { useRouter } from 'expo-router'
@@ -121,6 +122,7 @@ export default function Computers() {
                       {pc.error}
                     </T>
                   ) : null}
+                  {pc.status === 'online' ? <HostUpdates hostId={pc.id} name={pc.name} running={n.running} /> : null}
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
                     {pc.status !== 'online' && pc.status !== 'paused' ? (
                       <Action label={say('Reconnect')} onPress={() => retry(pc.id)} />

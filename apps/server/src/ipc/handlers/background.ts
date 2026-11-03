@@ -13,6 +13,8 @@ export const registerBackgroundHandlers: RegisterHandlers = ({
   recaps,
   notices,
   resources,
+  hostUpdates,
+  host,
 }) => ({
   'resources.snapshot': {
     args: z.tuple([]),
@@ -54,6 +56,15 @@ export const registerBackgroundHandlers: RegisterHandlers = ({
   'updates.status': { args: z.tuple([]), run: () => updates.status() },
   'updates.check': { args: z.tuple([]), run: () => updates.check() },
   'updates.download': { args: z.tuple([]), run: () => updates.download() },
+  'updates.apply': {
+    args: z.tuple([]),
+    run: async () => {
+      const { result, restartService } = await hostUpdates.apply()
+      // The asking device gets the answer first; the service manager then starts the new build.
+      if (restartService) setTimeout(() => host.restartService?.(), 1000)
+      return result
+    },
+  },
   'notices.list': { args: z.tuple([]), run: () => notices?.list() ?? [] },
   'notices.dismiss': { args: z.tuple([z.string().max(300)]), run: (id: string) => notices?.dismiss(id) },
   'notices.clear': { args: z.tuple([]), run: () => notices?.clear() },

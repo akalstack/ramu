@@ -764,7 +764,13 @@ async function main() {
           })
           value = result.canceled ? [] : result.filePaths
         } else if (payload.method === 'reveal' && payload.path) shell.showItemInFolder(payload.path)
-        else throw new Error('Unknown desktop action')
+        else if (payload.method === 'installUpdate') {
+          // Asked from another of the person's devices: install only a signed build that is fully prepared.
+          await desktopUpdater.readyFor(await runtimeInvoke(runtime, 'updates.status'))
+          await runtimeInvoke(runtime, 'host.reply', [payload.requestId, null])
+          setTimeout(() => desktopUpdater.install(), 500)
+          return
+        } else throw new Error('Unknown desktop action')
         await runtimeInvoke(runtime, 'host.reply', [payload.requestId, value])
       } catch (error) {
         await runtimeInvoke(runtime, 'host.reply', [payload.requestId, null, String(error)]).catch(() => {})

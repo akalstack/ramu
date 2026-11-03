@@ -57,6 +57,7 @@ import { NearbyHosts } from './NearbyHosts'
 import { AgentHosts } from './AgentHosts'
 import { LinkSettings, TunnelSettings } from './ReachThisHost'
 import { AccountHosts } from './AccountHosts'
+import { HostUpdateLine, UpdateAllHosts } from './HostUpdates'
 import { useStagedValue } from './stagedChanges'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
@@ -802,6 +803,7 @@ function Computers({ state }: { state: ComputerList }) {
             {t('Add a host')}
           </Button>
         )}
+        <UpdateAllHosts computers={state.computers} />
       </div>
       <div className="flex flex-col gap-1.5">
         {state.computers.map((computer) => (
@@ -896,6 +898,7 @@ function Computers({ state }: { state: ComputerList }) {
                 )}
               </div>
             </div>
+            <HostUpdateLine computer={computer} />
             {computer.grantedUnreachable && (
               <p role="status" className="m-[6px_0_0_44px] text-caption text-muted-foreground">
                 {t(

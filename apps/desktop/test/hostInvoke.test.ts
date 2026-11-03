@@ -98,6 +98,11 @@ describe('isHostInvokeAllowed', () => {
     expect(isHostInvokeAllowed('background.restart')).toBe(false)
     expect(isHostInvokeAllowed(42)).toBe(false)
   })
+  it("keeps a host current from any device: its Ramu release and provider CLIs, but never this machine's restart", () => {
+    for (const method of ['updates.status', 'updates.check', 'updates.apply', 'providers.updates', 'providers.update'])
+      expect(isHostInvokeAllowed(method)).toBe(true)
+    for (const method of ['updates.restart', 'updates.download']) expect(isHostInvokeAllowed(method)).toBe(false)
+  })
 })
 
 describe('routeTaskCommand', () => {

@@ -65,6 +65,10 @@ export interface RuntimeHost {
   canAdministerIntegrations?(): boolean
   send(channel: string, payload: unknown): void
   native(method: 'pickExecutable' | 'pickDirectory' | 'pickAttachments' | 'reveal', path?: string): Promise<unknown>
+  /** This host's own desktop app, when it is open: whether it is, and asking it to install a prepared update. */
+  desktopApp?: { attached(): boolean; installUpdate(version: string): Promise<void> }
+  /** Stops the service so its service manager starts the newly built version. */
+  restartService?(): void
 }
 
 /** One RPC method: a validated argument tuple and the function that runs with it. */
@@ -87,6 +91,7 @@ export interface HandlerContext extends Services {
   awake: KeepAwakeService
   attachmentStore: AttachmentStore
   updates: AppUpdateService
+  hostUpdates: import('../background/hostUpdate').HostUpdater
   usage: UsageService
   extraUsage: ExtraUsageReader
   accountUsage: AccountUsage
