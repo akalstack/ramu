@@ -75,7 +75,7 @@ Hosts whose platform or description (**Settings → Threads → Describe this ho
 
 ## Thread titles
 
-A thread is named from its first message, then once more after the first reply. **Rename** always wins; **Rename with AI** regenerates.
+A thread is named from its first message, then once more after the first reply. **Rename** always wins; **Rename with AI** regenerates. A thread's hover card (and the phone's rename sheet) says where its title came from: your first message, Ramu, the provider, or you, and whether Ramu may still change it.
 
 ## Asides and advice
 

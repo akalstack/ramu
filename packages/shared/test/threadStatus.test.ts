@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { newerTaskSnapshot, threadStatus } from '../src/chat/threadStatus'
+import { newerTaskSnapshot, threadStatus, titleSourceNote } from '../src/chat/threadStatus'
 
 const task = (patch: Partial<Parameters<typeof threadStatus>[0]> = {}) => ({
   status: 'idle' as never,
@@ -104,4 +104,12 @@ describe('helper work and stale snapshots', () => {
     expect(newerTaskSnapshot(at(5, 'idle'), at(undefined, 'running'))).toEqual(at(undefined, 'running'))
     expect(newerTaskSnapshot(undefined, at(1))).toEqual(at(1))
   })
+})
+
+it('says where a title came from and whether Ramu may still change it', () => {
+  expect(titleSourceNote('manual')).toBe('Named by you. Ramu will not rename it.')
+  expect(titleSourceNote('provider')).toContain('provider')
+  expect(titleSourceNote('prompt')).toContain('first message')
+  // Older hosts do not say.
+  expect(titleSourceNote(undefined)).toBeNull()
 })

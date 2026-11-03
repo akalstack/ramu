@@ -1,4 +1,5 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
+import { titleSourceNote } from '@ramu/shared/chat/threadStatus'
 import { Folder, GitBranch } from 'lucide-react'
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { Button } from '@/components/desktop-button'
@@ -115,6 +116,9 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
       </div>
       {status && status.short !== status.full && (
         <div className="text-caption text-muted-foreground">{t(status.full)}</div>
+      )}
+      {titleSourceNote(task.titleSource) && (
+        <div className="text-caption text-muted-foreground">{t(titleSourceNote(task.titleSource)!)}</div>
       )}
       {!!task.inputSummary?.count && (
         <div className="flex flex-col gap-1 text-caption" aria-label={t('Pending requests')}>

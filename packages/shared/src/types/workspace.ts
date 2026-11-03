@@ -88,12 +88,19 @@ export interface TaskGoalSummary {
   reason?: string
 }
 
+export type TitleSource = 'prompt' | 'ai' | 'provider' | 'manual'
+
 export interface Task {
   id: string
   projectId: string
   title: string
   /** Execution-host title work, synchronized across clients. Older hosts omit it. */
   titleGenerationState?: 'idle' | 'pending' | 'complete' | 'failed'
+  /**
+   * Where the title came from: the first message, a model Ramu asked, the provider's own name for the session, or the
+   * person. A manual title is never replaced. Older hosts omit it.
+   */
+  titleSource?: TitleSource
   mode: CheckoutMode
   workspaceId: string | null
   status: TaskStatus

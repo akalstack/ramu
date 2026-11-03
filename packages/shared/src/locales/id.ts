@@ -66,6 +66,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Not connected. Pull requests, builds and work items need a personal access token.':
     'Belum terhubung. Pull request, build dan work item memerlukan personal access token.',
   Organization: 'Organisasi',
+  'Named by you. Ramu will not rename it.': 'Dinamai oleh Anda. Ramu tidak akan menggantinya.',
+  'Named by Ramu. Rename it to keep your own title.': 'Dinamai oleh Ramu. Ganti nama untuk memakai judul Anda sendiri.',
+  'Named by the provider. Rename it to keep your own title.':
+    'Dinamai oleh penyedia. Ganti nama untuk memakai judul Anda sendiri.',
+  'From your first message. Ramu may name it once the thread has more to go on.':
+    'Dari pesan pertama Anda. Ramu bisa menamainya setelah thread punya cukup konteks.',
   'Create a personal access token with the api scope under Preferences → Access tokens on your GitLab server. Ramu uses it for that server before a glab sign-in.':
     'Buat personal access token dengan cakupan api di Preferences → Access tokens pada server GitLab Anda. Ramu memakainya untuk server itu sebelum login glab.',
   'Remove saved token': 'Hapus token tersimpan',

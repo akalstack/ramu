@@ -93,6 +93,8 @@ describe('server-owned thread titles', () => {
     expect(workspace.getTask('task').title).toBe('My payment investigation')
     expect(draft.mock.calls[0]![2]!.signal!.aborted).toBe(true)
     expect(workspace.titleSource('task')).toBe('manual')
+    // Clients read the same answer with the thread, so they can say a manual title stays.
+    expect(workspace.getTask('task').titleSource).toBe('manual')
   })
 
   it('regeneration uses prior context but loses to a later manual rename or newer regeneration', async () => {

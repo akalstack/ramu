@@ -1,5 +1,5 @@
 import type { ChatGoal } from '../types/goal'
-import type { Task } from '../types/workspace'
+import type { Task, TitleSource } from '../types/workspace'
 import { goalHold } from './goalHold'
 
 /** What a thread list shows for one thread. `short` and `full` are catalog keys, translated where they are shown. */
@@ -74,4 +74,20 @@ export function threadStatus(
 export function newerTaskSnapshot<T extends Pick<Task, 'snapshotAt'>>(current: T | undefined, incoming: T): T {
   if (!current || current.snapshotAt === undefined || incoming.snapshotAt === undefined) return incoming
   return incoming.snapshotAt >= current.snapshotAt ? incoming : current
+}
+
+/** Where a thread's title came from and whether Ramu may still change it, as English copy for `t()`. */
+export function titleSourceNote(source: TitleSource | undefined): string | null {
+  switch (source) {
+    case 'manual':
+      return 'Named by you. Ramu will not rename it.'
+    case 'ai':
+      return 'Named by Ramu. Rename it to keep your own title.'
+    case 'provider':
+      return 'Named by the provider. Rename it to keep your own title.'
+    case 'prompt':
+      return 'From your first message. Ramu may name it once the thread has more to go on.'
+    default:
+      return null
+  }
 }

@@ -1,4 +1,5 @@
 import { SheetGroup, SheetOption } from './SheetOptions'
+import { titleSourceNote } from '@ramu/shared/chat/threadStatus'
 import { runsBy } from '../runtime/groupRuns'
 import { translate } from '@ramu/shared/i18n'
 import { readRemovalCommands, removalReview, removalError } from '@ramu/shared/chat/taskRemoval'
@@ -360,6 +361,11 @@ export function ChatActionsSheet({
               backgroundColor: c.raised2,
             }}
           />
+          {titleSourceNote(chat.titleSource) ? (
+            <T size={font.caption} tone="muted">
+              {say(titleSourceNote(chat.titleSource)!)}
+            </T>
+          ) : null}
           <View style={{ flexDirection: 'row', gap: space.s, justifyContent: 'flex-end' }}>
             <Button kind="ghost" title={say('Cancel')} onPress={() => setRenaming(false)} />
             <Button

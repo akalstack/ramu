@@ -2525,15 +2525,16 @@ describe('sub-agents Ramu runs', () => {
   it('refuses to start or resume a thread on a provider or login turned off in Settings', async () => {
     const svc = routed()
     const parent = await parentOf(svc)
-    const off = (patch: Partial<AppPreferences['providerBinaries']['claude-code']>) => {
+    const off = (patch: Partial<NonNullable<AppPreferences['providerBinaries']['claude-code']>>) => {
       const prefs = svc.preferences!()
-      svc.preferences = () => ({
+      const next: AppPreferences = {
         ...prefs,
         providerBinaries: {
           ...prefs.providerBinaries,
-          'claude-code': { ...prefs.providerBinaries['claude-code'], ...patch },
+          'claude-code': { binary: '', ...prefs.providerBinaries['claude-code'], ...patch },
         },
-      })
+      }
+      svc.preferences = () => next
     }
     off({ defaultAccountEnabled: false })
     await expect(svc.startReviewed('t2', scopeOf(cwd), 'hello', full)).rejects.toThrow(
