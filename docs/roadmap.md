@@ -12,7 +12,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 ## Implementation
 
-- **Ramu Link:** deploy the hosted service under a domain the project owns and set `DEFAULT_LINK_SERVICE` in `packages/shared/src/link/protocol.ts`; until then each person deploys `apps/link`. Later: push wake-ups through the relay (designed with direct-host push), sharing a host with another account as a viewer, and passkeys.
+- **Ramu Link:** the hosted service, its Free and Plus plans, usage measurement, payments (with rupiah prices) and removing Cloudflare Tunnel are planned in [Ramu Link Plus](plans/ramu-link-plus.md); until the service is deployed each person deploys `apps/link`. Later: push wake-ups through the relay (designed with direct-host push) and passkeys.
 - **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; mutations that cannot be retried report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
 - **Background terminals:** native command handles for Claude, Codex, OpenCode and Cursor need verified owner-lifecycle contracts. The ACP client-terminal boundary is written but enabled for no provider until one is verified against a live runtime.
 - **Agent setup:** per-adapter rule delivery (path-matched activation only where a runtime supports it).
