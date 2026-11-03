@@ -1,7 +1,7 @@
 import { ContinuedCard } from './ContinueOnHost'
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
 import { FileIcon } from './FileIcon'
-import { translate } from '@ramu/shared/i18n'
+import { translate, type Language } from '@ramu/shared/i18n'
 import { toolVerb } from '@ramu/shared/chat/toolStatus'
 import { DiffLines } from './DiffLines'
 import { changedFile } from '../runtime/diff'
@@ -962,6 +962,15 @@ function LongMessage({
   )
 }
 
+type ToolItem = Extract<TranscriptItem, { kind: 'tool' }>
+
+/** What a tool says: Ramu's own tools what they did (Saved memory “…”), file tools verb and file name, the rest as sent. */
+function toolWords(item: ToolItem, language: Language, running: boolean): { verb: string; subject: string } {
+  if (item.ramu)
+    return { verb: translate(language, running ? item.ramu.running : item.ramu.done), subject: item.ramu.subject ?? '' }
+  return { verb: item.file ? translate(language, toolVerb(item.verb, running)) : item.verb, subject: item.subject }
+}
+
 function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> }) {
   const { c } = useTheme()
   const { language } = useStore()
@@ -971,12 +980,19 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
     tool.status === 'in_progress' ? 'running' : tool.status === 'failed' ? 'failed' : 'done',
   )
   const counts = new Map<string, number>()
-  for (const tool of item.tools) counts.set(tool.verb, (counts.get(tool.verb) ?? 0) + 1)
+  for (const tool of item.tools) {
+    const verb = toolWords(tool, language, false).verb
+    counts.set(verb, (counts.get(verb) ?? 0) + 1)
+  }
+  const words = current ? toolWords(current, language, current.status === 'in_progress') : null
   const headline =
     running || failed
-      ? `${current?.verb ?? ''} ${current?.subject ?? ''}`.trim()
+      ? `${words?.verb ?? ''} ${words?.subject ?? ''}`.trim()
       : [...counts].map(([verb, count]) => `${verb}${count > 1 ? ` ×${count}` : ''}`).join(' · ')
+  // A group of Ramu's own tools wears its mark, as each of its rows does.
+  const ramuGroup = item.tools.every((tool) => tool.ramu)
   const Icon = current ? toolIcons[current.tool] : Wrench
+  const tint = failed ? c.bad : running ? c.accent : c.muted
   // Tools already here when the group appeared stay still; ones that arrive later fade in.
   const initial = useRef(new Set(item.tools.map((tool) => tool.id))).current
   return (
@@ -992,7 +1008,7 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
         <Breathe active={running > 0}>
-          <Icon size={14} color={failed ? c.bad : running ? c.accent : c.muted} />
+          {ramuGroup || current?.ramu ? <RamuGlyph size={14} color={tint} /> : <Icon size={14} color={tint} />}
         </Breathe>
         <View style={{ flex: 1, minWidth: 0 }}>
           {/* The headline follows the current tool; each change fades instead of jumping. */}
@@ -1101,10 +1117,8 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
   const long = Boolean(item.detail) && (lines > PREVIEW_LINES || item.detail!.length > 400)
   const running = item.status === 'in_progress'
   const failed = item.status === 'failed'
-  // Ramu's own tools read as what they did (Saved memory “…”), file tools as verb and file name, the rest as sent.
-  const title = item.ramu
-    ? `${translate(storeLanguage, running ? item.ramu.running : item.ramu.done)}${item.ramu.subject ? ` ${item.ramu.subject}` : ''}`
-    : `${item.file ? translate(storeLanguage, toolVerb(item.verb, running)) : item.verb} ${item.subject}`
+  const words = toolWords(item, storeLanguage, running)
+  const title = `${words.verb} ${words.subject}`.trim()
   const facts = item.ramu?.facts ?? []
   return (
     <View>
