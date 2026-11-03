@@ -1167,6 +1167,25 @@ const mcpHttp = createServer(async (req, res) => {
         }
       },
     )
+  if (!agents.get(source.id).parentId)
+    server.registerTool(
+      'teammate_ask',
+      {
+        description:
+          'Ask a teammate the person added to this thread a quick question, by its name as in @name, and wait for its reply, which comes back as this result. It sees what the thread said since it last took part. Use teammate_message instead when you do not need the answer to continue.',
+        inputSchema: { to: z.string().min(1).max(80), question: z.string().min(1).max(20000) },
+      },
+      async ({ to, question }, extra) => {
+        try {
+          return result(await agents.teammateAsk(source.id, to, question, extra.signal))
+        } catch (error) {
+          return {
+            isError: true,
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+          }
+        }
+      },
+    )
   // A Ramu-run sub-agent talks to the chat that started it; the chat answers its questions.
   if (agents.get(source.id).parentId) {
     server.registerTool(

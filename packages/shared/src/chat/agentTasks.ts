@@ -207,6 +207,11 @@ export function teammateNotePrompt(name: string, text: string): string {
   return `[Teammate "${name.replace(/"/g, "'")}" says]\n${text.trim()}\n\n(Reply with teammate_message, to "${teammateHandle(name)}", only if it needs an answer.)`
 }
 
+/** The lead's question to a teammate; its reply goes straight back into the lead's turn. */
+export function leadQuestionPrompt(text: string): string {
+  return `[The lead asks]\n${text.trim()}\n\n(Answer briefly; your reply goes straight back to the lead.)`
+}
+
 /** The lead's note to its teammate, delivered as the teammate's next message. */
 export function leadNotePrompt(text: string): string {
   return `[The lead says]\n${text.trim()}\n\n(Reply with teammate_message, to "lead", only if it needs an answer before your report.)`

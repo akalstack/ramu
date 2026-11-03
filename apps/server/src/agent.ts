@@ -5,6 +5,7 @@ import {
   activeTeammates,
   latestTasks,
   leadNotePrompt,
+  leadQuestionPrompt,
   namesTeammate,
   teammateHandle,
 } from '@ramu/shared/chat/agentTasks'
@@ -898,6 +899,24 @@ export class AgentService {
     if (this.parts.subagents.teammatePaused(fromId)) throw new Error(TEAMMATE_PAUSED)
     await this.parts.tasks.messageTask(fromId, teammate.agentId, leadNotePrompt(text))
     return { to: teammateHandle(teammate.name) }
+  }
+
+  /** teammate_ask: the lead asks one teammate by name and gets its reply as the tool's result. */
+  async teammateAsk(fromId: string, to: string, question: string, signal?: AbortSignal): Promise<{ reply: string }> {
+    if (this.get(fromId).parentId) throw new Error('Only the main agent asks teammates; use teammate_message.')
+    const here = activeTeammates(latestTasks(this.events(fromId)))
+    if (!here.length) throw new Error('This thread has no teammate. The person adds one with @ or the thread menu.')
+    const named = here.filter((task) => namesTeammate(to, task.name))
+    if (named.length !== 1)
+      throw new Error(`Name one teammate: ${here.map((task) => `"${teammateHandle(task.name)}"`).join(', ')}.`)
+    const teammate = named[0]!
+    const reply = await this.parts.subagents.askTeammate(
+      fromId,
+      teammate.agentId,
+      () => this.parts.tasks.messageTask(fromId, teammate.agentId, leadQuestionPrompt(question)),
+      signal,
+    )
+    return { reply }
   }
 
   /** The person wrote, so a teammate exchange that paused may continue. */

@@ -19,7 +19,7 @@ const WARN_AT = 80
 
 /** Shows usage-limit fallback for the next message. */
 /** Soft filled pill: the background is the only thing that changes on hover, and there is no border, so nothing shifts. */
-const CHIP =
+export const CHIP =
   'h-7 min-h-7 gap-1.5 rounded-full border-0 bg-fill px-2.5 text-caption font-normal text-soft [box-shadow:none] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground [&.on]:bg-hover [&.on]:text-foreground [&_svg]:flex-none [&_svg]:text-muted-foreground [&.warn]:bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] [&.warn]:text-warn [&.warn:hover]:bg-[color-mix(in_srgb,var(--warn)_20%,transparent)] [&.bad]:bg-[color-mix(in_srgb,var(--bad)_12%,transparent)] [&.bad]:text-bad [&.bad:hover]:bg-[color-mix(in_srgb,var(--bad)_20%,transparent)] [&.warn_svg]:text-warn [&.bad_svg]:text-bad [&.switching]:text-foreground [&_.route-reason]:text-muted-foreground'
 
 /** The chip when there is nothing to warn about: an icon with no fill, so the composer row looks as it did. */

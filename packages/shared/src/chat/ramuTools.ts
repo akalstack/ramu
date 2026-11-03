@@ -67,6 +67,7 @@ const KNOWN = new Set([
   'ask_parent',
   'answer_subagent',
   'teammate_message',
+  'teammate_ask',
   'rtk_run',
   'codex_pre_tool_use',
 ])
@@ -300,6 +301,10 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
         ? reply('Messaged the main agent', 'Messaging the main agent', 'message', undefined, facts)
         : reply('Messaged teammate', 'Messaging teammate', 'message', text(args.to), facts)
     }
+    case 'teammate_ask':
+      return reply('Asked teammate', 'Asking teammate', 'message', text(args.to), [
+        { label: 'Question', value: text(args.question) ?? '' },
+      ])
     case 'ask_user':
       return reply('Asked a question', 'Asking a question', 'message')
     case 'question_status':

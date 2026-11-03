@@ -189,6 +189,47 @@ export class SubagentRunner {
     return (this.teammateRounds.get(parentId) ?? 0) >= TEAMMATE_ROUNDS
   }
 
+  /**
+   * The lead asks a teammate and waits for its reply inside its own turn: `deliver` sends the question, and the
+   * teammate's next report comes back here instead of as a message. A reply that takes longer than an ask allows
+   * arrives as a message later, as any report does.
+   */
+  async askTeammate(
+    parentId: string,
+    childId: string,
+    deliver: () => Promise<void>,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    if (!this.wakeTeammate(parentId, childId)) throw new Error('That teammate is not in this thread.')
+    const run = this.children.get(childId)!
+    if (run.waiter) throw new Error('A question to that teammate is already waiting for its reply.')
+    if (!this.teammateRound(parentId)) throw new Error(TEAMMATE_PAUSED)
+    const reply = new Promise<string>((resolve) => {
+      const done = (text: string) => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', cancel)
+        resolve(text)
+      }
+      const timer = setTimeout(() => {
+        run.waiter = undefined
+        done('No reply yet. Carry on; its reply arrives as a message when it finishes.')
+      }, ASK_WAIT_MS)
+      const cancel = () => {
+        run.waiter = undefined
+        done('The question was cancelled.')
+      }
+      signal?.addEventListener('abort', cancel, { once: true })
+      run.waiter = (result) => done(result.report)
+    })
+    try {
+      await deliver()
+    } catch (error) {
+      run.waiter = undefined
+      throw error
+    }
+    return reply
+  }
+
   /** A teammate's note to the lead, sent with teammate_message before its report. */
   async messageLead(childId: string, to: string, text: string): Promise<void> {
     const run = this.children.get(childId)

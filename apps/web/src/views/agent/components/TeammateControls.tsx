@@ -3,7 +3,8 @@ import { Square, Users } from 'lucide-react'
 import type { AgentSettings, AgentTask, TeammateMode } from '@ramu/shared/types'
 import { teammateHandle } from '@ramu/shared/chat/agentTasks'
 import type { CustomAgent } from '@ramu/shared/customAgents'
-import { Dropdown } from '../../../Menu'
+import { Dropdown, Menu } from '../../../Menu'
+import { CHIP } from '../../../models/ProviderRoute'
 import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -164,5 +165,44 @@ export function TeammateBar({ sessionId, teammate }: { sessionId: string; teamma
         </Button>
       )}
     </div>
+  )
+}
+
+/**
+ * Who a message without a mention goes to while the thread has teammates: the main agent, or the teammate last
+ * talked to, so carrying on with it takes no `@`. Choosing here, or writing `@lead`, changes it.
+ */
+export function RecipientChip({
+  teammates,
+  recipient,
+  onChange,
+}: {
+  teammates: AgentTask[]
+  recipient: AgentTask | null
+  onChange: (agentId: string | null) => void
+}) {
+  useLanguage()
+  if (!teammates.length) return null
+  const label = recipient ? t('To {0}', { 0: recipient.name }) : t('To the main agent')
+  return (
+    <Menu
+      label={label}
+      className={`${CHIP}${recipient ? ' on' : ''}`}
+      icon={
+        <>
+          <Users size={13} aria-hidden="true" />
+          <span className="max-w-[160px] truncate">{recipient ? recipient.name : t('Main agent')}</span>
+        </>
+      }
+      items={[
+        { key: 'lead', label: t('Main agent'), selected: !recipient, onSelect: () => onChange(null) },
+        ...teammates.map((task) => ({
+          key: task.agentId,
+          label: task.name,
+          selected: recipient?.agentId === task.agentId,
+          onSelect: () => onChange(task.agentId),
+        })),
+      ]}
+    />
   )
 }

@@ -4,7 +4,7 @@ import { goBackOrHome } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Animated, Platform, Pressable, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Alert, Animated, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -23,6 +23,7 @@ import {
   Monitor,
   Server,
   SquareTerminal,
+  Users,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
@@ -65,7 +66,7 @@ import {
   type ItemMeta,
 } from '../../../components/Transcript'
 import { SelectionBar } from '../../../components/SelectionBar'
-import { ConnectionDot, Sheet, T, tap } from '../../../components/ui'
+import { Chip, ConnectionDot, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { PendingBubble } from '../../../components/Outbox'
@@ -296,6 +297,9 @@ export default function ChatScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [focused, hasNotice, chat?.id] by design; the values it reads beyond these are current as of that run
   }, [focused, hasNotice, chat?.id])
   const teammates = useMemo(() => (chat ? teammatesOf(chat) : []), [chat])
+  // Kept on this phone for this thread: after talking to a teammate, plain messages keep going to it.
+  const [recipientId, setRecipientId] = useState<string | null>(null)
+  const recipient = teammates.find((task) => task.agentId === recipientId) ?? null
   const viewer = computer?.access === 'viewer'
   const hostId = chat?.computerId
   const catalogs = hostId ? store.catalogs[hostId] : undefined
@@ -1216,18 +1220,26 @@ export default function ChatScreen() {
                         .then(() => {
                           router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
                         })
-                    // `@name` at the start talks to a teammate here, or brings that model or custom agent in.
-                    const target =
-                      chat.sessionId && chat.settings && !attachments?.length
+                    // `@lead` goes to the main agent; `@name` talks to a teammate here or brings a model or custom
+                    // agent in; without a mention, a teammate chosen as the recipient gets it.
+                    const lead = /^@(?:lead|main)\s+/i.test(text.trim())
+                    if (lead) setRecipientId(null)
+                    const mention =
+                      chat.sessionId && chat.settings && !attachments?.length && !lead
                         ? resolveMention(text, teammates, models, agents)
                         : null
+                    const target =
+                      mention ??
+                      (recipient && !lead && !attachments?.length && text.trim() && !text.trim().startsWith('/')
+                        ? ({ kind: 'teammate', task: recipient, body: text.trim() } as const)
+                        : null)
                     if (target && chat.sessionId && chat.settings) {
                       const base = chat.settings
                       const sessionId = chat.sessionId
                       if (target.kind === 'teammate')
                         return store
                           .invoke(chat.computerId, 'agent.messageTask', sessionId, target.task.agentId, target.body)
-                          .then(() => {})
+                          .then(() => setRecipientId(target.task.agentId))
                       const agent = target.kind === 'agent' ? target.agent : null
                       const settings =
                         target.kind === 'model'
@@ -1248,7 +1260,7 @@ export default function ChatScreen() {
                           agent && !agent.readOnly ? 'take-over' : 'review',
                           agent ? `${agent.instructions}\n\n${target.body}` : target.body,
                         )
-                        .then(() => {})
+                        .then((joined) => setRecipientId(joined.agentId))
                     }
                     following.current = true
                     smoothSendScroll.current = true
@@ -1257,6 +1269,32 @@ export default function ChatScreen() {
                   taskId={chat.taskId || undefined}
                   chatId={chat.id}
                   teammate={composerTeammate}
+                  header={
+                    teammates.length && !viewer ? (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always">
+                        <View style={{ flexDirection: 'row', gap: space.xs }}>
+                          <Chip
+                            small
+                            label={tr('Main agent')}
+                            selected={!recipient}
+                            onPress={() => setRecipientId(null)}
+                          />
+                          {teammates.map((task) => (
+                            <Chip
+                              key={task.agentId}
+                              small
+                              icon={Users}
+                              label={task.name}
+                              maxLabelWidth={140}
+                              selected={recipient?.agentId === task.agentId}
+                              accessibilityLabel={tr('To {0}', { 0: task.name })}
+                              onPress={() => setRecipientId(task.agentId)}
+                            />
+                          ))}
+                        </View>
+                      </ScrollView>
+                    ) : undefined
+                  }
                   computerId={chat.computerId}
                   draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
                   onStop={() => store.stop(chat.id)}

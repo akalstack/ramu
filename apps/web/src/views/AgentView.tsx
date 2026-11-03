@@ -76,7 +76,7 @@ import { useSidePanels } from './agent/hooks/useSidePanels'
 import { useTurnPaging } from './agent/hooks/useTurnPaging'
 import { useContinueInNewChat } from './agent/hooks/useContinueInNewChat'
 import { ContinueOnHostDialog } from './agent/components/ContinueOnHostDialog'
-import { AddTeammateDialog, TeammateBar } from './agent/components/TeammateControls'
+import { AddTeammateDialog, RecipientChip, TeammateBar } from './agent/components/TeammateControls'
 import { useModelChange } from './agent/hooks/useModelChange'
 import { useJsonDraft } from '../composer/useJsonDraft'
 import { settingsMatch } from './agent/settingsMatch'
@@ -219,6 +219,9 @@ export const AgentView = memo(function AgentView({
   const allTasks = useMemo(() => latestTasks(events), [events])
   const tasks = useMemo(() => allTasks.filter((task) => task.taskType !== 'local_bash'), [allTasks])
   const teammates = useMemo(() => activeTeammates(allTasks), [allTasks])
+  // Kept on this device for this thread: after talking to a teammate, plain messages keep going to it.
+  const [recipientId, setRecipientId] = useState<string | null>(null)
+  const recipient = teammates.find((task) => task.agentId === recipientId) ?? null
   const [addingTeammate, setAddingTeammate] = useState(false)
   const { catalogs } = useModelSets()
   const [customAgents, setCustomAgents] = useState<CustomAgent[]>([])
@@ -490,24 +493,35 @@ export const AgentView = memo(function AgentView({
       setMcpOpen(true)
       return
     }
-    // `@name` at the start talks to a teammate here, or brings that model or custom agent in with this message.
-    const target = session && !attachments.length ? resolveMention(draft, teammates, models, agents) : null
+    // `@lead` (or `@main`) goes to the main agent and makes it the recipient again.
+    const lead = /^@(?:lead|main)\s+([\s\S]+)$/i.exec(draft.trim())
+    if (lead) setRecipientId(null)
+    // `@name` at the start talks to a teammate here, or brings that model or custom agent in with this message;
+    // without a mention, a teammate chosen as the recipient gets it.
+    const mention = session && !attachments.length && !lead ? resolveMention(draft, teammates, models, agents) : null
+    const target =
+      mention ??
+      (session && recipient && !lead && !attachments.length && draft.trim() && !draft.trim().startsWith('/')
+        ? ({ kind: 'teammate', task: recipient, body: draft.trim() } as const)
+        : null)
     if (session && target)
       return act(async () => {
         const submitted = draft
-        if (target.kind === 'teammate')
+        if (target.kind === 'teammate') {
           await invoke('agent.messageTask', view.sessionId, target.task.agentId, target.body)
-        else if (target.kind === 'model')
-          await invoke(
+          setRecipientId(target.task.agentId)
+        } else if (target.kind === 'model') {
+          const joined = await invoke(
             'agent.addTeammate',
             view.sessionId,
             teammateSettings(session.settings, target.model),
             'review',
             target.body,
           )
-        else {
+          setRecipientId(joined.agentId)
+        } else {
           const agent = target.agent
-          await invoke(
+          const joined = await invoke(
             'agent.addTeammate',
             view.sessionId,
             agent.model
@@ -520,6 +534,7 @@ export const AgentView = memo(function AgentView({
             agent.readOnly ? 'review' : 'take-over',
             `${agent.instructions}\n\n${target.body}`,
           )
+          setRecipientId(joined.agentId)
         }
         const consumed = consumeDraft()
         if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
@@ -946,6 +961,9 @@ export const AgentView = memo(function AgentView({
                 allowEmpty={attached.length > 0}
                 chips={
                   <>
+                    {!viewOnly && (
+                      <RecipientChip teammates={teammates} recipient={recipient} onChange={setRecipientId} />
+                    )}
                     {session && (
                       <ProviderRouteChip
                         sessionId={view.sessionId}
@@ -1008,9 +1026,11 @@ export const AgentView = memo(function AgentView({
                     ? translate('Message · sends when {0} is back', { 0: hostName })
                     : limitView
                       ? limitPlaceholder(limitView, autoResume.effective.value)
-                      : live || busyAgent
-                        ? translate('Reply to the agent')
-                        : translate('Message the agent')
+                      : recipient
+                        ? translate('Message {0}', { 0: recipient.name })
+                        : live || busyAgent
+                          ? translate('Reply to the agent')
+                          : translate('Message the agent')
                 }
                 submitLabel={
                   hostOffline || limitView ? 'Queue' : busyAgent ? (action === 'queue' ? 'Queue' : 'Steer') : 'Send'

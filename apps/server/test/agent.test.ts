@@ -2594,6 +2594,31 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
+  it('lets the lead ask a teammate and get its reply in its own turn, not as a message', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc)
+    const settings = { ...full, provider: 'codex' as const, model: 'codex-test', effort: 'high' as const }
+    const { agentId } = await svc.addTeammate(parent.id, settings, 'review', '')
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
+    const request = svc.events(parent.id).find((e) => e.kind === 'permission-request') as { requestId: string }
+    svc.replyPermission(parent.id, request.requestId, true)
+    await until(() => svc.task(parent.id, agentId)?.status === 'completed')
+    const reports = () =>
+      svc.events(parent.id).filter((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Codex test"')).length
+    const before = reports()
+    await expect(svc.teammateAsk(parent.id, 'someone', 'x')).rejects.toThrow(/Name one teammate/)
+    const asked = svc.teammateAsk(parent.id, 'codex-test', 'Is utils.ts covered?')
+    // Review asks before it runs a command, in this turn as in its first.
+    await until(() => svc.events(parent.id).filter((e) => e.kind === 'permission-request').length === 2)
+    const again = svc.events(parent.id).findLast((e) => e.kind === 'permission-request') as { requestId: string }
+    svc.replyPermission(parent.id, again.requestId, true)
+    const { reply } = await asked
+    expect(reply).toContain('[The lead asks]')
+    expect(reply).toContain('Is utils.ts covered?')
+    expect(reports()).toBe(before)
+    svc.stopAll()
+  })
+
   it("gives a teammate what the thread said since it last took part before the person's next message", async () => {
     const svc = routed()
     const parent = await parentOf(svc)
