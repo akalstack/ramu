@@ -320,12 +320,8 @@ export function QueuedMessages({
       className="message-queue"
       aria-label={translate('Queued messages')}
       defaultOpen
-      title={
-        <>
-          {translate('Queued messages')}{' '}
-          <span className="text-muted-foreground tabular-nums">{queued.length + pending.length}</span>
-        </>
-      }
+      title={translate('Queued messages')}
+      count={queued.length + pending.length}
       icon={<ListOrdered />}
       actions={
         paused && (

@@ -445,102 +445,112 @@ function ScreenThumbnail({
   )
 }
 
-/** Shows only when computer use is on for this host. The grant is per thread and explicit. */
-export function ComputerActivity({ taskId, visible }: { taskId: string | undefined; visible: boolean }) {
-  useLanguage()
-  const liveView = useAppSettings().preferences.liveViewDesktop
+export type ComputerActivityState = {
+  taskId: string | undefined
+  session: ComputerSessionSummary | null
+  keepAwake: boolean
+  reload: () => Promise<void>
+}
+
+/** The thread's computer session, polled while the chat is visible; the tray shows Computer only while one exists. */
+export function useComputerActivity(taskId: string | undefined, visible: boolean): ComputerActivityState {
   const { invoke, id: hostId } = useHost()
-  const { viewOnly, canWrite } = useHostWriteAccess()
+  const { viewOnly } = useHostWriteAccess()
   const scope = `${hostId}:${taskId}`
   const current = useRef(scope)
   current.current = scope
-  const [enabled, setEnabled] = useState(false)
-  const [session, setSession] = useState<ComputerSessionSummary | null>(null)
-  const [error, setError] = useState('')
-  const [needed, setNeeded] = useState<DevicePermission | null>(null)
-  const [viewing, setViewing] = useState(false)
-  const tray = useRef<HTMLDivElement>(null)
-  // The header button and shortcut ask for this thread's computer: the viewer when one is shared, else this tray.
-  useEffect(() => {
-    const open = (event: Event) => {
-      if ((event as CustomEvent<{ taskId: string }>).detail.taskId !== taskId) return
-      if (session) setViewing(true)
-      else {
-        tray.current?.scrollIntoView({ block: 'nearest' })
-        tray.current?.querySelector<HTMLElement>('button')?.focus()
-      }
-    }
-    window.addEventListener(OPEN_COMPUTER_EVENT, open)
-    return () => window.removeEventListener(OPEN_COMPUTER_EVENT, open)
-  }, [taskId, session])
-  const [asked, setAsked] = useState(false)
-  const [apps, setApps] = useState<string[]>([])
-  const [appHint, setAppHint] = useState('')
-  const [keepAwake, setKeepAwake] = useState(true)
-  const [app, setApp] = useState('')
-  const [runtimes, setRuntimes] = useState<{ id: string; name: string; online: boolean }[]>([])
-  const [runtime, setRuntime] = useState('local')
   const requests = useRef(0)
+  const [reading, setReading] = useState<{ scope: string; session: ComputerSessionSummary | null; keepAwake: boolean }>(
+    { scope, session: null, keepAwake: true },
+  )
   const load = useCallback(async () => {
     if (!taskId || current.current !== scope) return
     const request = ++requests.current
     const valid = () => current.current === scope && requests.current === request
-    if (viewOnly) {
-      const granted = await invoke('computer.session', taskId).catch(() => null)
-      if (valid()) {
-        setSession(granted)
-        setEnabled(true)
-      }
-      return
-    }
-    const status = await invoke('computer.status').catch(() => null)
-    if (!valid() || !canWrite()) return
-    const appsReady = !!status?.apps?.available
     // A test device is a computer session too, and it works without turning computer use on.
-    const granted = await invoke('computer.session', taskId).catch(() => null)
-    if (!valid() || !canWrite()) return
-    const apps =
-      status?.enabled && (appsReady || runtime !== 'local')
-        ? await invoke('computer.apps', ...(runtime === 'local' ? [] : [runtime])).catch(() => [])
-        : []
-    if (!valid() || !canWrite()) return
-    const runtimes = status?.enabled ? await invoke('computer.runtimes').catch(() => []) : []
-    if (!valid() || !canWrite()) return
-    setEnabled((!!status?.enabled && (status.runtime.available || appsReady)) || !!granted)
-    setKeepAwake(status?.keepAwake ?? true)
-    setAppHint(status?.apps && !status.apps.available ? (status.apps.detail ?? '') : '')
-    setSession(granted)
-    setApps(apps)
-    setRuntimes(runtimes)
-  }, [invoke, taskId, runtime, viewOnly, scope, canWrite])
+    const session = await invoke('computer.session', taskId).catch(() => null)
+    if (!valid()) return
+    const status = session && !viewOnly ? await invoke('computer.status').catch(() => null) : null
+    if (valid()) setReading({ scope, session, keepAwake: status?.keepAwake ?? true })
+  }, [invoke, taskId, viewOnly, scope])
   useEffect(() => {
     if (!taskId || !visible) return
     void load()
     const timer = setInterval(() => void load(), 2000)
     return () => clearInterval(timer)
   }, [load, taskId, visible])
+  const mine = reading.scope === scope
+  return {
+    taskId,
+    session: mine && taskId ? reading.session : null,
+    keepAwake: mine ? reading.keepAwake : true,
+    reload: load,
+  }
+}
+
+function useComputerRun(reload: () => Promise<void>) {
+  const { canWrite } = useHostWriteAccess()
+  const [error, setError] = useState('')
+  const [needed, setNeeded] = useState<DevicePermission | null>(null)
   const run = async (work: () => Promise<unknown>) => {
-    if (!canWrite()) return
+    if (!canWrite()) return false
     setError('')
     setNeeded(null)
-    setAsked(false)
+    let done = true
     try {
       await work()
     } catch (reason) {
+      done = false
       setError(t(errorText(reason)))
       setNeeded(refusedPermission(errorText(reason)))
     }
-    await load()
+    await reload()
+    return done
   }
-  if (!taskId || (!enabled && !viewOnly)) return null
+  return { run, error, needed }
+}
+
+function ComputerProblem({ needed, error }: { needed: DevicePermission | null; error: string }) {
+  const { id: hostId } = useHost()
+  if (needed) return <PermissionNeeded host={hostId} permission={needed} />
+  if (!error) return null
+  return (
+    <span role="alert" className="text-caption text-destructive">
+      {error}
+    </span>
+  )
+}
+
+/** The tray row for a thread that is using a computer: view it, trade control and end access. */
+export function ComputerActivity({ state }: { state: ComputerActivityState }) {
+  useLanguage()
+  const { taskId, session, keepAwake, reload } = state
+  const liveView = useAppSettings().preferences.liveViewDesktop
+  const { invoke, id: hostId } = useHost()
+  const { viewOnly } = useHostWriteAccess()
+  const [viewing, setViewing] = useState(false)
+  const [asked, setAsked] = useState(false)
+  const { run: runWork, error, needed } = useComputerRun(reload)
+  const run = async (work: () => Promise<unknown>) => {
+    setAsked(false)
+    await runWork(work)
+  }
+  // The header button and shortcut ask for this thread's computer; with a session they open its viewer.
+  useEffect(() => {
+    const open = (event: Event) => {
+      if ((event as CustomEvent<{ taskId: string }>).detail.taskId === taskId) setViewing(true)
+    }
+    window.addEventListener(OPEN_COMPUTER_EVENT, open)
+    return () => window.removeEventListener(OPEN_COMPUTER_EVENT, open)
+  }, [taskId])
+  if (!taskId || !session) return null
   return (
     <ComposerTraySection
-      ref={tray}
       aria-label={t('Computer')}
       title={t('Computer')}
       icon={<Monitor />}
       actions={
-        session && liveView ? (
+        liveView ? (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -560,85 +570,168 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
             {t(VIEW_ONLY_COMPUTER_NOTICE)}
           </p>
         )}
-        {session ? (
-          <>
-            <div className="flex items-center gap-3">
-              <ScreenThumbnail
-                taskId={taskId}
-                label={t('Open {0}', { 0: session.target.name })}
-                live={!viewing}
-                onOpen={() => setViewing(true)}
-              />
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <span className="truncate text-control">{session.target.name}</span>
-                <span className="text-caption text-muted-foreground">
-                  {viewOnly ? t('View only') : t(controllerLabel(session))}
-                </span>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => setViewing(true)}>
-                    {t('View computer')}
-                  </Button>
-                  {!viewOnly &&
-                    (session.controller.kind === 'human' ? (
-                      <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
-                        {t('Give back to agent')}
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() =>
-                          void run(async () => {
-                            if ((await takeOrRequest(invoke, taskId)) === 'asked') setAsked(true)
-                            else setViewing(true)
-                          })
-                        }
-                      >
-                        {t('Take control')}
-                      </Button>
-                    ))}
-                  {!viewOnly && (
-                    <Menu
-                      label={t('Computer options')}
-                      icon={<Ellipsis />}
-                      align="end"
-                      items={[
-                        {
-                          key: 'stop-agent',
-                          label: t('Stop the agent'),
-                          title: t('Stops the agent’s work in this thread; access to the computer stays.'),
-                          onSelect: () => void run(() => invoke('computer.stop', taskId)),
-                        },
-                        {
-                          key: 'revoke',
-                          label: t('Stop computer use'),
-                          title: t('Ends this thread’s access to the computer.'),
-                          danger: true,
-                          onSelect: () => void run(() => invoke('computer.revoke', taskId)),
-                        },
-                      ]}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-            {!viewOnly && <HandoffNotice taskId={taskId} session={session} run={run} />}
-            {asked && (
-              <span className="text-caption text-muted-foreground">
-                {t('Waiting for the device in control to allow it.')}
-              </span>
-            )}
-            {!viewOnly && showsLocalInputLimit(session) && (
-              <span className="text-caption text-muted-foreground">{t(LOCAL_INPUT_LIMIT)}</span>
-            )}
-          </>
-        ) : viewOnly ? null : (
-          <>
+        <div className="flex items-center gap-3">
+          <ScreenThumbnail
+            taskId={taskId}
+            label={t('Open {0}', { 0: session.target.name })}
+            live={!viewing}
+            onOpen={() => setViewing(true)}
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <span className="truncate text-control">{session.target.name}</span>
             <span className="text-caption text-muted-foreground">
-              {t(
-                'Allow this thread to see and control your main display. Revoke it any time. Ramu cannot tell when you use your own mouse or keyboard, so choose Take control before you do.',
-              )}
+              {viewOnly ? t('View only') : t(controllerLabel(session))}
             </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setViewing(true)}>
+                {t('View computer')}
+              </Button>
+              {!viewOnly &&
+                (session.controller.kind === 'human' ? (
+                  <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
+                    {t('Give back to agent')}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      void run(async () => {
+                        if ((await takeOrRequest(invoke, taskId)) === 'asked') setAsked(true)
+                        else setViewing(true)
+                      })
+                    }
+                  >
+                    {t('Take control')}
+                  </Button>
+                ))}
+              {!viewOnly && (
+                <Menu
+                  label={t('Computer options')}
+                  icon={<Ellipsis />}
+                  align="end"
+                  items={[
+                    {
+                      key: 'stop-agent',
+                      label: t('Stop the agent'),
+                      title: t('Stops the agent’s work in this thread; access to the computer stays.'),
+                      onSelect: () => void run(() => invoke('computer.stop', taskId)),
+                    },
+                    {
+                      key: 'revoke',
+                      label: t('Stop computer use'),
+                      title: t('Ends this thread’s access to the computer.'),
+                      danger: true,
+                      onSelect: () => void run(() => invoke('computer.revoke', taskId)),
+                    },
+                  ]}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+        {!viewOnly && <HandoffNotice taskId={taskId} session={session} run={run} />}
+        {asked && (
+          <span className="text-caption text-muted-foreground">
+            {t('Waiting for the device in control to allow it.')}
+          </span>
+        )}
+        {!viewOnly && showsLocalInputLimit(session) && (
+          <span className="text-caption text-muted-foreground">{t(LOCAL_INPUT_LIMIT)}</span>
+        )}
+        {!keepAwake && (
+          <span className="text-caption text-muted-foreground">
+            {t('This Mac may sleep when idle and stop the agent. Turn on Keep awake in Settings → System.')}
+          </span>
+        )}
+        {!viewOnly && <ComputerSharing taskId={taskId} />}
+        <ComputerProblem needed={needed} error={error} />
+      </div>
+      {viewing && (
+        <Viewer
+          taskId={taskId}
+          session={session}
+          run={run}
+          onAsked={() => setAsked(true)}
+          onClose={() => setViewing(false)}
+        />
+      )}
+    </ComposerTraySection>
+  )
+}
+
+/**
+ * Granting this thread the computer by hand, opened from the header button or shortcut while nothing is shared.
+ * Agents usually ask for it themselves through a permission request.
+ */
+export function ComputerGrantDialog({ state }: { state: ComputerActivityState }) {
+  useLanguage()
+  const { taskId, session, reload } = state
+  const { invoke } = useHost()
+  const { viewOnly, canWrite } = useHostWriteAccess()
+  const [open, setOpen] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [ready, setReady] = useState(false)
+  const [apps, setApps] = useState<string[]>([])
+  const [appHint, setAppHint] = useState('')
+  const [app, setApp] = useState('')
+  const [runtimes, setRuntimes] = useState<{ id: string; name: string; online: boolean }[]>([])
+  const [runtime, setRuntime] = useState('local')
+  const { run, error, needed } = useComputerRun(reload)
+  useEffect(() => {
+    const show = (event: Event) => {
+      if ((event as CustomEvent<{ taskId: string }>).detail.taskId !== taskId || session || viewOnly) return
+      setLoaded(false)
+      setOpen(true)
+    }
+    window.addEventListener(OPEN_COMPUTER_EVENT, show)
+    return () => window.removeEventListener(OPEN_COMPUTER_EVENT, show)
+  }, [taskId, session, viewOnly])
+  useEffect(() => {
+    if (!open || !taskId) return
+    let active = true
+    void (async () => {
+      const status = await invoke('computer.status').catch(() => null)
+      if (!active || !canWrite()) return
+      const appsReady = !!status?.apps?.available
+      const [apps, runtimes] = status?.enabled
+        ? await Promise.all([
+            appsReady || runtime !== 'local'
+              ? invoke('computer.apps', ...(runtime === 'local' ? [] : [runtime])).catch(() => [])
+              : Promise.resolve([]),
+            invoke('computer.runtimes').catch(() => []),
+          ])
+        : [[], []]
+      if (!active) return
+      setReady(!!status?.enabled && (status.runtime.available || appsReady || runtime !== 'local'))
+      setAppHint(status?.apps && !status.apps.available ? (status.apps.detail ?? '') : '')
+      setApps(apps)
+      setRuntimes(runtimes)
+      setLoaded(true)
+    })()
+    return () => {
+      active = false
+    }
+  }, [open, taskId, runtime, invoke, canWrite])
+  if (!taskId) return null
+  const grant = (options: { app?: string }) =>
+    void run(() => invoke('computer.grant', taskId, { observe: true, input: true, ...options, runtime })).then(
+      (done) => done && setOpen(false),
+    )
+  return (
+    // A grant from anywhere, including the agent's own request, makes this dialog moot.
+    <Dialog open={open && !session} onOpenChange={setOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('Computer')}</DialogTitle>
+          <DialogDescription>
+            {t(
+              'Allow this thread to see and control your main display. Revoke it any time. Ramu cannot tell when you use your own mouse or keyboard, so choose Take control before you do.',
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        {loaded && (
+          <div className="flex flex-col gap-2 text-control">
             {runtimes.length > 1 && (
               <Dropdown
                 label={t('Computer')}
@@ -650,67 +743,46 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
                 onChange={setRuntime}
               />
             )}
-            <div className="flex flex-wrap items-center gap-2">
-              {apps.length > 0 && (
-                <>
-                  <Dropdown
-                    label={t('App')}
-                    value={app}
-                    options={[
-                      { value: '', label: t('Choose an app') },
-                      ...apps.map((name) => ({ value: name, label: name })),
-                    ]}
-                    onChange={setApp}
-                  />
-                  <Button
-                    size="sm"
-                    disabled={!app}
-                    onClick={() =>
-                      void run(() => invoke('computer.grant', taskId, { observe: true, input: true, app, runtime }))
-                    }
-                  >
-                    {t('Allow this app')}
-                  </Button>
-                </>
-              )}
+            {ready ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {apps.length > 0 && (
+                  <>
+                    <Dropdown
+                      label={t('App')}
+                      value={app}
+                      options={[
+                        { value: '', label: t('Choose an app') },
+                        ...apps.map((name) => ({ value: name, label: name })),
+                      ]}
+                      onChange={setApp}
+                    />
+                    <Button size="sm" disabled={!app} onClick={() => grant({ app })}>
+                      {t('Allow this app')}
+                    </Button>
+                  </>
+                )}
+                <Button size="sm" variant={apps.length ? 'secondary' : 'default'} onClick={() => grant({})}>
+                  {t('Allow main display')}
+                </Button>
+              </div>
+            ) : (
               <Button
                 size="sm"
-                variant={apps.length ? 'secondary' : 'default'}
-                onClick={() =>
-                  void run(() => invoke('computer.grant', taskId, { observe: true, input: true, runtime }))
-                }
+                variant="secondary"
+                className="self-start"
+                onClick={() => {
+                  setOpen(false)
+                  window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'computer' } }))
+                }}
               >
-                {t('Allow main display')}
+                {t('Open settings')}
               </Button>
-            </div>
+            )}
             {appHint && <span className="text-caption text-muted-foreground">{t(appHint)}</span>}
-          </>
+            <ComputerProblem needed={needed} error={error} />
+          </div>
         )}
-        {session && !keepAwake && (
-          <span className="text-caption text-muted-foreground">
-            {t('This Mac may sleep when idle and stop the agent. Turn on Keep awake in Settings → System.')}
-          </span>
-        )}
-        {session && !viewOnly && <ComputerSharing taskId={taskId} />}
-        {needed ? (
-          <PermissionNeeded host={hostId} permission={needed} />
-        ) : (
-          error && (
-            <span role="alert" className="text-caption text-destructive">
-              {error}
-            </span>
-          )
-        )}
-      </div>
-      {viewing && session && (
-        <Viewer
-          taskId={taskId}
-          session={session}
-          run={run}
-          onAsked={() => setAsked(true)}
-          onClose={() => setViewing(false)}
-        />
-      )}
-    </ComposerTraySection>
+      </DialogContent>
+    </Dialog>
   )
 }

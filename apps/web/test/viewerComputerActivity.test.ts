@@ -58,7 +58,7 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogHeader: 'div',
   DialogTitle: 'h3',
 }))
-import { ComputerActivity } from '../src/chat/ComputerActivity'
+import { ComputerActivity, ComputerGrantDialog, useComputerActivity } from '../src/chat/ComputerActivity'
 type Node = { type?: unknown; props: Record<string, any> }
 const nodes = (value: unknown): Node[] =>
   !value || typeof value !== 'object'
@@ -71,16 +71,25 @@ const session = {
   controller: { kind: 'human' },
   handoffRequest: { deviceId: 'other' },
 }
-const RenderActivity = () => {
+// Mirrors AgentView: the hook feeds both the tray row and the grant dialog in one render.
+const Render = () => {
   state.cursor = 0
-  return ComputerActivity({ taskId: 'task', visible: true })
+  const activity = useComputerActivity('task', true)
+  return { tray: ComputerActivity({ state: activity }), dialog: ComputerGrantDialog({ state: activity }) }
 }
+const RenderActivity = () => Render().tray
+const listeners = () =>
+  (window.addEventListener as ReturnType<typeof vi.fn>).mock.calls
+    .filter(([name]) => name === 'ramu:open-computer')
+    .map(([, listener]) => listener as (event: unknown) => void)
+const askToOpen = () => listeners().forEach((listener) => listener({ detail: { taskId: 'task' } }))
 const flush = async () => {
   state.effects.splice(0).forEach((run) => run())
   for (let i = 0; i < 10; i++) await Promise.resolve()
 }
 beforeEach(() => {
   vi.useFakeTimers()
+  ;(window.addEventListener as ReturnType<typeof vi.fn>).mockClear()
   state.slots = []
   state.effects = []
   state.viewer = true
@@ -145,4 +154,35 @@ it('refuses a retained stop action after viewer access is confirmed', async () =
   stop.onSelect()
   await flush()
   expect(state.invoke.mock.calls.some(([method]) => method === 'computer.stop')).toBe(false)
+})
+it('stays out of the tray while the thread has no computer, and opens the grant dialog when asked', async () => {
+  state.viewer = false
+  state.invoke.mockImplementation(async (method) => {
+    if (method === 'computer.session') return null
+    if (method === 'computer.status') return { enabled: true, runtime: { available: true }, apps: { available: false } }
+    if (method === 'computer.runtimes') return []
+  })
+  Render()
+  await flush()
+  const idle = Render()
+  expect(idle.tray).toBeNull()
+  expect((idle.dialog as Node).props.open).toBe(false)
+  askToOpen()
+  Render()
+  await flush()
+  const asked = nodes(Render().dialog)
+  expect(asked[0]!.props.open).toBe(true)
+  const allow = asked.find((node) => node.props.children === 'Allow main display')!
+  allow.props.onClick()
+  await flush()
+  expect(state.invoke).toHaveBeenCalledWith('computer.grant', 'task', { observe: true, input: true, runtime: 'local' })
+})
+it('does not offer a grant to a view-only device', async () => {
+  state.invoke.mockImplementation(async (method) => (method === 'computer.session' ? null : undefined))
+  Render()
+  await flush()
+  askToOpen()
+  const viewOnly = Render()
+  expect(viewOnly.tray).toBeNull()
+  expect((viewOnly.dialog as Node).props.open).toBe(false)
 })

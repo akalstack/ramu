@@ -138,11 +138,8 @@ export function TeammatesSection({
   return (
     <ComposerTraySection
       aria-label={t('Teammates')}
-      title={
-        <>
-          {t('Teammates')} <span className="text-muted-foreground tabular-nums">{teammates.length}</span>
-        </>
-      }
+      title={t('Teammates')}
+      count={teammates.length}
       icon={<Users />}
       actions={
         working > 0 && (

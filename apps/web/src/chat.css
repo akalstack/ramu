@@ -88,6 +88,12 @@
   font-weight: 500;
   color: var(--muted);
 }
+.composer-tray-count-dot {
+  margin-inline: 0.35em;
+}
+.composer-tray-count {
+  font-variant-numeric: tabular-nums;
+}
 .composer-tray-chevron {
   transition: transform 160ms var(--ease);
 }

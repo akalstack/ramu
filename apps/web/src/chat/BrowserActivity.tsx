@@ -84,11 +84,8 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
   return (
     <ComposerTraySection
       aria-label={t('Browser')}
-      title={
-        <>
-          {t('Browser')} <span className="text-muted-foreground tabular-nums">{state.tabs.length}</span>
-        </>
-      }
+      title={t('Browser')}
+      count={state.tabs.length}
       icon={<Globe />}
       actions={
         state.stale ? (

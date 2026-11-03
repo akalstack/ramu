@@ -105,12 +105,8 @@ export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof
       />
       <ComposerTraySection
         aria-label={t('Background terminals')}
-        title={
-          <>
-            {t('Background terminals')}{' '}
-            <span className="text-muted-foreground tabular-nums">{live || terminals.length}</span>
-          </>
-        }
+        title={t('Background terminals')}
+        count={live || terminals.length}
         icon={<SquareTerminal />}
         actions={
           stale && <span className="text-muted-foreground text-caption">{t('Offline · last-known activity')}</span>

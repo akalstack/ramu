@@ -1,7 +1,7 @@
 import { useViewOnly } from '../composer/useViewOnly'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { McpStatusDialog } from './agent/components/McpStatusDialog'
-import { ComputerActivity } from '../chat/ComputerActivity'
+import { ComputerActivity, ComputerGrantDialog, useComputerActivity } from '../chat/ComputerActivity'
 import { BrowserActivity, useBrowserActivity } from '../chat/BrowserActivity'
 import { BackgroundTerminalsSection, useBackgroundTerminals } from '../chat/BackgroundTerminals'
 import { ConfirmStopDialog } from '../chat/ConfirmStopDialog'
@@ -324,6 +324,7 @@ export const AgentView = memo(function AgentView({
     void act(() => invoke('agent.backgroundTool', view.sessionId, toolUseId))
   const browserActivity = useBrowserActivity(session && !session.parentId ? session.taskId : undefined, visible)
   const backgroundTerminals = useBackgroundTerminals(session?.taskId)
+  const computerActivity = useComputerActivity(session && !session.parentId ? session.taskId : undefined, visible)
   const [stopping, setStopping] = useState<AgentTask | null>(null)
   const runStopTask = (task: AgentTask) => void act(() => invoke('agent.stopTask', view.sessionId, task.agentId))
   // Background commands are processes, so ending one is confirmed; sub-agents stop at once.
@@ -888,6 +889,7 @@ export const AgentView = memo(function AgentView({
           <div className="composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]">
             <ComposerStack>
               {error && <ErrorNote message={error} title={translate('That didn’t work')} />}
+              <ComputerGrantDialog state={computerActivity} />
               <ConfirmStopDialog
                 command={stopping ? stopping.name : null}
                 onCancel={() => setStopping(null)}
@@ -899,6 +901,7 @@ export const AgentView = memo(function AgentView({
               {(hostOffline ||
                 backgroundTerminals.terminals.length > 0 ||
                 browserActivity.tabs.length > 0 ||
+                !!computerActivity.session ||
                 providerWait ||
                 liveGoal ||
                 queued.length > 0 ||
@@ -926,10 +929,7 @@ export const AgentView = memo(function AgentView({
                     />
                   )}
                   {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
-                  <ComputerActivity
-                    taskId={session && !session.parentId ? session.taskId : undefined}
-                    visible={visible}
-                  />
+                  <ComputerActivity state={computerActivity} />
                   {backgroundTerminals.terminals.length > 0 && (
                     <BackgroundTerminalsSection state={backgroundTerminals} />
                   )}
