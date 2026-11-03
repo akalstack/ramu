@@ -8107,3 +8107,73 @@ test('an error toast sits under the header and never blocks a press, while an Un
   assert.equal(undo.props.style.bottom, 34 + 72)
   assert.equal(undo.props.style.top, undefined)
 })
+
+for (const readOnly of [false, true]) {
+  test(`the phone's MCP sheet ${readOnly ? 'only reads status on a view-only device' : 'reconnects a failed server and reloads them all'}`, async () => {
+    const hooks = hookHarness(),
+      calls = []
+    const status = {
+      supported: true,
+      live: true,
+      canReconnect: true,
+      canReload: true,
+      servers: [
+        { name: 'github', status: 'failed', error: 'token expired' },
+        { name: 'docs', status: 'connected', toolCount: 4 },
+      ],
+    }
+    const store = {
+      invoke: async (...args) => {
+        calls.push(args)
+        return args[1] === 'agent.mcpStatus' ? status : undefined
+      },
+    }
+    const { McpStatusSheet } = load('components/McpStatusSheet.tsx', 'ios', {
+      react: { ...require('react'), ...hooks.react },
+      './ui': components,
+      '@ramu/shared/mcp': sharedMcp,
+      '../runtime/store': { useStore: () => store },
+      '../i18n': { useSay: () => (text, values) => text.replace('{0}', values?.[0] ?? '') },
+      '../theme': {
+        font: { caption: 12 },
+        space: { l: 16, m: 12, s: 8 },
+        useTheme: () => ({ c: { ok: 'ok', bad: 'bad', muted: 'muted' } }),
+      },
+    })
+    const render = () =>
+      hooks.render(() => McpStatusSheet({ open: true, onClose() {}, computerId: 'host', sessionId: 's', readOnly }))
+    render()
+    await settle()
+    const buttons = () => nodes(render()).filter((node) => node.type === 'Button')
+    const button = (title) => buttons().find((node) => node.props.title === title)
+    assert.ok(nodes(render()).some((node) => node.props?.children === 'github'))
+    if (readOnly) {
+      assert.equal(button('Reconnect'), undefined)
+      assert.equal(button('Reload MCP servers'), undefined)
+      assert.ok(button('Refresh'))
+      return
+    }
+    // Only the failed server offers Reconnect.
+    assert.equal(buttons().filter((node) => node.props.title === 'Reconnect').length, 1)
+    calls.length = 0
+    button('Reconnect').props.onPress()
+    await settle()
+    assert.deepEqual(
+      calls.map((call) => call.slice(1)),
+      [
+        ['agent.reconnectMcp', 's', 'github'],
+        ['agent.mcpStatus', 's'],
+      ],
+    )
+    calls.length = 0
+    button('Reload MCP servers').props.onPress()
+    await settle()
+    assert.deepEqual(
+      calls.map((call) => call.slice(1)),
+      [
+        ['agent.reloadMcp', 's'],
+        ['agent.mcpStatus', 's'],
+      ],
+    )
+  })
+}

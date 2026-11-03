@@ -40,6 +40,8 @@ import { fill, useT, useSay } from '../../../i18n'
 import { LoadingMark } from '../../../components/AnimatedMark'
 import { ProviderIcon } from '../../../components/Logos'
 import { McpStatusSheet } from '../../../components/McpStatusSheet'
+import { editFromHere } from '../../../runtime/editFromHere'
+import { looseInvoke } from '../../../runtime/settingsModel'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
@@ -1056,46 +1058,41 @@ export default function ChatScreen() {
               return
             }
             const sessionId = chat.sessionId
-            const preview = await latestStore.current
-              .invoke(chat.computerId, 'reviews.chatUndoPreview', sessionId, seq)
-              .catch(() => null)
-            const ready = preview?.files.filter((f) => f.status === 'ready') ?? []
-            const choice = await new Promise<'keep' | 'revert' | null>((resolve) =>
-              Alert.alert(
-                tr('Edit from here?'),
-                tr(
-                  running
-                    ? 'Stops the agent and rewinds the thread to before this message. Your prompt and attachments return to the message box.'
-                    : 'Rewinds the thread to before this message. Your prompt and attachments return to the message box.',
-                ),
-                [
-                  { text: tr('Cancel'), style: 'cancel', onPress: () => resolve(null) },
-                  ...(ready.length
-                    ? [
-                        {
-                          text:
-                            ready.length === 1
-                              ? tr('Revert 1 file too')
-                              : tr('Revert {0} files too', { 0: ready.length }),
-                          onPress: () => resolve('revert' as const),
-                        },
-                      ]
-                    : []),
-                  { text: tr('Edit from here'), onPress: () => resolve('keep') },
-                ],
-                { cancelable: true, onDismiss: () => resolve(null) },
-              ),
-            )
-            if (!choice || viewerNow()) return
             try {
-              if (choice === 'revert' && preview && ready.length)
-                await latestStore.current.invoke(
-                  chat.computerId,
-                  'reviews.chatUndoApply',
-                  preview.token,
-                  ready.map((f) => f.fileId),
-                )
-              await latestStore.current.invoke(chat.computerId, 'agent.rewind', sessionId, seq)
+              const done = await editFromHere({
+                invoke: (method, ...args) => looseInvoke(latestStore.current.invoke)(chat.computerId, method, ...args),
+                sessionId,
+                seq,
+                stillWritable: () => !viewerNow(),
+                confirm: (revertable) =>
+                  new Promise((resolve) =>
+                    Alert.alert(
+                      tr('Edit from here?'),
+                      tr(
+                        running
+                          ? 'Stops the agent and rewinds the thread to before this message. Your prompt and attachments return to the message box.'
+                          : 'Rewinds the thread to before this message. Your prompt and attachments return to the message box.',
+                      ),
+                      [
+                        { text: tr('Cancel'), style: 'cancel', onPress: () => resolve(null) },
+                        ...(revertable
+                          ? [
+                              {
+                                text:
+                                  revertable === 1
+                                    ? tr('Revert 1 file too')
+                                    : tr('Revert {0} files too', { 0: revertable }),
+                                onPress: () => resolve('revert' as const),
+                              },
+                            ]
+                          : []),
+                        { text: tr('Edit from here'), onPress: () => resolve('keep' as const) },
+                      ],
+                      { cancelable: true, onDismiss: () => resolve(null) },
+                    ),
+                  ),
+              })
+              if (done !== 'rewound') return
               void latestStore.current.refresh(chat.computerId)
               setEditing({ seq, files })
               setRestore((r) => ({ text: visibleText(text), n: (r?.n ?? 0) + 1 }))
