@@ -48,6 +48,8 @@ export interface TranscriptTool {
 
 export type TranscriptItem = (
   | { kind: 'error'; id: string; message: string }
+  /** What a sub-agent or teammate sent back to the thread: who, how it ended (finished, failed, says…), and its words. */
+  | { kind: 'report'; id: string; name: string; verb: string; body: string }
   | {
       kind: 'user'
       id: string

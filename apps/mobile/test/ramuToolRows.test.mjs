@@ -25,3 +25,13 @@ test('calls that already have a card in the chat stay out of the tool rows unles
   const failed = transcript([use('g2', 'mcp__ramu__set_goal', { objective: 'Ship it' }), done('g2', true)])
   assert.equal(failed.filter((item) => item.kind === 'tool').length, 1)
 })
+
+test("a sub-agent's report back is its own card, not text the person typed", () => {
+  const [row] = transcript([{ kind: 'user', text: '[Sub-agent "Sonnet 5.5" finished]\nNothing to review.' }])
+  assert.deepEqual(row && { kind: row.kind, name: row.name, verb: row.verb, body: row.body }, {
+    kind: 'report',
+    name: 'Sonnet 5.5',
+    verb: 'finished',
+    body: 'Nothing to review.',
+  })
+})

@@ -5,7 +5,7 @@ import { translate, type Language } from '@ramu/shared/i18n'
 import { toolVerb } from '@ramu/shared/chat/toolStatus'
 import { DiffLines } from './DiffLines'
 import { changedFile } from '../runtime/diff'
-import { Helpers } from './Helpers'
+import { Helpers, ReportCard } from './Helpers'
 import { InteractiveContent } from './InteractiveContent'
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ActionSheetIOS, Alert, Image, Linking, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
@@ -592,6 +592,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <PlanCard item={item} />
     case 'agents':
       return <AgentsGroup item={item} chat={chat} />
+    case 'report':
+      return <ReportCard item={item} chat={chat} />
     case 'question':
       return <QuestionCard item={item} chatId={chat.id} />
     case 'permission':

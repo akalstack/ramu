@@ -41,6 +41,36 @@ export function helperStatusLabel(task: AgentTask): string {
       ? 'Waiting for provider'
       : 'Working'
 }
+/**
+ * What kind of helper this is, for the small tag beside its name: a teammate you added (and how it works), the
+ * thread's advisor, a background command, or a sub-agent the agent started (and its type, such as Explore).
+ */
+export function helperRole(task: Pick<AgentTask, 'teammate' | 'taskType' | 'agentType'>): {
+  role: 'teammate' | 'advisor' | 'command' | 'subagent'
+  label: string
+  detail?: string
+} {
+  if (task.teammate)
+    return { role: 'teammate', label: 'Teammate', detail: task.teammate === 'take-over' ? 'Take over' : 'Review' }
+  if (task.taskType === 'advisor') return { role: 'advisor', label: 'Advisor' }
+  if (task.taskType === 'local_bash') return { role: 'command', label: 'Command' }
+  return {
+    role: 'subagent',
+    label: 'Sub-agent',
+    ...(task.agentType && !/^general/i.test(task.agentType) ? { detail: task.agentType } : {}),
+  }
+}
+
+/** The status words a helper's report back uses, the same as its card's. */
+export const REPORT_STATUS: Record<string, string> = {
+  finished: 'Completed',
+  failed: 'Failed',
+  stopped: 'Stopped',
+  'is still working': 'Still working',
+  says: 'Note',
+  asks: 'Question',
+}
+
 const rank = (task: AgentTask) =>
   task.waitingFor === 'input' && helperActive(task) ? 0 : helperActive(task) ? 1 : task.status === 'failed' ? 2 : 3
 export const sortHelpers = (tasks: AgentTask[]): AgentTask[] => [...tasks].sort((a, b) => rank(a) - rank(b))

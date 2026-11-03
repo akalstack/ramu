@@ -13,6 +13,7 @@ import { ActivityText } from '../../../chat/ActivityText'
 import { formatDuration } from '../lib/format'
 import { useElapsed } from '../hooks/useElapsed'
 import { TaskStatusIcon } from './TaskStatus'
+import { ProviderIcon } from '../../../models/ProviderIcon'
 
 const marking = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -68,6 +69,7 @@ export function AdvisorActivity({
       onClick={onOpen}
       title={task.error ?? translate("Open the advisor's answer")}
     >
+      {task.provider && <ProviderIcon provider={task.provider} size={13} />}
       <TaskStatusIcon status={status} active={!offline && helperActive(task) && !task.waitingFor} />
       <span role="status">
         <ActivityText active={!offline && helperActive(task) && !task.waitingFor}>

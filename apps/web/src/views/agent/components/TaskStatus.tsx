@@ -2,6 +2,7 @@ import { formatLocale, t, useLanguage } from '../../../i18n'
 import { CircleCheck, CircleSlash, CircleX, Clock } from 'lucide-react'
 import { providerName } from '../../../chat/AgentControls'
 import type { AgentTask, AgentWork } from '@ramu/shared/types'
+import { helperRole } from '@ramu/shared/chat/helperPresentation'
 import { effortDisplayName, modelDisplayName } from '../../../models/ModelSets'
 import { formatDuration } from '../lib/format'
 
@@ -24,6 +25,21 @@ export function TaskStatusIcon({ status, active = true }: { status: AgentTask['s
   return <CircleSlash size={14} className="task-status stopped" aria-hidden="true" />
 }
 
+/**
+ * The small tag beside a helper's name that says what it is: Teammate · Review, Sub-agent · Explore, Advisor, Command.
+ * One card design serves them all; this is what tells them apart.
+ */
+export function RoleTag({ task }: { task: Pick<AgentTask, 'teammate' | 'taskType' | 'agentType'> }) {
+  useLanguage()
+  const { label, detail } = helperRole(task)
+  return (
+    <span className="flex-none rounded-(--radius-s) bg-fill px-1.5 text-caption leading-[18px] text-muted-foreground">
+      {t(label)}
+      {detail ? ` · ${t(detail)}` : ''}
+    </span>
+  )
+}
+
 /** A teammate named for its model (Sonnet 5.5 for `sonnet`) need not name the model again. */
 const namesModel = (name: string, model: string) => name.toLowerCase().includes(modelDisplayName(model).toLowerCase())
 
@@ -39,8 +55,6 @@ export function taskMeta(task: AgentTask, status: AgentTask['status']): string {
       ? `${providerName(task.provider)}${task.model && !namesModel(task.name, task.model) ? ` · ${modelDisplayName(task.model)}` : ''}`
       : undefined,
     task.effort ? effortDisplayName(task.effort, task.provider ?? 'claude-code') : undefined,
-    task.agentType,
-    task.taskType === 'local_bash' ? 'Command' : undefined,
     task.isolated ? 'Own copy' : undefined,
     task.background ? 'Background' : undefined,
     task.toolUses ? `${task.toolUses} ${task.toolUses === 1 ? 'tool use' : 'tool uses'}` : undefined,

@@ -21,7 +21,8 @@ import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { visibleText } from '../lib/messages'
 import { ThreadAgents } from '../lib/threadAgents'
 import { ProviderIcon } from '../../../models/ProviderIcon'
-import { TASK_STATUS, TaskStatusIcon } from './TaskStatus'
+import { RoleTag, TaskStatusIcon } from './TaskStatus'
+import { REPORT_STATUS } from '@ramu/shared/chat/helperPresentation'
 import { MessageTime } from './MessageTime'
 import { CopyButton } from './CopyButton'
 import { UserBubble } from '../../../chat/UserBubble'
@@ -240,15 +241,10 @@ export function UserMessage({
   )
 }
 
-const REPORT_STATUS: Record<string, AgentTask['status'] | undefined> = {
+const REPORT_ICON: Record<string, AgentTask['status'] | undefined> = {
   finished: 'completed',
   failed: 'failed',
   stopped: 'stopped',
-}
-const REPORT_LABEL: Record<string, string> = {
-  'is still working': 'Still working',
-  says: 'Note',
-  asks: 'Question',
 }
 
 /**
@@ -265,7 +261,7 @@ function TaskReport({
   useLanguage()
   const agents = useContext(ThreadAgents)
   const agent = agents.findLast((task) => task.name === report.name)
-  const status = REPORT_STATUS[report.verb]
+  const status = REPORT_ICON[report.verb]
   return (
     <Button
       variant="ghost"
@@ -281,9 +277,10 @@ function TaskReport({
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate font-semibold text-foreground">{report.name}</span>
+          {agent && <RoleTag task={agent} />}
           <span className="inline-flex flex-none items-center gap-1 text-caption text-muted-foreground">
             {status && <TaskStatusIcon status={status} />}
-            {translate(status ? TASK_STATUS[status] : (REPORT_LABEL[report.verb] ?? report.verb))}
+            {translate(REPORT_STATUS[report.verb] ?? report.verb)}
           </span>
         </span>
         <span className={`${MSG_CLASS} assistant text-soft`}>

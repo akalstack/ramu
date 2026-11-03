@@ -10,7 +10,7 @@ import { ProviderIcon } from '../../../models/ProviderIcon'
 import { modelDisplayName } from '../../../models/ModelSets'
 import { toolLabel } from '../lib/toolSummary'
 import { useElapsed } from '../hooks/useElapsed'
-import { TASK_STATUS, TaskStatusIcon, taskMeta, workSummary } from './TaskStatus'
+import { RoleTag, TASK_STATUS, TaskStatusIcon, taskMeta, workSummary } from './TaskStatus'
 import { CARET_CLASS, ICON_BUTTON_CLASS } from '../styles'
 import { ActivityText } from '../../../chat/ActivityText'
 
@@ -66,6 +66,7 @@ export function AgentTaskCard({
             <span className="agent-task-name min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-foreground">
               {task.name}
             </span>
+            <RoleTag task={task} />
             <span
               className={`agent-task-state flex-none inline-flex items-center gap-1 text-muted-foreground text-caption ${status}`}
             >

@@ -98,7 +98,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         answers = parseAnswerMessage(e.text)
       items.push(
         report
-          ? { kind: 'text', id, text: `**${report.name}** ${report.verb}\n\n${report.body}` }
+          ? { kind: 'report', id, name: report.name, verb: report.verb, body: report.body }
           : advice
             ? {
                 kind: 'note',

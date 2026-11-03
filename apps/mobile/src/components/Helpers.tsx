@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Alert, Pressable, TextInput, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { Bot } from 'lucide-react-native'
+import { Bot, CircleCheck, CircleSlash, CircleX } from 'lucide-react-native'
 import {
   helperActions,
   helperActive,
   helperCounts,
   helperElapsed,
+  helperRole,
   helperStatusLabel,
+  REPORT_STATUS,
   sortHelpers,
 } from '@ramu/shared/chat/helperPresentation'
+import { translate } from '@ramu/shared/i18n'
 import type { AgentTask, AgentWork } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import { providerNames, type Chat, type TranscriptItem } from '../runtime/types'
@@ -19,7 +22,7 @@ import { formatDuration } from '../runtime/turns'
 import { ProviderIcon } from './Logos'
 import { Markdown } from './Markdown'
 import { Button, Card, Divider, Sheet, T, tap } from './ui'
-import { Collapse, Disclosure } from './Motion'
+import { ActivityText, Collapse, Disclosure } from './Motion'
 
 type Helper = Extract<TranscriptItem, { kind: 'agents' }>['agents'][number]
 const copy = (key: string, id: boolean) =>
@@ -34,6 +37,21 @@ const copy = (key: string, id: boolean) =>
         'Recovered activity': 'Aktivitas dipulihkan',
       }[key] ?? key)
     : key
+/** What a helper is, beside its name: Teammate · Review, Sub-agent · Explore, Advisor, Command (as on the desktop). */
+export function RoleTag({ task }: { task: Pick<AgentTask, 'teammate' | 'taskType' | 'agentType'> }) {
+  const { c } = useTheme()
+  const { language } = useStore()
+  const { label, detail } = helperRole(task)
+  return (
+    <View style={{ backgroundColor: c.fill, borderRadius: radius.s, paddingHorizontal: 6, paddingVertical: 1 }}>
+      <T size={font.caption} tone="muted" numberOfLines={1}>
+        {translate(language, label)}
+        {detail ? ` · ${translate(language, detail)}` : ''}
+      </T>
+    </View>
+  )
+}
+
 /** A teammate's changes and usage, e.g. "2 files +40 −5 · 3 turns · $0.12". */
 function workLine(work: AgentWork, id: boolean): string {
   const files = work.files
@@ -312,12 +330,22 @@ export function Helpers({
                 ) : (
                   <Bot size={16} color={c.soft} />
                 )}
-                <T weight="500" style={{ flex: 1 }}>
+                <T weight="500" numberOfLines={1} style={{ flex: 1 }}>
                   {helper.name}
                 </T>
-                <T size={font.caption} tone={helper.status === 'failed' ? 'bad' : 'muted'}>
-                  {copy(helperStatusLabel(helper), id)}
-                </T>
+                {online && helperActive(helper) ? (
+                  <ActivityText active size={font.caption}>
+                    {copy(helperStatusLabel(helper), id)}
+                  </ActivityText>
+                ) : (
+                  <T size={font.caption} tone={helper.status === 'failed' ? 'bad' : 'muted'}>
+                    {copy(helperStatusLabel(helper), id)}
+                  </T>
+                )}
+              </View>
+              {/* On a phone the role sits under the name, so a long name keeps its words. */}
+              <View style={{ flexDirection: 'row', paddingLeft: 24 }}>
+                <RoleTag task={helper} />
               </View>
               {helper.summary || helper.lastTool ? (
                 <T size={font.caption} tone="muted" numberOfLines={2}>
@@ -335,6 +363,61 @@ export function Helpers({
         chat={chat}
         onClose={() => setShownId(null)}
       />
+    </Card>
+  )
+}
+
+const REPORT_ICON = { finished: CircleCheck, failed: CircleX, stopped: CircleSlash } as const
+
+/**
+ * What a sub-agent or teammate sent back, drawn like its row in the agents card: its model's icon, its name and role,
+ * how it ended, then its words. Tapping it opens that agent, as tapping its row does.
+ */
+export function ReportCard({ item, chat }: { item: Extract<TranscriptItem, { kind: 'report' }>; chat: Chat }) {
+  const { c } = useTheme()
+  const { language } = useStore()
+  const [open, setOpen] = useState(false)
+  let agent: Helper | undefined
+  for (const entry of chat.items)
+    if (entry.kind === 'agents') for (const task of entry.agents) if (task.name === item.name) agent = task
+  const Icon = REPORT_ICON[item.verb as keyof typeof REPORT_ICON]
+  const tint = item.verb === 'failed' ? c.bad : item.verb === 'finished' ? c.ok : c.muted
+  return (
+    <Card>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${item.name}, ${translate(language, REPORT_STATUS[item.verb] ?? item.verb)}`}
+        disabled={!agent}
+        onPress={() => {
+          tap()
+          setOpen(true)
+        }}
+        style={({ pressed }) => ({ padding: space.m, gap: space.s, backgroundColor: pressed ? c.pressed : undefined })}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+          {agent?.provider ? <ProviderIcon provider={agent.provider} size={16} /> : <Bot size={16} color={c.soft} />}
+          <T weight="600" numberOfLines={1} style={{ flex: 1 }}>
+            {item.name}
+          </T>
+          {Icon ? <Icon size={13} color={tint} /> : null}
+          <T size={font.caption} tone={item.verb === 'failed' ? 'bad' : 'muted'}>
+            {translate(language, REPORT_STATUS[item.verb] ?? item.verb)}
+          </T>
+        </View>
+        {agent ? (
+          <View style={{ flexDirection: 'row', paddingLeft: 24 }}>
+            <RoleTag task={agent} />
+          </View>
+        ) : null}
+        <Markdown text={item.body} />
+      </Pressable>
+      {open && agent ? (
+        <HelperDetails
+          task={{ ...agent, agentId: agent.agentId ?? agent.id }}
+          chat={chat}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </Card>
   )
 }
