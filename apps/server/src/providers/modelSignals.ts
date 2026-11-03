@@ -91,9 +91,6 @@ export function mergeSignals(dev: ModelSignals, litellm: ModelSignals): ModelSig
   return merged
 }
 
-/** How long a model counts as new after its release. */
-export const NEW_FOR_MS = 14 * 24 * 60 * 60_000
-
 /**
  * Adds release and retirement dates to a provider's catalog, and marks legacy what the sources call deprecated or
  * retired. A provider's own lifecycle label is never overridden, and a model the sources do not know is left to
