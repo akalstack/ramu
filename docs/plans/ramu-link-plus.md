@@ -19,7 +19,7 @@ The plan charges only for what costs money to run, and leaves everything else fr
 | | **Free** | **Plus** | **Self-hosted Link** |
 | --- | --- | --- | --- |
 | Price | $0 | $5/month or $48/year | $0 (your own Cloudflare account) |
-| Price in Indonesia | Rp0 | Rp49.000/month or Rp449.000/year | Rp0 |
+| Price in Indonesia | Rp0 | Rp89.000/month or Rp869.000/year | Rp0 |
 | The whole app, every agent and provider | ✓ | ✓ | ✓ |
 | Direct routes: LAN, VPN (Tailscale and others), SSH | ✓ | ✓ | ✓ |
 | Pairing, device permissions, revoking devices | ✓ | ✓ | ✓ |
@@ -54,17 +54,17 @@ Payments through a merchant of record cost about 5% + $0.50 each.
 | --- | --- | --- | --- |
 | $5/month | ~$0.75 | ~$4.25 | ~$3.45 (69%) |
 | $48/year | ~$2.90 | ~$45.10 | ~$35.50 (74%) |
-| Rp49.000/month | ~$0.65 | ~$2.35 | ~$1.55 |
-| Rp449.000/year | ~$1.85 | ~$25 | ~$15 |
+| Rp89.000/month | ~$0.75 | ~$4.16 | ~$3.36 (68%) |
+| Rp869.000/year | ~$2.90 | ~$45.00 | ~$35.40 (74%) |
 
-The yearly plan is shown first everywhere, and first of all in Indonesia, where the fixed fee takes a fifth of a monthly payment. One Plus account covers about 11 free accounts that use all 60 hours. Prices are revisited after three months of measured usage (step 1), not before.
+Rupiah prices follow the dollar prices at Rp18.140 per US dollar (3 November 2026), rounded down to end in 9.000, and are reviewed with the dollar prices rather than following the daily rate. The yearly plan is shown first everywhere, because the fixed fee takes a larger share of a monthly payment. One Plus account covers about 11 free accounts that use all 60 hours. Prices are revisited after three months of measured usage (step 1), not before.
 
 ## Payments
 
 Ramu Link stores **what an account has and until when**, never how it paid. Every payment route writes the same entitlement.
 
 1. **At launch: Paddle as merchant of record, for everyone.** Paddle accepts sellers in Indonesia, collects VAT and sales tax in each buyer's country (12% in Indonesia), and allows a per-country price, which sets the rupiah prices. Its webhooks (subscription created, renewed, past due, cancelled, refunded) update the entitlement. Polar is the fallback: it pays out to Indonesia through Stripe Connect Express but needs a regular bank account (not Wise or Payoneer).
-2. **When Indonesian sales justify it: QRIS and e-wallets through Midtrans or Xendit.** Most buyers in Indonesia have no credit card. Sell **Ramu Plus 1 tahun** as a one-time Rp449.000 payment rather than a subscription, because QRIS has no reliable automatic renewal; remind the person 14 and 3 days before it ends. On these payments Ramu is the seller, not a merchant of record, so tax reporting is the maintainer's; get an accountant's answer before turning it on.
+2. **When Indonesian sales justify it: QRIS and e-wallets through Midtrans or Xendit.** Most buyers in Indonesia have no credit card. Sell **Ramu Plus 1 tahun** as a one-time Rp869.000 payment rather than a subscription, because QRIS has no reliable automatic renewal; remind the person 14 and 3 days before it ends. On these payments Ramu is the seller, not a merchant of record, so tax reporting is the maintainer's; get an accountant's answer before turning it on.
 
 Before either goes live: confirm the payout currency and bank for the chosen provider, and the maintainer's own income tax.
 
@@ -92,7 +92,7 @@ Before either goes live: confirm the payout currency and bank for the chosen pro
 - A free account passes 60 relayed hours: Link streams refuse with the message, the same device still reaches the host over the LAN, and Link works again on the 1st.
 - A Plus subscription cancelled in Paddle: hosts beyond 3 stop taking relayed streams at period end, nothing is deleted, and renewing restores them.
 - A refund and a failed renewal each update the entitlement within a minute of the webhook.
-- A buyer in Indonesia sees Rp449.000/year first at checkout and pays with a local card.
+- A buyer in Indonesia sees Rp869.000/year first at checkout and pays with a local card.
 - A self-hosted service with no payment secrets: every account has Plus features, no limits and no **Get Plus**.
 - A desktop that had a quick tunnel on updates, sees the one-time notice, turns on Ramu Link from it and pairs a phone.
 - A month of measured usage on the hosted service, compared against Cloudflare's bill, within 10%.
