@@ -6,7 +6,7 @@ import { Gauge, Monitor, Network, Settings } from 'lucide-react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { useRouter } from 'expo-router'
 import type { AgentProvider, UsageReading } from '@ramu/shared/types'
-import { planName, providerEnabled } from '@ramu/shared/providers/providers'
+import { accountName, planName, providerEnabled } from '@ramu/shared/providers/providers'
 import {
   summaryUsage,
   usagePercent,
@@ -17,6 +17,8 @@ import {
   groupUsageByProvider,
 } from '@ramu/shared/usage/presentation'
 import { useStore } from '../runtime/store'
+import { useAccountLogins } from '../runtime/useAccountLogins'
+import { useSay } from '../i18n'
 import { providerNames } from '../runtime/types'
 import { font, space, useTheme } from '../theme'
 import { Card, Divider, Row, SectionLabel, Sheet, T, Toggle } from './ui'
@@ -27,7 +29,10 @@ export function PlanUsageReading({
   offline = false,
   compact = false,
   details = true,
+  account,
 }: {
+  /** The login's name as people read it; without one only the provider is named. */
+  account?: string
   reading: UsageReading
   offline?: boolean
   compact?: boolean
@@ -77,7 +82,7 @@ export function PlanUsageReading({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
           <ProviderIcon provider={r.provider} size={16} />
           <T weight="600" style={{ flexShrink: 1 }}>
-            {providerNames[r.provider]} · {r.accountId ?? 'default'}
+            {account ? `${providerNames[r.provider]} · ${account}` : providerNames[r.provider]}
           </T>
         </View>
       ) : null}
@@ -161,6 +166,8 @@ export function PlanUsageSheet({
   const [filter, setFilter] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [details, setDetails] = useState(() => store.drafts?.['usage-show-details'] === 'yes')
+  const say = useSay()
+  const logins = useAccountLogins(hosts, open)
   const refreshing = useRef<number | null>(null)
   const generation = useRef(0)
   const sequences = useRef(new Map<string, number>())
@@ -260,8 +267,8 @@ export function PlanUsageSheet({
             <T>{store.language === 'id' ? 'Detail akun' : 'Account details'}</T>
             <T size={font.caption} tone="muted">
               {store.language === 'id'
-                ? 'Tampilkan ID akun dan waktu pembaruan.'
-                : 'Show account IDs and update times.'}
+                ? 'Tampilkan kapan setiap batas terakhir diperbarui.'
+                : 'Show when each limit was last updated.'}
             </T>
           </View>
           <Toggle
@@ -364,18 +371,17 @@ export function PlanUsageSheet({
                       </View>
                     )}
                     {Array.from(new Set(group.readings.map((reading) => reading.accountId ?? 'default'))).map(
-                      (account, index) => {
+                      (account) => {
                         const readings = group.readings.filter(
                           (reading) => (reading.accountId ?? 'default') === account,
                         )
-                        const title =
-                          account === 'default'
-                            ? store.language === 'id'
-                              ? 'Akun default'
-                              : 'Default account'
-                            : /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(account)
-                              ? `${store.language === 'id' ? 'Akun' : 'Account'} ${index + 1}`
-                              : account
+                        const title = accountName(
+                          store.appPreferences[id]?.providerBinaries,
+                          group.provider,
+                          account,
+                          logins[id]?.[group.provider]?.[account],
+                          say,
+                        )
                         return (
                           <Card key={account} style={{ margin: space.m }}>
                             <View style={{ padding: space.m, gap: space.xs }}>
@@ -385,11 +391,6 @@ export function PlanUsageSheet({
                                   {providerNames[group.provider]} · {title}
                                 </T>
                               </View>
-                              {details && title !== account ? (
-                                <T size={font.caption} tone="muted" copyable={account}>
-                                  {account}
-                                </T>
-                              ) : null}
                             </View>
                             {readings.map((reading) => (
                               <View key={`${reading.window}:${reading.scope ?? ''}`}>

@@ -167,6 +167,8 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id.endsWith('/i18n') && !(id in mocks))
         return { useT: () => ({}), useSay: () => (text) => text, ago: () => '' }
       if (id in mocks) return mocks[id]
+      // Logins name themselves only when a host answers; tests that need names supply them.
+      if (id.endsWith('/useAccountLogins')) return { useAccountLogins: () => ({}) }
       if (id === '@ramu/shared/types')
         return {
           DEFAULT_AGENT_SETTINGS: {
@@ -6842,10 +6844,17 @@ test('plan usage uses a full-screen settings surface and groups windows under re
     '@ramu/shared/providers/providers': providers,
     '../runtime/store': { useStore: () => store },
     '../runtime/types': { providerNames: { 'claude-code': 'Claude Code' } },
+    '../runtime/useAccountLogins': {
+      useAccountLogins: () => ({ host: { 'claude-code': { [account]: { email: 'me@work.com', apiKey: true } } } }),
+    },
   })
   const render = () => hooks.render(() => PlanUsageSheet({ hosts: ['host'], open: true, onClose() {} }))
   let tree = render()
   assert.equal(find(tree, 'Sheet').props.presentation, 'screen')
+  const headings = nodes(tree)
+    .filter((node) => node.type === 'T' && node.props.weight === '600')
+    .map((node) => [node.props.children].flat().join(''))
+  assert.deepEqual(headings, ['Claude Code · Default CLI account', 'Claude Code · me@work.com · API key'])
   assert.equal(
     nodes(tree).filter((node) => node.type === PlanUsageReading).length,
     4,
@@ -6862,7 +6871,7 @@ test('plan usage uses a full-screen settings surface and groups windows under re
   )
   find(tree, 'Toggle').props.onValueChange(true)
   tree = render()
-  assert.ok(nodes(tree).some((node) => node.props?.children === account))
+  assert.ok(!nodes(tree).some((node) => node.props?.children === account), 'details never show the raw id')
   assert.equal(store.drafts['usage-show-details'], 'yes')
   hooks.dispose()
 })

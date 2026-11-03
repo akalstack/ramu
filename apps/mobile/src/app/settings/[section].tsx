@@ -26,6 +26,8 @@ import {
   type PushCategory,
 } from '../../runtime/pushCategories'
 import { useT, useSay } from '../../i18n'
+import { accountName } from '@ramu/shared/providers/providers'
+import { useAccountLogins } from '../../runtime/useAccountLogins'
 import { Header, Screen, useScrolledUnderBar, PageScrollView as ScrollView } from '../../components/Screen'
 import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
 import { Button, Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
@@ -379,8 +381,10 @@ function About() {
 }
 
 function Usage({ computer }: { computer: string }) {
-  const { usage } = useStore()
+  const { usage, appPreferences } = useStore()
+  const say = useSay()
   const readings = usage[computer] ?? []
+  const logins = useAccountLogins([computer], readings.length > 0)[computer]
   return (
     <>
       <SectionLabel>Plan usage</SectionLabel>
@@ -390,7 +394,16 @@ function Usage({ computer }: { computer: string }) {
           readings.map((r, i) => (
             <View key={`${r.provider}:${r.accountId ?? 'default'}:${r.window}:${r.scope ?? ''}`}>
               {i ? <Divider inset={space.m} /> : null}
-              <PlanUsageReading reading={r} />
+              <PlanUsageReading
+                reading={r}
+                account={accountName(
+                  appPreferences[computer]?.providerBinaries,
+                  r.provider,
+                  r.accountId ?? 'default',
+                  logins?.[r.provider]?.[r.accountId ?? 'default'],
+                  say,
+                )}
+              />
             </View>
           ))
         ) : (

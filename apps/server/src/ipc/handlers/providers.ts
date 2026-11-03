@@ -48,6 +48,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
       providers.status(config, latest, true, refresh),
   },
   'providers.accountEmails': { args: z.tuple([]), run: () => providers.accountEmails() },
+  'providers.accountLogins': { args: z.tuple([]), run: () => providers.accountLogins() },
   'providers.signIn': {
     args: z.tuple([agentSettings.shape.provider, agentSettings.shape.accountId, antigravitySignIn.optional()]),
     run: async (provider: ProviderStatus['provider'], accountId?: string, method?: AntigravitySignIn) => {

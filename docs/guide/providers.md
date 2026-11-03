@@ -26,7 +26,7 @@ Release and retirement dates come from public model lists, [models.dev](https://
 
 Every provider can hold several logins; the first enabled one in **Settings → Providers** applies to new threads. When a thread hits a limit, every enabled login is tried before another model. A provider or login turned off starts nothing: new threads, threads continuing after a stop or restart, and fallback switches all refuse it and say why.
 
-To pick a login yourself, use the account menu next to the model under the message box, or **Agent settings** in the phone's composer. It appears once a provider has more than one login turned on, and the thread moves over with its conversation. On the phone, **Settings → Providers** lists each login with how it signs in and turns logins on or off.
+To pick a login yourself, use the account menu next to the model under the message box, or **Agent settings** in the phone's composer. It appears once a provider has more than one login turned on and names each login by its label, else its sign-in email, marking logins that use an API key. The thread moves over with its conversation. On the phone, **Settings → Providers** lists each login with how it signs in and turns logins on or off.
 
 ### API keys
 
@@ -46,7 +46,7 @@ Approvals default to **Allow once**. For a command you can save a prefix rule (s
 
 ## Plan usage
 
-The sidebar footer shows each provider's remaining allowance. Claude and Codex report their own; for Cursor and Antigravity Ramu reads the same services their apps use. With several hosts connected, the popover also lists other hosts' logins once each, and a **This week** line adds finished turns, reported cost and tokens across hosts. Claude and Codex report tokens for each turn; hosts with turns from other providers are named under the total rather than counted as zero.
+The sidebar footer shows each provider's remaining allowance. Account names and emails in its popover stay hidden until you choose **Show accounts**, which this device remembers. Claude and Codex report their own; for Cursor and Antigravity Ramu reads the same services their apps use. With several hosts connected, the popover also lists other hosts' logins once each, and a **This week** line adds finished turns, reported cost and tokens across hosts. Claude and Codex report tokens for each turn; hosts with turns from other providers are named under the total rather than counted as zero.
 
 ## Advisor
 

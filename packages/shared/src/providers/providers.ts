@@ -125,6 +125,43 @@ export function accountDisplayName(
   return { name: '', fallback: 'numbered', number: accounts.findIndex((account) => account.id === id) + 2 }
 }
 
+/** What a login reports about itself for naming it: its sign-in email, and whether it runs on an API key. */
+export interface AccountLogin {
+  email?: string
+  apiKey?: boolean
+}
+
+/**
+ * A login as people read it: the label given to it, else its sign-in email, else "Default CLI account" or "Account N",
+ * with "API key" added for a login that runs on one. `reveal` false leaves labels and emails out, for views that may be
+ * on a shared screen. `say` is the app's translator.
+ */
+export function accountName(
+  config: ProviderConfiguration | undefined,
+  provider: AgentProvider,
+  id: string,
+  login: AccountLogin | undefined,
+  say: (text: string, values?: Record<string, string | number>) => string,
+  reveal = true,
+): string {
+  const shown = reveal
+    ? accountDisplayName(config, provider, id, login?.email)
+    : id === 'default'
+      ? { name: '', fallback: 'default' as const }
+      : {
+          name: '',
+          fallback: 'numbered' as const,
+          number: (config?.[provider]?.accounts ?? []).findIndex((account) => account.id === id) + 2,
+        }
+  const name =
+    shown.fallback === 'default'
+      ? say(provider === 'antigravity' ? 'Default account' : 'Default CLI account')
+      : shown.fallback === 'numbered'
+        ? say('Account {0}', { '0': shown.number ?? 0 })
+        : shown.name
+  return login?.apiKey ? `${name} · ${say('API key')}` : name
+}
+
 /** A plan as people read it: the CLIs report `pro` or `max_20x`; tier names such as Antigravity's come titled already. */
 export const planName = (plan: string) =>
   plan

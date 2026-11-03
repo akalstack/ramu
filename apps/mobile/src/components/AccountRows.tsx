@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
 import { UserRound } from 'lucide-react-native'
-import { accountDisplayName, providerAccountOrder, providerName } from '@ramu/shared/providers/providers'
+import { accountName, providerAccountOrder, providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
+import { useAccountLogins } from '../runtime/useAccountLogins'
 import { SheetGroup, SheetOption } from './SheetOptions'
 
 /**
@@ -26,29 +26,10 @@ export function AccountRows({
   const config = store.appPreferences[computerId]?.providerBinaries
   const order = providerAccountOrder(config, provider)
   const several = order.length > 1
-  const [emails, setEmails] = useState<Record<string, string>>({})
-  useEffect(() => {
-    if (!several) return
-    let current = true
-    void store.invoke(computerId, 'providers.accountEmails').then(
-      (all) => current && setEmails(all[provider] ?? {}),
-      () => {},
-    )
-    return () => {
-      current = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- store.invoke is stable for the life of the store
-  }, [computerId, provider, several])
+  const logins = useAccountLogins([computerId], several)[computerId]?.[provider] ?? {}
   if (!several) return null
   const selected = accountId && order.includes(accountId) ? accountId : order[0]
-  const name = (id: string) => {
-    const shown = accountDisplayName(config, provider, id, emails[id])
-    return shown.fallback === 'default'
-      ? say(provider === 'antigravity' ? 'Default account' : 'Default CLI account')
-      : shown.fallback === 'numbered'
-        ? say('Account {0}', { '0': shown.number })
-        : shown.name
-  }
+  const name = (id: string) => accountName(config, provider, id, logins[id], say)
   return (
     <SheetGroup
       title={say('{0} account', { '0': providerName(provider) })}

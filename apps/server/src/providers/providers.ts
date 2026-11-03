@@ -175,12 +175,14 @@ export class ProviderService {
     this.plans.set(key, plan)
     if (before && before !== plan) this.onPlanChange?.(provider, accountId)
   }
-  /** Providers whose sign-in runs inside Ramu instead of a terminal command. */
-  private emails = new Map<string, { at: number; email?: string }>()
-  /** The sign-in email of each login that reports one, read at most every ten minutes, for naming accounts without a label. */
-  async accountEmails(): Promise<Record<string, Record<string, string>>> {
+  private logins = new Map<string, { at: number; email?: string; apiKey?: boolean }>()
+  /**
+   * Each login's sign-in email and whether it runs on an API key, read at most every ten minutes, for naming logins
+   * that have no label. A login with neither is named by its position.
+   */
+  async accountLogins(): Promise<Record<string, Record<string, { email?: string; apiKey?: boolean }>>> {
     const config = this.preferences().providerBinaries ?? {}
-    const result: Record<string, Record<string, string>> = {}
+    const result: Record<string, Record<string, { email?: string; apiKey?: boolean }>> = {}
     await Promise.all(
       AGENT_PROVIDERS.map(async (provider) => {
         const binary = providerBinary(provider, config)
@@ -189,20 +191,35 @@ export class ProviderService {
         await Promise.all(
           ids.map(async (id) => {
             const key = `${provider}:${id}`
-            let hit = this.emails.get(key)
+            let hit = this.logins.get(key)
             if (!hit || Date.now() - hit.at > 10 * 60_000) {
               const state = await signInState(provider, binary, providerEnvironment(provider, config, id)).catch(
                 () => undefined,
               )
-              hit = { at: Date.now(), ...(state?.email ? { email: state.email } : {}) }
-              this.emails.set(key, hit)
+              const apiKey = !!state?.signedIn && (!!state.apiKey || !!providerApiKey(provider, id))
+              hit = { at: Date.now(), ...(state?.email ? { email: state.email } : {}), ...(apiKey ? { apiKey } : {}) }
+              this.logins.set(key, hit)
             }
-            if (hit.email) (result[provider] ??= {})[id] = hit.email
+            if (hit.email || hit.apiKey)
+              (result[provider] ??= {})[id] = {
+                ...(hit.email ? { email: hit.email } : {}),
+                ...(hit.apiKey ? { apiKey: true } : {}),
+              }
           }),
         )
       }),
     )
     return result
+  }
+  /** The sign-in email of each login that reports one, for naming accounts without a label. */
+  async accountEmails(): Promise<Record<string, Record<string, string>>> {
+    const logins = await this.accountLogins()
+    return Object.fromEntries(
+      Object.entries(logins).map(([provider, byId]) => [
+        provider,
+        Object.fromEntries(Object.entries(byId).flatMap(([id, login]) => (login.email ? [[id, login.email]] : []))),
+      ]),
+    )
   }
 
   async signIn(provider: AgentProvider, accountId = 'default', method?: AntigravitySignIn): Promise<void> {
@@ -240,7 +257,7 @@ export class ProviderService {
       if (!findExecutable(binary)) throw new Error('Install the provider first.')
       await adapter.storeApiKey({ binary, env: providerEnvironment(provider, config, accountId), key })
     } else await keys.set(provider, accountId, variable, key)
-    this.emails.delete(`${provider}:${accountId}`)
+    this.logins.delete(`${provider}:${accountId}`)
     this.statusCache = undefined
   }
   /** Shell-free updater, shared by manual actions and the detached service timer. */

@@ -1,10 +1,10 @@
 import { ChevronDown, UserRound } from 'lucide-react'
-import { providerAccountOrder, providerName } from '@ramu/shared/providers/providers'
+import { accountName, providerAccountOrder, providerName } from '@ramu/shared/providers/providers'
 import type { AgentSettings } from '@ramu/shared/types'
 import { t, useLanguage } from '../i18n'
 import { Menu } from '../Menu'
 import { useAppSettings } from '../settings/AppSettings'
-import { accountLabel, useAccountEmails } from '../settings/Usage'
+import { useAccountLogins } from '../settings/Usage'
 
 /**
  * Which login of the provider the thread runs on. Usage limits still move a thread to the next login by themselves; this
@@ -24,10 +24,10 @@ export function AccountPicker({
   const { preferences } = useAppSettings()
   const config = preferences.providerBinaries
   const order = providerAccountOrder(config, settings.provider)
-  const emails = useAccountEmails(order.length > 1)[settings.provider] ?? {}
+  const logins = useAccountLogins(order.length > 1)[settings.provider] ?? {}
   if (order.length < 2) return null
   const current = settings.accountId && order.includes(settings.accountId) ? settings.accountId : order[0]!
-  const name = (id: string) => accountLabel(config, id, settings.provider, emails[id])
+  const name = (id: string) => accountName(config, settings.provider, id, logins[id], t)
   return (
     <Menu
       standard

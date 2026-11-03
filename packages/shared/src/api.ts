@@ -17,7 +17,7 @@ import type { RamuTheme, ThemeIssue, ThemeRole } from './theme'
 import type { AppUpdateStatus } from './updates'
 import type { NearbyHostsState } from './discovery/tracker'
 import type { AgentSetupSnapshot } from './agentSetup'
-import type { ProviderConfiguration, ProviderStatus } from './providers/providers'
+import type { AccountLogin, ProviderConfiguration, ProviderStatus } from './providers/providers'
 import type { LimitRetryResult } from './chat/providerWait'
 import type { VoiceBridge } from './voice/bridge'
 import type {
@@ -871,6 +871,8 @@ export interface RamuMethods {
   ): Promise<ProviderStatus[]>
   /** Sign-in email per provider and login ID, for the logins whose CLI reports one. */
   'providers.accountEmails'(): Promise<Record<string, Record<string, string>>>
+  /** Each login's sign-in email and whether it uses an API key, by provider and account, for naming logins. */
+  'providers.accountLogins'(): Promise<Record<string, Record<string, AccountLogin>>>
   'mcp.status'(): SharedMcpManagement & { canAdminister: boolean }
   'mcp.save'(input: Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>, connectionId?: string): SharedMcpConnection
   'mcp.account'(account: SharedMcpProviderAccount): void

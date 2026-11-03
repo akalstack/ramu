@@ -16,18 +16,19 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { cn } from 'cn'
-import { Gauge } from 'lucide-react'
+import { Eye, EyeOff, Gauge } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentProvider, ContextUsage, UsageReading } from '@ramu/shared/types'
 import {
-  accountDisplayName,
+  accountName,
   providerAccountOrder,
   providerEnabled,
   providerName,
-  type ProviderConfiguration,
+  type AccountLogin,
 } from '@ramu/shared/providers/providers'
 import { bridge, invokeOn, invokerFor } from '../ipc'
 import { ownHostId } from '../hosts'
+import { deviceStorage } from '../deviceStorage'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
 import { ProviderIcon } from '../models/ProviderIcon'
@@ -130,16 +131,16 @@ export function useAccountUsage(enabled = true): UsageReading[] {
   return all
 }
 
-/** Sign-in emails per provider and login, loaded while `enabled`; they name accounts that were not given a label. */
-export function useAccountEmails(enabled = true): Record<string, Record<string, string>> {
+/** Each login's sign-in email and whether it uses an API key, loaded while `enabled`, for naming logins without a label. */
+export function useAccountLogins(enabled = true): Record<string, Record<string, AccountLogin>> {
   const { invoke } = useHost()
-  const [emails, setEmails] = useState<Record<string, Record<string, string>>>({})
+  const [logins, setLogins] = useState<Record<string, Record<string, AccountLogin>>>({})
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
-    void invoke('providers.accountEmails').then(
+    void invoke('providers.accountLogins').then(
       (next) => {
-        if (!cancelled) setEmails(next)
+        if (!cancelled) setLogins(next)
       },
       () => {},
     )
@@ -147,22 +148,7 @@ export function useAccountEmails(enabled = true): Record<string, Record<string, 
       cancelled = true
     }
   }, [enabled, invoke])
-  return emails
-}
-
-/** The label given to an account, else its sign-in email, else "Default account" or "Account N". */
-export function accountLabel(
-  config: ProviderConfiguration | undefined,
-  id: string,
-  provider: AgentProvider,
-  email?: string,
-): string {
-  const { name, fallback, number } = accountDisplayName(config, provider, id, email)
-  return fallback === 'default'
-    ? t(provider === 'antigravity' ? 'Default account' : 'Default CLI account')
-    : fallback === 'numbered'
-      ? t('Account {0}', { '0': number })
-      : name
+  return logins
 }
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
@@ -423,6 +409,8 @@ function UsageDetail({
   )
 }
 
+const REVEAL_KEY = 'ramu.usage.accounts'
+
 function UsagePopover({
   trigger,
   side = 'top',
@@ -440,18 +428,26 @@ function UsagePopover({
     ({ provider }) => providerAccountOrder(preferences.providerBinaries, provider).length > 1,
   )
   const accountReadings = useAccountUsage(open && rotating)
-  const emails = useAccountEmails(open)
+  const logins = useAccountLogins(open)
+  // Labels and emails stay hidden until asked for, since the popover opens on hover, also while sharing a screen.
+  const [reveal, setReveal] = useState(() => deviceStorage.getItem(REVEAL_KEY) === 'shown')
+  const toggleReveal = () => {
+    deviceStorage.setItem(REVEAL_KEY, reveal ? 'hidden' : 'shown')
+    setReveal(!reveal)
+  }
   const accountsOf = (provider: AgentProvider) => {
     const config = preferences.providerBinaries[provider]
     const active = config?.accountId || 'default'
     const order = providerAccountOrder(preferences.providerBinaries, provider)
+    const name = (id: string) =>
+      accountName(preferences.providerBinaries, provider, id, logins[provider]?.[id], t, reveal)
     return {
-      account: accountLabel(preferences.providerBinaries, active, provider, emails[provider]?.[active]),
+      account: name(active),
       others: order
         .filter((id) => id !== active)
         .map((id) => ({
           id,
-          name: accountLabel(preferences.providerBinaries, id, provider, emails[provider]?.[id]),
+          name: name(id),
           readings: accountReadings.filter(
             (reading) => reading.provider === provider && (reading.accountId ?? 'default') === id,
           ),
@@ -522,6 +518,16 @@ function UsagePopover({
         <div className="flex items-center gap-1.5 text-caption text-muted-foreground">
           <Gauge size={14} />
           <span>{t('Plan usage')}</span>
+          <LocalInlineAction
+            tone="muted"
+            className="ml-auto"
+            aria-pressed={reveal}
+            title={reveal ? t('Hide account names and emails') : t('Show account names and emails')}
+            onClick={toggleReveal}
+          >
+            {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
+            {reveal ? t('Hide accounts') : t('Show accounts')}
+          </LocalInlineAction>
         </div>
         {groups.map((group, index) => (
           <Fragment key={group.provider}>
@@ -529,7 +535,7 @@ function UsagePopover({
             <UsageDetail {...group} {...accountsOf(group.provider)} />
           </Fragment>
         ))}
-        {open && <OtherHostLogins />}
+        {open && <OtherHostLogins reveal={reveal} />}
         {open && <WeekActivity />}
         <Separator className="h-px bg-line" />
         <p className="m-0 text-caption leading-normal whitespace-normal text-muted-foreground">
@@ -544,7 +550,7 @@ function UsagePopover({
  * Logins seen from other connected hosts that this host does not already show, each once. A login used here too is
  * matched by sign-in email and left out; percentages are never added together.
  */
-function OtherHostLogins() {
+function OtherHostLogins({ reveal }: { reveal: boolean }) {
   const host = useHost()
   const computers = useComputers()
   const [logins, setLogins] = useState<LoginUsage[]>([])
@@ -588,9 +594,10 @@ function OtherHostLogins() {
               className="flex items-center gap-2 text-caption"
             >
               <span className="min-w-0 flex-1 truncate">
-                {[providerName(login.provider), login.email ?? t('Account on {0}', { 0: login.hosts.join(', ') })].join(
-                  ' · ',
-                )}
+                {[
+                  providerName(login.provider),
+                  (reveal && login.email) || t('Account on {0}', { 0: login.hosts.join(', ') }),
+                ].join(' · ')}
               </span>
               {peak && (
                 <span className="flex-none text-muted-foreground tabular-nums">

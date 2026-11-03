@@ -4881,6 +4881,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'A usage limit still moves the thread to the next login by itself.':
     'Batas pemakaian tetap memindahkan thread ke login berikutnya secara otomatis.',
   'Applies to this thread from its next step.': 'Berlaku untuk thread ini mulai langkah berikutnya.',
+  'Show accounts': 'Tampilkan akun',
+  'Hide accounts': 'Sembunyikan akun',
+  'Show account names and emails': 'Tampilkan nama dan email akun',
+  'Hide account names and emails': 'Sembunyikan nama dan email akun',
   Behavior: 'Perilaku',
   'Automatic provider fallback': 'Fallback provider otomatis',
   'Switch to the next provider when this one hits a limit.':
