@@ -745,8 +745,11 @@ export const fakeQuery: QueryFn = ({ prompt, options }) => {
   }
   // The context fills with each message, so the meter has something to show.
   let messages = 0
+  const mcp = fakeMcpServers()
   return Object.assign(run(), {
     interrupt: async () => undefined,
+    mcpServerStatus: async () => mcp.list(),
+    reconnectMcpServer: async (name: string) => mcp.reconnect(name),
     backgroundTasks: async () => true,
     getContextUsage: async () => ({ totalTokens: 12_000 + (messages += 1) * 9_000, maxTokens: 200_000, percentage: 0 }),
     usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: async () => ({
@@ -896,7 +899,18 @@ export const fakeCodex: import('../agent/agentRunner').AgentRunnerFactory = (sco
     emit({ kind: 'text', text: `Fake Codex in ${scope.cwd} received: ${prompt}` })
     emit({ kind: 'result', isError: false, text: 'done', costUsd: null })
   }
+  const mcp = fakeMcpServers()
   return {
+    mcpStatus: async () => ({
+      supported: true,
+      live: true,
+      source: 'live' as const,
+      canReconnect: true,
+      canReload: true,
+      servers: mcp.list(),
+    }),
+    reconnectMcp: async (name: string) => mcp.reconnect(name),
+    reloadMcp: async () => {},
     setTools: (tools) => {
       connection = tools
     },
@@ -944,5 +958,20 @@ export const fakeCodex: import('../agent/agentRunner').AgentRunnerFactory = (sco
       resolvePermission?.()
     },
     replyQuestion: () => {},
+  }
+}
+
+/** Two MCP servers, one down until reconnected, so the MCP status views can be tried with Reconnect and Reload. */
+function fakeMcpServers() {
+  const servers: { name: string; status: string; toolCount?: number; error?: string }[] = [
+    { name: 'ramu', status: 'connected', toolCount: 12 },
+    { name: 'docs', status: 'failed', error: 'Fake server is down until reconnected' },
+  ]
+  return {
+    list: () => servers.map((server) => ({ ...server })),
+    reconnect: (name: string) => {
+      const server = servers.find((entry) => entry.name === name)
+      if (server) Object.assign(server, { status: 'connected', toolCount: 3, error: undefined })
+    },
   }
 }
