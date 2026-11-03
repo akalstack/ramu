@@ -1754,6 +1754,10 @@ async function networkMethod(method: string, args: unknown[]) {
   if (method === 'network.linkShares') return link.shares()
   if (method === 'network.linkShare') return link.share(z.string().trim().min(3).max(320).parse(args[0]))
   if (method === 'network.linkUnshare') return link.unshare(z.string().min(1).max(100).parse(args[0]))
+  if (method === 'network.linkDeleteAccount') {
+    await link.deleteAccount()
+    return networkStatus()
+  }
   if (method === 'network.revoke') {
     if (typeof args[0] !== 'string') throw new Error('Invalid device')
     devices.revoke(args[0])

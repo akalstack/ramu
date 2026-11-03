@@ -42,9 +42,10 @@ function signedIn(answer: (url: string, init: RequestInit) => unknown) {
   const calls: { url: string; init: RequestInit }[] = []
   const fetcher = (async (url: string, init: RequestInit) => {
     calls.push({ url, init })
-    return new Response(JSON.stringify(answer(url, init)), { status: 200 })
+    const value = answer(url, init)
+    return value instanceof Response ? value : new Response(JSON.stringify(value), { status: 200 })
   }) as unknown as typeof fetch
-  const credentials = { read: async () => 'session-token' } as unknown as HostCredentialStore
+  const credentials = { read: async () => 'session-token', remove: async () => {} } as unknown as HostCredentialStore
   const service = new LinkService({
     statePath,
     hostId: 'a'.repeat(32),
@@ -75,4 +76,22 @@ it('opens a checkout for the chosen interval and manages who the host is shared 
   await service.unshare('u2')
   expect(calls.at(-2)!.url).toBe(`https://link.example.com/v1/hosts/${'a'.repeat(32)}/shares/u2`)
   expect(calls.at(-2)!.init.method).toBe('DELETE')
+})
+
+it('deletes the account on the service before forgetting it here, and keeps everything when the service refuses', async () => {
+  let refuse = true
+  const { service, calls } = signedIn(() =>
+    refuse
+      ? new Response(JSON.stringify({ error: 'Your Plus subscription could not be cancelled' }), { status: 502 })
+      : { deleted: true },
+  )
+  await expect(service.deleteAccount()).rejects.toThrow('could not be cancelled')
+  expect(service.status().account).not.toBeNull()
+  refuse = false
+  await service.deleteAccount()
+  expect(calls.map((call) => [call.init.method, call.url])).toEqual([
+    ['DELETE', 'https://link.example.com/v1/me'],
+    ['DELETE', 'https://link.example.com/v1/me'],
+  ])
+  expect(service.status().account).toBeNull()
 })

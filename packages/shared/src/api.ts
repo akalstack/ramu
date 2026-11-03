@@ -635,6 +635,8 @@ export interface RamuMethods {
   'network.linkShares'(): import('./link/account').LinkShare[]
   'network.linkShare'(email: string): import('./link/account').LinkShare[]
   'network.linkUnshare'(userId: string): import('./link/account').LinkShare[]
+  /** Deletes the Ramu Link account (cancelling a Plus subscription first) and signs this host out. */
+  'network.linkDeleteAccount'(): NetworkStatus
   /** Computers this app is connected to, all at once. Handled by the desktop app itself. */
   'computers.settings.invoke'(id: string, method: string, args: unknown[]): unknown
   'computers.settings.get'(id: string): SettingsSnapshot

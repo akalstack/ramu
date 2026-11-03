@@ -5116,3 +5116,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Shared by {0}': 'Dibagikan oleh {0}',
   'It reaches this host through a Ramu Link share, so it can only view threads and answer requests.': 'Perangkat ini menjangkau host lewat berbagi Ramu Link, jadi hanya bisa melihat thread dan menjawab permintaan.',
 }
+  'Delete Ramu Link account': 'Hapus akun Ramu Link',
+  'Removes the account, every host it links and its shares. A Plus subscription is cancelled first.': 'Menghapus akun, semua host yang ditautkan, dan pembagiannya. Langganan Plus dibatalkan lebih dulu.',
+  'Delete account…': 'Hapus akun…',
+  'Delete your Ramu Link account?': 'Hapus akun Ramu Link Anda?',
+  'Delete account': 'Hapus akun',
+  'Every host linked to {0} is unlinked and devices lose their Ramu Link routes; paired devices keep their other routes. A Plus subscription is cancelled at once, without a refund for the rest of the period. This cannot be undone.': 'Semua host yang tertaut ke {0} dilepas dan perangkat kehilangan rute Ramu Link; perangkat yang dipasangkan tetap memakai rute lainnya. Langganan Plus langsung dibatalkan, tanpa pengembalian dana untuk sisa periode. Tindakan ini tidak bisa dibatalkan.',

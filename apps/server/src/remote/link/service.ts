@@ -7,6 +7,7 @@ import { dirname } from 'node:path'
 import type { Server } from 'node:http'
 import {
   addLinkShare,
+  deleteLinkAccount,
   linkCheckout,
   linkMe,
   linkShares,
@@ -275,6 +276,22 @@ export class LinkService {
       await unlinkHost(this.fetcher, service, session, this.options.hostId).catch(() => {})
       await signOutLink(this.fetcher, service, session)
     }
+    await this.forgetAccount()
+  }
+
+  /**
+   * Deletes the Ramu Link account itself: every host it links, its shares, usage and plan. The service cancels a Plus
+   * subscription first and refuses (keeping everything) when it cannot, so this throws and nothing changes here.
+   */
+  async deleteAccount() {
+    const { service, token } = await this.session()
+    await deleteLinkAccount(this.fetcher, service, token)
+    this.cancelSignIn()
+    this.disconnect()
+    await this.forgetAccount()
+  }
+
+  private async forgetAccount() {
     for (const kind of ['session', 'secret'] as const) {
       const reference = this.saved.refs[kind]
       if (reference) await this.credentials.remove(this.scope(kind), reference).catch(() => {})

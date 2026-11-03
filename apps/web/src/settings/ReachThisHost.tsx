@@ -41,6 +41,7 @@ export function LinkSettings({ status, setStatus }: { status: NetworkStatus; set
   const [service, setService] = useState(link.service ?? '')
   const [busy, setBusy] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   // Once a hosted service exists, choosing another one is an advanced step; until then it is the only way in.
   const ownService = DEFAULT_LINK_SERVICE === null || (link.service !== null && link.service !== DEFAULT_LINK_SERVICE)
   const [showService, setShowService] = useState(ownService)
@@ -104,6 +105,17 @@ export function LinkSettings({ status, setStatus }: { status: NetworkStatus; set
             </Button>
           </SettingsRow>
           <LinkPlanSettings status={status} setStatus={setStatus} />
+          <SettingsRow>
+            <SettingsLabel
+              title={t('Delete Ramu Link account')}
+              help={t(
+                'Removes the account, every host it links and its shares. A Plus subscription is cancelled first.',
+              )}
+            />
+            <Button variant="ghost" className="text-bad" disabled={busy} onClick={() => setDeleting(true)}>
+              {t('Delete account…')}
+            </Button>
+          </SettingsRow>
         </>
       ) : link.signIn ? (
         <SettingsRow>
@@ -167,6 +179,25 @@ export function LinkSettings({ status, setStatus }: { status: NetworkStatus; set
           <p>
             {t(
               'This host is unlinked from your account. Devices that reach it only through Ramu Link lose access until you sign in again; paired devices keep their other routes.',
+            )}
+          </p>
+        </ConfirmDialog>
+      )}
+      {deleting && (
+        <ConfirmDialog
+          danger
+          title={t('Delete your Ramu Link account?')}
+          confirmLabel={t('Delete account')}
+          onCancel={() => setDeleting(false)}
+          onConfirm={() => {
+            setDeleting(false)
+            void run(() => invoke('network.linkDeleteAccount'))
+          }}
+        >
+          <p>
+            {t(
+              'Every host linked to {0} is unlinked and devices lose their Ramu Link routes; paired devices keep their other routes. A Plus subscription is cancelled at once, without a refund for the rest of the period. This cannot be undone.',
+              { 0: link.account?.email ?? '' },
             )}
           </p>
         </ConfirmDialog>
