@@ -109,7 +109,11 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'git', title: 'GitHub', words: 'github gh account pull requests issues hosting' },
   { section: 'git', title: 'GitLab', words: 'gitlab merge requests pipelines glab hosting' },
   { section: 'git', title: 'Bitbucket Cloud', words: 'bitbucket pull requests builds issues api token hosting' },
-  { section: 'git', title: 'Azure DevOps', words: 'azure devops repos pull requests pipelines work items boards token hosting' },
+  {
+    section: 'git',
+    title: 'Azure DevOps',
+    words: 'azure devops repos pull requests pipelines work items boards token hosting',
+  },
   { section: 'git', title: 'Automatic pull', words: 'git auto fetch remote fast-forward background sync' },
   {
     section: 'git',
@@ -165,6 +169,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   },
   { section: 'memory', title: 'Archive unused memories after', words: 'memory stale decay archive expire days' },
   { section: 'chats', title: 'Agent notifications', words: 'notify notification alert done finished system toast' },
+  { section: 'chats', title: 'Let agents suggest teammates', words: 'teammate review second model suggest invite' },
   {
     section: 'chats',
     title: 'Continue threads after restart',
