@@ -57,6 +57,18 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Edits while the lead waits, then hands back with a summary.': 'Mengedit selagi agent utama menunggu, lalu mengembalikan dengan ringkasan.',
   'What should it do?': 'Apa yang harus dilakukan?',
   'Teammate {0} · {1} · start a message with @{2} to talk to it': 'Rekan {0} · {1} · awali pesan dengan @{2} untuk bicara dengannya',
+  'Connect Azure DevOps in Settings → Git, or set AZURE_DEVOPS_EXT_PAT on the host.':
+    'Hubungkan Azure DevOps di Pengaturan → Git, atau setel AZURE_DEVOPS_EXT_PAT di host.',
+  'Create a personal access token under User settings in Azure DevOps with Code (read and write), Build (read) and Work Items (read) scopes, and name its organization.':
+    'Buat personal access token di User settings Azure DevOps dengan cakupan Code (baca dan tulis), Build (baca) dan Work Items (baca), lalu sebutkan organisasinya.',
+  'Not connected. Pull requests, builds and work items need a personal access token.':
+    'Belum terhubung. Pull request, build dan work item memerlukan personal access token.',
+  Organization: 'Organisasi',
+  'Create a personal access token with the api scope under Preferences → Access tokens on your GitLab server. Ramu uses it for that server before a glab sign-in.':
+    'Buat personal access token dengan cakupan api di Preferences → Access tokens pada server GitLab Anda. Ramu memakainya untuk server itu sebelum login glab.',
+  'Remove saved token': 'Hapus token tersimpan',
+  'Replace token': 'Ganti token',
+  'Save token': 'Simpan token',
   'Talk to teammate {0} · {1}': 'Bicara dengan rekan {0} · {1}',
   'Bring a second model into this thread': 'Bawa model kedua ke thread ini',
   Teammate: 'Rekan',

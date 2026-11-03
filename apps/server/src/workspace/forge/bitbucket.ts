@@ -23,6 +23,7 @@ import { currentBranch, git, publishRemote } from '../git'
 import { registerForgeAdapter } from './adapter'
 import { ForgeError, pullRequestDraft } from './github'
 import { bitbucketCredential, type BitbucketCredential } from './bitbucketCredentials'
+import { FAILED_STEPS, failedStepLog } from './buildLogs'
 
 const API = 'https://api.bitbucket.org/2.0'
 
@@ -246,6 +247,67 @@ export function commentsPrompt(pr: PullRequestInfo, comments: RawComment[]): str
   return [`Address the open review comments on pull request #${pr.number} (${pr.title}):`, '', ...lines].join('\n')
 }
 
+/** The build number of a Bitbucket Pipelines result, from the link its build status carries. */
+export function pipelineNumber(url: string | null): number | null {
+  const match = url ? /bitbucket\.org\/[^/]+\/[^/]+\/pipelines\/results\/(\d+)/.exec(url) : null
+  return match ? Number(match[1]) : null
+}
+
+/**
+ * A step log. Bitbucket answers with a redirect to its log storage; that request goes without the credential, which
+ * is only ever sent to api.bitbucket.org.
+ */
+async function stepLog(target: Target, path: string): Promise<string> {
+  const headers = { Authorization: authorization(target) }
+  const first = await (target.fetch ?? fetch)(`${API}${path}`, {
+    headers,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(20_000),
+  })
+  let response = first
+  if (first.status >= 300 && first.status < 400) {
+    const location = first.headers.get('location')
+    if (!location?.startsWith('https://')) return ''
+    response = await (target.fetch ?? fetch)(location, { redirect: 'error', signal: AbortSignal.timeout(20_000) })
+  }
+  if (!response.ok) return ''
+  if (Number(response.headers.get('content-length') ?? 0) > 32 * 1024 * 1024) return ''
+  return response.text()
+}
+
+interface RawPipeline {
+  uuid: string
+  build_number?: number
+}
+
+interface RawStep {
+  uuid: string
+  name?: string
+  state?: { result?: { name?: string } }
+}
+
+/** The end of each failed step's log for one pipeline run, so the thread starts from the error. */
+async function pipelineLogs(a: Access, number: number): Promise<string[]> {
+  const pipeline = await repoApi<RawPipeline>(a, `/pipelines/${number}`).catch(async () => {
+    const recent = await repoApi<{ values: RawPipeline[] }>(a, '/pipelines/?sort=-created_on&pagelen=50')
+    const found = recent.values.find((entry) => entry.build_number === number)
+    if (!found) throw new Error('Pipeline not found.')
+    return found
+  })
+  const steps = await repoApi<{ values: RawStep[] }>(a, `/pipelines/${q(pipeline.uuid)}/steps/?pagelen=100`)
+  const failed = steps.values.filter((step) => step.state?.result?.name === 'FAILED').slice(0, FAILED_STEPS)
+  const logs: string[] = []
+  for (const step of failed) {
+    const text = await stepLog(
+      a.credential,
+      `/repositories/${q(a.repo.workspace)}/${q(a.repo.slug)}/pipelines/${q(pipeline.uuid)}/steps/${q(step.uuid)}/log`,
+    ).catch(() => '')
+    const block = failedStepLog(`${step.name ?? 'Step'} (pipeline #${number})`, text)
+    if (block) logs.push(block)
+  }
+  return logs
+}
+
 export async function pullRequestFeedback(cwd: string, kind: PullRequestFeedbackKind, url?: string): Promise<string> {
   const a = await access(cwd)
   const raw = await findPullRequest(a, url)
@@ -259,11 +321,16 @@ export async function pullRequestFeedback(cwd: string, kind: PullRequestFeedback
   }
   const failed = pr.checks.filter((check) => check.state === 'failure')
   if (!failed.length) throw new Error('No failing builds.')
+  const pipelines = [...new Set(failed.map((check) => pipelineNumber(check.url)).filter((n) => n !== null))]
+  const logs = (
+    await Promise.all(pipelines.slice(0, FAILED_STEPS).map((n) => pipelineLogs(a, n).catch(() => [])))
+  ).flat()
   return redactSecrets(
     [
       `Fix the failing builds on pull request #${pr.number} (${pr.title}). Reproduce each one locally:`,
       '',
       ...failed.map((check) => `- ${check.name}${check.url ? ` (${check.url})` : ''}`),
+      ...(logs.length ? ['', 'End of the failed steps’ logs:', '', ...logs] : []),
     ].join('\n'),
   )
 }

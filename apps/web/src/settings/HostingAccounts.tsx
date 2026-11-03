@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import type { BitbucketSummary, ForgeConnectionSummary, ForgeSavedConnection, GitlabSummary } from '@ramu/shared/types'
+import type {
+  AzureSummary,
+  BitbucketSummary,
+  ForgeConnectionSummary,
+  ForgeSavedConnection,
+  GitlabSummary,
+} from '@ramu/shared/types'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
@@ -13,7 +19,6 @@ import { invoke as openOnThisComputer } from '../ipc'
 import { accountDetail, connectionHeadline, savedDetail } from './hostingStatus'
 
 /** Providers shown for orientation only: no setup, no network calls, no background work until they are built. */
-const COMING_SOON = ['Azure DevOps'] as const
 
 type Form = { replace: ForgeSavedConnection | null }
 
@@ -387,12 +392,7 @@ export function HostingAccounts() {
       )}
       <GitlabRow canAdminister={canAdminister} />
       <BitbucketRow canAdminister={canAdminister} />
-      {COMING_SOON.map((name) => (
-        <SettingsRow key={name}>
-          <SettingsLabel title={name} />
-          <span className="text-caption text-muted-foreground">{t('Coming soon')}</span>
-        </SettingsRow>
-      ))}
+      <AzureRow canAdminister={canAdminister} />
     </>
   )
 }
@@ -406,7 +406,12 @@ function gitlabHeadline(summary: GitlabSummary | null, failed: string | null) {
       : t('Not signed in. Sign in with glab for gitlab.com or a self-managed server.')
   return summary.accounts
     .map((account) => {
-      const via = account.source === 'cli' ? t('GitLab CLI') : 'GITLAB_TOKEN'
+      const via =
+        account.source === 'saved'
+          ? t('saved on this host')
+          : account.source === 'cli'
+            ? t('GitLab CLI')
+            : 'GITLAB_TOKEN'
       if (account.state === 'failed') return `${account.origin}: ${account.error ?? t('Could not connect')}`
       return account.login
         ? t('Connected as {0} on {1} ({2})', { 0: account.login, 1: account.origin, 2: via })
@@ -415,7 +420,7 @@ function gitlabHeadline(summary: GitlabSummary | null, failed: string | null) {
     .join(' · ')
 }
 
-/** GitLab merge requests, pipelines and issues use the host's own `glab` sign-in or `GITLAB_TOKEN`. */
+/** GitLab merge requests, pipelines and issues use a token saved here, the host's own `glab` sign-in or `GITLAB_TOKEN`. */
 function GitlabRow({ canAdminister }: { canAdminister: boolean }) {
   const invoke = useSettingsInvoke()
   const [summary, setSummary] = useState<GitlabSummary | null>(null)
@@ -439,63 +444,206 @@ function GitlabRow({ canAdminister }: { canAdminister: boolean }) {
     [invoke],
   )
   useEffect(() => load(false), [load])
+  const [form, setForm] = useState(false)
+  const saved = summary?.accounts.find((account) => account.source === 'saved')
   return (
-    <SettingsRow>
-      <SettingsLabel title="GitLab" help={gitlabHeadline(summary, failed)} />
-      <span className="flex items-center gap-2">
-        <Button variant="secondary" size="sm" aria-busy={busy} disabled={!summary} onClick={() => load(true)}>
-          {busy ? t('Checking…') : t('Check connection')}
+    <>
+      <SettingsRow>
+        <SettingsLabel title="GitLab" help={gitlabHeadline(summary, failed)} />
+        <span className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" aria-busy={busy} disabled={!summary} onClick={() => load(true)}>
+            {busy ? t('Checking…') : t('Check connection')}
+          </Button>
+          {canAdminister && summary?.cli === 'installed' && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                runProviderCommand(t('Sign in to GitLab'), 'glab auth login')
+                // The terminal finishes on its own time; read the sign-ins again when the person comes back.
+                window.addEventListener('focus', () => load(false), { once: true })
+              }}
+            >
+              {summary.accounts.length ? t('Add account') : t('Sign in')}
+            </Button>
+          )}
+          {canAdminister && summary?.cli === 'no-cli' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                void openOnThisComputer('app.openExternal', 'https://gitlab.com/gitlab-org/cli#installation')
+              }
+            >
+              {t('Install glab')}
+            </Button>
+          )}
+          {canAdminister && !form && (
+            <Button variant="secondary" size="sm" disabled={!summary} onClick={() => setForm(true)}>
+              {saved ? t('Replace token') : t('Save token')}
+            </Button>
+          )}
+          {canAdminister && saved && !form && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                void Promise.resolve(invoke('forge.removeGitlab')).then(setSummary, (reason) =>
+                  setFailed(errorText(reason)),
+                )
+              }
+            >
+              {t('Remove saved token')}
+            </Button>
+          )}
+        </span>
+      </SettingsRow>
+      {form && (
+        <TokenForm
+          instructions={t(
+            'Create a personal access token with the api scope under Preferences → Access tokens on your GitLab server. Ramu uses it for that server before a glab sign-in.',
+          )}
+          field={{ label: t('Server'), type: 'text', required: true }}
+          initial={saved?.origin ?? 'gitlab.com'}
+          minToken={8}
+          onCancel={() => setForm(false)}
+          onSave={async (origin, token) => {
+            setSummary(await invoke('forge.saveGitlab', { origin, token }))
+            setForm(false)
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+/** What a token-based service's Settings row reads back from its host. */
+interface TokenSummary {
+  source: 'saved' | 'environment' | null
+  login: string | null
+  state: 'unchecked' | 'ok' | 'failed'
+  error?: string
+}
+
+function tokenHeadline(
+  summary: TokenSummary | null,
+  failed: string | null,
+  disconnected: string,
+  shown: string | null,
+) {
+  if (failed) return failed
+  if (!summary) return t('Checking…')
+  if (!summary.source) return disconnected
+  if (summary.state === 'failed') return summary.error ?? t('Could not connect')
+  const via = summary.source === 'saved' ? t('saved on this host') : t('from the environment')
+  const who = summary.login ?? shown
+  return who ? t('Connected as {0} ({1})', { 0: who, 1: via }) : t('Connected ({0})', { 0: via })
+}
+
+/** The token and the one field beside it, checked on the host when saved; a refusal stays in the form. */
+function TokenForm({
+  instructions,
+  field,
+  minToken,
+  initial = '',
+  onSave,
+  onCancel,
+}: {
+  instructions: string
+  field: { label: string; type: 'email' | 'text'; required: boolean }
+  minToken: number
+  initial?: string
+  onSave: (field: string, token: string) => Promise<void>
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState(initial)
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const submit = () => {
+    setBusy(true)
+    setError(null)
+    void onSave(value.trim(), token).then(
+      () => setBusy(false),
+      (reason) => {
+        setBusy(false)
+        setError(errorText(reason))
+      },
+    )
+  }
+  return (
+    <SettingsRow className="settings-stack gap-3">
+      <p className="m-0 text-caption text-muted-foreground">{instructions}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1.5 text-caption">
+          {field.label}
+          <Input
+            type={field.type}
+            autoComplete="off"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5 text-caption">
+          {t('API token')}
+          <Input type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} />
+        </label>
+      </div>
+      {error && (
+        <p role="alert" className="m-0 text-caption text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}>
+          {t('Cancel')}
         </Button>
-        {canAdminister && summary?.cli === 'installed' && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              runProviderCommand(t('Sign in to GitLab'), 'glab auth login')
-              // The terminal finishes on its own time; read the sign-ins again when the person comes back.
-              window.addEventListener('focus', () => load(false), { once: true })
-            }}
-          >
-            {summary.accounts.length ? t('Add account') : t('Sign in')}
-          </Button>
-        )}
-        {canAdminister && summary?.cli === 'no-cli' && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              void openOnThisComputer('app.openExternal', 'https://gitlab.com/gitlab-org/cli#installation')
-            }
-          >
-            {t('Install glab')}
-          </Button>
-        )}
-      </span>
+        <Button
+          size="sm"
+          disabled={busy || token.trim().length < minToken || (field.required && !value.trim())}
+          onClick={submit}
+        >
+          {busy ? t('Checking…') : t('Save')}
+        </Button>
+      </div>
     </SettingsRow>
   )
 }
 
-function bitbucketHeadline(summary: BitbucketSummary | null, failed: string | null) {
-  if (failed) return failed
-  if (!summary) return t('Checking…')
-  if (!summary.source) return t('Not connected. Pull requests, builds and issues need an Atlassian API token.')
-  if (summary.state === 'failed') return summary.error ?? t('Could not connect')
-  const via = summary.source === 'saved' ? t('saved on this host') : t('from the environment')
-  const who = summary.login ?? summary.email
-  return who ? t('Connected as {0} ({1})', { 0: who, 1: via }) : t('Connected ({0})', { 0: via })
-}
-
-/** Bitbucket Cloud has no official CLI: its credential is an API token saved here, or given in the environment. */
-function BitbucketRow({ canAdminister }: { canAdminister: boolean }) {
-  const invoke = useSettingsInvoke()
-  const [summary, setSummary] = useState<BitbucketSummary | null>(null)
+/**
+ * A service with no official CLI, connected with a token saved here or given in the environment: Bitbucket Cloud and
+ * Azure DevOps. The token is checked on the host before it is saved.
+ */
+function TokenServiceRow<S extends TokenSummary>({
+  canAdminister,
+  title,
+  disconnected,
+  instructions,
+  field,
+  shown,
+  minToken,
+  load,
+  save,
+  remove,
+}: {
+  canAdminister: boolean
+  title: string
+  disconnected: string
+  instructions: string
+  /** The one field beside the token: an account email, an organization. */
+  field: { label: string; type: 'email' | 'text'; required: boolean }
+  /** What the summary shows when it has no login, such as the email. */
+  shown: (summary: S) => string | null
+  minToken: number
+  load: (check: boolean) => Promise<S> | S
+  save: (field: string, token: string) => Promise<S> | S
+  remove: () => Promise<S> | S
+}) {
+  const [summary, setSummary] = useState<S | null>(null)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
   const [form, setForm] = useState(false)
-  const [email, setEmail] = useState('')
-  const [token, setToken] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
-  const call = useCallback((work: () => Promise<BitbucketSummary> | BitbucketSummary) => {
+  const call = useCallback((work: () => Promise<S> | S) => {
     setBusy(true)
     setFailed(null)
     void Promise.resolve()
@@ -511,29 +659,16 @@ function BitbucketRow({ canAdminister }: { canAdminister: boolean }) {
         },
       )
   }, [])
-  useEffect(() => call(() => invoke('forge.bitbucket', false)), [call, invoke])
-  const save = () => {
-    setBusy(true)
-    setFormError(null)
-    void Promise.resolve(
-      invoke('forge.saveBitbucket', { ...(email.trim() ? { email: email.trim() } : {}), token }),
-    ).then(
-      (next) => {
-        setSummary(next)
-        setBusy(false)
-        setForm(false)
-        setToken('')
-      },
-      (reason) => {
-        setBusy(false)
-        setFormError(errorText(reason))
-      },
-    )
-  }
+  const loadNow = useRef(load)
+  loadNow.current = load
+  useEffect(() => call(() => loadNow.current(false)), [call])
   return (
     <>
       <SettingsRow>
-        <SettingsLabel title="Bitbucket Cloud" help={bitbucketHeadline(summary, failed)} />
+        <SettingsLabel
+          title={title}
+          help={tokenHeadline(summary, failed, disconnected, summary ? shown(summary) : null)}
+        />
         <span className="flex items-center gap-2">
           {summary?.source && (
             <Button
@@ -541,7 +676,7 @@ function BitbucketRow({ canAdminister }: { canAdminister: boolean }) {
               size="sm"
               aria-busy={busy}
               disabled={busy}
-              onClick={() => call(() => invoke('forge.bitbucket', true))}
+              onClick={() => call(() => load(true))}
             >
               {busy ? t('Checking…') : t('Check connection')}
             </Button>
@@ -552,54 +687,66 @@ function BitbucketRow({ canAdminister }: { canAdminister: boolean }) {
             </Button>
           )}
           {canAdminister && summary?.source === 'saved' && !form && (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onClick={() => call(() => invoke('forge.removeBitbucket'))}
-            >
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => call(remove)}>
               {t('Disconnect')}
             </Button>
           )}
         </span>
       </SettingsRow>
       {form && (
-        <SettingsRow className="settings-stack gap-3">
-          <p className="m-0 text-caption text-muted-foreground">
-            {t(
-              'Create an API token with Bitbucket scopes in your Atlassian account settings and enter it with your account email. For a workspace or repository access token, leave the email empty.',
-            )}
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5 text-caption">
-              {t('Atlassian account email')}
-              <Input type="email" autoComplete="off" value={email} onChange={(event) => setEmail(event.target.value)} />
-            </label>
-            <label className="flex flex-col gap-1.5 text-caption">
-              {t('API token')}
-              <Input
-                type="password"
-                autoComplete="off"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-              />
-            </label>
-          </div>
-          {formError && (
-            <p role="alert" className="m-0 text-caption text-destructive">
-              {formError}
-            </p>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setForm(false)}>
-              {t('Cancel')}
-            </Button>
-            <Button size="sm" disabled={busy || token.trim().length < 8} onClick={save}>
-              {busy ? t('Checking…') : t('Save')}
-            </Button>
-          </div>
-        </SettingsRow>
+        <TokenForm
+          instructions={instructions}
+          field={field}
+          minToken={minToken}
+          onCancel={() => setForm(false)}
+          onSave={async (value, token) => {
+            setSummary(await save(value, token))
+            setForm(false)
+          }}
+        />
       )}
     </>
+  )
+}
+
+/** Bitbucket Cloud has no official CLI: its credential is an API token saved here, or given in the environment. */
+function BitbucketRow({ canAdminister }: { canAdminister: boolean }) {
+  const invoke = useSettingsInvoke()
+  return (
+    <TokenServiceRow<BitbucketSummary>
+      canAdminister={canAdminister}
+      title="Bitbucket Cloud"
+      disconnected={t('Not connected. Pull requests, builds and issues need an Atlassian API token.')}
+      instructions={t(
+        'Create an API token with Bitbucket scopes in your Atlassian account settings and enter it with your account email. For a workspace or repository access token, leave the email empty.',
+      )}
+      field={{ label: t('Atlassian account email'), type: 'email', required: false }}
+      shown={(summary) => summary.email}
+      minToken={8}
+      load={(check) => invoke('forge.bitbucket', check)}
+      save={(email, token) => invoke('forge.saveBitbucket', { ...(email ? { email } : {}), token })}
+      remove={() => invoke('forge.removeBitbucket')}
+    />
+  )
+}
+
+/** Azure DevOps' CLI is an `az` extension, so it connects with a personal access token, like Bitbucket. */
+function AzureRow({ canAdminister }: { canAdminister: boolean }) {
+  const invoke = useSettingsInvoke()
+  return (
+    <TokenServiceRow<AzureSummary>
+      canAdminister={canAdminister}
+      title="Azure DevOps"
+      disconnected={t('Not connected. Pull requests, builds and work items need a personal access token.')}
+      instructions={t(
+        'Create a personal access token under User settings in Azure DevOps with Code (read and write), Build (read) and Work Items (read) scopes, and name its organization.',
+      )}
+      field={{ label: t('Organization'), type: 'text', required: true }}
+      shown={(summary) => summary.organization}
+      minToken={20}
+      load={(check) => invoke('forge.azure', check)}
+      save={(organization, token) => invoke('forge.saveAzure', { organization, token })}
+      remove={() => invoke('forge.removeAzure')}
+    />
   )
 }

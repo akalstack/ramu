@@ -12,6 +12,8 @@ import type { AccountUsage } from '../providers/accountUsage'
 import type { ProviderEnvironmentStore } from '../providers/environmentStore'
 import type { ForgeAccountStore } from '../workspace/forgeAccounts'
 import type { BitbucketCredentials } from '../workspace/forge/bitbucketCredentials'
+import type { AzureCredentials } from '../workspace/forge/azureCredentials'
+import type { GitlabCredentials } from '../workspace/forge/gitlabCredentials'
 import type { AttachmentStore } from '../attachments'
 import type { HostFolders } from '../remote/hostFolders'
 import type { AgentService } from '../agent'
@@ -91,6 +93,8 @@ export interface HandlerContext extends Services {
   environment: ProviderEnvironmentStore
   forgeAccounts: ForgeAccountStore
   bitbucket: BitbucketCredentials
+  azure: AzureCredentials
+  gitlab: GitlabCredentials
   loadPreferences(): AppPreferences
   savePreferences(preferences: AppPreferences, models?: ModelPreferences): void
   /** The stored preferences as written, without defaults or validation. */

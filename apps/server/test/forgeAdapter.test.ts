@@ -29,5 +29,5 @@ it('registers GitHub and GitLab behind the shared boundary, with every operation
 
 it('refuses a second adapter for the same provider and a provider with none', () => {
   expect(() => registerForgeAdapter(forgeAdapter('github'))).toThrow('already registered')
-  expect(() => forgeAdapter('azure' as never)).toThrow('No forge adapter')
+  expect(() => forgeAdapter('gitea' as never)).toThrow('No forge adapter')
 })

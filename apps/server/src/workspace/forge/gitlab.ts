@@ -1,5 +1,5 @@
-// GitLab merge requests, pipelines and issues through the REST API (v4), with the user's own `glab` sign-in or a
-// `GITLAB_TOKEN`. Like github.ts, Git runs with argument arrays only; the token is sent only to the project's origin.
+// GitLab merge requests, pipelines and issues through the REST API (v4), with a token saved in Settings, the user's
+// own `glab` sign-in or a `GITLAB_TOKEN`. Like github.ts, Git runs with argument arrays only; the token is sent only to the project's origin.
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -25,6 +25,7 @@ import { currentBranch, git, publishRemote } from '../git'
 import { registerForgeAdapter } from './adapter'
 import { findExecutable } from '../../providers/providerBinaries'
 import { ForgeError, failureExcerpt, pullRequestDraft } from './github'
+import { savedGitlabCredential } from './gitlabCredentials'
 
 /** Where `glab` keeps its sign-ins: its own config directory, then the platform defaults. */
 function glabConfigPaths(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -46,11 +47,18 @@ export async function gitlabSignIns(env: NodeJS.ProcessEnv = process.env): Promi
   return new Map()
 }
 
-/** The token for one origin, and where it came from. `GITLAB_TOKEN` applies to gitlab.com or to `GITLAB_HOST`. */
+type TokenSource = 'saved' | 'cli' | 'environment'
+
+/**
+ * The token for one origin, and where it came from: the one saved in Settings for it, else `glab`'s, else
+ * `GITLAB_TOKEN`, which applies to gitlab.com or to `GITLAB_HOST`.
+ */
 export async function gitlabToken(
   origin: string,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ token: string; source: 'cli' | 'environment' } | null> {
+): Promise<{ token: string; source: TokenSource } | null> {
+  const saved = await savedGitlabCredential()
+  if (saved?.origin === origin) return { token: saved.token, source: 'saved' }
   const cli = (await gitlabSignIns(env)).get(origin)
   if (cli) return { token: cli, source: 'cli' }
   const named = (env.GITLAB_HOST ?? 'gitlab.com')
@@ -67,8 +75,11 @@ export async function gitlabSummary(
   options: { env?: NodeJS.ProcessEnv; fetch?: typeof fetch; hasCli?: boolean } = {},
 ): Promise<GitlabSummary> {
   const env = options.env ?? process.env
-  const found = new Map<string, { token: string; source: 'cli' | 'environment' }>()
-  for (const [origin, token] of await gitlabSignIns(env)) found.set(origin, { token, source: 'cli' })
+  const found = new Map<string, { token: string; source: TokenSource }>()
+  const saved = await savedGitlabCredential()
+  if (saved) found.set(saved.origin, { token: saved.token, source: 'saved' })
+  for (const [origin, token] of await gitlabSignIns(env))
+    if (!found.has(origin)) found.set(origin, { token, source: 'cli' })
   const environment = env.GITLAB_TOKEN ?? env.GL_TOKEN
   if (environment) {
     const origin = (env.GITLAB_HOST ?? 'gitlab.com')
@@ -100,6 +111,8 @@ export async function gitlabSummary(
 /** Self-managed GitLab servers the person has signed in to, so their remotes are recognised as GitLab. */
 export async function knownGitlabHosts(): Promise<Set<string>> {
   const hosts = new Set((await gitlabSignIns()).keys())
+  const saved = await savedGitlabCredential()
+  if (saved) hosts.add(saved.origin)
   if (process.env.GITLAB_HOST) hosts.add(process.env.GITLAB_HOST.replace(/^https?:\/\//, '').toLowerCase())
   return hosts
 }
@@ -118,7 +131,7 @@ interface Access {
   cwd: string
   project: GitlabProject
   token: string
-  source: 'cli' | 'environment'
+  source: TokenSource
   fetch: typeof fetch
 }
 
@@ -457,7 +470,7 @@ export async function repositoryAccount(cwd: string): Promise<ForgeRepositoryAcc
   const user = await gitlabApi<{ username?: string }>({ origin: project.origin, token: found.token, fetch }, '/user')
     .then((value) => value.username ?? null)
     .catch(() => null)
-  return { origin: project.origin, login: user, source: 'cli', ambiguous: false }
+  return { origin: project.origin, login: user, source: found.source === 'saved' ? 'saved' : 'cli', ambiguous: false }
 }
 
 const unknown = (detail: string | null = null): ForgeCheckResult => ({ state: 'unknown', detail })
@@ -488,7 +501,10 @@ export async function checkAccess(cwd: string): Promise<ForgeAccessReport> {
     return {
       origin: project.origin,
       account: none,
-      api: { read: unknown('Sign in with glab or set GITLAB_TOKEN.'), write: unknown() },
+      api: {
+        read: unknown('Save a GitLab token in Settings → Git, sign in with glab, or set GITLAB_TOKEN.'),
+        write: unknown(),
+      },
       transport,
       checkedAt,
     }
@@ -496,7 +512,12 @@ export async function checkAccess(cwd: string): Promise<ForgeAccessReport> {
   const login = await gitlabApi<{ username?: string }>(target, '/user')
     .then((user) => user.username ?? null)
     .catch(() => null)
-  const account = { source: 'cli' as const, login, connectionId: null, ambiguous: false }
+  const account = {
+    source: found.source === 'saved' ? ('saved' as const) : ('cli' as const),
+    login,
+    connectionId: null,
+    ambiguous: false,
+  }
   try {
     const details = await gitlabApi<{
       permissions?: { project_access?: { access_level: number } | null; group_access?: { access_level: number } | null }

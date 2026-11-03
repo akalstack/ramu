@@ -1,5 +1,6 @@
 // The forge boundary the rest of the server imports. Each hosting service has an adapter (`forge/github.ts` with its
-// direct API client in `forge/githubApi.ts`, `forge/gitlab.ts`); `forge/route.ts` picks one from a checkout's remote.
+// direct API client in `forge/githubApi.ts`, `forge/gitlab.ts`, `forge/bitbucket.ts`, `forge/azure.ts`);
+// `forge/route.ts` picks one from a checkout's remote.
 // The operations below dispatch through it; GitHub's account and connection helpers are exported as they are.
 import type {
   ForgeRepositorySummary,
@@ -10,21 +11,15 @@ import type {
   PullRequestInput,
 } from '@ramu/shared/types'
 import { forgeAdapter } from './forge/adapter'
-import { UnsupportedForgeError, adapterFor, adapterForOrigin } from './forge/route'
+import { adapterFor, adapterForOrigin } from './forge/route'
 
 export * from './forge/github'
 export { forgeAdapter }
 
 export const repositoryAccount = async (cwd: string) => (await adapterFor(cwd)).repositoryAccount(cwd)
 export const checkAccess = async (cwd: string) => (await adapterFor(cwd)).checkAccess(cwd)
-/** A service without an adapter reads like a remote that is not GitHub: the pull request section stays out of the way. */
-export const pullRequestStatus = async (cwd: string, url?: string): Promise<ForgeStatus> => {
-  const adapter = await adapterFor(cwd).catch((error: unknown) => {
-    if (error instanceof UnsupportedForgeError) return null
-    throw error
-  })
-  return adapter ? adapter.pullRequestStatus(cwd, url) : { availability: 'not-github', pullRequest: null }
-}
+export const pullRequestStatus = async (cwd: string, url?: string): Promise<ForgeStatus> =>
+  (await adapterFor(cwd)).pullRequestStatus(cwd, url)
 export const pullRequestDraft = async (cwd: string, issue: IssueLink | null) =>
   (await adapterFor(cwd)).pullRequestDraft(cwd, issue)
 export const createPullRequest = async (cwd: string, input: PullRequestInput) =>

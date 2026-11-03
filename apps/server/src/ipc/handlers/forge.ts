@@ -10,8 +10,9 @@ import type {
   PullRequestInput,
 } from '@ramu/shared/types'
 import * as forge from '../../workspace/forge'
-import { gitlabSummary } from '../../workspace/forge/gitlab'
+import { gitlabApi, gitlabSummary } from '../../workspace/forge/gitlab'
 import { bitbucketApi, bitbucketSummary } from '../../workspace/forge/bitbucket'
+import { azureSummary, verifyAzureToken } from '../../workspace/forge/azure'
 import * as git from '../../workspace/git'
 import { gitExclusive, writingSettings } from '../helpers'
 import { id } from '../schemas'
@@ -139,6 +140,35 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([z.boolean()]),
       run: (check: boolean) => gitlabSummary(check),
     },
+    // Like the other hosting credentials, a GitLab token changes only from the machine running the host.
+    'forge.saveGitlab': {
+      args: z.tuple([
+        z.object({
+          origin: z
+            .string()
+            .trim()
+            .toLowerCase()
+            .transform((value) => value.replace(/^https:\/\//, '').replace(/\/+$/, ''))
+            .pipe(z.string().regex(/^[a-z0-9.-]+(?::\d{1,5})?$/, 'Enter a server such as gitlab.com.')),
+          token: z.string().trim().min(8).max(4096),
+        }),
+      ]),
+      run: async (input: { origin: string; token: string }) => {
+        administrate()
+        // Check it before saving, so a mistyped token never replaces a working one.
+        await gitlabApi({ ...input, fetch }, '/user')
+        await ctx.gitlab.save(input)
+        return gitlabSummary(true)
+      },
+    },
+    'forge.removeGitlab': {
+      args: z.tuple([]),
+      run: async () => {
+        administrate()
+        await ctx.gitlab.remove()
+        return gitlabSummary(false)
+      },
+    },
     'forge.bitbucket': {
       args: z.tuple([z.boolean()]),
       run: (check: boolean) => bitbucketSummary(check, ctx.bitbucket.saved()),
@@ -166,6 +196,37 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         administrate()
         await ctx.bitbucket.remove()
         return bitbucketSummary(false, null)
+      },
+    },
+    'forge.azure': {
+      args: z.tuple([z.boolean()]),
+      run: (check: boolean) => azureSummary(check),
+    },
+    // Like the other hosting credentials, an Azure DevOps token changes only from the machine running the host.
+    'forge.saveAzure': {
+      args: z.tuple([
+        z.object({
+          organization: z
+            .string()
+            .trim()
+            .regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,49}$/, 'An organization name has letters, digits and dashes.'),
+          token: z.string().trim().min(20).max(4096),
+        }),
+      ]),
+      run: async (input: { organization: string; token: string }) => {
+        administrate()
+        // Check it before saving, so a mistyped token never replaces a working one.
+        await verifyAzureToken(input, input.organization)
+        await ctx.azure.save(input)
+        return azureSummary(true)
+      },
+    },
+    'forge.removeAzure': {
+      args: z.tuple([]),
+      run: async () => {
+        administrate()
+        await ctx.azure.remove()
+        return azureSummary(false)
       },
     },
     // Credentials change only from the machine running the host: never from a paired client, an agent tool or a viewer.

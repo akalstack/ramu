@@ -33,10 +33,13 @@ export interface PullRequestWatchStatus {
   threads: { id: string; title: string }[]
 }
 
+/** A hosting service with its own adapter. */
+export type ForgeService = 'github' | 'gitlab' | 'bitbucket' | 'azure'
+
 export interface ForgeStatus {
   availability: ForgeAvailability
   /** The hosting service, so a sign-in hint names the right one. Absent means GitHub. */
-  service?: 'github' | 'gitlab' | 'bitbucket'
+  service?: ForgeService
   /** The pull request for the checked-out branch, if one exists. */
   pullRequest: PullRequestInfo | null
 }
@@ -164,11 +167,11 @@ export interface ForgeConnectionSummary {
 
 /** GitLab on one host: the servers its `glab` sign-in or `GITLAB_TOKEN` covers. Tokens never leave the host. */
 export interface GitlabSummary {
-  /** `no-cli`: `glab` is not installed (a `GITLAB_TOKEN` still works). */
+  /** `no-cli`: `glab` is not installed (a saved token or `GITLAB_TOKEN` still works). */
   cli: 'no-cli' | 'installed'
   accounts: {
     origin: string
-    source: 'cli' | 'environment'
+    source: 'saved' | 'cli' | 'environment'
     /** Filled by a connection check; null before one. */
     login: string | null
     state: 'unchecked' | 'ok' | 'failed'
@@ -181,6 +184,16 @@ export interface BitbucketSummary {
   source: 'saved' | 'environment' | null
   /** The account email of an API token; null for an access token. */
   email: string | null
+  login: string | null
+  state: 'unchecked' | 'ok' | 'failed'
+  error?: string
+}
+
+/** Azure DevOps Services on one host: the personal access token saved in Settings or given in its environment. */
+export interface AzureSummary {
+  source: 'saved' | 'environment' | null
+  /** The organization repositories are browsed in; null when none was named. */
+  organization: string | null
   login: string | null
   state: 'unchecked' | 'ok' | 'failed'
   error?: string

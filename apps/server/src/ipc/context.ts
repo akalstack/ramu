@@ -15,6 +15,8 @@ import { UsageService } from '../providers/usage'
 import { ProviderEnvironmentStore } from '../providers/environmentStore'
 import { ForgeAccountStore } from '../workspace/forgeAccounts'
 import { BitbucketCredentials, configureBitbucketCredentials } from '../workspace/forge/bitbucketCredentials'
+import { AzureCredentials, configureAzureCredentials } from '../workspace/forge/azureCredentials'
+import { GitlabCredentials, configureGitlabCredentials } from '../workspace/forge/gitlabCredentials'
 import { configureForgeAccounts } from '../workspace/forge'
 import { ExtraUsageReader, readAntigravityUsage, readCursorUsage } from '../providers/providerUsage'
 import { ACCOUNT_USAGE_INTERVAL_MS, AccountUsage } from '../providers/accountUsage'
@@ -54,6 +56,16 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     (key, value) => workspace.setAppState(key, value),
   )
   configureBitbucketCredentials(bitbucket)
+  const azure = new AzureCredentials(
+    (key, fallback) => workspace.getAppState(key, fallback),
+    (key, value) => workspace.setAppState(key, value),
+  )
+  configureAzureCredentials(azure)
+  const gitlab = new GitlabCredentials(
+    (key, fallback) => workspace.getAppState(key, fallback),
+    (key, value) => workspace.setAppState(key, value),
+  )
+  configureGitlabCredentials(gitlab)
   const storedPreferences = () => workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
   const managedSkills = (taskId: string) => learning?.catalog(workspace.projectIdOf(taskId)) ?? []
   const withContext = (ws: Workspace, taskId: string, prompt: string, context?: FileContext[]) =>
@@ -196,6 +208,8 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     environment,
     forgeAccounts,
     bitbucket,
+    azure,
+    gitlab,
     loadPreferences,
     savePreferences,
     storedPreferences,

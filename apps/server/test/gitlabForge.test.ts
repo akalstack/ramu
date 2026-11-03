@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+import { HostCredentialStore } from '../src/credentials/store'
+import { GitlabCredentials, configureGitlabCredentials } from '../src/workspace/forge/gitlabCredentials'
 import {
   discussionsPrompt,
   gitlabApi,
@@ -181,5 +183,39 @@ it('lists the GitLab servers a host can use and checks who each sign-in is witho
     expect(JSON.stringify(checked)).not.toContain('glpat')
   } finally {
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('uses a token saved in Settings for its own server first, and lists it without the secret', async () => {
+  const secrets = new Map<string, string>()
+  const store = new HostCredentialStore(async (_service, key) => ({
+    setPassword: async (value: string) => void secrets.set(key, value),
+    getPassword: async () => secrets.get(key) ?? null,
+    deletePassword: async () => secrets.delete(key),
+  }))
+  store.verify = async () => {}
+  const state = new Map<string, unknown>()
+  const saved = new GitlabCredentials(
+    (key, fallback) => (state.get(key) ?? fallback) as never,
+    (key, value) => void state.set(key, value),
+    store,
+  )
+  configureGitlabCredentials(saved)
+  try {
+    await saved.save({ origin: 'code.example.com', token: 'glpat-saved' })
+    const env = { GLAB_CONFIG_DIR: '/nonexistent', GITLAB_TOKEN: 'env-token', GITLAB_HOST: 'code.example.com' }
+    expect(await gitlabToken('code.example.com', env)).toEqual({ token: 'glpat-saved', source: 'saved' })
+    // Another server never gets it.
+    expect(await gitlabToken('gitlab.com', { GLAB_CONFIG_DIR: '/nonexistent', GITLAB_TOKEN: 'e' })).toEqual({
+      token: 'e',
+      source: 'environment',
+    })
+    const listed = await gitlabSummary(false, { env, hasCli: false })
+    expect(listed.accounts).toEqual([{ origin: 'code.example.com', source: 'saved', login: null, state: 'unchecked' }])
+    expect(JSON.stringify(listed)).not.toContain('glpat')
+    await saved.remove()
+    expect(await gitlabToken('code.example.com', env)).toEqual({ token: 'env-token', source: 'environment' })
+  } finally {
+    configureGitlabCredentials(null)
   }
 })

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ForgeAccessReport, ForgeAvailability, ForgeConnectionSummary } from '@ramu/shared/types'
+import type { ForgeAccessReport, ForgeAvailability, ForgeConnectionSummary, ForgeService } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Dropdown } from '../../Menu'
 import { t } from '../../i18n'
@@ -12,10 +12,8 @@ export const openHostingSettings = () =>
   window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git', target: 'Hosting accounts' } }))
 
 /** Why pull requests are unavailable here, with the one action that fixes it. */
-export function forgeUnavailableText(
-  availability: ForgeAvailability,
-  service: 'github' | 'gitlab' | 'bitbucket' = 'github',
-): string {
+export function forgeUnavailableText(availability: ForgeAvailability, service: ForgeService = 'github'): string {
+  if (service === 'azure') return t('Connect Azure DevOps in Settings → Git, or set AZURE_DEVOPS_EXT_PAT on the host.')
   if (service === 'bitbucket')
     return t('Connect Bitbucket in Settings → Git, or set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN on the host.')
   if (service === 'gitlab')
@@ -42,7 +40,7 @@ export function ForgeAccessPanel({
   taskId: string
   repoId: string
   unavailable?: ForgeAvailability
-  service?: 'github' | 'gitlab' | 'bitbucket'
+  service?: ForgeService
 }) {
   const { invoke } = useHost()
   const [report, setReport] = useState<ForgeAccessReport | null>(null)
