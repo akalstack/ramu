@@ -4900,13 +4900,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Use an API key': 'Pakai API key',
   '{0} account · {1}': 'Akun {0} · {1}',
   'Manage logins…': 'Kelola login…',
-  'A usage limit still moves the thread to the next login by itself.':
-    'Batas pemakaian tetap memindahkan thread ke login berikutnya secara otomatis.',
-  'Applies to this thread from its next step.': 'Berlaku untuk thread ini mulai langkah berikutnya.',
   'Show accounts': 'Tampilkan akun',
   'Hide accounts': 'Sembunyikan akun',
   'Show account names and emails': 'Tampilkan nama dan email akun',
   'Hide account names and emails': 'Sembunyikan nama dan email akun',
+  'A usage limit still moves the thread to the next login by itself.':
+    'Batas pemakaian tetap memindahkan thread ke login berikutnya secara otomatis.',
+  'Applies to this thread from its next step.': 'Berlaku untuk thread ini mulai langkah berikutnya.',
   Behavior: 'Perilaku',
   'Automatic provider fallback': 'Fallback provider otomatis',
   'Switch to the next provider when this one hits a limit.':
@@ -5161,7 +5161,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Delete your Ramu Link account?': 'Hapus akun Ramu Link Anda?',
   'Delete account': 'Hapus akun',
   'Every host linked to {0} is unlinked and devices lose their Ramu Link routes; paired devices keep their other routes. A Plus subscription is cancelled at once, without a refund for the rest of the period. This cannot be undone.': 'Semua host yang tertaut ke {0} dilepas dan perangkat kehilangan rute Ramu Link; perangkat yang dipasangkan tetap memakai rute lainnya. Langganan Plus langsung dibatalkan, tanpa pengembalian dana untuk sisa periode. Tindakan ini tidak bisa dibatalkan.',
-}
   'Add a filter': 'Tambah filter',
   'Address and requests': 'Alamat dan permintaan',
   'After saving, the schedule’s card shows the address and secret to give the sender. Requests for the same subject within two minutes join one run.': 'Setelah disimpan, kartu jadwal menampilkan alamat dan secret untuk diberikan ke pengirim. Permintaan untuk subjek yang sama dalam dua menit digabung ke satu run.',
@@ -5232,12 +5231,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Sentry created a new issue.': 'Sentry membuat issue baru.',
   'Any request': 'Permintaan apa pun',
   'Any POST to the address starts a run. Add filters to narrow it.': 'Setiap POST ke alamat ini memulai run. Tambahkan filter untuk mempersempitnya.',
-  'Set up on GitHub for {0}': 'Sudah diatur di GitHub untuk {0}',
-  'Add the address and secret to the repository’s webhooks on GitHub, or add a GitHub repository to this project.': 'Tambahkan alamat dan secret ke webhook repositori di GitHub, atau tambahkan repositori GitHub ke proyek ini.',
-  'Ramu can create the webhook on GitHub for you.': 'Ramu bisa membuatkan webhook di GitHub untuk Anda.',
-  'Create again': 'Buat ulang',
-  'Create on {0}': 'Buat di {0}',
-}
   'What starts it, its address and its secret are set up on a computer, where they can be copied into the sender.': 'Pemicunya, alamatnya, dan secret-nya diatur di komputer, tempat semuanya bisa disalin ke pengirim.',
   'Set up on GitHub for {0}': 'Sudah diatur di GitHub untuk {0}',
   'Add the address and secret to the repository’s webhooks on GitHub, or add a GitHub repository to this project.': 'Tambahkan alamat dan secret ke webhook repositori di GitHub, atau tambahkan repositori GitHub ke proyek ini.',
