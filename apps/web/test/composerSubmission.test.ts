@@ -88,6 +88,8 @@ vi.mock('../src/composer/ComposerSuggestions', () => ({
     clearPinned: state.cleared,
   }),
 }))
+vi.mock('../src/workspace/workspace', () => ({ useWorkspace: () => ({ task: () => undefined }) }))
+vi.mock('../src/workspace/useOpenFileLink', () => ({ useOpenFileLink: () => () => {} }))
 vi.mock('../src/composer/useViewOnly', () => ({ useViewOnly: () => state.viewOnly }))
 import { Composer } from '../src/composer/Composer'
 

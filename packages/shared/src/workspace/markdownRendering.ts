@@ -43,16 +43,3 @@ const frontmatterHandlers = { yaml: frontmatter, toml: frontmatter }
 export const previewRemarkRehypeOptions: Options['remarkRehypeOptions'] = { handlers: frontmatterHandlers }
 
 export const previewUrlTransform = (url: string) => defaultUrlTransform(url)
-
-/** Relative images resolve from the document's directory; the main process validates scope. */
-export function previewImagePath(documentPath: string, url: string): string | null {
-  if (!url || /^[a-z][a-z\d+.-]*:/i.test(url) || url.startsWith('//') || url.startsWith('#')) return null
-  try {
-    const base = new URL(documentPath.split('/').map(encodeURIComponent).join('/'), 'https://ramu.local/')
-    const resolved = new URL(url, base)
-    if (resolved.origin !== base.origin) return null
-    return decodeURIComponent(resolved.pathname.slice(1))
-  } catch {
-    return null
-  }
-}

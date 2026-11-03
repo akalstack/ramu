@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { pushTarget } from '../src/runtime/pushTarget.ts'
+import { pushTarget, readPushes } from '../src/runtime/pushTarget.ts'
 
 const hosts = ['host-a', 'host-b']
 
@@ -33,4 +33,14 @@ test('a push from a host this phone does not know, or with data it cannot read, 
   assert.equal(pushTarget({ taskId: 't1' }, hosts), null)
   assert.equal(pushTarget(null, hosts), null)
   assert.equal(pushTarget('x', hosts), null)
+})
+
+test('a delivered push leaves once its notice is read elsewhere, but not before the host listed it', () => {
+  const push = (id, sessionId, computerId = 'host-a') => ({ id, data: { computerId, taskId: 't', sessionId } })
+  const presented = [push('p1', 's1'), push('p2', 's2'), push('p3', 's3', 'host-b'), { id: 'p4', data: null }]
+  const listed = new Map([['host-a', new Set(['agent:s1'])]])
+  assert.deepEqual(readPushes(presented, listed, { 'host-a': [] }), ['p1'])
+  assert.deepEqual(readPushes(presented, listed, { 'host-a': [{ id: 'agent:s1' }] }), [])
+  // A host whose inbox has not loaded decides nothing.
+  assert.deepEqual(readPushes(presented, listed, {}), [])
 })

@@ -8,9 +8,8 @@ import { parseThreadReference, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/
 import { composerDraft, type DraftMention } from '@ramu/shared/chat/composerDraft'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { t, useLanguage } from '../i18n'
-import { useHost } from '../workspace/HostProvider'
+import { useOpenFileLink } from '../workspace/useOpenFileLink'
 import { useWorkspace } from '../workspace/workspace'
-import { errorText } from '../workspace/TaskPane'
 import { notifyError } from './Notifications'
 
 function SkillReference({ name }: { name: string }) {
@@ -22,7 +21,7 @@ function SkillReference({ name }: { name: string }) {
 export function ChatLink({ href, children, taskId }: { href?: string; children: ReactNode; taskId?: string }) {
   useLanguage()
   const ws = useWorkspace()
-  const { invoke } = useHost()
+  const openFileLink = useOpenFileLink(taskId)
   const thread = href && parseThreadReference(href)
   if (thread)
     return (
@@ -57,7 +56,7 @@ export function ChatLink({ href, children, taskId }: { href?: string; children: 
   }
   const local = href && localFileLink(href)
   const chip = href ? fileChip(href) : null
-  if (local && chip)
+  if (href && local && chip)
     return (
       <ReferenceChipView
         chip={chip}
@@ -69,48 +68,7 @@ export function ChatLink({ href, children, taskId }: { href?: string; children: 
         }
         onOpen={(event) => {
           event.preventDefault()
-          if (!taskId || !href) return
-          // Composer mentions carry a repository name; resolve that prefix to the checkout first.
-          const binding = (ws.bindings[ws.workspaceOf(taskId)] ?? ws.bindings[taskId] ?? []).find((entry) =>
-            local.path.startsWith(`${entry.repoName}/`),
-          )
-          const target = binding
-            ? `${binding.cwd}/${local.path.slice(binding.repoName.length + 1)}${local.line ? `:${local.line}:${local.column ?? 1}` : ''}`
-            : href
-          void invoke('files.resolveLink', taskId, target, { folders: true })
-            .then((file) => {
-              if (!file)
-                throw new Error(
-                  t('This path was not found in this thread’s folders, or it matches more than one place.'),
-                )
-              // A folder opens in the Explorer, expanded and scrolled into view.
-              if (file.kind === 'folder') {
-                ws.setSidebar('explorer')
-                window.dispatchEvent(new Event('ramu:show-explorer'))
-                requestAnimationFrame(() =>
-                  window.dispatchEvent(
-                    new CustomEvent('ramu:explorer-reveal', { detail: { repoId: file.repoId, path: file.path } }),
-                  ),
-                )
-                return
-              }
-              ws.openView(taskId, {
-                kind: 'file',
-                repoId: file.repoId,
-                path: file.path,
-                ...(file.line
-                  ? {
-                      selection: {
-                        line: file.line,
-                        column: file.column ?? 1,
-                        endColumn: file.column ?? 1,
-                        requestId: crypto.randomUUID(),
-                      },
-                    }
-                  : {}),
-              })
-            })
-            .catch((error) => notifyError(errorText(error), 'Open file'))
+          openFileLink(href)
         }}
       />
     )

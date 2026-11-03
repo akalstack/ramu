@@ -1,12 +1,15 @@
 import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState, type HTMLAttributes } from 'react'
 import { createPortal } from 'react-dom'
-import { Quote, SquareTerminal, Users, WandSparkles } from 'lucide-react'
+import { Folder, Quote, SquareTerminal, Users, WandSparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { FileIcon } from '../editor/FileIcon'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { REFERENCE_CHIP } from '../chat/ReferenceChipView'
 import { composerDraft, deleteDraftAtom, type DraftChip, type DraftMention } from '@ramu/shared/chat/composerDraft'
 import { markdownRuns, toggleMarkdownWrap } from '@ramu/shared/chat/markdownRuns'
+import { isFolderLike } from '@ramu/shared/chat/referenceChip'
+import { localFileLink } from '@ramu/shared/workspace/fileLinks'
+import { t } from '../i18n'
 
 export interface ComposerInputHandle {
   focus(): void
@@ -82,17 +85,41 @@ export function focusComposer(root: Element | null, caret?: number) {
   if (input && caret !== undefined) selectComposerInput(input, caret)
 }
 
-export function InlineChip({ chip }: { chip: DraftChip }) {
+export function InlineChip({ chip, onOpen }: { chip: DraftChip; onOpen?: (target: string) => void }) {
+  const target = chip.kind === 'file' ? chip.target : undefined
+  const folder = target !== undefined && isFolderLike(localFileLink(target)?.path ?? target)
+  const open = target && onOpen ? () => onOpen(target) : undefined
   return (
     <Badge
       variant="secondary"
       {...REFERENCE_CHIP}
-      title={chip.kind === 'mention' ? `@${chip.target}` : (chip.target ?? chip.label)}
+      title={
+        open
+          ? folder
+            ? t('Show {0} in Explorer', { '0': target })
+            : t('Open {0} in editor', { '0': target })
+          : chip.kind === 'mention'
+            ? `@${chip.target}`
+            : (chip.target ?? chip.label)
+      }
+      {...(open
+        ? {
+            render: <a href={target} />,
+            // The chip is one atom in the draft: a press opens it instead of moving the caret.
+            onMouseDown: (event: React.MouseEvent) => event.preventDefault(),
+            onClick: (event: React.MouseEvent) => {
+              event.preventDefault()
+              open()
+            },
+          }
+        : {})}
     >
-      {chip.kind === 'skill' ? (
+      {folder ? (
+        <Folder data-icon="inline-start" aria-hidden="true" />
+      ) : chip.kind === 'skill' ? (
         <WandSparkles data-icon="inline-start" className="text-brand" aria-hidden="true" />
       ) : chip.kind === 'file' ? (
-        <FileIcon path={chip.target!} />
+        <FileIcon path={localFileLink(chip.target!)?.path ?? chip.target!} />
       ) : chip.kind === 'quote' ? (
         <Quote data-icon="inline-start" aria-hidden="true" />
       ) : chip.kind === 'mention' ? (
@@ -121,10 +148,23 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> & {
   readOnly?: boolean
   /** Who a message can start with; a leading `@handle` naming one draws as that model or teammate. */
   mentions?: readonly DraftMention[]
+  /** Opens a referenced file or folder when its chip is pressed. */
+  onOpenFile?: (target: string) => void
 }
 const NO_MENTIONS: readonly DraftMention[] = []
 export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function ComposerInput(
-  { value, onChange, placeholder, autoFocus, readOnly, mentions = NO_MENTIONS, onKeyDown, onPaste, ...props },
+  {
+    value,
+    onChange,
+    placeholder,
+    autoFocus,
+    readOnly,
+    mentions = NO_MENTIONS,
+    onOpenFile,
+    onKeyDown,
+    onPaste,
+    ...props
+  },
   forwarded,
 ) {
   // The list is rebuilt on every render upstream; its contents decide when the chips are drawn again.
@@ -320,7 +360,9 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
           }
         }}
       />
-      {portals.map(({ node, chip }) => createPortal(<InlineChip chip={chip} />, node, `${chip.start}:${chip.kind}`))}
+      {portals.map(({ node, chip }) =>
+        createPortal(<InlineChip chip={chip} onOpen={onOpenFile} />, node, `${chip.start}:${chip.kind}`),
+      )}
     </>
   )
 })

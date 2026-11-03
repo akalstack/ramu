@@ -33,7 +33,9 @@ export function createAgentNotifier(options: {
   preferences?: () => Promise<AppPreferences>
 }) {
   const last = new Map<string, AgentSessionState>()
-  const live = new Set<Notification>()
+  // System notifications by the host notice they stand for (`agent:<session>`), so one read anywhere closes them here.
+  const live = new Map<string, Notification>()
+  let listed = new Set<string>()
   const questionsSeen = new Set<string>()
   // A turn that ended while independent helpers still ran is not finished yet; its notice waits for the next idle state.
   const waitingForHelpers = new Set<string>()
@@ -83,13 +85,18 @@ export function createAgentNotifier(options: {
         return
       }
       if (!Notification.isSupported()) return
+      const id = `agent:${notice.sessionId}`
+      live.get(id)?.close()
       const system = new Notification({ title: notice.title, body: notice.body, silent: false })
-      live.add(system)
+      live.set(id, system)
+      const forget = () => {
+        if (live.get(id) === system) live.delete(id)
+      }
       system.on('click', () => {
-        live.delete(system)
+        forget()
         open(notice)
       })
-      system.on('close', () => live.delete(system))
+      system.on('close', forget)
       system.show()
     } catch {
       /* A notification is never worth interrupting the app for. */
@@ -97,6 +104,18 @@ export function createAgentNotifier(options: {
   }
   return {
     observe(channel: string, payload: unknown) {
+      if (channel === 'notices:changed') {
+        // A notice read or cleared on another device (or in this app) leaves the host's list; its banner goes too. Only
+        // a notice the list held before counts, so a banner shown just ahead of its notice is not closed early.
+        const current = new Set((payload as { id: string }[]).map((notice) => notice.id))
+        for (const [id, system] of live)
+          if (listed.has(id) && !current.has(id)) {
+            live.delete(id)
+            system.close()
+          }
+        listed = current
+        return
+      }
       if (channel !== 'agent:event') return
       const { sessionId, event } = payload as {
         sessionId: string

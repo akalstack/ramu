@@ -1,5 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { SvgXml } from 'react-native-svg'
 import { Check, Copy, FileQuestion, FolderSearch, Pencil, X } from 'lucide-react-native'
@@ -15,7 +15,9 @@ import type { ChangedFile } from '../runtime/types'
 import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen'
 import { DiffLines } from '../components/DiffLines'
 import { CodeTokens, grammarFor, highlightLines } from '../components/Code'
-import { Markdown } from '../components/Markdown'
+import { Markdown, ReferenceContext, type ReferenceActions } from '../components/Markdown'
+import { markdownLinkTarget, previewImagePath } from '@ramu/shared/workspace/fileLinks'
+import { useOpenLink } from '../runtime/openFile'
 import { diffMethod, type Revision } from '../runtime/gitRevision'
 import { Button, Segmented, T, tap } from '../components/ui'
 
@@ -139,6 +141,40 @@ export function FileViewer({
   const binding = scope.owner === identity ? scope.bindings.find((b) => b.repoId === repoId) : undefined
   const repoName = binding?.repoName ?? ''
   const gitAvailable = !!binding && !binding.folderOnly && !binding.notGit
+  const openLink = useOpenLink(computerId, taskId, (targetRepo, targetPath, targetLine) =>
+    router.push({
+      pathname: '/file',
+      params: {
+        computer: computerId!,
+        ctx: taskId!,
+        repoId: targetRepo,
+        path: targetPath,
+        ...(targetLine ? { line: String(targetLine) } : {}),
+        ...(composer
+          ? {
+              composerProject: composer.projectId,
+              ...(composer.draftContext ? { draftContext: composer.draftContext } : {}),
+            }
+          : {}),
+      },
+    }),
+  )
+  // Links in a Markdown preview resolve from this document, as on the desktop: relative files and folders open here,
+  // relative images draw from the same repository.
+  const markdownActions: ReferenceActions = {
+    openFile: (href) => {
+      const target = markdownLinkTarget(path, href)
+      if (!target) return
+      if (target.kind === 'local') void openLink(target.href)
+      else if (binding) void openLink(`${binding.cwd}/${target.path}`)
+    },
+    openUrl: (url) => void Linking.openURL(url).catch(() => {}),
+    image: async (href) => {
+      const local = previewImagePath(path, href)
+      if (!local || !computerId || !taskId) return null
+      return (await store.invoke(computerId, 'files.media', taskId, repoId, local)).url
+    },
+  }
   const target = line && Number.isSafeInteger(Number(line)) && Number(line) > 0 ? Number(line) : undefined
   const [preview, setPreview] = useState(target === undefined)
   const [svgBroken, setSvgBroken] = useState(false)
@@ -634,7 +670,11 @@ export function FileViewer({
               />
             </ScrollView>
           ) : null}
-          {state.kind === 'text' && markdown && preview ? <Markdown text={state.raw} /> : null}
+          {state.kind === 'text' && markdown && preview ? (
+            <ReferenceContext.Provider value={markdownActions}>
+              <Markdown text={state.raw} />
+            </ReferenceContext.Provider>
+          ) : null}
           {state.kind === 'text' && svg && !svgBroken && preview ? (
             <ScrollView
               maximumZoomScale={5}

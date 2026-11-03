@@ -34,3 +34,34 @@ export function localFileLink(href: string): { path: string; line?: number; colu
   if (!path || path.includes('\0')) return null
   return { path, ...(line ? { line, column } : {}) }
 }
+
+/** Relative images and links resolve from the document's directory; the main process validates scope. */
+export function previewImagePath(documentPath: string, url: string): string | null {
+  if (!url || /^[a-z][a-z\d+.-]*:/i.test(url) || url.startsWith('//') || url.startsWith('#')) return null
+  try {
+    const base = new URL(documentPath.split('/').map(encodeURIComponent).join('/'), 'https://ramu.local/')
+    const resolved = new URL(url, base)
+    if (resolved.origin !== base.origin) return null
+    return decodeURIComponent(resolved.pathname.slice(1))
+  } catch {
+    return null
+  }
+}
+
+export type MarkdownLinkTarget = { kind: 'repository'; path: string } | { kind: 'local'; href: string }
+
+/**
+ * Where a link in a Markdown document points, as a path the host can resolve: relative and `/root` links resolve from
+ * the document inside its repository (keeping a `#L12` line), `file://` and other local paths stay as written. External
+ * links return null.
+ */
+export function markdownLinkTarget(documentPath: string, href: string): MarkdownLinkTarget | null {
+  const relative = previewImagePath(documentPath, href)
+  const location = localFileLink(href)
+  if (relative)
+    return {
+      kind: 'repository',
+      path: location?.line ? `${relative}:${location.line}:${location.column ?? 1}` : relative,
+    }
+  return location && !/^https?:/i.test(href) ? { kind: 'local', href } : null
+}

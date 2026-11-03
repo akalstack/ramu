@@ -4,7 +4,7 @@ import { cn } from 'cn'
 import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
 import { WrapText } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { MarkdownViewControl, initialMarkdownView } from '../editor/MarkdownViewControl'
 import type { AppPreferences } from '@ramu/shared/types'
 import { MarkdownEditor } from '../editor/MarkdownEditor'
@@ -19,6 +19,8 @@ import { applyEditorConfig, normalizeForSave } from '../editor/editorConfig'
 import { errorText } from '../workspace/TaskPane'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { useHost } from '../workspace/HostProvider'
+import { useOpenFileLink } from '../workspace/useOpenFileLink'
+import type { MarkdownLinkTarget } from '@ramu/shared/workspace/fileLinks'
 import { MediaFileView, isMedia, isSvg } from './MediaFileView'
 import { deviceStorage } from '../deviceStorage'
 import { editorThemeName } from '../editor/editorTheme'
@@ -59,6 +61,13 @@ function TextFileView({
   const { invoke, status: hostStatus } = useHost()
   const { on: onHostEvent } = useHostRuntime()
   const { preferences } = useAppSettings()
+  const openFileLink = useOpenFileLink(taskId)
+  // A link in a Markdown file opens the file at its line or reveals a folder, from this document's repository.
+  const openMarkdownLink = useCallback(
+    (target: MarkdownLinkTarget) =>
+      openFileLink(target.kind === 'repository' ? `${binding.cwd}/${target.path}` : target.href),
+    [openFileLink, binding.cwd],
+  )
   const changingBuffer = useRef(false)
   const host = useRef<HTMLDivElement>(null)
   const diffHost = useRef<HTMLDivElement>(null)
@@ -489,7 +498,7 @@ function TextFileView({
                   repoId={binding.repoId}
                   path={view.path}
                   onSave={() => saveRef.current()}
-                  onOpenFile={(path) => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path })}
+                  onOpenLink={openMarkdownLink}
                 />
               ) : mode === 'preview' ? (
                 <MarkdownPreview
@@ -497,7 +506,7 @@ function TextFileView({
                   taskId={taskId}
                   repoId={binding.repoId}
                   path={view.path}
-                  onOpenFile={(path) => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path })}
+                  onOpenLink={openMarkdownLink}
                 />
               ) : null}
             </div>

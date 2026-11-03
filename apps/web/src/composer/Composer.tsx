@@ -4,7 +4,7 @@ import { ComposerInput, type ComposerInputHandle } from './ComposerInput'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
 import { Button } from '@/components/ui/button'
-import { ArrowUp, CornerDownRight, FileText, ListEnd, Paperclip, Play, Square, X } from 'lucide-react'
+import { ArrowUp, CornerDownRight, ListEnd, Paperclip, Play, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Attachment, FileContext } from '@ramu/shared/types'
@@ -19,6 +19,10 @@ import {
 import { Attachments } from './Attachments'
 import { registerWorkspaceCheckpoint } from '../workspace/workspaceCheckpoint'
 import { useHost } from '../workspace/HostProvider'
+import { useWorkspace } from '../workspace/workspace'
+import { useOpenFileLink } from '../workspace/useOpenFileLink'
+import { Button as DesktopButton } from '@/components/desktop-button'
+import { FileIcon } from '../editor/FileIcon'
 import { VIEW_ONLY_NOTICE } from './viewerAccess'
 import { useViewOnly } from './useViewOnly'
 import { DictationStatus, MicButton } from '../voice/DictationControls'
@@ -92,6 +96,8 @@ export function Composer({
   teammate?: ComposerTeammate
 }) {
   useLanguage()
+  const ws = useWorkspace()
+  const openFileLink = useOpenFileLink(scopeId)
   const [caret, setCaret] = useState(value.length)
   const suggestions = useComposerSuggestions(value, caret, scopeId, chat, teammate)
   const [submitting, setSubmitting] = useState(false)
@@ -462,12 +468,7 @@ export function Composer({
                 className="attachment-chip [&_img]:w-[36px] [&_img]:h-[36px] [&_img]:object-cover [&_img]:rounded-(--radius-xs) [&_button]:flex-none [&_svg]:flex-none [&_.attachment-open.file]:inline-flex [&_.attachment-open.file]:items-center [&_.attachment-open.file]:gap-[7px] [&_.attachment-open.file]:p-[5px_9px] [&_.attachment-open.file]:max-w-[240px] [&_.attachment-open.file]:bg-transparent [&_.attachment-open.file]:[border:0] [&_.attachment-open.file]:text-left [&_.attachment-open.file]:justify-start [&_.attachment-open.file]:cursor-pointer [&_.attachment-remove]:top-[-7px] [&_.attachment-remove]:right-[-7px] [&:not(.comments-chip)_.attachment-remove]:opacity-0 [&:not(.comments-chip)_.attachment-remove]:[transition:none] [&:hover_.attachment-remove]:opacity-100 [&:hover_.attachment-remove]:[transition:opacity_0.12s_var(--ease)] [&_button.comments-chip-x]:absolute [&_button.comments-chip-x]:top-[50%] [&_button.comments-chip-x]:right-1 [&_button.comments-chip-x]:bottom-auto [&_button.comments-chip-x]:left-auto [&_button.comments-chip-x]:w-5 [&_button.comments-chip-x]:h-5 [&_button.comments-chip-x]:min-w-0 [&_button.comments-chip-x]:min-h-0 [&_button.comments-chip-x]:m-0 [&_button.comments-chip-x]:p-0 [&_button.comments-chip-x]:grid [&_button.comments-chip-x]:place-items-center [&_button.comments-chip-x]:[border:0] [&_button.comments-chip-x]:rounded-full [&_button.comments-chip-x]:[transform:translateY(-50%)] [&_button.comments-chip-x]:opacity-0 [&_button.comments-chip-x]:[transition:none] [&:hover_button.comments-chip-x]:opacity-100 [&:hover_button.comments-chip-x]:[transition:opacity_0.12s_var(--ease)] [&_button.comments-chip-x:focus-visible]:opacity-100 [&_button.comments-chip-x:focus-visible]:[transition:opacity_0.12s_var(--ease)] inline-flex items-center gap-[7px] max-w-[240px] min-w-0 [border:1px_solid_transparent] rounded-(--radius-s) text-control whitespace-normal relative p-0 bg-hover comments-chip [&:focus-visible]:[border-color:var(--line-strong)] [&_.attachment-open.file]:pr-3 [&_.attachment-open.file]:[transition:none] [&:hover_.attachment-open.file]:pr-[30px] [&:hover_.attachment-open.file]:[mask-image:linear-gradient(to_right,_#000_calc(100%_-_52px),_transparent_calc(100%_-_14px))] [&:focus-within_.attachment-open.file]:pr-[30px] [&:focus-within_.attachment-open.file]:[mask-image:linear-gradient(to_right,_#000_calc(100%_-_52px),_transparent_calc(100%_-_14px))] [&:hover_.comments-chip-x]:opacity-100 [outline:0] relative"
                 title={`${suggestions.repoName(file.repoId)}/${file.path}`}
               >
-                <span className="attachment-open file">
-                  <FileText size={15} />
-                  <span className="attachment-name [&_small]:block [&_small]:text-caption min-w-0 [overflow-wrap:anywhere]">
-                    {file.path.slice(file.path.lastIndexOf('/') + 1)}
-                  </span>
-                </span>
+                <PinnedFileOpen taskId={scopeId && ws.task(scopeId) ? scopeId : undefined} file={file} />
                 <Button
                   variant="secondary"
                   size="icon-xs"
@@ -556,6 +557,7 @@ export function Composer({
         <ComposerInput
           ref={ref}
           mentions={teammate?.mentions}
+          onOpenFile={scopeId && ws.task(scopeId) ? openFileLink : undefined}
           readOnly={dictating || submitting}
           autoFocus={autoFocus}
           value={
@@ -747,5 +749,30 @@ export function Composer({
         </div>
       )}
     </>
+  )
+}
+
+/** A file pinned to the message, which opens in the editor once the thread exists. */
+function PinnedFileOpen({ taskId, file }: { taskId?: string; file: { repoId: string; path: string } }) {
+  const ws = useWorkspace()
+  const content = (
+    <>
+      <FileIcon path={file.path} size={15} />
+      <span className="attachment-name [&_small]:block [&_small]:text-caption min-w-0 [overflow-wrap:anywhere]">
+        {file.path.slice(file.path.lastIndexOf('/') + 1)}
+      </span>
+    </>
+  )
+  if (!taskId) return <span className="attachment-open file">{content}</span>
+  return (
+    <DesktopButton
+      variant="ghost"
+      type="button"
+      className="attachment-open file h-full min-h-0 rounded-[inherit] font-[inherit] text-[length:inherit] hover:bg-transparent"
+      aria-label={t('Open {0} in editor', { '0': file.path })}
+      onClick={() => ws.openView(taskId, { kind: 'file', repoId: file.repoId, path: file.path })}
+    >
+      {content}
+    </DesktopButton>
   )
 }

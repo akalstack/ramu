@@ -1,16 +1,29 @@
 import type { BrowserWindow } from 'electron'
 import { expect, it, vi } from 'vitest'
 
+const system = vi.hoisted(() => ({ supported: false, shown: [] as { close: () => void; closed: boolean }[] }))
 vi.mock('electron', () => ({
   Notification: class {
-    static isSupported = () => false
+    static isSupported = () => system.supported
+    closed = false
+    private handlers = new Map<string, () => void>()
+    on(event: string, handler: () => void) {
+      this.handlers.set(event, handler)
+    }
+    show() {
+      system.shown.push(this)
+    }
+    close() {
+      this.closed = true
+      this.handlers.get('close')?.()
+    }
   },
 }))
 const { createAgentNotifier } = await import('../src/main/agentNotifier')
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-function setup(goal: unknown = null, helpers: { active: number }[] = []) {
+function setup(goal: unknown = null, helpers: { active: number }[] = [], focused = true) {
   const send = vi.fn()
   const invoke = vi.fn(async (method: string) => {
     if (method === 'agent.goal') return goal
@@ -20,7 +33,7 @@ function setup(goal: unknown = null, helpers: { active: number }[] = []) {
   })
   const window = {
     isDestroyed: () => false,
-    isFocused: () => true,
+    isFocused: () => focused,
     isVisible: () => true,
     isMinimized: () => false,
   } as unknown as BrowserWindow
@@ -110,4 +123,25 @@ it('holds the finished notice while a helper still runs and sends it when the th
   state('idle')
   await flush()
   expect(send).toHaveBeenCalledTimes(1)
+})
+
+it('closes a system notification once its notice is read on another device', async () => {
+  system.supported = true
+  system.shown.length = 0
+  try {
+    const { notifier } = setup(null, [], false)
+    notifier.observe('agent:event', { sessionId: 's1', event: { kind: 'state', state: 'running' } })
+    notifier.observe('agent:event', { sessionId: 's1', event: { kind: 'state', state: 'idle' } })
+    await flush()
+    expect(system.shown).toHaveLength(1)
+    // A list without the notice yet (it may trail the banner) leaves the banner alone.
+    notifier.observe('notices:changed', [])
+    expect(system.shown[0]!.closed).toBe(false)
+    notifier.observe('notices:changed', [{ id: 'agent:s1' }])
+    expect(system.shown[0]!.closed).toBe(false)
+    notifier.observe('notices:changed', [])
+    expect(system.shown[0]!.closed).toBe(true)
+  } finally {
+    system.supported = false
+  }
 })

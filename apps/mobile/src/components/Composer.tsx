@@ -71,6 +71,8 @@ const ACCESS_MODES = [
   { key: 'full', label: 'Full access', help: 'Commands and edits run without asking.', icon: LockOpen },
 ] as const
 import { ProviderIcon } from './Logos'
+import { FileIcon } from './FileIcon'
+import { useOpenFile } from '../runtime/openFile'
 import { Glass } from './Glass'
 import { AutoResumeRows, LimitTray } from './LimitTray'
 import { AccountRows } from './AccountRows'
@@ -708,6 +710,7 @@ export function Composer({
   const origin = useRef(draftKey)
   origin.current = draftKey
   const pc = computerId ?? store.selected
+  const files = useOpenFile(chatId && taskId ? { id: chatId, computerId: pc, taskId } : undefined)
   const attachmentOwner = useRef('')
   attachmentOwner.current = JSON.stringify([pc, draftKey])
   // The Auto-resume choice belongs to the thread's session, so it is offered once the thread has one.
@@ -1097,9 +1100,10 @@ export function Composer({
           {context.map((file) => (
             <ContextChip
               key={`${file.repoId}:${file.path}`}
-              icon={FileText}
+              icon={<FileIcon path={file.path} size={13} />}
               label={file.path.split('/').at(-1) ?? file.path}
               detail={file.path}
+              open={chatId && taskId ? () => files.open(file.repoId, file.path) : undefined}
               remove={() => setContext((old) => old.filter((f) => f !== file))}
             />
           ))}
@@ -1628,17 +1632,29 @@ function ContextChip({
   icon: I,
   label,
   detail,
+  open,
   remove,
 }: {
-  icon: typeof FileText
+  icon: typeof FileText | ReactNode
   label: string
   detail?: string
+  /** Opens what the chip stands for, such as a pinned file in the file screen. */
+  open?: () => void
   remove: () => void
 }) {
   const { c } = useTheme()
+  const say = useSay()
+  const content = (
+    <>
+      {typeof I === 'function' ? <I size={12} color={c.accent} /> : I}
+      <T size={font.caption + 1} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
+        {label}
+      </T>
+    </>
+  )
   return (
     <View
-      accessibilityLabel={detail ?? label}
+      accessibilityLabel={open ? undefined : (detail ?? label)}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -1651,10 +1667,21 @@ function ContextChip({
         maxWidth: 220,
       }}
     >
-      <I size={12} color={c.accent} />
-      <T size={font.caption + 1} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
-        {label}
-      </T>
+      {open ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={say('Open {0}', { '0': detail ?? label })}
+          onPress={() => {
+            tap()
+            open()
+          }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 }}
+        >
+          {content}
+        </Pressable>
+      ) : (
+        content
+      )}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Remove ${label}`}

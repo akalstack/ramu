@@ -3,8 +3,8 @@ const MermaidBlock = lazy(() => import('../chat/MermaidBlock').then((m) => ({ de
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
 import Markdown from 'react-markdown'
 import { useHost } from '../workspace/HostProvider'
+import { markdownLinkTarget, previewImagePath, type MarkdownLinkTarget } from '@ramu/shared/workspace/fileLinks'
 import {
-  previewImagePath,
   previewRehypePlugins,
   previewRemarkPlugins,
   previewRemarkRehypeOptions,
@@ -77,8 +77,8 @@ export function MarkdownPreview({
   taskId,
   repoId,
   path,
-  onOpenFile,
-}: Context & { text: string; onOpenFile: (path: string) => void }) {
+  onOpenLink,
+}: Context & { text: string; onOpenLink: (target: MarkdownLinkTarget) => void }) {
   const components = useMemo<ComponentProps<typeof Markdown>['components']>(() => {
     const context = { taskId, repoId, path }
     return {
@@ -115,10 +115,10 @@ export function MarkdownPreview({
               event.preventDefault()
               return
             }
-            const local = previewImagePath(path, href)
-            if (local) {
+            const target = markdownLinkTarget(path, href)
+            if (target) {
               event.preventDefault()
-              onOpenFile(local)
+              onOpenLink(target)
             }
           }}
         >
@@ -126,7 +126,7 @@ export function MarkdownPreview({
         </a>
       ),
     }
-  }, [taskId, repoId, path, onOpenFile])
+  }, [taskId, repoId, path, onOpenLink])
   return (
     <Markdown
       remarkPlugins={previewRemarkPlugins}

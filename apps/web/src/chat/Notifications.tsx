@@ -218,6 +218,9 @@ export function Notifications() {
   }
   const inbox = useRef<InboxNotice[]>([])
   const publishInbox = (list: InboxNotice[]) => {
+    // A notice read on the phone (or cleared anywhere) leaves the host's list, and its toast goes with it.
+    const current = new Set(list.map((entry) => entry.id))
+    for (const entry of inbox.current) if (!current.has(entry.id)) notify.close(entry.id)
     inbox.current = list
     notices.setHost(
       list.map((entry): import('./notificationCenter').CenterNotice => {

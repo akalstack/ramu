@@ -21,7 +21,8 @@ import {
   Undo2,
   Redo2,
 } from 'lucide-react'
-import { previewImagePath, previewUrlTransform } from '@ramu/shared/workspace/markdownRendering'
+import { previewUrlTransform } from '@ramu/shared/workspace/markdownRendering'
+import { markdownLinkTarget, previewImagePath, type MarkdownLinkTarget } from '@ramu/shared/workspace/fileLinks'
 import { Button } from '@/components/desktop-button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Input } from '@/components/ui/input'
@@ -71,7 +72,7 @@ export function MarkdownEditor({
   repoId,
   path,
   onSave,
-  onOpenFile,
+  onOpenLink,
 }: {
   model: monaco.editor.ITextModel
   viewId: string
@@ -79,13 +80,13 @@ export function MarkdownEditor({
   repoId: string
   path: string
   onSave: () => void
-  onOpenFile: (path: string) => void
+  onOpenLink: (target: MarkdownLinkTarget) => void
 }) {
   useLanguage()
   const { invoke } = useHost()
   const host = useRef<HTMLDivElement>(null)
-  const callbacks = useRef({ onSave, onOpenFile })
-  callbacks.current = { onSave, onOpenFile }
+  const callbacks = useRef({ onSave, onOpenLink })
+  callbacks.current = { onSave, onOpenLink }
   const [editor, setEditor] = useState<Editor | null>(null)
   const [, refresh] = useState(0)
   const [linkUrl, setLinkUrl] = useState<string | null>(null)
@@ -156,8 +157,8 @@ export function MarkdownEditor({
           if (!link || !(event.metaKey || event.ctrlKey)) return false
           const safe = previewUrlTransform(link.getAttribute('href') ?? '')
           if (!safe) return true
-          const local = previewImagePath(path, safe)
-          if (local) callbacks.current.onOpenFile(local)
+          const target = markdownLinkTarget(path, safe)
+          if (target) callbacks.current.onOpenLink(target)
           else window.open(safe, '_blank', 'noopener,noreferrer')
           return true
         },

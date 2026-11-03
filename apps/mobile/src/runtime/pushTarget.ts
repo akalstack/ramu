@@ -19,3 +19,25 @@ export function pushTarget(data: unknown, knownComputers: readonly string[]): Pu
   if (typeof taskId === 'string') return { kind: 'thread', computerId, taskId }
   return null
 }
+
+/**
+ * Delivered pushes whose notice has since been read or cleared, on this phone or the desktop, so they can leave the
+ * notification list. A push stands for the host notice `agent:<session>`; only a notice the host has listed before and
+ * no longer does counts as read, so a push that arrives ahead of its notice is kept.
+ */
+export function readPushes(
+  presented: readonly { id: string; data: unknown }[],
+  listed: ReadonlyMap<string, ReadonlySet<string>>,
+  current: Readonly<Record<string, readonly { id: string }[] | undefined>>,
+): string[] {
+  return presented
+    .filter(({ data }) => {
+      if (!data || typeof data !== 'object') return false
+      const { computerId, sessionId } = data as Record<string, unknown>
+      if (typeof computerId !== 'string' || typeof sessionId !== 'string') return false
+      const notice = `agent:${sessionId}`
+      const now = current[computerId]
+      return !!now && !!listed.get(computerId)?.has(notice) && !now.some((entry) => entry.id === notice)
+    })
+    .map(({ id }) => id)
+}

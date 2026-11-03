@@ -2,8 +2,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown from 'react-markdown'
 import { describe, expect, it } from 'vitest'
+import { markdownLinkTarget, previewImagePath } from '../src/workspace/fileLinks'
 import {
-  previewImagePath,
   previewRehypePlugins,
   previewRemarkPlugins,
   previewRemarkRehypeOptions,
@@ -64,5 +64,26 @@ describe('Markdown file preview', () => {
     expect(previewImagePath('README.md', '/assets/logo.svg')).toBe('assets/logo.svg')
     expect(previewImagePath('README.md', 'https://example.com/logo.png')).toBeNull()
     expect(previewImagePath('README.md', '#heading')).toBeNull()
+  })
+})
+
+describe('markdownLinkTarget', () => {
+  it('resolves relative and root links inside the repository, keeping a line', () => {
+    expect(markdownLinkTarget('docs/guide.md', './setup.md')).toEqual({ kind: 'repository', path: 'docs/setup.md' })
+    expect(markdownLinkTarget('docs/guide.md', '../src/app.ts#L12')).toEqual({
+      kind: 'repository',
+      path: 'src/app.ts:12:1',
+    })
+    expect(markdownLinkTarget('docs/guide.md', '/apps/web/')).toEqual({ kind: 'repository', path: 'apps/web/' })
+  })
+
+  it('keeps file URLs as written and leaves external links and anchors to the browser', () => {
+    expect(markdownLinkTarget('docs/guide.md', 'file:///tmp/notes.md')).toEqual({
+      kind: 'local',
+      href: 'file:///tmp/notes.md',
+    })
+    expect(markdownLinkTarget('docs/guide.md', 'https://example.com/a.md')).toBeNull()
+    expect(markdownLinkTarget('docs/guide.md', 'mailto:hi@example.com')).toBeNull()
+    expect(markdownLinkTarget('docs/guide.md', '#install')).toBeNull()
   })
 })

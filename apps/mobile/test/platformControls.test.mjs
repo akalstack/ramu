@@ -167,6 +167,17 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id.endsWith('/i18n') && !(id in mocks))
         return { useT: () => ({}), useSay: () => (text) => text, ago: () => '' }
       if (id in mocks) return mocks[id]
+      // Opening a referenced file navigates; tests that follow a tap supply their own opener.
+      if (id.endsWith('/runtime/openFile'))
+        return {
+          useOpenLink: () => async () => false,
+          useOpenFile: () => ({
+            open() {},
+            async openLink() {
+              return false
+            },
+          }),
+        }
       // Logins name themselves only when a host answers; tests that need names supply them.
       if (id.endsWith('/useAccountLogins')) return { useAccountLogins: () => ({}) }
       if (id === '@ramu/shared/types')
