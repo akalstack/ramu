@@ -72,6 +72,8 @@ export type SettingRow =
   | (RowBase & { kind: 'toggle' })
   | (RowBase & { kind: 'choice'; options: Option[] })
   | (RowBase & { kind: 'text'; placeholder?: string; maxLength?: number })
+  /** One of the host's model steps, stored as provider, model and effort; `emptyLabel` names the choice of none. */
+  | (RowBase & { kind: 'model'; emptyLabel: string })
   /** "When a usage limit is reached": one choice stored as two settings, `path` (fallback on or off) and `resumePath`. */
   | (RowBase & { kind: 'limit'; resumePath: string })
 export interface RowGroup {
@@ -192,6 +194,14 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
             { value: 'push', label: 'Commit & Push' },
             { value: 'sync', label: 'Commit & Sync' },
           ],
+        },
+        {
+          kind: 'model',
+          path: 'commitModel',
+          title: 'Writing model',
+          help: 'Writes commit messages and pull request titles and descriptions. Default uses your default model.',
+          words: 'commit message pull request model generated writing',
+          emptyLabel: 'Default model',
         },
         {
           kind: 'choice',
@@ -578,6 +588,14 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           help: 'Maximum daily learning reviews. Each one uses model tokens.',
           words: 'maximum daily limit tokens learning',
           options: choice([1, 3, 5, 10, 20], (n) => count(Number(n))),
+        },
+        {
+          kind: 'model',
+          path: 'intelligence.maintenanceModel',
+          title: 'Model for background maintenance',
+          help: 'Used for learning reviews and memory cleanup. A cheaper model keeps token use low.',
+          words: 'background model cheap tokens learning cleanup maintenance',
+          emptyLabel: 'Same as thread',
         },
         {
           kind: 'choice',

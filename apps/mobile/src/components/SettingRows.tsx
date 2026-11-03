@@ -4,6 +4,8 @@ import { useState, type ReactNode } from 'react'
 import { translate } from '@ramu/shared/i18n'
 import { ModelFlowRow } from './ModelFlowRow'
 import { useStore } from '../runtime/store'
+import { modelStepLabel } from '@ramu/shared/providers/providers'
+import type { AgentProvider, ModelPreferences, ReasoningEffort } from '@ramu/shared/types'
 import { ActivityIndicator, TextInput, View } from 'react-native'
 import { ChevronsUpDown } from 'lucide-react-native'
 import type { LimitChoice } from '@ramu/shared/chat/limitPolicy'
@@ -153,6 +155,50 @@ export function TextRow({
   )
 }
 
+type StepValue = { provider: AgentProvider; model: string; effort: ReasoningEffort | null } | null
+
+/**
+ * A model chosen from the host's model steps, as the desktop's Writing model and background model rows offer them.
+ * The steps and their names come from the host, so the phone lists exactly what the desktop does.
+ */
+function ModelStepRow({
+  row,
+  host,
+  value,
+  disabled,
+}: {
+  row: Extract<SettingRow, { kind: 'model' }>
+  host: Host
+  value: unknown
+  disabled?: boolean
+}) {
+  const store = useStore()
+  const sets = (host.read('$models') as ModelPreferences | undefined)?.sets ?? []
+  const steps = sets.flatMap((set) => set.steps)
+  const catalogs = store.catalogs[host.computerId] ?? []
+  const current = value as StepValue
+  const chosen =
+    steps.find(
+      (step) => step.provider === current?.provider && step.model === current.model && step.effort === current.effort,
+    )?.id ?? ''
+  return (
+    <ChoiceRow
+      title={row.title}
+      help={row.help}
+      value={chosen}
+      options={[
+        { value: '', label: row.emptyLabel },
+        ...steps.map((step) => ({ value: step.id, label: modelStepLabel(step, catalogs) })),
+      ]}
+      disabled={disabled}
+      onChange={(id) => {
+        const step = steps.find((entry) => entry.id === id)
+        host.set(row.path, step ? { provider: step.provider, model: step.model, effort: step.effort } : null)
+      }}
+    />
+  )
+}
+
 /** One computer-side row, drawn from its definition and the live value. */
 function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disabled?: boolean }) {
   if (row.path === '$models.defaultBarMode' && row.kind === 'choice')
@@ -191,6 +237,7 @@ function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disable
       />
     )
   }
+  if (row.kind === 'model') return <ModelStepRow row={row} host={host} value={value} disabled={disabled} />
   if (row.kind === 'text')
     return (
       <TextRow

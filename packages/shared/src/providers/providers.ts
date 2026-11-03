@@ -1,4 +1,4 @@
-import type { AgentProvider } from '../types'
+import type { AgentProvider, ModelStep, ProviderCatalog } from '../types'
 import type { CompatibilityResult } from './compatibility'
 
 export const AGENT_PROVIDERS = ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as const
@@ -130,3 +130,19 @@ export const planName = (plan: string) =>
     .filter(Boolean)
     .map((word) => (/^[a-z]/.test(word) ? word.charAt(0).toUpperCase() + word.slice(1) : word))
     .join(' ')
+
+const EFFORT_NAMES: Record<string, string> = { xhigh: 'Extra High' }
+
+/** A model step as a picker lists it: the catalog's model name (or the provider's default) and its effort. */
+export function modelStepLabel(
+  step: Pick<ModelStep, 'provider' | 'model' | 'effort'>,
+  catalogs: readonly ProviderCatalog[],
+): string {
+  const model = catalogs
+    .flatMap((catalog) => catalog.models)
+    .find((entry) => entry.provider === step.provider && (entry.id === step.model || (!step.model && entry.isDefault)))
+  const name = model?.name ?? (step.model || `${providerName(step.provider)} default`)
+  const effort = step.effort ?? model?.defaultEffort ?? null
+  const effortName = effort ? (EFFORT_NAMES[effort] ?? effort.charAt(0).toUpperCase() + effort.slice(1)) : ''
+  return `${name} ${effortName}`.trim()
+}

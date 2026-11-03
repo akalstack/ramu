@@ -83,5 +83,5 @@ export function useHostSettings(computerId: string) {
       }
     })
   }
-  return { state, read, set, reload: load }
+  return { state, read, set, reload: load, computerId }
 }
