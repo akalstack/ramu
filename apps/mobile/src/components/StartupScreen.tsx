@@ -8,6 +8,20 @@ import { useSay } from '../i18n'
 
 if (Platform.OS !== 'web') void SplashScreen.preventAutoHideAsync().catch(() => {})
 
+// The dot's height (wordmark units) over its move, in time rather than eased progress: its sideways move eases out and
+// crosses the letters early, so it rises clear of them, waits until it is past the u, then drops onto the baseline like
+// a full stop being set, with a small settle.
+const HOP: [number, number][] = [
+  [0, 86.155],
+  [0.14, 36],
+  [0.3, 26],
+  [0.5, 28],
+  [0.68, 99],
+  [0.8, 95],
+  [0.9, 98],
+  [1, 98],
+]
+
 /** The desktop's r-and-dot-to-wordmark reveal, using native-driven transforms and opacity. */
 export function StartupScreen({ ready, children }: { ready: boolean; children: ReactNode }) {
   const say = useSay()
@@ -16,6 +30,7 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
   const scale = Math.min(280, width - 48) / 431.579
   const r = useRef(new Animated.Value(0)).current
   const dot = useRef(new Animated.Value(0)).current
+  const lift = useRef(new Animated.Value(0)).current
   const letters = useRef(new Animated.Value(0)).current
   const opacity = useRef(new Animated.Value(1)).current
   const [reduced, setReduced] = useState<boolean | null>(null)
@@ -39,22 +54,28 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
     if (reduced) {
       r.setValue(1)
       dot.setValue(1)
+      lift.setValue(1)
       letters.setValue(1)
       setMotionDone(true)
       return
     }
-    const move = (value: Animated.Value, delay: number, duration: number) =>
+    const move = (value: Animated.Value, delay: number, duration: number, easing = Easing.bezier(0.22, 1, 0.36, 1)) =>
       Animated.sequence([
         Animated.delay(delay),
         Animated.timing(value, {
           toValue: 1,
           duration,
-          easing: Easing.bezier(0.22, 1, 0.36, 1),
+          easing,
           useNativeDriver: true,
         }),
         Animated.delay(1200 - delay - duration),
       ])
-    const animation = Animated.parallel([move(r, 288, 648), move(dot, 288, 720), move(letters, 408, 552)])
+    const animation = Animated.parallel([
+      move(r, 288, 648),
+      move(dot, 288, 720),
+      move(lift, 288, 720, Easing.linear),
+      move(letters, 408, 552),
+    ])
     animation.start(({ finished }) => {
       if (finished) setMotionDone(true)
     })
@@ -63,8 +84,8 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
       animation.stop()
       clearTimeout(fallback)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [reduced, r, dot, letters] by design; the values it reads beyond these are current as of that run
-  }, [reduced, r, dot, letters])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [reduced, r, dot, lift, letters] by design; the values it reads beyond these are current as of that run
+  }, [reduced, r, dot, lift, letters])
   useEffect(() => {
     if (!ready || !motionDone) return
     const animation = Animated.timing(opacity, { toValue: 0, duration: reduced ? 0 : 200, useNativeDriver: true })
@@ -132,7 +153,13 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
                 top: -10 * scale,
                 transform: [
                   { translateX: interpolate(dot, 240.877, 387.579) },
-                  { translateY: interpolate(dot, 86.155, 98) },
+                  // The dot hops onto the end of the word, as the mark's dot hops when tapped.
+                  {
+                    translateY: lift.interpolate({
+                      inputRange: HOP.map(([at]) => at),
+                      outputRange: HOP.map(([, y]) => y * scale),
+                    }),
+                  },
                   { scale: dot.interpolate({ inputRange: [0, 1], outputRange: [1.188349515, 1] }) },
                 ],
               }}

@@ -5221,3 +5221,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Create on {0}': 'Buat di {0}',
 }
   'What starts it, its address and its secret are set up on a computer, where they can be copied into the sender.': 'Pemicunya, alamatnya, dan secret-nya diatur di komputer, tempat semuanya bisa disalin ke pengirim.',
+  'Set up on GitHub for {0}': 'Sudah diatur di GitHub untuk {0}',
+  'Add the address and secret to the repository’s webhooks on GitHub, or add a GitHub repository to this project.': 'Tambahkan alamat dan secret ke webhook repositori di GitHub, atau tambahkan repositori GitHub ke proyek ini.',
+  'Ramu can create the webhook on GitHub for you.': 'Ramu bisa membuatkan webhook di GitHub untuk Anda.',
+  'Create again': 'Buat ulang',
+  'Create on {0}': 'Buat di {0}',
+}
