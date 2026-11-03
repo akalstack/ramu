@@ -54,3 +54,22 @@ it("keeps each host's terminal dots apart, even for the same workspace id", () =
   studio.setShownTerminal('project:p')
   expect(local.hasUnseenTerminalOutput('project:p')).toBe(true)
 })
+
+it('holds a shell another device opened behind the dot, and hands it over once when the panel opens', () => {
+  const activity = createTerminalActivity()
+  activity.holdShell('w', 'phone-shell')
+  activity.holdShell('w', 'phone-shell')
+  expect(activity.hasUnseenTerminalOutput('w')).toBe(true)
+  expect(activity.heldShells('w')).toEqual(['phone-shell'])
+  // Closed on the phone before anyone here looked: nothing to show.
+  activity.holdShell('w', 'gone')
+  activity.dropShell('w', 'gone')
+  expect(activity.releaseShells('w')).toEqual(['phone-shell'])
+  expect(activity.releaseShells('w')).toEqual([])
+  // While the panel is on screen a held shell raises no dot.
+  activity.setShownTerminal('w')
+  expect(activity.isShown('w')).toBe(true)
+  activity.holdShell('w', 'another')
+  activity.setShownTerminal(null)
+  expect(activity.hasUnseenTerminalOutput('w')).toBe(false)
+})

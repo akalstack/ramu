@@ -66,6 +66,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Not connected. Pull requests, builds and work items need a personal access token.':
     'Belum terhubung. Pull request, build dan work item memerlukan personal access token.',
   Organization: 'Organisasi',
+  'Show terminal · {0} opened on another device': 'Tampilkan terminal · {0} dibuka di perangkat lain',
   'Keep paired': 'Tetap tersandingkan',
   'Keep {0} paired': 'Biarkan {0} tetap tersandingkan',
   'Like other devices ({0})': 'Seperti perangkat lain ({0})',

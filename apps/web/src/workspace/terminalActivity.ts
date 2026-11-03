@@ -28,6 +28,8 @@ export type TerminalActivity = ReturnType<typeof createTerminalActivity>
 
 export function createTerminalActivity() {
   const unseen = new Set<string>()
+  /** Shells another device opened in a workspace, waiting to be shown here when its terminal panel opens. */
+  const held = new Map<string, Set<string>>()
   const listeners = new Set<() => void>()
   let shown: string | null = null
   const publish = () => {
@@ -52,9 +54,40 @@ export function createTerminalActivity() {
       if (workspace && unseen.delete(workspace)) publish()
     },
     hasUnseenTerminalOutput: (workspace: string | null) => !!workspace && unseen.has(workspace),
+    /** Whether that workspace's terminal panel is on screen now. */
+    isShown: (workspace: string) => shown === workspace,
+    /**
+     * A shell another device (the phone) opened here. It does not open a tab on its own: the Terminal button gets its
+     * dot, and the shell joins the panel the next time it is opened.
+     */
+    holdShell(workspace: string, shell: string) {
+      const set = held.get(workspace) ?? new Set<string>()
+      if (set.has(shell)) return
+      set.add(shell)
+      held.set(workspace, set)
+      if (workspace !== shown) unseen.add(workspace)
+      publish()
+    },
+    /** A held shell ended or closed elsewhere before anyone here looked. */
+    dropShell(workspace: string, shell: string) {
+      if (held.get(workspace)?.delete(shell)) publish()
+    },
+    heldShells: (workspace: string | null) => (workspace ? [...(held.get(workspace) ?? [])] : []),
+    /** The held shells, handed over once to be shown as tabs. */
+    releaseShells(workspace: string): string[] {
+      const shells = [...(held.get(workspace) ?? [])]
+      held.delete(workspace)
+      if (shells.length) publish()
+      return shells
+    },
   }
 }
 
 export function useUnseenTerminalOutput(activity: TerminalActivity, workspace: string | null): boolean {
   return useSyncExternalStore(activity.subscribe, () => activity.hasUnseenTerminalOutput(workspace))
+}
+
+/** How many shells another device opened in `workspace` that this window has not shown yet. */
+export function useHeldShells(activity: TerminalActivity, workspace: string | null): number {
+  return useSyncExternalStore(activity.subscribe, () => activity.heldShells(workspace).length)
 }

@@ -42,7 +42,7 @@ import { buildCommands, formatKeys, useKeybindings } from './commands'
 import { Palette } from './palette/Palette'
 import type { PaletteMode } from './palette/sources'
 import { copyText, invoke, ramu } from './ipc'
-import { useUnseenTerminalOutput } from './workspace/terminalActivity'
+import { useHeldShells, useUnseenTerminalOutput } from './workspace/terminalActivity'
 import { useContextMenu } from './Menu'
 import { RepositoryPicker } from './git/RepositoryPicker'
 import { syncRepositories } from './git/syncRepositories'
@@ -408,8 +408,9 @@ function Shell() {
   ).size
   // Output from a terminal nobody is looking at: a dot on the Terminal button until the panel is opened.
   // Only this workspace's terminals count, and a freshly opened shell's startup output doesn't (see terminalActivity).
-  const { activity } = useHostRuntime()
+  const { activity, terminals } = useHostRuntime()
   const terminalUnseen = useUnseenTerminalOutput(activity, activeWorkspace)
+  const heldShells = useHeldShells(activity, activeWorkspace)
   useLayoutEffect(
     () => activity.setShownTerminal(terminalShown ? activeWorkspace : null),
     [activity, terminalShown, activeWorkspace],
@@ -480,7 +481,13 @@ function Shell() {
         className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
         aria-label={t('Terminal')}
         aria-pressed={terminalShown}
-        title={terminalShown ? t('Hide terminal') : t('Show terminal')}
+        title={
+          terminalShown
+            ? t('Hide terminal')
+            : heldShells
+              ? t('Show terminal · {0} opened on another device', { 0: heldShells })
+              : t('Show terminal')
+        }
         disabled={!ui.activeTaskId}
         onClick={() => {
           const id = ui.activeTaskId
@@ -488,8 +495,15 @@ function Shell() {
           const state = activePanelState
           if (terminalShown) ws.setTerminalPanel(id, { terminalOpen: false })
           else {
+            // Shells another device opened here join as tabs now, instead of a new shell.
+            const held = activeWorkspace ? activity.releaseShells(activeWorkspace) : []
+            for (const shell of held) {
+              terminals.queueAdopt(activeWorkspace!, shell)
+              ws.openView(id, { kind: 'terminal' })
+            }
             const terminal = state?.views.findLast((view) => view.kind === 'terminal')
-            if (terminal) ws.activateView(id, terminal.id)
+            if (held.length) ws.setTerminalPanel(id, { terminalOpen: true })
+            else if (terminal) ws.activateView(id, terminal.id)
             else ws.openView(id, { kind: 'terminal' })
           }
         }}

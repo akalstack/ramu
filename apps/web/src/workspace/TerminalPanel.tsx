@@ -70,6 +70,8 @@ export function TerminalPanel({
         return
       }
       const live = new Set(list.map((info) => info.id))
+      for (const shell of runtime.activity.heldShells(taskId))
+        if (!live.has(shell)) runtime.activity.dropShell(taskId, shell)
       const mine = new Set<string>()
       for (const view of views.current) {
         const shell = shellOf(view.id)
@@ -83,6 +85,11 @@ export function TerminalPanel({
       for (const info of list) {
         // A persistent command opens a view only when the person asks to see its output.
         if (mine.has(info.id) || info.exited || info.background || adoptQueued(taskId, info.id)) continue
+        // Someone looking at these terminals sees the new tab; otherwise it waits behind the Terminal button's dot.
+        if (!runtime.activity.isShown(taskId)) {
+          runtime.activity.holdShell(taskId, info.id)
+          continue
+        }
         queueAdopt(taskId, info.id)
         ws.openView(taskId, { kind: 'terminal', ...(info.repoId ? { repoId: info.repoId } : {}) })
       }

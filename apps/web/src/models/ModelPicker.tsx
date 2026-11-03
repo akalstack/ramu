@@ -469,16 +469,26 @@ export function ModelPicker({
                       />
                     )}
                     <ProviderIcon provider={model.provider} size={14} />
-                    <span className="mp-name min-w-0 flex-1 truncate text-control font-medium">
-                      {modelDisplayName(model.name)}
+                    {/* Legacy rides with the name, so the shortcut, check and star at the end never move it. */}
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                      <span className="mp-name min-w-0 truncate text-control font-medium">
+                        {modelDisplayName(model.name)}
+                      </span>
+                      {model.isLegacy && (
+                        <span className="flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
+                          {t('Legacy')}
+                        </span>
+                      )}
                     </span>
-                    {model.isLegacy && (
-                      <span className="flex-none text-caption text-muted-foreground">{t('Legacy')}</span>
-                    )}
-                    {!editingFavorites && index < 9 && (
-                      <Kbd className="mp-key flex-none opacity-0 group-hover:opacity-100 group-focus:opacity-100">
-                        ⌘{index + 1}
-                      </Kbd>
+                    {!editingFavorites && (
+                      // Every row keeps the shortcut's width, numbered or not, so rows past the ninth line up too.
+                      <span className="flex w-[34px] flex-none justify-end">
+                        {index < 9 && (
+                          <Kbd className="mp-key opacity-0 group-hover:opacity-100 group-focus:opacity-100">
+                            ⌘{index + 1}
+                          </Kbd>
+                        )}
+                      </span>
                     )}
                     {selected(model) && <Check size={15} className="flex-none text-brand" aria-hidden="true" />}
                     {!editingFavorites && (

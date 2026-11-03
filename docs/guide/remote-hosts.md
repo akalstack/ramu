@@ -92,3 +92,5 @@ These threads run at **Allow edits**, show **Started from a terminal by â€¹nameâ
 ## Phone
 
 See the [mobile guide](../../apps/mobile/README.md) to pair the iOS or Android app.
+
+Terminals live on the host, so every device shows the same shells: what you type on one appears on the other. A terminal opened on the phone does not open a tab on the desktop by itself; the desktop's Terminal button gets a dot, and the shell joins the panel the next time you open it (straight away if the panel is already open).
