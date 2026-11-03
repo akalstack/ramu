@@ -4,13 +4,18 @@ import { join } from 'node:path'
 import { defineAdapter, npmLatest, runCli } from '../adapter'
 
 /** The email in the signed-in ChatGPT token's claims. Only that claim is read; the token is never kept or sent. */
-function codexEmail(env: NodeJS.ProcessEnv): string | undefined {
+/** The login's email and ChatGPT plan, from the ID token Codex keeps; the plan is as of Codex's last token refresh. */
+function codexLogin(env: NodeJS.ProcessEnv): { email?: string; plan?: string } {
   try {
     const file = JSON.parse(readFileSync(join(env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json'), 'utf8'))
     const claims = JSON.parse(Buffer.from(String(file?.tokens?.id_token).split('.')[1] ?? '', 'base64url').toString())
-    return typeof claims.email === 'string' && claims.email ? claims.email : undefined
+    const plan = claims?.['https://api.openai.com/auth']?.chatgpt_plan_type
+    return {
+      ...(typeof claims.email === 'string' && claims.email ? { email: claims.email } : {}),
+      ...(typeof plan === 'string' && plan ? { plan } : {}),
+    }
   } catch {
-    return undefined
+    return {}
   }
 }
 
@@ -39,7 +44,7 @@ export const codexAdapter = defineAdapter({
     return ok && /logged in/i.test(out)
       ? {
           signedIn: true,
-          ...(codexEmail(env) ? { email: codexEmail(env) } : {}),
+          ...codexLogin(env),
           detail:
             out
               .trim()

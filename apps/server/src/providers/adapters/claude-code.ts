@@ -44,6 +44,9 @@ export const claudeCodeAdapter = defineAdapter({
             signedIn: true,
             ...(typeof status.authMethod === 'string' ? { detail: status.authMethod } : {}),
             ...(typeof status.email === 'string' && status.email ? { email: status.email } : {}),
+            ...(typeof status.subscriptionType === 'string' && status.subscriptionType
+              ? { plan: status.subscriptionType }
+              : {}),
           }
         : { signedIn: false }
     } catch {

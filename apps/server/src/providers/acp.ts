@@ -216,6 +216,25 @@ export function acpSessionModels(provider: AcpProvider, session: Wire): AgentMod
     isDefault: m.id === current,
   }))
 }
+/** What each ACP login last said about its plan (Antigravity's quota tier), by provider and account. */
+const acpPlans = new Map<string, { plan: string; upgradeUrl?: string }>()
+const planListeners = new Set<(provider: AcpProvider, accountId: string) => void>()
+export const acpPlan = (provider: AcpProvider, accountId = 'default') => acpPlans.get(`${provider}:${accountId}`)
+/** Hears a login's plan change, so its models and usage can be read again. */
+export function onAcpPlanChange(listener: (provider: AcpProvider, accountId: string) => void): () => void {
+  planListeners.add(listener)
+  return () => planListeners.delete(listener)
+}
+/** Notes the plan a new or resumed session reports; a different plan than before tells the listeners. */
+export function observeAcpPlan(provider: AcpProvider, accountId: string, session: Wire): void {
+  const tier = session?._meta?.antigravity?.tier
+  if (!tier || typeof tier.name !== 'string' || !tier.name.trim()) return
+  const upgrade = typeof tier.upgradeUri === 'string' && tier.upgradeUri.startsWith('https://') ? tier.upgradeUri : ''
+  const key = `${provider}:${accountId}`
+  const before = acpPlans.get(key)
+  acpPlans.set(key, { plan: tier.name.trim(), ...(upgrade ? { upgradeUrl: upgrade } : {}) })
+  if (before && before.plan !== tier.name.trim()) for (const listener of planListeners) listener(provider, accountId)
+}
 export async function acpModels(provider: AcpProvider, accountId?: string): Promise<AgentModel[]> {
   const rpc = new AcpRpc(provider, homedir(), accountId)
   rpc.onMessage = (m) => {
@@ -224,7 +243,9 @@ export async function acpModels(provider: AcpProvider, accountId?: string): Prom
   }
   try {
     await rpc.initialize()
-    return acpSessionModels(provider, await rpc.request('session/new', { cwd: homedir(), mcpServers: [] }))
+    const session = await rpc.request('session/new', { cwd: homedir(), mcpServers: [] })
+    observeAcpPlan(provider, accountId ?? 'default', session)
+    return acpSessionModels(provider, session)
   } finally {
     await rpc.close()
   }
@@ -506,6 +527,7 @@ class AcpSession implements AgentRunner {
             : []),
         ],
       })
+      observeAcpPlan(provider, this.settings.accountId ?? 'default', this.session)
     } catch (e) {
       // The runtime answered but no longer has the session; a crash or timeout is a different failure and stays one.
       if (resume && (e as { rpc?: boolean }).rpc)
@@ -797,6 +819,11 @@ class AcpSession implements AgentRunner {
       if (p.sessionId !== this.sessionId) return
       const u = p.update ?? {}
       // Session metadata: a title the runtime chose. History replay while loading is ignored above, so only live updates count.
+      // The runtime's full option set changed (its model list after a plan change, or the model's thinking levels).
+      if (u.sessionUpdate === 'config_option_update' && Array.isArray(u.configOptions)) {
+        this.session = { ...this.session, configOptions: u.configOptions }
+        return
+      }
       if (u.sessionUpdate === 'session_info_update') {
         if (!this.loading && typeof u.title === 'string' && u.title.trim()) this.onTitle?.(u.title)
         return

@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
-import type { AppPreferences, FileContext, UsageReading, ModelPreferences } from '@ramu/shared/types'
+import type { AgentProvider, AppPreferences, FileContext, UsageReading, ModelPreferences } from '@ramu/shared/types'
 import { providerEnabled } from '@ramu/shared/providers/providers'
 import { withContext as withFileContext } from '../context'
 import { HostFolders } from '../remote/hostFolders'
@@ -23,6 +23,7 @@ import { GitlabCredentials, configureGitlabCredentials } from '../workspace/forg
 import { configureForgeAccounts } from '../workspace/forge'
 import { ExtraUsageReader, readAntigravityUsage, readCursorUsage } from '../providers/providerUsage'
 import { ACCOUNT_USAGE_INTERVAL_MS, AccountUsage } from '../providers/accountUsage'
+import { onAcpPlanChange } from '../providers/acp'
 import { codexUsage } from '../providers/codex'
 import type { Workspace } from '../workspace/workspace'
 import { KeyedLock } from './keyedLock'
@@ -208,6 +209,14 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     )
     agents.modelSignals = () => signals.current()
     agents.refreshAccountUsage = (provider) => accountUsage.refresh(provider)
+    // An upgrade or downgrade changes which models a login offers and how its usage is counted: read both again now.
+    const planChanged = (provider: AgentProvider, accountId: string) => {
+      agents.invalidateCatalog()
+      accountUsage.forget(provider, accountId)
+      void accountUsage.refresh(provider).catch(() => {})
+    }
+    providers.onPlanChange = planChanged
+    onAcpPlanChange(planChanged)
     agents.onContext = (sessionId, context) => host.send('context:changed', { sessionId, context })
   }
 

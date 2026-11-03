@@ -313,6 +313,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Permissions: {0}': 'Izin: {0}',
   'Copy details': 'Salin detail',
   'Show details': 'Tampilkan detail',
+  'Upgrade plan': 'Tingkatkan paket',
   'Hide details': 'Sembunyikan detail',
   'Coming soon': 'Segera hadir',
   'Update this host to manage rules.': 'Perbarui host ini untuk mengelola aturan.',

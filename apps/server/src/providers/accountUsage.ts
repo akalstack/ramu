@@ -20,6 +20,11 @@ export class AccountUsage {
     private readonly standalone: AgentProvider[] = [],
   ) {}
 
+  /** Lets the next refresh read this login at once, as after a plan change. */
+  forget(provider: AgentProvider, accountId: string): void {
+    this.last.delete(`${provider}:${accountId}`)
+  }
+
   async refresh(only?: AgentProvider, now = Date.now()): Promise<void> {
     const config = this.config()
     const jobs: Promise<void>[] = []

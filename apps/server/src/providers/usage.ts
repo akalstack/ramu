@@ -36,7 +36,11 @@ export class UsageService {
   update(next: UsageReading[]): void {
     if (!next.length) return
     const key = (r: UsageReading) => `${r.provider}:${r.accountId ?? 'default'}:${r.window}:${r.scope ?? ''}`
-    const merged = new Map(this.readings.map((r) => [key(r), r]))
+    const login = (r: UsageReading) => `${r.provider}:${r.accountId ?? 'default'}`
+    // A login on a new plan starts over: windows only the old plan had (a Max-only Opus limit) would keep its name.
+    const plans = new Map(next.filter((r) => r.plan).map((r) => [login(r), r.plan]))
+    const current = this.readings.filter((r) => !r.plan || !plans.has(login(r)) || plans.get(login(r)) === r.plan)
+    const merged = new Map(current.map((r) => [key(r), r]))
     for (const reading of next) merged.set(key(reading), reading)
     this.readings = [...merged.values()]
     this.persist(this.readings)

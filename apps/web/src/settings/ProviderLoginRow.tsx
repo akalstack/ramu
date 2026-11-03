@@ -16,10 +16,11 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { LogIn, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import type { ProviderStatus } from '@ramu/shared/providers/providers'
+import { planName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
 import type { SharedMcpAccountReadiness } from '@ramu/shared/mcp'
 import { t } from '../i18n'
+import { ramu } from '../ipc'
 import { SettingsField } from './SettingsScope'
 import { peakUsage, usageTone, type useAccountUsage } from './Usage'
 import { SECONDARY_BUTTON_CLASS } from './constants'
@@ -140,8 +141,18 @@ export function ProviderLoginRow({
           {!state
             ? ''
             : state.signedIn
-              ? `${t('Signed in')}${state.detail && state.detail !== row.name && provider !== 'opencode' ? ` · ${state.detail}` : ''}`
+              ? `${t('Signed in')}${state.detail && state.detail !== row.name && provider !== 'opencode' ? ` · ${state.detail}` : ''}${state.plan ? ` · ${planName(state.plan)}` : ''}`
               : t('Not signed in')}
+          {state?.signedIn && state.upgradeUrl && (
+            <Button
+              variant="link"
+              size="xs"
+              className="ml-1.5 h-auto p-0 align-baseline"
+              onClick={() => void ramu.invoke('app.openExternal', state.upgradeUrl!).catch(() => {})}
+            >
+              {t('Upgrade plan')}
+            </Button>
+          )}
         </span>
         {mcpSharing?.readiness && (
           <span

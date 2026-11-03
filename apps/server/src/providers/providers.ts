@@ -10,7 +10,7 @@ import {
   type ProviderStatus,
 } from '@ramu/shared/providers/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
-import { acpSignIn } from './acp'
+import { acpPlan, acpSignIn } from './acp'
 import { parseProviderVersion } from './adapter'
 import { providerAdapter } from './adapters'
 import {
@@ -160,6 +160,17 @@ export class ProviderService {
           ? `Remove-Item ${cleared.map((key) => `Env:${key}`).join(',')} -ErrorAction SilentlyContinue; `
           : `env ${cleared.map((key) => `-u ${key}`).join(' ')} `
     return `${clean}${assignments}${process.platform === 'win32' ? '& ' : ''}${quote(providerBinary(provider, config))} ${args.join(' ')}`
+  }
+  /** The plan each login was last seen on, so an upgrade or downgrade is noticed when it happens. */
+  private plans = new Map<string, string>()
+  /** Told when a login's plan changed, so its models and usage are read again. */
+  onPlanChange?: (provider: AgentProvider, accountId: string) => void
+  private notePlan(provider: AgentProvider, accountId: string, plan: string | undefined) {
+    if (!plan) return
+    const key = `${provider}:${accountId}`,
+      before = this.plans.get(key)
+    this.plans.set(key, plan)
+    if (before && before !== plan) this.onPlanChange?.(provider, accountId)
   }
   /** Providers whose sign-in runs inside Ramu instead of a terminal command. */
   private emails = new Map<string, { at: number; email?: string }>()
@@ -364,11 +375,11 @@ export class ProviderService {
           await Promise.all(
             ids.map(async (accountId) => {
               try {
-                signIn![accountId] = await signInState(
-                  provider,
-                  binary,
-                  providerEnvironment(provider, config, accountId),
-                )
+                const state = await signInState(provider, binary, providerEnvironment(provider, config, accountId))
+                // Antigravity says its plan only when a session opens; the last one it named stands in.
+                const acp = provider === 'antigravity' && state.signedIn ? acpPlan(provider, accountId) : undefined
+                signIn![accountId] = acp && !state.plan ? { ...state, ...acp } : state
+                this.notePlan(provider, accountId, signIn![accountId]!.plan)
               } catch {
                 signIn![accountId] = { signedIn: false }
               }

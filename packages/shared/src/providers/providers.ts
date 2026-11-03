@@ -20,6 +20,10 @@ export interface ProviderSignIn {
   detail?: string
   /** The login's email when the CLI reports it; names the account when it has no label. */
   email?: string
+  /** The plan the login is on as the provider reports it now (`pro`, `max`, `plus`, a tier name), read at every check. */
+  plan?: string
+  /** Where the provider offers a bigger plan, when it says. */
+  upgradeUrl?: string
 }
 export type ProviderConfiguration = Partial<
   Record<
@@ -118,3 +122,11 @@ export function accountDisplayName(
   if (email) return { name: email }
   return { name: '', fallback: 'numbered', number: accounts.findIndex((account) => account.id === id) + 2 }
 }
+
+/** A plan as people read it: the CLIs report `pro` or `max_20x`; tier names such as Antigravity's come titled already. */
+export const planName = (plan: string) =>
+  plan
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => (/^[a-z]/.test(word) ? word.charAt(0).toUpperCase() + word.slice(1) : word))
+    .join(' ')

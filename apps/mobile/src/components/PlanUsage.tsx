@@ -6,7 +6,7 @@ import { Gauge, Monitor, Network, Settings } from 'lucide-react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { useRouter } from 'expo-router'
 import type { AgentProvider, UsageReading } from '@ramu/shared/types'
-import { providerEnabled } from '@ramu/shared/providers/providers'
+import { planName, providerEnabled } from '@ramu/shared/providers/providers'
 import {
   summaryUsage,
   usagePercent,
@@ -111,7 +111,7 @@ export function PlanUsageReading({
       <T tone="muted" size={font.caption}>
         {[
           reset,
-          r.plan,
+          r.plan ? planName(r.plan) : null,
           details
             ? `${lastKnown ? (id ? 'terakhir dilaporkan' : 'last reported') : id ? 'diperbarui' : 'updated'} ${relative(r.updatedAt, id)}`
             : null,

@@ -390,7 +390,8 @@ function UsageDetail({
   useLanguage()
   const all = [five, weekly, ...scoped].filter((r): r is UsageReading => !!r)
   const newest = Math.max(...all.map((r) => r.updatedAt))
-  const plan = all.find((r) => r.plan)?.plan
+  // The newest reading's plan: after an upgrade or downgrade, older windows may still carry the previous one.
+  const plan = all.filter((r) => r.plan).sort((a, b) => b.updatedAt - a.updatedAt)[0]?.plan
   return (
     <section className="flex flex-col gap-2.5">
       <header className="flex items-center gap-[7px] text-control">
