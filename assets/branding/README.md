@@ -1,6 +1,6 @@
 # Branding assets
 
-The wordmark uses the icon's shared `r` path and outlined Manrope Semibold letters. See the included [SIL Open Font License](Manrope-OFL.txt).
+The wordmark uses the icon's shared `r` path and outlined Manrope Semibold letters. See the included [SIL Open Font License](Manrope-OFL.txt). The Ramu name, logo and icon are trademarks; see [trademarks](../../TRADEMARKS.md) before using them in a fork.
 
 `r-shape.svg` supplies the icon and wordmark's `r`. `wordmark-shapes.svg` supplies the other letter outlines. The generated SVG, PNG, and ICNS assets are checked in; builds do not require a logo generator or installed font.
 

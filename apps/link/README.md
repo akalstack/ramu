@@ -74,4 +74,4 @@ Then set the service to `http://localhost:8787` on this computer; plain HTTP is 
 
 ## License
 
-[AGPL-3.0](LICENSE). You can run, change and host your own copy; if you offer a modified copy as a service, make its source available to the people who use it. The rest of Ramu is [MIT](../../LICENSE).
+[AGPL-3.0](LICENSE). You can run, change and host your own copy; if you offer a modified copy as a service, make its source available to the people who use it. The rest of Ramu is [MIT](../../LICENSE). A public or modified service needs its own name; see [trademarks](../../TRADEMARKS.md).
