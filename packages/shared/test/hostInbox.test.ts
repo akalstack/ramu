@@ -159,6 +159,7 @@ it('validates navigation destinations before IPC dispatch', () => {
     { kind: 'new' },
     { kind: 'new', projectId: 'p' },
     { kind: 'task', taskId: 't' },
+    { kind: 'task', taskId: 't', sessionId: 'helper', requestId: 'r' },
     { kind: 'summary', summaryId: 's' },
     { kind: 'project', projectId: 'p' },
   ])
@@ -169,6 +170,8 @@ it('validates navigation destinations before IPC dispatch', () => {
     { kind: 'task' },
     { kind: 'task', taskId: '' },
     { kind: 'task', taskId: 't', sessionId: 3 },
+    // A request is always addressed within its session.
+    { kind: 'task', taskId: 't', requestId: 'r' },
     { kind: 'shell', command: 'x' },
     // Adding a project on another host now runs in the window that asks (its own folder browser).
     { kind: 'add-project' },

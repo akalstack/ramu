@@ -13,7 +13,8 @@ export interface HostOverview {
 }
 
 export type HostDestination =
-  | { kind: 'task'; taskId: string; sessionId?: string }
+  /** `sessionId` is the session to show (a helper's own, for its request); `requestId` the request to scroll to. */
+  | { kind: 'task'; taskId: string; sessionId?: string; requestId?: string }
   | { kind: 'project'; projectId: string }
   | { kind: 'new'; projectId?: string }
   | { kind: 'summary'; summaryId: string }
@@ -26,7 +27,11 @@ export function isHostDestination(value: unknown): value is HostDestination {
   const id = (key: string) => typeof d[key] === 'string' && (d[key] as string).length > 0
   switch (d.kind) {
     case 'task':
-      return id('taskId') && (d.sessionId === undefined || id('sessionId'))
+      return (
+        id('taskId') &&
+        (d.sessionId === undefined || id('sessionId')) &&
+        (d.requestId === undefined || (id('requestId') && id('sessionId')))
+      )
     case 'project':
       return id('projectId')
     case 'new':

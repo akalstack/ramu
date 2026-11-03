@@ -17,6 +17,20 @@ describe('threadStatus', () => {
     expect(threadStatus(task(), true)?.kind).toBe('finished')
     expect(threadStatus(task({ status: 'running', executionState: 'stopped' }), true)?.kind).toBe('working')
   })
+  it('says what lets a stopped, held or waiting thread continue, and nothing for work or a finished result', () => {
+    expect(threadStatus(task({ executionState: 'stopped' }), false)?.next).toBe(
+      'Send a message to continue where it stopped.',
+    )
+    expect(threadStatus(task(), false, { status: 'turn-limit' })?.next).toBe('Resume the goal to give it more turns.')
+    expect(
+      threadStatus(
+        task({ inputSummary: { count: 1, approvals: 1, requests: [] } as never, status: 'needs-input' }),
+        false,
+      )?.next,
+    ).toBe('Allow or deny it to let the agent go on.')
+    expect(threadStatus(task({ status: 'running' }), false)?.next).toBeUndefined()
+    expect(threadStatus(task(), true)?.next).toBeUndefined()
+  })
   it('says nothing for a quiet, read thread', () => {
     expect(threadStatus(task(), false)).toBeNull()
   })

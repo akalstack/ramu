@@ -23,6 +23,9 @@ it('opens a destination only in the supplied host store, and a host-only selecti
   expect(store.openTask).not.toHaveBeenCalled()
   expect(applyDestination(store, { kind: 'task', taskId: 'same', sessionId: 'chat' }, { openSummary })).toBe(true)
   expect(store.openView).toHaveBeenCalledWith('same', { kind: 'agent', sessionId: 'chat' })
+  // A helper's request opens the helper's own session at the request.
+  applyDestination(store, { kind: 'task', taskId: 'same', sessionId: 'helper', requestId: 'r1' }, { openSummary })
+  expect(store.openView).toHaveBeenLastCalledWith('same', { kind: 'agent', sessionId: 'helper', focusRequestId: 'r1' })
   expect(needsRefresh({ kind: 'task', taskId: 'same' }, null)).toBe(true)
   vi.clearAllMocks()
   expect(applyDestination(store, { kind: 'host' }, { openSummary })).toBe(true)

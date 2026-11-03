@@ -54,6 +54,8 @@ export function blockerLabel(blocker: InboxBlocker): string {
 interface RowContent {
   taskId?: string
   sessionId?: string | null
+  /** The request Open scrolls to, in `sessionId`. */
+  requestId?: string
   title: string
   detail: string
   tone?: 'bad' | 'warn'
@@ -90,6 +92,7 @@ function BriefRowView({
           kind: 'task',
           taskId: content.taskId,
           ...(content.sessionId ? { sessionId: content.sessionId } : {}),
+          ...(content.sessionId && content.requestId ? { requestId: content.requestId } : {}),
         })
       : showInboxTab('running')
   const request =
@@ -228,7 +231,13 @@ export function Brief() {
     const base = { taskId: row.chat.taskId, sessionId: row.chat.sessionId, title }
     if (row.kind === 'failure') return { ...base, detail: t('Failed'), tone: 'bad' }
     const request = row.chat.inputSummary?.requests[0]
-    return { ...base, detail: request?.title || blockerLabel(row.blocker), tone: 'warn' }
+    // A helper's request belongs to the helper's session; Open goes there and to the request itself.
+    return {
+      ...base,
+      ...(request ? { sessionId: request.sessionId, requestId: request.requestId } : {}),
+      detail: request?.title || blockerLabel(row.blocker),
+      tone: 'warn',
+    }
   }
   const refetch = (hostId: string) => () => void hosts.find((entry) => entry.id === hostId)?.refetch()
   const keyOf = (row: BriefRow) =>

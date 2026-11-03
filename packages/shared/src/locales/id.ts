@@ -66,6 +66,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Not connected. Pull requests, builds and work items need a personal access token.':
     'Belum terhubung. Pull request, build dan work item memerlukan personal access token.',
   Organization: 'Organisasi',
+  'Allow or deny it to let the agent go on.': 'Izinkan atau tolak agar agen bisa lanjut.',
+  'Answer to let the agent go on.': 'Jawab agar agen bisa lanjut.',
+  'Retry, or send a message to continue.': 'Coba lagi, atau kirim pesan untuk melanjutkan.',
+  'Resume the goal to continue.': 'Lanjutkan tujuan untuk meneruskan.',
+  'Reply with what the goal needs, then resume it.': 'Balas dengan yang dibutuhkan tujuan, lalu lanjutkan.',
+  'Resume the goal to give it more turns.': 'Lanjutkan tujuan untuk memberinya giliran tambahan.',
+  'Send a message to continue where it stopped.': 'Kirim pesan untuk melanjutkan dari titik berhenti.',
   'Named by you. Ramu will not rename it.': 'Dinamai oleh Anda. Ramu tidak akan menggantinya.',
   'Named by Ramu. Rename it to keep your own title.': 'Dinamai oleh Ramu. Ganti nama untuk memakai judul Anda sendiri.',
   'Named by the provider. Rename it to keep your own title.':

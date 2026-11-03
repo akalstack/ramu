@@ -19,6 +19,8 @@ export interface ThreadStatus {
     | 'finished'
   short: string
   full: string
+  /** What lets the thread continue, when that is up to the person; a catalog key like the others. */
+  next?: string
 }
 
 /** The part of a goal that decides a status; a `ChatGoal` and a list summary both fit. */
@@ -41,8 +43,13 @@ export function threadStatus(
   const limit: ThreadStatus = { kind: 'limit', short: 'Limit reached', full: 'Limit reached' }
   if (task.inputSummary?.count)
     return task.inputSummary.approvals
-      ? { kind: 'approval', short: 'Approval', full: 'Approval needed' }
-      : { kind: 'input', short: 'Needs input', full: 'Waiting for your input' }
+      ? {
+          kind: 'approval',
+          short: 'Approval',
+          full: 'Approval needed',
+          next: 'Allow or deny it to let the agent go on.',
+        }
+      : { kind: 'input', short: 'Needs input', full: 'Waiting for your input', next: 'Answer to let the agent go on.' }
   // Independent helper work keeps the thread working after its parent goes idle, even before the stored status catches up.
   if (task.status === 'running' || (task.helperSummary?.active && task.status !== 'needs-input')) {
     if (goalHold(unfinished) === 'provider-limit') return limit
@@ -52,17 +59,42 @@ export function threadStatus(
       ? { kind: 'goal', short: 'Goal', full: 'Working toward goal' }
       : { kind: 'working', short: 'Working', full: 'Agent working' }
   }
-  if (task.status === 'needs-input') return { kind: 'input', short: 'Needs input', full: 'Waiting for your input' }
+  if (task.status === 'needs-input')
+    return {
+      kind: 'input',
+      short: 'Needs input',
+      full: 'Waiting for your input',
+      next: 'Answer to let the agent go on.',
+    }
   if (task.waitingUntil || goalHold(unfinished) === 'provider-limit') return limit
-  if (task.status === 'failed') return { kind: 'failed', short: 'Failed', full: 'Agent failed' }
+  if (task.status === 'failed')
+    return { kind: 'failed', short: 'Failed', full: 'Agent failed', next: 'Retry, or send a message to continue.' }
   if (unfinished?.status === 'active' && unfinished.verifying)
     return { kind: 'verifying', short: 'Verifying', full: 'Verifying goal' }
   if (unfinished?.status === 'active') return { kind: 'goal', short: 'Goal', full: 'Working toward goal' }
-  if (unfinished?.status === 'paused') return { kind: 'paused', short: 'Paused', full: 'Goal paused' }
-  if (unfinished?.status === 'blocked') return { kind: 'blocked', short: 'Needs input', full: 'Goal needs input' }
+  if (unfinished?.status === 'paused')
+    return { kind: 'paused', short: 'Paused', full: 'Goal paused', next: 'Resume the goal to continue.' }
+  if (unfinished?.status === 'blocked')
+    return {
+      kind: 'blocked',
+      short: 'Needs input',
+      full: 'Goal needs input',
+      next: 'Reply with what the goal needs, then resume it.',
+    }
   if (unfinished?.status === 'turn-limit')
-    return { kind: 'turn-limit', short: 'Turn limit', full: 'Goal turn limit reached' }
-  if (task.executionState === 'stopped') return { kind: 'stopped', short: 'Stopped', full: 'Agent stopped' }
+    return {
+      kind: 'turn-limit',
+      short: 'Turn limit',
+      full: 'Goal turn limit reached',
+      next: 'Resume the goal to give it more turns.',
+    }
+  if (task.executionState === 'stopped')
+    return {
+      kind: 'stopped',
+      short: 'Stopped',
+      full: 'Agent stopped',
+      next: 'Send a message to continue where it stopped.',
+    }
   if (unread) return { kind: 'finished', short: 'Finished', full: 'Finished, not viewed yet' }
   return null
 }

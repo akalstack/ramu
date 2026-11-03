@@ -114,8 +114,10 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
           </span>
         )}
       </div>
-      {status && status.short !== status.full && (
-        <div className="text-caption text-muted-foreground">{t(status.full)}</div>
+      {status && (status.short !== status.full || status.next) && (
+        <div className="text-caption text-muted-foreground">
+          {[status.short !== status.full && t(status.full), status.next && t(status.next)].filter(Boolean).join(' · ')}
+        </div>
       )}
       {titleSourceNote(task.titleSource) && (
         <div className="text-caption text-muted-foreground">{t(titleSourceNote(task.titleSource)!)}</div>

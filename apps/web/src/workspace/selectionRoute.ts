@@ -48,7 +48,12 @@ export function applyDestination(
     case 'task':
       if (!ws.tasks.some((task) => task.id === destination.taskId)) return false
       ws.openTask(destination.taskId)
-      if (destination.sessionId) ws.openView(destination.taskId, { kind: 'agent', sessionId: destination.sessionId })
+      if (destination.sessionId)
+        ws.openView(destination.taskId, {
+          kind: 'agent',
+          sessionId: destination.sessionId,
+          ...(destination.requestId ? { focusRequestId: destination.requestId } : {}),
+        })
       return true
     case 'project':
       ws.setSidebar('projects')
