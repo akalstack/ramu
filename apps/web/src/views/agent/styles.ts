@@ -15,8 +15,7 @@ export const CARET_CLASS =
   "caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]"
 
 /** Leading icon of a tool row. */
-export const TOOL_ICON_CLASS =
-  'tool-icon flex-none text-muted-foreground'
+export const TOOL_ICON_CLASS = 'tool-icon flex-none text-muted-foreground'
 
 /** One-line summary text of a tool row. */
 export const TOOL_SUMMARY_CLASS =

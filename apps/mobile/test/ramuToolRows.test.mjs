@@ -2,8 +2,19 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { transcript } from '../src/runtime/transcript.ts'
 
-const use = (toolUseId, name, input) => ({ kind: 'tool-use', toolUseId, name, summary: '', input: JSON.stringify(input) })
-const done = (toolUseId, isError = false) => ({ kind: 'tool-result', toolUseId, isError, summary: isError ? 'boom' : '{}' })
+const use = (toolUseId, name, input) => ({
+  kind: 'tool-use',
+  toolUseId,
+  name,
+  summary: '',
+  input: JSON.stringify(input),
+})
+const done = (toolUseId, isError = false) => ({
+  kind: 'tool-result',
+  toolUseId,
+  isError,
+  summary: isError ? 'boom' : '{}',
+})
 
 test("Ramu's own tools read as what they did, with their facts, not as raw tool names", () => {
   const rows = transcript([
