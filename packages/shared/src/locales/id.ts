@@ -37,6 +37,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'This week': 'Minggu ini',
   '{0} turns': '{0} giliran',
   'Some providers on {0} report no cost': 'Beberapa provider di {0} tidak melaporkan biaya',
+  'Some providers on {0} report no tokens': 'Beberapa provider di {0} tidak melaporkan token',
+  '{0} tokens': '{0} token',
   'Not counted: {0}': 'Tidak dihitung: {0}',
   'Custom agent': 'Agen kustom',
   'A model': 'Sebuah model',

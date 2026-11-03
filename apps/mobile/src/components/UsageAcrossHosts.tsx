@@ -76,6 +76,16 @@ export function UsageAcrossHosts({ hosts, readings }: { hosts: string[]; reading
           {[
             `${say('This week')}: ${say('{0} turns', { 0: week.turns })}`,
             week.costUsd > 0 ? `$${week.costUsd.toFixed(2)}` : '',
+            week.tokens > 0
+              ? say('{0} tokens', {
+                  0: new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(
+                    week.tokens,
+                  ),
+                })
+              : '',
+            week.tokens > 0 && week.untokenedOn.length
+              ? say('Some providers on {0} report no tokens', { 0: week.untokenedOn.join(', ') })
+              : '',
             week.unpricedOn.length
               ? say('Some providers on {0} report no cost', { 0: week.unpricedOn.join(', ') })
               : '',

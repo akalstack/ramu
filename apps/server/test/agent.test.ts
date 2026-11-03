@@ -4326,4 +4326,19 @@ describe('activity', () => {
     expect(svc.activity(Date.now() + 60_000)).toEqual([])
     svc.stopAll()
   })
+
+  it('adds the tokens turns report and counts the turns that report none', async () => {
+    const svc = service()
+    const s = svc.start('t', scopeOf(cwd), 'hello', full)
+    await until(() => svc.get(s.id).state === 'idle')
+    const record = (event: AgentEvent) =>
+      (svc as unknown as { record(id: string, event: AgentEvent): void }).record(s.id, event)
+    record({ kind: 'result', isError: false, text: 'done', costUsd: null, tokens: { input: 1200, output: 300 } })
+    record({ kind: 'result', isError: false, text: 'done', costUsd: null, tokens: { input: 100, output: 50 } })
+    const rows = svc.activity(0)
+    const turns = rows.reduce((sum, row) => sum + row.turns, 0)
+    expect(rows.reduce((sum, row) => sum + (row.tokens ?? 0), 0)).toBe(1650)
+    expect(rows.reduce((sum, row) => sum + (row.untokened ?? 0), 0)).toBe(turns - 2)
+    svc.stopAll()
+  })
 })

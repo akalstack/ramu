@@ -886,13 +886,15 @@ export class AgentService {
     this.parts.subagents.resetTeammateRounds(sessionId)
   }
 
-  /** Finished turns per local day and provider since `since`, with cost where the provider reported it. */
+  /** Finished turns per local day and provider since `since`, with cost and tokens where the provider reported them. */
   activity(since: number): ActivityRow[] {
     return this.db
       .prepare(
         `SELECT date(json_extract(e.event, '$.at') / 1000, 'unixepoch', 'localtime') AS day, s.provider AS provider,
            COUNT(*) AS turns, COALESCE(SUM(json_extract(e.event, '$.costUsd')), 0) AS costUsd,
-           SUM(json_extract(e.event, '$.costUsd') IS NULL) AS unpriced
+           SUM(json_extract(e.event, '$.costUsd') IS NULL) AS unpriced,
+           COALESCE(SUM(json_extract(e.event, '$.tokens.input') + json_extract(e.event, '$.tokens.output')), 0) AS tokens,
+           SUM(json_extract(e.event, '$.tokens') IS NULL) AS untokened
          FROM agent_events e JOIN agent_sessions s ON s.id = e.session_id
          WHERE json_extract(e.event, '$.kind') = 'result' AND json_extract(e.event, '$.at') >= ?
          GROUP BY day, s.provider ORDER BY day`,

@@ -285,6 +285,7 @@ export class ClaudeStreamPump {
           isError: msg.is_error,
           text: msg.subtype === 'success' ? msg.result : msg.subtype,
           costUsd: msg.total_cost_usd ?? null,
+          ...claudeTokens(msg.usage),
         })
         const current = this.host.live.get(id)?.query
         if (current) this.host.refreshContext(id, current)
@@ -359,4 +360,20 @@ export class ClaudeStreamPump {
       this.host.updateTask(id, agentId, { status, summary: m.summary || undefined, endedAt: Date.now(), ...usage })
     }
   }
+}
+
+/** A Claude turn's tokens: everything it read, cached or not, and what it wrote. */
+export function claudeTokens(
+  usage:
+    | {
+        input_tokens?: number | null
+        output_tokens?: number | null
+        cache_read_input_tokens?: number | null
+        cache_creation_input_tokens?: number | null
+      }
+    | undefined,
+): { tokens?: { input: number; output: number } } {
+  if (!usage || typeof usage.input_tokens !== 'number' || typeof usage.output_tokens !== 'number') return {}
+  const input = usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0)
+  return { tokens: { input, output: usage.output_tokens } }
 }

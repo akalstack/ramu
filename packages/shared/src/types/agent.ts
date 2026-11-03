@@ -443,7 +443,14 @@ type AgentEventBody =
       setupOmissions?: SetupOmission[]
     }
   | { kind: 'request-resolved'; requestId: string; outcome: string; savedApprovalId?: string }
-  | { kind: 'result'; isError: boolean; text: string; costUsd: number | null }
+  | {
+      kind: 'result'
+      isError: boolean
+      text: string
+      costUsd: number | null
+      /** Tokens the turn used, where the provider reports them; input includes cached reads. */
+      tokens?: { input: number; output: number }
+    }
   | {
       kind: 'compaction'
       state: 'started' | 'completed' | 'failed' | 'cancelled' | 'unknown'

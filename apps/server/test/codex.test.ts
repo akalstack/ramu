@@ -3,7 +3,9 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  addTokens,
   codexContext,
+  codexLast,
   createCodexRunner,
   codexModels,
   codexReadings,
@@ -295,5 +297,15 @@ describe('Codex context window', () => {
     ).toEqual({ used: 52_000, max: 258_000 })
     expect(codexContext({ last: { totalTokens: 5 }, modelContextWindow: null })).toBeNull()
     expect(codexContext(undefined)).toBeNull()
+  })
+})
+
+describe('Codex turn tokens', () => {
+  it("adds each model call's input and output within a turn, ignoring calls without counts", () => {
+    const first = codexLast({ last: { inputTokens: 1000, cachedInputTokens: 800, outputTokens: 120 } })
+    const second = codexLast({ last: { inputTokens: 1500, outputTokens: 80 } })
+    expect(addTokens(addTokens(null, first), second)).toEqual({ input: 2500, output: 200 })
+    expect(addTokens({ input: 1, output: 2 }, codexLast({ last: { totalTokens: 9 } }))).toEqual({ input: 1, output: 2 })
+    expect(addTokens(null, null)).toBeNull()
   })
 })

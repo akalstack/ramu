@@ -604,7 +604,7 @@ function OtherHostLogins() {
   )
 }
 
-/** This week's finished turns and reported cost, added across connected hosts; a host not read is named, not zero. */
+/** This week's finished turns, reported cost and tokens, added across connected hosts; a host not read is named, not zero. */
 function WeekActivity() {
   const computers = useComputers()
   const [total, setTotal] = useState<ActivityTotal | null>(null)
@@ -629,6 +629,14 @@ function WeekActivity() {
     total.costUsd > 0
       ? ` · ${new Intl.NumberFormat(formatLocale(), { style: 'currency', currency: 'USD' }).format(total.costUsd)}`
       : ''
+  const tokens =
+    total.tokens > 0
+      ? ` · ${t('{0} tokens', {
+          0: new Intl.NumberFormat(formatLocale(), { notation: 'compact', maximumFractionDigits: 1 }).format(
+            total.tokens,
+          ),
+        })}`
+      : ''
   return (
     <>
       <Separator className="h-px bg-line" />
@@ -637,11 +645,17 @@ function WeekActivity() {
         <p className="m-0 text-caption">
           {t('{0} turns', { 0: total.turns })}
           {money}
+          {tokens}
           {total.byHost.length > 1 && ` · ${total.byHost.map((entry) => `${entry.host} ${entry.turns}`).join(', ')}`}
         </p>
         {total.unpricedOn.length > 0 && (
           <p className="m-0 text-caption text-muted-foreground">
             {t('Some providers on {0} report no cost', { 0: total.unpricedOn.join(', ') })}
+          </p>
+        )}
+        {total.tokens > 0 && total.untokenedOn.length > 0 && (
+          <p className="m-0 text-caption text-muted-foreground">
+            {t('Some providers on {0} report no tokens', { 0: total.untokenedOn.join(', ') })}
           </p>
         )}
         {total.missing.length > 0 && (

@@ -41,7 +41,7 @@ export function loginsAcrossHosts(hosts: readonly HostUsage[]): LoginUsage[] {
 export const peakOf = (login: Pick<LoginUsage, 'readings'>) =>
   [...login.readings].sort((a, b) => b.usedPercent - a.usedPercent)[0]
 
-/** One host's finished turns on one day for one provider; cost only where the provider reports it. */
+/** One host's finished turns on one day for one provider; cost and tokens only where the provider reports them. */
 export interface ActivityRow {
   day: string
   provider: AgentProvider
@@ -49,23 +49,38 @@ export interface ActivityRow {
   costUsd: number
   /** Turns whose provider reported no cost; they are never counted as free. */
   unpriced: number
+  /** Input and output tokens; absent from hosts that predate token counts. */
+  tokens?: number
+  /** Turns whose provider reported no tokens; never counted as zero. */
+  untokened?: number
 }
 
 export interface ActivityTotal {
   turns: number
   costUsd: number
+  tokens: number
   /** Hosts with turns their provider did not price. */
   unpricedOn: string[]
+  /** Hosts with turns that reported no tokens, so the token total leaves them out. */
+  untokenedOn: string[]
   /** Hosts that could not be read, so the totals leave them out. */
   missing: string[]
-  byHost: { host: string; turns: number; costUsd: number }[]
+  byHost: { host: string; turns: number; costUsd: number; tokens: number }[]
 }
 
 /** Adds each host's own figures; a host that could not be read is named, never treated as zero. */
 export function activityAcrossHosts(
   hosts: readonly { host: string; rows: readonly ActivityRow[] | null }[],
 ): ActivityTotal {
-  const total: ActivityTotal = { turns: 0, costUsd: 0, unpricedOn: [], missing: [], byHost: [] }
+  const total: ActivityTotal = {
+    turns: 0,
+    costUsd: 0,
+    tokens: 0,
+    unpricedOn: [],
+    untokenedOn: [],
+    missing: [],
+    byHost: [],
+  }
   for (const { host, rows } of hosts) {
     if (!rows) {
       total.missing.push(host)
@@ -73,10 +88,14 @@ export function activityAcrossHosts(
     }
     const turns = rows.reduce((sum, row) => sum + row.turns, 0)
     const costUsd = rows.reduce((sum, row) => sum + row.costUsd, 0)
+    const tokens = rows.reduce((sum, row) => sum + (row.tokens ?? 0), 0)
     if (rows.some((row) => row.unpriced > 0)) total.unpricedOn.push(host)
+    // A host that predates token counts reports none for every turn.
+    if (rows.some((row) => (row.untokened ?? row.turns) > 0)) total.untokenedOn.push(host)
     total.turns += turns
     total.costUsd += costUsd
-    total.byHost.push({ host, turns, costUsd })
+    total.tokens += tokens
+    total.byHost.push({ host, turns, costUsd, tokens })
   }
   return total
 }

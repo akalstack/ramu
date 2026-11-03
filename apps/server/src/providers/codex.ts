@@ -192,6 +192,8 @@ class CodexSession implements CodexRunner {
   private connection?: McpConnection
   private threadId = ''
   private turnId = ''
+  /** Tokens the current turn's model calls used so far; null outside a turn or before Codex reports any. */
+  private turnUsage: { input: number; output: number } | null = null
   private readonly completedTurns = new Set<string>()
   private readonly compactedItems = new Set<string>()
   private modernCompactionTurn = ''
@@ -714,6 +716,9 @@ class CodexSession implements CodexRunner {
     if (m.method === 'thread/name/updated' && p.threadId === this.threadId && typeof p.threadName === 'string')
       this.onTitle?.(p.threadName)
     if (m.method === 'thread/tokenUsage/updated') {
+      // Each update carries the last model call's usage; a resumed thread's earlier totals never count.
+      if (this.turnId && (!p.threadId || p.threadId === this.threadId))
+        this.turnUsage = addTokens(this.turnUsage, codexLast(p.tokenUsage))
       const context = codexContext(p.tokenUsage)
       if (context) this.emit({ kind: 'context', ...context })
     }
@@ -722,6 +727,7 @@ class CodexSession implements CodexRunner {
       this.emit({ kind: 'title', title: p.threadName })
     if (m.method === 'turn/started') {
       this.turnId = p.turn.id
+      this.turnUsage = null
       this.emit({ kind: 'state', state: 'running' })
     }
     if (
@@ -840,8 +846,16 @@ class CodexSession implements CodexRunner {
       this.limit ||=
         classifyLimit(JSON.stringify(error?.codexErrorInfo ?? ''), { provider: 'codex', channel: 'error' })
           ?.confidence === 'high'
+      const tokens = this.turnUsage
+      this.turnUsage = null
       this.emit(
-        { kind: 'result', isError: p.turn.status === 'failed', text: error?.message || p.turn.status, costUsd: null },
+        {
+          kind: 'result',
+          isError: p.turn.status === 'failed',
+          text: error?.message || p.turn.status,
+          costUsd: null,
+          ...(tokens ? { tokens } : {}),
+        },
         this.limit,
       )
       // AgentService owns the state transition and any fallback.
@@ -1044,6 +1058,22 @@ export function codexContext(usage: Wire | null | undefined): { used: number; ma
   const used = usage?.last?.totalTokens,
     max = usage?.modelContextWindow
   return typeof used === 'number' && typeof max === 'number' && max > 0 ? { used, max } : null
+}
+
+/** One model call's input and output tokens; input includes cached reads. */
+export function codexLast(usage: Wire | null | undefined): { input: number; output: number } | null {
+  const input = usage?.last?.inputTokens,
+    output = usage?.last?.outputTokens
+  return typeof input === 'number' && typeof output === 'number' && input >= 0 && output >= 0 ? { input, output } : null
+}
+
+/** A running turn total with one more call added; an unreported call leaves it as it was. */
+export function addTokens(
+  total: { input: number; output: number } | null,
+  call: { input: number; output: number } | null,
+): { input: number; output: number } | null {
+  if (!call) return total
+  return { input: (total?.input ?? 0) + call.input, output: (total?.output ?? 0) + call.output }
 }
 
 /** Codex's rate-limit windows as usage readings: the 5-hour window and the weekly one, told apart by their length. */

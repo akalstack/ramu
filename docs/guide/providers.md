@@ -34,7 +34,7 @@ Approvals default to **Allow once**. For a command you can save a prefix rule (s
 
 ## Plan usage
 
-The sidebar footer shows each provider's remaining allowance. Claude and Codex report their own; for Cursor and Antigravity Ramu reads the same services their apps use. With several hosts connected, the popover also lists other hosts' logins once each, and a **This week** line adds finished turns and reported cost across hosts.
+The sidebar footer shows each provider's remaining allowance. Claude and Codex report their own; for Cursor and Antigravity Ramu reads the same services their apps use. With several hosts connected, the popover also lists other hosts' logins once each, and a **This week** line adds finished turns, reported cost and tokens across hosts. Claude and Codex report tokens for each turn; hosts with turns from other providers are named under the total rather than counted as zero.
 
 ## Advisor
 
