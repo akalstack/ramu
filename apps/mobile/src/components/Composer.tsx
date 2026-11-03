@@ -45,6 +45,7 @@ import {
   LockOpen,
   Shuffle,
   Zap,
+  Users,
 } from 'lucide-react-native'
 import type { AgentProvider, AgentSettings, ChatGoal, FileContext, QueuedMessage, SkillInfo } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
@@ -832,8 +833,22 @@ export function Composer({
     edit(next.text)
     setCaret(next.caret)
     setForced({ start: next.caret, end: next.caret })
+    // Picking who the message goes to turns it into the chip; typed by hand, it stays coloured text in the field,
+    // since rewriting a native field's text between keystrokes loses or repeats what was typed.
+    const first = composerDraft(splitQuotes(next.text).body, teammate?.mentions).chips[0]
+    setChipped(first?.kind === 'mention' && first.start === 0 ? (first.target ?? null) : null)
   }
-  const chips = useMemo(() => composerDraft(split.body, teammate?.mentions).segments, [split.body, teammate?.mentions])
+  const [chipped, setChipped] = useState<string | null>(null)
+  // A message that starts with a picked @model or @teammate shows who it goes to as a chip before the text field, with
+  // the model's icon, since a native text field cannot hold one. The field edits what follows; the draft keeps it all.
+  const lead = useMemo(() => {
+    const first = composerDraft(split.body, teammate?.mentions).chips[0]
+    return first?.kind === 'mention' && first.start === 0 && first.target === chipped ? first : null
+  }, [split.body, teammate?.mentions, chipped])
+  const prefix = lead ? split.body.slice(0, lead.end + (split.body[lead.end] === ' ' ? 1 : 0)) : ''
+  const fieldText = split.body.slice(prefix.length)
+  const editField = (value: string) => edit(prefix + value)
+  const chips = useMemo(() => composerDraft(fieldText).segments, [fieldText])
   const append = (value: string) => {
     const next = text + value
     setText(next)
@@ -1132,48 +1147,103 @@ export function Composer({
             showSettings
           />
         </View>
-        <TextInput
-          onChangeText={(value) => {
-            edit(value)
-            if (forced) setForced(undefined)
-          }}
-          onSelectionChange={(event) => {
-            setCaret(event.nativeEvent.selection.start)
-            selectionEnd.current = event.nativeEvent.selection.end
-            if (forced && event.nativeEvent.selection.start === forced.start) setForced(undefined)
-          }}
-          selection={forced}
-          multiline
-          editable={!busy && !viewOnly && !dictating}
-          ref={textInput}
-          placeholder={
-            dictation.snapshot.state.phase === 'recording' ? t.dictateListening : (placeholder ?? t.messagePlaceholder)
-          }
-          placeholderTextColor={c.placeholder}
-          style={{
-            color: c.text,
-            fontSize: font.body,
-            lineHeight: 21,
-            maxHeight: 140,
-            minHeight: 40,
-            paddingHorizontal: space.m + 2,
-            paddingTop: 6,
-            paddingBottom: 6,
-          }}
-        >
-          {/* Finished references (@file, $skill, /command, quotes) show as badges; the text itself is unchanged, so the agent still receives it. */}
-          <Text style={{ color: c.text }}>
-            {chips.map((part, index) =>
-              part.kind === 'text' ? (
-                part.source
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+          {lead ? (
+            <View
+              accessible
+              accessibilityLabel={translate(store.language, 'To {0}', { 0: lead.label })}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                marginLeft: space.m,
+                marginTop: 7,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: radius.full,
+                backgroundColor: c.accentSoft,
+                maxWidth: 180,
+              }}
+            >
+              {lead.provider ? (
+                <ProviderIcon provider={lead.provider} size={13} />
               ) : (
-                <Text key={index} style={{ color: c.accent, fontWeight: REFERENCE_APPEARANCE.fontWeight }}>
-                  {part.source}
-                </Text>
-              ),
-            )}
-          </Text>
-        </TextInput>
+                <Users size={13} color={c.accent} />
+              )}
+              <Text
+                numberOfLines={1}
+                style={{ color: c.accent, fontSize: font.control, fontWeight: '600', flexShrink: 1 }}
+              >
+                {lead.label}
+              </Text>
+            </View>
+          ) : null}
+          <TextInput
+            onChangeText={(value) => {
+              editField(value)
+              if (forced) setForced(undefined)
+            }}
+            onKeyPress={(event) => {
+              // Backspace at the very start takes the chip away, as deleting the mention's text would.
+              if (
+                lead &&
+                event.nativeEvent.key === 'Backspace' &&
+                caret === prefix.length &&
+                selectionEnd.current === caret
+              ) {
+                edit(fieldText)
+                setChipped(null)
+              }
+            }}
+            onSelectionChange={(event) => {
+              setCaret(event.nativeEvent.selection.start + prefix.length)
+              selectionEnd.current = event.nativeEvent.selection.end + prefix.length
+              if (forced && event.nativeEvent.selection.start + prefix.length === forced.start) setForced(undefined)
+            }}
+            selection={
+              forced
+                ? {
+                    start: Math.max(0, forced.start - prefix.length),
+                    end: Math.max(0, forced.end - prefix.length),
+                  }
+                : undefined
+            }
+            multiline
+            editable={!busy && !viewOnly && !dictating}
+            ref={textInput}
+            placeholder={
+              dictation.snapshot.state.phase === 'recording'
+                ? t.dictateListening
+                : (placeholder ?? t.messagePlaceholder)
+            }
+            placeholderTextColor={c.placeholder}
+            style={{
+              flex: 1,
+              color: c.text,
+              fontSize: font.body,
+              lineHeight: 21,
+              maxHeight: 140,
+              minHeight: 40,
+              paddingHorizontal: space.m + 2,
+              paddingLeft: lead ? space.s : space.m + 2,
+              paddingTop: 6,
+              paddingBottom: 6,
+            }}
+          >
+            {/* Finished references (@file, $skill, /command, quotes) show as badges; the text itself is unchanged, so the agent still receives it. */}
+            <Text style={{ color: c.text }}>
+              {chips.map((part, index) =>
+                part.kind === 'text' ? (
+                  part.source
+                ) : (
+                  <Text key={index} style={{ color: c.accent, fontWeight: REFERENCE_APPEARANCE.fontWeight }}>
+                    {part.source}
+                  </Text>
+                ),
+              )}
+            </Text>
+          </TextInput>
+        </View>
         <View
           style={{
             flexDirection: 'row',
