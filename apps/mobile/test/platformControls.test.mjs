@@ -28,6 +28,7 @@ import ts from 'typescript'
 import * as settingsModel from '../src/runtime/settingsModel.ts'
 import * as taskRemoval from '../../../packages/shared/src/chat/taskRemoval.ts'
 import * as terminalOutput from '../../../packages/shared/src/workspace/terminalOutput.ts'
+import * as sharedMcp from '../../../packages/shared/src/mcp.ts'
 import * as terminalKeys from '../src/runtime/terminalKeys.ts'
 import * as workspaceDefaults from '../../../packages/shared/src/workspaceDefaults.ts'
 import * as workspaceChoices from '../src/runtime/workspaces.ts'
@@ -7979,7 +7980,22 @@ test('the Skills & MCP page reads shared servers and a project’s skills withou
           ],
           providerManaged: [{ provider: 'claude-code', name: 'figma' }],
         }
-      if (args[1] === 'skills.list') return [{ name: 'deploy', description: 'Ships it', path: '/x' }]
+      if (args[1] === 'projects.setup')
+        return {
+          skills: [
+            {
+              name: 'deploy',
+              description: 'Ships it',
+              providers: ['claude-code'],
+              nativeProviders: ['claude-code'],
+              shared: false,
+              shareScope: 'default',
+              scope: 'project',
+              sources: [{ scope: 'project', label: 'site', file: '.claude/skills/deploy', enabled: true }],
+              nameConflict: true,
+            },
+          ],
+        }
       throw new Error(`Unexpected ${args[1]}`)
     },
   }
@@ -7989,6 +8005,7 @@ test('the Skills & MCP page reads shared servers and a project’s skills withou
     './SettingRows': { RowLabel: 'RowLabel' },
     '@ramu/shared/providers/providers': { providerName: (id) => id },
     '@ramu/shared/listView': { matchesWords: () => true, searchWords: () => [] },
+    '@ramu/shared/mcp': sharedMcp,
   })
   const render = () => hooks.render(() => AgentSetupSettings({ hostId: 'a' }))
   render()
@@ -7999,11 +8016,12 @@ test('the Skills & MCP page reads shared servers and a project’s skills withou
   assert.deepEqual(labels, [
     ['Issues', 'Sign-in required · 3 tools · codex'],
     ['figma', 'Only claude-code has it, from its own settings'],
-    ['deploy', 'Ships it'],
+    // Who loads it, where it comes from, and a name two places use for different content.
+    ['deploy', 'Ships it · Only in claude-code · From site/.claude/skills/deploy · Different content shares this name'],
   ])
   assert.deepEqual(
-    calls.find(([, method]) => method === 'skills.list'),
-    ['a', 'skills.list', 'project:p1'],
+    calls.find(([, method]) => method === 'projects.setup'),
+    ['a', 'projects.setup', 'p1'],
   )
   assert.equal(
     calls.some(([, method]) => /^mcp\.(save|approve|signIn|setSecret|remove)/.test(method)),

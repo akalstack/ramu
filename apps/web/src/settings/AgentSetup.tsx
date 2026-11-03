@@ -3,7 +3,13 @@ import { useStaging } from './stagedChanges'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentProvider } from '@ramu/shared/types'
-import type { ProjectMcpServer, ProjectSetupSource, ProjectSkill } from '@ramu/shared/mcp'
+import {
+  setupFromText,
+  setupReachText,
+  type ProjectMcpServer,
+  type ProjectSetupSource,
+  type ProjectSkill,
+} from '@ramu/shared/mcp'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
@@ -69,26 +75,12 @@ function ProviderStrip({ providers }: { providers: AgentProvider[] }) {
 }
 
 /** Where something is declared, briefly: the first two places and a count of the rest. */
-function fromText(sources: ProjectSetupSource[]) {
-  const places = [
-    ...new Set(sources.map((source) => (source.scope === 'user' ? source.file : `${source.label}/${source.file}`))),
-  ]
-  const shown = places.slice(0, 2).join(', ')
-  return places.length > 2 ? t('{places} and {count} more', { places: shown, count: places.length - 2 }) : shown
-}
+const fromText = (sources: ProjectSetupSource[]) => setupFromText(sources, t)
 
 type Shareable = Pick<ProjectMcpServer, 'shared' | 'shareBlocked' | 'nativeProviders' | 'shareScope'>
 
 /** One line on who has it now: shared, only some providers, or off everywhere. */
-function reach(item: Shareable) {
-  if (item.shared)
-    return item.shareScope === 'project'
-      ? t('Shared with every provider and account in this project')
-      : t('Shared with every provider and account')
-  if (item.shareBlocked) return t(item.shareBlocked)
-  if (!item.nativeProviders.length) return t('Turned off in every provider')
-  return t('Only in {providers}', { providers: item.nativeProviders.map(providerName).join(', ') })
-}
+const reach = (item: Shareable) => setupReachText(item, t, providerName)
 
 /** A name, who has it, where it comes from, and the one switch that shares it. */
 function ShareRow({
@@ -257,7 +249,9 @@ function Skills({
         <ShareRow
           key={skill.name}
           name={skill.name}
-          detail={skill.description}
+          detail={
+            skill.nameConflict ? `${skill.description} · ${t('Different content shares this name')}` : skill.description
+          }
           item={skill}
           providers={skill.providers}
           sources={skill.sources}

@@ -182,3 +182,29 @@ export interface ProjectSetup {
   /** Servers a provider reported in an earlier thread that no readable file declares: only that provider can manage them. */
   providerManaged?: { provider: AgentProvider; name: string }[]
 }
+
+type Translate = (text: string, values?: Record<string, string | number>) => string
+
+/** Where a skill or server comes from, two places at most: user files by path, project files under their folder. */
+export function setupFromText(sources: readonly ProjectSetupSource[], t: Translate): string {
+  const places = [
+    ...new Set(sources.map((source) => (source.scope === 'user' ? source.file : `${source.label}/${source.file}`))),
+  ]
+  const shown = places.slice(0, 2).join(', ')
+  return places.length > 2 ? t('{places} and {count} more', { places: shown, count: places.length - 2 }) : shown
+}
+
+/** One line on who has a skill or server now: shared, only some providers, or off everywhere. */
+export function setupReachText(
+  item: Pick<ProjectSkill, 'shared' | 'shareBlocked' | 'nativeProviders' | 'shareScope'>,
+  t: Translate,
+  providerName: (provider: AgentProvider) => string,
+): string {
+  if (item.shared)
+    return item.shareScope === 'project'
+      ? t('Shared with every provider and account in this project')
+      : t('Shared with every provider and account')
+  if (item.shareBlocked) return t(item.shareBlocked)
+  if (!item.nativeProviders.length) return t('Turned off in every provider')
+  return t('Only in {providers}', { providers: item.nativeProviders.map(providerName).join(', ') })
+}

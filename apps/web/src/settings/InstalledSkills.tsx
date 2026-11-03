@@ -163,7 +163,19 @@ export function InstalledSkills() {
                   {skill.projectId ? projects.find((p) => p.id === skill.projectId)?.name : t('All projects')}
                 </Badge>
               }
-              meta={skill.description}
+              meta={
+                <>
+                  {skill.description}
+                  {skill.copiedFrom && (
+                    <span className="block text-muted-foreground">
+                      {t('Your copy of {name}. Its source changes reach it only after you review them.', {
+                        name:
+                          skills.find((entry) => entry.id === skill.copiedFrom!.id)?.name ?? t('an installed skill'),
+                      })}
+                    </span>
+                  )}
+                </>
+              }
               actions={
                 <>
                   {skill.copiedFrom &&
@@ -328,7 +340,18 @@ export function InstalledSkills() {
                   </Badge>
                 </>
               }
-              meta={skill.description}
+              meta={
+                <>
+                  {skill.description}
+                  {skill.installation && (
+                    <span className="block text-muted-foreground [overflow-wrap:anywhere]">
+                      {t('From {source}. Update brings in its changes; make a copy to edit it yourself.', {
+                        source: skill.installation.source,
+                      })}
+                    </span>
+                  )}
+                </>
+              }
               actions={
                 <>
                   <Button

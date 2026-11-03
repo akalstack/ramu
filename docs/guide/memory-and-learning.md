@@ -17,8 +17,9 @@ Every proposal is checked for credentials before it can be saved. Model-written 
 ## Skills
 
 - **Managed skills** are the ones Ramu writes. They load through each provider's own skill system for that thread, without touching your provider folders. Pin a skill to keep it from being archived.
-- **Installed skills** come from a repository, URL or folder (**Settings → Memory & skills → Installed skills**, or ask the agent). You approve the files first, and scripts need a second approval.
-- **Your skills** are ones you write by hand. Learning never changes them. **Edit a copy** makes an editable copy of an installed skill.
+- **Installed skills** come from a repository, URL or folder (**Settings → Memory & skills → Installed skills**, or ask the agent). You approve the files first, and scripts need a second approval. Each card names its source; **Update** brings in changes from there.
+- **Your skills** are ones you write by hand. Learning never changes them. **Edit a copy** makes an editable copy of an installed skill; the copy says what it came from, and changes to that source reach it only after you review them.
+- **Skills in your provider folders and projects** are listed under **Settings → Agent setup** (desktop and phone) with which providers load each one and the files it comes from. Two places holding different content under one name are flagged.
 
 ## What Ramu learned
 

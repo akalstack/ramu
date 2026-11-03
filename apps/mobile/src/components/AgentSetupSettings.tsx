@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
 import { providerName } from '@ramu/shared/providers/providers'
-import type { SharedMcpManagement } from '@ramu/shared/mcp'
-import type { Memory, SkillInfo } from '@ramu/shared/types'
+import { setupFromText, setupReachText, type ProjectSkill, type SharedMcpManagement } from '@ramu/shared/mcp'
+import type { Memory } from '@ramu/shared/types'
 import { matchesWords, searchWords } from '@ramu/shared/listView'
 import { useStore } from '../runtime/store'
 import { space, useTheme } from '../theme'
@@ -36,7 +36,7 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
   const online = store.isOnline(hostId)
   const projects = store.projects.filter((project) => project.computerId === hostId)
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
-  const [skills, setSkills] = useState<SkillInfo[] | null>(null)
+  const [skills, setSkills] = useState<ProjectSkill[] | null>(null)
   const [mcp, setMcp] = useState<SharedMcpManagement | null>(null)
   const [error, setError] = useState('')
   const runtime = useRef(store)
@@ -62,8 +62,9 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
     setSkills(null)
     if (!online || !projectId) return
     let active = true
-    void runtime.current.invoke(hostId, 'skills.list', `project:${hostProjectId(projectId)}`).then(
-      (list) => active && setSkills([...list].sort((a, b) => a.name.localeCompare(b.name))),
+    // The same inventory the desktop's Agent setup reads: who has each skill and where it comes from.
+    void runtime.current.invoke(hostId, 'projects.setup', hostProjectId(projectId)).then(
+      (setup) => active && setSkills([...setup.skills].sort((a, b) => a.name.localeCompare(b.name))),
       () => active && setSkills([]),
     )
     return () => {
@@ -153,7 +154,17 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
           <View key={skill.name}>
             {index ? <Divider inset={space.l} /> : null}
             <Row style={{ paddingVertical: space.m }}>
-              <RowLabel title={skill.name} help={skill.description} />
+              <RowLabel
+                title={skill.name}
+                help={[
+                  skill.description,
+                  setupReachText(skill, t, providerName),
+                  skill.sources.length ? t('From {places}', { places: setupFromText(skill.sources, t) }) : null,
+                  skill.nameConflict ? t('Different content shares this name') : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              />
             </Row>
           </View>
         ))}
