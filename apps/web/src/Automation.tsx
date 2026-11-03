@@ -13,7 +13,9 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
-import { CalendarClock, ChevronRight, Clock, Pause, Pencil, Play, Plus, Trash2, X } from 'lucide-react'
+import { CalendarClock, ChevronRight, Clock, Pause, Pencil, Play, Plus, Trash2, Webhook, X } from 'lucide-react'
+import { WebhookFields, WebhookPanel } from './WebhookSchedule'
+import { WEBHOOK_PRESETS } from '@ramu/shared/webhooks'
 import { useCallback, useEffect, useState } from 'react'
 import { DateTime } from 'luxon'
 import {
@@ -317,13 +319,25 @@ function ScheduleCard({
       ? t('No project')
       : (ws.projects.find((p) => p.id === s.projectId)?.name ?? t('Unavailable project'))
   const isolated = s.workspaceId && (ws.workspaces.find((w) => w.id === s.workspaceId)?.name ?? t('Isolated workspace'))
-  const meta = [project, isolated, s.rule.kind === 'once' ? t('Once') : t(s.rule.kind), s.timezone].filter(Boolean)
+  const webhook = s.rule.kind === 'webhook'
+  const viewOnly = useViewOnly()
+  const [requestsOpen, setRequestsOpen] = useState(false)
+  const meta = [
+    project,
+    isolated,
+    s.rule.kind === 'once' ? t('Once') : webhook ? t('When a request arrives') : t(s.rule.kind),
+    webhook ? null : s.timezone,
+  ].filter(Boolean)
   return (
     <article
       className={`schedule-card flex flex-col gap-0.5 rounded-(--radius-m) bg-card px-3 py-2 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:flex [&:hover_.row-time]:hidden [&:focus-within_.row-time]:hidden ${selected ? 'ring-1 ring-(--line-strong)' : ''}`}
     >
       <div className="flex min-h-7 items-center gap-2">
-        <CalendarClock size={14} className="flex-none text-muted-foreground" />
+        {webhook ? (
+          <Webhook size={14} className="flex-none text-muted-foreground" />
+        ) : (
+          <CalendarClock size={14} className="flex-none text-muted-foreground" />
+        )}
         <strong className="min-w-0 truncate text-control font-medium">{s.name}</strong>
         <Badge variant="outline" className="flex-none rounded-full px-1.5 text-caption text-muted-foreground">
           {t(s.state)}
@@ -331,7 +345,7 @@ function ScheduleCard({
         <span className="min-w-0 flex-1" />
         <span className="row-time flex flex-none items-center gap-1.5 text-caption text-muted-foreground">
           <Clock size={12} />
-          {formatScheduleTime(s.nextRunAt, s.timezone)}
+          {webhook ? t('On request') : formatScheduleTime(s.nextRunAt, s.timezone)}
         </span>
         <span className="row-actions hidden flex-none items-center gap-0.5">
           <Button
@@ -406,6 +420,18 @@ function ScheduleCard({
             {t('Open originating thread')}
           </Button>
         )}
+        {webhook && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 flex-none gap-0.5 bg-transparent px-1.5 text-caption text-muted-foreground"
+            aria-expanded={requestsOpen}
+            onClick={() => setRequestsOpen(!requestsOpen)}
+          >
+            {t('Address and requests')}
+            <ChevronRight size={12} className={`transition-transform ${requestsOpen ? 'rotate-90' : ''}`} />
+          </Button>
+        )}
         {runs.length > 0 && (
           <Button
             variant="ghost"
@@ -419,6 +445,9 @@ function ScheduleCard({
           </Button>
         )}
       </div>
+      {webhook && requestsOpen && (
+        <WebhookPanel schedule={s} runs={runs} invoke={invoke} readOnly={viewOnly} onOpenRun={onOpenRun} />
+      )}
       {open && (
         <div className="schedule-history mt-1 flex flex-col border-t border-(--line) pt-1">
           {paged.shown.map((r) => (
@@ -524,6 +553,9 @@ function ScheduleEditor({
   }, [input.rule, input.timezone])
   const rule = input.rule
   const setRule = (rule: ScheduleRule) => setInput((i) => ({ ...i, rule }))
+  // A trigger's name and first prompt fill only what the person has not written yet.
+  const fillFromPreset = (name: string, prompt: string) =>
+    setInput((i) => ({ ...i, name: i.name.trim() ? i.name : name, prompt: i.prompt.trim() ? i.prompt : prompt }))
   const save = async () => {
     setBusy(true)
     setError(null)
@@ -648,10 +680,18 @@ function ScheduleEditor({
             <Dropdown
               label={t('Frequency')}
               value={rule.kind}
-              onChange={(kind) => setRule(ruleForKind(kind as ScheduleRule['kind'], onceLocal, input.timezone))}
+              onChange={(kind) => {
+                setRule(ruleForKind(kind as ScheduleRule['kind'], onceLocal, input.timezone))
+                if (kind === 'webhook') fillFromPreset(t(WEBHOOK_PRESETS[0]!.label), WEBHOOK_PRESETS[0]!.prompt)
+              }}
               options={RULE_KINDS.map((value) => ({
                 value,
-                label: value === 'interval' ? t('Every interval') : t(value[0]!.toUpperCase() + value.slice(1)),
+                label:
+                  value === 'interval'
+                    ? t('Every interval')
+                    : value === 'webhook'
+                      ? t('When a request arrives')
+                      : t(value[0]!.toUpperCase() + value.slice(1)),
               }))}
             />
           </label>
@@ -708,6 +748,7 @@ function ScheduleEditor({
             </span>
           </label>
         )}
+        {rule.kind === 'webhook' && <WebhookFields rule={rule} onRule={setRule} onPreset={fillFromPreset} />}
         {rule.kind === 'interval' && (
           <label>
             {t('Every how many minutes?')}
@@ -719,18 +760,20 @@ function ScheduleEditor({
             />
           </label>
         )}
-        <label className="schedule-wide col-span-full">
-          {t('If the host is asleep or the service is stopped')}
-          <Dropdown
-            label={t('Missed runs')}
-            value={input.missedPolicy}
-            onChange={(missedPolicy) => setInput({ ...input, missedPolicy: missedPolicy as 'latest' | 'skip' })}
-            options={[
-              { value: 'latest', label: t('Run the latest missed occurrence once') },
-              { value: 'skip', label: t('Skip missed occurrences') },
-            ]}
-          />
-        </label>
+        {rule.kind !== 'webhook' && (
+          <label className="schedule-wide col-span-full">
+            {t('If the host is asleep or the service is stopped')}
+            <Dropdown
+              label={t('Missed runs')}
+              value={input.missedPolicy}
+              onChange={(missedPolicy) => setInput({ ...input, missedPolicy: missedPolicy as 'latest' | 'skip' })}
+              options={[
+                { value: 'latest', label: t('Run the latest missed occurrence once') },
+                { value: 'skip', label: t('Skip missed occurrences') },
+              ]}
+            />
+          </label>
+        )}
         <div className="schedule-wide col-span-full">
           <AgentControls
             settings={input.settings}
@@ -738,18 +781,20 @@ function ScheduleEditor({
             disabled={busy}
           />
         </div>
-        <div className="schedule-preview grid gap-[7px] [background:var(--field)] rounded-(--radius-s) p-3">
-          <strong className="small text-caption">{t('Upcoming runs')}</strong>
-          {preview.map((at) => (
-            <div className="muted text-muted-foreground small text-caption" key={at}>
-              {formatScheduleTime(at, input.timezone)}
-            </div>
-          ))}
-          {previewLoading && <ContentSkeleton rows={3} />}
-          {!previewLoading && !preview.length && (
-            <div className="muted text-muted-foreground small text-caption">{t('Choose a valid future time.')}</div>
-          )}
-        </div>
+        {rule.kind !== 'webhook' && (
+          <div className="schedule-preview grid gap-[7px] [background:var(--field)] rounded-(--radius-s) p-3">
+            <strong className="small text-caption">{t('Upcoming runs')}</strong>
+            {preview.map((at) => (
+              <div className="muted text-muted-foreground small text-caption" key={at}>
+                {formatScheduleTime(at, input.timezone)}
+              </div>
+            ))}
+            {previewLoading && <ContentSkeleton rows={3} />}
+            {!previewLoading && !preview.length && (
+              <div className="muted text-muted-foreground small text-caption">{t('Choose a valid future time.')}</div>
+            )}
+          </div>
+        )}
         <p className="muted text-muted-foreground small text-caption">
           {t('New schedules use your system timezone. Saved schedules keep their original timezone.')}
         </p>
@@ -766,7 +811,16 @@ function ScheduleEditor({
             variant="default"
             type="button"
             className={PRIMARY_ACTION_CLASS}
-            disabled={!canSaveSchedule({ busy, previewLoading, preview, name: input.name, prompt: input.prompt })}
+            disabled={
+              !canSaveSchedule({
+                busy,
+                previewLoading,
+                preview,
+                name: input.name,
+                prompt: input.prompt,
+                webhook: rule.kind === 'webhook',
+              })
+            }
             onClick={() => void save()}
           >
             {busy ? t('Saving…') : t('Save schedule')}
@@ -888,7 +942,9 @@ export function ScheduleChatCard({ schedule }: { schedule: Schedule }) {
       <div className="grow flex-1 min-w-0 text-left">
         <strong>{schedule.name}</strong>
         <span className="muted text-muted-foreground small text-caption block block">
-          {schedule.rule.kind === 'once' ? t('Runs once') : t(schedule.rule.kind)} · {schedule.timezone}
+          {schedule.rule.kind === 'webhook'
+            ? t('When a request arrives')
+            : `${schedule.rule.kind === 'once' ? t('Runs once') : t(schedule.rule.kind)} · ${schedule.timezone}`}
         </span>
         <span className="small text-caption block block">
           {formatScheduleTime(schedule.nextRunAt, schedule.timezone)}

@@ -1,4 +1,5 @@
 import type { AgentSettings, Schedule, ScheduleInput, ScheduleRule, ScheduleRun } from '@ramu/shared/types'
+import { SOURCE_DEFAULTS, WEBHOOK_PRESETS } from '@ramu/shared/webhooks'
 
 // Describing, validating and building schedules for the phone. No React Native in here, so it is unit tested.
 
@@ -43,6 +44,7 @@ export const RULE_LABELS: Record<ScheduleRule['kind'], Record<Lang, string>> = {
   monthly: { en: 'Monthly', id: 'Bulanan' },
   interval: { en: 'Every…', id: 'Setiap…' },
   once: { en: 'Once', id: 'Sekali' },
+  webhook: { en: 'On request', id: 'Saat ada permintaan' },
 }
 
 export function deviceTimezone(): string {
@@ -119,6 +121,16 @@ export function describeRule(rule: ScheduleRule, lang: Lang = 'en', timezone?: s
       return id ? `Setiap ${intervalText(rule.minutes, lang)}` : `Every ${intervalText(rule.minutes, lang)}`
     case 'once':
       return `${id ? 'Sekali' : 'Once'}, ${formatWhen(Date.parse(rule.at), timezone, lang)}`
+    case 'webhook': {
+      const sender = SOURCE_DEFAULTS[rule.source].label
+      return rule.source === 'generic'
+        ? id
+          ? 'Saat permintaan masuk'
+          : 'When a request arrives'
+        : id
+          ? `Saat ${sender} mengirim permintaan`
+          : `When ${sender} sends a request`
+    }
   }
 }
 
@@ -192,6 +204,22 @@ export function ruleOfKind(kind: ScheduleRule['kind'], previous: ScheduleRule, n
       return { kind, minutes: 60, anchor: now.toISOString() }
     case 'once':
       return { kind, at: onceInstant(addDays(now, 1), time) }
+    case 'webhook': {
+      // Webhook schedules are set up on a computer, where the address and secret can be copied into the sender.
+      const preset = WEBHOOK_PRESETS[0]!
+      const source = SOURCE_DEFAULTS[preset.source]
+      return {
+        kind,
+        source: preset.source,
+        filters: preset.filters,
+        signature: source.signature,
+        replayKey: source.replayKey,
+        coalesceKey: preset.coalesceKey,
+        coalesceSeconds: 120,
+        maxAgeMinutes: 60,
+        fields: preset.fields,
+      }
+    }
   }
 }
 
@@ -207,7 +235,7 @@ export function validateInput(input: ScheduleInput, now = Date.now(), lang: Lang
   if (!input.name.trim()) return id ? 'Beri nama jadwal ini.' : 'Give the schedule a name.'
   if (!input.prompt.trim()) return id ? 'Tulis apa yang harus dikerjakan agen.' : 'Say what the agent should do.'
   const { rule } = input
-  if (rule.kind !== 'once' && rule.kind !== 'interval' && !parseTime(rule.time))
+  if (rule.kind !== 'once' && rule.kind !== 'interval' && rule.kind !== 'webhook' && !parseTime(rule.time))
     return id ? 'Waktu tidak valid.' : 'That is not a valid time.'
   if (rule.kind === 'weekly' && !rule.weekdays.length)
     return id ? 'Pilih minimal satu hari.' : 'Pick at least one weekday.'

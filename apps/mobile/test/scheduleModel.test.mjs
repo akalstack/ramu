@@ -125,3 +125,11 @@ test('schedule writes require an online non-viewer host while older hosts retain
   assert.match(scheduleWriteProblem(undefined, 'en'), /Connect/)
   assert.match(scheduleWriteProblem({ status: 'offline', access: 'owner' }, 'id'), /Hubungkan/)
 })
+
+test('a webhook schedule names its sender and saves without a time', () => {
+  const rule = ruleOfKind('webhook', { kind: 'daily', time: '09:00' })
+  assert.equal(rule.kind, 'webhook')
+  assert.equal(describeRule(rule), 'When GitHub sends a request')
+  assert.equal(describeRule({ ...rule, source: 'generic' }, 'id'), 'Saat permintaan masuk')
+  assert.equal(validateInput({ ...valid(), rule }), null)
+})

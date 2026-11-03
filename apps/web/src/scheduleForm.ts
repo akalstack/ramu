@@ -6,12 +6,45 @@ import {
   type ScheduleInput,
   type ScheduleRule,
 } from '@ramu/shared/types'
+import { SOURCE_DEFAULTS, WEBHOOK_PRESETS, type WebhookPreset, type WebhookTrigger } from '@ramu/shared/webhooks'
 
 // The pure parts of the schedule editor and list on the Schedules page: defaults, how a rule changes with its kind, and when saving is allowed.
 
 const LOCAL_INPUT = "yyyy-MM-dd'T'HH:mm"
 
-export const RULE_KINDS: ScheduleRule['kind'][] = ['once', 'daily', 'weekly', 'monthly', 'interval']
+export const RULE_KINDS: ScheduleRule['kind'][] = ['once', 'daily', 'weekly', 'monthly', 'interval', 'webhook']
+
+/** A webhook rule as a preset sets it up: its sender's signature and repeat key, its filters and what the agent reads. */
+export function webhookRule(preset: WebhookPreset): WebhookTrigger {
+  const source = SOURCE_DEFAULTS[preset.source]
+  return {
+    kind: 'webhook',
+    source: preset.source,
+    filters: preset.filters,
+    signature: source.signature,
+    replayKey: source.replayKey,
+    coalesceKey: preset.coalesceKey,
+    coalesceSeconds: 120,
+    maxAgeMinutes: 60,
+    fields: preset.fields,
+  }
+}
+
+/** The preset a saved rule still matches, so the editor can show its name; null once filters were changed by hand. */
+export function presetOf(rule: WebhookTrigger): WebhookPreset | null {
+  return (
+    WEBHOOK_PRESETS.find(
+      (preset) => preset.source === rule.source && JSON.stringify(preset.filters) === JSON.stringify(rule.filters),
+    ) ?? null
+  )
+}
+
+/** Filter values for `in` are typed as a comma-separated list. */
+export const splitList = (text: string) =>
+  text
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
 
 /** A new schedule starts as a daily 09:00 run in the project of the open thread, or in no project. */
 export function defaultScheduleInput(
@@ -58,6 +91,8 @@ export function ruleForKind(
       return { kind, time: '09:00', day: 1 }
     case 'interval':
       return { kind, minutes: 60, anchor: now.plus({ hours: 1 }).toISO()! }
+    case 'webhook':
+      return webhookRule(WEBHOOK_PRESETS[0]!)
     default:
       return { kind: 'daily', time: '09:00' }
   }
@@ -69,15 +104,20 @@ export function setWeekday(weekdays: number[], day: number, on: boolean): number
   return (on ? [...rest, day] : rest).sort((a, b) => a - b)
 }
 
-/** Saving waits for a valid future time (the host's preview is the check) and for a name and a prompt. */
+/**
+ * Saving waits for a name and a prompt, and for a valid future time (the host's preview is the check) unless a request
+ * starts the schedule.
+ */
 export function canSaveSchedule(form: {
   busy: boolean
   previewLoading: boolean
   preview: number[]
   name: string
   prompt: string
+  webhook?: boolean
 }): boolean {
-  return !form.busy && !form.previewLoading && form.preview.length > 0 && !!form.name.trim() && !!form.prompt.trim()
+  const timed = form.webhook || (!form.previewLoading && form.preview.length > 0)
+  return !form.busy && timed && !!form.name.trim() && !!form.prompt.trim()
 }
 
 /** Soonest next run first; schedules with nothing upcoming go last. */

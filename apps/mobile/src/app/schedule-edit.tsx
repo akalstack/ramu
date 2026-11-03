@@ -239,13 +239,24 @@ export default function ScheduleEdit() {
           </View>
         </Field>
 
-        <Field label={t.repeat}>
-          <Segmented
-            value={rule.kind}
-            onChange={(kind) => patch({ rule: ruleOfKind(kind, rule) })}
-            options={RULE_KINDS.map((kind) => ({ key: kind, label: RULE_LABELS[kind][lang] }))}
-          />
-        </Field>
+        {rule.kind === 'webhook' ? (
+          <Field label={t.repeat}>
+            <T tone="soft">{describeRule(rule, lang)}</T>
+            <T size={font.caption} tone="muted">
+              {say(
+                'What starts it, its address and its secret are set up on a computer, where they can be copied into the sender.',
+              )}
+            </T>
+          </Field>
+        ) : (
+          <Field label={t.repeat}>
+            <Segmented
+              value={rule.kind}
+              onChange={(kind) => patch({ rule: ruleOfKind(kind, rule) })}
+              options={RULE_KINDS.map((kind) => ({ key: kind, label: RULE_LABELS[kind][lang] }))}
+            />
+          </Field>
+        )}
 
         {rule.kind === 'weekly' ? (
           <Field label={t.days}>
@@ -307,7 +318,7 @@ export default function ScheduleEdit() {
             </View>
           </Field>
         ) : null}
-        {rule.kind !== 'interval' ? (
+        {rule.kind !== 'interval' && rule.kind !== 'webhook' ? (
           <Field label={t.time}>
             <TimeField
               value={rule.kind === 'once' ? hhmm(rule.at) : rule.time}
@@ -320,35 +331,39 @@ export default function ScheduleEdit() {
           </Field>
         ) : null}
 
-        <Field label={t.missedPolicy}>
-          <Segmented
-            value={input.missedPolicy}
-            onChange={(missedPolicy) => patch({ missedPolicy })}
-            options={[
-              { key: 'latest', label: t.runLatest },
-              { key: 'skip', label: t.skipIt },
-            ]}
-          />
-        </Field>
+        {rule.kind !== 'webhook' ? (
+          <Field label={t.missedPolicy}>
+            <Segmented
+              value={input.missedPolicy}
+              onChange={(missedPolicy) => patch({ missedPolicy })}
+              options={[
+                { key: 'latest', label: t.runLatest },
+                { key: 'skip', label: t.skipIt },
+              ]}
+            />
+          </Field>
+        ) : null}
 
-        <Field label={t.upcoming}>
-          <View style={{ gap: 4 }}>
-            <T tone="soft" weight="500">
-              {describeRule(rule, lang, input.timezone)}
-            </T>
-            {preview.slice(0, 5).map((at) => (
-              <T key={at} size={font.control} tone="muted">
-                {formatWhen(at, input.timezone, lang)}
+        {rule.kind !== 'webhook' ? (
+          <Field label={t.upcoming}>
+            <View style={{ gap: 4 }}>
+              <T tone="soft" weight="500">
+                {describeRule(rule, lang, input.timezone)}
               </T>
-            ))}
-            {previewError ? (
-              <T size={font.control} tone="bad">
-                {previewError}
-              </T>
-            ) : null}
-            <T size={font.caption} tone="muted">{`${t.timezone}: ${input.timezone}`}</T>
-          </View>
-        </Field>
+              {preview.slice(0, 5).map((at) => (
+                <T key={at} size={font.control} tone="muted">
+                  {formatWhen(at, input.timezone, lang)}
+                </T>
+              ))}
+              {previewError ? (
+                <T size={font.control} tone="bad">
+                  {previewError}
+                </T>
+              ) : null}
+              <T size={font.caption} tone="muted">{`${t.timezone}: ${input.timezone}`}</T>
+            </View>
+          </Field>
+        ) : null}
         {error ? (
           <T tone="bad" size={font.control}>
             {error}

@@ -9,9 +9,13 @@ import {
   isProblemRun,
   onceIso,
   onceLocalValue,
+  presetOf,
   ruleForKind,
   setWeekday,
+  splitList,
+  webhookRule,
 } from '../src/scheduleForm'
+import { WEBHOOK_PRESETS } from '@ramu/shared/webhooks'
 
 const zone = 'Asia/Jakarta' // UTC+7, no daylight saving
 const now = DateTime.fromISO('2026-10-18T10:00:00', { zone })
@@ -44,7 +48,7 @@ describe('one-time schedules', () => {
 
 describe('changing the frequency', () => {
   it('offers every frequency', () => {
-    expect([...RULE_KINDS].sort()).toEqual(['daily', 'interval', 'monthly', 'once', 'weekly'])
+    expect([...RULE_KINDS].sort()).toEqual(['daily', 'interval', 'monthly', 'once', 'webhook', 'weekly'])
   })
   it('builds a sensible starting rule for each kind', () => {
     expect(ruleForKind('daily', '', zone, now)).toEqual({ kind: 'daily', time: '09:00' })
@@ -95,5 +99,23 @@ describe('the schedule list', () => {
     expect(isProblemRun('interrupted')).toBe(true)
     expect(isProblemRun('completed')).toBe(false)
     expect(isProblemRun('missed')).toBe(false)
+  })
+})
+
+describe('webhook schedules', () => {
+  it('start from the first preset, signed the way its sender signs', () => {
+    const rule = ruleForKind('webhook', '', zone, now)
+    expect(rule).toMatchObject({ kind: 'webhook', source: 'github', signature: { header: 'x-hub-signature-256' } })
+    expect(presetOf(rule as ReturnType<typeof webhookRule>)?.id).toBe(WEBHOOK_PRESETS[0]!.id)
+  })
+  it('stop naming a preset once its filters change', () => {
+    const rule = webhookRule(WEBHOOK_PRESETS[0]!)
+    expect(presetOf({ ...rule, filters: [] })).toBeNull()
+  })
+  it('save without an upcoming time, and read a typed list', () => {
+    const form = { busy: false, previewLoading: false, preview: [], name: 'Fix CI', prompt: 'Fix it' }
+    expect(canSaveSchedule(form)).toBe(false)
+    expect(canSaveSchedule({ ...form, webhook: true })).toBe(true)
+    expect(splitList(' opened, ,reopened ')).toEqual(['opened', 'reopened'])
   })
 })
