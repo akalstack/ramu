@@ -1,13 +1,33 @@
 import { systemTimezone } from '@ramu/shared/workspace/timezone'
 import { cleanLabel, clipText } from '@ramu/shared/text'
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { DateTime } from 'luxon'
 import { z } from 'zod'
 import type { Db } from '../db'
 import type { AgentService } from '../agent'
 import type { Workspace } from '../workspace/workspace'
 import { threadOutcome } from './threadOutcome'
-import { NO_PROJECT, type Schedule, type ScheduleInput, type ScheduleRule, type ScheduleRun } from '@ramu/shared/types'
+import {
+  NO_PROJECT,
+  type Schedule,
+  type ScheduleInput,
+  type ScheduleRule,
+  type ScheduleRun,
+  type WebhookDelivery,
+} from '@ramu/shared/types'
+import {
+  MAX_WEBHOOK_FILTERS,
+  WEBHOOK_PRESETS,
+  describeRequest,
+  excerpt,
+  failedFilter,
+  isWebhookPath,
+  renderKey,
+  sampleRequest,
+  webhookPrompt,
+  type WebhookRequest,
+  type WebhookTrigger,
+} from '@ramu/shared/webhooks'
 
 export const settingsSchema = z.object({
   provider: z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity']),
@@ -26,12 +46,44 @@ const instant = z
     (s) => /(?:Z|[+-]\d\d:\d\d)$/.test(s) && DateTime.fromISO(s).isValid,
     'Use an ISO timestamp with an explicit offset',
   )
+const webhookPath = z.string().max(200).refine(isWebhookPath, 'Use a path like body.action or headers.x-github-event')
+const filterText = z.string().max(300)
+const webhookRuleSchema = z.object({
+  kind: z.literal('webhook'),
+  source: z.enum(['github', 'gitlab', 'sentry', 'generic']),
+  filters: z
+    .array(
+      z.discriminatedUnion('op', [
+        z.object({ path: webhookPath, op: z.enum(['equals', 'notEquals', 'startsWith']), value: filterText }),
+        z.object({ path: webhookPath, op: z.literal('in'), value: z.array(filterText.min(1)).min(1).max(50) }),
+        z.object({ path: webhookPath, op: z.literal('exists') }),
+      ]),
+    )
+    .max(MAX_WEBHOOK_FILTERS),
+  signature: z
+    .discriminatedUnion('kind', [
+      z.object({
+        kind: z.literal('hmac'),
+        header: z.string().trim().toLowerCase().min(1).max(100),
+        encoding: z.enum(['hex', 'base64']),
+        prefix: z.string().max(40),
+      }),
+      z.object({ kind: z.literal('token'), header: z.string().trim().toLowerCase().min(1).max(100) }),
+    ])
+    .nullable(),
+  replayKey: z.string().max(300).nullable(),
+  coalesceKey: z.string().max(300).nullable(),
+  coalesceSeconds: z.number().int().min(10).max(3600).default(120),
+  maxAgeMinutes: z.number().int().min(1).max(1440).nullable(),
+  fields: z.array(webhookPath).max(40),
+})
 export const ruleSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('once'), at: instant }),
   z.object({ kind: z.literal('daily'), time }),
   z.object({ kind: z.literal('weekly'), time, weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7) }),
   z.object({ kind: z.literal('monthly'), time, day: z.number().int().min(1).max(31) }),
   z.object({ kind: z.literal('interval'), minutes: z.number().int().min(5).max(525600), anchor: instant }),
+  webhookRuleSchema,
 ])
 export const scheduleSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -51,6 +103,7 @@ export const scheduleSchema = z.object({
 /** Calendar rules preserve wall-clock time. DST gaps shift forward; folds use the earlier instant.
  * Monthly dates absent from a month are skipped, rather than silently moved to another day. */
 export function nextOccurrence(rule: ScheduleRule, timezone: string, after: number): number | null {
+  if (rule.kind === 'webhook') return null
   if (rule.kind === 'once') {
     const at = DateTime.fromISO(rule.at).toMillis()
     return at > after ? at : null
@@ -90,19 +143,53 @@ interface ScheduleRow {
   next_run_at: number | null
   created_at: number
 }
-const mapSchedule = (r: ScheduleRow): Schedule => ({
-  ...JSON.parse(r.data),
-  id: r.id,
-  state: r.state,
-  nextRunAt: r.next_run_at,
-  createdAt: r.created_at,
-})
+/** What `data` holds beyond the schedule itself: a webhook schedule's address token and signing secret. */
+interface StoredWebhook {
+  webhookToken?: string
+  webhookSecret?: string | null
+}
+/** The secret never leaves the host this way; `schedules.webhook` hands it out to someone setting up the sender. */
+const mapSchedule = (r: ScheduleRow): Schedule => {
+  const { webhookToken, webhookSecret, ...data } = JSON.parse(r.data) as ScheduleInput & StoredWebhook
+  return {
+    ...data,
+    ...(webhookToken ? { webhook: { hasSecret: Boolean(webhookSecret) } } : {}),
+    id: r.id,
+    state: r.state,
+    nextRunAt: r.next_run_at,
+    createdAt: r.created_at,
+  } as Schedule
+}
+const newToken = () => randomBytes(24).toString('base64url')
+const newSecret = () => randomBytes(32).toString('hex')
+
+/** What a webhook-started run says, kept until the run's thread starts. */
+interface RunPrompt {
+  prompt: string
+  title: string
+  coalesceKey: string | null
+  queuedAt: number
+}
+interface StoredDelivery extends WebhookDelivery {
+  replayKey: string | null
+}
+/** Enough history to see what has been arriving; older deliveries drop off. */
+const MAX_LOGGED_DELIVERIES = 50
+/** Runs waiting behind a running one; beyond this a burst records deliveries but queues nothing more. */
+const MAX_WAITING_RUNS = 5
+/** How long a replay key is remembered: senders retry for hours, not days. */
+const REPLAY_WINDOW_MS = 24 * 60 * 60_000
 /** This many failed runs in a row pause a schedule, so a broken task stops spending runs and tokens until someone looks. */
 export const MAX_CONSECUTIVE_FAILURES = 3
 const RUN_COLUMNS =
   'id, schedule_id AS scheduleId, due_at AS dueAt, task_id AS taskId, session_id AS sessionId, status, attempts, retry_at AS retryAt, error, created_at AS createdAt'
 
+const logKey = (scheduleId: string) => `webhook-log:${scheduleId}`
+const promptKey = (runId: string) => `schedule-run-prompt:${runId}`
+
 export class ScheduleService {
+  /** The host's addresses a sender could reach, set by the server once its routes are known. */
+  webhookBases: () => { url: string; via: string }[] = () => []
   private ticking = false
   private stopping = false
   async stop(): Promise<void> {
@@ -157,7 +244,17 @@ export class ScheduleService {
     const value = this.validate(input),
       old = id ? this.get(id) : null
     const at = nextOccurrence(value.rule, value.timezone, now)
-    if (at === null) throw new Error('Choose a future execution time')
+    const webhook = value.rule.kind === 'webhook'
+    if (at === null && !webhook) throw new Error('Choose a future execution time')
+    // An edit keeps the address senders already have; a secret is made once a signature is chosen.
+    const stored = old ? this.stored(old.id) : {}
+    const keys: StoredWebhook = webhook
+      ? {
+          webhookToken: stored.webhookToken ?? newToken(),
+          webhookSecret:
+            value.rule.kind === 'webhook' && value.rule.signature ? (stored.webhookSecret ?? newSecret()) : null,
+        }
+      : {}
     // An edit may be the fix for what failed, so earlier failures stop counting; a pause and its reason stay until resumed.
     const extras = {
       failuresAfter: this.lastRunMark(),
@@ -175,7 +272,7 @@ export class ScheduleService {
       .prepare(
         'INSERT INTO schedules VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data=excluded.data, state=excluded.state, next_run_at=excluded.next_run_at',
       )
-      .run(schedule.id, JSON.stringify({ ...value, ...extras }), schedule.state, at, schedule.createdAt)
+      .run(schedule.id, JSON.stringify({ ...value, ...extras, ...keys }), schedule.state, at, schedule.createdAt)
     // Editing cancels occurrences that have not begun; an already-running chat remains independent.
     if (id)
       this.db
@@ -184,14 +281,18 @@ export class ScheduleService {
         )
         .run(id)
     this.changed()
-    return schedule
+    return this.get(schedule.id)
+  }
+  private stored(id: string): StoredWebhook {
+    const row = this.db.prepare('SELECT data FROM schedules WHERE id = ?').get(id) as { data: string } | undefined
+    return row ? (JSON.parse(row.data) as StoredWebhook) : {}
   }
   pause(id: string, paused: boolean): Schedule {
     const s = this.get(id)
     const at = paused ? s.nextRunAt : nextOccurrence(s.rule, s.timezone, Date.now())
-    this.db
-      .prepare('UPDATE schedules SET state=?, next_run_at=? WHERE id=?')
-      .run(paused ? 'paused' : at === null ? 'completed' : 'active', at, id)
+    // A webhook schedule has no next time, and resuming makes it listen again rather than complete.
+    const state = paused ? 'paused' : at === null && s.rule.kind !== 'webhook' ? 'completed' : 'active'
+    this.db.prepare('UPDATE schedules SET state=?, next_run_at=? WHERE id=?').run(state, at, id)
     // A resume starts the failure count again and drops the reason it was paused for.
     if (!paused) this.patchData(id, { pausedReason: undefined, failuresAfter: this.lastRunMark() })
     if (paused)
@@ -207,7 +308,10 @@ export class ScheduleService {
   private lastRunMark(): number {
     return (this.db.prepare('SELECT COALESCE(MAX(rowid), 0) AS mark FROM schedule_runs').get() as { mark: number }).mark
   }
-  private patchData(id: string, patch: Partial<Pick<Schedule, 'pausedReason' | 'failuresAfter'>>): void {
+  private patchData(
+    id: string,
+    patch: Partial<Pick<Schedule, 'pausedReason' | 'failuresAfter'> & StoredWebhook>,
+  ): void {
     const row = this.db.prepare('SELECT data FROM schedules WHERE id = ?').get(id) as { data: string } | undefined
     if (row)
       this.db
@@ -234,8 +338,221 @@ export class ScheduleService {
   }
   delete(id: string): void {
     this.get(id)
+    const runs = this.db.prepare('SELECT id FROM schedule_runs WHERE schedule_id=?').all(id) as { id: string }[]
+    for (const run of runs) this.db.prepare('DELETE FROM app_state WHERE key=?').run(promptKey(run.id))
+    this.db.prepare('DELETE FROM app_state WHERE key=?').run(logKey(id))
     this.db.prepare('DELETE FROM schedules WHERE id=?').run(id)
     this.changed()
+  }
+
+  // Webhooks. A request arrives with its address token, already read and size-checked by the host; the signature is
+  // checked here because only the schedule knows its secret.
+
+  /** The schedule a token belongs to, with its secret; null for an unknown token. */
+  webhookTarget(token: string): { schedule: Schedule; secret: string | null } | null {
+    for (const row of this.db
+      .prepare("SELECT * FROM schedules WHERE json_extract(data, '$.webhookToken') = ?")
+      .all(token) as unknown as ScheduleRow[]) {
+      const schedule = mapSchedule(row)
+      if (schedule.rule.kind === 'webhook') return { schedule, secret: this.stored(row.id).webhookSecret ?? null }
+    }
+    return null
+  }
+  /** The schedule's address on every route, and its secret for pasting into the sender. */
+  webhook(id: string): { path: string; urls: { url: string; via: string }[]; secret: string | null } {
+    if (this.get(id).rule.kind !== 'webhook') throw new Error('This schedule does not start from webhooks')
+    const stored = this.stored(id)
+    const path = `/hooks/${stored.webhookToken}`
+    return {
+      path,
+      urls: this.webhookBases().map((base) => ({ url: `${base.url.replace(/\/$/, '')}${path}`, via: base.via })),
+      secret: stored.webhookSecret ?? null,
+    }
+  }
+  rotateWebhook(id: string): Schedule {
+    const schedule = this.get(id)
+    if (schedule.rule.kind !== 'webhook') throw new Error('This schedule does not start from webhooks')
+    this.patchData(id, { webhookToken: newToken(), webhookSecret: schedule.rule.signature ? newSecret() : null })
+    this.changed()
+    return this.get(id)
+  }
+  setWebhookSecret(id: string, secret: string | null): Schedule {
+    const schedule = this.get(id)
+    if (schedule.rule.kind !== 'webhook') throw new Error('This schedule does not start from webhooks')
+    if (secret !== null && !schedule.rule.signature) throw new Error('Choose how the sender signs requests first')
+    this.patchData(id, { webhookSecret: secret })
+    this.changed()
+    return this.get(id)
+  }
+  deliveries(id: string): WebhookDelivery[] {
+    this.get(id)
+    return this.log(id).map(({ replayKey: _replayKey, ...delivery }) => delivery)
+  }
+  private log(id: string): StoredDelivery[] {
+    return this.workspace.getAppState<StoredDelivery[]>(logKey(id), [])
+  }
+  private record(delivery: StoredDelivery): WebhookDelivery {
+    this.workspace.setAppState(
+      logKey(delivery.scheduleId),
+      [delivery, ...this.log(delivery.scheduleId)].slice(0, MAX_LOGGED_DELIVERIES),
+    )
+    this.changed()
+    const { replayKey: _replayKey, ...shown } = delivery
+    return shown
+  }
+
+  /**
+   * Decides what one request does: filters, repeats, age and a burst for the same subject are checked in that order,
+   * and every request is logged with its outcome. `signed` is false when the signature did not check out.
+   */
+  deliver(
+    schedule: Schedule,
+    request: WebhookRequest,
+    options: { signed: boolean; receivedAt?: number; heldMs?: number; now?: number },
+  ): WebhookDelivery {
+    const rule = schedule.rule as WebhookTrigger
+    const now = options.now ?? Date.now()
+    const receivedAt = options.receivedAt ?? now
+    const summary = clipText(describeRequest(rule.source, request), 200)
+    const base = {
+      id: randomUUID(),
+      scheduleId: schedule.id,
+      receivedAt,
+      heldMs: options.heldMs ?? 0,
+      summary,
+      runId: null,
+      excerpt: excerpt(request, rule.fields),
+      replayKey: rule.replayKey ? renderKey(rule.replayKey, request) : null,
+    }
+    const skip = (outcome: WebhookDelivery['outcome'], detail: string) => this.record({ ...base, outcome, detail })
+    if (!options.signed) return skip('bad-signature', 'The signature did not match the secret. Nothing ran.')
+    const failed = failedFilter(request, rule.filters)
+    if (failed)
+      return skip(
+        'filtered',
+        `${failed.path} ${failed.op}${'value' in failed ? ` ${Array.isArray(failed.value) ? failed.value.join(', ') : failed.value}` : ''} did not match.`,
+      )
+    if (
+      base.replayKey &&
+      this.log(schedule.id).some(
+        (entry) =>
+          entry.replayKey === base.replayKey &&
+          now - entry.receivedAt < REPLAY_WINDOW_MS &&
+          entry.outcome !== 'bad-signature',
+      )
+    )
+      return skip('duplicate', 'The sender sent this delivery again; it already arrived.')
+    if (rule.maxAgeMinutes !== null && now - receivedAt > rule.maxAgeMinutes * 60_000)
+      return skip(
+        'too-old',
+        `It waited ${Math.round((now - receivedAt) / 60_000)} minutes while this host was offline.`,
+      )
+    if (schedule.state !== 'active') return skip('paused', 'The schedule is paused.')
+    return this.queueFromDelivery(schedule, request, base, 'started', now)
+  }
+
+  /** Queues a run for a delivery, or folds it into a run still waiting for the same subject. */
+  private queueFromDelivery(
+    schedule: Schedule,
+    request: WebhookRequest,
+    base: Omit<StoredDelivery, 'outcome' | 'detail'>,
+    outcome: 'started' | 'test' | 'replayed',
+    now: number,
+    requestExcerpt = base.excerpt,
+  ): WebhookDelivery {
+    const rule = schedule.rule as WebhookTrigger
+    const coalesceKey = rule.coalesceKey ? renderKey(rule.coalesceKey, request) : null
+    const prompt: RunPrompt = {
+      prompt: webhookPrompt(
+        schedule.prompt,
+        base.summary,
+        requestExcerpt,
+        DateTime.fromMillis(base.receivedAt, { zone: schedule.timezone }).toFormat('LLL d HH:mm'),
+      ),
+      title: clipText(`${schedule.name} · ${base.summary}`, 200),
+      coalesceKey,
+      queuedAt: now,
+    }
+    const waiting = this.db
+      .prepare(
+        `SELECT ${RUN_COLUMNS} FROM schedule_runs WHERE schedule_id=? AND status='queued' AND task_id IS NULL ORDER BY due_at`,
+      )
+      .all(schedule.id) as unknown as ScheduleRun[]
+    if (coalesceKey && outcome === 'started') {
+      const same = waiting.find((run) => {
+        const queued = this.workspace.getAppState<RunPrompt | null>(promptKey(run.id), null)
+        return queued?.coalesceKey === coalesceKey && now - queued.queuedAt < rule.coalesceSeconds * 1000
+      })
+      if (same) {
+        // The latest request describes the subject best, so the waiting run takes its prompt.
+        this.workspace.setAppState(promptKey(same.id), { ...prompt, queuedAt: now })
+        return this.record({
+          ...base,
+          outcome: 'coalesced',
+          detail: 'Joined a run already waiting for the same subject.',
+          runId: same.id,
+        })
+      }
+    }
+    if (waiting.length >= MAX_WAITING_RUNS)
+      return this.record({
+        ...base,
+        outcome: 'paused',
+        detail: `${MAX_WAITING_RUNS} runs are already waiting. Replay it once they finish.`,
+      })
+    let due = now
+    while (this.db.prepare('SELECT 1 FROM schedule_runs WHERE schedule_id=? AND due_at=?').get(schedule.id, due)) due++
+    const runId = randomUUID()
+    this.db
+      .prepare("INSERT INTO schedule_runs (id,schedule_id,due_at,status,created_at) VALUES (?,?,?,'queued',?)")
+      .run(runId, schedule.id, due, now)
+    this.workspace.setAppState(promptKey(runId), prompt)
+    const delivery = this.record({ ...base, outcome, detail: null, runId })
+    void this.tick()
+    return delivery
+  }
+
+  replay(id: string, deliveryId: string, now = Date.now()): WebhookDelivery {
+    const schedule = this.get(id)
+    const original = this.log(id).find((entry) => entry.id === deliveryId)
+    if (!original || schedule.rule.kind !== 'webhook') throw new Error('That delivery is no longer in the log')
+    // The log keeps only the excerpt, so the replay runs on what the agent would have read.
+    return this.queueFromDelivery(
+      schedule,
+      { headers: {}, body: {} },
+      { ...original, id: randomUUID(), receivedAt: now, heldMs: 0, runId: null, replayKey: null },
+      'replayed',
+      now,
+      original.excerpt,
+    )
+  }
+
+  sendTest(id: string, now = Date.now()): WebhookDelivery {
+    const schedule = this.get(id)
+    const rule = schedule.rule
+    if (rule.kind !== 'webhook') throw new Error('This schedule does not start from webhooks')
+    const preset = WEBHOOK_PRESETS.find((entry) => entry.source === rule.source) ?? WEBHOOK_PRESETS.at(-1)!
+    const request = sampleRequest({
+      ...preset,
+      filters: rule.filters,
+      fields: rule.fields.length ? rule.fields : preset.fields,
+    })
+    return this.queueFromDelivery(
+      schedule,
+      request,
+      {
+        id: randomUUID(),
+        scheduleId: id,
+        receivedAt: now,
+        heldMs: 0,
+        summary: `Test · ${describeRequest(rule.source, request)}`,
+        runId: null,
+        excerpt: excerpt(request, rule.fields),
+        replayKey: null,
+      },
+      'test',
+      now,
+    )
   }
   runNow(id: string): ScheduleRun {
     this.get(id)
@@ -327,14 +644,17 @@ export class ScheduleService {
           continue
         const s = this.get(run.scheduleId)
         try {
+          const fromWebhook = this.workspace.getAppState<RunPrompt | null>(promptKey(run.id), null)
           const task = run.taskId
             ? this.workspace.getTask(run.taskId)
             : await this.workspace.createTask({
                 projectId: s.projectId,
-                title: clipText(
-                  `${s.name} · ${DateTime.fromMillis(run.dueAt, { zone: s.timezone }).toFormat('LLL d HH:mm')}`,
-                  200,
-                ),
+                title:
+                  fromWebhook?.title ??
+                  clipText(
+                    `${s.name} · ${DateTime.fromMillis(run.dueAt, { zone: s.timezone }).toFormat('LLL d HH:mm')}`,
+                    200,
+                  ),
                 mode: s.workspaceId ? 'worktree' : 'current',
                 workspaceId: s.workspaceId ?? undefined,
               })
@@ -348,7 +668,8 @@ export class ScheduleService {
           }
           await this.agents.validateSettings(s.settings)
           // Starting and recording the session are synchronous; no tick can claim this occurrence twice.
-          const session = await this.agents.startReviewed(task.id, scope, s.prompt, s.settings)
+          const session = await this.agents.startReviewed(task.id, scope, fromWebhook?.prompt ?? s.prompt, s.settings)
+          if (fromWebhook) this.db.prepare('DELETE FROM app_state WHERE key=?').run(promptKey(run.id))
           this.db
             .prepare(
               "UPDATE schedule_runs SET session_id=?, status='running', attempts=attempts+1, retry_at=NULL, error=NULL WHERE id=?",

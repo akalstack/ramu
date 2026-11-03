@@ -712,6 +712,18 @@ export interface RamuMethods {
   'schedules.runNow'(id: string): ScheduleRun
   'schedules.runs'(id?: string): ScheduleRun[]
   'schedules.preview'(rule: ScheduleRule, timezone: string): number[]
+  /** The latest requests a webhook schedule received, newest first. */
+  'schedules.deliveries'(id: string): import('./types').WebhookDelivery[]
+  /** Starts a run from a delivery again, whatever its outcome was (a filter that was too strict, a paused schedule). */
+  'schedules.replay'(id: string, deliveryId: string): import('./types').WebhookDelivery
+  /** Starts a run from a made-up request shaped like the preset expects. */
+  'schedules.sendTest'(id: string): import('./types').WebhookDelivery
+  /** Where senders reach this schedule, through every route the host has, and its signing secret for copying. */
+  'schedules.webhook'(id: string): { path: string; urls: { url: string; via: string }[]; secret: string | null }
+  /** A new address and secret; the old ones stop working at once. */
+  'schedules.rotateWebhook'(id: string): Schedule
+  /** A secret the sender chose (Sentry gives you one), or null to sign nothing. */
+  'schedules.setWebhookSecret'(id: string, secret: string | null): Schedule
   'recaps.get'(): RecapSnapshot
   'recaps.refresh'(): RecapSnapshot
   'recaps.act'(id: string, action: 'open' | 'done' | 'dismissed' | 'snoozed', until?: number): void

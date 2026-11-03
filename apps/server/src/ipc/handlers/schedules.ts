@@ -25,6 +25,18 @@ export const registerScheduleHandlers: RegisterHandlers = ({ schedules, recaps }
       return previewOccurrences(rule, zone, Date.now())
     },
   },
+  'schedules.deliveries': { args: z.tuple([id]), run: (scheduleId: string) => schedules.deliveries(scheduleId) },
+  'schedules.replay': {
+    args: z.tuple([id, id]),
+    run: (scheduleId: string, deliveryId: string) => schedules.replay(scheduleId, deliveryId),
+  },
+  'schedules.sendTest': { args: z.tuple([id]), run: (scheduleId: string) => schedules.sendTest(scheduleId) },
+  'schedules.webhook': { args: z.tuple([id]), run: (scheduleId: string) => schedules.webhook(scheduleId) },
+  'schedules.rotateWebhook': { args: z.tuple([id]), run: (scheduleId: string) => schedules.rotateWebhook(scheduleId) },
+  'schedules.setWebhookSecret': {
+    args: z.tuple([id, z.string().trim().min(8).max(500).nullable()]),
+    run: (scheduleId: string, secret: string | null) => schedules.setWebhookSecret(scheduleId, secret),
+  },
   'recaps.get': { args: z.tuple([]), run: () => recaps.snapshot() },
   'recaps.refresh': { args: z.tuple([]), run: () => recaps.refresh() },
   'recaps.act': {

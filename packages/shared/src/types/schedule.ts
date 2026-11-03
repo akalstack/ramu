@@ -1,4 +1,5 @@
 import type { AgentSettings } from './agent'
+import type { WebhookTrigger } from '../webhooks'
 
 export type ScheduleRule =
   | { kind: 'once'; at: string }
@@ -6,6 +7,7 @@ export type ScheduleRule =
   | { kind: 'weekly'; time: string; weekdays: number[] }
   | { kind: 'monthly'; time: string; day: number }
   | { kind: 'interval'; minutes: number; anchor: string }
+  | WebhookTrigger
 export interface ScheduleInput {
   name: string
   prompt: string
@@ -26,6 +28,39 @@ export interface Schedule extends ScheduleInput {
   pausedReason?: string
   /** Failed runs up to this point in the run history no longer count towards pausing (set on an edit or a resume). */
   failuresAfter?: number
+  /**
+   * Set on a webhook schedule. Its address is a credential (anyone holding it can send requests), so it is not here,
+   * where viewer devices can read it; `schedules.webhook` gives it to full-access devices.
+   */
+  webhook?: { hasSecret: boolean }
+}
+/** One request a webhook schedule received, and what came of it. */
+export interface WebhookDelivery {
+  id: string
+  scheduleId: string
+  receivedAt: number
+  /** How long Ramu Link held it while the host was offline. */
+  heldMs: number
+  /**
+   * `started` queued a run; `coalesced` joined one already waiting for the same subject; `test` and `replayed` were
+   * started from Ramu. The rest started nothing, and `detail` says why.
+   */
+  outcome:
+    | 'started'
+    | 'coalesced'
+    | 'test'
+    | 'replayed'
+    | 'filtered'
+    | 'duplicate'
+    | 'bad-signature'
+    | 'too-old'
+    | 'paused'
+    | 'invalid'
+  summary: string
+  detail: string | null
+  runId: string | null
+  /** The fields the prompt received (or would have), kept so a delivery can be replayed. */
+  excerpt: string
 }
 export interface ScheduleRun {
   id: string

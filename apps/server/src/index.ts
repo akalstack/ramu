@@ -111,6 +111,7 @@ import { TerminalService } from './workspace/pty'
 import { createDispatcher } from './ipc'
 import { OperationLog, runOnce } from './ipc/operationLog'
 import { ScheduleService, scheduleSchema } from './background/schedules'
+import { WEBHOOK_PATH, WebhookReceiver, readWebhookBody } from './background/webhookReceiver'
 import { PullRequestWatchService } from './background/pullRequestWatches'
 import { AgentThreadService, hostThreadRequest } from './background/agentThreads'
 import { describeValidationError } from './validation'
@@ -441,6 +442,14 @@ const schedules = new ScheduleService(
   changed,
   () => void mobilePush.deliverScheduleFailure().catch(() => {}),
 )
+const webhooks = new WebhookReceiver(schedules)
+// Where a sender can reach this host: every address the listener serves, then Ramu Link's public address.
+schedules.webhookBases = () => [
+  ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []).map((candidate) => ({
+    url: candidate.url,
+    via: candidate.interface,
+  })),
+]
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
 schedules.recover()
 // eslint-disable-next-line prefer-const -- declared earlier because closures built before this point reference it
@@ -931,6 +940,18 @@ const handle = () => async (req: import('node:http').IncomingMessage, res: Serve
       res
         .writeHead(outcome.ok ? 200 : 400, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' })
         .end(oauthPage(outcome.message))
+      return
+    }
+    // A webhook carries no device token: its unguessable address and the schedule's signature check stand in for one.
+    const hookPath = (req.url ?? '').split('?')[0] ?? ''
+    if (req.method === 'POST' && hookPath.startsWith(WEBHOOK_PATH)) {
+      const raw = await readWebhookBody(req)
+      const answer = raw
+        ? webhooks.receive(decodeURIComponent(hookPath.slice(WEBHOOK_PATH.length)), req.headers, raw)
+        : ({ status: 413, error: 'The request is too large' } as const)
+      res
+        .writeHead(answer.status, json)
+        .end(JSON.stringify('delivery' in answer ? { outcome: answer.delivery.outcome } : { error: answer.error }))
       return
     }
     const authenticated = await remoteAccess.accept(req, res)
