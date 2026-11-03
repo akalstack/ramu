@@ -3,8 +3,18 @@ import { transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Animated, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react'
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -1222,7 +1232,13 @@ export default function ChatScreen() {
                 }
               />
               {/* Covers the transcript while it settles at its end, then fades away; the composer stays above it. */}
-              <OpeningCover visible={!revealed} color={c.window} spinner={c.muted} />
+              <OpeningCover
+                visible={!revealed}
+                color={c.window}
+                spinner={c.muted}
+                top={topInset}
+                bottom={composerHeight}
+              />
               {ios ? null : <TopFade visible={scrolled} color={c.window} />}
               <KeyboardLift keyboard={keyboard}>
                 <BottomFade height={composerHeight * 0.75} color={c.window} />
@@ -1620,8 +1636,25 @@ export default function ChatScreen() {
 }
 
 /** A plain surface with Ramu's loading mark over a thread that is still settling, faded out once it is ready. */
-function OpeningCover({ visible, color, spinner }: { visible: boolean; color: string; spinner: string }) {
+function OpeningCover({
+  visible,
+  color,
+  spinner,
+  top,
+  bottom,
+}: {
+  visible: boolean
+  color: string
+  spinner: string
+  /** Where the floating header ends and the composer begins, from the window's top and bottom edges. */
+  top: number
+  bottom: number
+}) {
   const say = useSay()
+  const window = useWindowDimensions()
+  const cover = useRef<ComponentRef<typeof View>>(null)
+  // The cover's own top in the window: it is not the screen's, and the cover runs past the bottom edge.
+  const [offset, setOffset] = useState<number | null>(null)
   const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current
   const [mounted, setMounted] = useState(visible)
   useEffect(() => {
@@ -1637,13 +1670,27 @@ function OpeningCover({ visible, color, spinner }: { visible: boolean; color: st
   if (!mounted) return null
   return (
     <Animated.View
+      ref={cover}
       pointerEvents="none"
-      style={[
-        StyleSheet.absoluteFill,
-        { backgroundColor: color, opacity, alignItems: 'center', justifyContent: 'center' },
-      ]}
+      onLayout={() => cover.current?.measureInWindow((_, y) => setOffset(y))}
+      style={[StyleSheet.absoluteFill, { backgroundColor: color, opacity }]}
     >
-      <LoadingMark color={spinner} label={say('Loading conversation')} />
+      {offset === null ? null : (
+        // Centered in what is visible between the floating header and the composer.
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: Math.max(top, offset) - offset,
+            height: Math.max(0, window.height - bottom - Math.max(top, offset)),
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <LoadingMark color={spinner} label={say('Loading conversation')} />
+        </View>
+      )}
     </Animated.View>
   )
 }
