@@ -2,9 +2,9 @@ import { translate } from '@ramu/shared/i18n'
 import { recentThreads } from '../../../runtime/recentThreads'
 import { groupSummary, startedGroups } from '@ramu/shared/workspace/startedGroups'
 import { groupThreads, type ThreadGroup } from '../../../runtime/threadGroups'
-import { useMemo, useState } from 'react'
-import { Platform, Pressable, ScrollView as HScroll, View } from 'react-native'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { BackHandler, Platform, Pressable, ScrollView as HScroll, View } from 'react-native'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Folder,
   FolderGit2,
@@ -17,6 +17,9 @@ import {
   WifiOff,
   Clock,
   X,
+  Archive,
+  Check,
+  Trash2,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { useStore, type OutboxItem } from '../../../runtime/store'
@@ -33,6 +36,8 @@ import { confirmCancel } from '../../../components/Outbox'
 import { TopFade } from '../../../components/Glass'
 import { useTabActions } from '../../../components/Overlays'
 import { ComputerSwitcher } from '../../../components/ComputerSwitcher'
+import { useBulkThreadActions } from '../../../components/BulkThreadActions'
+import { threadSelection, useThreadSelection } from '../../../runtime/threadSelection'
 
 type Position = { first?: boolean; last?: boolean; gap?: number }
 type HomeRow = { key: string } & Position &
@@ -70,6 +75,20 @@ export default function Threads() {
   const [historyLimit, setHistoryLimit] = useState(20)
   const pc = computers.find((x) => x.id === selected)
   const actions = useTabActions()
+  const selection = useThreadSelection()
+  const bulk = useBulkThreadActions()
+  const picked = useMemo(() => chats.filter((chat) => selection.ids.has(chat.id)), [chats, selection.ids])
+  // Deleted threads leave the selection; leaving the tab ends selecting.
+  useEffect(() => threadSelection.keep(new Set(chats.map((chat) => chat.id))), [chats])
+  useFocusEffect(useCallback(() => () => threadSelection.clear(), []))
+  useEffect(() => {
+    if (!selection.on) return
+    const back = BackHandler.addEventListener('hardwareBackPress', () => {
+      threadSelection.clear()
+      return true
+    })
+    return () => back.remove()
+  }, [selection.on])
   const [usageOpen, setUsageOpen] = useState(false)
 
   type StatusFilter = 'all' | 'running' | 'needs-input' | 'failed' | 'archived'
@@ -298,7 +317,7 @@ export default function Threads() {
           )
         })()
       ) : row.kind === 'chat' ? (
-        <ChatRow chat={row.chat} project={row.project} divider={row.divider} />
+        <ChatRow chat={row.chat} project={row.project} divider={row.divider} selectable />
       ) : row.kind === 'more' ? (
         <Row
           onPress={() => (row.group ? toggle(setExpanded, row.group) : setHistoryLimit((limit) => limit + 20))}
@@ -423,31 +442,77 @@ export default function Threads() {
     )
   }
 
+  const say = (text: string, values?: Record<string, string | number>) => translate(store.language, text, values)
+  const header = selection.on ? (
+    <Header
+      back={false}
+      title={picked.length ? say('{0} selected', { 0: picked.length }) : say('Select threads')}
+      right={
+        <>
+          {bulk.writable(picked) ? (
+            <>
+              <HeaderButton
+                actionId="select-done"
+                icon={Check}
+                label={say('Mark selected done')}
+                systemIcon="checkmark.circle"
+                onPress={() => void bulk.markDone(picked)}
+              />
+              <HeaderButton
+                actionId="select-archive"
+                icon={Archive}
+                label={say('Archive selected')}
+                systemIcon="archivebox"
+                onPress={() => void bulk.archive(picked)}
+              />
+              <HeaderButton
+                actionId="select-delete"
+                icon={Trash2}
+                label={say('Delete selected…')}
+                systemIcon="trash"
+                onPress={() => void bulk.remove(picked)}
+              />
+            </>
+          ) : null}
+          <HeaderButton
+            actionId="select-cancel"
+            icon={X}
+            label={say('Cancel selection')}
+            systemIcon="xmark"
+            onPress={() => threadSelection.clear()}
+          />
+        </>
+      }
+    />
+  ) : null
   return (
     <Screen>
-      <Header
-        back={false}
-        large
-        scrollEdge
-        collapsed={edge.scrolled}
-        title={t.chats}
-        right={
-          <>
-            {computers.some(
-              (host) => (merged || host.id === selected) && store.appPreferences?.[host.id]?.showUsageLimits !== false,
-            ) ? (
-              <HeaderButton
-                actionId="tab-usage"
-                icon={Gauge}
-                label={store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'}
-                systemIcon="gauge.with.dots.needle.50percent"
-                onPress={() => setUsageOpen(true)}
-              />
-            ) : null}
-            {actions}
-          </>
-        }
-      />
+      {header ?? (
+        <Header
+          back={false}
+          large
+          scrollEdge
+          collapsed={edge.scrolled}
+          title={t.chats}
+          right={
+            <>
+              {computers.some(
+                (host) =>
+                  (merged || host.id === selected) && store.appPreferences?.[host.id]?.showUsageLimits !== false,
+              ) ? (
+                <HeaderButton
+                  actionId="tab-usage"
+                  icon={Gauge}
+                  label={store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'}
+                  systemIcon="gauge.with.dots.needle.50percent"
+                  onPress={() => setUsageOpen(true)}
+                />
+              ) : null}
+              {actions}
+            </>
+          }
+        />
+      )}
       <PageFlatList
         data={rows}
         keyExtractor={(row) => row.key}

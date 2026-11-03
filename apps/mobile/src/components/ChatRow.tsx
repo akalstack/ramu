@@ -1,7 +1,7 @@
 import { memo, useState } from 'react'
 import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Archive, ArchiveRestore, Check, Clock, GitBranch, Pin, RotateCcw } from 'lucide-react-native'
+import { Archive, ArchiveRestore, Check, Clock, GitBranch, ListChecks, Pin, RotateCcw } from 'lucide-react-native'
 import { TEXT_SCALE, font, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
 import { ago, useT, type Strings, useSay } from '../i18n'
@@ -13,6 +13,7 @@ import { ComputerUseNotice } from './ComputerUseNotice'
 import { useComputerUse } from '../runtime/computerUse'
 import { Monitor } from 'lucide-react-native'
 import { useStore } from '../runtime/store'
+import { threadSelection, useThreadSelection } from '../runtime/threadSelection'
 
 const SHORT = {
   working: ['threadWorking', 'threadWorkingFull'],
@@ -34,10 +35,13 @@ export const ChatRow = memo(function ChatRow({
   chat,
   project,
   divider,
+  selectable,
 }: {
   chat: Chat
   project?: string
   divider?: boolean
+  /** The list offers Select: while selecting, a tap picks the row instead of opening it. */
+  selectable?: boolean
 }) {
   const say = useSay()
   const { c, textSize } = useTheme()
@@ -61,11 +65,14 @@ export const ChatRow = memo(function ChatRow({
         chat.goal && { ...chat.goal, verifying: !!chat.goal.claim },
       )
   const online = store.isOnline(chat.computerId)
+  const selection = useThreadSelection()
+  const selecting = !!selectable && selection.on && !chat.pending
+  const picked = selecting && selection.ids.has(chat.id)
   const [shortKey, fullKey] = status ? SHORT[status.kind] : []
   // A thread with no project and nothing to preview is one line; its row is centered instead of leaving a blank line.
   const hasDetail = Boolean(project || chat.mode === 'worktree' || chat.preview)
   const actions =
-    chat.pending || commands.viewOnly
+    chat.pending || commands.viewOnly || selecting
       ? []
       : [
           {
@@ -117,10 +124,16 @@ export const ChatRow = memo(function ChatRow({
               ? undefined
               : () => {
                   tap()
-                  setMenu(true)
+                  if (selecting) threadSelection.toggle(chat.id)
+                  else setMenu(true)
                 }
           }
-          onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
+          onPress={() => {
+            if (!selecting) return router.push({ pathname: '/chat/[id]', params: { id: chat.id } })
+            tap()
+            threadSelection.toggle(chat.id)
+          }}
+          accessibilityState={selecting ? { selected: picked } : undefined}
           style={{
             alignItems: hasDetail ? 'flex-start' : 'center',
             paddingVertical: 10,
@@ -132,7 +145,22 @@ export const ChatRow = memo(function ChatRow({
             .join(', ')}
         >
           <View style={{ paddingTop: hasDetail ? 2 : 0 }}>
-            {chat.pending ? (
+            {selecting ? (
+              <View
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  borderWidth: picked ? 0 : 1.5,
+                  borderColor: c.lineStrong,
+                  backgroundColor: picked ? c.primary : 'transparent',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {picked ? <Check size={12} color={c.primaryInk} strokeWidth={3} /> : null}
+              </View>
+            ) : chat.pending ? (
               <Clock size={16} color={c.muted} />
             ) : status?.kind === 'finished' ? (
               <View
@@ -197,7 +225,18 @@ export const ChatRow = memo(function ChatRow({
           </View>
         </Row>
       </SwipeRow>
-      {chat.pending ? null : <ChatActionsSheet chat={chat} open={menu} onClose={() => setMenu(false)} />}
+      {chat.pending ? null : (
+        <ChatActionsSheet
+          chat={chat}
+          open={menu}
+          onClose={() => setMenu(false)}
+          extras={
+            selectable
+              ? [{ icon: ListChecks, label: say('Select'), onPress: () => threadSelection.start(chat.id) }]
+              : []
+          }
+        />
+      )}
     </>
   )
 })

@@ -60,6 +60,10 @@ From a host's row in **Settings → Remote access**, request **Agents** to let t
 
 In the sidebar, Cmd/Ctrl-click adds a thread to the selection and Shift-click selects a range, starting from the open thread when nothing is selected yet. The bar above the list pins, finishes, archives or deletes them together; **Delete** or **Backspace** deletes them, and **Esc** clears the selection. Archive and done can be undone; delete still reviews each thread so a running command is never lost.
 
+On the phone, long-press a thread and choose **Select**, then tap more threads; the header marks them done, archives or deletes them, and **×** cancels. Deleting several at once keeps any thread with a background command for its own review.
+
+In a thread on iPhone, long-press a word to select it and drag the handles to select more, as on the desktop. The bar above the message box quotes, starts a thread with, asks aside about or copies the selection; **More** has the whole message's actions. On Android, long-press a message to select its text.
+
 ## One prompt, several threads
 
 With **Auto** as the destination, a request that needs several projects (on any connected host) becomes a reviewed list: one thread per project, each with an editable brief, plus a shared contract. Nothing starts until **Start all**. **Split requests across projects** (Settings → Threads) turns this off.

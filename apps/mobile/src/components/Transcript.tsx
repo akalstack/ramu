@@ -38,7 +38,7 @@ import { endedOnError } from '../runtime/turns'
 import { showError } from '../runtime/toast'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
-import { Markdown, ReferenceBadge, ReferenceContext } from './Markdown'
+import { Markdown, MessageTextSelection, ReferenceBadge, ReferenceContext } from './Markdown'
 import { draftChip } from '@ramu/shared/chat/referenceChip'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
@@ -156,24 +156,62 @@ function SelectableMessage({
   )
 }
 
-/** Long-press a message to select its text; the bar over the message box then acts on the selection, as on the desktop. */
+/**
+ * Selecting a message's text brings up the bar over the message box, which acts on the selection as on the desktop.
+ * On iOS the text is natively selectable: a long press picks a word and the handles move by character. Elsewhere a long
+ * press opens the message for selecting in place. Either way "More" offers the whole message's actions.
+ */
 function MessageActions({
   text,
   from,
   seq,
   files,
+  markdown,
   children,
 }: {
   text: string
   from: 'user' | 'assistant'
   seq?: number
   files?: Attachment[]
+  /** The message is Markdown, which iOS draws as native selectable text. */
+  markdown?: boolean
   children: ReactNode
 }) {
   const menu = useContext(MessageMenu)
   const latestMenu = useRef(menu)
   latestMenu.current = menu
   const [selecting, setSelecting] = useState(false)
+  // A native selection, by block, so clearing one block does not drop another's; `clears` remounts to clear them all.
+  const picked = useRef<string | null>(null)
+  const [clears, setClears] = useState(0)
+  const select = menu?.select
+  const native = Platform.OS === 'ios' && !!select && !!markdown
+  const report = useMemo(
+    () =>
+      native
+        ? (block: string, value: string | null) => {
+            if (value) {
+              picked.current = block
+              select({
+                text: value,
+                from,
+                more: () => openRef.current(),
+                done: () => {
+                  picked.current = null
+                  select(null)
+                  setClears((n) => n + 1)
+                },
+              })
+            } else if (picked.current === block) {
+              picked.current = null
+              select(null)
+            }
+          }
+        : null,
+    [native, select, from],
+  )
+  useEffect(() => () => void (picked.current && select?.(null)), [select])
+  const openRef = useRef<() => void>(() => {})
   const open = () => {
     if (!text.trim()) return
     const actions: [string, () => void][] = [
@@ -213,19 +251,27 @@ function MessageActions({
         { text: 'Cancel', style: 'cancel' as const },
       ])
   }
+  openRef.current = open
   if (selecting) return <SelectableMessage text={text} from={from} more={open} done={() => setSelecting(false)} />
   return (
     <Pressable
-      onLongPress={() => {
-        if (!text.trim()) return
-        tap()
-        if (menu) setSelecting(true)
-        else open()
-      }}
+      // On iOS a long press selects a word natively, so the message itself takes none; "More" in the bar has the rest.
+      onLongPress={
+        native
+          ? undefined
+          : () => {
+              if (!text.trim()) return
+              tap()
+              if (menu) setSelecting(true)
+              else open()
+            }
+      }
       delayLongPress={350}
       accessibilityHint="Long-press to select text"
     >
-      {children}
+      <MessageTextSelection.Provider value={report}>
+        <View key={clears}>{children}</View>
+      </MessageTextSelection.Provider>
     </Pressable>
   )
 }
@@ -511,7 +557,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
   switch (item.kind) {
     case 'user':
       return (
-        <MessageActions text={item.text} from="user" seq={item.seq} files={item.attachments}>
+        <MessageActions text={item.text} from="user" seq={item.seq} files={item.attachments} markdown>
           <UserBubble text={item.text} attachments={item.attachments} chat={chat} />
         </MessageActions>
       )
@@ -519,7 +565,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <ErrorCard message={item.message} last={endedOnError(chat.items, item.id)} chat={chat} />
     case 'text':
       return (
-        <MessageActions text={item.text} from="assistant">
+        <MessageActions text={item.text} from="assistant" markdown>
           <Markdown text={item.text} streaming={meta?.streaming} fresh={meta?.fresh} />
           {meta?.footer && !meta.streaming ? <AnswerFooter at={item.at} text={item.text} /> : null}
         </MessageActions>

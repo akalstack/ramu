@@ -66,6 +66,12 @@ const Toolbar = Object.assign(() => {}, {
 const Stack = { SearchBar: 'NativeSearch', Screen: 'StackScreen', Toolbar }
 
 // Render the actual TSX at the native boundary, without needing a device for event regressions.
+/** Selecting threads is off: rows and the Threads screen render as they do outside Select. */
+const threadSelectionStub = {
+  threadSelection: { start() {}, toggle() {}, keep() {}, clear() {} },
+  useThreadSelection: () => ({ on: false, ids: new Set() }),
+}
+
 function load(file, os, overrides = {}, globals = {}) {
   const module = { exports: {} }
   const native = {
@@ -117,6 +123,9 @@ function load(file, os, overrides = {}, globals = {}) {
       otherBusyMode: () => 'queue',
     },
     '../runtime/computerUse': { useComputerUse: () => ({ session: undefined, refresh() {} }) },
+    '../runtime/threadSelection': threadSelectionStub,
+    '../../../runtime/threadSelection': threadSelectionStub,
+    '../../../components/BulkThreadActions': { useBulkThreadActions: () => ({ writable: () => false }) },
     'expo-glass-effect': {
       isGlassEffectAPIAvailable: () => true,
       isLiquidGlassAvailable: () => true,

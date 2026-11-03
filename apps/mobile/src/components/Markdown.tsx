@@ -1,5 +1,15 @@
 import { CHAT_MOTION } from '@ramu/shared/chat/presentation'
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  isValidElement,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Image, Linking, Platform, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native'
 import { ReferenceBadge } from './ReferenceChip'
 export { ReferenceBadge } from './ReferenceChip'
@@ -10,6 +20,8 @@ import { chatReferences } from '@ramu/shared/chat/chatReferences'
 import { draftChip, skillChip } from '@ramu/shared/chat/referenceChip'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { font, radius, space, useTheme } from '../theme'
+import { UITextView } from '@bsky.app/react-native-uitextview'
+import { selectedText, type TextRun } from '../runtime/selectedText'
 
 // Native markdown for agent replies: headings, lists, tasks, quotes, tables, rules, coloured code, emphasis and links.
 // Kept native: shared's react-markdown renderer depends on the DOM.
@@ -26,6 +38,19 @@ export const ReferenceContext = createContext<ReferenceActions>({
   openFile: () => {},
   openUrl: (url) => void Linking.openURL(url).catch(() => {}),
 })
+
+/**
+ * Where a message hears what part of it is selected. Inside one, iOS draws each finished block as native selectable
+ * text, so a long press picks a word and the handles move by character, as on the desktop. `block` tells blocks apart;
+ * `text` is null once that block's selection is cleared.
+ */
+export const MessageTextSelection = createContext<((block: string, text: string | null) => void) | null>(null)
+
+/**
+ * Spans inside a block. Under a selectable block they join its native text; anywhere else this is React Native's own
+ * Text, so one renderer serves both.
+ */
+const Span = UITextView
 
 // Match desktop: a brief fade on new words, with no stagger or delayed typing queue.
 const FADE_MS = CHAT_MOTION.durationMs
@@ -76,9 +101,9 @@ function fadeWords(text: string, key: string, fade: WordFade, tint: string): Rea
     if (plain) out.push(plain)
     plain = ''
     out.push(
-      <Text key={`${key}-${i}`} style={{ color: withAlpha(tint, 0.5 + 0.5 * (1 - (1 - progress) ** 2)) }}>
+      <Span key={`${key}-${i}`} style={{ color: withAlpha(tint, 0.5 + 0.5 * (1 - (1 - progress) ** 2)) }}>
         {part}
-      </Text>,
+      </Span>,
     )
   })
   if (plain) out.push(plain)
@@ -114,13 +139,16 @@ const PILL_MAX = 32
  * background and native platforms paint it across the whole line box, so short snippets are an inline View pill,
  * nudged down onto the text baseline. Long snippets wrap as plain mono text with no tint (no tall slabs).
  */
+/** Whether a snippet is drawn as an inline pill (one view) rather than as text. */
+const isPill = (code: string) => Platform.OS !== 'web' && code.length <= PILL_MAX && !code.includes('\n')
+
 function InlineCode({ code, c }: { code: string; c: ReturnType<typeof useTheme>['c'] }) {
   const type = { fontFamily: font.mono, fontSize: font.control, color: c.text }
   if (Platform.OS === 'web')
     return (
       <Text style={{ ...type, backgroundColor: c.fill, borderRadius: radius.xs, paddingHorizontal: 4 }}>{code}</Text>
     )
-  if (code.length > PILL_MAX || code.includes('\n')) return <Text style={type}>{code}</Text>
+  if (!isPill(code)) return <Span style={type}>{code}</Span>
   return (
     <View
       style={{
@@ -156,21 +184,21 @@ function inline(
         return <InlineCode key={k} code={p.slice(1, -1)} c={c} />
       if (((p.startsWith('**') && p.endsWith('**')) || (p.startsWith('__') && p.endsWith('__'))) && p.length > 4)
         return (
-          <Text key={k} style={{ fontWeight: '600', color: c.text }}>
+          <Span key={k} style={{ fontWeight: '600', color: c.text }}>
             {inline(p.slice(2, -2), k, c, actions, c.text, fade)}
-          </Text>
+          </Span>
         )
       if (p.startsWith('~~') && p.endsWith('~~') && p.length > 4)
         return (
-          <Text key={k} style={{ textDecorationLine: 'line-through', color: c.muted }}>
+          <Span key={k} style={{ textDecorationLine: 'line-through', color: c.muted }}>
             {inline(p.slice(2, -2), k, c, actions, c.muted, fade)}
-          </Text>
+          </Span>
         )
       if (((/^\*[^*]/.test(p) && p.endsWith('*')) || (/^_[^_]/.test(p) && p.endsWith('_'))) && p.length > 2)
         return (
-          <Text key={k} style={{ fontStyle: 'italic' }}>
+          <Span key={k} style={{ fontStyle: 'italic' }}>
             {inline(p.slice(1, -1), k, c, actions, tint, fade)}
-          </Text>
+          </Span>
         )
       const link = p.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/)
       const url = link ? link[2]! : /^<https?:\/\//.test(p) ? p.slice(1, -1) : /^https?:\/\//.test(p) ? p : null
@@ -186,14 +214,14 @@ function inline(
           )
         if (/^https?:\/\//i.test(url))
           return (
-            <Text
+            <Span
               key={k}
               onPress={() => actions.openUrl(url)}
               accessibilityRole="link"
               style={{ color: c.accent, textDecorationLine: 'underline' }}
             >
               {label}
-            </Text>
+            </Span>
           )
         return label
       }
@@ -201,8 +229,24 @@ function inline(
     })
 }
 
+/** What each rendered piece copies as, in on-screen order; inline views are one placeholder character natively. */
+function textRuns(node: ReactNode, out: TextRun[] = []): TextRun[] {
+  if (typeof node === 'string' || typeof node === 'number') out.push({ text: String(node) })
+  else if (Array.isArray(node)) for (const child of node) textRuns(child, out)
+  else if (isValidElement(node)) {
+    const props = node.props as { children?: ReactNode; code?: string; chip?: { label: string } }
+    if (node.type === InlineCode && props.code !== undefined)
+      out.push(isPill(props.code) ? { text: props.code, atom: true } : { text: props.code })
+    else if (node.type === ReferenceBadge && props.chip) out.push({ text: props.chip.label, atom: true })
+    else textRuns(props.children, out)
+  }
+  return out
+}
+
 function Inline({ text, style, stream }: { text: string; style?: TextStyle; stream?: StreamFade }) {
   const { c } = useTheme()
+  const report = useContext(MessageTextSelection)
+  const block = useId()
   const actions = useContext(ReferenceContext)
   const births = useRef<number[]>([])
   const primed = useRef(false)
@@ -229,7 +273,22 @@ function Inline({ text, style, stream }: { text: string; style?: TextStyle; stre
     const frame = requestAnimationFrame(() => tick((n) => n + 1))
     return () => cancelAnimationFrame(frame)
   })
-  return <Text style={[{ color: c.body, fontSize: font.body, lineHeight: 22 }, style]}>{nodes}</Text>
+  const look = [{ color: c.body, fontSize: font.body, lineHeight: 22 }, style]
+  // Words still fading in repaint every frame; the block becomes selectable once they have settled.
+  if (Platform.OS === 'ios' && report && !settling && !stream)
+    return (
+      <UITextView
+        selectable
+        uiTextView
+        style={look}
+        onSelectionChange={({ nativeEvent: { start, end } }) =>
+          report(block, end > start ? selectedText(textRuns(nodes), start, end).trim() || null : null)
+        }
+      >
+        {nodes}
+      </UITextView>
+    )
+  return <Text style={look}>{nodes}</Text>
 }
 
 function MarkdownImage({ src, alt }: { src: string; alt: string }) {
