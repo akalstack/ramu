@@ -227,7 +227,7 @@ function MessageActions({
             ...(!menu.readOnly && from === 'user' && seq !== undefined
               ? ([
                   [
-                    'Edit and resend',
+                    'Edit from here',
                     () => !latestMenu.current?.readOnly && latestMenu.current?.edit(seq, text, files ?? []),
                   ],
                   ['Undo file changes from here', () => !latestMenu.current?.readOnly && latestMenu.current?.undo(seq)],

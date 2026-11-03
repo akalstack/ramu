@@ -1,4 +1,4 @@
-import { deliveryVisible } from '../../../runtime/transcript'
+import { deliveryVisible, visibleText } from '../../../runtime/transcript'
 import { transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
@@ -618,7 +618,7 @@ export default function ChatScreen() {
       ],
     )
   }
-  /** Sends the revised message as a new request; the agent is told it replaces the earlier one, and files can be put back first. */
+  /** After Edit from here rewound the thread, the changed message goes out as an ordinary one, with the attachments it kept. */
   const submitEdit = async (
     text: string,
     mode: 'send' | 'queue' | 'steer',
@@ -626,51 +626,11 @@ export default function ChatScreen() {
     context?: import('@ramu/shared/types').FileContext[],
   ) => {
     requireWriteAccess()
-    if (!editing || !chat.sessionId) return
-    const online = store.isOnline(chat.computerId)
-    let restored = false
-    if (online) {
-      const preview = await store
-        .invoke(chat.computerId, 'reviews.chatUndoPreview', chat.sessionId, editing.seq)
-        .catch(() => null)
-      const ready = preview?.files.filter((f) => f.status === 'ready') ?? []
-      if (preview && ready.length) {
-        const choice = await new Promise<'restore' | 'keep' | 'cancel'>((resolve) =>
-          Alert.alert(
-            `Restore ${ready.length} file${ready.length === 1 ? '' : 's'}?`,
-            `The agent changed ${ready
-              .map((f) => f.path)
-              .slice(0, 4)
-              .join(
-                ', ',
-              )}${ready.length > 4 ? '…' : ''} after this message. Put ${ready.length === 1 ? 'it' : 'them'} back as before, or keep the current files.`,
-            [
-              { text: 'Cancel', style: 'cancel', onPress: () => resolve('cancel') },
-              { text: 'Keep files', onPress: () => resolve('keep') },
-              { text: 'Restore files', onPress: () => resolve('restore') },
-            ],
-            { cancelable: true, onDismiss: () => resolve('cancel') },
-          ),
-        )
-        requireWriteAccess()
-        if (choice === 'cancel') throw new Error('Edit not sent. Your text is kept.')
-        if (choice === 'restore') {
-          await store.invoke(
-            chat.computerId,
-            'reviews.chatUndoApply',
-            preview.token,
-            ready.map((f) => f.fileId),
-          )
-          restored = true
-        }
-      }
-    }
-    requireWriteAccess()
-    const outgoing = `${text}\n\n<ramu-context>\nThis revises my earlier message ${editing.seq}.${restored ? ' Selected file changes from that message and later captured runs were restored using Ramu. Inspect current files before acting.' : ' Files have not been restored.'} Treat this revised request as replacing the earlier request; the previous transcript remains as historical evidence.\n</ramu-context>`
+    if (!editing) return
     const keep = editing.files.map((file) => file.id).filter((id) => !attachments?.includes(id))
     setEditing(null)
     following.current = true
-    await store.send(chat.id, outgoing, mode === 'send' ? 'queue' : mode, [...keep, ...(attachments ?? [])], context)
+    await store.send(chat.id, text, mode, [...keep, ...(attachments ?? [])], context)
   }
   const offline = !store.isOnline(chat.computerId)
   // Keep the submitted text visible while the host accepts it.
@@ -1084,10 +1044,61 @@ export default function ChatScreen() {
               Alert.alert('Could not undo', error instanceof Error ? error.message : String(error))
             }
           },
-          edit: (seq, text, files) => {
-            if (viewerNow()) return
-            setEditing({ seq, files })
-            setRestore((r) => ({ text: text.split('\n\n<ramu-context>')[0]!, n: (r?.n ?? 0) + 1 }))
+          // Edit from here, as on the desktop: the thread rewinds to before this message (stopping the agent first),
+          // the agent's file changes since can be put back, and the message returns to the box to change and send.
+          edit: async (seq, text, files) => {
+            if (viewerNow() || !chat.sessionId) return
+            if (!store.isOnline(chat.computerId)) {
+              Alert.alert(tr('Edit from here?'), tr('Reconnect to {0} to edit from here.', { 0: computer?.name ?? '' }))
+              return
+            }
+            const sessionId = chat.sessionId
+            const preview = await latestStore.current
+              .invoke(chat.computerId, 'reviews.chatUndoPreview', sessionId, seq)
+              .catch(() => null)
+            const ready = preview?.files.filter((f) => f.status === 'ready') ?? []
+            const choice = await new Promise<'keep' | 'revert' | null>((resolve) =>
+              Alert.alert(
+                tr('Edit from here?'),
+                tr(
+                  running
+                    ? 'Stops the agent and rewinds the thread to before this message. Your prompt and attachments return to the message box.'
+                    : 'Rewinds the thread to before this message. Your prompt and attachments return to the message box.',
+                ),
+                [
+                  { text: tr('Cancel'), style: 'cancel', onPress: () => resolve(null) },
+                  ...(ready.length
+                    ? [
+                        {
+                          text:
+                            ready.length === 1
+                              ? tr('Revert 1 file too')
+                              : tr('Revert {0} files too', { 0: ready.length }),
+                          onPress: () => resolve('revert' as const),
+                        },
+                      ]
+                    : []),
+                  { text: tr('Edit from here'), onPress: () => resolve('keep') },
+                ],
+                { cancelable: true, onDismiss: () => resolve(null) },
+              ),
+            )
+            if (!choice || viewerNow()) return
+            try {
+              if (choice === 'revert' && preview && ready.length)
+                await latestStore.current.invoke(
+                  chat.computerId,
+                  'reviews.chatUndoApply',
+                  preview.token,
+                  ready.map((f) => f.fileId),
+                )
+              await latestStore.current.invoke(chat.computerId, 'agent.rewind', sessionId, seq)
+              void latestStore.current.refresh(chat.computerId)
+              setEditing({ seq, files })
+              setRestore((r) => ({ text: visibleText(text), n: (r?.n ?? 0) + 1 }))
+            } catch (error) {
+              Alert.alert(tr('Edit from here?'), error instanceof Error ? error.message : String(error))
+            }
           },
           quoteNew: (text) =>
             router.push({ pathname: '/new', params: { project: chat.projectId, quote: text.slice(0, 20_000) } }),
@@ -1427,11 +1438,7 @@ export default function ChatScreen() {
                             }
                           : undefined
                     }
-                    editing={
-                      editing
-                        ? { label: `Editing your message · the agent is told it replaces the earlier one` }
-                        : undefined
-                    }
+                    editing={editing ? { label: tr('Rewound to before your message. Change it and send.') } : undefined}
                     onCancelEdit={() => {
                       setEditing(null)
                       setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
