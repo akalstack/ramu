@@ -11,7 +11,7 @@ The plan charges only for what costs money to run, and leaves everything else fr
 - **Nothing in the app is locked.** Agents, providers, threads, Git, terminals, browser, computer use, schedules, the phone app and direct connections work the same on every plan.
 - **Reaching a host from anywhere stays free.** The free plan covers a person with up to 3 machines who checks in from a phone.
 - **People who need more pay a small, plain price.** Plus raises the limits and adds the hosted features that store data. It does not require buying an unrelated product.
-- **Open-source developers lose nothing.** Self-hosting `apps/link` stays documented and gets every feature with no limit. Maintainers and students can ask for Plus for free.
+- **Open-source developers lose nothing.** Self-hosting `apps/link` stays documented and gets every feature with no limit.
 - **Fewer ways in, each one better.** Cloudflare Tunnel is removed: Ramu Link reaches the host from anywhere with end-to-end encryption and no public address, and direct routes cover the rest.
 
 ## Plans
@@ -35,7 +35,6 @@ The plan charges only for what costs money to run, and leaves everything else fr
 - **Relayed hours** count only the time the relay is awake carrying a stream. An idle connected host or device costs nothing and counts nothing. Direct routes never count.
 - **Reaching a limit never cuts work off.** At 60 hours a free account's devices keep their direct routes; Link answers with a clear message and **Get Plus**, and the count resets on the first of the month (UTC). At the host limit, linking another host explains how to unlink one or upgrade.
 - **A lapsed Plus account keeps its data.** Hosts beyond 3 stay listed but stop accepting relayed streams until the person unlinks some or renews; nothing is deleted.
-- **Free Plus** for open-source maintainers and students, granted by hand from a GitHub issue template. No automated verification.
 - **Self-hosted** services keep `HOST_LIMIT=0` and no metering; every Plus feature reads its entitlement from the service it runs on, and a self-hosted service grants all of them.
 
 ## Costs and margin
@@ -73,7 +72,7 @@ Before either goes live: confirm the payout currency and bank for the chosen pro
 1. **Measure.** The relay records relayed seconds and frames per account per day in D1, written when a stream closes or the Durable Object hibernates, never per frame. `GET /api/usage` returns the month so far. Runs on self-hosted services too, where it only informs. Ship and watch for a month before any limit is enforced.
 2. **Remove Cloudflare Tunnel.** Delete `apps/server/src/remote/tunnel.ts` and its test, the `ramu tunnel` command and `ramu up --tunnel`, the tunnel section of `ReachThisHost.tsx` and the onboarding step, tunnel addresses in the host's routes, `networkLabel.ts` and `types/remote.ts` entries, and their Indonesian strings. It has not shipped in a release, so no settings need migrating and nothing tells anyone it is gone; stored tunnel settings are ignored. Docs keep "put HTTPS in front" for a public name.
 3. **Hosted service.** Deploy `apps/link` under a project domain with real Google and GitHub OAuth apps, set `DEFAULT_LINK_SERVICE`, and move **Use my own service** under an advanced disclosure in Remote access. Privacy notice and terms on the service's page. `LINK_HOST_LIMIT` becomes 3 for the free plan.
-4. **Entitlements.** An `entitlement` table (account, plan, source, expires at, updated at) written only by payment webhooks and by an admin grant for free Plus. `hostLimit` and the relay read the account's plan instead of one `HOST_LIMIT`; a self-hosted service without payment secrets grants Plus to every account. The 60-hour limit turns on.
+4. **Entitlements.** An `entitlement` table (account, plan, source, expires at, updated at) written only by payment webhooks. `hostLimit` and the relay read the account's plan instead of one `HOST_LIMIT`; a self-hosted service without payment secrets grants Plus to every account. The 60-hour limit turns on.
 5. **Plus in the app.** Settings → Remote access → Ramu Link shows the plan, hosts used (3 of 3), hours used this month, and **Get Plus**, which opens checkout in the browser and refreshes when it returns. The phone shows the same and links out, so store rules about in-app purchases do not apply to it. Account deletion cancels the subscription first.
 6. **Paddle checkout and webhooks**, with rupiah prices for Indonesia and the yearly plan first.
 7. **Plus features**, each its own item: webhook holding (D1 with a 24-hour expiry, encrypted to the host), host sharing as a viewer.

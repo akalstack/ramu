@@ -58,17 +58,6 @@ Set `PADDLE_ENV` to `sandbox` in `wrangler.jsonc` to try it against Paddle's san
 
 **Get Plus** in Ramu calls `POST /v1/checkout`, which creates a Paddle transaction tagged with the account and opens it on `/checkout`. Webhooks then keep the entitlement current: an active subscription gives Plus until its period ends (plus a day of grace for a late renewal), a scheduled cancellation keeps Plus until it takes effect, and a failed renewal, pause, cancellation or approved refund ends it. Deleting an account cancels its subscription first, and keeps the account if Paddle cannot be reached.
 
-## Free Plus
-
-Open-source maintainers and students can ask for Plus for free with the GitHub issue template. Grant it by hand with `ADMIN_TOKEN` set as a secret:
-
-```sh
-curl -X POST https://<your-domain>/v1/admin/grants -H "authorization: Bearer $ADMIN_TOKEN" \
-  -H 'content-type: application/json' -d '{"email":"person@example.com","until":null}'
-```
-
-`until` is a time in milliseconds, or `null` for no end; `{"email":…,"revoke":true}` takes a grant back. A grant never replaces a subscription Paddle has not cancelled.
-
 ## Local development
 
 ```sh

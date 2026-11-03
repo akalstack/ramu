@@ -63,7 +63,7 @@ const time = (value: string | undefined) => {
 }
 
 /**
- * Ends Plus from one subscription now; a grant or a different subscription on the account is left alone. A refund
+ * Ends Plus from one subscription now; a different subscription on the account is left alone. A refund
  * leaves Paddle's status as it was (Paddle reports the cancellation itself).
  */
 async function end(env: Pick<Env, 'DB'>, subscriptionId: string, at: number, status: string | null) {

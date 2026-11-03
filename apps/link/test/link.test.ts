@@ -4,15 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 import { parseRegistration, registerHost, removeHost } from '../src/hosts'
 import { checkoutPage, devicePage, language, legalPage } from '../src/page'
-import {
-  entitlementOf,
-  grantPlus,
-  hostLimit,
-  planStatus,
-  recordUsage,
-  relayedSeconds,
-  streamRefusal,
-} from '../src/plans'
+import { entitlementOf, hostLimit, planStatus, recordUsage, relayedSeconds, streamRefusal } from '../src/plans'
 import { RENEWAL_GRACE_MS, applyEvent, verifySignature } from '../src/paddle'
 import { addShare, isSharedWith, listShares, removeShare } from '../src/shares'
 
@@ -58,6 +50,14 @@ const selling = () => {
   const { db, env } = database()
   return { db, env: { ...env, HOST_LIMIT: undefined, ...SELLING } }
 }
+/** Plus as a Paddle subscription would leave it, until `expiresAt` (null: renewing with no end recorded). */
+const paidPlus = (db: DatabaseSync, userId: string, expiresAt: number | null) =>
+  db
+    .prepare(
+      `INSERT INTO entitlement (userId, plan, source, expiresAt, renews, subscriptionId, subscriptionStatus, updatedAt)
+       VALUES (?, 'plus', 'paddle', ?, 1, 'sub_test', 'active', 0)`,
+    )
+    .run(userId, expiresAt)
 const host = (hostId: string, name = 'Studio') => ({ hostId, name, publicKey: KEY })
 const id = (n: number) => n.toString(16).padStart(32, '0')
 
@@ -161,13 +161,13 @@ describe('plans', () => {
     })
   })
 
-  it('names the limit and both ways out at a fourth host, and links it once Plus is granted', async () => {
-    const { env } = selling()
+  it('names the limit and both ways out at a fourth host, and links it once the account has Plus', async () => {
+    const { db, env } = selling()
     for (const n of [1, 2, 3]) expect(await registerHost(env, 'u1', host(id(n)))).toHaveProperty('secret')
     const refused = await registerHost(env, 'u1', host(id(4)))
     expect(refused).toMatchObject({ status: 403, code: 'host-limit' })
     expect((refused as { error: string }).error).toMatch(/3 hosts.*Unlink one, or get Plus for up to 20/)
-    expect(await grantPlus(env, 'u1', null)).toBe(true)
+    paidPlus(db, 'u1', null)
     expect(await registerHost(env, 'u1', host(id(4)))).toHaveProperty('secret')
   })
 
@@ -184,18 +184,18 @@ describe('plans', () => {
   })
 
   it('refuses new streams past 60 hours on Free, never on Plus', async () => {
-    const { env } = selling()
+    const { db, env } = selling()
     await registerHost(env, 'u1', host(HOST))
     expect(await streamRefusal(env, 'u1', HOST, NOV)).toBeNull()
     await recordUsage(env, [{ userId: 'u1', day: '2026-11-02', seconds: 60 * 3600, frames: 1 }])
     expect(await streamRefusal(env, 'u1', HOST, NOV)).toBe('Relayed hours used up this month')
-    await grantPlus(env, 'u1', null, NOV)
+    paidPlus(db, 'u1', null)
     expect(await streamRefusal(env, 'u1', HOST, NOV)).toBeNull()
   })
 
   it('keeps every host after Plus lapses, but only the first 3 linked take new streams', async () => {
     const { db, env } = selling()
-    await grantPlus(env, 'u1', NOV + DAY, NOV)
+    paidPlus(db, 'u1', NOV + DAY)
     for (const n of [1, 2, 3, 4]) await registerHost(env, 'u1', host(id(n)))
     db.prepare('UPDATE host SET createdAt = ? WHERE id = ?').run(1, id(4))
     db.prepare('UPDATE host SET createdAt = ? WHERE id = ?').run(Number.MAX_SAFE_INTEGER, id(1))
@@ -295,14 +295,6 @@ describe('Paddle', () => {
     expect(await applyEvent(env, stranger)).toBe('plus')
     expect((await entitlementOf(env, 'nobody', NOV)).plan).toBe('free')
     expect(await applyEvent(env, { event_type: 'transaction.completed', data: {} })).toBe('ignored')
-  })
-
-  it('does not replace a paying subscription with a grant', async () => {
-    const { env } = selling()
-    await applyEvent(env, subscription('active', '2026-11-15T12:00:00Z'))
-    expect(await grantPlus(env, 'u1', null)).toBe(false)
-    await applyEvent(env, subscription('canceled', '2026-11-16T12:00:00Z'))
-    expect(await grantPlus(env, 'u1', null)).toBe(true)
   })
 })
 

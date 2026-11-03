@@ -7,7 +7,7 @@ CREATE TABLE "usage" (
   "frames" integer NOT NULL DEFAULT 0,
   PRIMARY KEY ("userId", "day")
 );
--- What an account has and until when, never how it paid. Written only by payment webhooks and by an admin grant.
+-- What an account has and until when, never how it paid. Written only by payment webhooks.
 CREATE TABLE "entitlement" (
   "userId" text NOT NULL PRIMARY KEY REFERENCES "user" ("id") ON DELETE CASCADE,
   "plan" text NOT NULL,

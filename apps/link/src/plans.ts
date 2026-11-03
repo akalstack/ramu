@@ -1,5 +1,5 @@
-// Plans, entitlements and relayed time. An entitlement says what an account has and until when; payments and admin
-// grants write it, and everything else only reads it. A service that sells nothing (no payment secrets) grants Plus
+// Plans, entitlements and relayed time. An entitlement says what an account has and until when; payment webhooks
+// write it, and everything else only reads it. A service that sells nothing (no payment secrets) grants Plus
 // to every account, so a self-hosted deployment has every feature and only the host limit it sets itself.
 import { LINK_PLANS, type LinkPlan, type LinkPlanStatus } from '@ramu/shared/link/protocol'
 import type { Env } from './auth'
@@ -68,7 +68,7 @@ export async function entitlementOf(env: PlanEnv, userId: string, now = Date.now
   if (row?.plan === 'plus' && (row.expiresAt === null || row.expiresAt > now))
     return {
       plan: 'plus',
-      source: row.source === 'grant' ? 'grant' : 'paddle',
+      source: 'paddle',
       expiresAt: row.expiresAt,
       renews: row.renews === 1,
       ...limitsOf('plus'),
@@ -161,24 +161,4 @@ export async function streamRefusal(env: PlanEnv, ownerId: string, hostId: strin
     if (!results.some((row) => row.id === hostId)) return 'Host beyond the plan limit'
   }
   return null
-}
-
-/**
- * Free Plus for maintainers and students: written by a person, never by a payment. False when the account pays for a
- * subscription Paddle has not cancelled, whose record must stay so deleting the account can cancel it.
- */
-export async function grantPlus(env: Pick<Env, 'DB'>, userId: string, until: number | null, now = Date.now()) {
-  const result = await env.DB.prepare(
-    `INSERT INTO entitlement (userId, plan, source, expiresAt, renews, subscriptionId, updatedAt)
-     VALUES (?, 'plus', 'grant', ?, 0, NULL, ?)
-     ON CONFLICT(userId) DO UPDATE SET plan = 'plus', source = 'grant', expiresAt = excluded.expiresAt, renews = 0,
-       subscriptionId = NULL, subscriptionStatus = NULL, updatedAt = excluded.updatedAt
-     WHERE entitlement.subscriptionId IS NULL OR entitlement.subscriptionStatus = 'canceled'`,
-  )
-    .bind(userId, until, now)
-    .run()
-  return (result.meta.changes ?? 0) > 0
-}
-export async function revokeGrant(env: Pick<Env, 'DB'>, userId: string) {
-  await env.DB.prepare("DELETE FROM entitlement WHERE userId = ? AND source = 'grant'").bind(userId).run()
 }

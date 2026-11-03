@@ -1,22 +1,12 @@
 // Ramu Link on Cloudflare Workers: Better Auth for Google and GitHub sign-in (device-code flow for every Ramu client),
 // a registry of the hosts each account linked, the relay that joins a device's stream to its host, and the plan each
-// account has (Free, or Plus through Paddle or a grant).
+// account has (Free, or Plus through Paddle).
 import { LINK_CLOSE, LINK_PROTOCOL, credentialFromProtocols, isHostId } from '@ramu/shared/link/protocol'
 import { createAuth, providers, type Auth, type Env } from './auth'
 import { checkoutPage, checkoutPolicy, devicePage, language, legalPage } from './page'
 import { registerHost, removeHost, type HostRow } from './hosts'
 import { applyEvent, cancelSubscription, createCheckout, verifySignature } from './paddle'
-import {
-  entitlementOf,
-  grantPlus,
-  monthOf,
-  planStatus,
-  relayedSeconds,
-  revokeGrant,
-  sellsPlus,
-  streamRefusal,
-  usageDays,
-} from './plans'
+import { entitlementOf, monthOf, planStatus, relayedSeconds, sellsPlus, streamRefusal, usageDays } from './plans'
 import { addShare, isSharedWith, listShares, ownsHost, removeShare } from './shares'
 
 export { HostRelay } from './relay'
@@ -122,35 +112,6 @@ export default {
       })()
       if (!event) return failure('Invalid event', 400)
       return json({ result: await applyEvent(env, event) })
-    }
-
-    // Free Plus for open-source maintainers and students, granted by a person from a GitHub issue.
-    if (path === '/v1/admin/grants' && request.method === 'POST') {
-      const token = request.headers.get('authorization')?.replace(/^Bearer /, '') ?? ''
-      if (!env.ADMIN_TOKEN || !sameHex(await sha256Hex(token), await sha256Hex(env.ADMIN_TOKEN)))
-        return failure('Not found', 404)
-      const body = (await request.json().catch(() => null)) as {
-        email?: unknown
-        until?: unknown
-        revoke?: unknown
-      } | null
-      const email = typeof body?.email === 'string' ? body.email.trim() : ''
-      const target = email
-        ? await env.DB.prepare('SELECT id FROM "user" WHERE lower(email) = lower(?)')
-            .bind(email)
-            .first<{ id: string }>()
-        : null
-      if (!target) return failure('No account uses that email', 404)
-      if (body?.revoke === true) {
-        await revokeGrant(env, target.id)
-        return json({ revoked: true })
-      }
-      const until = body?.until === null || body?.until === undefined ? null : Number(body.until)
-      if (until !== null && (!Number.isFinite(until) || until <= Date.now()))
-        return failure('until must be a future time in milliseconds, or null', 400)
-      if (!(await grantPlus(env, target.id, until)))
-        return failure('This account pays for Plus already; its subscription stays as it is.', 409)
-      return json({ granted: true, until })
     }
 
     // A host keeps one socket here, authenticated by the secret it got when it was linked.

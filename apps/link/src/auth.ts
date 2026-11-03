@@ -21,8 +21,6 @@ export interface Env {
   PADDLE_CLIENT_TOKEN?: string
   PADDLE_PRICE_YEAR?: string
   PADDLE_PRICE_MONTH?: string
-  /** Lets a person grant free Plus (`POST /v1/admin/grants`); unset turns the endpoint off. */
-  ADMIN_TOKEN?: string
 }
 
 /** Ramu's own clients; the device flow refuses any other `client_id`. */

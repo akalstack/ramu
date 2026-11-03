@@ -32,8 +32,8 @@ export type LinkBillingInterval = 'year' | 'month'
 /** An account's plan and this month's use, as `GET /v1/me` reports it. */
 export interface LinkPlanStatus {
   plan: LinkPlan
-  /** Who granted Plus: a payment, a person (free Plus for maintainers and students), or a service that sells nothing. */
-  source: 'free' | 'paddle' | 'grant' | 'self-hosted'
+  /** Where Plus comes from: a payment, or a service that sells nothing. */
+  source: 'free' | 'paddle' | 'self-hosted'
   /** When Plus ends without a renewal; null while it renews or never ends. */
   expiresAt: number | null
   /** A cancelled subscription keeps Plus until `expiresAt`. */
