@@ -27,7 +27,9 @@ A teammate is another model working in the thread beside its main agent, with it
 
 - **A teammate already here**, by its name, such as `@opus-5.5`.
 - **A model** from the model menu, or one of your **custom agents**: sending brings it into the thread with the conversation so far and gives it your message. Nothing to set up first.
-- **Add teammate…** (also `/teammate` and the thread menu) to choose the model, how it works and what it should do before it starts.
+- **Add teammate…** (also `/teammate` and the thread menu) starts the message with `@` and the thread's own model.
+
+The mention shows as that model's icon and name. While a message brings a new teammate in, the composer's controls are the teammate's: its model, effort and access, and **Review** or **Take over**. Choosing another model there rewrites the mention. The rest of the message is its brief.
 
 Once you talk to a teammate it becomes the recipient: the **To** chip in the composer shows it, and plain messages keep going to it until you choose **Main agent** there or start a message with `@lead`. A thread holds up to four teammates; the same model twice is numbered (`Opus 5.5 2`).
 
