@@ -50,7 +50,7 @@ export const MessageTextSelection = createContext<((block: string, text: string 
  * Whether this app binary has the native text view behind word-by-word selection. Expo Go and builds made before it
  * was added do not, and drawing it there fails with "UnimplementedView"; those keep React Native's Text instead.
  */
-const nativeSelection = (() => {
+export const nativeSelection = (() => {
   if (Platform.OS !== 'ios') return false
   try {
     return UIManager.hasViewManagerConfig('RNUITextView') && UIManager.hasViewManagerConfig('RNUITextViewChild')

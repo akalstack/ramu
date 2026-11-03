@@ -51,16 +51,33 @@ export function SelectionBar({ selection }: { selection: MessageSelection }) {
           <Action icon={MessageCircle} label={say('Ask aside')} run={() => menu.aside(text, from)} />
         )}
         <Action icon={Copy} label={say('Copy')} run={() => void Clipboard.setStringAsync(text)} />
-        <Action icon={Ellipsis} label={say('More')} run={more} />
       </ScrollView>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={say('Close')}
-        onPress={act(() => {})}
-        style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
-      >
-        <X size={15} color={c.muted} />
-      </Pressable>
+      {/* Pinned beside Close, so the whole message's actions (Edit from here among them) never scroll out of reach. */}
+      <IconAction icon={Ellipsis} label={say('More')} color={c.body} run={act(more)} />
+      <IconAction icon={X} label={say('Close')} color={c.muted} run={act(() => {})} />
     </View>
+  )
+}
+
+function IconAction({
+  icon: Icon,
+  label,
+  color,
+  run,
+}: {
+  icon: LucideIcon
+  label: string
+  color: string
+  run(): void
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={run}
+      style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Icon size={15} color={color} />
+    </Pressable>
   )
 }

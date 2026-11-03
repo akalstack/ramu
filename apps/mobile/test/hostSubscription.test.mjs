@@ -16,6 +16,7 @@ test('with no screen asking, frequent single-screen channels and unused ones are
     assert.ok(!idle.channels.includes(channel), `${channel} is not requested`)
   for (const channel of [
     'agent:event',
+    'agent:rewound',
     'workspace:changed',
     'notices:changed',
     'term:exit',

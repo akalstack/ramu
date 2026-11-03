@@ -16,7 +16,6 @@ const UNUSED_CHANNELS: readonly string[] = [
   'memory:changed',
   'mcp:changed',
   'providers:updates',
-  'agent:rewound',
   // The phone's own connection state, never sent by a host.
   'background:connection',
 ]

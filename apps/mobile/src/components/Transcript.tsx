@@ -38,7 +38,7 @@ import { endedOnError } from '../runtime/turns'
 import { showError } from '../runtime/toast'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
-import { Markdown, MessageTextSelection, ReferenceBadge, ReferenceContext } from './Markdown'
+import { Markdown, MessageTextSelection, nativeSelection, ReferenceBadge, ReferenceContext } from './Markdown'
 import { draftChip } from '@ramu/shared/chat/referenceChip'
 import { composerDraft, type DraftMention } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
@@ -162,8 +162,9 @@ function SelectableMessage({
 
 /**
  * Selecting a message's text brings up the bar over the message box, which acts on the selection as on the desktop.
- * On iOS the text is natively selectable: a long press picks a word and the handles move by character. Elsewhere a long
- * press opens the message for selecting in place. Either way "More" offers the whole message's actions.
+ * Where iOS has the native text view, the text is natively selectable: a long press picks a word and the handles move by
+ * character. Elsewhere a long press opens the message for selecting in place. Either way "More" offers the whole
+ * message's actions.
  */
 function MessageActions({
   text,
@@ -189,7 +190,7 @@ function MessageActions({
   const picked = useRef<string | null>(null)
   const [clears, setClears] = useState(0)
   const select = menu?.select
-  const native = Platform.OS === 'ios' && !!select && !!markdown
+  const native = nativeSelection && !!select && !!markdown
   const report = useMemo(
     () =>
       native

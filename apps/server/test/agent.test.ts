@@ -4436,6 +4436,18 @@ describe('MCP connection status', () => {
     expect(await svc.mcpStatus(chat.id)).toEqual({ supported: true, live: false, source: 'snapshot', servers: [] })
     svc.stopAll()
   })
+
+  it('reloads every MCP server on a runner that can reload', async () => {
+    const svc = service()
+    const chat = svc.start('t', scopeOf(cwd), '[codex mcp] hello', { ...full, provider: 'codex', model: 'codex-test' })
+    await until(() => svc.get(chat.id).state === 'idle')
+    const before = await svc.mcpStatus(chat.id)
+    expect(before).toMatchObject({ live: true, canReload: true })
+    expect(before.servers.find((server) => server.name === 'docs')?.status).toBe('failed')
+    await svc.reloadMcp(chat.id)
+    expect((await svc.mcpStatus(chat.id)).servers.map((server) => server.status)).toEqual(['connected', 'connected'])
+    svc.stopAll()
+  })
 })
 
 describe('activity', () => {

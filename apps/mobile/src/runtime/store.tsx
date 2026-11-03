@@ -557,6 +557,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             },
           ].slice(-30),
         )
+    } else if (channel === 'agent:rewound') {
+      // Edit from here, on this device or another, removed the turns from this message on; a refresh only adds rows.
+      const rows = eventRows.current.get(scoped(id, payload.sessionId))
+      for (const seq of rows?.keys() ?? []) if (seq >= payload.seq) rows!.delete(seq)
+      const buffered = buffers.current.get(id)
+      if (buffered)
+        buffers.current.set(
+          id,
+          buffered.filter(
+            (event) => event.sessionId !== payload.sessionId || event.seq == null || event.seq < payload.seq,
+          ),
+        )
+      if (rows) rebuild(id, payload.sessionId)
     } else if (channel === 'workspace:changed') {
       // Chats and projects changed on the computer or another device: reload the lists right away instead of at the next poll.
       clearTimeout(changeTimers.current.get(id))

@@ -899,11 +899,23 @@ export const fakeCodex: import('../agent/agentRunner').AgentRunnerFactory = (sco
     emit({ kind: 'text', text: `Fake Codex in ${scope.cwd} received: ${prompt}` })
     emit({ kind: 'result', isError: false, text: 'done', costUsd: null })
   }
-  return {
+  const runner: import('../agent/agentRunner').AgentRunner = {
     setTools: (tools) => {
       connection = tools
     },
     start: async (prompt, resume) => {
+      // A thread that opens with "[codex mcp]" gets a live MCP API with Reload; others keep the last-reported fallback.
+      if (prompt.includes('[codex mcp]')) {
+        const mcp = fakeMcpServers()
+        runner.mcpStatus = async () => ({
+          supported: true,
+          live: true,
+          source: 'live',
+          canReload: true,
+          servers: mcp.list(),
+        })
+        runner.reloadMcp = async () => mcp.reloadAll()
+      }
       emit({
         kind: 'init',
         model: settings.model || 'fake-codex',
@@ -948,11 +960,12 @@ export const fakeCodex: import('../agent/agentRunner').AgentRunnerFactory = (sco
     },
     replyQuestion: () => {},
   }
+  return runner
 }
 
 /**
  * Two MCP servers on a fake Claude session, one down until reconnected, so the MCP status views can be tried with
- * Reconnect. The fake Codex runner offers none, so the last-reported fallback stays covered too.
+ * Reconnect, or on a fake Codex thread opened with "[codex mcp]", with Reload.
  */
 function fakeMcpServers() {
   const servers: { name: string; status: string; toolCount?: number; error?: string }[] = [
@@ -964,6 +977,11 @@ function fakeMcpServers() {
     reconnect: (name: string) => {
       const server = servers.find((entry) => entry.name === name)
       if (server) Object.assign(server, { status: 'connected', toolCount: 3, error: undefined })
+    },
+    reloadAll: () => {
+      for (const server of servers)
+        if (server.status !== 'connected')
+          Object.assign(server, { status: 'connected', toolCount: 3, error: undefined })
     },
   }
 }
