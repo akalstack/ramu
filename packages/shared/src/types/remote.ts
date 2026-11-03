@@ -117,8 +117,7 @@ export interface NetworkStatus {
     name: string
   }
   link: LinkStatus
-  tunnel: TunnelStatus
-  /** Some route beyond this computer is up: the network listener, the tunnel or Ramu Link. */
+  /** Some route beyond this computer is up: the network listener or Ramu Link. */
   reachable: boolean
 }
 /** Ramu Link on this host. */
@@ -135,18 +134,6 @@ export interface LinkStatus {
   /** This host's Link address, for devices to save as a route. */
   address: string
   streams: number
-}
-export type TunnelMode = 'off' | 'quick' | 'named'
-/** The managed Cloudflare Tunnel. */
-export interface TunnelStatus {
-  mode: TunnelMode
-  state: 'off' | 'installing' | 'starting' | 'running' | 'error'
-  url: string | null
-  error: string | null
-  originPort: number
-  hostname: string | null
-  /** A named tunnel's token is saved; the token itself never leaves the host. */
-  hasToken: boolean
 }
 /** What became of one pairing offer. */
 export type PairingOfferStatus =

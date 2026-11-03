@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Check, ExternalLink, FolderGit2, Globe, Layers, LogIn, SlidersHorizontal, Wifi } from 'lucide-react'
+import { Check, ExternalLink, FolderGit2, Layers, LogIn, SlidersHorizontal, Wifi } from 'lucide-react'
 import { cn } from 'cn'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider, ModelPreferences, NetworkStatus, Project } from '@ramu/shared/types'
@@ -309,7 +309,7 @@ export function TokensStep({ choices, onChoices }: { choices: TokenChoices; onCh
 
 const LOOPBACK = /^(127\.|::1$|localhost$)/
 
-/** The three routes to this host from elsewhere: Ramu Link (Google or GitHub), the local network or VPN, and a Cloudflare Tunnel. */
+/** The two routes to this host from elsewhere: Ramu Link (Google or GitHub), and the local network or VPN. */
 export function ReachStep({ onError }: { onError(message: string): void }) {
   const [status, setStatus] = useState<NetworkStatus | null>(null)
   const [busy, setBusy] = useState(false)
@@ -321,7 +321,7 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
         () => {},
       )
     load()
-    // Sign-in finishes in the browser and the tunnel takes a moment to start; follow both.
+    // Sign-in finishes in the browser; follow it.
     const timer = window.setInterval(load, 2500)
     return () => {
       live = false
@@ -346,7 +346,7 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
         {t('Checking this host…')}
       </p>
     )
-  const { link, tunnel } = status
+  const { link } = status
   const managed = status.source === 'command-line'
   const network = status.enabled && !LOOPBACK.test(status.host)
   return (
@@ -435,30 +435,6 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
                   acceptUnencrypted: true,
                 }),
               )
-            }
-          />
-        </Row>
-        <Row
-          title={
-            <>
-              <Globe size={15} className="text-muted-foreground" />
-              {t('Cloudflare Tunnel')}
-            </>
-          }
-          help={
-            tunnel.state === 'running' && tunnel.url
-              ? t('Reachable at {0}', { 0: tunnel.url })
-              : tunnel.mode !== 'off' && tunnel.state === 'error'
-                ? t('The tunnel stopped: {0}. Ramu tries again.', { 0: tunnel.error ?? '' })
-                : t('A public HTTPS address without an account or open ports. Devices still pair before they connect.')
-          }
-        >
-          <Switch
-            aria-label={t('Cloudflare Tunnel')}
-            checked={tunnel.mode !== 'off'}
-            disabled={busy}
-            onCheckedChange={(checked) =>
-              void run(() => invoke('network.tunnelConfigure', { mode: checked ? 'quick' : 'off' }))
             }
           />
         </Row>

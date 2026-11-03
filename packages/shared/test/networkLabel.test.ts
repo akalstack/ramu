@@ -18,7 +18,7 @@ it('names the route a host is reached by', () => {
   expect(routeName('http://ramu-753d.local:7788')).toBe('LAN')
   expect(routeName('http://100.101.2.3:7788')).toBe('VPN')
   expect(routeName('https://studio.tail1234.ts.net')).toBe('VPN')
-  expect(routeName('https://ramu.example.com')).toBe('Tunnel')
+  expect(routeName('https://ramu.example.com')).toBe('Internet')
   expect(routeName('http://8a1b.link.invalid')).toBe('Ramu Link')
   expect(routeName(null, 'me@studio')).toBe('SSH')
   expect(routeName('http://203.0.113.5:7788')).toBe('Internet')

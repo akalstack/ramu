@@ -296,7 +296,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   {
     section: 'remote',
     title: 'Connect to a host',
-    words: 'remote server use another host switch host pair address link ssh alias tunnel',
+    words: 'remote server use another host switch host pair address link ssh alias',
   },
 ]
 

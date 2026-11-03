@@ -81,13 +81,6 @@ import {
 import { PairingRequests } from './remote/pairingRequests'
 import { createPairingNotice } from './remote/pairingNotice'
 import { LinkService } from './remote/link/service'
-import {
-  CloudflareTunnel,
-  readTunnelSetting,
-  readTunnelTokenRef,
-  validateTunnelSetting,
-  writeTunnelSetting,
-} from './remote/tunnel'
 import { HostCredentialStore } from './credentials/store'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
@@ -720,7 +713,6 @@ async function stop(intentional = false, exitCode = 0) {
   clearTimeout(remoteRetry)
   mcpHttp.close()
   link.stop()
-  tunnel.stop()
   linkSockets.close()
   localSockets.close()
   runtime.close()
@@ -1520,47 +1512,16 @@ const localSocketHost: SocketHost = {
   },
 }
 const localSockets = serveSockets(runtime, localSocketHost)
-// Ramu Link streams and the Cloudflare Tunnel reach the same handlers as the network listener: the same authentication,
-// limits and socket. Link connections arrive in memory, so this server never listens; the tunnel gets its own loopback one.
+// Ramu Link streams reach the same handlers as the network listener: the same authentication, limits and socket. They
+// arrive in memory, so this server never listens.
 const linkServer = createServer(handle())
 const linkSockets = serveSockets(linkServer, socketHost)
-let tunnelServer: { server: ReturnType<typeof createServer>; sockets: ReturnType<typeof serveSockets> } | null = null
 const linkCredentials = new HostCredentialStore()
-const tunnelPath = join(userData, 'tunnel.json')
-const tunnelTokenScope = { hostId, integration: 'link' as const, connectionId: 'tunnel', accountId: 'cloudflare' }
-let tunnelTokenRef = readTunnelTokenRef(tunnelPath)
-let tunnelSetting = readTunnelSetting(tunnelPath)
-// Only apps on this computer manage Link and the tunnel, so only they hear that it changed.
+// Only apps on this computer manage Link, so only they hear that it changed.
 const networkChanged = () => {
   const message = `data: ${JSON.stringify({ channel: 'network:changed', payload: {} })}\n\n`
   for (const client of hostClients) if (!client.destroyed) writeEvent(client, message)
 }
-const tunnel = new CloudflareTunnel({
-  binDir: join(userData, 'bin'),
-  listen: (port) =>
-    new Promise<void>((resolve, reject) => {
-      tunnelServer?.sockets.close()
-      tunnelServer?.server.close()
-      const server = createServer(handle())
-      tunnelServer = { server, sockets: serveSockets(server, socketHost) }
-      server.once('error', reject)
-      server.listen(port, '127.0.0.1', () => {
-        server.off('error', reject)
-        resolve()
-      })
-    }),
-  unlisten: () => {
-    tunnelServer?.sockets.close()
-    tunnelServer?.server.close()
-    tunnelServer?.server.closeAllConnections()
-    tunnelServer = null
-  },
-  token: async () =>
-    tunnelTokenRef ? await linkCredentials.read(tunnelTokenScope, tunnelTokenRef).catch(() => null) : null,
-  changed: networkChanged,
-})
-tunnel.setTokenSaved(Boolean(tunnelTokenRef))
-void tunnel.apply(tunnelSetting)
 const link = new LinkService({
   statePath: join(userData, 'link.json'),
   hostId,
@@ -1573,12 +1534,11 @@ const link = new LinkService({
 void link.start()
 /** Any way a device can reach this host right now, beyond this computer. */
 function reachable() {
-  return network.enabled || link.active() || tunnel.address() !== null
+  return network.enabled || link.active()
 }
-/** The tunnel and Link addresses, after the direct ones, for pairing offers and the identity answer. */
+/** The Link address, after the direct ones, for pairing offers and the identity answer. */
 function extraRoutes(): string[] {
-  const tunnelAddress = tunnel.address()
-  return [...(tunnelAddress ? [tunnelAddress] : []), ...(link.status().enabled ? [link.address()] : [])]
+  return link.status().enabled ? [link.address()] : []
 }
 const pairingNotice = createPairingNotice({
   // Only the desktop apps on this machine answer pairing requests; paired devices never see them.
@@ -1644,7 +1604,6 @@ function networkStatus() {
     defaultPermissions: devices.defaultPermissions(),
     permissionRequests: permissionRequests.list(),
     link: link.status(),
-    tunnel: tunnel.status(),
     reachable: reachable(),
   }
 }
@@ -1722,7 +1681,7 @@ async function networkMethod(method: string, args: unknown[]) {
     return networkStatus()
   }
   if (method === 'network.pair') {
-    if (!reachable()) throw new Error('Turn on network access, a tunnel or Ramu Link first')
+    if (!reachable()) throw new Error('Turn on network access or Ramu Link first')
     const role = args[0] ?? 'owner'
     if (role !== 'owner' && role !== 'viewer') throw new Error('Invalid device role')
     const owner = typeof args[1] === 'string' && args[1].length > 0 && args[1].length <= 80 ? args[1] : undefined
@@ -1731,16 +1690,11 @@ async function networkMethod(method: string, args: unknown[]) {
     syncDiscovery()
     setTimeout(syncDiscovery, expiresAt - Date.now() + 1000).unref()
     const direct = network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []
-    const tunnelAddress = tunnel.address()
     return {
       offerId,
       code,
       expiresAt,
-      urls: [
-        ...direct,
-        ...(tunnelAddress ? [{ url: tunnelAddress, interface: 'Cloudflare Tunnel' }] : []),
-        ...(link.active() ? [{ url: link.address(), interface: 'Ramu Link' }] : []),
-      ],
+      urls: [...direct, ...(link.active() ? [{ url: link.address(), interface: 'Ramu Link' }] : [])],
     }
   }
   if (method === 'network.cancelOffer') {
@@ -1793,29 +1747,6 @@ async function networkMethod(method: string, args: unknown[]) {
   }
   if (method === 'network.linkSetService') {
     link.setService(z.string().max(500).nullable().parse(args[0]))
-    return networkStatus()
-  }
-  if (method === 'network.tunnelConfigure') {
-    tunnelSetting = validateTunnelSetting(args[0])
-    writeTunnelSetting(tunnelPath, tunnelSetting, tunnelTokenRef)
-    await tunnel.apply(tunnelSetting)
-    return networkStatus()
-  }
-  if (method === 'network.tunnelSetToken') {
-    const token = z
-      .string()
-      .trim()
-      .min(20)
-      .max(4096)
-      .regex(/^[A-Za-z0-9+/=_-]+$/, 'Paste the tunnel token from the Cloudflare dashboard')
-      .nullable()
-      .parse(args[0])
-    const old = tunnelTokenRef
-    tunnelTokenRef = token ? await linkCredentials.put(tunnelTokenScope, token) : null
-    if (old) await linkCredentials.remove(tunnelTokenScope, old).catch(() => {})
-    writeTunnelSetting(tunnelPath, tunnelSetting, tunnelTokenRef)
-    tunnel.setTokenSaved(Boolean(tunnelTokenRef))
-    if (tunnelSetting.mode === 'named') await tunnel.apply(tunnelSetting)
     return networkStatus()
   }
   if (method === 'network.revoke') {

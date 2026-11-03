@@ -58,17 +58,13 @@ Usage:
   ramu hosts add <address> <code> [--name <name>]
                                  Add one, with a code from \`ramu pair\` there; it may only start and follow threads
   ramu hosts forget <id|name>    Stop using a host here (revoke it on that host to end it there too)
-  ramu up [--link] [--tunnel] [--private-network] [--no-link] [--no-tunnel] [--no-private-network] [--yes]
+  ramu up [--link] [--private-network] [--no-link] [--no-private-network] [--yes]
                                  Set up how other devices reach this host, keep it running as a service, and pair one.
                                  Without a terminal it never asks; name the ways you want, or --yes for Ramu Link.
   ramu link login|logout|on|off|status [--json]
                                  Sign this host in to Ramu Link with Google or GitHub (prints a code and link), or manage it
   ramu link service <url|default>
                                  Use your own Ramu Link deployment (see apps/link/README.md)
-  ramu tunnel quick [--port <n>] Give this host a temporary public HTTPS address with Cloudflare Tunnel
-  ramu tunnel named <hostname> [--port <n>]
-                                 Use your own Cloudflare tunnel; the token is read from RAMU_TUNNEL_TOKEN or asked for
-  ramu tunnel off|status [--json]
 
 Options:
   --data-dir <dir>               Profile directory (default: the desktop app's, so both share threads and settings)
@@ -146,9 +142,7 @@ const booleans = new Set([
   'private-network',
   'discoverable',
   'link',
-  'tunnel',
   'no-link',
-  'no-tunnel',
   'no-private-network',
   'yes',
 ])
@@ -220,7 +214,6 @@ if (command === 'start') {
           pid: status.pid,
           version: status.version ?? null,
           listening: status.listening ?? null,
-          tunnel: network ? { mode: network.tunnel.mode, state: network.tunnel.state, url: network.tunnel.url } : null,
           link: network
             ? { enabled: network.link.enabled, state: network.link.state, account: network.link.account?.email ?? null }
             : null,
@@ -283,7 +276,6 @@ if (command === 'start') {
       ]
       urls = candidateUrls(host, port, Boolean(status.tls)).map((c) => ({ url: c.url, note: `  (${c.interface})` }))
     }
-    if (network?.tunnel.url) urls.push({ url: network.tunnel.url, note: '  (Cloudflare Tunnel)' })
     if (network?.link.state === 'online') urls.push({ url: network.link.address, note: '  (Ramu Link)' })
     if (!urls.length) fail('No network address found for this host. Pass --url <address>.')
   }
@@ -532,8 +524,6 @@ if (command === 'start') {
   }
 } else if (command === 'link') {
   await linkCommand(positional[1] ?? 'status')
-} else if (command === 'tunnel') {
-  await tunnelCommand(positional[1] ?? 'status')
 } else if (command === 'up') {
   await up()
 } else fail(`unknown command "${command}". Run ramu --help.`)
@@ -542,10 +532,6 @@ function reachLines(network: NetworkStatus): string[] {
   const lines: string[] = []
   if (network.enabled)
     lines.push(`network  ${network.listening ? 'listening' : 'starting'} on ${network.host}:${network.port}`)
-  if (network.tunnel.mode !== 'off')
-    lines.push(
-      `tunnel   ${network.tunnel.state}${network.tunnel.url ? `  ${network.tunnel.url}` : ''}${network.tunnel.error ? `  (${network.tunnel.error})` : ''}`,
-    )
   if (network.link.account || network.link.enabled)
     lines.push(
       `link     ${network.link.state}  ${network.link.account?.email ?? ''}${network.link.error ? `  (${network.link.error})` : ''}`,
@@ -614,61 +600,6 @@ async function linkCommand(action: string) {
   } else fail(`unknown link command "${action}". Use login, logout, on, off, service or status.`)
 }
 
-async function readSecret(prompt: string): Promise<string> {
-  if (process.env.RAMU_TUNNEL_TOKEN) return process.env.RAMU_TUNNEL_TOKEN
-  if (!process.stdin.isTTY) {
-    const chunks: Buffer[] = []
-    for await (const chunk of process.stdin) chunks.push(chunk as Buffer)
-    return Buffer.concat(chunks).toString().trim()
-  }
-  const { createInterface } = await import('node:readline/promises')
-  const rl = createInterface({ input: process.stdin, output: process.stdout })
-  try {
-    return (await rl.question(prompt)).trim()
-  } finally {
-    rl.close()
-  }
-}
-
-async function waitForTunnel(): Promise<NetworkStatus> {
-  for (let i = 0; i < 90; i++) {
-    const status = await call<NetworkStatus>('network.status')
-    if (status.tunnel.state === 'running') return status
-    if (status.tunnel.state === 'error' && i > 5) fail(status.tunnel.error ?? 'The tunnel did not start.')
-    await sleep(1000)
-  }
-  fail('The tunnel did not start within 90 seconds. Check ramu tunnel status.')
-}
-
-async function tunnelCommand(action: string) {
-  const port = text('port') ? Number(text('port')) : undefined
-  if (action === 'quick') {
-    await call('network.tunnelConfigure', [{ mode: 'quick', ...(port ? { originPort: port } : {}) }])
-    const status = await waitForTunnel()
-    console.log(
-      `Tunnel running at ${status.tunnel.url}\nIt changes when the tunnel restarts; paired devices also keep their other routes.`,
-    )
-  } else if (action === 'named') {
-    const hostname = positional[2]
-    if (!hostname) fail('Usage: ramu tunnel named <hostname> [--port <n>]')
-    const token = await readSecret('Tunnel token from the Cloudflare dashboard: ')
-    if (!token) fail('A named tunnel needs its token (RAMU_TUNNEL_TOKEN, stdin or the prompt).')
-    await call('network.tunnelSetToken', [token])
-    await call('network.tunnelConfigure', [{ mode: 'named', hostname, ...(port ? { originPort: port } : {}) }])
-    const status = await waitForTunnel()
-    console.log(
-      `Tunnel running at ${status.tunnel.url}\nIn the Cloudflare dashboard, route ${hostname} to http://localhost:${status.tunnel.originPort}.`,
-    )
-  } else if (action === 'off') {
-    await call('network.tunnelConfigure', [{ mode: 'off' }])
-    console.log('Tunnel stopped.')
-  } else if (action === 'status') {
-    const status = await call<NetworkStatus>('network.status')
-    if (flags.has('json')) console.log(JSON.stringify(status.tunnel, null, 2))
-    else console.log(reachLines(status).find((line) => line.startsWith('tunnel')) ?? 'tunnel   off')
-  } else fail(`unknown tunnel command "${action}". Use quick, named, off or status.`)
-}
-
 /** Guided setup for a command-line host, like the desktop's Remote access section in one command. */
 async function up() {
   const interactive = process.stdin.isTTY && process.stdout.isTTY && !flags.has('yes')
@@ -685,9 +616,8 @@ async function up() {
   }
   const named = (flag: string) => (flags.has(flag) ? true : flags.has(`no-${flag}`) ? false : undefined)
   let wantLink = named('link')
-  let wantTunnel = named('tunnel')
   let wantPrivate = named('private-network')
-  const chose = [wantLink, wantTunnel, wantPrivate].some((value) => value !== undefined)
+  const chose = [wantLink, wantPrivate].some((value) => value !== undefined)
 
   let running = await runtimeInvoke(config.socketPath, 'background.status').catch(() => null)
   if (!running) {
@@ -706,10 +636,9 @@ async function up() {
   let status = await call<NetworkStatus>('network.status')
   if (!chose) {
     if (!interactive && !flags.has('yes') && !status.reachable)
-      fail('Name how devices reach this host: --link, --tunnel and/or --private-network (or --yes for Ramu Link).')
+      fail('Name how devices reach this host: --link and/or --private-network (or --yes for Ramu Link).')
     console.log('How should your other devices reach this host? Choose any.')
     wantLink = await ask('  Ramu Link: sign in with Google or GitHub, works from anywhere, end-to-end encrypted.', true)
-    wantTunnel = await ask('  Cloudflare Tunnel: a temporary public HTTPS address, no account.', false)
     wantPrivate = await ask('  Private network: Tailscale, WireGuard or a LAN you trust.', false)
   }
 
@@ -721,13 +650,6 @@ async function up() {
     console.log(`Listening on port ${status.port} for devices on your private network.`)
   } else if (wantPrivate === false && status.enabled && status.source !== 'command-line')
     await call('network.configure', [{ ...status, enabled: false, acceptUnencrypted: status.tls ? false : true }])
-
-  if (wantTunnel === true && status.tunnel.mode === 'off') {
-    await call('network.tunnelConfigure', [{ mode: 'quick' }])
-    status = await waitForTunnel()
-    console.log(`Tunnel running at ${status.tunnel.url}`)
-  } else if (wantTunnel === false && status.tunnel.mode !== 'off')
-    await call('network.tunnelConfigure', [{ mode: 'off' }])
 
   if (wantLink === true && !status.link.account) {
     status = await linkLogin()

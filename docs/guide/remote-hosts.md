@@ -8,14 +8,13 @@ A **host** is a computer that runs Ramu's workspace server: your agents, termina
 
 - **Let other devices connect** opens the host on a network you choose (all networks, or one such as your VPN) and a port.
 - **Ramu Link** reaches the host from anywhere without a VPN or open ports. Sign in with Google or GitHub; devices signed in to the same account list the host under **Add a host → Ramu Link** (on a phone, the pairing screen's Ramu Link tab) and pair after both screens show the same six-digit number. Streams are end-to-end encrypted, so the relay cannot read them. See [Ramu Link](#ramu-link).
-- **Cloudflare Tunnel** gives the host a public HTTPS address: **Temporary address** needs no account, **My own tunnel** uses a token and hostname from your Cloudflare dashboard. Ramu runs a pinned, checksum-verified `cloudflared`.
 - **Pair a device** shows a one-time code and this host's addresses. With **Discoverable** on, a nearby device can also ask without a code: Ramu asks you to allow it (in the app, or as a notification when it is in the background or closed). Allow it only when both screens show the same six-digit number.
 - **Device permissions** decide what each device may use: computer use, the browser, terminals, settings changes and agents. Grant this time, for an hour, a day or always. Each device shows what it runs on (an iPhone, an Android tablet, a Mac, an Ubuntu server…) once it has connected, and **Keep paired** sets how long that one device stays paired without use, or leaves it like the others. A device that offers this host its screen for agents is allowed or refused in the same place. When a device asks for a permission it lacks, the request opens in Ramu on this host (or as a system notification when Ramu is in the background) with the same choices; closing it leaves the request waiting here until it lapses.
 - **Hosts** adds another host by choosing it nearby, or by address and code. Each host card has a switch that turns its connection off and on without forgetting it, and **Permissions** holds both directions: what this computer may do on that host, and whether that host may use this computer's screen. On the phone, Settings → Remote access shows the same for the selected host.
 
 With a second host, a switcher appears at the top of the sidebar. Each host keeps its own threads, browser and settings, and notifications open the right host. **Apply settings to** in Settings edits one host or all of them.
 
-A device pairs once and keeps one token, role and set of permissions on every route. It learns the host's other addresses (LAN, VPN, tunnel, Link), tries direct ones first, falls back to Link, and moves back to a direct route as soon as one answers.
+A device pairs once and keeps one token, role and set of permissions on every route. It learns the host's other addresses (LAN, VPN, Link), tries direct ones first, falls back to Link, and moves back to a direct route as soon as one answers.
 
 ## Headless server
 
@@ -29,9 +28,8 @@ ramu pair
 | --- | --- |
 | `ramu [serve]` | Run the server in the foreground |
 | `ramu status`, `stop`, `restart` | Check, stop or restart it |
-| `ramu up` | Choose how devices reach this host (Ramu Link, Cloudflare Tunnel, private network), keep it running as a service and pair a device; `--link`, `--tunnel`, `--private-network`, their `--no-` forms and `--yes` make it scriptable |
+| `ramu up` | Choose how devices reach this host (Ramu Link, private network), keep it running as a service and pair a device; `--link`, `--private-network`, their `--no-` forms and `--yes` make it scriptable |
 | `ramu link login\|logout\|on\|off\|status`, `ramu link service <url>` | Sign this host in to Ramu Link (prints a code and a link to approve on any device) or manage it |
-| `ramu tunnel quick\|named <hostname>\|off\|status` | Manage the Cloudflare Tunnel; a named tunnel's token is read from `RAMU_TUNNEL_TOKEN` or asked for |
 | `ramu pair [--role viewer]` | Print a one-time pairing code and this host's addresses |
 | `ramu pair --approve <request>`, `--deny <request>` | Answer a nearby device's request; the server prints each one with its number |
 | `ramu devices` | List, revoke and grant permissions to paired devices |
@@ -48,8 +46,8 @@ A bare port (`--listen 7788`) listens on this computer only. Any other address n
 | Tailscale, NetBird, ZeroTier, WireGuard | Listen on the VPN address, then `ramu pair` |
 | LAN | The same, if you trust everyone on it |
 | SSH tunnel | Keep the loopback listener and `ssh -L 7788:127.0.0.1:7788 host` |
-| Public name | Put HTTPS in front, give Ramu a certificate, or `ramu tunnel named <hostname>` |
-| Anywhere, no setup | `ramu link login` (Ramu Link) or `ramu tunnel quick` |
+| Public name | Put HTTPS in front, or give Ramu a certificate |
+| Anywhere, no setup | `ramu link login` (Ramu Link) |
 
 A full-access device can do anything the desktop can, including run terminals and agents with your provider accounts. Treat each one like an SSH key.
 

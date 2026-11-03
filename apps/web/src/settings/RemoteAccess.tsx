@@ -40,7 +40,7 @@ import { workspaceVisible } from '../workspace/workspaceLifetime'
 import { onPairLink, takePairLink } from '../pairLink'
 import { NearbyHosts } from './NearbyHosts'
 import { AgentHosts } from './AgentHosts'
-import { LinkSettings, TunnelSettings } from './ReachThisHost'
+import { LinkSettings } from './ReachThisHost'
 import { AccountHosts } from './AccountHosts'
 import { HostUpdateLine, UpdateAllHosts } from './HostUpdates'
 import { DeviceScreenLine, HostScreenSharing, useScreenOffers } from './ScreenSharing'
@@ -308,7 +308,6 @@ function ThisComputer() {
       )}
 
       <LinkSettings status={status} setStatus={setStatus} />
-      <TunnelSettings status={status} setStatus={setStatus} />
 
       <div>
         <SettingsRow>
@@ -319,7 +318,7 @@ function ThisComputer() {
                 ? t(
                     'Creates a one-time code for a phone or another host. With Discoverable on, nearby devices can also ask, and you allow them here.',
                   )
-                : t('Turn on a way in above first: other devices, Ramu Link or a tunnel.')
+                : t('Turn on a way in above first: other devices or Ramu Link.')
             }
           />
           <Button

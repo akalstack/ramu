@@ -627,13 +627,6 @@ export interface RamuMethods {
   'network.linkSetEnabled'(enabled: boolean): NetworkStatus
   /** The Ramu Link service URL, or null for the default. Only while signed out. */
   'network.linkSetService'(url: string | null): NetworkStatus
-  'network.tunnelConfigure'(input: {
-    mode: import('./types').TunnelMode
-    hostname?: string | null
-    originPort?: number
-  }): NetworkStatus
-  /** Saves (or with null removes) a named tunnel's token in the OS credential store. */
-  'network.tunnelSetToken'(token: string | null): NetworkStatus
   /** Computers this app is connected to, all at once. Handled by the desktop app itself. */
   'computers.settings.invoke'(id: string, method: string, args: unknown[]): unknown
   'computers.settings.get'(id: string): SettingsSnapshot
@@ -1340,7 +1333,7 @@ export type PushEvents = {
   'pairing:requests': { requests: NetworkStatus['requests'] }
   /** Paired devices asking for a permission, waiting for the person here. Sent only to apps on the host itself. */
   'permission:requests': { requests: NetworkStatus['permissionRequests'] }
-  /** Link or tunnel state changed; Settings reads `network.status` again. Sent only to apps on the host itself. */
+  /** Link state changed; Settings reads `network.status` again. Sent only to apps on the host itself. */
   'network:changed': Record<string, never>
   /** This desktop's Ramu Link account changed. */
   'linkAccount:changed': Record<string, never>
