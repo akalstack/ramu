@@ -42,7 +42,12 @@ export class CatalogService {
     this.catalogs = null
   }
 
-  async validateSettings(settings: AgentSettings): Promise<void> {
+  /**
+   * Whether these settings may start a process at all: the provider and its login are turned on, and the installed
+   * runtime is one Ramu can launch. A thread resuming on its recorded model checks only this, since its model may have
+   * left today's catalog.
+   */
+  async validateLaunch(settings: AgentSettings): Promise<void> {
     if (this.providerOff(settings.provider))
       throw new Error(`${providerName(settings.provider)} is turned off in Settings → Providers.`)
     const account =
@@ -61,6 +66,11 @@ export class CatalogService {
     // One decision at every new process boundary: main threads, helpers, advisors, background work and fallback targets.
     if (launchCompatibility.applies(settings.provider) && process.env.RAMU_FAKE_AGENT !== '1')
       await launchCompatibility.assertLaunchable(settings.provider)
+  }
+
+  /** `validateLaunch`, and the model, effort and service tier exist in the provider's catalog. */
+  async validateSettings(settings: AgentSettings): Promise<void> {
+    await this.validateLaunch(settings)
     let catalog = (await this.host.catalog()).find((c) => c.provider === settings.provider)
     // A retained chat may belong to a different profile than today's default.
     if (

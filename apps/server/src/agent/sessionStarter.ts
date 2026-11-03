@@ -46,6 +46,7 @@ export interface SessionStarterHost
       'activeWriter' | 'draining' | 'finalizing' | 'live' | 'revisions' | 'runners' | 'transitioning'
     >,
     Pick<UserRequests, 'hasBlockingQuestions'>,
+    Pick<import('./catalogService').CatalogService, 'validateLaunch' | 'validateSettings'>,
     Pick<
       FallbackRouter,
       | 'attempted'
@@ -89,6 +90,8 @@ export class SessionStarter {
     const route = await this.host.route(settings)
     const requested = settings
     if (route) settings = this.host.withStep(settings, route.step)
+    // Every new thread passes the same check, whoever starts it: the composer, a schedule, an agent or another host.
+    await this.host.validateSettings(settings)
     const started = await this.startRouted(taskId, scope, prompt, settings, attachments)
     if (route) this.host.noteRoute(started.id, requested, settings, route.reason)
     return started
@@ -265,6 +268,8 @@ export class SessionStarter {
       return
     }
     await this.host.draining.get(id)
+    // A new process for a thread: its provider or login may have been turned off since it last ran.
+    await this.host.validateLaunch(s.settings)
     this.host.launch(id, text, s.providerSessionId, recordUser, attachments)
   }
 }

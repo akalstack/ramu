@@ -18,7 +18,7 @@ Each provider card shows whether its installed version is **Supported**, **Limit
 
 ## Accounts
 
-Codex and OpenCode can hold several accounts; a saved account applies to new threads. When a thread hits a limit, every enabled account is tried before another model.
+Codex and OpenCode can hold several accounts; a saved account applies to new threads. When a thread hits a limit, every enabled account is tried before another model. A provider or account turned off in **Settings → Providers** starts nothing: new threads, threads continuing after a stop or restart, and fallback switches all refuse it and say why.
 
 ## Environment variables
 

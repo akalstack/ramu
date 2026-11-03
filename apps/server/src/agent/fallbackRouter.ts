@@ -54,7 +54,7 @@ import type { Db } from '../db'
 /** What FallbackRouter needs from the rest of the service. */
 export interface FallbackRouterHost
   extends
-    Pick<CatalogService, 'validateSettings'>,
+    Pick<CatalogService, 'validateLaunch' | 'validateSettings'>,
     Pick<SessionProcess, 'fail' | 'halt' | 'launch' | 'planSwitch' | 'planTransition' | 'rememberSession'>,
     Pick<ProviderWaits, 'waitForGoalProvider'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
@@ -605,12 +605,10 @@ export class FallbackRouter {
           const model = step.model
             ? models?.find((model) => model.id === step!.model)
             : (models?.find((model) => model.isDefault) ?? models?.[0])
-          plan = this.host.planTransition(
-            id,
-            this.cappedChildSettings(s, this.withStep(s.settings, step), catalogs),
-            'limit',
-            model?.contextWindow,
-          )
+          const candidate = this.cappedChildSettings(s, this.withStep(s.settings, step), catalogs)
+          // A provider or login turned off since routing read its preferences is skipped like any refused option.
+          await this.host.validateLaunch(candidate)
+          plan = this.host.planTransition(id, candidate, 'limit', model?.contextWindow)
           if (plan.fits) break
           tooLarge = step.provider
         } catch (error) {

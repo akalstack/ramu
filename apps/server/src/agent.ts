@@ -299,7 +299,9 @@ export class AgentService {
       get usageReader() {
         return parts.contexts.usageReader
       },
-      validateSettings: (...a) => parts.catalogs.validateSettings(...a),
+      // Through the service's own methods, so every boundary uses the one check a caller or test may replace.
+      validateSettings: (...a) => this.validateSettings(...a),
+      validateLaunch: (...a) => this.validateLaunch(...a),
       waitForGoalProvider: (...a) => parts.providerWaits.waitForGoalProvider(...a),
       wakeWorkspaceQueue: (...a) => parts.dispatcher.wakeWorkspaceQueue(...a),
       withStep: (...a) => parts.router.withStep(...a),
@@ -712,6 +714,10 @@ export class AgentService {
 
   validateSettings(...args: Parameters<CatalogService['validateSettings']>) {
     return this.parts.catalogs.validateSettings(...args)
+  }
+
+  validateLaunch(...args: Parameters<CatalogService['validateLaunch']>) {
+    return this.parts.catalogs.validateLaunch(...args)
   }
 
   configure(...args: Parameters<FallbackRouter['configure']>) {

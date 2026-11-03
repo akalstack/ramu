@@ -1841,6 +1841,8 @@ describe('busy agent messages', () => {
         if (id === session.id) await capture
       },
     }
+    // This fake runtime has no model catalog; starting checks are covered elsewhere.
+    vi.spyOn(service, 'validateSettings').mockResolvedValue()
     const second = await service.startReviewed('t2', scopeOf(cwd), 'second thread', {
       ...DEFAULT_AGENT_SETTINGS,
       access: 'full' as const,
@@ -2517,6 +2519,29 @@ describe('sub-agents Ramu runs', () => {
     expect(svc.get(result.agentId).settings).toMatchObject({ provider: 'codex', access: 'edits' })
     expect(svc.task(parent.id, result.agentId)).toMatchObject({ teammate: 'review', canMessage: true })
     await expect(svc.addTeammate(parent.id, settings, 'take-over', '')).rejects.toThrow(/already has a teammate/)
+    svc.stopAll()
+  })
+
+  it('refuses to start or resume a thread on a provider or login turned off in Settings', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc)
+    const off = (patch: Partial<AppPreferences['providerBinaries']['claude-code']>) => {
+      const prefs = svc.preferences!()
+      svc.preferences = () => ({
+        ...prefs,
+        providerBinaries: {
+          ...prefs.providerBinaries,
+          'claude-code': { ...prefs.providerBinaries['claude-code'], ...patch },
+        },
+      })
+    }
+    off({ defaultAccountEnabled: false })
+    await expect(svc.startReviewed('t2', scopeOf(cwd), 'hello', full)).rejects.toThrow(
+      /default Claude login is turned off/,
+    )
+    // A thread that ran before needs a new process to continue, and gets the same answer.
+    await svc.stopAndWait(parent.id)
+    await expect(svc.send(parent.id, 'more')).rejects.toThrow(/turned off/)
     svc.stopAll()
   })
 
