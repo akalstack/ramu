@@ -1,6 +1,6 @@
 # Ramu Link service
 
-Google and GitHub sign-in, the list of hosts each account links, and the relay that joins a device's stream to its host. It runs on Cloudflare Workers with D1 and one Durable Object per host, all within the Workers free plan for personal use.
+Google and GitHub sign-in, the list of hosts each account links, the relay that joins a device's stream to its host, and each account's plan. It runs on Cloudflare Workers with D1 and one Durable Object per host, all within the Workers free plan for personal use.
 
 The relay forwards sealed frames only: every stream is end-to-end encrypted between the device and the host (`packages/shared/src/link`). See [Security](../../SECURITY.md#remote-access) for the trust model and [Remote hosts](../../docs/guide/remote-hosts.md#ramu-link) for using it.
 
@@ -27,9 +27,47 @@ The relay forwards sealed frames only: every stream is end-to-end encrypted betw
    pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET
    ```
 
-4. `pnpm --filter @ramu/link deploy`, then point Ramu at it: Settings → Remote access → Ramu Link → Service, or `RAMU_LINK_URL=https://<your-domain>` for a headless host.
+4. `pnpm --filter @ramu/link deploy`, then point Ramu at it: Settings → Remote access → Ramu Link → **Use my own service**, or `RAMU_LINK_URL=https://<your-domain>` for a headless host.
 
-`HOST_LIMIT` in `wrangler.jsonc` caps hosts per account (5 by default); set it to `0` for no limit.
+A service set up this way sells nothing: every account has every Plus feature, relayed time is measured but never limited, and `HOST_LIMIT` in `wrangler.jsonc` caps hosts per account (`0`, the default, for no limit). The privacy notice and terms are at `/privacy` and `/terms`; they describe the hosted service, so edit `src/page.ts` if yours differs.
+
+## Plans and usage
+
+The relay counts relayed time for each host's owner: the seconds the relay is awake carrying a stream, and the frames it carried, per UTC day in the `usage` table. Counts are written a few seconds after traffic starts and when a stream closes, never per frame. `GET /v1/usage` returns the month so far for the signed-in account; `GET /v1/me` includes the plan, hosts used and hours used.
+
+When the service sells Plus, an account without Plus is on Free: 3 hosts and 60 relayed hours a month (UTC). Plus allows 20 hosts and unlimited relayed hours, and sharing a host with another account. Limits never cut off an open stream: past 60 hours, new streams are refused with close code 4402 until the 1st; hosts beyond the plan's limit (the most recently linked) stay listed and refuse new streams. The limits are in `LINK_PLANS` in `packages/shared/src/link/protocol.ts`.
+
+## Selling Plus with Paddle
+
+Paddle is the merchant of record: it charges, collects tax in the buyer's country and pays out. The service stores only what an account has and until when (the `entitlement` table), written by Paddle's webhooks.
+
+1. In Paddle, create a product with a yearly and a monthly price ($48/year and $5/month), each with a price override for Indonesia (Rp869.000 and Rp89.000).
+2. Set the default payment link to `https://<your-domain>/checkout` and approve that domain.
+3. Add a notification destination for `https://<your-domain>/v1/paddle/webhook` with the `subscription.*` and `adjustment.*` events.
+4. Set the secrets; Plus goes on sale, and the limits apply, only once all five are set:
+
+   ```sh
+   pnpm exec wrangler secret put PADDLE_API_KEY
+   pnpm exec wrangler secret put PADDLE_WEBHOOK_SECRET   # the destination's secret key
+   pnpm exec wrangler secret put PADDLE_CLIENT_TOKEN     # a client-side token, for the checkout page
+   pnpm exec wrangler secret put PADDLE_PRICE_YEAR       # pri_…
+   pnpm exec wrangler secret put PADDLE_PRICE_MONTH      # pri_…
+   ```
+
+Set `PADDLE_ENV` to `sandbox` in `wrangler.jsonc` to try it against Paddle's sandbox first.
+
+**Get Plus** in Ramu calls `POST /v1/checkout`, which creates a Paddle transaction tagged with the account and opens it on `/checkout`. Webhooks then keep the entitlement current: an active subscription gives Plus until its period ends (plus a day of grace for a late renewal), a scheduled cancellation keeps Plus until it takes effect, and a failed renewal, pause, cancellation or approved refund ends it. Deleting an account cancels its subscription first, and keeps the account if Paddle cannot be reached.
+
+## Free Plus
+
+Open-source maintainers and students can ask for Plus for free with the GitHub issue template. Grant it by hand with `ADMIN_TOKEN` set as a secret:
+
+```sh
+curl -X POST https://<your-domain>/v1/admin/grants -H "authorization: Bearer $ADMIN_TOKEN" \
+  -H 'content-type: application/json' -d '{"email":"person@example.com","until":null}'
+```
+
+`until` is a time in milliseconds, or `null` for no end; `{"email":…,"revoke":true}` takes a grant back. A grant never replaces a subscription Paddle has not cancelled.
 
 ## Local development
 

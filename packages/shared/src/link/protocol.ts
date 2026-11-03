@@ -17,13 +17,45 @@ export function linkServiceUrl(input: string): string {
 }
 /** WebSocket subprotocol both relay endpoints answer with. */
 export const LINK_PROTOCOL = 'ramu-link.v1'
-/** Host links per account on the hosted service; phones and browsers do not count. */
-export const LINK_HOST_LIMIT = 5
+
+/**
+ * What each plan on a service that sells Plus allows. Phones and browsers never count; only relayed time does, and only
+ * while the relay is awake carrying a stream. A service that sells nothing grants Plus with its own host limit.
+ */
+export const LINK_PLANS = {
+  free: { hosts: 3, relayedHours: 60 },
+  plus: { hosts: 20, relayedHours: null },
+} as const satisfies Record<string, { hosts: number; relayedHours: number | null }>
+export type LinkPlan = keyof typeof LINK_PLANS
+export type LinkBillingInterval = 'year' | 'month'
+
+/** An account's plan and this month's use, as `GET /v1/me` reports it. */
+export interface LinkPlanStatus {
+  plan: LinkPlan
+  /** Who granted Plus: a payment, a person (free Plus for maintainers and students), or a service that sells nothing. */
+  source: 'free' | 'paddle' | 'grant' | 'self-hosted'
+  /** When Plus ends without a renewal; null while it renews or never ends. */
+  expiresAt: number | null
+  /** A cancelled subscription keeps Plus until `expiresAt`. */
+  renews: boolean
+  hosts: number
+  hostLimit: number | null
+  /** `YYYY-MM`, UTC; the count starts again on the first of the month. */
+  month: string
+  relayedSeconds: number
+  relayedLimitSeconds: number | null
+  /** The service sells Plus, so **Get Plus** has somewhere to go. */
+  checkout: boolean
+}
 
 export const LINK_PATHS = {
   hosts: '/v1/hosts',
   host: (hostId: string) => `/v1/hosts/${hostId}`,
+  shares: (hostId: string) => `/v1/hosts/${hostId}/shares`,
+  share: (hostId: string, userId: string) => `/v1/hosts/${hostId}/shares/${encodeURIComponent(userId)}`,
   me: '/v1/me',
+  usage: '/v1/usage',
+  checkout: '/v1/checkout',
   relayHost: '/v1/relay/host',
   relayConnect: (hostId: string) => `/v1/relay/connect/${hostId}`,
 } as const
@@ -83,6 +115,8 @@ export function credentialFromProtocols(header: string | null, kind: 'bearer' | 
 export const LINK_CLOSE = {
   hostOffline: 4404,
   unauthorized: 4401,
+  /** The account's plan does not cover this stream (relayed hours used up, or a host beyond the plan's limit). */
+  plan: 4402,
   limit: 4429,
   hostClosed: 4000,
 } as const
@@ -112,6 +146,8 @@ export function decodeMux(frame: Uint8Array): { type: MuxType; stream: number; p
 /** What the relay tells the host about a new stream; the account is the relay's claim, never proof of a device. */
 export interface StreamOpen {
   account: string
+  /** The account was given this host by its owner rather than owning it; the host lets it pair only as a viewer. */
+  shared?: boolean
 }
 
 /** The first sealed message a device sends on a stream. */

@@ -11,7 +11,18 @@ export interface Env {
   GOOGLE_CLIENT_SECRET?: string
   GITHUB_CLIENT_ID?: string
   GITHUB_CLIENT_SECRET?: string
+  /** Links per account on a service that sells nothing; 0 or unset removes the limit. */
   HOST_LIMIT?: string
+  /** Paddle sells Plus only when all of these are set; without them every account has Plus. */
+  PADDLE_ENV?: 'sandbox' | 'production'
+  PADDLE_API_KEY?: string
+  PADDLE_WEBHOOK_SECRET?: string
+  /** The client-side token Paddle.js needs on the `/checkout` page. */
+  PADDLE_CLIENT_TOKEN?: string
+  PADDLE_PRICE_YEAR?: string
+  PADDLE_PRICE_MONTH?: string
+  /** Lets a person grant free Plus (`POST /v1/admin/grants`); unset turns the endpoint off. */
+  ADMIN_TOKEN?: string
 }
 
 /** Ramu's own clients; the device flow refuses any other `client_id`. */

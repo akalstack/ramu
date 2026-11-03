@@ -1,14 +1,9 @@
-import { LINK_HOST_LIMIT, isHostId } from '@ramu/shared/link/protocol'
+import { LINK_PLANS, isHostId } from '@ramu/shared/link/protocol'
 import type { Env } from './auth'
+import { entitlementOf } from './plans'
 
 export interface HostRow {
   secretHash: string
-}
-
-/** 0 or a negative number removes the limit. */
-export function hostLimit(env: Pick<Env, 'HOST_LIMIT'>): number | null {
-  const parsed = env.HOST_LIMIT === undefined ? LINK_HOST_LIMIT : Number(env.HOST_LIMIT)
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null
 }
 
 const KEY = /^[0-9a-f]{64}$/
@@ -38,10 +33,10 @@ async function sha256Hex(text: string): Promise<string> {
  * linked to another account is refused: that account must unlink it first.
  */
 export async function registerHost(
-  env: Pick<Env, 'DB' | 'HOST_LIMIT'>,
+  env: Parameters<typeof entitlementOf>[0],
   userId: string,
   body: unknown,
-): Promise<{ secret: string } | { error: string; status: number }> {
+): Promise<{ secret: string } | { error: string; status: number; code?: 'host-limit' }> {
   const registration = parseRegistration(body)
   if (!registration) return { error: 'Invalid host', status: 400 }
   const existing = await env.DB.prepare('SELECT userId FROM host WHERE id = ?')
@@ -49,13 +44,21 @@ export async function registerHost(
     .first<{ userId: string }>()
   if (existing && existing.userId !== userId)
     return { error: 'This host is linked to another account. Unlink it there first.', status: 409 }
-  const limit = hostLimit(env)
+  const entitlement = await entitlementOf(env, userId)
+  const limit = entitlement.hostLimit
   if (!existing && limit !== null) {
     const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM host WHERE userId = ?')
       .bind(userId)
       .first<{ count: number }>()
     if ((count?.count ?? 0) >= limit)
-      return { error: `This account already links ${limit} hosts. Unlink one to add another.`, status: 403 }
+      return {
+        error:
+          entitlement.source === 'free'
+            ? `This account already links ${limit} hosts, the most the Free plan includes. Unlink one, or get Plus for up to ${LINK_PLANS.plus.hosts}.`
+            : `This account already links ${limit} hosts. Unlink one to add another.`,
+        status: 403,
+        code: 'host-limit',
+      }
   }
   const secret = `${registration.hostId}.${randomSecret()}`
   const secretHash = await sha256Hex(secret)
