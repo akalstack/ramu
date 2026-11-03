@@ -74,6 +74,21 @@ function harness(reduced = false) {
     Easing: { bezier: (...values) => values, out: (value) => value, quad: 'quad', cubic: 'cubic' },
     View: 'View',
   }
+  // Collapse and the finish sweep run on the UI thread through Reanimated; record their timings like Animated's.
+  const reanimated = {
+    default: { View: 'ReanimatedView' },
+    Easing: { linear: 'linear', out: (value) => value, cubic: 'cubic', bezier: (...values) => values },
+    useSharedValue: (value) => react.useRef({ value }).current,
+    useAnimatedStyle: (style) => style(),
+    interpolate: (value) => value,
+    withTiming(toValue, config, callback) {
+      timings.push({ toValue, ...config })
+      if (callback) completions.push(() => callback(true))
+      return toValue
+    },
+    withDelay: (_delay, value) => value,
+    cancelAnimation() {},
+  }
   const module = { exports: {} }
   const code = ts.transpileModule(readFileSync(new URL('../src/components/Motion.tsx', import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
@@ -87,9 +102,13 @@ function harness(reduced = false) {
           ? react
           : id === 'react-native'
             ? native
-            : id === 'react/jsx-runtime'
-              ? require(id)
-              : {},
+            : id === 'react-native-reanimated'
+              ? reanimated
+              : id === 'react-native-worklets'
+                ? { scheduleOnRN: (run, ...args) => run(...args) }
+                : id === 'react/jsx-runtime'
+                  ? require(id)
+                  : {},
   })
   return {
     ...module.exports,

@@ -10,6 +10,16 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native'
+import Reanimated, {
+  cancelAnimation,
+  Easing as ReEasing,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import { font, useTheme } from '../theme'
 import { ChevronRight } from 'lucide-react-native'
 import { T } from './ui'
@@ -115,27 +125,27 @@ export function ActivityText({
 }) {
   const reduced = useReducedMotion()
   const previous = useRef(active)
-  const progress = useRef(new Animated.Value(1)).current
+  const progress = useSharedValue(1)
   const [width, setWidth] = useState(0)
   useEffect(() => {
     const completed = previous.current && !active
     previous.current = active
-    progress.setValue(1)
-    if (!completed || reduced) return
-    progress.setValue(0)
-    const animation = Animated.timing(progress, {
-      toValue: 1,
-      delay: TOOL_MOTION.settleMs,
-      duration: TOOL_MOTION.finishMs,
-      easing: Easing.linear,
-      useNativeDriver: false,
-      isInteraction: false,
-    })
-    animation.start()
-    return () => animation.stop()
+    if (!completed || reduced) {
+      progress.value = 1
+      return
+    }
+    // The wipe resizes its clip, which the native driver cannot do; Reanimated runs it on the UI thread.
+    progress.value = 0
+    progress.value = withDelay(
+      TOOL_MOTION.settleMs,
+      withTiming(1, { duration: TOOL_MOTION.finishMs, easing: ReEasing.linear }),
+    )
+    return () => cancelAnimation(progress)
   }, [active, reduced, progress])
-  const clip = progress.interpolate({ inputRange: [0, TOOL_MOTION.fadeAt, 1], outputRange: ['0%', '100%', '100%'] })
-  const opacity = progress.interpolate({ inputRange: [0, TOOL_MOTION.fadeAt, 1], outputRange: [1, 1, 0] })
+  const wipe = useAnimatedStyle(() => ({
+    width: `${interpolate(progress.value, [0, TOOL_MOTION.fadeAt, 1], [0, 100, 100])}%`,
+    opacity: interpolate(progress.value, [0, TOOL_MOTION.fadeAt, 1], [1, 1, 0]),
+  }))
   return (
     <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ minWidth: 0, overflow: 'hidden' }}>
       {/* While the shimmer runs it is the only copy shown; drawing both put two slightly offset labels on top of each other. */}
@@ -155,18 +165,18 @@ export function ActivityText({
         </View>
       ) : null}
       {!active && !reduced ? (
-        <Animated.View
+        <Reanimated.View
           pointerEvents="none"
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
-          style={{ position: 'absolute', top: 0, left: 0, width: clip, opacity, overflow: 'hidden' }}
+          style={[{ position: 'absolute', top: 0, left: 0, overflow: 'hidden' }, wipe]}
         >
           <View style={{ width }}>
             <T size={size} numberOfLines={1}>
               {children}
             </T>
           </View>
-        </Animated.View>
+        </Reanimated.View>
       ) : null}
     </View>
   )
@@ -203,35 +213,29 @@ export function Collapse({ open, children }: { open: boolean; children: ReactNod
   const reduced = useReducedMotion()
   const [mounted, setMounted] = useState(open)
   const [height, setHeight] = useState(0)
-  const size = useRef(new Animated.Value(0)).current
-  const opacity = useRef(new Animated.Value(0)).current
+  // On the UI thread, so a block opens smoothly even while a long transcript keeps JavaScript busy.
+  const size = useSharedValue(0)
+  const opacity = useSharedValue(0)
   useEffect(() => {
     if (open) setMounted(true)
-    const animation = Animated.parallel([
-      Animated.timing(size, {
-        toValue: open ? height : 0,
-        duration: reduced ? 0 : 200,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }),
-      Animated.timing(opacity, {
-        toValue: open ? 1 : 0,
-        duration: reduced ? 0 : 160,
-        useNativeDriver: false,
-      }),
-    ])
-    animation.start(({ finished }) => {
+    const done = (finished?: boolean) => {
       if (finished && !open) setMounted(false)
-    })
-    return () => animation.stop()
+    }
+    size.value = withTiming(
+      open ? height : 0,
+      { duration: reduced ? 0 : 200, easing: ReEasing.out(ReEasing.cubic) },
+      (finished) => scheduleOnRN(done, finished),
+    )
+    opacity.value = withTiming(open ? 1 : 0, { duration: reduced ? 0 : 160 })
   }, [open, height, reduced, size, opacity])
+  const style = useAnimatedStyle(() => ({ height: size.value, opacity: opacity.value }))
   if (!open && !mounted) return null
   return (
-    <Animated.View
+    <Reanimated.View
       pointerEvents={open ? 'auto' : 'none'}
       accessibilityElementsHidden={!open}
       importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
-      style={{ height: size, opacity, overflow: 'hidden' }}
+      style={[{ overflow: 'hidden' }, style]}
     >
       <View
         onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
@@ -239,7 +243,7 @@ export function Collapse({ open, children }: { open: boolean; children: ReactNod
       >
         {children}
       </View>
-    </Animated.View>
+    </Reanimated.View>
   )
 }
 

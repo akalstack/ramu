@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
-import { Animated, Easing, View } from 'react-native'
+import { useEffect } from 'react'
+import { View } from 'react-native'
+import Reanimated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import {
   ArrowDown,
   ArrowLeft,
@@ -54,21 +55,16 @@ export function TerminalGestureOverlay({
   height: number
 }) {
   const { c } = useTheme()
-  const strength = useRef(new Animated.Value(0)).current
+  const strength = useSharedValue(0)
   const speed = state?.direction ? state.speed : 0
   useEffect(() => {
     // Retarget from the current presentation value: dragging back drains the blue
     // immediately, rather than waiting for the next key-repeat cycle to finish.
-    const animation = Animated.timing(strength, {
-      toValue: speed,
-      duration: 80,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: false,
-      isInteraction: false,
-    })
-    animation.start()
-    return () => animation.stop()
+    strength.value = withTiming(speed, { duration: 80, easing: Easing.out(Easing.quad) })
   }, [speed, strength])
+  const along = state?.direction === 'up' || state?.direction === 'down' ? 'height' : 'width'
+  // On the UI thread: a drag keeps JavaScript busy sending keys, which made the fill lag behind the finger.
+  const fill = useAnimatedStyle(() => ({ [along]: interpolate(strength.value, [0, 1], [9, 32]) }))
   if (!state?.active) return null
   const level = state.speed < 0.34 ? 1 : state.speed < 0.67 ? 2 : 3
   const glyph = (direction: Direction, color: string, multiple: boolean) => {
@@ -118,20 +114,22 @@ export function TerminalGestureOverlay({
         {(Object.keys(positions) as Direction[]).map((direction) => {
           const selected = direction === state.direction
           const vertical = direction === 'up' || direction === 'down'
-          // Fill follows the selected arrow's axis, growing outward from its tail.
-          const extent = strength.interpolate({ inputRange: [0, 1], outputRange: [9, 32] })
           return (
             <View key={direction} style={{ position: 'absolute', ...positions[direction], width: 32, height: 32 }}>
               {glyph(direction, selected ? c.text : c.muted, selected && level > 1)}
               {selected ? (
-                <Animated.View
-                  style={{
-                    position: 'absolute',
-                    overflow: 'hidden',
-                    ...(vertical
-                      ? { left: 0, width: 32, height: extent, ...(direction === 'up' ? { bottom: 0 } : { top: 0 }) }
-                      : { top: 0, height: 32, width: extent, ...(direction === 'left' ? { right: 0 } : { left: 0 }) }),
-                  }}
+                // Fill follows the selected arrow's axis, growing outward from its tail.
+                <Reanimated.View
+                  style={[
+                    {
+                      position: 'absolute',
+                      overflow: 'hidden',
+                      ...(vertical
+                        ? { left: 0, width: 32, ...(direction === 'up' ? { bottom: 0 } : { top: 0 }) }
+                        : { top: 0, height: 32, ...(direction === 'left' ? { right: 0 } : { left: 0 }) }),
+                    },
+                    fill,
+                  ]}
                 >
                   <View
                     style={{
@@ -147,7 +145,7 @@ export function TerminalGestureOverlay({
                   >
                     {glyph(direction, BLUE, level > 1)}
                   </View>
-                </Animated.View>
+                </Reanimated.View>
               ) : null}
             </View>
           )

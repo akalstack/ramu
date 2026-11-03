@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Easing, Pressable, View } from 'react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
+import Reanimated, {
+  cancelAnimation,
+  Easing as ReEasing,
+  interpolate,
+  useAnimatedProps,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated'
 import { useTheme } from '../theme'
 import { useReducedMotion } from './Motion'
 import { tap as haptic } from './ui'
@@ -12,7 +21,6 @@ const VIEW = 540,
   ORIGIN = 240
 const STEM = 'M356 694V518C356 402 434 334 548 334'
 const STEM_LENGTH = 440
-const AnimatedPath = Animated.createAnimatedComponent(Path)
 let revealed = false
 
 export function AnimatedMark({ size = 56 }: { size?: number }) {
@@ -21,26 +29,26 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
   const reduced = useReducedMotion()
   const k = size / VIEW
   const [first] = useState(() => !revealed)
-  const draw = useRef(new Animated.Value(first ? 0 : 1)).current
+  const draw = useSharedValue(first ? 0 : 1)
   const drop = useRef(new Animated.Value(first ? 0 : 1)).current
   const hop = useRef(new Animated.Value(0)).current
   useEffect(() => {
     if (!first) return
     revealed = true
     if (reduced) {
-      draw.setValue(1)
+      draw.value = 1
       drop.setValue(1)
       return
     }
-    Animated.parallel([
-      Animated.timing(draw, {
-        toValue: 1,
-        duration: 850,
-        easing: Easing.bezier(0.22, 1, 0.36, 1),
-        useNativeDriver: false,
-      }),
-      Animated.timing(drop, { toValue: 1, duration: 620, delay: 420, easing: Easing.linear, useNativeDriver: true }),
-    ]).start()
+    // The stem's dash is an SVG prop, which the native driver cannot move; Reanimated draws it on the UI thread.
+    draw.value = withTiming(1, { duration: 850, easing: ReEasing.bezier(0.22, 1, 0.36, 1) })
+    Animated.timing(drop, {
+      toValue: 1,
+      duration: 620,
+      delay: 420,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
   }, [])
   const replay = () => {
@@ -82,20 +90,23 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
     outputRange: ['0deg', '-9deg', '4deg', '-2deg', '0deg'],
   })
   const viewBox = `${ORIGIN} ${ORIGIN} ${VIEW} ${VIEW}`
+  const stem = useAnimatedProps(() => ({
+    strokeDashoffset: STEM_LENGTH * (1 - draw.value),
+    opacity: interpolate(draw.value, [0, 0.12, 1], [0, 1, 1]),
+  }))
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={say('Animate Ramu logo')} onPress={replay} hitSlop={8}>
       <View style={{ width: size, height: size, overflow: 'visible' }}>
         <Animated.View pointerEvents="none" style={[at(356, 694), { transform: [{ rotate: tilt }] }]}>
           <Svg width={size} height={size} viewBox={viewBox}>
-            <AnimatedPath
+            <WorkletPath
               d={STEM}
               stroke={c.text}
               strokeWidth={120}
               strokeLinecap="round"
               fill="none"
               strokeDasharray={[STEM_LENGTH, STEM_LENGTH]}
-              strokeDashoffset={draw.interpolate({ inputRange: [0, 1], outputRange: [STEM_LENGTH, 0] })}
-              opacity={draw.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 1, 1] })}
+              animatedProps={stem}
             />
           </Svg>
         </Animated.View>
@@ -135,7 +146,9 @@ export function RamuGlyph({ size, color }: { size: number; color: string }) {
   )
 }
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle)
+const WorkletPath = Reanimated.createAnimatedComponent(Path)
+const WorkletCircle = Reanimated.createAnimatedComponent(Circle)
+const EASE = ReEasing.bezierFn(0.65, 0, 0.35, 1)
 
 /**
  * Waiting on Ramu itself, such as a thread opening: the desktop's loading mark. The stem traces over a faint copy while
@@ -143,43 +156,39 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle)
  */
 export function LoadingMark({ size = 28, color, label }: { size?: number; color: string; label: string }) {
   const reduced = useReducedMotion()
-  const loop = useRef(new Animated.Value(0)).current
+  const loop = useSharedValue(0)
   useEffect(() => {
     if (reduced) return
-    const run = Animated.loop(
-      Animated.timing(loop, { toValue: 1, duration: 1800, easing: Easing.linear, useNativeDriver: false }),
-    )
-    run.start()
-    return () => run.stop()
+    loop.value = withRepeat(withTiming(1, { duration: 1800, easing: ReEasing.linear }), -1)
+    return () => cancelAnimation(loop)
   }, [loop, reduced])
-  const ease = Easing.bezier(0.65, 0, 0.35, 1)
-  const offset = reduced
-    ? 0
-    : loop.interpolate({
-        inputRange: [0, 0.45, 0.6, 1],
-        outputRange: [STEM_LENGTH, 0, 0, -STEM_LENGTH],
-        easing: ease,
-      })
-  const dotOpacity = reduced
-    ? 1
-    : loop.interpolate({ inputRange: [0, 0.3, 0.5, 0.62, 1], outputRange: [0.2, 0.2, 1, 1, 0.2] })
-  const dotRadius = reduced
-    ? 72
-    : loop.interpolate({ inputRange: [0, 0.3, 0.5, 0.62, 1], outputRange: [43, 43, 79, 72, 43] })
+  // On the UI thread, so the mark keeps its pace while JavaScript is busy laying out a long thread.
+  const stem = useAnimatedProps(() => {
+    const t = loop.value
+    const offset = t < 0.45 ? STEM_LENGTH * (1 - EASE(t / 0.45)) : t < 0.6 ? 0 : -STEM_LENGTH * EASE((t - 0.6) / 0.4)
+    return { strokeDashoffset: reduced ? 0 : offset }
+  })
+  const dot = useAnimatedProps(() => {
+    const t = loop.value
+    return {
+      r: reduced ? 72 : interpolate(t, [0, 0.3, 0.5, 0.62, 1], [43, 43, 79, 72, 43]),
+      opacity: reduced ? 1 : interpolate(t, [0, 0.3, 0.5, 0.62, 1], [0.2, 0.2, 1, 1, 0.2]),
+    }
+  })
   return (
     <View accessible accessibilityRole="progressbar" accessibilityLabel={label}>
       <Svg width={size} height={size} viewBox={VIEW_BOX}>
         <Path d={STEM} stroke={color} strokeOpacity={0.18} strokeWidth={120} strokeLinecap="round" fill="none" />
-        <AnimatedPath
+        <WorkletPath
           d={STEM}
           stroke={color}
           strokeWidth={120}
           strokeLinecap="round"
           fill="none"
           strokeDasharray={[STEM_LENGTH, STEM_LENGTH]}
-          strokeDashoffset={offset}
+          animatedProps={stem}
         />
-        <AnimatedCircle cx={664} cy={622} r={dotRadius} fill={color} opacity={dotOpacity} />
+        <WorkletCircle cx={664} cy={622} fill={color} animatedProps={dot} />
       </Svg>
     </View>
   )

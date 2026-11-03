@@ -373,9 +373,9 @@ export interface ItemMeta {
   date?: string
   /** The last answer of its turn: shows its time and a copy button underneath. */
   footer?: boolean
-  /** The reply is still arriving, so its cut-off last line is completed for display and its new words fade in. */
+  /** The reply is still arriving, so its cut-off last line is completed for display and each new block fades in. */
   streaming?: boolean
-  /** The reply began while this chat was open, so its first words fade in too. */
+  /** The reply began while this chat was open, so its first block fades in too. */
   fresh?: boolean
 }
 

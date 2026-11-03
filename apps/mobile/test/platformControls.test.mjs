@@ -7769,20 +7769,26 @@ test('native tool completion uses the shared delayed left-to-right sweep without
         },
       },
       Easing: { linear: 'linear' },
-      Animated: {
-        Value,
-        View: 'AnimatedView',
-        timing: (_value, options) => {
-          calls.push(options)
-          return {
-            start() {},
-            stop() {
-              stopped++
-            },
-          }
-        },
+      Animated: { Value, View: 'AnimatedView' },
+    },
+    // The sweep runs on the UI thread through Reanimated: record each timing with the delay that wraps it.
+    'react-native-reanimated': {
+      default: { View: 'ReanimatedView' },
+      Easing: { linear: 'linear' },
+      useSharedValue: (value) => hooks.react.useRef({ value }).current,
+      useAnimatedStyle: (style) => style(),
+      interpolate: (value) => value,
+      withTiming: (toValue, options) => {
+        const timing = { toValue, ...options }
+        calls.push(timing)
+        return timing
+      },
+      withDelay: (delay, timing) => Object.assign(timing, { delay }),
+      cancelAnimation: () => {
+        stopped++
       },
     },
+    'react-native-worklets': { scheduleOnRN: (run, ...args) => run(...args) },
     './ui': { T: 'T' },
   })
   let active = false
@@ -7798,7 +7804,6 @@ test('native tool completion uses the shared delayed left-to-right sweep without
   assert.equal(calls.length, 1)
   assert.equal(calls[0].delay, chatPresentation.TOOL_MOTION.settleMs)
   assert.equal(calls[0].duration, chatPresentation.TOOL_MOTION.finishMs)
-  assert.equal(calls[0].isInteraction, false)
   text = 'Read more files'
   render()
   assert.equal(calls.length, 1)

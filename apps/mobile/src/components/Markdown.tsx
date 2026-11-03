@@ -1,20 +1,9 @@
-import { CHAT_MOTION } from '@ramu/shared/chat/presentation'
-import {
-  createContext,
-  isValidElement,
-  useContext,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
+import { createContext, isValidElement, useContext, useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { Image, Linking, Platform, ScrollView, StyleSheet, Text, UIManager, View, type TextStyle } from 'react-native'
 import { ReferenceBadge } from './ReferenceChip'
 export { ReferenceBadge } from './ReferenceChip'
 import { CodeBlock } from './Code'
-import { useReducedMotion } from './Motion'
+import { Arrive } from './Motion'
 import { parseBlocks, splitLongParagraph, type Block } from '../runtime/markdown'
 import { chatReferences } from '@ramu/shared/chat/chatReferences'
 import { draftChip, skillChip } from '@ramu/shared/chat/referenceChip'
@@ -65,73 +54,11 @@ export const nativeSelection = (() => {
  */
 const Span = nativeSelection ? UITextView : Text
 
-// Match desktop: a brief fade on new words, with no stagger or delayed typing queue.
-const FADE_MS = CHAT_MOTION.durationMs
-// A burst (a reopened chat, a big chunk) fades only its last words, so a frame never repaints hundreds of spans.
-const MAX_FADING = 24
-
-/** How a block of a streaming reply fades: `settled` words are already on screen when the block first mounts (a reopened chat). */
-export interface StreamFade {
-  settled: boolean
-}
-
-/** One render's view of a block's word births: `births[i]` is when word i starts fading in. */
-interface WordFade {
-  births: number[]
-  now: number
-  index: number
-  /** Words in the block, so a burst can settle all but its last MAX_FADING. */
-  total: number
-  settled: boolean
-}
-
-/** `#rrggbb` with an alpha channel, which both platforms read. */
-const withAlpha = (hex: string, alpha: number) =>
-  `${hex}${Math.round(Math.min(1, Math.max(0, alpha)) * 255)
-    .toString(16)
-    .padStart(2, '0')}`
-
-/** Words of a text run, with the ones still fading in wrapped in a tinted span and the settled ones left as plain text. */
-function fadeWords(text: string, key: string, fade: WordFade, tint: string): ReactNode[] {
-  const out: ReactNode[] = []
-  let plain = ''
-  text.split(/(\s+)/).forEach((part, i) => {
-    if (!part || /^\s+$/.test(part)) {
-      plain += part
-      return
-    }
-    const at = fade.index++
-    let born = fade.births[at]
-    if (born === undefined) {
-      born = fade.settled || at < fade.total - MAX_FADING ? 0 : fade.now
-      fade.births[at] = born
-    }
-    const progress = Math.min(1, Math.max(0, (fade.now - born) / FADE_MS))
-    if (progress >= 1) {
-      plain += part
-      return
-    }
-    if (plain) out.push(plain)
-    plain = ''
-    out.push(
-      <Span key={`${key}-${i}`} style={{ color: withAlpha(tint, 0.5 + 0.5 * (1 - (1 - progress) ** 2)) }}>
-        {part}
-      </Span>,
-    )
-  })
-  if (plain) out.push(plain)
-  return out
-}
-
 /** Plain prose with explicit references (`@file`, `$skill`) turned into badges. */
-function prose(text: string, key: string, actions: ReferenceActions, fade: WordFade | undefined, tint: string) {
+function prose(text: string, actions: ReferenceActions) {
   return chatReferences(text).map((part, index) =>
     part.kind === 'text' ? (
-      fade ? (
-        fadeWords(part.text, `${key}-${index}`, fade, tint)
-      ) : (
-        part.text
-      )
+      part.text
     ) : part.kind === 'skill' ? (
       <ReferenceBadge key={index} chip={skillChip(part.target)} />
     ) : (
@@ -185,8 +112,6 @@ function inline(
   key: string,
   c: ReturnType<typeof useTheme>['c'],
   actions: ReferenceActions,
-  tint: string,
-  fade?: WordFade,
 ): ReactNode[] {
   return text
     .split(INLINE)
@@ -198,19 +123,19 @@ function inline(
       if (((p.startsWith('**') && p.endsWith('**')) || (p.startsWith('__') && p.endsWith('__'))) && p.length > 4)
         return (
           <Span key={k} style={{ fontWeight: '600', color: c.text }}>
-            {inline(p.slice(2, -2), k, c, actions, c.text, fade)}
+            {inline(p.slice(2, -2), k, c, actions)}
           </Span>
         )
       if (p.startsWith('~~') && p.endsWith('~~') && p.length > 4)
         return (
           <Span key={k} style={{ textDecorationLine: 'line-through', color: c.muted }}>
-            {inline(p.slice(2, -2), k, c, actions, c.muted, fade)}
+            {inline(p.slice(2, -2), k, c, actions)}
           </Span>
         )
       if (((/^\*[^*]/.test(p) && p.endsWith('*')) || (/^_[^_]/.test(p) && p.endsWith('_'))) && p.length > 2)
         return (
           <Span key={k} style={{ fontStyle: 'italic' }}>
-            {inline(p.slice(1, -1), k, c, actions, tint, fade)}
+            {inline(p.slice(1, -1), k, c, actions)}
           </Span>
         )
       const link = p.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/)
@@ -238,7 +163,7 @@ function inline(
           )
         return label
       }
-      return prose(p, k, actions, fade, tint)
+      return prose(p, actions)
     })
 }
 
@@ -256,39 +181,15 @@ function textRuns(node: ReactNode, out: TextRun[] = []): TextRun[] {
   return out
 }
 
-function Inline({ text, style, stream }: { text: string; style?: TextStyle; stream?: StreamFade }) {
+/** `live`: the reply is still arriving, so the block stays plain text until it settles, then becomes selectable. */
+function Inline({ text, style, live }: { text: string; style?: TextStyle; live?: boolean }) {
   const { c } = useTheme()
   const report = useContext(MessageTextSelection)
   const block = useId()
   const actions = useContext(ReferenceContext)
-  const births = useRef<number[]>([])
-  const primed = useRef(false)
-  const [, tick] = useState(0)
-  const tint = typeof style?.color === 'string' ? style.color : c.body
-  const now = Date.now()
-  // Fading continues for a moment after the reply is done, so its last words settle instead of snapping.
-  const fading = Boolean(stream) || (births.current.length > 0 && now < (births.current.at(-1) ?? 0) + FADE_MS)
-  const fade: WordFade | undefined = fading
-    ? {
-        births: births.current,
-        now,
-        index: 0,
-        total: text.match(/\S+/g)?.length ?? 0,
-        settled: Boolean(stream?.settled) && !primed.current,
-      }
-    : undefined
-  const nodes = inline(text, 'i', c, actions, tint, fade)
-  if (fade?.index) primed.current = true
-  const settling = fade ? (fade.births.at(-1) ?? 0) + FADE_MS > now : false
-  useEffect(() => {
-    if (!settling) return
-    // One repaint per display frame (60 Hz), only while this block still has a word fading in.
-    const frame = requestAnimationFrame(() => tick((n) => n + 1))
-    return () => cancelAnimationFrame(frame)
-  })
+  const nodes = inline(text, 'i', c, actions)
   const look = [{ color: c.body, fontSize: font.body, lineHeight: 22 }, style]
-  // Words still fading in repaint every frame; the block becomes selectable once they have settled.
-  if (nativeSelection && report && !settling && !stream)
+  if (nativeSelection && report && !live)
     return (
       <UITextView
         selectable
@@ -347,7 +248,7 @@ function MarkdownImage({ src, alt }: { src: string; alt: string }) {
 
 const HEADING = [0, 22, 19, 17, 16, 15, 15]
 
-function BlockView({ block, stream }: { block: Block; stream?: StreamFade }) {
+function BlockView({ block, live }: { block: Block; live?: boolean }) {
   const { c } = useTheme()
   switch (block.kind) {
     case 'code':
@@ -356,7 +257,7 @@ function BlockView({ block, stream }: { block: Block; stream?: StreamFade }) {
       return (
         <Inline
           text={block.text}
-          stream={stream}
+          live={live}
           style={{
             fontSize: HEADING[block.level],
             lineHeight: HEADING[block.level]! + 6,
@@ -380,11 +281,11 @@ function BlockView({ block, stream }: { block: Block; stream?: StreamFade }) {
       )
     case 'paragraph': {
       const pieces = splitLongParagraph(block.text)
-      if (pieces.length === 1) return <Inline text={block.text} stream={stream} />
+      if (pieces.length === 1) return <Inline text={block.text} live={live} />
       return (
         <View>
           {pieces.map((piece, index) => (
-            <Inline key={index} text={piece} stream={index === pieces.length - 1 ? stream : undefined} />
+            <Inline key={index} text={piece} live={live} />
           ))}
         </View>
       )
@@ -424,7 +325,7 @@ function BlockView({ block, stream }: { block: Block; stream?: StreamFade }) {
                 <View style={{ flex: 1 }}>
                   <Inline
                     text={item.text}
-                    stream={stream}
+                    live={live}
                     style={item.task && item.done ? { color: c.muted, textDecorationLine: 'line-through' } : undefined}
                   />
                 </View>
@@ -535,21 +436,21 @@ export function Markdown({
 }: {
   text: string
   muted?: boolean
-  /** The reply is still arriving: complete its cut-off last line for display, and fade its new words in. */ streaming?: boolean
-  /** The reply started while the chat was open, so even its first words fade in (a reopened chat shows them settled). */ fresh?: boolean
+  /** The reply is still arriving: complete its cut-off last line for display, and fade each new block in. */
+  streaming?: boolean
+  /** The reply started while the chat was open, so even its first block fades in (a reopened chat shows it settled). */
+  fresh?: boolean
 }) {
-  const reduced = useReducedMotion()
   const blocks = useMemo(() => parseBlocks(streaming ? closePartial(text) : text), [text, streaming])
-  // Blocks mounted with the reply (a chat opened mid-stream) start settled; blocks that appear later fade in whole.
+  // Blocks on screen when the reply mounts (a chat opened mid-stream) stay put; blocks that appear later fade in whole,
+  // once, on the native driver, so a busy JavaScript thread never stalls them.
   const [settledCount] = useState(() => (fresh ? 0 : blocks.length))
   return (
     <View style={{ gap: space.m, opacity: muted ? 0.8 : 1 }}>
       {blocks.map((block, index) => (
-        <BlockView
-          key={index}
-          block={block}
-          stream={streaming && !reduced ? { settled: index < settledCount } : undefined}
-        />
+        <Arrive key={index} animate={Boolean(streaming) && index >= settledCount}>
+          <BlockView block={block} live={streaming} />
+        </Arrive>
       ))}
     </View>
   )
