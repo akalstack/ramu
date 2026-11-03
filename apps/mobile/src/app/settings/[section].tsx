@@ -41,6 +41,7 @@ import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingR
 import { PermissionNeeded } from '../../components/DevicePermissions'
 import { ScopeControl } from '../../components/ScopeControl'
 import { PhonePermissions } from '../../components/DevicePermissions'
+import { ScreenSharingDevices } from '../../components/ScreenSharingDevices'
 
 function AppearancePage() {
   const say = useSay()
@@ -331,6 +332,7 @@ function Computers() {
       {pc ? (
         <>
           <PhonePermissions computerId={pc.id} />
+          <ScreenSharingDevices hostId={pc.id} />
           <SectionLabel>Connection</SectionLabel>
           <Card style={{ marginHorizontal: space.l }}>
             <Row style={{ paddingVertical: space.m }} onPress={() => retry(pc.id)}>

@@ -58,6 +58,7 @@ import { AgentHosts } from './AgentHosts'
 import { LinkSettings, TunnelSettings } from './ReachThisHost'
 import { AccountHosts } from './AccountHosts'
 import { HostUpdateLine, UpdateAllHosts } from './HostUpdates'
+import { DeviceScreenLine, HostScreenSharing, useScreenOffers } from './ScreenSharing'
 import { useStagedValue } from './stagedChanges'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
@@ -147,6 +148,7 @@ export function RemoteAccessSettings() {
 
 function ThisComputer() {
   const invoke = useSettingsInvoke()
+  const { offers, allow } = useScreenOffers(invoke)
   const [status, setStatus, reload] = useNetworkStatus(2500)
   const [confirm, setConfirm] = useState(false),
     [pairing, setPairing] = useState(false),
@@ -352,8 +354,17 @@ function ThisComputer() {
           device={device}
           invoke={changePermission}
           onRevoke={() => setRevoking(device.id)}
+          screen={offers.get(device.id)}
+          onScreen={(allowed) => allow(device.id, allowed)}
         />
       ))}
+      {[...offers.values()]
+        .filter((offer) => !status.devices.some((device) => device.id === offer.deviceId))
+        .map((offer) => (
+          <SettingsRow key={offer.deviceId} className="p-1.5">
+            <DeviceScreenLine name={offer.name} offer={offer} onChange={(allowed) => allow(offer.deviceId, allowed)} />
+          </SettingsRow>
+        ))}
       {!status.devices.length && (
         <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">{t('No devices paired yet.')}</p>
       )}
@@ -913,11 +924,13 @@ function Computers({ state }: { state: ComputerList }) {
                     <Button variant="ghost" size="sm" className="group/perm text-caption text-muted-foreground" />
                   }
                 >
-                  {t('What this computer may do there')}
+                  {t('Permissions')}
                   <ChevronDown size={14} className="transition-transform group-data-[panel-open]/perm:rotate-180" />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
+                  {/* Both directions in one place: what this computer may do there, and what that host may do here. */}
                   <ThisDevicePermissions computer={computer} agents={agents} />
+                  <HostScreenSharing computer={computer} />
                 </CollapsibleContent>
               </Collapsible>
             )}
@@ -1430,10 +1443,15 @@ function PairedDeviceRow({
   device,
   invoke,
   onRevoke,
+  screen,
+  onScreen,
 }: {
   device: NetworkDevice
   invoke: Parameters<typeof DevicePermissionList>[0]['invoke']
   onRevoke: () => void
+  /** The screen this device offers this host's agents, when it offers one. */
+  screen?: Parameters<typeof DeviceScreenLine>[0]['offer']
+  onScreen: (allowed: boolean) => void
 }) {
   const [open, setOpen] = useState(false)
   const seen = device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never')
@@ -1475,6 +1493,7 @@ function PairedDeviceRow({
         ) : (
           <DevicePermissionList device={device} invoke={invoke} />
         )}
+        {screen && <DeviceScreenLine name={device.name} offer={screen} onChange={onScreen} />}
         <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
           <span className="text-caption text-muted-foreground">
             {`${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t('Paired {0}', { 0: new Date(device.createdAt).toLocaleDateString() })}`}

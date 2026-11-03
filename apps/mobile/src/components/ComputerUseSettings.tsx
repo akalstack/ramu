@@ -9,11 +9,10 @@ import { Hint, ToggleRow } from './SettingRows'
 import { Card, Divider, SectionLabel, T } from './ui'
 
 type Status = ReturnType<RamuMethods['computer.status']>
-type Device = ReturnType<RamuMethods['computer.runtimeDevices']>[number]
 
 /**
- * Settings → Computer use for the selected computer: whether agents may use its screen, real-pointer drags, and which paired
- * devices share their screen with it. Installing the helper and granting macOS permissions need someone at that Mac, so
+ * Settings → Computer use for the selected computer: whether agents may use its screen and real-pointer drags. Which
+ * paired devices share their screen with it is a permission, so it lives in Remote access. Installing the helper and granting macOS permissions need someone at that Mac, so
  * this page reports their state and leaves the steps to Ramu on the host.
  */
 export function ComputerUseSettings({ hostId }: { hostId: string }) {
@@ -22,7 +21,6 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
   const readOnly = store.computers.find((computer) => computer.id === hostId)?.access === 'viewer'
   const online = store.isOnline(hostId)
   const [status, setStatus] = useState<Status | null>(null)
-  const [devices, setDevices] = useState<Device[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const live = useRef(true)
@@ -38,9 +36,6 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
       if (!live.current) return
       setStatus(next)
       setError('')
-      // Device sharing is an owner's decision on the host that holds the screen.
-      const shared = next.enabled ? await store.invoke(hostId, 'computer.runtimeDevices').catch(() => []) : []
-      if (live.current) setDevices(shared)
     } catch (reason) {
       if (live.current) setError(reason instanceof Error ? reason.message : String(reason))
     }
@@ -48,7 +43,6 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
   }, [hostId, store.invoke])
   useEffect(() => {
     setStatus(null)
-    setDevices([])
     if (online) void load()
   }, [load, online])
   const act = async (work: () => Promise<unknown>) => {
@@ -121,28 +115,6 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
           'Each thread still needs your approval before the agent can see or control the screen. Installing the helper and allowing Screen Recording and Accessibility are done in Ramu on that Mac. Turning this off ends every thread’s access.',
         )}
       </Hint>
-      {devices.length ? (
-        <>
-          <SectionLabel>{say('Devices sharing their screen')}</SectionLabel>
-          <Card style={{ marginHorizontal: space.l }}>
-            {devices.map((device, index) => (
-              <View key={device.deviceId}>
-                {index ? <Divider inset={space.l} /> : null}
-                <ToggleRow
-                  title={say('{0} shares its screen with this host', { 0: device.name })}
-                  help={say(device.online ? 'Online' : 'Offline')}
-                  value={device.allowed}
-                  disabled={busy || readOnly}
-                  onChange={(allow) =>
-                    void act(() => store.invoke(hostId, 'computer.allowRuntime', device.deviceId, allow))
-                  }
-                />
-              </View>
-            ))}
-          </Card>
-          <Hint>{say('Off by default. You can revoke a device at any time.')}</Hint>
-        </>
-      ) : null}
       {error ? (
         <T tone="bad" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s }}>
           {error}

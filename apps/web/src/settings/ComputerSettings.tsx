@@ -1,6 +1,6 @@
 import { TestDeviceSettings } from './TestDeviceSettings'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
-import { useStagedValue, useStaging } from './stagedChanges'
+import { useStagedValue } from './stagedChanges'
 import { Check } from 'lucide-react'
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { SettingsScopeContext } from './SettingsScope'
@@ -11,7 +11,6 @@ import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/set
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/desktop-button'
 import { invokeOn, ramu } from '../ipc'
-import { useComputers } from '../workspace/computers'
 import { t, useLanguage } from '../i18n'
 import { KeepAwakeSettings } from './KeepAwakeSettings'
 import type { DraftProps } from './ToggleRow'
@@ -190,7 +189,6 @@ export function ComputerSettings({
         canWrite={canWrite}
         visible={!!status?.enabled && !!status.apps?.available}
       />
-      <ScreenSharing key={`sharing:${revision}`} hostId={hostId} canWrite={canWrite} enabled={!!status?.enabled} />
       <p className="m-[0_0_12px] text-caption text-muted-foreground">
         {t(
           'macOS asks for Screen Recording and Accessibility the first time. Display control pauses when you use the mouse or keyboard where supported. Choose Take control to step in. Turning this off ends every thread’s access.',
@@ -234,85 +232,6 @@ export function ComputerSettings({
       </SettingsRow>
       {error && (
         <p role="alert" className="m-[0_0_12px] text-caption text-destructive">
-          {error}
-        </p>
-      )}
-    </>
-  )
-}
-
-/** Both sides of using another computer's screen: this computer opts in per host, and this host's owner allows devices. */
-function ScreenSharing({ hostId, enabled, canWrite }: { hostId: string; enabled: boolean; canWrite: () => boolean }) {
-  useLanguage()
-  const computers = useComputers()
-  const [shared, setShared] = useState<string[]>([])
-  const { valueOf, stage } = useStaging()
-  const [devices, setDevices] = useState<ReturnType<RamuMethods['computer.runtimeDevices']>>([])
-  const [error, setError] = useState('')
-  const load = useCallback(async () => {
-    if (!canWrite()) return
-    try {
-      setShared(await ramu.invoke('computers.screenSharing'))
-      if (!canWrite()) return
-      setDevices(enabled ? await invokeOn(hostId, 'computer.runtimeDevices') : [])
-    } catch (reason) {
-      setError(t(errorText(reason)))
-    }
-  }, [hostId, enabled, canWrite])
-  useEffect(() => {
-    void load()
-  }, [load])
-  const act = async (work: () => Promise<unknown>) => {
-    if (!canWrite()) return
-    setError('')
-    try {
-      await work()
-    } catch (reason) {
-      setError(t(errorText(reason)))
-    }
-    await load()
-  }
-  const paired = (computers?.computers ?? []).filter(
-    (computer) => computer.id !== computers?.current && computer.id !== 'local',
-  )
-  return (
-    <>
-      {paired.map((computer) => (
-        <SettingsRow key={computer.id}>
-          <SettingsLabel
-            title={t('Let {0} use this computer’s screen', { 0: computer.name })}
-            help={t('Off by default. That host’s owner must also allow this computer, and can revoke it at any time.')}
-          />
-          <Switch
-            aria-label={t('Let {0} use this computer’s screen', { 0: computer.name })}
-            checked={valueOf(`screen:${computer.id}`, shared.includes(computer.id))}
-            onCheckedChange={(checked) =>
-              stage(`screen:${computer.id}`, checked, shared.includes(computer.id), (value) =>
-                act(() => ramu.invoke('computers.setScreenSharing', computer.id, value)),
-              )
-            }
-          />
-        </SettingsRow>
-      ))}
-      {devices.map((device) => (
-        <SettingsRow key={device.deviceId}>
-          <SettingsLabel
-            title={t('{0} shares its screen with this host', { 0: device.name })}
-            help={device.online ? t('Online') : t('Offline')}
-          />
-          <Switch
-            aria-label={t('{0} shares its screen with this host', { 0: device.name })}
-            checked={valueOf(`runtime:${device.deviceId}`, device.allowed)}
-            onCheckedChange={(checked) =>
-              stage(`runtime:${device.deviceId}`, checked, device.allowed, (value) =>
-                act(() => invokeOn(hostId, 'computer.allowRuntime', device.deviceId, value)),
-              )
-            }
-          />
-        </SettingsRow>
-      ))}
-      {error && (
-        <p role="alert" className="m-0 text-caption text-destructive">
           {error}
         </p>
       )}
