@@ -51,8 +51,9 @@ import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { translate } from '@ramu/shared/i18n'
 import { Composer } from '../../../components/Composer'
 import { ContinueOnHostSheet } from '../../../components/ContinueOnHost'
-import { AddTeammateSheet, teammateOf } from '../../../components/Teammate'
-import { teammateMention } from '@ramu/shared/chat/agentTasks'
+import { AddTeammateSheet, teammatesOf } from '../../../components/Teammate'
+import { resolveMention, teammateSettings } from '@ramu/shared/chat/teammateMentions'
+import type { CustomAgent } from '@ramu/shared/customAgents'
 import type { TranscriptItem } from '../../../runtime/types'
 import type { AgentSettings } from '@ramu/shared/types'
 import {
@@ -294,16 +295,29 @@ export default function ChatScreen() {
     if (focused && hasNotice && chat) store.acknowledge(chat.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [focused, hasNotice, chat?.id] by design; the values it reads beyond these are current as of that run
   }, [focused, hasNotice, chat?.id])
-  const currentTeammate = useMemo(() => (chat ? teammateOf(chat) : undefined), [chat])
+  const teammates = useMemo(() => (chat ? teammatesOf(chat) : []), [chat])
   const viewer = computer?.access === 'viewer'
+  const hostId = chat?.computerId
+  const catalogs = hostId ? store.catalogs[hostId] : undefined
+  // A device that may only view can talk to no one, so it is offered nothing to bring in either.
+  const models = useMemo(
+    () => (viewer ? [] : (catalogs ?? []).flatMap((catalog) => catalog.models)),
+    [catalogs, viewer],
+  )
+  const [customAgents, setCustomAgents] = useState<CustomAgent[]>([])
+  useEffect(() => {
+    if (hostId && !viewer) void store.invoke(hostId, 'customAgents.list').then(setCustomAgents, () => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [hostId, viewer] by design; the store is current as of that run
+  }, [hostId, viewer])
+  const agents = useMemo(() => (viewer ? [] : customAgents), [customAgents, viewer])
   const composerTeammate = useMemo(
-    () =>
-      currentTeammate
-        ? { current: { name: currentTeammate.name, mode: currentTeammate.teammate ?? ('review' as const) } }
-        : viewer
-          ? undefined
-          : { onAdd: () => setAddingTeammate(true) },
-    [currentTeammate, viewer],
+    () => ({
+      teammates: teammates.map((task) => ({ name: task.name, mode: task.teammate ?? ('review' as const) })),
+      models,
+      agents,
+      ...(viewer ? {} : { onAdd: () => setAddingTeammate(true) }),
+    }),
+    [teammates, models, agents, viewer],
   )
   // Editing a sent message keeps its place with the draft text: leaving the chat or restarting does not drop it.
   const editDraftKey = chat ? `${chat.computerId}:chat:${chat.taskId || chat.id}:editing` : null
@@ -663,7 +677,7 @@ export default function ChatScreen() {
     group: 'tools' | 'info'
     symbol?: import('../../../components/Screen').HeaderMenuAction['icon']
   }[] = [
-    ...(computer?.access !== 'viewer' && !teammateOf(chat)
+    ...(computer?.access !== 'viewer'
       ? [
           {
             icon: GitFork,
@@ -1202,12 +1216,40 @@ export default function ChatScreen() {
                         .then(() => {
                           router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
                         })
-                    const teammate = teammateOf(chat)
-                    const forTeammate = teammate && !attachments?.length ? teammateMention(text, teammate.name) : null
-                    if (teammate && forTeammate && chat.sessionId)
+                    // `@name` at the start talks to a teammate here, or brings that model or custom agent in.
+                    const target =
+                      chat.sessionId && chat.settings && !attachments?.length
+                        ? resolveMention(text, teammates, models, agents)
+                        : null
+                    if (target && chat.sessionId && chat.settings) {
+                      const base = chat.settings
+                      const sessionId = chat.sessionId
+                      if (target.kind === 'teammate')
+                        return store
+                          .invoke(chat.computerId, 'agent.messageTask', sessionId, target.task.agentId, target.body)
+                          .then(() => {})
+                      const agent = target.kind === 'agent' ? target.agent : null
+                      const settings =
+                        target.kind === 'model'
+                          ? teammateSettings(base, target.model)
+                          : agent?.model
+                            ? teammateSettings(base, {
+                                provider: agent.model.provider,
+                                id: agent.model.model,
+                                defaultEffort: agent.model.effort ?? null,
+                              })
+                            : base
                       return store
-                        .invoke(chat.computerId, 'agent.messageTask', chat.sessionId, teammate.agentId, forTeammate)
+                        .invoke(
+                          chat.computerId,
+                          'agent.addTeammate',
+                          sessionId,
+                          settings,
+                          agent && !agent.readOnly ? 'take-over' : 'review',
+                          agent ? `${agent.instructions}\n\n${target.body}` : target.body,
+                        )
                         .then(() => {})
+                    }
                     following.current = true
                     smoothSendScroll.current = true
                     return store.send(chat.id, text, mode, attachments, context)

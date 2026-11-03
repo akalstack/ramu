@@ -161,9 +161,9 @@ export const BACKGROUND_PREAMBLE =
 export const SUBAGENT_PREAMBLE =
   'You are a sub-agent started by another agent that works in the same workspace. Do the task below, then finish with a concise report of what you did and found: files you changed, results, and anything left open. Ask nothing unless you are blocked; your report goes straight back to the agent that started you. While you work, message_parent sends the agent that started you a short note without stopping, and ask_parent asks it a question and waits for the answer; use ask_parent only when you cannot go on without it, and still end with your report.'
 
-/** The person's teammate in this thread, if one is still around to talk to. */
-export const activeTeammate = (tasks: readonly AgentTask[]) =>
-  tasks.find((task) => task.teammate && task.status !== 'stopped' && task.status !== 'failed')
+/** The person's teammates in this thread that are still around to talk to, in the order they joined. */
+export const activeTeammates = (tasks: readonly AgentTask[]) =>
+  tasks.filter((task) => task.teammate && task.status !== 'stopped' && task.status !== 'failed')
 
 /** How the lead and the person address a teammate: its name in lower case, spaces as dashes. */
 export const teammateHandle = (name: string) => name.trim().toLowerCase().replace(/\s+/g, '-')
@@ -172,12 +172,6 @@ export const teammateHandle = (name: string) => name.trim().toLowerCase().replac
 export const namesTeammate = (to: string, name: string) => {
   const handle = to.trim().replace(/^@/, '').toLowerCase()
   return handle === 'teammate' || handle === teammateHandle(name)
-}
-
-/** A message that starts with `@name` (or `@teammate`) goes to the teammate instead of the lead. */
-export function teammateMention(text: string, name: string): string | null {
-  const match = /^@(\S+)\s+([\s\S]+)$/.exec(text.trim())
-  return match && namesTeammate(match[1]!, name) ? match[2]!.trim() : null
 }
 
 /** Files the card lists by name; the counts still cover every file. */

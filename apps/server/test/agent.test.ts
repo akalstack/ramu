@@ -2515,10 +2515,13 @@ describe('sub-agents Ramu runs', () => {
     const settings = { ...full, provider: 'codex' as const, model: 'codex-test', effort: 'high' as const }
     const result = await svc.addTeammate(parent.id, settings, 'review', '')
     const marker = svc.events(result.agentId).find((event) => event.kind === 'teammate')
-    expect(marker).toMatchObject({ kind: 'teammate', mode: 'review', name: 'codex-test' })
+    // Named as the model menu names it.
+    expect(marker).toMatchObject({ kind: 'teammate', mode: 'review', name: 'Codex test' })
     expect(svc.get(result.agentId).settings).toMatchObject({ provider: 'codex', access: 'edits' })
     expect(svc.task(parent.id, result.agentId)).toMatchObject({ teammate: 'review', canMessage: true })
-    await expect(svc.addTeammate(parent.id, settings, 'take-over', '')).rejects.toThrow(/already has a teammate/)
+    // The same model again joins as a second, numbered teammate.
+    const second = await svc.addTeammate(parent.id, settings, 'take-over', '')
+    expect(svc.task(parent.id, second.agentId)).toMatchObject({ name: 'Codex test 2', teammate: 'take-over' })
     svc.stopAll()
   })
 
@@ -2558,7 +2561,7 @@ describe('sub-agents Ramu runs', () => {
     await until(() =>
       svc
         .events(parent.id)
-        .some((e) => e.kind === 'user' && e.text.startsWith('[Teammate "codex-test" says]\nTests fail on main')),
+        .some((e) => e.kind === 'user' && e.text.startsWith('[Teammate "Codex test" says]\nTests fail on main')),
     )
     await expect(svc.teammateMessage(agentId, 'codex-test', 'x')).rejects.toThrow(/only "lead"/)
     for (const note of ['two', 'three', 'four']) await svc.teammateMessage(agentId, 'lead', note)
@@ -2571,10 +2574,11 @@ describe('sub-agents Ramu runs', () => {
     await until(() => svc.task(parent.id, agentId)?.status === 'completed')
     expect(svc.task(parent.id, agentId)?.work).toMatchObject({ files: 0, paths: [], turns: 1 })
     // The lead addresses it by its handle; the note wakes it for another turn.
-    await expect(svc.teammateMessage(parent.id, 'someone', 'x')).rejects.toThrow(/teammate is "codex-test"/)
+    await expect(svc.teammateMessage(parent.id, 'someone', 'x')).rejects.toThrow(/Name one teammate: "codex-test"/)
     expect(await svc.teammateMessage(parent.id, '@codex-test', 'Check a.ts too')).toEqual({ to: 'codex-test' })
     await until(() =>
-      svc.events(agentId).some((e) => e.kind === 'user' && e.text.startsWith('[The lead says]\nCheck a.ts too')),
+      // After the catch-up note on what the thread said since its report.
+      svc.events(agentId).some((e) => e.kind === 'user' && e.text.includes('[The lead says]\nCheck a.ts too')),
     )
     expect(svc.task(parent.id, agentId)).toMatchObject({ status: 'running' })
     expect(svc.task(parent.id, agentId)?.endedAt).toBeUndefined()
@@ -2584,9 +2588,34 @@ describe('sub-agents Ramu runs', () => {
     svc.replyPermission(parent.id, again.requestId, true)
     await until(
       () =>
-        svc.events(parent.id).filter((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "codex-test" finished]'))
+        svc.events(parent.id).filter((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Codex test" finished]'))
           .length === 2,
     )
+    svc.stopAll()
+  })
+
+  it("gives a teammate what the thread said since it last took part before the person's next message", async () => {
+    const svc = routed()
+    const parent = await parentOf(svc)
+    const settings = { ...full, provider: 'codex' as const, model: 'codex-test', effort: 'high' as const }
+    const { agentId } = await svc.addTeammate(parent.id, settings, 'review', '')
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
+    const record = (event: AgentEvent) =>
+      (svc as unknown as { record(id: string, event: AgentEvent): void }).record(parent.id, event)
+    record({ kind: 'user', text: 'Rename the helper to formatDate' })
+    record({ kind: 'text', text: 'Renamed it in utils.ts' })
+    await svc.messageTask(parent.id, agentId, 'Does the rename look right?')
+    const sent = () => JSON.stringify(svc.events(agentId))
+    await until(() => sent().includes('Does the rename look right?'))
+    expect(sent()).toContain('Since you last took part in this thread')
+    expect(sent()).toContain('Rename the helper to formatDate')
+    // The next message carries only what is new.
+    await svc.messageTask(parent.id, agentId, 'And the tests?')
+    await until(() => sent().includes('And the tests?'))
+    const texts = svc
+      .events(agentId)
+      .flatMap((e) => (e.kind === 'queue' ? e.messages.map((m) => m.text) : e.kind === 'user' ? [e.text] : []))
+    expect(texts.find((text) => text.includes('And the tests?'))).not.toContain('formatDate')
     svc.stopAll()
   })
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { View } from 'react-native'
 import type { AgentSettings, AgentTask, TeammateMode } from '@ramu/shared/types'
-import { activeTeammate } from '@ramu/shared/chat/agentTasks'
+import { activeTeammates } from '@ramu/shared/chat/agentTasks'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
@@ -10,12 +10,12 @@ import { ModelChip, type ModelChoice } from './Composer'
 import { TextField } from './ScheduleFields'
 import { Button, Segmented, Sheet, T } from './ui'
 
-/** The thread's teammate, read from its helper cards; the newest card for each helper wins. */
-export function teammateOf(chat: Chat): AgentTask | undefined {
+/** The thread's teammates, read from its helper cards; the newest card for each helper wins. */
+export function teammatesOf(chat: Chat): AgentTask[] {
   const cards = new Map<string, AgentTask>()
   for (const item of chat.items)
     if (item.kind === 'agents') for (const agent of item.agents) cards.set(agent.agentId, agent)
-  return activeTeammate([...cards.values()])
+  return activeTeammates([...cards.values()])
 }
 
 /** The phone's Add teammate: a model, Review or Take over, and an optional request. */

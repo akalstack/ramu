@@ -3,7 +3,10 @@ import { errorText } from '../lib/errors'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { FileContext, SkillInfo, TeammateMode } from '@ramu/shared/types'
+import type { AgentModel, FileContext, SkillInfo, TeammateMode } from '@ramu/shared/types'
+import type { CustomAgent } from '@ramu/shared/customAgents'
+import { modelHandle } from '@ramu/shared/chat/teammateMentions'
+import { providerName } from '@ramu/shared/providers/providers'
 import { teammateHandle } from '@ramu/shared/chat/agentTasks'
 import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
@@ -23,15 +26,19 @@ interface Choice {
   id: string
   label: string
   description: string
-  kind: 'Command' | 'Skill' | 'File' | 'Teammate'
+  kind: 'Command' | 'Skill' | 'File' | 'Teammate' | 'Model' | 'Agent'
   insertion?: string
   file?: { repoId: string; path: string }
   action?: () => void
 }
-/** A thread's teammate, or how to add one, offered after `@` at the start of a message and as `/teammate`. */
+/**
+ * Who `@` at the start of a message can reach: teammates already in the thread, and models and custom agents that join
+ * it as one when the message is sent. `/teammate` opens the full Add teammate dialog.
+ */
 export interface ComposerTeammate {
-  /** The teammate still around to talk to. */
-  current?: { name: string; mode: TeammateMode }
+  teammates: { name: string; mode: TeammateMode }[]
+  models: AgentModel[]
+  agents: CustomAgent[]
   /** Opens Add teammate; absent when this device may only view. */
   onAdd?: () => void
 }
@@ -104,34 +111,55 @@ export function useComposerSuggestions(
     Object.values(ws.repos)
       .flat()
       .find((r) => r.id === repoId)?.name ?? repoId
-  const current = team?.current
   const onAddTeammate = team?.onAdd
   const choices = useMemo(() => {
-    const handle = current ? teammateHandle(current.name) : ''
-    const modeLabel = current?.mode === 'take-over' ? t('Take over') : t('Review')
-    // Only a message that starts with the mention goes to the teammate, so it is offered only there.
-    const teammates: Choice[] = current
-      ? [
-          {
-            id: 'teammate',
-            label: `@${handle}`,
-            description: t('Talk to teammate {0} · {1}', { 0: current.name, 1: modeLabel }),
-            kind: 'Teammate',
-            insertion: `@${handle} `,
-          },
-        ]
-      : onAddTeammate
+    const here = team?.teammates ?? []
+    const handles = new Set(here.map((entry) => teammateHandle(entry.name)))
+    // Only a message that starts with the mention goes to a teammate, so they are offered only there.
+    const teammates: Choice[] = [
+      ...here.map((entry) => ({
+        id: `teammate:${entry.name}`,
+        label: `@${teammateHandle(entry.name)}`,
+        description: t('Talk to teammate {0} · {1}', {
+          0: entry.name,
+          1: entry.mode === 'take-over' ? t('Take over') : t('Review'),
+        }),
+        kind: 'Teammate' as const,
+        insertion: `@${teammateHandle(entry.name)} `,
+      })),
+      ...(team?.agents ?? [])
+        .filter((agent) => !handles.has(teammateHandle(agent.name)))
+        .map((agent) => ({
+          id: `agent:${agent.id}`,
+          label: `@${teammateHandle(agent.name)}`,
+          description: agent.description || t('Custom agent'),
+          kind: 'Agent' as const,
+          insertion: `@${teammateHandle(agent.name)} `,
+        })),
+      ...(team?.models ?? [])
+        .filter((model) => !model.isLegacy && !handles.has(modelHandle(model)))
+        .map((model) => ({
+          id: `model:${model.provider}:${model.id}`,
+          label: `@${modelHandle(model)}`,
+          description: t('{0} joins this thread and reviews', {
+            0: `${model.name || model.id} · ${providerName(model.provider)}`,
+          }),
+          kind: 'Model' as const,
+          insertion: `@${modelHandle(model)} `,
+        })),
+      ...(onAddTeammate
         ? [
             {
               id: 'add-teammate',
-              label: t('Add teammate'),
-              description: t('Bring a second model into this thread'),
-              kind: 'Teammate',
+              label: t('Add teammate…'),
+              description: t('Choose the model, how it works and what it should do'),
+              kind: 'Teammate' as const,
               insertion: '',
               action: onAddTeammate,
             },
           ]
-        : []
+        : []),
+    ]
     const commands: Choice[] = [
       { id: 'new', label: '/new', description: t('Start a new thread'), kind: 'Command', action: () => ws.newTask() },
       {
@@ -248,28 +276,18 @@ export function useComposerSuggestions(
             },
           ]
         : []),
-      ...(current
+      ...(onAddTeammate
         ? [
             {
               id: 'teammate',
               label: '/teammate',
-              description: t('Talk to teammate {0} · {1}', { 0: current.name, 1: modeLabel }),
+              description: t('Bring another model into this thread'),
               kind: 'Command' as const,
-              insertion: `@${handle} `,
+              insertion: '',
+              action: onAddTeammate,
             },
           ]
-        : onAddTeammate
-          ? [
-              {
-                id: 'teammate',
-                label: '/teammate',
-                description: t('Add teammate'),
-                kind: 'Command' as const,
-                insertion: '',
-                action: onAddTeammate,
-              },
-            ]
-          : []),
+        : []),
       { id: 'clear', label: '/clear', description: t('Clear this draft'), kind: 'Command', insertion: '' },
       // A chat's composer only: the question goes to an aside, never to the agent.
       ...(chat
@@ -327,7 +345,7 @@ export function useComposerSuggestions(
     chat,
     preferences.memory.enabled,
     preferences.intelligence.learning,
-    current,
+    team,
     onAddTeammate,
     trigger?.start,
   ])

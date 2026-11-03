@@ -36,13 +36,15 @@ import { useReviews } from '../git/reviews'
 import { FILE_DRAG_TYPE } from '../composer/ComposerSuggestions'
 import { ChatFind } from '../chat/ChatFind'
 import {
-  activeTeammate,
+  activeTeammates,
   effectiveStatus,
   latestTasks,
   parseTaskMessage,
   parseTaskStop,
-  teammateMention,
 } from '@ramu/shared/chat/agentTasks'
+import { resolveMention, teammateSettings } from '@ramu/shared/chat/teammateMentions'
+import type { CustomAgent } from '@ramu/shared/customAgents'
+import { useModelSets } from '../models/ModelSets'
 import type { AgentTask } from '@ramu/shared/types'
 import { ProviderRouteChip } from '../models/ProviderRoute'
 import { limitPlaceholder, limitResume } from '../models/limitCopy'
@@ -216,16 +218,24 @@ export const AgentView = memo(function AgentView({
   const helperSelection = useMemo(() => helperGroups(events), [events])
   const allTasks = useMemo(() => latestTasks(events), [events])
   const tasks = useMemo(() => allTasks.filter((task) => task.taskType !== 'local_bash'), [allTasks])
-  const teammate = useMemo(() => activeTeammate(allTasks), [allTasks])
+  const teammates = useMemo(() => activeTeammates(allTasks), [allTasks])
   const [addingTeammate, setAddingTeammate] = useState(false)
+  const { catalogs } = useModelSets()
+  const [customAgents, setCustomAgents] = useState<CustomAgent[]>([])
+  useEffect(() => {
+    if (!viewOnly) void invoke('customAgents.list').then(setCustomAgents, () => {})
+  }, [invoke, viewOnly])
+  // A device that may only view can talk to no one, so it is offered nothing to bring in either.
+  const models = useMemo(() => (viewOnly ? [] : catalogs.flatMap((catalog) => catalog.models)), [catalogs, viewOnly])
+  const agents = useMemo(() => (viewOnly ? [] : customAgents), [customAgents, viewOnly])
   const composerTeammate = useMemo(
-    () =>
-      teammate
-        ? { current: { name: teammate.name, mode: teammate.teammate ?? ('review' as const) } }
-        : viewOnly
-          ? undefined
-          : { onAdd: () => setAddingTeammate(true) },
-    [teammate, viewOnly],
+    () => ({
+      teammates: teammates.map((task) => ({ name: task.name, mode: task.teammate ?? ('review' as const) })),
+      models,
+      agents,
+      ...(viewOnly ? {} : { onAdd: () => setAddingTeammate(true) }),
+    }),
+    [teammates, models, agents, viewOnly],
   )
   const commands = allTasks.filter(
     (task) => task.taskType === 'local_bash' && task.background && effectiveStatus(task, live) === 'running',
@@ -480,11 +490,37 @@ export const AgentView = memo(function AgentView({
       setMcpOpen(true)
       return
     }
-    const forTeammate = teammate && !attachments.length ? teammateMention(draft, teammate.name) : null
-    if (teammate && forTeammate)
+    // `@name` at the start talks to a teammate here, or brings that model or custom agent in with this message.
+    const target = session && !attachments.length ? resolveMention(draft, teammates, models, agents) : null
+    if (session && target)
       return act(async () => {
         const submitted = draft
-        await invoke('agent.messageTask', view.sessionId, teammate.agentId, forTeammate)
+        if (target.kind === 'teammate')
+          await invoke('agent.messageTask', view.sessionId, target.task.agentId, target.body)
+        else if (target.kind === 'model')
+          await invoke(
+            'agent.addTeammate',
+            view.sessionId,
+            teammateSettings(session.settings, target.model),
+            'review',
+            target.body,
+          )
+        else {
+          const agent = target.agent
+          await invoke(
+            'agent.addTeammate',
+            view.sessionId,
+            agent.model
+              ? teammateSettings(session.settings, {
+                  provider: agent.model.provider,
+                  id: agent.model.model,
+                  defaultEffort: agent.model.effort ?? null,
+                })
+              : session.settings,
+            agent.readOnly ? 'review' : 'take-over',
+            `${agent.instructions}\n\n${target.body}`,
+          )
+        }
         const consumed = consumeDraft()
         if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
       }, true)
@@ -653,7 +689,7 @@ export const AgentView = memo(function AgentView({
         continuing={continuing}
         onContinue={() => setConfirmContinue(true)}
         onContinueOnHost={setContinueHost}
-        onAddTeammate={teammate || viewOnly ? undefined : () => setAddingTeammate(true)}
+        onAddTeammate={viewOnly ? undefined : () => setAddingTeammate(true)}
         latestRequest={
           events.findLast(
             (event): event is Extract<typeof event, { kind: 'user' }> => event.kind === 'user' && !event.agentId,
@@ -713,7 +749,8 @@ export const AgentView = memo(function AgentView({
               onClose={() => setAddingTeammate(false)}
             />
           )}
-          {teammate && session && <TeammateBar sessionId={session.id} teammate={teammate} />}
+          {session &&
+            teammates.map((task) => <TeammateBar key={task.agentId} sessionId={session.id} teammate={task} />)}
           {continueHost && session && (
             <ContinueOnHostDialog
               taskId={session.taskId}

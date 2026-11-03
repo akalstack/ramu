@@ -1,28 +1,83 @@
 import { expect, it } from 'vitest'
 import {
-  activeTeammate,
+  activeTeammates,
   helperWork,
   leadNotePrompt,
   namesTeammate,
   teammateHandle,
-  teammateMention,
   teammateNotePrompt,
 } from '../src/chat/agentTasks'
+import { resolveMention, teammateCatchUp, teammateSettings } from '../src/chat/teammateMentions'
+import { DEFAULT_AGENT_SETTINGS, type AgentModel } from '../src/types'
+import type { CustomAgent } from '../src/customAgents'
 import { describeRamuTool, ramuTool } from '../src/chat/ramuTools'
 import type { AgentEvent, AgentTask } from '../src/types'
 
-it('routes @name and @teammate to the teammate, and anything else to the lead', () => {
-  expect(teammateMention('@codex-test rewrite the README', 'codex-test')).toBe('rewrite the README')
-  expect(teammateMention('@teammate check this', 'GPT Sol')).toBe('check this')
-  expect(teammateMention('@gpt-sol check this', 'GPT Sol')).toBe('check this')
-  expect(teammateMention('@someone else', 'codex-test')).toBeNull()
-  expect(teammateMention('no mention', 'codex-test')).toBeNull()
+const task = (patch: Partial<AgentTask>) => ({ agentId: 'a', name: 'n', status: 'running', ...patch }) as AgentTask
+const model = (patch: Partial<AgentModel>) =>
+  ({
+    provider: 'codex',
+    id: 'gpt-sol',
+    name: 'GPT Sol',
+    efforts: [],
+    defaultEffort: 'high',
+    isDefault: false,
+    ...patch,
+  }) as AgentModel
+
+it('sends @name to a teammate here, brings in a model or custom agent by name, and leaves anything else to the lead', () => {
+  const sol = task({ agentId: 's', name: 'GPT Sol', teammate: 'review' })
+  const models = [model({}), model({ provider: 'claude-code', id: 'opus', name: 'Opus 5.5' })]
+  const agents = [{ id: 'r', name: 'Strict reviewer' } as CustomAgent]
+  // A teammate already here wins over the model it runs on.
+  expect(resolveMention('@gpt-sol check this', [sol], models)).toMatchObject({ kind: 'teammate', body: 'check this' })
+  expect(resolveMention('@teammate check this', [sol], models)?.kind).toBe('teammate')
+  expect(resolveMention('@opus-5.5 review the diff', [sol], models)).toMatchObject({
+    kind: 'model',
+    model: { id: 'opus' },
+    body: 'review the diff',
+  })
+  expect(resolveMention('@strict-reviewer look', [], models, agents)?.kind).toBe('agent')
+  // `@teammate` is ambiguous with two, and a name nobody has goes to the lead.
+  expect(resolveMention('@teammate hi', [sol, task({ name: 'Opus 5.5' })], models)).toBeNull()
+  expect(resolveMention('@someone else', [sol], models)).toBeNull()
+  expect(resolveMention('@gpt-sol', [sol], models)).toBeNull()
 })
 
-it('finds the teammate still around, not a stopped one or a helper', () => {
-  const task = (patch: Partial<AgentTask>) => ({ agentId: 'a', name: 'n', status: 'running', ...patch }) as AgentTask
-  expect(activeTeammate([task({}), task({ teammate: 'review', status: 'stopped' })])).toBeUndefined()
-  expect(activeTeammate([task({ teammate: 'take-over', status: 'completed', agentId: 'b' })])?.agentId).toBe('b')
+it('finds the teammates still around, not stopped ones or helpers', () => {
+  expect(activeTeammates([task({}), task({ teammate: 'review', status: 'stopped' })])).toEqual([])
+  expect(
+    activeTeammates([
+      task({ teammate: 'take-over', status: 'completed', agentId: 'b' }),
+      task({ teammate: 'review', agentId: 'c' }),
+    ]).map((entry) => entry.agentId),
+  ).toEqual(['b', 'c'])
+})
+
+it("carries a model's own settings and only the thread's login and fast mode for the same provider", () => {
+  const base = {
+    ...DEFAULT_AGENT_SETTINGS,
+    provider: 'codex' as const,
+    accountId: 'work',
+    serviceTier: 'fast' as const,
+  }
+  expect(teammateSettings(base, { provider: 'codex', id: 'gpt-sol', defaultEffort: 'high' })).toMatchObject({
+    model: 'gpt-sol',
+    effort: 'high',
+    accountId: 'work',
+    serviceTier: 'fast',
+  })
+  const other = teammateSettings(base, { provider: 'claude-code', id: 'opus', defaultEffort: null })
+  expect(other).toMatchObject({ provider: 'claude-code', serviceTier: 'standard' })
+  expect(other.accountId).toBeUndefined()
+})
+
+it('tells a teammate what the thread said and changed since it last took part, or nothing', () => {
+  expect(teammateCatchUp('', [])).toBe('')
+  const note = teammateCatchUp('USER: rename it', ['a.ts'])
+  expect(note).toContain('USER: rename it')
+  expect(note).toContain('Files changed: a.ts')
+  expect(note.endsWith('</thread-catch-up>\n\n')).toBe(true)
 })
 
 it('addresses a teammate by its handle or as teammate, and each note says how to reply', () => {

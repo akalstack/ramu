@@ -360,7 +360,7 @@ export class SubagentRunner {
     const run: ChildRun = {
       parentId,
       name,
-      ...(input.teammate ? { teammate: input.teammate } : {}),
+      ...(input.teammate ? { teammate: input.teammate, seenParent: this.host.events(parentId).length } : {}),
       ...(isolation ? { isolation } : {}),
       ...(input.type ? { type: input.type } : {}),
       prompt: input.prompt,

@@ -78,7 +78,7 @@ export function AgentHeader({
   onContinueOnHost: (hostId: string) => void
   /** The person's latest message, for suggesting a host whose platform it names. */
   latestRequest?: string
-  /** Absent when the thread already has a teammate or this device may only view. */
+  /** Absent when this device may only view. */
   onAddTeammate?: () => void
 }) {
   useLanguage()

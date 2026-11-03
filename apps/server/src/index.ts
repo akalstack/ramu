@@ -1153,7 +1153,7 @@ const mcpHttp = createServer(async (req, res) => {
       {
         description: teammateSession
           ? 'Send the lead (to "lead") a short note before your report: a finding it should act on now, or a question. It does not wait for a reply; finish with your report as usual.'
-          : 'Message the teammate the person added to this thread, by its name (as in @name) or "teammate". It wakes the teammate and its next report comes back to you as a message. Use it only when the thread has a teammate; for your own sub-agents use their tools.',
+          : 'Message a teammate the person added to this thread, by its name as in @name ("teammate" works while there is one). It wakes the teammate, which also sees what the thread said since it last took part, and its next report comes back to you as a message. Use it only when the thread has teammates; for your own sub-agents use their tools.',
         inputSchema: { to: z.string().min(1).max(80), text: z.string().min(1).max(20000) },
       },
       async ({ to, text }) => {

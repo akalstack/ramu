@@ -40,6 +40,8 @@ vi.mock('../src/git/reviews', () => ({ openReview() {} }))
 vi.mock('../src/components/desktop-button', () => ({ Button: 'button' }))
 vi.mock('../src/components/ui/badge', () => ({ Badge: 'span' }))
 import { ComposerSuggestions, useComposerSuggestions, type ComposerTeammate } from '../src/composer/ComposerSuggestions'
+import type { AgentModel } from '@ramu/shared/types'
+import type { CustomAgent } from '@ramu/shared/customAgents'
 
 beforeEach(() => {
   state.values = []
@@ -141,26 +143,40 @@ it('keeps focus in the composer when clicking an option and chooses its original
   expect(onChoose).toHaveBeenCalledWith(0)
 })
 
-it('offers the teammate first after @ at the start of a message, and inserts its handle', async () => {
+const model = (id: string, name: string, provider = 'codex' as const) =>
+  ({ provider, id, name, efforts: [], defaultEffort: null, isDefault: false }) as AgentModel
+
+it('lists teammates here first after @, then custom agents and models that join, and only at the start', async () => {
   state.invoke.mockResolvedValue([{ repoId: 'repo', path: 'codex.ts' }])
-  const team = { current: { name: 'GPT Sol', mode: 'review' as const } }
-  const suggestions = await load('@gpt', team)
-  expect(suggestions.choices.map((choice) => [choice.label, choice.kind])).toEqual([['@gpt-sol', 'Teammate']])
-  expect(suggestions.choose(suggestions.choices[0]!).value).toBe('@gpt-sol ')
-  // Mid-message the mention would not reach the teammate, so only files are offered there.
-  const later = await load('look at @co', team)
-  expect(later.choices.map((choice) => choice.kind)).toEqual(['File'])
+  const team = {
+    teammates: [{ name: 'GPT Sol', mode: 'review' as const }],
+    // The model already here as a teammate is not offered a second time.
+    models: [model('gpt-sol', 'GPT Sol'), model('opus', 'Opus 5.5', 'claude-code' as never)],
+    agents: [{ id: 'a', name: 'Strict reviewer', description: 'Finds missing tests' } as CustomAgent],
+  }
+  const all = await load('@', team)
+  expect(all.choices.map((choice) => [choice.label, choice.kind])).toEqual([
+    ['@gpt-sol', 'Teammate'],
+    ['@strict-reviewer', 'Agent'],
+    ['@opus-5.5', 'Model'],
+    ['project/codex.ts', 'File'],
+  ])
+  const opus = await load('@opus', team)
+  expect(opus.choose(opus.choices[0]!).value).toBe('@opus-5.5 ')
+  // Mid-message a mention would not reach anyone, so only files are offered there.
+  expect((await load('look at @co', team)).choices.map((choice) => choice.kind)).toEqual(['File'])
 })
 
-it('offers Add teammate after @ and as /teammate when the thread has none', async () => {
+it('offers Add teammate after @ and as /teammate, and nothing to a device that may only view', async () => {
   state.invoke.mockResolvedValue([])
   const onAdd = vi.fn()
-  const at = await load('@', { onAdd })
-  expect(at.choices.map((choice) => choice.label)).toEqual(['Add teammate'])
+  const at = await load('@add', { teammates: [], models: [], agents: [], onAdd })
+  expect(at.choices.map((choice) => choice.label)).toEqual(['Add teammate…'])
   expect(at.choose(at.choices[0]!).value).toBe('')
   expect(onAdd).toHaveBeenCalledOnce()
-  const slash = await load('/teammate', { onAdd })
+  const slash = await load('/teammate', { teammates: [], models: [], agents: [], onAdd })
   expect(slash.choices.map((choice) => choice.label)).toContain('/teammate')
-  // A device that may only view gets neither.
-  expect((await load('/teammate')).choices.map((choice) => choice.label)).not.toContain('/teammate')
+  expect(
+    (await load('/teammate', { teammates: [], models: [], agents: [] })).choices.map((choice) => choice.label),
+  ).not.toContain('/teammate')
 })

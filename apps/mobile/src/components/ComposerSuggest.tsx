@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Command, FileText, Sparkles, Users } from 'lucide-react-native'
-import type { SkillInfo, TeammateMode } from '@ramu/shared/types'
+import type { AgentModel, SkillInfo, TeammateMode } from '@ramu/shared/types'
+import type { CustomAgent } from '@ramu/shared/customAgents'
+import { modelHandle } from '@ramu/shared/chat/teammateMentions'
+import { providerName } from '@ramu/shared/providers/providers'
 import { teammateHandle } from '@ramu/shared/chat/agentTasks'
 import { acceptComposerTrigger, composerTrigger } from '@ramu/shared/chat/composerTrigger'
 import { font, space, useTheme } from '../theme'
@@ -13,14 +16,19 @@ export interface Choice {
   id: string
   label: string
   description: string
-  kind: 'Command' | 'Skill' | 'File' | 'Teammate'
+  kind: 'Command' | 'Skill' | 'File' | 'Teammate' | 'Model' | 'Agent'
   insertion?: string
   file?: { repoId: string; path: string }
   run?: () => void
 }
-/** The chat's teammate, or how to add one, offered after `@` at the start of a message and as `/teammate`. */
+/**
+ * Who `@` at the start of a message can reach: teammates already in the chat, and models and custom agents that join it
+ * as one when the message is sent. `/teammate` opens the full Add teammate sheet.
+ */
 export interface ComposerTeammate {
-  current?: { name: string; mode: TeammateMode }
+  teammates: { name: string; mode: TeammateMode }[]
+  models: AgentModel[]
+  agents: CustomAgent[]
   /** Opens Add teammate; absent when this phone may only view. */
   onAdd?: () => void
 }
@@ -105,30 +113,52 @@ export function useComposerSuggest({
   }, [visible, scope, online, computerId])
   const data = loaded && loaded.scope === scope && loaded.computerId === computerId ? loaded : undefined
 
-  const current = teammate?.current
   const onAddTeammate = teammate?.onAdd
   const choices = useMemo<Choice[]>(() => {
     if (!mode) return []
-    const handle = current ? teammateHandle(current.name) : ''
-    const talk = current
-      ? `Talk to teammate ${current.name} · ${current.mode === 'take-over' ? 'Take over' : 'Review'}`
-      : ''
-    // Only a message that starts with the mention goes to the teammate, so it is offered only there.
-    const teammates: Choice[] = current
-      ? [{ id: 'teammate', label: `@${handle}`, description: talk, kind: 'Teammate', insertion: `@${handle} ` }]
-      : onAddTeammate
+    const go = (to: Parameters<typeof router.push>[0]) => () => router.push(to)
+    const here = teammate?.teammates ?? []
+    const handles = new Set(here.map((entry) => teammateHandle(entry.name)))
+    // Only a message that starts with the mention goes to a teammate, so they are offered only there.
+    const teammates: Choice[] = [
+      ...here.map((entry) => ({
+        id: `teammate:${entry.name}`,
+        label: `@${teammateHandle(entry.name)}`,
+        description: `Talk to teammate ${entry.name} · ${entry.mode === 'take-over' ? 'Take over' : 'Review'}`,
+        kind: 'Teammate' as const,
+        insertion: `@${teammateHandle(entry.name)} `,
+      })),
+      ...(teammate?.agents ?? [])
+        .filter((agent) => !handles.has(teammateHandle(agent.name)))
+        .map((agent) => ({
+          id: `agent:${agent.id}`,
+          label: `@${teammateHandle(agent.name)}`,
+          description: agent.description || 'Custom agent',
+          kind: 'Agent' as const,
+          insertion: `@${teammateHandle(agent.name)} `,
+        })),
+      ...(teammate?.models ?? [])
+        .filter((model) => !model.isLegacy && !handles.has(modelHandle(model)))
+        .map((model) => ({
+          id: `model:${model.provider}:${model.id}`,
+          label: `@${modelHandle(model)}`,
+          description: `${model.name || model.id} · ${providerName(model.provider)} joins this thread and reviews`,
+          kind: 'Model' as const,
+          insertion: `@${modelHandle(model)} `,
+        })),
+      ...(onAddTeammate
         ? [
             {
               id: 'add-teammate',
-              label: 'Add teammate',
-              description: 'Bring a second model into this thread',
-              kind: 'Teammate',
+              label: 'Add teammate…',
+              description: 'Choose the model, how it works and what it should do',
+              kind: 'Teammate' as const,
               insertion: '',
               run: onAddTeammate,
             },
           ]
-        : []
-    const go = (to: Parameters<typeof router.push>[0]) => () => router.push(to)
+        : []),
+    ]
     const commands: Choice[] = [
       { id: 'new', label: '/new', description: 'Start a new thread', kind: 'Command', run: go('/new') },
       {
@@ -237,28 +267,18 @@ export function useComposerSuggest({
           )
         },
       },
-      ...(current
+      ...(onAddTeammate
         ? [
             {
               id: 'teammate',
               label: '/teammate',
-              description: talk,
+              description: 'Bring another model into this thread',
               kind: 'Command' as const,
-              insertion: `@${handle} `,
+              insertion: '',
+              run: onAddTeammate,
             },
           ]
-        : onAddTeammate
-          ? [
-              {
-                id: 'teammate',
-                label: '/teammate',
-                description: 'Add teammate',
-                kind: 'Command' as const,
-                insertion: '',
-                run: onAddTeammate,
-              },
-            ]
-          : []),
+        : []),
       { id: 'clear', label: '/clear', description: 'Clear this draft', kind: 'Command', insertion: '' },
     ]
     const names = data?.names ?? {}
@@ -288,8 +308,8 @@ export function useComposerSuggest({
     return options
       .filter((choice) => `${choice.label} ${choice.description}`.toLowerCase().includes(query))
       .slice(0, 30)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mode, query, data, chatId, computerId, current, onAddTeammate, trigger start] by design; the values it reads beyond these are current as of that run
-  }, [mode, query, data, chatId, computerId, current, onAddTeammate, trigger?.start])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mode, query, data, chatId, computerId, teammate, onAddTeammate, trigger start] by design; the values it reads beyond these are current as of that run
+  }, [mode, query, data, chatId, computerId, teammate, onAddTeammate, trigger?.start])
 
   return {
     // `$` is ordinary text unless a skill matches, so it never shows an empty picker.
@@ -349,7 +369,7 @@ export function SuggestionList({
           >
             {choice.kind === 'File' ? (
               <FileText size={15} color={c.soft} />
-            ) : choice.kind === 'Teammate' ? (
+            ) : choice.kind === 'Teammate' || choice.kind === 'Model' || choice.kind === 'Agent' ? (
               <Users size={15} color={c.accent} />
             ) : choice.kind === 'Skill' ? (
               <Sparkles size={15} color={c.accent} />

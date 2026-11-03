@@ -24,6 +24,8 @@ export interface ChildRun {
   toolUses: number
   startedAt: number
   teammate?: import('@ramu/shared/types').TeammateMode
+  /** How many of the lead's events a teammate has seen; its next message carries what came after. */
+  seenParent?: number
 }
 export interface SubagentInput {
   description: string

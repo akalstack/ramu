@@ -23,16 +23,20 @@ The agent can start helpers for parts of a task. Helper cards show progress; ope
 
 ## Teammates
 
-**Add teammate** brings a second model into the thread with the conversation so far. Open it from the thread menu, from `@` at the start of a message, or with `/teammate` (desktop and phone). One teammate per thread.
+A teammate is another model working in the thread beside its main agent, with its own session. Type `@` at the start of a message to choose who it goes to (desktop and phone):
 
-Type `@` at the start of a message to pick the teammate, or write `@name` or `@teammate`; anything else goes to the main agent.
+- **A teammate already here**, by its name, such as `@opus-5.5`.
+- **A model** from the model menu, or one of your **custom agents**: sending brings it into the thread with the conversation so far and gives it your message. Nothing to set up first.
+- **Add teammate…** (also `/teammate` and the thread menu) to choose the model, how it works and what it should do before it starts.
+
+Anything without a mention goes to the main agent. A thread holds up to four teammates; the same model twice is numbered (`Opus 5.5 2`).
 
 - **Review** (default) reads the latest changes and replies with findings. It never edits, whatever the thread allows.
-- **Take over** edits while the main agent waits, then hands back with a summary.
+- **Take over** edits while the main agent waits, then hands back with a summary. A custom agent that may edit joins this way.
 
-The main agent and the teammate also message each other by name with the `teammate_message` tool: the main agent's note wakes the teammate, and the teammate can send a note before its report. The bar above the composer and the teammate's card show what it changed (files and lines) and its turns and reported cost.
+Before each message, a teammate gets a short catch-up on what the thread said and which files changed since it last took part. The main agent and teammates also message each other by name with the `teammate_message` tool. Each teammate's bar above the composer and its card show what it changed (files and lines) and its turns and reported cost.
 
-After four teammate reports or notes without you writing, the exchange pauses; a message to either one continues it.
+After four teammate reports or notes without you writing, the exchange pauses; a message to any of them continues it.
 
 ## Custom agents
 

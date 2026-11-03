@@ -2,7 +2,7 @@
 // queue, goals, routing, sub-agents, ...); this class builds them, wires their hosts and exposes the public API.
 import { mcpRequest, mcpServerDetails } from './agent/mcpStatus'
 import {
-  activeTeammate,
+  activeTeammates,
   latestTasks,
   leadNotePrompt,
   namesTeammate,
@@ -64,6 +64,9 @@ export { serverToolUse, serverToolResult } from './agent/toolSummaries'
 export { conversationHandoff } from './agent/handoff'
 export { claudeDefaultEffort, sameSettings } from './agent/settings'
 export { isUsageLimit } from './agent/usageLimit'
+
+/** Teammates one thread holds at once; each is a model the person pays for. */
+const MAX_TEAMMATES = 4
 
 export class AgentService {
   /** The collaborators that own the service's state; this class wires them together and exposes their public methods. */
@@ -844,17 +847,25 @@ export class AgentService {
     return this.parts.router.subagentSettings(...args)
   }
 
-  /** Adds a second model the person chose, working beside this thread's agent. One per thread. */
+  /**
+   * Brings a model the person chose into this thread as a teammate, named as the model menu names it (numbered when the
+   * same model is already here). A thread holds up to four.
+   */
   async addTeammate(sessionId: string, settings: AgentSettings, mode: TeammateMode, request: string) {
     const lead = this.get(sessionId)
     if (lead.parentId) throw new Error('Add a teammate to the main thread, not to a helper.')
-    const existing = latestTasks(this.events(sessionId)).find(
-      (task) => task.teammate && task.status !== 'stopped' && task.status !== 'failed',
-    )
-    if (existing) throw new Error(`This thread already has a teammate, ${existing.name}. Stop it first.`)
+    const here = activeTeammates(latestTasks(this.events(sessionId)))
+    if (here.length >= MAX_TEAMMATES)
+      throw new Error(`This thread already has ${MAX_TEAMMATES} teammates. Stop one before adding another.`)
     // Review never writes, whatever the thread allows; Take over cannot exceed the thread's own access.
     const access = mode === 'review' ? 'edits' : lead.settings.access
-    const name = clipText(settings.model || settings.provider, 60)
+    const listed = (await this.catalog().catch(() => []))
+      .flatMap((catalog) => catalog.models)
+      .find((model) => model.provider === settings.provider && model.id === settings.model)
+    const base = clipText(listed?.name || settings.model || settings.provider, 60)
+    const taken = new Set(here.map((task) => teammateHandle(task.name)))
+    let name = base
+    for (let n = 2; taken.has(teammateHandle(name)); n++) name = `${base} ${n}`
     return this.parts.subagents.spawnSubagent(sessionId, {
       description: 'Teammate',
       prompt:
@@ -878,10 +889,12 @@ export class AgentService {
       await this.parts.subagents.messageLead(fromId, to, text)
       return { to: 'lead' }
     }
-    const teammate = activeTeammate(latestTasks(this.events(fromId)))
-    if (!teammate) throw new Error('This thread has no teammate. The person adds one from the thread menu.')
-    if (!namesTeammate(to, teammate.name))
-      throw new Error(`This thread's teammate is "${teammateHandle(teammate.name)}".`)
+    const here = activeTeammates(latestTasks(this.events(fromId)))
+    if (!here.length) throw new Error('This thread has no teammate. The person adds one with @ or the thread menu.')
+    const named = here.filter((task) => namesTeammate(to, task.name))
+    const teammate = named.length === 1 ? named[0]! : null
+    if (!teammate)
+      throw new Error(`Name one teammate: ${here.map((task) => `"${teammateHandle(task.name)}"`).join(', ')}.`)
     if (this.parts.subagents.teammatePaused(fromId)) throw new Error(TEAMMATE_PAUSED)
     await this.parts.tasks.messageTask(fromId, teammate.agentId, leadNotePrompt(text))
     return { to: teammateHandle(teammate.name) }
