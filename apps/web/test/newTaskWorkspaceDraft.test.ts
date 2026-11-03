@@ -71,7 +71,6 @@ vi.mock('../src/workspace/HostProvider', () => ({
       state.calls.push({ method, args })
       if (method === state.failMethod) throw new Error('Delivery rejected')
       if (method === 'projects.route') return state.route
-      if (method === 'projects.splitBriefs') return null
       if (method === 'tasks.workspaceOptions')
         return {
           defaultCheckoutMode: 'current',

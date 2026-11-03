@@ -14,7 +14,7 @@ it('lets a paired host start, check and message its threads and list projects, a
     'agent.events',
     'agent.start',
     'tasks.list',
-    'threads.startGroup',
+    'threads.startInProject',
     'browser.activity',
     'network.status',
     'projects.list',
