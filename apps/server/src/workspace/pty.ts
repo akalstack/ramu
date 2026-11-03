@@ -78,6 +78,8 @@ const plain = (text: string) => text.replace(ANSI, '').replace(/\r(?!\n)/g, '\n'
 export class TerminalService {
   private readonly terms = new Map<string, Entry>()
   private readonly watchers = new Map<string, Set<() => void>>()
+  /** How many agent waits each command has open; devices show the command as awaited while any is. */
+  private readonly awaited = new Map<string, number>()
   private readonly history = new Map<string, BackgroundTerminalRecord>()
   private readonly checkpoints = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly warned = new Set<string>()
@@ -229,7 +231,9 @@ export class TerminalService {
     for (const record of [...this.terms.values()].filter((e) => e.bg && e.taskId === taskId).map(backgroundInfo))
       records.set(record.id, { ...record, output: '' })
     return [...records.values()]
-      .map(({ output: _output, ...record }) => record)
+      .map(({ output: _output, ...record }) =>
+        this.awaited.has(record.id) ? { ...record, agentWaiting: true as const } : record,
+      )
       .sort((a, b) => Number(isLive(b)) - Number(isLive(a)) || b.startedAt - a.startedAt)
   }
 
@@ -318,15 +322,23 @@ export class TerminalService {
         clearTimeout(timer)
         clearInterval(quiet)
         options.signal?.removeEventListener('abort', abort)
-        for (const id of unique) this.watchers.get(id)?.delete(check)
+        for (const id of unique) {
+          this.watchers.get(id)?.delete(check)
+          const left = (this.awaited.get(id) ?? 1) - 1
+          if (left > 0) this.awaited.set(id, left)
+          else this.awaited.delete(id)
+        }
+        this.onChange(taskId)
       }
-      if (options.signal?.aborted) return abort()
       options.signal?.addEventListener('abort', abort, { once: true })
       for (const id of unique) {
         const set = this.watchers.get(id) ?? new Set()
         set.add(check)
         this.watchers.set(id, set)
+        this.awaited.set(id, (this.awaited.get(id) ?? 0) + 1)
       }
+      this.onChange(taskId)
+      if (options.signal?.aborted) return abort()
       // Silence has no event of its own, so it is checked on a short tick while a quiet limit is set.
       if (options.quietMs !== undefined) quiet = setInterval(check, Math.min(1000, options.quietMs))
       check()

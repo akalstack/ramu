@@ -3893,6 +3893,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'More activity': 'Aktivitas lainnya',
   'Stop requested by you': 'Penghentian diminta oleh Anda',
   'Stop requested by agent': 'Penghentian diminta oleh agen',
+  'Agent is waiting': 'Agen sedang menunggu',
+  'Waiting on {0}': 'Menunggu {0}',
   'Started by a sub-agent': 'Dimulai oleh sub-agen',
   'Background command stop requested': 'Penghentian perintah latar belakang diminta',
   'You requested a stop for {0}': 'Anda meminta penghentian {0}',

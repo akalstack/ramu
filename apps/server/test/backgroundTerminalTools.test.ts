@@ -250,3 +250,16 @@ it.skipIf(process.platform === 'win32')(
     expect(terminals.inspectBackground('thread', mine.id).state).toBe('running')
   },
 )
+
+it.skipIf(process.platform === 'win32')(
+  'marks a command as awaited while the agent waits, so every device can say so',
+  async () => {
+    const { call, terminals } = await setup()
+    const command = terminals.launchBackground('thread', null, tmpdir(), 'sleep 0.5; exit 0')
+    const pending = call('background_terminal_wait', { ids: [command.id], timeoutSeconds: 10 })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(terminals.listBackground('thread')[0]?.agentWaiting).toBe(true)
+    await pending
+    expect(terminals.listBackground('thread')[0]?.agentWaiting).toBeUndefined()
+  },
+)

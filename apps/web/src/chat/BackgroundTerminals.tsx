@@ -136,6 +136,7 @@ export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof
                   {terminal.command}
                 </code>
                 <span className="text-caption text-muted-foreground">
+                  {terminal.agentWaiting && <span className="text-foreground">{t('Agent is waiting')} · </span>}
                   {stateLabel(terminal)}
                   {terminal.startedBy ? ` · ${t('Started by a sub-agent')}` : ''}
                   {terminal.stoppedBy

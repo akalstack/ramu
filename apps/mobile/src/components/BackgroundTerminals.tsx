@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, View, useWindowDimensions } from 'react-native'
+import { ActivityIndicator, Alert, View, useWindowDimensions } from 'react-native'
 import type { BackgroundTerminalInfo } from '@ramu/shared/api'
 import { translate } from '@ramu/shared/i18n'
 import { TerminalOutputBuffer, unseenOutput, type TerminalChunk } from '@ramu/shared/workspace/terminalOutput'
@@ -8,10 +8,17 @@ import { useStore } from '../runtime/store'
 import { font, space } from '../theme'
 import { Button, Card, Divider, Row, Sheet, T } from './ui'
 import TerminalView from './TerminalView'
+import { ActivityPill } from './ActivityPill'
+import { SquareTerminal } from 'lucide-react-native'
 
 type Status = 'loading' | 'ready' | 'offline' | 'error'
 type Inspection = BackgroundTerminalInfo & { output: string }
 const MAX_OUTPUT = 64_000
+/** A command short enough for a pill: its first line, clipped. */
+const clipCommand = (command: string) => {
+  const line = command.trim().split('\n')[0] ?? ''
+  return line.length > 28 ? `${line.slice(0, 27)}…` : line
+}
 const live = (command: BackgroundTerminalInfo) => command.state === 'running' || command.state === 'stopping'
 
 /** Inspect existing host-owned commands. This surface never opens, writes to or closes a shell. */
@@ -176,6 +183,7 @@ export function BackgroundTerminals({
   }, [scope, hostId, taskId, open, selected, detailKey, online])
 
   const rows = list.scope === scope ? list.rows : []
+  const awaited = rows.find((row) => row.agentWaiting)
   const shown = detail.key === detailKey ? detail.record : undefined
   const canControl =
     open &&
@@ -254,14 +262,18 @@ export function BackgroundTerminals({
   return (
     <>
       {!!rows.length && (
-        <Pressable
-          accessibilityRole="button"
+        <ActivityPill
+          icon={SquareTerminal}
+          // While the agent waits on a command, the pill says which one, so an idle-looking turn has a reason on screen.
+          label={
+            awaited
+              ? t('Waiting on {0}', { 0: clipCommand(awaited.command) })
+              : t('{0} background terminals', { 0: rows.filter(live).length || rows.length })
+          }
           accessibilityLabel={t('Background terminals')}
+          tone={awaited ? 'attention' : 'quiet'}
           onPress={onOpen}
-          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.m }}
-        >
-          <T size={font.caption}>{t('{0} background terminals', { 0: rows.filter(live).length || rows.length })}</T>
-        </Pressable>
+        />
       )}
       <Sheet open={open} onClose={onClose} title={t('Background terminals')}>
         <View style={{ padding: space.l, gap: space.s }}>
@@ -354,6 +366,7 @@ export function BackgroundTerminals({
                             {command.command}
                           </T>
                           <T size={font.caption} tone="muted">
+                            {command.agentWaiting ? <T size={font.caption}>{`${t('Agent is waiting')} · `}</T> : null}
                             {stateLabel(command)}
                             {stopLabel(command)}
                           </T>

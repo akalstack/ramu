@@ -4575,7 +4575,7 @@ for (const os of ['ios', 'android']) {
     f.render()
     await settle()
     const badge = nodes(f.render()).find(
-      (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Background terminals',
+      (node) => node.type === 'ActivityPill' && node.props.accessibilityLabel === 'Background terminals',
     )
     assert.ok(badge)
     badge.props.onPress()

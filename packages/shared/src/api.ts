@@ -149,6 +149,8 @@ export interface BackgroundTerminalInfo {
   stoppedBy?: 'user' | 'agent'
   /** Set when a sub-agent (helper), not the thread's main agent, launched the command. */
   startedBy?: 'helper'
+  /** The agent is waiting on this command right now, so its turn continues when the command settles. */
+  agentWaiting?: true
   capabilities: { inspect: true; stop: boolean; forceStop: boolean; input: boolean }
 }
 
