@@ -210,3 +210,21 @@ describe('Antigravity sign-in methods', () => {
     }
   })
 })
+
+describe.skipIf(process.platform === 'win32')('Codex API key sign-in', () => {
+  it('hands the key to Codex on stdin, never in its arguments, and logs out to remove it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ramu-codex-key-'))
+    try {
+      const log = join(dir, 'log')
+      const binary = join(dir, 'codex')
+      writeFileSync(binary, `#!/bin/sh\necho "args:$*" >> "${log}"\ncat >> "${log}"\n`, { mode: 0o755 })
+      const adapter = providerAdapter('codex')
+      await adapter.storeApiKey!({ binary, env: process.env, key: 'sk-proj-secret' })
+      await adapter.storeApiKey!({ binary, env: process.env, key: null })
+      const lines = readFileSync(log, 'utf8').trim().split('\n')
+      expect(lines).toEqual(['args:login --with-api-key', 'sk-proj-secret', 'args:logout'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})

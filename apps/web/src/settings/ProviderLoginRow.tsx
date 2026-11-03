@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { LogIn, Pencil, Trash2 } from 'lucide-react'
+import { KeyRound, LogIn, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { planName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
@@ -40,6 +40,7 @@ export function ProviderLoginRow({
   sortable,
   onlyOn,
   onLogin,
+  onApiKey,
   onToggleAccount,
   onRename,
   onRemove,
@@ -55,6 +56,8 @@ export function ProviderLoginRow({
   /** The only login left on; it cannot be turned off or removed. */
   onlyOn: boolean
   onLogin: () => void
+  /** Opens API-key sign-in; absent where the provider has none or this client cannot enter credentials. */
+  onApiKey?: () => void
   onToggleAccount: (enabled: boolean) => void
   onRename: (name: string) => void
   onRemove: () => void
@@ -141,7 +144,9 @@ export function ProviderLoginRow({
           {!state
             ? ''
             : state.signedIn
-              ? `${t('Signed in')}${state.detail && state.detail !== row.name && provider !== 'opencode' ? ` · ${state.detail}` : ''}${state.plan ? ` · ${planName(state.plan)}` : ''}`
+              ? state.apiKey
+                ? `${t('Signed in')} · ${t('API key')}`
+                : `${t('Signed in')}${state.detail && state.detail !== row.name && provider !== 'opencode' ? ` · ${state.detail}` : ''}${state.plan ? ` · ${planName(state.plan)}` : ''}`
               : t('Not signed in')}
           {state?.signedIn && state.upgradeUrl && (
             <Button
@@ -187,6 +192,19 @@ export function ProviderLoginRow({
         <LogIn size={14} />
         {signingIn ? t('Finish sign-in in your browser…') : state?.signedIn ? t('Switch login') : t('Login')}
       </Button>
+      {onApiKey && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={`size-7 flex-none ${state?.apiKey ? 'text-brand' : 'text-muted-foreground'}`}
+          aria-label={t('API key for {0}', { '0': row.name })}
+          title={state?.apiKey ? t('Change or remove the API key') : t('Use an API key')}
+          disabled={signingIn}
+          onClick={onApiKey}
+        >
+          <KeyRound size={14} />
+        </Button>
+      )}
       <SettingsField
         path={`providerBinaries.${provider}.${row.id === 'default' ? 'defaultAccountEnabled' : 'accounts'}`}
       >

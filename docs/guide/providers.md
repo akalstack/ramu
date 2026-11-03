@@ -24,7 +24,13 @@ Release and retirement dates come from public model lists, [models.dev](https://
 
 ## Accounts
 
-Codex and OpenCode can hold several accounts; a saved account applies to new threads. When a thread hits a limit, every enabled account is tried before another model. A provider or account turned off in **Settings → Providers** starts nothing: new threads, threads continuing after a stop or restart, and fallback switches all refuse it and say why.
+Every provider can hold several logins; the first enabled one in **Settings → Providers** applies to new threads. When a thread hits a limit, every enabled login is tried before another model. A provider or login turned off starts nothing: new threads, threads continuing after a stop or restart, and fallback switches all refuse it and say why.
+
+To pick a login yourself, use the account menu next to the model under the message box, or **Agent settings** in the phone's composer. It appears once a provider has more than one login turned on, and the thread moves over with its conversation. On the phone, **Settings → Providers** lists each login with how it signs in and turns logins on or off.
+
+### API keys
+
+Claude Code, Codex, Cursor and OpenCode logins can use an API key instead of a subscription: choose the key button on a login in **Settings → Providers** on the host. Usage is then billed to the key, and adding a login with a key gives a thread somewhere to continue when your plan's limit is reached. OpenCode asks which model provider the key is for. Codex keeps the key in its own login file; for the others the key stays in the host's OS credential store and reaches only that login's processes. **Remove key** returns the login to its subscription (for Codex, sign in again). Antigravity takes Gemini and Agent Platform keys in its own **Login** dialog.
 
 ## Environment variables
 

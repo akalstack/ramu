@@ -36,7 +36,7 @@ export const cursorAdapter = defineAdapter({
   },
   // The SDK takes an API key, or its own stored login; the CLI's `agent login` session does not carry over.
   async signInState(_binary, env) {
-    if (env.CURSOR_API_KEY) return { signedIn: true, detail: 'API key' }
+    if (env.CURSOR_API_KEY) return { signedIn: true, detail: 'API key', apiKey: true }
     try {
       const { Cursor, FileCredentialStore } = await loadCursorSdk()
       const status = await Cursor.auth.status(

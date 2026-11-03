@@ -913,6 +913,13 @@ export interface RamuMethods {
     accountId?: string,
     method?: AntigravitySignIn,
   ): Promise<void>
+  /** Signs one login in with an API key on the execution host; `key` null removes it so the subscription login is used. */
+  'providers.setApiKey'(
+    provider: ProviderStatus['provider'],
+    accountId: string,
+    variable: string,
+    key: string | null,
+  ): Promise<void>
   'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
   'providers.updates'(): Promise<ProviderStatus[]>
   'providers.dismissUpdate'(provider: ProviderStatus['provider'], binary: string, latestVersion: string): void

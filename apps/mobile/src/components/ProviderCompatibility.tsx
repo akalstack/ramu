@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Linking, View } from 'react-native'
+import { ActivityIndicator, Alert, View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
 import { compatibilitySummary } from '@ramu/shared/providers/compatibility'
 import { compatibilityPlan } from '@ramu/shared/providers/compatibilityPlan'
-import { planName, providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
+import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
 import { Button, Card, Divider, SectionLabel, T } from './ui'
 import { Hint } from './SettingRows'
+import { ProviderLogins } from './ProviderLogins'
+import { useHostSettings } from '../runtime/useHostSettings'
 
 /** Last result per host, so an unreachable host still shows what was known, marked as stale. */
 const lastKnown = new Map<string, ProviderStatus[]>()
@@ -28,6 +30,7 @@ export function ProviderCompatibility({ hostId }: { hostId: string }) {
   const generation = useRef(0)
   const runtime = useRef(store)
   runtime.current = store
+  const settings = useHostSettings(hostId)
 
   const load = useCallback(
     async (refresh: boolean) => {
@@ -108,23 +111,8 @@ export function ProviderCompatibility({ hostId }: { hostId: string }) {
                       {status.version ?? ''}
                     </T>
                   </View>
-                  {/* Each signed-in login's plan as the provider reports it now, so an upgrade shows here too. */}
-                  {Object.entries(status.signIn ?? {})
-                    .filter(([, login]) => login.signedIn && login.plan)
-                    .map(([accountId, login], index) => (
-                      <View key={accountId} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                        <T size={font.caption} tone="soft" style={{ flex: 1 }}>
-                          {`${accountId === 'default' ? t('Default account') : t('Account {0}', { '0': String(index + 1) })} · ${planName(login.plan!)}`}
-                        </T>
-                        {login.upgradeUrl ? (
-                          <Button
-                            kind="ghost"
-                            title={t('Upgrade plan')}
-                            onPress={() => void Linking.openURL(login.upgradeUrl!).catch(() => {})}
-                          />
-                        ) : null}
-                      </View>
-                    ))}
+                  {/* Each login with how it signs in now (plan or API key), and a switch to stop using it. */}
+                  <ProviderLogins status={status} settings={settings} disabled={!online} />
                   <T
                     size={font.caption}
                     tone={bad ? 'bad' : 'muted'}

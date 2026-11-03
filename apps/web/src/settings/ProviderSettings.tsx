@@ -19,6 +19,8 @@ import { ProviderModels } from './ProviderModels'
 import { useModelSets } from '../models/ModelSets'
 import { providerStatusQuery } from './providerStatusQuery'
 import { AntigravitySignIn } from './AntigravitySignIn'
+import { ApiKeySignIn } from './ApiKeySignIn'
+import { supportsApiKey } from '@ramu/shared/providers/apiKeys'
 import { antigravityKeyName } from '@ramu/shared/providers/environment'
 
 export function ProviderSettings({
@@ -40,6 +42,7 @@ export function ProviderSettings({
   const [signingIn, setSigningIn] = useState<AgentProvider | null>(null)
   // Antigravity offers several sign-in methods; the account being signed in and the key names the host keeps.
   const [antigravity, setAntigravity] = useState<{ accountId: string; keys: string[] } | null>(null)
+  const [apiKey, setApiKey] = useState<{ provider: AgentProvider; accountId: string; name: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const sequence = useRef(0),
@@ -274,6 +277,13 @@ export function ProviderSettings({
               updating={updating}
               onChange={(patch) => change(provider, patch)}
               onLogin={(accountId) => void login(provider, accountId)}
+              onApiKey={
+                canShare && supportsApiKey(provider)
+                  ? (accountId, name) => {
+                      if (allowed()) setApiKey({ provider, accountId, name })
+                    }
+                  : undefined
+              }
               onToggleAccount={(id, on) => toggleAccount(provider, id, on)}
               onReorder={(order) => arrange(provider, order)}
               onRename={(id, label) => rename(provider, id, label)}
@@ -312,6 +322,18 @@ export function ProviderSettings({
           )
         })}
       </fieldset>
+      {apiKey && (
+        <ApiKeySignIn
+          provider={apiKey.provider}
+          account={apiKey.name}
+          saved={!!statuses.find((item) => item.provider === apiKey.provider)?.signIn?.[apiKey.accountId]?.apiKey}
+          onClose={() => setApiKey(null)}
+          onSubmit={async (variable, key) => {
+            await invoke('providers.setApiKey', apiKey.provider, apiKey.accountId, variable, key)
+            void refresh()
+          }}
+        />
+      )}
       {antigravity && (
         <AntigravitySignIn
           hasKey={(method) => antigravity.keys.includes(antigravityKeyName(method))}

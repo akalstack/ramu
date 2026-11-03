@@ -5,6 +5,7 @@ import { claudeAdvisorModel } from '../../agent/advisor'
 import { providerBinaries } from '../preferences'
 import { agentSettings, relPath } from '../schemas'
 import type { RegisterHandlers } from '../types'
+import { MAX_API_KEY_LENGTH } from '@ramu/shared/providers/apiKeys'
 import {
   ANTIGRAVITY_SIGN_IN_METHODS,
   ENVIRONMENT_SCOPES,
@@ -34,6 +35,7 @@ const antigravitySignIn = z.object({
 export const registerProviderHandlers: RegisterHandlers = ({
   host,
   environment,
+  apiKeys,
   providers,
   usage,
   agents,
@@ -65,6 +67,19 @@ export const registerProviderHandlers: RegisterHandlers = ({
         })
       }
       return providers.signIn(provider, accountId, method && { ...method, apiKey: undefined })
+    },
+  },
+  // Keys are credentials: only the execution host enters them; other clients see that a login uses one.
+  'providers.setApiKey': {
+    args: z.tuple([
+      agentSettings.shape.provider,
+      z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/),
+      z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+      z.string().max(MAX_API_KEY_LENGTH).nullable(),
+    ]),
+    run: (provider: ProviderStatus['provider'], accountId: string, variable: string, key: string | null) => {
+      if (host.canAdministerIntegrations?.() !== true) throw new Error('Enter API keys on the host running Ramu')
+      return providers.setApiKey(provider, accountId, variable, key, apiKeys)
     },
   },
   'providers.loginCommand': {

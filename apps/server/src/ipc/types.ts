@@ -96,6 +96,7 @@ export interface HandlerContext extends Services {
   extraUsage: ExtraUsageReader
   accountUsage: AccountUsage
   environment: ProviderEnvironmentStore
+  apiKeys: import('../providers/apiKeyStore').ProviderApiKeyStore
   forgeAccounts: ForgeAccountStore
   bitbucket: BitbucketCredentials
   azure: AzureCredentials

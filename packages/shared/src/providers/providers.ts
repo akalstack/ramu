@@ -24,6 +24,8 @@ export interface ProviderSignIn {
   plan?: string
   /** Where the provider offers a bigger plan, when it says. */
   upgradeUrl?: string
+  /** The login uses an API key (billed per use) rather than a subscription. */
+  apiKey?: boolean
 }
 export type ProviderConfiguration = Partial<
   Record<

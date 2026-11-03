@@ -1,9 +1,9 @@
+import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { defineAdapter, npmLatest, runCli } from '../adapter'
 
-/** The email in the signed-in ChatGPT token's claims. Only that claim is read; the token is never kept or sent. */
 /** The login's email and ChatGPT plan, from the ID token Codex keeps; the plan is as of Codex's last token refresh. */
 function codexLogin(env: NodeJS.ProcessEnv): { email?: string; plan?: string } {
   try {
@@ -45,6 +45,7 @@ export const codexAdapter = defineAdapter({
       ? {
           signedIn: true,
           ...codexLogin(env),
+          ...(/api key/i.test(out) ? { apiKey: true } : {}),
           detail:
             out
               .trim()
@@ -54,6 +55,17 @@ export const codexAdapter = defineAdapter({
       : { signedIn: false }
   },
   loginArgs: ['login'],
+  // The app-server reads the key from Codex's own login file, so it is saved there; the key travels on stdin only.
+  storeApiKey: ({ binary, env, key }) =>
+    new Promise((resolve, reject) => {
+      const child = execFile(
+        binary,
+        key === null ? ['logout'] : ['login', '--with-api-key'],
+        { timeout: 20_000, maxBuffer: 64 * 1024, windowsHide: true, env },
+        (error) => (error ? reject(new Error('Codex did not accept the API key.')) : resolve()),
+      )
+      child.stdin?.end(key === null ? '' : `${key}\n`)
+    }),
   native: { blockingQuestions: true },
   // The ACP adapter takes no skill roots from the client, but Codex scans `.agents/skills` in the chat's folder.
   skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.agents', 'skills')] : [] }),

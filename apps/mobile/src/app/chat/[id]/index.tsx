@@ -581,7 +581,8 @@ export default function ChatScreen() {
           (m.effort || '') === (chat.effort || '') &&
           (m.settings?.access ?? chat.settings?.access) === chat.settings?.access &&
           (m.settings?.autoFallback ?? chat.settings?.autoFallback) === chat.settings?.autoFallback &&
-          (m.settings?.serviceTier ?? chat.settings?.serviceTier) === chat.settings?.serviceTier
+          (m.settings?.serviceTier ?? chat.settings?.serviceTier) === chat.settings?.serviceTier &&
+          (m.settings?.accountId ?? chat.settings?.accountId) === chat.settings?.accountId
           ? null
           : { chatId: chat.id, model: m },
       )

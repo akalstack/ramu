@@ -4864,8 +4864,22 @@ export const indonesian: Readonly<Record<string, string>> = {
   'From your photo library.': 'Dari pustaka foto kamu.',
   'Use the camera now.': 'Pakai kamera sekarang.',
   'Point the agent at a skill on the host.': 'Arahkan agen ke skill di host.',
-  'Permissions, provider fallback and speed for this thread.':
-    'Izin, fallback provider, dan kecepatan untuk thread ini.',
+  'Account, permissions, provider fallback and speed for this thread.':
+    'Akun, izin, fallback provider, dan kecepatan untuk thread ini.',
+  'Use an API key for {0}': 'Pakai API key untuk {0}',
+  'Usage is billed to the key instead of your plan. The key stays on this computer and is used only by this login.':
+    'Pemakaian ditagih ke key ini, bukan ke paket kamu. Key tetap di komputer ini dan hanya dipakai login ini.',
+  'Model provider': 'Provider model',
+  '{0} API key': 'API key {0}',
+  'Remove key': 'Hapus key',
+  'Save key': 'Simpan key',
+  'API key for {0}': 'API key untuk {0}',
+  'Change or remove the API key': 'Ganti atau hapus API key',
+  'Use an API key': 'Pakai API key',
+  '{0} account · {1}': 'Akun {0} · {1}',
+  'Manage logins…': 'Kelola login…',
+  'A usage limit still moves the thread to the next login by itself.':
+    'Batas pemakaian tetap memindahkan thread ke login berikutnya secara otomatis.',
   'Applies to this thread from its next step.': 'Berlaku untuk thread ini mulai langkah berikutnya.',
   Behavior: 'Perilaku',
   'Automatic provider fallback': 'Fallback provider otomatis',
@@ -5115,10 +5129,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Use my own service…': 'Gunakan layanan saya sendiri…',
   'Shared by {0}': 'Dibagikan oleh {0}',
   'It reaches this host through a Ramu Link share, so it can only view threads and answer requests.': 'Perangkat ini menjangkau host lewat berbagi Ramu Link, jadi hanya bisa melihat thread dan menjawab permintaan.',
-}
   'Delete Ramu Link account': 'Hapus akun Ramu Link',
   'Removes the account, every host it links and its shares. A Plus subscription is cancelled first.': 'Menghapus akun, semua host yang ditautkan, dan pembagiannya. Langganan Plus dibatalkan lebih dulu.',
   'Delete account…': 'Hapus akun…',
   'Delete your Ramu Link account?': 'Hapus akun Ramu Link Anda?',
   'Delete account': 'Hapus akun',
   'Every host linked to {0} is unlinked and devices lose their Ramu Link routes; paired devices keep their other routes. A Plus subscription is cancelled at once, without a refund for the rest of the period. This cannot be undone.': 'Semua host yang tertaut ke {0} dilepas dan perangkat kehilangan rute Ramu Link; perangkat yang dipasangkan tetap memakai rute lainnya. Langganan Plus langsung dibatalkan, tanpa pengembalian dana untuk sisa periode. Tindakan ini tidak bisa dibatalkan.',
+}

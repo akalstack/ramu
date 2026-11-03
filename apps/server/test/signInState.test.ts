@@ -29,6 +29,11 @@ it('reads Codex login status from either output stream', async () => {
     detail: 'ChatGPT',
   })
   expect(await signInState('codex', cli('echo "Not logged in" >&2; exit 1'), codexHome())).toEqual({ signedIn: false })
+  expect(await signInState('codex', cli('echo "Logged in using an API key - sk-proj-***abc"'), codexHome())).toEqual({
+    signedIn: true,
+    apiKey: true,
+    detail: 'an API key - sk-proj-***abc',
+  })
 })
 it('names a Codex login by the email in its ChatGPT token, and never returns the token', async () => {
   const claims = Buffer.from(JSON.stringify({ email: 'me@example.com' })).toString('base64url')
@@ -49,10 +54,15 @@ it('reads Claude, Cursor and OpenCode login state', async () => {
     ),
   ).toEqual({ signedIn: true, detail: 'oauth_token', email: 'me@example.com' })
   expect(await signInState('claude-code', cli('echo \'{"loggedIn":false}\''), process.env)).toEqual({ signedIn: false })
+  // A key in the environment reads as a key, not a subscription.
+  expect(
+    await signInState('claude-code', cli('echo \'{"loggedIn":true,"authMethod":"api_key"}\''), process.env),
+  ).toEqual({ signedIn: true, detail: 'api_key', apiKey: true })
   // Cursor chats run on its SDK, which takes an API key (or its own stored login), not the CLI's session.
   expect(await signInState('cursor', cli('exit 1'), { ...process.env, CURSOR_API_KEY: 'key' })).toEqual({
     signedIn: true,
     detail: 'API key',
+    apiKey: true,
   })
   expect(
     await signInState(

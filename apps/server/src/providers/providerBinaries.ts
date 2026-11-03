@@ -50,6 +50,14 @@ let customEnvironment: ProviderEnvironmentValues = {}
 export function configureProviderEnvironment(value: ProviderEnvironmentValues) {
   customEnvironment = value
 }
+/** API keys saved for single logins: provider → account → the variable and the key. */
+export type ProviderApiKeys = Partial<Record<AgentProvider, Record<string, { variable: string; value: string }>>>
+let apiKeys: ProviderApiKeys = {}
+export function configureProviderApiKeys(value: ProviderApiKeys) {
+  apiKeys = value
+}
+/** Whether this login runs on a key Ramu saved for it. */
+export const providerApiKey = (provider: AgentProvider, accountId: string) => apiKeys[provider]?.[accountId]
 const expand = (path: string) => (path.startsWith('~/') ? join(homedir(), path.slice(2)) : path)
 export function findExecutable(command: string): string | null {
   const candidates = isAbsolute(command)
@@ -110,6 +118,9 @@ export function providerEnvironment(
   // Variables set in Ramu win over the inherited shell; an account's own config folders still win over them.
   for (const [key, value] of Object.entries(scopedEnvironment(customEnvironment, provider)))
     if (!(key in accountEnv)) env[key] = value
+  // A key saved for this login wins over the same variable set for the whole provider.
+  const saved = apiKeys[provider]?.[accountId]
+  if (saved) env[saved.variable] = saved.value
   return (
     providerAdapter(provider).extendEnvironment?.(env, {
       overrides,

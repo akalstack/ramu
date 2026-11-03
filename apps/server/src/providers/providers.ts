@@ -21,9 +21,12 @@ import {
   providerAccountEnv,
   providerAccountHome,
   providerRuntimeHome,
+  providerApiKey,
   providerBinary,
   providerEnvironment,
 } from './providerBinaries'
+import type { ProviderApiKeyStore } from './apiKeyStore'
+import { supportsApiKey } from '@ramu/shared/providers/apiKeys'
 
 type Release = { version: string; checkedAt: string; downloadUrl?: string }
 type Cache = Partial<Record<AgentProvider, Release>>
@@ -215,6 +218,31 @@ export class ProviderService {
     })
     this.statusCache = undefined
   }
+  /**
+   * Signs one login in with an API key, or with `key` null removes it so the login falls back to its subscription.
+   * CLIs that keep keys in their own login file get it there; for the rest Ramu keeps it in the host credential store.
+   */
+  async setApiKey(
+    provider: AgentProvider,
+    accountId: string,
+    variable: string,
+    key: string | null,
+    keys: ProviderApiKeyStore,
+  ): Promise<void> {
+    if (!supportsApiKey(provider)) throw new Error('This provider signs in another way')
+    const config = this.preferences().providerBinaries
+    if (accountId !== 'default' && !config?.[provider]?.accounts?.some((account) => account.id === accountId))
+      throw new Error('The selected provider account no longer exists')
+    const adapter = providerAdapter(provider)
+    this.statusCache = undefined
+    if (adapter.storeApiKey) {
+      const binary = providerBinary(provider, config)
+      if (!findExecutable(binary)) throw new Error('Install the provider first.')
+      await adapter.storeApiKey({ binary, env: providerEnvironment(provider, config, accountId), key })
+    } else await keys.set(provider, accountId, variable, key)
+    this.emails.delete(`${provider}:${accountId}`)
+    this.statusCache = undefined
+  }
   /** Shell-free updater, shared by manual actions and the detached service timer. */
   update(provider: AgentProvider): Promise<ProviderStatus> {
     const pending = this.updating.get(provider)
@@ -378,7 +406,10 @@ export class ProviderService {
                 const state = await signInState(provider, binary, providerEnvironment(provider, config, accountId))
                 // Antigravity says its plan only when a session opens; the last one it named stands in.
                 const acp = provider === 'antigravity' && state.signedIn ? acpPlan(provider, accountId) : undefined
-                signIn![accountId] = acp && !state.plan ? { ...state, ...acp } : state
+                signIn![accountId] = {
+                  ...(acp && !state.plan ? { ...state, ...acp } : state),
+                  ...(state.signedIn && providerApiKey(provider, accountId) ? { apiKey: true } : {}),
+                }
                 this.notePlan(provider, accountId, signIn![accountId]!.plan)
               } catch {
                 signIn![accountId] = { signedIn: false }

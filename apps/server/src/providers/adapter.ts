@@ -121,6 +121,11 @@ export interface ProviderAdapter {
     /** The sign-in method the person chose, for runtimes that offer more than one. */
     method?: AntigravitySignIn
   }): Promise<void>
+  /**
+   * Saves an API key in the CLI's own credential store, for CLIs that read it from there rather than the environment;
+   * `key` null signs that login out. Without this hook Ramu keeps the key and passes it in the environment.
+   */
+  storeApiKey?(ctx: { binary: string; env: NodeJS.ProcessEnv; key: string | null }): Promise<void>
   readonly native?: NativeFeatures
   /** Loads the managed-skill export through the provider's own skills. `cwd`, when known, is the chat's working directory for providers that scan one. */
   skillsLaunch?(exportDir: string, cwd?: string): SkillsLaunch

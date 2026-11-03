@@ -72,6 +72,7 @@ const ACCESS_MODES = [
 import { ProviderIcon } from './Logos'
 import { Glass } from './Glass'
 import { AutoResumeRows, LimitTray } from './LimitTray'
+import { AccountRows } from './AccountRows'
 import { canEditVerify } from '../runtime/goalVerify'
 import { isUserPaused } from '@ramu/shared/chat/goalHold'
 import { GoalVerifySheet } from './GoalVerifySheet'
@@ -1344,7 +1345,7 @@ export function Composer({
           <SheetOption
             icon={SlidersHorizontal}
             title={say('Agent settings')}
-            help={say('Permissions, provider fallback and speed for this thread.')}
+            help={say('Account, permissions, provider fallback and speed for this thread.')}
             onPress={() => afterMenu(() => setMenu('settings'))}
           />
         </SheetGroup>
@@ -1374,6 +1375,22 @@ export function Composer({
         </SheetGroup>
       </Sheet>
       <Sheet open={menu === 'settings'} onClose={() => setMenu(null)} title={say('Agent settings')}>
+        <AccountRows
+          computerId={pc}
+          provider={model.provider}
+          accountId={model.settings?.accountId}
+          onPick={(accountId) =>
+            onModel({
+              ...model,
+              settings: {
+                access: model.settings?.access ?? 'auto',
+                autoFallback: model.settings?.autoFallback ?? true,
+                serviceTier: model.settings?.serviceTier,
+                accountId,
+              },
+            })
+          }
+        />
         <SheetGroup title={say('Permissions')} footer={say('Applies to this thread from its next step.')}>
           {ACCESS_MODES.map((mode) => (
             <SheetOption

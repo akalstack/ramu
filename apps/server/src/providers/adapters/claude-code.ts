@@ -43,6 +43,7 @@ export const claudeCodeAdapter = defineAdapter({
         ? {
             signedIn: true,
             ...(typeof status.authMethod === 'string' ? { detail: status.authMethod } : {}),
+            ...(status.authMethod === 'api_key' ? { apiKey: true } : {}),
             ...(typeof status.email === 'string' && status.email ? { email: status.email } : {}),
             ...(typeof status.subscriptionType === 'string' && status.subscriptionType
               ? { plan: status.subscriptionType }

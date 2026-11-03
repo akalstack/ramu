@@ -16,6 +16,7 @@ import { runtimeVersion } from '../build'
 import { configureProviderAccounts, providerEnvironment } from '../providers/providerBinaries'
 import { UsageService } from '../providers/usage'
 import { ProviderEnvironmentStore } from '../providers/environmentStore'
+import { ProviderApiKeyStore } from '../providers/apiKeyStore'
 import { ForgeAccountStore } from '../workspace/forgeAccounts'
 import { BitbucketCredentials, configureBitbucketCredentials } from '../workspace/forge/bitbucketCredentials'
 import { AzureCredentials, configureAzureCredentials } from '../workspace/forge/azureCredentials'
@@ -43,6 +44,11 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
   )
   // Loaded before threads resume; a locked credential store is reported in Settings and retried there.
   void environment.load().catch(() => {})
+  const apiKeys = new ProviderApiKeyStore(
+    (key, fallback) => workspace.getAppState(key, fallback),
+    (key, value) => workspace.setAppState(key, value),
+  )
+  void apiKeys.load()
   const forgeAccounts = new ForgeAccountStore(
     (key, fallback) => workspace.getAppState(key, fallback),
     (key, value) => workspace.setAppState(key, value),
@@ -236,6 +242,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     extraUsage,
     accountUsage,
     environment,
+    apiKeys,
     forgeAccounts,
     bitbucket,
     azure,

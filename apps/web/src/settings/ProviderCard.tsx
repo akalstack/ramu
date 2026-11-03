@@ -47,6 +47,7 @@ export function ProviderCard({
   updating,
   onChange,
   onLogin,
+  onApiKey,
   onToggleAccount,
   onReorder,
   onRename,
@@ -76,6 +77,8 @@ export function ProviderCard({
   updating: AgentProvider | null
   onChange: (patch: Partial<ProviderPrefs>) => void
   onLogin: (accountId: string) => void
+  /** API-key sign-in for one login, with the name it is shown by; absent hides the control. */
+  onApiKey?: (accountId: string, name: string) => void
   onToggleAccount: (id: string, enabled: boolean) => void
   /** Account IDs in the new priority order; the first is used first. */
   onReorder: (ids: string[]) => void
@@ -173,24 +176,25 @@ export function ProviderCard({
                     const email = status.signIn?.[id]?.email,
                       shown = accountDisplayName(config, provider, id, email),
                       account = preferences?.accounts?.find((entry) => entry.id === id)
+                    const name =
+                      shown.fallback === 'default'
+                        ? t(
+                            accounts
+                              ? provider === 'antigravity'
+                                ? 'Default account'
+                                : 'Default CLI account'
+                              : 'CLI login',
+                          )
+                        : shown.fallback === 'numbered'
+                          ? t('Account {0}', { '0': shown.number })
+                          : shown.name
                     return (
                       <ProviderLoginRow
                         key={id}
                         provider={provider}
                         row={{
                           id,
-                          name:
-                            shown.fallback === 'default'
-                              ? t(
-                                  accounts
-                                    ? provider === 'antigravity'
-                                      ? 'Default account'
-                                      : 'Default CLI account'
-                                    : 'CLI login',
-                                )
-                              : shown.fallback === 'numbered'
-                                ? t('Account {0}', { '0': shown.number })
-                                : shown.name,
+                          name,
                           label: account?.name,
                           enabled: account ? account.enabled : preferences?.defaultAccountEnabled,
                         }}
@@ -201,6 +205,7 @@ export function ProviderCard({
                         sortable={order.length > 1}
                         onlyOn={onCount <= 1 && on(id)}
                         onLogin={() => onLogin(id)}
+                        onApiKey={onApiKey ? () => onApiKey(id, name) : undefined}
                         onToggleAccount={(on) => onToggleAccount(id, on)}
                         onRename={(name) => onRename(id, name)}
                         onRemove={() => onRemove(id)}
