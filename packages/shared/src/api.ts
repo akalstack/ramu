@@ -608,6 +608,10 @@ export interface RamuMethods {
   'network.revoke'(deviceId: string): NetworkStatus
   /** Days an unused device stays paired (1 to 3650), `never`, or null for the server default. Host-only, like the rest of `network.*`. */
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus
+  /** One device's pairing lifetime: days, never, or back to this host's default. Host only. */
+  'network.setDeviceExpiry'(deviceId: string, days: number | 'never' | 'default'): NetworkStatus
+  /** A paired device saying what it runs on, so this host shows the right icon and OS for it. */
+  'device.describe'(os: import('./types').DeviceOs): void
   /** Hosts only: the most access threads that paired host starts here may have. */
   'network.setHostAccess'(deviceId: string, access: 'edits' | 'auto' | 'full'): NetworkStatus
   /** Other hosts this host's agents may start threads on. */

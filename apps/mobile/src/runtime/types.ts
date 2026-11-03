@@ -10,6 +10,8 @@ export interface Computer {
   name: string
   address: string
   os: 'macos' | 'linux' | 'windows'
+  /** What the host runs on, as it reports itself: its icon and the line under its name. Older hosts omit it. */
+  system?: import('@ramu/shared/types').DeviceOs
   /** Still carrying the placeholder label; the computer's own hostname replaces it on first contact. */
   auto?: boolean
   status: ComputerStatus

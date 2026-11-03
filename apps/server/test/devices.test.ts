@@ -318,3 +318,31 @@ it('refuses to turn a view-only code into a host pairing, and leaves the code us
   expect(devices.redeem(code, 'Sneaky', Date.now(), 'host')).toBeNull()
   expect(devices.redeem(code, 'Reviewer')?.device.role).toBe('viewer')
 })
+
+it('keeps one device paired for its own lifetime, works the expiry out from its last use, and can go back', () => {
+  const { devices } = store()
+  const paired = devices.redeem(devices.createCode().code, 'iPhone')!
+  const now = Date.now()
+  devices.authenticate(`Bearer ${paired.token}`, now)
+  const listed = () => devices.list().find((device) => device.id === paired.device.id)!
+  devices.setDeviceLifetime(paired.device.id, 7)
+  expect(listed()).toMatchObject({ lifetimeDays: 7 })
+  expect(listed().expiresAt! - now).toBeLessThanOrEqual(7 * 86_400_000)
+  devices.setDeviceLifetime(paired.device.id, 'never')
+  expect(listed().expiresAt).toBeNull()
+  // Using it keeps its own choice instead of the host's default.
+  devices.authenticate(`Bearer ${paired.token}`, now + 10 * 60_000)
+  expect(listed().expiresAt).toBeNull()
+  devices.setDeviceLifetime(paired.device.id, undefined)
+  expect(listed().lifetimeDays).toBeUndefined()
+  expect(listed().expiresAt).not.toBeNull()
+  expect(() => devices.setDeviceLifetime(paired.device.id, 0)).toThrow(/1 and 3650/)
+  expect(() => devices.setDeviceLifetime('gone', 7)).toThrow(/no longer paired/)
+})
+
+it('remembers what a device says it runs on', () => {
+  const { devices } = store()
+  const paired = devices.redeem(devices.createCode().code, 'Tablet')!
+  devices.describe(paired.device.id, { os: 'android', form: 'tablet', version: '16', model: 'Pixel Tablet' })
+  expect(devices.list()[0]!.os).toEqual({ os: 'android', form: 'tablet', version: '16', model: 'Pixel Tablet' })
+})

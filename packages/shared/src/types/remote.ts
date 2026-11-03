@@ -18,6 +18,8 @@ export interface BackgroundStatus {
   listening?: string
   /** Whether that listener serves HTTPS. */
   tls?: boolean
+  /** What this host runs on. Older hosts omit it. */
+  os?: DeviceOs
 }
 
 /** What asking a host to update Ramu did. `built` means a supervisor-less host needs its service restarted by hand. */
@@ -30,6 +32,19 @@ export interface HostUpdateResult {
 }
 
 /** A device that has paired with this computer's server and holds its own access token. */
+/** What a device or host runs on, as it reports itself. Drives the icon and the line under its name. */
+export interface DeviceOs {
+  os: 'ios' | 'ipados' | 'android' | 'macos' | 'linux' | 'windows' | 'unknown'
+  form: 'phone' | 'tablet' | 'computer' | 'server'
+  /** OS version, such as `26.1` or `24.04.1 LTS`. */
+  version?: string
+  /** Linux only: the distribution's id from os-release (`ubuntu`, `debian`, `fedora`…) and its own name. */
+  distro?: string
+  distroName?: string
+  /** The hardware, when the device names it (`iPhone 17 Pro`, `Pixel 10`). */
+  model?: string
+}
+
 export interface NetworkDevice {
   id: string
   name: string
@@ -48,6 +63,10 @@ export interface NetworkDevice {
   maxAccess?: 'edits' | 'auto' | 'full'
   /** The agent pairing that follows this device's Agents permission. Shown with the device, not as one of its own. */
   agentHost?: { id: string; maxAccess: 'edits' | 'auto' | 'full' }
+  /** This device's own pairing lifetime, when it differs from the host's default. */
+  lifetimeDays?: number | 'never'
+  /** What the device runs on, once it described itself. */
+  os?: DeviceOs
 }
 /** An address this computer has, which another device may reach it on (LAN, VPN, ...). */
 export interface NetworkAddress {

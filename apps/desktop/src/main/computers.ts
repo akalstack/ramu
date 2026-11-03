@@ -2,7 +2,7 @@
 // All computers share one shell; this module owns the connections, their health and their activity counts.
 import type { RuntimeEndpoint } from '@ramu/contracts'
 import type { RuntimeResult } from '@ramu/client-runtime'
-import type { Computer, ComputerStatus, Computers } from '@ramu/shared/types'
+import type { Computer, ComputerStatus, Computers, DeviceOs } from '@ramu/shared/types'
 import type { PushArgs } from '@ramu/shared/pushChannels'
 import type { ComputerUpdate, RemoteServers, SavedServer } from './remoteServers'
 import type { SshComputers } from './sshComputers'
@@ -45,6 +45,8 @@ export interface ComputerDeps {
   renew(url: string, token: string): Promise<{ token: string } | null>
   /** Computers reached over SSH keep a tunnel; the registry asks for it before connecting. */
   ssh: Pick<SshComputers, 'ensure' | 'connect' | 'close' | 'closeAll'>
+  /** What this computer runs on, told to each host it connects to so that host shows it with the right icon. */
+  thisDevice?: () => DeviceOs | undefined
   /** An event from a computer, for its window and its notifier. */
   deliver(id: string, ...args: PushArgs): void
   /** The list, a status or a count changed. */
@@ -167,6 +169,9 @@ export class ComputerRegistry {
           live.retryAt = payload.retryAt
           if (payload.connected) {
             void this.deps.follow(endpoint, this.followed.get(id) ?? []).catch(() => {})
+            const os = this.deps.thisDevice?.()
+            // An older host without the method refuses it; it then shows this computer without an OS.
+            if (os) void this.deps.invoke(endpoint, 'device.describe', [os]).catch(() => {})
             this.routeWork('learn', id, 3_600_000, (host) => this.learnRoutes(host))
             this.routeWork('direct', id, 60_000, (host) => this.preferDirect(host))
             this.countSoon(id)

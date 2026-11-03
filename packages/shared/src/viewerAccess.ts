@@ -1,6 +1,8 @@
 // Explicit allowlist: a new method never acquires viewer access by its spelling alone.
 const viewerMethods = new Set([
   'background.status',
+  // Saying what it runs on changes nothing on the host but the icon shown for it.
+  'device.describe',
   'agent.all',
   'agent.list',
   'agent.get',

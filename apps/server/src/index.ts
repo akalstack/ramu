@@ -68,6 +68,7 @@ import { loadConfig } from './config'
 import { DeviceStore, isHostAccess, validLifetime, type DeviceInfo } from './remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
 import { PermissionRequests } from './remote/permissionRequests'
+import { deviceOsSchema, readHostOs } from './remote/hostOs'
 import {
   DEVICE_PERMISSIONS,
   PERMISSION_DURATIONS,
@@ -148,6 +149,8 @@ const pairingRequests = new PairingRequests({
   linkKey: () => link.hostKey(),
 })
 // Only the desktop apps on this machine answer permission requests, like pairing; paired devices never see them.
+/** What this host runs on; it does not change while the service runs. */
+const hostOs = readHostOs()
 const permissionRequests = new PermissionRequests(Date.now, (requests) => {
   const message = `data: ${JSON.stringify({ channel: 'permission:requests', payload: { requests } })}\n\n`
   for (const client of hostClients) if (!client.destroyed) writeEvent(client, message)
@@ -809,6 +812,10 @@ async function performInvoke(
     value = { code: devices.agentPairingCode(device.id) }
     // The earlier agent pairing it replaced must not keep an open connection.
     dropRevoked()
+  } else if (method === 'device.describe') {
+    // This computer itself needs no description; a paired device tells what it runs on, bounded and checked.
+    if (device) devices.describe(device.id, deviceOsSchema.parse(args?.[0]))
+    value = {}
   } else if (method === 'device.requestPermission') {
     if (!device) throw new Error('This computer already has every permission.')
     if (!isDevicePermission(args?.[0])) throw new Error('Invalid permission')
@@ -905,6 +912,7 @@ async function performInvoke(
       protocol: PROTOCOL_VERSION,
       capabilities: capabilities(),
       access: accessOf(device),
+      os: hostOs,
       ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}),
     }
   else if (method.startsWith('network.')) {
@@ -1756,6 +1764,13 @@ async function networkMethod(method: string, args: unknown[]) {
   if (method === 'network.offer') {
     if (typeof args[0] !== 'string') throw new Error('Invalid offer')
     return devices.offerStatus(args[0])
+  }
+  if (method === 'network.setDeviceExpiry') {
+    const [deviceId, days] = args
+    if (typeof deviceId !== 'string') throw new Error('Invalid device')
+    if (days !== 'default' && !validLifetime(days)) throw new Error('Choose 1 to 3650 days, or never')
+    devices.setDeviceLifetime(deviceId, days === 'default' ? undefined : (days as number | 'never'))
+    return networkStatus()
   }
   if (method === 'network.setDeviceLifetime') {
     const days = args[0]

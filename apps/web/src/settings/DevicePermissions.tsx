@@ -33,7 +33,8 @@ export type PermissionInvoke = (
     | 'network.setDevicePermission'
     | 'network.decidePermission'
     | 'network.setDefaultPermissions'
-    | 'network.setHostAccess',
+    | 'network.setHostAccess'
+    | 'network.setDeviceExpiry',
   ...args: unknown[]
 ) => Promise<void>
 
@@ -166,12 +167,9 @@ export function DevicePermissionList({ device, invoke }: { device: NetworkDevice
   if (device.role === 'viewer') return null
   return (
     <div className="mt-2 flex flex-col gap-2 border-t border-border pt-3">
-      {DEVICE_PERMISSIONS.map((permission) =>
-        // Phones have no agents to send, so Agents appears once a computer has asked and been answered.
-        permission === 'agents' && !device.permissions?.agents && !device.blocked?.includes(permission) ? null : (
-          <PermissionLine key={permission} device={device} permission={permission} invoke={invoke} />
-        ),
-      )}
+      {DEVICE_PERMISSIONS.map((permission) => (
+        <PermissionLine key={permission} device={device} permission={permission} invoke={invoke} />
+      ))}
       {device.agentHost && (
         <div className={SETTINGS_CARD_LINE}>
           <span className="min-w-0 flex-1 truncate text-control">{t('Most access for its threads')}</span>

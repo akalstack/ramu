@@ -28,6 +28,7 @@ import { AppState, NativeModules } from 'react-native'
 import { hostFetch as expoFetch, pinLinkKey } from './link'
 import { shareRows } from './shareRows'
 import * as Device from 'expo-device'
+import { thisDeviceOs } from './deviceOs'
 import Constants from 'expo-constants'
 import type { PushEvents, RamuMethods, ReviewAddressResult } from '@ramu/shared/api'
 import type { PushArgs } from '@ramu/shared/pushChannels'
@@ -1234,11 +1235,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 ...c,
                 access: info.access ?? c.access,
                 os: info.platform === 'darwin' ? 'macos' : info.platform === 'win32' ? 'windows' : 'linux',
+                ...(info.os ? { system: info.os } : {}),
                 ...(c.auto && info.hostname ? { name: info.hostname, auto: false } : {}),
               }
             : c,
         ),
       }))
+      // The host shows this phone with its own icon and OS; an older host without the method just refuses it.
+      void connection.client.invoke('device.describe', thisDeviceOs()).catch(() => {})
       // Rotate the device token about monthly on hosts that support it; a failure only retries next connect.
       if (info.capabilities?.includes('renewal'))
         void readRenewedAt(computer.id)

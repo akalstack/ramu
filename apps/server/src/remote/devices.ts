@@ -42,6 +42,10 @@ export interface DeviceInfo {
   kind?: 'host'
   /** The most access a thread a host pairing starts may have here, whatever it asks for. Hosts only; default edits. */
   maxAccess?: HostAccess
+  /** How long this device stays paired without use, overriding the host's default; absent uses the default. */
+  lifetimeDays?: number | 'never'
+  /** The device's own OS, as it described itself when it connected. Absent until it does. */
+  os?: import('@ramu/shared/types').DeviceOs
   /** The agent pairing that follows this device's Agents permission. */
   agentHost?: { id: string; maxAccess: HostAccess }
 }
@@ -149,6 +153,38 @@ export class DeviceStore {
   }
 
   /** How long an unused device stays paired: the host's saved choice, else the server default. */
+  /** A device's own lifetime when one was chosen for it, else the host's. */
+  private lifetimeFor(file: DeviceFile, record: Pick<DeviceInfo, 'lifetimeDays'>): number | null {
+    if (record.lifetimeDays === undefined) return this.lifetimeOf(file)
+    return record.lifetimeDays === 'never' ? null : record.lifetimeDays * 86_400_000
+  }
+
+  /**
+   * Keeps one device paired for `days` without use, or forever, or by the host's default (`undefined`). The expiry is
+   * worked out again from the device's last use, so shortening it can end a device that has been away longer.
+   */
+  setDeviceLifetime(id: string, days: number | 'never' | undefined): void {
+    if (days !== undefined && days !== 'never' && !(Number.isInteger(days) && days >= 1 && days <= 3650))
+      throw new Error('Choose between 1 and 3650 days, or never.')
+    const file = this.read()
+    const record = file.devices.find((entry) => entry.id === id)
+    if (!record) throw new Error('That device is no longer paired')
+    if (days === undefined) delete record.lifetimeDays
+    else record.lifetimeDays = days
+    const lifetime = this.lifetimeFor(file, record)
+    record.expiresAt = lifetime === null ? null : (record.lastSeenAt ?? record.createdAt) + lifetime
+    this.write(file)
+  }
+
+  /** What a device says it runs on; written only when it changed, since devices describe themselves on every connect. */
+  describe(id: string, os: import('@ramu/shared/types').DeviceOs): void {
+    const file = this.read()
+    const record = file.devices.find((entry) => entry.id === id)
+    if (!record || JSON.stringify(record.os) === JSON.stringify(os)) return
+    record.os = os
+    this.write(file)
+  }
+
   private lifetimeOf(file: DeviceFile): number | null {
     if (file.lifetimeDays === undefined) return this.lifetimeMs
     return file.lifetimeDays === 'never' ? null : file.lifetimeDays * 86_400_000
@@ -469,7 +505,7 @@ export class DeviceStore {
           (d.previousTokenHash === hash && (d.previousUntil ?? 0) > now),
       )
     if (!record) return null
-    const lifetime = this.lifetimeOf(file)
+    const lifetime = this.lifetimeFor(file, record)
     // The first request that carries the token proves the device saved it.
     const claimed = record.unclaimed === true
     if (claimed) delete record.unclaimed
@@ -507,7 +543,7 @@ export class DeviceStore {
     const file = this.read()
     const record = file.devices.find((d) => d.tokenHash === hash)
     if (!record) return null
-    const lifetime = this.lifetimeOf(file)
+    const lifetime = this.lifetimeFor(file, record)
     const expiry = record.expiresAt === undefined ? null : record.expiresAt
     if (expiry !== null && expiry <= now) return null
     const token = randomBytes(32).toString('hex')
@@ -520,9 +556,9 @@ export class DeviceStore {
 
   list(now = Date.now()): DeviceInfo[] {
     const file = this.dropOrphans(this.read(), now)
-    const lifetime = this.lifetimeOf(file)
-    return file.devices.map((record) =>
-      strip({
+    return file.devices.map((record) => {
+      const lifetime = this.lifetimeFor(file, record)
+      return strip({
         ...record,
         expiresAt:
           record.expiresAt === undefined
@@ -530,8 +566,8 @@ export class DeviceStore {
               ? null
               : (record.lastSeenAt ?? record.createdAt) + lifetime
             : record.expiresAt,
-      }),
-    )
+      })
+    })
   }
   /** Removes grants nobody ever used, so a lost pairing response does not leave a credential no one holds. */
   private dropOrphans(file: DeviceFile, now: number): DeviceFile {
@@ -604,8 +640,12 @@ const strip = ({
   blocked,
   kind,
   maxAccess,
+  lifetimeDays,
+  os,
 }: DeviceRecord): DeviceInfo => ({
   ...(permissions ? { permissions } : {}),
+  ...(lifetimeDays !== undefined ? { lifetimeDays } : {}),
+  ...(os ? { os } : {}),
   ...(blocked?.length ? { blocked } : {}),
   ...(kind === 'host' ? { kind, maxAccess: maxAccess ?? 'edits' } : {}),
   id,

@@ -4,7 +4,9 @@ import { HostUpdates } from '../components/HostUpdates'
 import { goBackOrHome } from '../runtime/navigation'
 import { Alert, Pressable, Switch, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Check, Laptop, Plus, Server } from 'lucide-react-native'
+import { Check, Plus } from 'lucide-react-native'
+import { osLine } from '@ramu/shared/deviceOs'
+import { DeviceIcon } from '../components/DeviceIcon'
 import { font, radius, space, useTheme } from '../theme'
 import { counts, useStore } from '../runtime/store'
 import { useT, ago, useSay } from '../i18n'
@@ -51,7 +53,6 @@ export default function Computers() {
         <Card>
           {computers.map((pc, i) => {
             const n = counts(chats, pc.id)
-            const I = pc.os === 'linux' ? Server : Laptop
             return (
               <View key={pc.id}>
                 {i ? <Divider inset={60} /> : null}
@@ -72,7 +73,7 @@ export default function Computers() {
                       justifyContent: 'center',
                     }}
                   >
-                    <I size={17} color={c.soft} strokeWidth={1.8} />
+                    <DeviceIcon os={pc.system} name={pc.name} />
                   </View>
                   <View style={{ flex: 1, gap: 2 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -90,8 +91,11 @@ export default function Computers() {
                             : pc.lastSeen
                               ? `${t[pc.status]} · ${ago(pc.lastSeen)}`
                               : t[pc.status],
+                          osLine(pc.system),
                           pc.address.replace(/^https?:\/\//, ''),
-                        ].join(' · ')}
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </T>
                     </View>
                     {n.running || n.waiting ? (

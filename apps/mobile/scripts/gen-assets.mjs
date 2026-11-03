@@ -1,5 +1,5 @@
 // Copies the desktop's brand and provider SVGs into a TS module for react-native-svg.
-// Run after changing assets/wordmark.svg or apps/web/src/assets/providers/*.svg.
+// Run after changing assets/wordmark.svg, apps/web/src/assets/providers/*.svg or apps/web/src/assets/os/*.svg.
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const root = new URL('../../../', import.meta.url)
@@ -34,6 +34,12 @@ const svgs = {
   opencode: clean(read('apps/web/src/assets/providers/opencode.svg')),
   cursor: clean(read('apps/web/src/assets/providers/cursor.svg')),
   antigravity: clean(read('apps/web/src/assets/providers/antigravity.svg')),
+  // Operating system marks shared with the desktop's device icons (Simple Icons, CC0).
+  ...Object.fromEntries(
+    ['apple', 'android', 'ubuntu', 'debian', 'fedora', 'arch', 'mint', 'redhat', 'raspberrypi', 'linux', 'windows'].map(
+      (mark) => [`os:${mark}`, clean(read(`apps/web/src/assets/os/${mark}.svg`))],
+    ),
+  ),
 }
 
 const body = Object.entries(svgs)

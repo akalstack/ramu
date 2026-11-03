@@ -82,7 +82,7 @@ import { NearbyBrowser } from './discovery'
 import { RemoteServers } from './remoteServers'
 import { LinkAccount } from './linkAccount'
 import { isHostId, linkAddress, linkHostOf } from '@ramu/shared/link/protocol'
-import type { NetworkStatus } from '@ramu/shared/types'
+import type { DeviceOs, NetworkStatus } from '@ramu/shared/types'
 import { ComputerBroadcaster } from './computerBroadcast'
 import { ComputerRegistry, LOCAL } from './computers'
 import { ScreenSharing } from './screenSharing'
@@ -606,7 +606,13 @@ async function main() {
     }
     throw new Error(`Unknown method ${method}`)
   }
+  // This computer's own OS, from its own service, for the hosts it connects to as a device.
+  let thisDevice: DeviceOs | undefined
+  void runtimeInvoke(runtime, 'background.status')
+    .then((status) => (thisDevice = status.os))
+    .catch(() => {})
   const computers = new ComputerRegistry({
+    thisDevice: () => thisDevice,
     servers,
     ssh,
     deviceName: hostname(),

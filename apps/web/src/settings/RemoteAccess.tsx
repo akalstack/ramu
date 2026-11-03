@@ -20,16 +20,10 @@ import {
   ChevronDown,
   Copy,
   Globe,
-  Laptop,
   Link2,
-  Monitor,
-  Network,
   Plus,
   Radar,
-  Server,
   Settings2,
-  Smartphone,
-  Tablet,
   Terminal,
 } from 'lucide-react'
 import { useContext, useCallback, useEffect, useRef, useState } from 'react'
@@ -37,6 +31,7 @@ import type {
   AgentHostSummary,
   Computer,
   Computers as ComputerList,
+  DeviceOs,
   NetworkDevice,
   NetworkStatus,
   PairingOffer,
@@ -46,7 +41,7 @@ import { RowButton } from '@/components/row-button'
 import { Dialog as ConfirmDialog, Dropdown, timeAgo } from '../Menu'
 import { learnedRoutes } from '@ramu/shared/hostProof'
 import { hostOfUrl, networkName, VIRTUAL_INTERFACE } from '@ramu/shared/networkLabel'
-import { copyText, invoke, ramu } from '../ipc'
+import { copyText, invoke, invokeUncachedOn, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
 import { t, useLanguage } from '../i18n'
@@ -59,6 +54,8 @@ import { LinkSettings, TunnelSettings } from './ReachThisHost'
 import { AccountHosts } from './AccountHosts'
 import { HostUpdateLine, UpdateAllHosts } from './HostUpdates'
 import { DeviceScreenLine, HostScreenSharing, useScreenOffers } from './ScreenSharing'
+import { DeviceIcon } from '@/components/device-icon'
+import { osLine } from '@ramu/shared/deviceOs'
 import { useStagedValue } from './stagedChanges'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
@@ -356,6 +353,7 @@ function ThisComputer() {
           onRevoke={() => setRevoking(device.id)}
           screen={offers.get(device.id)}
           onScreen={(allowed) => allow(device.id, allowed)}
+          hostDays={status.deviceLifetime.days}
         />
       ))}
       {[...offers.values()]
@@ -677,7 +675,24 @@ function PairDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
+/** What each connected host runs on, read from its own status; a host not reachable keeps the last answer. */
+function useHostOs(computers: Computer[]): Record<string, DeviceOs | undefined> {
+  const [known, setKnown] = useState<Record<string, DeviceOs | undefined>>({})
+  const reachable = computers.filter((computer) => computer.local || computer.status === 'connected')
+  const key = reachable.map((computer) => computer.id).join(',')
+  useEffect(() => {
+    for (const computer of reachable)
+      void invokeUncachedOn(computer.id, 'background.status').then(
+        (status) => status.os && setKnown((current) => ({ ...current, [computer.id]: status.os })),
+        () => {},
+      )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the reachable hosts
+  }, [key])
+  return known
+}
+
 function Computers({ state }: { state: ComputerList }) {
+  const hostOs = useHostOs(state.computers)
   useLanguage()
   const [busy, setBusy] = useState(false)
   const [address, setAddress] = useState(''),
@@ -825,7 +840,7 @@ function Computers({ state }: { state: ComputerList }) {
           >
             <div className="flex items-center gap-3">
               <span className="flex size-8 flex-none items-center justify-center rounded-(--radius-s) bg-hover text-muted-foreground">
-                {computer.local ? <Monitor size={16} /> : computer.ssh ? <Terminal size={16} /> : <Network size={16} />}
+                <DeviceIcon os={hostOs[computer.id]} name={computer.name} />
               </span>
               <div className="min-w-0 grow">
                 <div className="flex min-w-0 items-center gap-2">
@@ -845,7 +860,11 @@ function Computers({ state }: { state: ComputerList }) {
                 >
                   <StatusDot status={computer.status} />
                   <span className="flex-none">
-                    {[activityText(computer) || statusText(computer.status), hostRoute(computer)]
+                    {[
+                      activityText(computer) || statusText(computer.status),
+                      hostRoute(computer),
+                      osLine(hostOs[computer.id]),
+                    ]
                       .filter(Boolean)
                       .join(' · ')}
                   </span>
@@ -1420,6 +1439,9 @@ function lifetimeOptions(current: number | 'never', saved: boolean) {
 
 /** What a paired device may do, in a few words for its collapsed row. */
 function deviceSummary(device: NetworkDevice): string {
+  return [osLine(device.os), accessSummary(device)].filter(Boolean).join(' · ')
+}
+function accessSummary(device: NetworkDevice): string {
   if (device.kind === 'host') return t('Another host’s agents: start and follow threads only')
   if (device.role === 'viewer') return t('Viewer')
   if (!device.permissions) return t('Full access')
@@ -1432,11 +1454,39 @@ function deviceSummary(device: NetworkDevice): string {
  * open below it, so a long list of devices stays scannable.
  */
 /** Devices report no platform, so the name decides: a paired host, a phone or tablet, or a computer. */
-function DeviceIcon({ device }: { device: NetworkDevice }) {
-  if (device.kind === 'host') return <Server size={16} aria-hidden />
-  if (/\b(iphone|android|pixel|galaxy|phone)\b/i.test(device.name)) return <Smartphone size={16} aria-hidden />
-  if (/\b(ipad|tablet)\b/i.test(device.name)) return <Tablet size={16} aria-hidden />
-  return <Laptop size={16} aria-hidden />
+
+/** How long one device stays paired without use: its own choice, or the same as every other device here. */
+function DeviceExpiry({
+  device,
+  hostDays,
+  invoke,
+}: {
+  device: NetworkDevice
+  hostDays: number | 'never'
+  invoke: Parameters<typeof DevicePermissionList>[0]['invoke']
+}) {
+  const current = device.lifetimeDays === undefined ? 'default' : String(device.lifetimeDays)
+  const [value, stage] = useStagedValue<string>(`expiry:${device.id}`, current, (next) =>
+    invoke('network.setDeviceExpiry', device.id, next === 'default' || next === 'never' ? next : Number(next)),
+  )
+  const sameAsOthers = hostDays === 'never' ? t('Never expire') : t('{0} days', { 0: hostDays })
+  return (
+    <div className={SETTINGS_CARD_LINE}>
+      <SettingsLabel
+        title={t('Keep paired')}
+        help={t('Unused this long, it must pair again. Using it renews the time.')}
+      />
+      <Dropdown
+        label={t('Keep {0} paired', { 0: device.name })}
+        value={value}
+        onChange={stage}
+        options={[
+          { value: 'default', label: t('Like other devices ({0})', { 0: sameAsOthers }) },
+          ...lifetimeOptions(device.lifetimeDays ?? 90, false),
+        ]}
+      />
+    </div>
+  )
 }
 
 function PairedDeviceRow({
@@ -1445,6 +1495,7 @@ function PairedDeviceRow({
   onRevoke,
   screen,
   onScreen,
+  hostDays,
 }: {
   device: NetworkDevice
   invoke: Parameters<typeof DevicePermissionList>[0]['invoke']
@@ -1452,6 +1503,8 @@ function PairedDeviceRow({
   /** The screen this device offers this host's agents, when it offers one. */
   screen?: Parameters<typeof DeviceScreenLine>[0]['offer']
   onScreen: (allowed: boolean) => void
+  /** This host's default pairing lifetime, which a device follows unless it has its own. */
+  hostDays: number | 'never'
 }) {
   const [open, setOpen] = useState(false)
   const seen = device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never')
@@ -1467,7 +1520,7 @@ function PairedDeviceRow({
         }
       >
         <span className="flex size-8 flex-none items-center justify-center rounded-(--radius-s) bg-hover text-muted-foreground">
-          <DeviceIcon device={device} />
+          <DeviceIcon os={device.os} name={device.name} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate text-control font-medium text-foreground">{device.name}</span>
@@ -1494,6 +1547,7 @@ function PairedDeviceRow({
           <DevicePermissionList device={device} invoke={invoke} />
         )}
         {screen && <DeviceScreenLine name={device.name} offer={screen} onChange={onScreen} />}
+        {device.kind !== 'host' && <DeviceExpiry device={device} hostDays={hostDays} invoke={invoke} />}
         <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
           <span className="text-caption text-muted-foreground">
             {`${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t('Paired {0}', { 0: new Date(device.createdAt).toLocaleDateString() })}`}
