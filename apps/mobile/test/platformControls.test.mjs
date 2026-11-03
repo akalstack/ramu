@@ -5489,11 +5489,11 @@ for (const os of ['ios', 'android']) {
       selecting.props.done()
     }
     openMore()
-    assert.ok(sheets[0].options.includes('Edit and resend'))
+    assert.ok(sheets[0].options.includes('Edit from here'))
     menu = { ...menu, readOnly: true }
     openMore()
     assert.deepEqual(Array.from(sheets[1].options), ['Copy', 'Quote in reply', 'Quote in new thread', 'Cancel'])
-    for (const label of ['Edit and resend', 'Undo file changes from here', 'Ask aside about this'])
+    for (const label of ['Edit from here', 'Undo file changes from here', 'Ask aside about this'])
       sheets[0].select(sheets[0].options.indexOf(label))
     assert.deepEqual(calls, [])
     sheets[1].select(0)
