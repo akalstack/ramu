@@ -1,10 +1,10 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../composer/viewerAccess'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { ArrowLeft, Plus, MessageCircle, Quote, Send, X, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, MessageCircle, Quote, X, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Aside } from '@ramu/shared/types'
-import { Textarea } from '@/components/ui/textarea'
+import { PanelComposer } from '@/components/panel-composer'
 import { useHost } from '../../../workspace/HostProvider'
 import { errorText } from '../../../workspace/TaskPane'
 import { type AsideTarget } from '../types'
@@ -274,41 +274,18 @@ export function AsidePanel({
             </p>
           )}
           {error && <p className="error text-bad small text-caption aside-error m-[0_14px_6px]">{error}</p>}
-          <form
-            className="agent-panel-compose [&_textarea]:min-h-[56px] [&_textarea]:max-h-[160px] [&_textarea]:p-[10px_48px_10px_14px] [&_textarea]:border [&_textarea]:border-line [&_textarea]:rounded-(--radius-l) [&_textarea]:bg-fill [&_textarea]:resize-none [&_textarea]:text-control [&_textarea]:leading-[1.5] [&_textarea]:shadow-none [&_textarea]:ring-0 [&_textarea]:[transition:border-color_140ms_ease] [&_textarea:focus-visible]:border-line-strong [&_textarea:focus-visible]:ring-0 relative flex-none m-[0_10px_10px] min-w-0"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void send()
-            }}
-          >
-            <Textarea
-              ref={input}
-              aria-label={translate('Ask aside')}
-              placeholder={aside ? translate('Follow up…') : translate('Ask about this…')}
-              disabled={readOnly}
-              value={draft}
-              rows={2}
-              maxLength={20000}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                  event.preventDefault()
-                  void send()
-                }
-              }}
-            />
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              type="submit"
-              className="icon p-0 size-(--action-size) flex-none justify-center agent-panel-send [&:hover:not(:disabled)]:[border:0] absolute right-2 bottom-2 w-7 h-7 rounded-full bg-primary text-primary-foreground [border:0] [transition:background-color_140ms_ease,opacity_140ms_ease] hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
-              aria-label={translate('Ask')}
-              title={translate('Ask aside')}
-              disabled={readOnly || !draft.trim() || sending || waiting}
-            >
-              <Send size={14} />
-            </Button>
-          </form>
+          <PanelComposer
+            inputRef={input}
+            label={translate('Ask aside')}
+            placeholder={aside ? translate('Follow up…') : translate('Ask about this…')}
+            sendLabel={translate('Ask')}
+            sendTitle={translate('Ask aside')}
+            disabled={readOnly}
+            value={draft}
+            onChange={setDraft}
+            canSend={!!draft.trim() && !sending && !waiting}
+            onSend={() => void send()}
+          />
         </>
       )}
     </aside>

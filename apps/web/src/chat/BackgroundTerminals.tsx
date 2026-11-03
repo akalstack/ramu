@@ -127,7 +127,7 @@ export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof
               <RowButton
                 size="sm"
                 stacked
-                className="w-auto flex-1 px-0 py-1"
+                className="w-auto flex-1 min-w-0 -ml-2 px-2 py-1"
                 disabled={stale}
                 title={t('Open output')}
                 onClick={() => open(terminal)}

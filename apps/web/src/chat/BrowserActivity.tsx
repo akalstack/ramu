@@ -127,7 +127,7 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
             <RowButton
               size="sm"
               stacked
-              className="w-auto flex-1 px-0 py-1"
+              className="w-auto flex-1 min-w-0 -ml-2 px-2 py-1"
               disabled={state.stale}
               title={t('Open browser')}
               onClick={() => showBrowserTab(ws, taskId, tab)}

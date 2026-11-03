@@ -158,7 +158,7 @@ export function TeammatesSection({
             <RowButton
               size="sm"
               stacked
-              className="w-auto flex-1 min-w-0 px-0 py-1"
+              className="w-auto flex-1 min-w-0 -ml-2 px-2 py-1"
               title={t('Start a message with @{0} to talk to it', { 0: teammateHandle(task.name) })}
               onClick={() => onOpen(task.agentId)}
             >

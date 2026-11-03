@@ -56,6 +56,8 @@ function nodes(tree: ReactNode): Record<string, unknown>[] {
   return [tree.props as Record<string, unknown>, ...nodes(tree.props.children)]
 }
 const find = (tree: ReactNode, label: string) => nodes(tree).find((props) => props['aria-label'] === label)!
+/** The panel's message box, by its label: a shared composer whose `onChange` takes the text. */
+const box = (tree: ReactNode, label: string) => nodes(tree).find((props) => props.label === label)!
 beforeEach(() => {
   state.index = 0
   state.values = []
@@ -84,23 +86,15 @@ it('retains a helper draft across role changes and blocks form and keyboard subm
       readOnly,
     })
   }
-  ;(find(RenderPanel(false), 'Message Helper').onChange as (event: unknown) => void)({
-    target: { value: 'Keep this draft' },
-  })
+  ;(box(RenderPanel(false), 'Message Helper').onChange as (value: string) => void)('Keep this draft')
   const viewer = RenderPanel(true)
-  expect(find(viewer, 'Message Helper').value).toBe('Keep this draft')
-  expect(find(viewer, 'Message Helper').disabled).toBe(true)
-  expect(find(viewer, 'Send to agent').disabled).toBe(true)
-  const form = nodes(viewer).find((props) => props.onSubmit)!
-  ;(form.onSubmit as (event: unknown) => void)({ preventDefault() {} })
-  ;(find(viewer, 'Message Helper').onKeyDown as (event: unknown) => void)({
-    key: 'Enter',
-    nativeEvent: {},
-    preventDefault() {},
-  })
+  expect(box(viewer, 'Message Helper').value).toBe('Keep this draft')
+  expect(box(viewer, 'Message Helper').disabled).toBe(true)
+  // Sending, by button or Enter, goes through onSend; a viewer's send does nothing.
+  ;(box(viewer, 'Message Helper').onSend as () => void)()
   await Promise.resolve()
   expect(onMessage).not.toHaveBeenCalled()
-  expect(find(RenderPanel(false), 'Message Helper').value).toBe('Keep this draft')
+  expect(box(RenderPanel(false), 'Message Helper').value).toBe('Keep this draft')
 })
 
 it('keeps aside drafts and existing answers readable without sending or deleting for viewers', async () => {
@@ -122,20 +116,19 @@ it('keeps aside drafts and existing answers readable without sending or deleting
       readOnly,
     })
   }
-  ;(find(RenderAside(false), 'Ask aside').onChange as (event: unknown) => void)({ target: { value: 'My follow-up' } })
+  ;(box(RenderAside(false), 'Ask aside').onChange as (value: string) => void)('My follow-up')
   const viewer = RenderAside(true)
-  expect(find(viewer, 'Ask aside').value).toBe('My follow-up')
+  expect(box(viewer, 'Ask aside').value).toBe('My follow-up')
   expect(
     nodes(viewer).some((props) => (props.event as { text?: string } | undefined)?.text === 'An existing answer'),
   ).toBe(true)
-  expect(find(viewer, 'Ask aside').disabled).toBe(true)
+  expect(box(viewer, 'Ask aside').disabled).toBe(true)
   expect(find(viewer, 'Delete aside').disabled).toBe(true)
   ;(find(viewer, 'Delete aside').onClick as () => void)()
-  const form = nodes(viewer).find((props) => props.onSubmit)!
-  ;(form.onSubmit as (event: unknown) => void)({ preventDefault() {} })
+  ;(box(viewer, 'Ask aside').onSend as () => void)()
   await Promise.resolve()
   expect(state.invoke).not.toHaveBeenCalled()
-  expect(find(RenderAside(false), 'Ask aside').value).toBe('My follow-up')
+  expect(box(RenderAside(false), 'Ask aside').value).toBe('My follow-up')
 })
 
 it('does not fetch a revert plan or rewind when a viewer reaches an already-open edit dialog', async () => {

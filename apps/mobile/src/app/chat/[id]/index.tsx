@@ -37,6 +37,7 @@ import { sideChat } from '../../../runtime/sideChat'
 import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
 import { fill, useT, useSay } from '../../../i18n'
 import { LoadingMark } from '../../../components/AnimatedMark'
+import { ProviderIcon } from '../../../components/Logos'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
@@ -1332,9 +1333,13 @@ export default function ChatScreen() {
                     header={
                       joining ? (
                         <View style={{ gap: space.xs }}>
-                          <T size={font.caption} tone="muted">
-                            {tr('{0} joins this thread', { 0: joining.name })}
-                          </T>
+                          {/* The model the mention names, with its icon, since the text box itself shows plain text. */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                            <ProviderIcon provider={joining.model.provider} size={13} />
+                            <T size={font.caption} tone="muted">
+                              {tr('{0} joins this thread', { 0: joining.name })}
+                            </T>
+                          </View>
                           <Segmented<TeammateMode>
                             value={joining.mode}
                             onChange={(mode) => setJoinEdits({ key: joining.key, model: joinOwn?.model, mode })}

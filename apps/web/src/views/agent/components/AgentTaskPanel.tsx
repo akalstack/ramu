@@ -4,7 +4,7 @@ import { useHostConnection } from '../../../workspace/computers'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { Button } from '@/components/desktop-button'
-import { ArrowLeft, ArrowUp, Bot, Square, X } from 'lucide-react'
+import { ArrowLeft, Bot, Square, X } from 'lucide-react'
 import { visibleText } from '../lib/messages'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
@@ -12,7 +12,7 @@ import remarkGfm from 'remark-gfm'
 import type { AgentEvent } from '@ramu/shared/types'
 import { advisorTranscript, effectiveStatus, parseTaskMessage } from '@ramu/shared/chat/agentTasks'
 import type { AgentTask } from '@ramu/shared/types'
-import { Textarea } from '@/components/ui/textarea'
+import { PanelComposer } from '@/components/panel-composer'
 import { type ToolResult } from '../types'
 import { toBlocks } from '../lib/blocks'
 import { ToolGroup } from './ToolGroup'
@@ -307,40 +307,17 @@ export function AgentTaskPanel({
             </p>
           )}
           {actions.canMessage ? (
-            <form
-              className="agent-panel-compose [&_textarea]:min-h-[56px] [&_textarea]:max-h-[160px] [&_textarea]:p-[8px_44px_8px_12px] [&_textarea]:[border:1px_solid_transparent] [&_textarea]:rounded-(--radius-m) [&_textarea]:[background:var(--field)] [&_textarea]:resize-none [&_textarea]:text-control relative flex-none m-[0_10px_10px] min-w-0"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void send()
-              }}
-            >
-              <Textarea
-                aria-label={translate('Message {0}', { '0': task.name })}
-                placeholder={translate('Message {0}…', { '0': task.name })}
-                disabled={readOnly}
-                value={draft}
-                rows={2}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                    event.preventDefault()
-                    void send()
-                  }
-                }}
-              />
-              {/* The thread composer's send button, so sending reads the same in both places. */}
-              <Button
-                variant="default"
-                size="icon-sm"
-                type="submit"
-                className="send agent-panel-send absolute right-2 bottom-2 rounded-full"
-                aria-label={translate('Send to agent')}
-                title={translate('Send through the main agent')}
-                disabled={readOnly || !draft.trim() || sending}
-              >
-                <ArrowUp size={16} strokeWidth={2.25} />
-              </Button>
-            </form>
+            <PanelComposer
+              label={translate('Message {0}', { '0': task.name })}
+              placeholder={translate('Message {0}…', { '0': task.name })}
+              sendLabel={translate('Send to agent')}
+              sendTitle={translate('Send through the main agent')}
+              disabled={readOnly}
+              value={draft}
+              onChange={setDraft}
+              canSend={!!draft.trim() && !sending}
+              onSend={() => void send()}
+            />
           ) : (
             <p className="agent-panel-hint flex-none m-0 p-[10px_14px_14px] min-w-0 muted text-muted-foreground small text-caption">
               {task.taskType === 'advisor'
