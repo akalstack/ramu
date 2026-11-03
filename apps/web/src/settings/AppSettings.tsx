@@ -4,16 +4,17 @@ import { cancelPanelMotion } from '../workspace/panelMotion'
 import { configureLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { BootScreen } from '../Brand'
-import { createContext, useContext, useEffect, useState, type ReactNode, type ContextType } from 'react'
+import { useContext, useEffect, useState, type ReactNode, type ContextType } from 'react'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 import { invoke, ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
+import { stableContext } from '../lib/stableContext'
 
-const Context = createContext<{
+const Context = stableContext<{
   preferences: AppPreferences
   reload: () => Promise<void>
   save: (preferences: AppPreferences) => Promise<void>
-} | null>(null)
+} | null>('AppSettings', null)
 /** Primary, hover and accent text color per accent. The accent is also text and links, so on light it is a deeper shade. */
 const DARK_ACCENTS = {
   blue: ['#0a84ff', '#3395ff', '#64a8ff'],

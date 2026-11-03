@@ -1,8 +1,9 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react'
+import { useContext, useMemo, type ReactNode } from 'react'
 import type { ComputerStatus } from '@ramu/shared/types'
 import { invokerFor, ramu } from '../ipc'
 import { LOCAL_HOST, ownHostId } from '../hosts'
 import { useComputers } from './computers'
+import { stableContext } from '../lib/stableContext'
 
 export interface HostApi {
   id: string
@@ -14,7 +15,7 @@ export interface HostApi {
   invoke: typeof ramu.invoke
 }
 
-const Context = createContext<string | null>(null)
+const Context = stableContext<string | null>('Host', null)
 
 /** Names the host everything below belongs to. Without one, components use the window's own host. */
 export function HostProvider({ hostId, children }: { hostId?: string; children: ReactNode }) {

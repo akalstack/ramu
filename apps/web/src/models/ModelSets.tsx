@@ -4,7 +4,7 @@ import { errorText } from '../lib/errors'
 import { t } from '../i18n'
 import { providerName } from '@ramu/shared/providers/providers'
 import { BootScreen } from '../Brand'
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type ContextType } from 'react'
+import { useContext, useEffect, useRef, useState, type ReactNode, type ContextType } from 'react'
 import {
   DEFAULT_AGENT_SETTINGS,
   type AgentProvider,
@@ -18,6 +18,7 @@ import { useAppSettings } from '../settings/AppSettings'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
 import { cachedModelSets, rememberModelSets } from './modelSetsCache'
+import { stableContext } from '../lib/stableContext'
 
 export const modelDisplayName = (name: string) =>
   name
@@ -49,7 +50,7 @@ export function modelStepName(step: ModelStep, catalogs: ProviderCatalog[]) {
 
 export { recommendedSets } from '@ramu/shared/providers/modelDefaults'
 
-const Context = createContext<{
+const Context = stableContext<{
   preferences: ModelPreferences
   catalogs: ProviderCatalog[]
   error: string | null
@@ -57,7 +58,7 @@ const Context = createContext<{
   /** Asks every provider again unless `rediscover` is false; the host keeps its list current after a settings change. */
   reload: (options?: { rediscover?: boolean }) => Promise<void>
   initialSettings: AgentSettings
-} | null>(null)
+} | null>('ModelSets', null)
 
 export function ModelSetsProvider({ children }: { children: ReactNode }) {
   const { id: hostId, invoke } = useHost()

@@ -12,7 +12,6 @@ import { t, useLanguage } from '../i18n'
 // Renderer-side workspace state: projects, tasks, open task tabs and their view tabs. One store per host
 // (`HostWorkspace`), mounted lazily by `WorkspaceProvider`; `useWorkspace()` is the store of the host on screen.
 import {
-  createContext,
   memo,
   useCallback,
   useContext,
@@ -78,6 +77,7 @@ import {
   worktreeCtx,
   type ViewInput,
 } from './workspaceModel'
+import { stableContext } from '../lib/stableContext'
 
 /** Reads one store runs at once per host; well under the calls one host connection allows in flight. */
 const HOST_READ_CONCURRENCY = 8
@@ -174,9 +174,9 @@ type WorkspaceActions = Pick<
   WorkspaceApi,
   'task' | 'refresh' | 'openTask' | 'openView' | 'newTask' | 'consumeSourceNavigation'
 >
-const Ctx = createContext<WorkspaceApi | null>(null)
-const ActionsCtx = createContext<WorkspaceActions | null>(null)
-const RuntimeCtx = createContext<HostRuntime | null>(null)
+const Ctx = stableContext<WorkspaceApi | null>('Workspace', null)
+const ActionsCtx = stableContext<WorkspaceActions | null>('WorkspaceActions', null)
+const RuntimeCtx = stableContext<HostRuntime | null>('HostRuntime', null)
 
 /** Commands read fresh state when called, without subscribing to panel/UI changes. */
 export function useWorkspaceActions(): WorkspaceActions {
@@ -284,7 +284,7 @@ const subscribeShells = (listener: () => void) => {
   }
 }
 
-const ScopeCtx = createContext<{ store: WorkspaceApi | null } | null>(null)
+const ScopeCtx = stableContext<{ store: WorkspaceApi | null } | null>('WorkspaceScope', null)
 /**
  * Rows of one host, shown inside another host's shell (the sidebar's host groups): below it `useHost()` is that host
  * and `useRowStore()` that host's store, or null while it has not loaded (rows then show the last known overview).

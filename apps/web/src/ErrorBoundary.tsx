@@ -1,6 +1,8 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { Component, useState, type ErrorInfo, type ReactNode } from 'react'
+import { Check, ChevronDown, Copy, RotateCw, TriangleAlert } from 'lucide-react'
 import { t } from './i18n'
 import { Button } from '@/components/desktop-button'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 
 interface Props {
   children: ReactNode
@@ -33,32 +35,75 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     const { error } = this.state
     if (!error) return this.props.children
-    const app = this.props.scope === 'app'
-    return (
-      <div
-        role="alert"
-        className={`error-boundary flex flex-col items-center justify-center gap-3 p-8 text-center ${app ? 'h-screen w-screen bg-background text-foreground' : 'size-full min-h-0 min-w-0'}`}
-      >
-        <strong className="text-heading font-semibold">{t('Something went wrong')}</strong>
-        <p className="max-w-[420px] text-control text-muted-foreground [overflow-wrap:anywhere]">
-          {app
-            ? t('Ramu hit an unexpected error. Your threads and files are safe.')
-            : t('This view hit an unexpected error. The rest of Ramu still works.')}
-        </p>
-        <p className="max-w-[420px] max-h-24 overflow-hidden text-caption text-muted-foreground [overflow-wrap:anywhere]">
-          {error.message.slice(0, 300)}
-        </p>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => this.setState({ error: null })}>
-            {t('Try again')}
-          </Button>
-          {app && (
-            <Button variant="default" onClick={() => window.location.reload()}>
-              {t('Reload')}
-            </Button>
-          )}
-        </div>
-      </div>
-    )
+    return <CrashScreen error={error} app={this.props.scope === 'app'} onRetry={() => this.setState({ error: null })} />
   }
+}
+
+/**
+ * What a crash shows: what is affected and that work is safe, one way back, and the technical detail folded away with a
+ * copy for a bug report. The whole window reloads; a single view tries again in place, leaving the rest of Ramu as is.
+ */
+function CrashScreen({ error, app, onRetry }: { error: Error; app: boolean; onRetry: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const report = [error.message, error.stack?.split('\n').slice(1).join('\n')].filter(Boolean).join('\n')
+  const copy = () =>
+    void navigator.clipboard.writeText(report).then(
+      () => setCopied(true),
+      () => setOpen(true),
+    )
+  return (
+    <div
+      role="alert"
+      className={`error-boundary flex ${app ? 'h-screen w-screen bg-background text-foreground' : 'size-full min-h-0 min-w-0'}`}
+    >
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <TriangleAlert aria-hidden="true" />
+          </EmptyMedia>
+          <EmptyTitle className="text-heading font-semibold">{t('Something went wrong')}</EmptyTitle>
+          <EmptyDescription className="text-control">
+            {app
+              ? t('Ramu hit an unexpected error. Your threads and files are safe.')
+              : t('This view hit an unexpected error. The rest of Ramu still works.')}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <div className="flex gap-2">
+            {app ? (
+              <Button onClick={() => window.location.reload()}>
+                <RotateCw aria-hidden="true" />
+                {t('Reload')}
+              </Button>
+            ) : (
+              <Button onClick={onRetry}>
+                <RotateCw aria-hidden="true" />
+                {t('Try again')}
+              </Button>
+            )}
+            <Button variant="ghost" onClick={copy}>
+              {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+              {copied ? t('Copied') : t('Copy details')}
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-caption text-muted-foreground"
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            {open ? t('Hide details') : t('Show details')}
+            <ChevronDown aria-hidden="true" className={open ? 'rotate-180' : undefined} />
+          </Button>
+          {open && (
+            <pre className="m-0 max-h-48 w-full overflow-auto rounded-(--radius-s) bg-fill p-3 text-left font-mono text-caption whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere] select-text">
+              {report.slice(0, 4000)}
+            </pre>
+          )}
+        </EmptyContent>
+      </Empty>
+    </div>
+  )
 }

@@ -311,6 +311,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'In use': 'Sedang dipakai',
   'Git over {0}': 'Git lewat {0}',
   'Permissions: {0}': 'Izin: {0}',
+  'Copy details': 'Salin detail',
+  'Show details': 'Tampilkan detail',
   'Hide details': 'Sembunyikan detail',
   'Coming soon': 'Segera hadir',
   'Update this host to manage rules.': 'Perbarui host ini untuk mengelola aturan.',

@@ -1,5 +1,4 @@
 import {
-  createContext,
   useCallback,
   useContext,
   useEffect,
@@ -18,6 +17,7 @@ import { openSummary } from '../summaries/openSummary'
 import { useComputers } from './computers'
 import { applyDestination, needsRefresh, routeSelection } from './selectionRoute'
 import { publishedStore, requestHostStore, subscribePublished } from './workspace'
+import { stableContext } from '../lib/stableContext'
 
 interface HostSelection {
   /** The host whose store is on screen. */
@@ -26,7 +26,7 @@ interface HostSelection {
   select(host: string, destination: HostDestination): void
 }
 
-const Context = createContext<HostSelection | null>(null)
+const Context = stableContext<HostSelection | null>('HostSelection', null)
 
 export function useHostSelection(): HostSelection {
   const selection = useContext(Context)
