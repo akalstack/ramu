@@ -151,3 +151,102 @@ it.skipIf(process.platform === 'win32')(
     expect(terminals.inspectBackground('other', other.id).state).toBe('running')
   },
 )
+
+const waitResult = (response: Awaited<ReturnType<Client['callTool']>>) =>
+  JSON.parse((response.content as { text: string }[])[0]!.text) as {
+    reason: string
+    matched?: { text: string }
+    commands: { state: string; exitCode: number | null; output: string }[]
+  }
+
+it.skipIf(process.platform === 'win32')(
+  'waits for a ready line already printed, ignoring terminal colors, without waiting for exit',
+  async () => {
+    const { call, terminals } = await setup()
+    const server = terminals.launchBackground(
+      'thread',
+      null,
+      tmpdir(),
+      "printf '\\033[32mLocal: ready\\033[0m\\n'; sleep 100",
+    )
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const done = waitResult(
+      await call('background_terminal_wait', {
+        ids: [server.id],
+        outputIncludes: ['local: READY'],
+        timeoutSeconds: 10,
+      }),
+    )
+    expect(done.reason).toBe('matched')
+    expect(done.matched?.text).toBe('local: READY')
+    expect(done.commands[0]!.state).toBe('running')
+    expect(done.commands[0]!.output).toContain('Local: ready')
+    expect(done.commands[0]!.output).not.toContain('\u001b')
+  },
+)
+
+it.skipIf(process.platform === 'win32')('returns when a command exits and reports a failure', async () => {
+  const { call, terminals } = await setup()
+  const command = terminals.launchBackground('thread', null, tmpdir(), 'sleep 0.2; echo broke; exit 3')
+  const done = waitResult(await call('background_terminal_wait', { ids: [command.id], timeoutSeconds: 10 }))
+  expect(done.reason).toBe('exited')
+  expect(done.commands[0]).toMatchObject({ state: 'failed', exitCode: 3 })
+  expect(done.commands[0]!.output).toContain('broke')
+})
+
+it.skipIf(process.platform === 'win32')(
+  'with newOutputOnly, earlier output does not count and the wait ends on timeout or silence',
+  async () => {
+    const { call, terminals } = await setup()
+    const watcher = terminals.launchBackground('thread', null, tmpdir(), 'echo compiled; sleep 100')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const timedOut = waitResult(
+      await call('background_terminal_wait', {
+        ids: [watcher.id],
+        outputIncludes: ['compiled'],
+        newOutputOnly: true,
+        timeoutSeconds: 1,
+      }),
+    )
+    expect(timedOut.reason).toBe('timeout')
+    const quiet = waitResult(
+      await call('background_terminal_wait', { ids: [watcher.id], quietSeconds: 2, timeoutSeconds: 30 }),
+    )
+    expect(quiet.reason).toBe('quiet')
+  },
+)
+
+it.skipIf(process.platform === 'win32')('with mode all, waits for every command', async () => {
+  const { call, terminals } = await setup()
+  const quick = terminals.launchBackground('thread', null, tmpdir(), 'exit 0')
+  const slow = terminals.launchBackground('thread', null, tmpdir(), 'sleep 0.5; exit 0')
+  const done = waitResult(
+    await call('background_terminal_wait', { ids: [quick.id, slow.id], mode: 'all', timeoutSeconds: 10 }),
+  )
+  expect(done.reason).toBe('exited')
+  expect(done.commands.map((entry) => entry.state)).toEqual(['exited', 'exited'])
+})
+
+it.skipIf(process.platform === 'win32')(
+  'refuses to wait on another thread’s command and stops when the turn stops',
+  async () => {
+    const { client, terminals } = await setup()
+    const other = terminals.launchBackground('other', null, tmpdir(), 'sleep 100')
+    const mine = terminals.launchBackground('thread', null, tmpdir(), 'sleep 100')
+    const refused = await client.callTool({
+      name: 'tool_invoke',
+      arguments: { name: 'background_terminal_wait', arguments: { ids: [other.id] } },
+    })
+    expect(refused.isError).toBe(true)
+    const controller = new AbortController()
+    const pending = client.callTool(
+      { name: 'tool_invoke', arguments: { name: 'background_terminal_wait', arguments: { ids: [mine.id] } } },
+      undefined,
+      { signal: controller.signal },
+    )
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    controller.abort()
+    await expect(pending).rejects.toThrow()
+    expect(terminals.inspectBackground('thread', mine.id).state).toBe('running')
+  },
+)

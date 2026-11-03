@@ -119,4 +119,44 @@ describe('protected edits in review threads', () => {
       describeRamuTool({ name: 'skill_update', args: { id: 's', userRequested: true } }, 'This skill is pinned').facts,
     ).toEqual([])
   })
+
+  it('reads background command waits by what came of them', () => {
+    const call = (args: Record<string, unknown>) => ramuTool(use('mcp__ramu__background_terminal_wait', args))!
+    const waiting = describeRamuTool(call({ ids: ['a'], outputIncludes: ['ready'] }))
+    expect(waiting.running).toBe('Waiting for output')
+    const result = (value: unknown) => JSON.stringify(value)
+    const saw = describeRamuTool(
+      call({ ids: ['a'], outputIncludes: ['ready'] }),
+      result({
+        reason: 'matched',
+        waitedMs: 4200,
+        matched: { id: 'a', text: 'ready' },
+        commands: [{ command: 'pnpm dev', state: 'running' }],
+      }),
+    )
+    expect(saw).toMatchObject({ done: 'Saw', subject: '“ready”', icon: 'terminal' })
+    expect(saw.facts).toEqual([
+      { label: 'Command', value: 'pnpm dev' },
+      { label: 'Waited', value: '4s' },
+    ])
+    const failed = describeRamuTool(
+      call({ ids: ['a', 'b'], mode: 'all' }),
+      result({
+        reason: 'exited',
+        waitedMs: 90_000,
+        commands: [
+          { command: 'pnpm lint', state: 'exited', exitCode: 0 },
+          { command: 'pnpm test', state: 'failed', exitCode: 1 },
+        ],
+      }),
+    )
+    expect(failed).toMatchObject({ done: 'Background command failed', subject: 'pnpm lint, pnpm test' })
+    expect(failed.facts).toContainEqual({ label: 'Exit code', value: '1' })
+    expect(
+      describeRamuTool(call({ ids: ['a'] }), result({ reason: 'timeout', waitedMs: 300_000, commands: [] })).done,
+    ).toBe('Stopped waiting')
+    expect(
+      describeRamuTool(ramuTool(use('mcp__ramu__background_terminal_launch', { command: 'pnpm dev' }))!).subject,
+    ).toBe('pnpm dev')
+  })
 })

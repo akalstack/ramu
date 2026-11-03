@@ -3,7 +3,9 @@ import type { AgentSessionInfo } from '@ramu/shared/types'
 import { z } from 'zod'
 import type { TerminalService } from '../workspace/pty'
 
-export const BACKGROUND_TERMINAL_GUIDE = `Use background_terminal_launch for a development server or watcher that should remain running after your reply. The user can inspect and stop it in Background terminals. Commands run on this thread's execution host, in this session's checkout. After a host restart, saved commands without a verified process handle are Unknown and their saved output is read-only; inspect and verify them before starting anything again. Ramu never replays saved launches automatically. In Full access it launches directly; in other modes each launch asks the person to approve the exact command once, and a refusal must be respected. Never use it to bypass a restriction. A command whose stoppedBy is "user" was stopped by the person; do not restart it without a new instruction.`
+export const BACKGROUND_TERMINAL_GUIDE = `Use background_terminal_launch for a development server or watcher that should remain running after your reply. The user can inspect and stop it in Background terminals. Commands run on this thread's execution host, in this session's checkout. After a host restart, saved commands without a verified process handle are Unknown and their saved output is read-only; inspect and verify them before starting anything again. Ramu never replays saved launches automatically. In Full access it launches directly; in other modes each launch asks the person to approve the exact command once, and a refusal must be respected. Never use it to bypass a restriction. A command whose stoppedBy is "user" was stopped by the person; do not restart it without a new instruction.
+
+To wait for background commands, call background_terminal_wait instead of sleeping or polling inspect: it returns when a command exits, prints text you name (such as "ready" or "error"), goes quiet, or the timeout passes, with the new output. Wait before you rely on a server, finish your turn or report a result that depends on the command.`
 
 /** The authenticated MCP connection supplies the session; tool arguments cannot select a host, thread or cwd. */
 export function registerBackgroundTerminalTools(
@@ -67,6 +69,32 @@ export function registerBackgroundTerminalTools(
       inputSchema: { id: z.string().uuid() },
     },
     ({ id }) => result(terminals.inspectBackground(scope().taskId, id)),
+  )
+  server.registerTool(
+    'background_terminal_wait',
+    {
+      description:
+        'Wait for managed background commands in this thread instead of sleeping or polling. Returns when a command exits, its output contains one of outputIncludes (case-insensitive, colors ignored), it writes nothing for quietSeconds, or timeoutSeconds passes. With mode "all", waits until every command has exited or matched. Output printed before the call counts unless newOutputOnly is true; set it when waiting for the next rebuild of a watcher. Reports why it returned, each command\'s state and exit code, and the last output.',
+      inputSchema: {
+        ids: z.array(z.string().uuid()).min(1).max(8),
+        outputIncludes: z.array(z.string().trim().min(1).max(200)).max(8).default([]),
+        mode: z.enum(['any', 'all']).default('any'),
+        newOutputOnly: z.boolean().default(false),
+        quietSeconds: z.number().int().min(2).max(600).optional(),
+        timeoutSeconds: z.number().int().min(1).max(1800).default(300),
+      },
+    },
+    async ({ ids, outputIncludes, mode, newOutputOnly, quietSeconds, timeoutSeconds }, extra) =>
+      result(
+        await terminals.waitBackground(scope().taskId, ids, {
+          mode,
+          includes: outputIncludes,
+          newOutputOnly,
+          ...(quietSeconds === undefined ? {} : { quietMs: quietSeconds * 1000 }),
+          timeoutMs: timeoutSeconds * 1000,
+          signal: extra.signal,
+        }),
+      ),
   )
   server.registerTool(
     'background_terminal_stop',

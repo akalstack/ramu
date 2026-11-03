@@ -46,8 +46,38 @@ export type TerminalSnapshot = {
   resume: 'live' | 'replay' | 'snapshot'
 }
 
+/** Why a wait on background commands returned. */
+export type BackgroundWaitReason = 'exited' | 'matched' | 'quiet' | 'timeout'
+
+export type BackgroundWaitOptions = {
+  /** `any` returns when the first command settles; `all` when every one has. */
+  mode: 'any' | 'all'
+  /** A command settles early when its output contains one of these, compared without terminal colors. */
+  includes: string[]
+  /** Match only output written after the wait began, rather than all output still held. */
+  newOutputOnly: boolean
+  /** Return once none of the commands has written anything for this long. */
+  quietMs?: number
+  timeoutMs: number
+  signal?: AbortSignal
+}
+
+export type BackgroundWaitResult = {
+  reason: BackgroundWaitReason
+  waitedMs: number
+  matched?: { id: string; text: string }
+  commands: (BackgroundTerminalInfo & { output: string })[]
+}
+
+const WAIT_TAIL = 4000
+// CSI and OSC sequences: colors, cursor moves and titles that would split the words an agent waits for.
+// eslint-disable-next-line no-control-regex
+const ANSI = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/g
+const plain = (text: string) => text.replace(ANSI, '').replace(/\r(?!\n)/g, '\n')
+
 export class TerminalService {
   private readonly terms = new Map<string, Entry>()
+  private readonly watchers = new Map<string, Set<() => void>>()
   private readonly history = new Map<string, BackgroundTerminalRecord>()
   private readonly checkpoints = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly warned = new Set<string>()
@@ -106,6 +136,7 @@ export class TerminalService {
       entry.cursor += d.length
       entry.output = (entry.output + d).slice(-256_000)
       this.onData(entry.id, d, entry.cursor)
+      this.notify(entry.id)
       if (entry.bg && this.terms.has(entry.id) && !this.checkpoints.has(entry.id)) {
         const timer = setTimeout(() => {
           this.checkpoints.delete(entry.id)
@@ -124,6 +155,7 @@ export class TerminalService {
       }
       this.onExit(entry.id, exitCode)
       this.onChange(entry.taskId)
+      this.notify(entry.id)
     })
     queueMicrotask(() => this.onChange(taskId))
     return entry
@@ -207,6 +239,102 @@ export class TerminalService {
     if (!this.terms.has(id) && saved?.taskId === taskId) return { ...saved, capabilities: { ...saved.capabilities } }
     const e = this.ownedBackground(taskId, id)
     return { ...backgroundInfo(e), output: e.output }
+  }
+
+  /**
+   * Waits until background commands exit, print one of the expected texts, go quiet or run out of time. Each check reads
+   * the held output, so text printed before the wait began counts unless `newOutputOnly` is set.
+   */
+  waitBackground(taskId: string, ids: string[], options: BackgroundWaitOptions): Promise<BackgroundWaitResult> {
+    const unique = [...new Set(ids)]
+    // Ownership is checked up front so a wait never hangs on a command from another thread.
+    for (const id of unique) this.inspectBackground(taskId, id)
+    const started = Date.now()
+    const from = new Map(unique.map((id) => [id, options.newOutputOnly ? (this.terms.get(id)?.cursor ?? 0) : 0]))
+    const needles = options.includes.map((text) => text.toLowerCase())
+    let lastOutput = started
+    const cursors = new Map(unique.map((id) => [id, this.terms.get(id)?.cursor ?? 0]))
+
+    const since = (id: string) => {
+      const e = this.terms.get(id)
+      if (!e) return this.history.get(id)?.output ?? ''
+      // `output` keeps only the newest characters, so the start cursor maps to an index from its end.
+      return e.output.slice(Math.max(0, e.output.length - (e.cursor - from.get(id)!)))
+    }
+    const settled = (id: string): { text?: string } | null => {
+      const e = this.terms.get(id)
+      if (needles.length) {
+        const text = plain(since(id)).toLowerCase()
+        const hit = needles.findIndex((needle) => text.includes(needle))
+        if (hit >= 0) return { text: options.includes[hit] }
+      }
+      return !e || e.exited ? {} : null
+    }
+    const snapshot = (id: string) => {
+      const info = this.inspectBackground(taskId, id)
+      return { ...info, output: plain(since(id)).slice(-WAIT_TAIL) }
+    }
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => finish('timeout'), options.timeoutMs)
+      let quiet: ReturnType<typeof setInterval> | undefined
+      let done = false
+      const finish = (reason: BackgroundWaitReason, matched?: { id: string; text: string }) => {
+        if (done) return
+        done = true
+        cleanup()
+        resolve({
+          reason,
+          waitedMs: Date.now() - started,
+          ...(matched ? { matched } : {}),
+          commands: unique.map(snapshot),
+        })
+      }
+      const abort = () => {
+        if (done) return
+        done = true
+        cleanup()
+        reject(new Error('Stopped waiting because the turn was stopped.'))
+      }
+      const check = () => {
+        let moved = false
+        for (const id of unique) {
+          const cursor = this.terms.get(id)?.cursor ?? 0
+          if (cursor !== cursors.get(id)) moved = true
+          cursors.set(id, cursor)
+        }
+        if (moved) lastOutput = Date.now()
+        const states = unique.map((id) => ({ id, state: settled(id) }))
+        const match = states.find((entry) => entry.state?.text)
+        if (options.mode === 'any') {
+          if (match) return finish('matched', { id: match.id, text: match.state!.text! })
+          if (states.some((entry) => entry.state)) return finish('exited')
+        } else if (states.every((entry) => entry.state)) {
+          return match ? finish('matched', { id: match.id, text: match.state!.text! }) : finish('exited')
+        }
+        if (options.quietMs !== undefined && Date.now() - lastOutput >= options.quietMs) return finish('quiet')
+      }
+      const cleanup = () => {
+        clearTimeout(timer)
+        clearInterval(quiet)
+        options.signal?.removeEventListener('abort', abort)
+        for (const id of unique) this.watchers.get(id)?.delete(check)
+      }
+      if (options.signal?.aborted) return abort()
+      options.signal?.addEventListener('abort', abort, { once: true })
+      for (const id of unique) {
+        const set = this.watchers.get(id) ?? new Set()
+        set.add(check)
+        this.watchers.set(id, set)
+      }
+      // Silence has no event of its own, so it is checked on a short tick while a quiet limit is set.
+      if (options.quietMs !== undefined) quiet = setInterval(check, Math.min(1000, options.quietMs))
+      check()
+    })
+  }
+
+  private notify(id: string): void {
+    for (const watcher of [...(this.watchers.get(id) ?? [])]) watcher()
   }
 
   /**

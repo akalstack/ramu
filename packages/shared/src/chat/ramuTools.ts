@@ -70,6 +70,11 @@ const KNOWN = new Set([
   'teammate_ask',
   'teammate_suggest',
   'rtk_run',
+  'background_terminal_launch',
+  'background_terminal_list',
+  'background_terminal_inspect',
+  'background_terminal_wait',
+  'background_terminal_stop',
   'codex_pre_tool_use',
 ])
 
@@ -341,8 +346,76 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
         'terminal',
         Array.isArray(args.arguments) ? clip(`rtk ${args.arguments.map(String).join(' ')}`) : undefined,
       )
+    case 'background_terminal_launch':
+      return reply('Started in the background', 'Starting in the background', 'terminal', command(args.command))
+    case 'background_terminal_list':
+      return reply('Listed background commands', 'Listing background commands', 'terminal')
+    case 'background_terminal_inspect':
+      return reply('Checked a background command', 'Checking a background command', 'terminal', command(data.command))
+    case 'background_terminal_stop':
+      return reply('Stopped a background command', 'Stopping a background command', 'terminal', command(data.command))
+    case 'background_terminal_wait':
+      return describeWait(args, data, reply)
     default:
       return reply('Used', 'Using', 'wrench', call.name.replace(/_/g, ' '))
+  }
+}
+
+const command = (value: unknown) => {
+  const line = text(value)
+  return line ? clip(line, 60) : undefined
+}
+
+const seconds = (ms: number) => (ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))}s` : `${Math.round(ms / 60_000)}m`)
+
+/** A wait reads as what came of it: the text it saw, how the command ended, or that it stopped waiting. */
+function describeWait(
+  args: Record<string, unknown>,
+  data: Record<string, unknown>,
+  reply: (
+    done: string,
+    running: string,
+    icon: RamuToolIcon,
+    subject?: string,
+    facts?: RamuToolRow['facts'],
+  ) => RamuToolRow,
+): RamuToolRow {
+  const expected = Array.isArray(args.outputIncludes) ? args.outputIncludes.map(String).filter(Boolean) : []
+  const commands = Array.isArray(data.commands) ? data.commands.map(record) : []
+  const failed = commands.find((entry) => entry.state === 'failed')
+  const first = failed ?? commands[0]
+  const subject =
+    commands.length > 1 ? commands.map((entry) => command(entry.command)).join(', ') : command(first?.command)
+  const waited = typeof data.waitedMs === 'number' ? seconds(data.waitedMs) : ''
+  const matched = record(data.matched)
+  const exit = typeof first?.exitCode === 'number' ? String(first.exitCode) : ''
+  const running = expected.length ? 'Waiting for output' : 'Waiting for a background command'
+  const facts = [
+    { label: 'Waiting for', value: expected.map((entry) => `“${clip(entry, 40)}”`).join(', ') },
+    { label: 'Waited', value: waited },
+  ]
+  switch (data.reason) {
+    case 'matched':
+      return reply('Saw', running, 'terminal', quote(text(matched.text)), [
+        { label: 'Command', value: subject ?? '' },
+        ...facts.slice(1),
+      ])
+    case 'exited':
+      return failed
+        ? reply('Background command failed', running, 'terminal', subject, [
+            ...facts,
+            { label: 'Exit code', value: exit },
+          ])
+        : reply('Background command finished', running, 'terminal', subject, [
+            ...facts,
+            { label: 'Exit code', value: exit },
+          ])
+    case 'quiet':
+      return reply('Background command went quiet', running, 'terminal', subject, facts)
+    case 'timeout':
+      return reply('Stopped waiting', running, 'terminal', subject, facts)
+    default:
+      return reply('Waited for a background command', running, 'terminal', undefined, facts.slice(0, 1))
   }
 }
 
