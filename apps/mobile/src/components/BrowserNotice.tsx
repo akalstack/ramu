@@ -38,11 +38,10 @@ export function useThreadBrowserTabs(chat: Chat | undefined) {
       if (['browser:changed', 'hostBrowser:changed', 'browser:present', 'hostBrowser:present'].includes(channel))
         void load()
     })
-    const timer = setInterval(() => void load(), 5000)
+    // No poll: the host pushes every change, and a reconnect re-runs this effect (it depends on online).
     return () => {
       active = false
       off()
-      clearInterval(timer)
     }
   }, [host, task, online, viewOnly])
   return { tabs: viewOnly || !task ? [] : tabs, viewable: viewable && !viewOnly }

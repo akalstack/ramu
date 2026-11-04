@@ -1,5 +1,4 @@
 import { isModelListed } from '@ramu/shared/providers/modelVisibility'
-import { SheetFlatList as FlatList } from './ui'
 import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFocusEffect } from 'expo-router'
@@ -14,7 +13,6 @@ import {
   UIManager,
   type TextStyle,
   View,
-  useWindowDimensions,
 } from 'react-native'
 import { MenuView } from '@react-native-menu/menu'
 import { markdownRuns, type MarkdownMark } from '@ramu/shared/chat/markdownRuns'
@@ -89,7 +87,6 @@ import { AccountRows } from './AccountRows'
 import { canEditVerify } from '../runtime/goalVerify'
 import { isUserPaused } from '@ramu/shared/chat/goalHold'
 import { GoalVerifySheet } from './GoalVerifySheet'
-import { BottomSearch } from './BottomSearch'
 import { DictationStatus, MicButton } from './DictationControls'
 import { dictationBusy } from '@ramu/shared/voice/dictation'
 import {
@@ -178,7 +175,6 @@ export function ModelChip({
     [models],
   )
   const { c } = useTheme()
-  const { height: windowHeight } = useWindowDimensions()
   const [open, setOpen] = useState(false)
   const [provider, setProvider] = useState<AgentProvider | null>(null)
   const [picking, setPicking] = useState<ModelRow | null>(null)
@@ -199,11 +195,14 @@ export function ModelChip({
     onChange({ settings: value.settings, provider: m.provider, model: m.model, effort: chosen })
     close()
   }
+  // One provider's models, or with a query and no provider every model that matches, across providers.
   const shown = useMemo(() => {
-    if (!provider) return []
     const needle = query.trim().toLowerCase()
+    if (!provider && !needle) return []
     return models.filter(
-      (m) => m.provider === provider && (!needle || `${m.label} ${m.model}`.toLowerCase().includes(needle)),
+      (m) =>
+        (!provider || m.provider === provider) &&
+        (!needle || `${m.label} ${m.model} ${providerNames[m.provider]}`.toLowerCase().includes(needle)),
     )
   }, [models, provider, query])
   const title = picking ? picking.label : provider ? providerNames[provider] : 'Model'
@@ -216,11 +215,17 @@ export function ModelChip({
         }
       : undefined
   const offline = !store.isOnline(computerId ?? store.selected)
-  const providerCount = provider ? models.filter((m) => m.provider === provider).length : 0
-  const searchProps =
-    provider && !picking && providerCount > 8
-      ? { value: query, onChangeText: setQuery, placeholder: `Search ${providerCount} models` }
-      : undefined
+  const providerCount = provider ? models.filter((m) => m.provider === provider).length : models.length
+  // Search stays at the top of every step but the effort choice, as in the app's other pickers.
+  const searchProps = picking
+    ? undefined
+    : {
+        value: query,
+        onChangeText: setQuery,
+        placeholder: provider
+          ? `Search ${providerCount} ${providerNames[provider]} models`
+          : `Search ${providerCount} models`,
+      }
   const [limit, setLimit] = useState(MODEL_PAGE)
   useEffect(() => setLimit(MODEL_PAGE), [provider, query])
   const modelRow = (m: ModelRow) => {
@@ -307,10 +312,9 @@ export function ModelChip({
         open={open}
         onClose={close}
         title={title}
-        scroll={Platform.OS === 'ios'}
-        // On iOS a search bar added mid-flow rebuilds the native sheet and its rows stop taking taps, so iOS searches
-        // inside the list instead.
-        search={Platform.OS !== 'ios' && searchProps ? searchProps : undefined}
+        // Full height, with room for the keyboard while searching: a long model list is a task, not a drawer.
+        presentation="screen"
+        search={searchProps}
       >
         {back ? (
           <Row onPress={back}>
@@ -350,46 +354,22 @@ export function ModelChip({
               )
             })}
           </View>
-        ) : provider ? (
-          Platform.OS === 'ios' ? (
-            // iOS sheets are native: a React Native list inside one swallows taps, so the sheet scrolls plain rows.
-            <View>
-              {searchProps ? <BottomSearch {...searchProps} inputOnly /> : null}
-              {shown.slice(0, limit).map(modelRow)}
-              {shown.length > limit ? (
-                <Row onPress={() => setLimit((value) => value + MODEL_PAGE)}>
-                  <T tone="accent" weight="500">
-                    {`Show ${Math.min(MODEL_PAGE, shown.length - limit)} more of ${shown.length - limit}`}
-                  </T>
-                </Row>
-              ) : null}
-              {!shown.length ? (
-                <T tone="muted" style={{ padding: space.l }}>
-                  No model matches.
+        ) : provider || query.trim() ? (
+          <View>
+            {shown.slice(0, limit).map(modelRow)}
+            {shown.length > limit ? (
+              <Row onPress={() => setLimit((value) => value + MODEL_PAGE)}>
+                <T tone="accent" weight="500">
+                  {`Show ${Math.min(MODEL_PAGE, shown.length - limit)} more of ${shown.length - limit}`}
                 </T>
-              ) : null}
-            </View>
-          ) : (
-            <View style={{ flexShrink: 1 }}>
-              {/* Its own virtualized list, so only the rows on screen are drawn; it grows with its rows up to most of the screen. */}
-              <FlatList
-                style={{ flexGrow: 0, maxHeight: Math.round(windowHeight * 0.7) }}
-                data={shown}
-                keyExtractor={(m) => `${m.provider}:${m.model}`}
-                initialNumToRender={12}
-                maxToRenderPerBatch={10}
-                windowSize={5}
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled
-                ListEmptyComponent={
-                  <T tone="muted" style={{ padding: space.l }}>
-                    No model matches.
-                  </T>
-                }
-                renderItem={({ item }) => modelRow(item)}
-              />
-            </View>
-          )
+              </Row>
+            ) : null}
+            {!shown.length ? (
+              <T tone="muted" style={{ padding: space.l }}>
+                No model matches.
+              </T>
+            ) : null}
+          </View>
         ) : (
           <View>
             {/* The login is part of what runs the model, so it is chosen here, with each login's room for it. */}
@@ -408,7 +388,7 @@ export function ModelChip({
                     accountId,
                   },
                 })
-                close()
+                // Stays open: the account is one setting of several here, and the model is often chosen next.
               }}
             />
             <QuickSteps

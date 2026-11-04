@@ -88,6 +88,15 @@ function Navigator() {
   )
 }
 
+// A development build keeps the screen on while it runs (Expo's dev tools hold a wake lock); released apps never do.
+// Let it go, so testing shows the same sleep and battery behavior people get.
+if (__DEV__)
+  void import('expo-keep-awake')
+    .then(({ deactivateKeepAwake, ExpoKeepAwakeTag }) =>
+      setTimeout(() => void deactivateKeepAwake(ExpoKeepAwakeTag).catch(() => {}), 1000),
+    )
+    .catch(() => {})
+
 export default function RootLayout() {
   return (
     <SafeAreaProvider>

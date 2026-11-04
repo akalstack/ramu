@@ -65,12 +65,11 @@ export function useThreadToolActivity(chat: Chat | undefined, visible: boolean) 
       )
         void load()
     })
-    const timer = setInterval(() => void load(), 3000)
+    // No poll, as in T3 Code: the host pushes every change, and a reconnect re-runs this effect (it depends on online).
     return () => {
       active = false
       off()
       unwatch()
-      clearInterval(timer)
     }
   }, [host, task, session, scope, online, visible])
   return reading.scope === scope ? reading : { scope, browser: false, computer: false, terminal: false, usage: false }

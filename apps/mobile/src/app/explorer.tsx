@@ -627,7 +627,11 @@ export default function Explorer() {
 
                 {/* One repository is named once up here; several get their own root rows in the tree instead. */}
                 {(multiRoot ? [] : bindings).map((binding) => (
-                  <View key={binding.repoId} style={{ paddingHorizontal: space.xs, paddingTop: space.xs }}>
+                  // The tree's own inset, with room above and below, so the repository reads as the tree's heading.
+                  <View
+                    key={binding.repoId}
+                    style={{ paddingHorizontal: space.l, paddingTop: space.m, paddingBottom: space.s, gap: 2 }}
+                  >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
                       <FolderGit2 size={14} color={c.soft} />
                       <T weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>

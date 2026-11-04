@@ -234,7 +234,7 @@ interface Store extends State {
     provider: AgentProvider,
     model: string,
     effort: string,
-    settings?: Pick<AgentSettings, 'access' | 'autoFallback' | 'serviceTier'>,
+    settings?: Pick<AgentSettings, 'access' | 'autoFallback' | 'serviceTier' | 'accountId'>,
   ): Promise<void>
   isOnline(id: string): boolean
   setDraft(key: string, text: string): void
@@ -1935,12 +1935,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
     },
     setModel: (id, provider, model, effort, extra) => {
-      // Only these three come from the caller; a full settings object here once carried the old model back in.
+      // Only these come from the caller; a full settings object here once carried the old model back in. The login was
+      // left out, so choosing another account in the model picker did nothing.
       const options = extra
         ? {
             access: extra.access,
             autoFallback: extra.autoFallback,
             ...(extra.serviceTier ? { serviceTier: extra.serviceTier } : {}),
+            ...(extra.accountId ? { accountId: extra.accountId } : {}),
           }
         : {}
       const chat = ref.current.chats.find((c) => c.id === id)
