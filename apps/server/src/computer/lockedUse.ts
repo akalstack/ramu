@@ -12,7 +12,16 @@ export interface LockedUseStatus {
   session: string
   clientApproved: boolean
   blockers: string[]
+  /**
+   * The installer this service last started: still running (its prompts are open on the Mac), or how it ended. Absent
+   * until one is started here.
+   */
+  installer?: { running: boolean; error?: string }
 }
+
+/** How a started installer ended: its exit code and the last of what it printed. */
+type Finished = { code: number | null; output: string }
+type Start = (file: string, args: string[], done: (result: Finished) => void) => void
 
 type Exec = (file: string, args: string[], timeoutMs: number) => Promise<string>
 const execute: Exec = (file, args, timeoutMs) =>
@@ -60,23 +69,33 @@ export class LockedUse {
   constructor(
     private readonly executable: () => string | null = ocuExecutable,
     private readonly exec: Exec = execute,
-    private readonly start: (file: string, args: string[]) => void = (file, args) => {
-      const child = spawn(file, args, { stdio: 'ignore', detached: true })
-      child.on('error', () => {})
+    private readonly start: Start = (file, args, done) => {
+      // Its prompts can stay open as long as the person takes; what it prints says why it stopped, if it does.
+      const child = spawn(file, args, { stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+      let output = ''
+      const keep = (chunk: Buffer) => void (output = (output + chunk.toString()).slice(-4000))
+      child.stdout?.on('data', keep)
+      child.stderr?.on('data', keep)
+      child.on('error', (error) => done({ code: -1, output: error.message }))
+      child.on('close', (code) => done({ code, output }))
       child.unref()
     },
   ) {}
 
+  private installer: LockedUseStatus['installer']
+
   async status(): Promise<LockedUseStatus> {
     const ocu = this.executable()
     if (!ocu || process.platform !== 'darwin') return MISSING
+    const installer = this.installer ? { installer: this.installer } : {}
     try {
-      return parseLockedUse(await this.exec(ocu, ['locked-use', 'status', '--json'], 20_000))
+      return { ...parseLockedUse(await this.exec(ocu, ['locked-use', 'status', '--json'], 20_000)), ...installer }
     } catch (error) {
       return {
         ...MISSING,
         installed: true,
         blockers: [error instanceof Error ? error.message : 'Could not read Locked Use status.'],
+        ...installer,
       }
     }
   }
@@ -88,7 +107,24 @@ export class LockedUse {
   async enable(): Promise<LockedUseStatus> {
     const ocu = this.executable()
     if (!ocu) throw new Error('Install Open Computer Use first.')
-    this.start(ocu, ['locked-use', 'enable'])
+    if (this.installer?.running)
+      throw new Error('The installer is already open on this Mac. Finish or cancel it there.')
+    this.installer = { running: true }
+    this.start(ocu, ['locked-use', 'enable'], ({ code, output }) => {
+      const said = output
+        .trim()
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .at(-1)
+      this.installer =
+        code === 0
+          ? { running: false }
+          : {
+              running: false,
+              error: said ?? (code === null ? 'The installer was stopped.' : `The installer ended with code ${code}.`),
+            }
+    })
     return this.status()
   }
 

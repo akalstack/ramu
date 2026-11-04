@@ -1,4 +1,5 @@
 import { TestDeviceSettings } from './TestDeviceSettings'
+import { Dialog as ConfirmDialog } from '../Menu'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useStagedValue } from './stagedChanges'
 import { Check } from 'lucide-react'
@@ -249,7 +250,8 @@ function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: 
     try {
       const next = await invokeOn(hostId, 'computer.lockedUse')
       setState(next)
-      if (next.enabled) setWaiting(false)
+      // Keep following while the installer is open, even after leaving and coming back; stop once it has ended.
+      setWaiting(!next.enabled && !!next.installer?.running)
     } catch (reason) {
       setError(t(errorText(reason)))
     }
@@ -286,13 +288,20 @@ function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: 
       setError(t(errorText(reason)))
     }
   }
+  const installer = state.installer
+  // The installer ended without turning it on: what it said, or what macOS still needs.
+  const stopped = !state.enabled && installer && !installer.running
   const help = state.enabled
     ? state.available
       ? t('On. The agent can keep working while this Mac is locked.')
       : t('On, but not ready: {0}', { 0: state.blockers[0] ?? state.stage })
-    : waiting
-      ? t('Finish the permission and password prompts on this Mac…')
-      : t('Off. The agent stops at the lock screen.')
+    : installer?.running || waiting
+      ? t('Enter the administrator password in the prompt on this Mac. It can open behind other windows.')
+      : stopped && installer.error
+        ? t('Setup stopped: {0}', { 0: installer.error })
+        : stopped
+          ? t('Almost done: {0}', { 0: state.blockers[0] ?? state.stage })
+          : t('Off. The agent stops at the lock screen.')
   const where = here ? '' : ` ${t('Change it in Ramu on that Mac; it asks for that Mac’s administrator password.')}`
   return (
     <>
@@ -301,43 +310,45 @@ function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: 
         <Switch
           aria-label={t('Keep working while the screen is locked')}
           checked={state.enabled}
-          disabled={waiting || !here}
+          disabled={waiting || !!installer?.running || !here}
           onCheckedChange={(checked) =>
             checked ? setConfirming(true) : void act(() => invokeOn(hostId, 'computer.lockedUseDisable'))
           }
         />
       </SettingsRow>
       {confirming && !state.enabled && (
-        <div
-          className="flex flex-col gap-2 rounded border p-3 text-caption"
-          role="group"
-          aria-label={t('Locked screen setup')}
+        <ConfirmDialog
+          title={t('Keep working while the screen is locked?')}
+          confirmLabel={t('Continue on this Mac')}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() =>
+            void act(
+              () => invokeOn(hostId, 'computer.lockedUseEnable'),
+              () => {
+                setConfirming(false)
+                setWaiting(true)
+              },
+            )
+          }
         >
-          <p className="m-0">
+          <p>
             {t(
               'This installs signed Open Computer Use components into macOS sign-in. macOS will ask for your administrator password and for Accessibility, Screen Recording and Input Monitoring on this Mac. Only Ramu’s approved client can use it, and you can turn it off here at any time. Anyone who controls Ramu on this Mac could then act while it is locked.',
             )}
           </p>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              onClick={() =>
-                void act(
-                  () => invokeOn(hostId, 'computer.lockedUseEnable'),
-                  () => {
-                    setConfirming(false)
-                    setWaiting(true)
-                  },
-                )
-              }
-            >
-              {t('Continue on this Mac')}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
-              {t('Cancel')}
-            </Button>
-          </div>
-        </div>
+        </ConfirmDialog>
+      )}
+      {stopped && !installer.error && here && (
+        <Button
+          size="sm"
+          variant="secondary"
+          className="self-start"
+          onClick={() =>
+            void invokeOn(hostId, 'computer.openSetup').then(read, (reason) => setError(t(errorText(reason))))
+          }
+        >
+          {t('Open permission setup')}
+        </Button>
       )}
       {error && (
         <p role="alert" className="m-0 text-caption text-destructive">

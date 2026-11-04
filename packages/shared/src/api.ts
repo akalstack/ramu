@@ -200,6 +200,8 @@ export interface ComputerLockedUse {
   session: string
   clientApproved: boolean
   blockers: string[]
+  /** The installer this host last started: still open on the Mac, or why it stopped. */
+  installer?: { running: boolean; error?: string }
 }
 
 type ComputerFrameMeta = import('./computerBridge').ComputerFrameMeta

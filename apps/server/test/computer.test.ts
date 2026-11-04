@@ -455,13 +455,27 @@ describe('locked use', () => {
         blockers: ['Run ocu locked-use enable'],
       })
       const started: string[][] = []
+      let finish: (result: { code: number | null; output: string }) => void = () => {}
       const lock = new LockedUse(
         () => '/bin/ocu',
         async () => status,
-        (file, args) => started.push([file, ...args]),
+        (file, args, done) => {
+          started.push([file, ...args])
+          finish = done
+        },
       )
-      expect((await lock.enable()).stage).toBe('not-installed')
+      expect(await lock.enable()).toMatchObject({ stage: 'not-installed', installer: { running: true } })
       expect(started).toEqual([['/bin/ocu', 'locked-use', 'enable']])
+      await expect(lock.enable()).rejects.toThrow(/already open/)
+      // A cancelled administrator prompt ends the installer; its last words say so.
+      finish({
+        code: 1,
+        output: 'Requesting authorization…\nLocked Use administrator installation did not complete.\n',
+      })
+      expect((await lock.status()).installer).toEqual({
+        running: false,
+        error: 'Locked Use administrator installation did not complete.',
+      })
       expect(await new LockedUse(() => null).status()).toMatchObject({ installed: false })
       await expect(new LockedUse(() => null).enable()).rejects.toThrow(/Install Open Computer Use/)
       const broken = new LockedUse(
