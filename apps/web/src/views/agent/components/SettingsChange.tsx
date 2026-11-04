@@ -1,3 +1,5 @@
+import { accountName } from '@ramu/shared/providers/providers'
+import { useAppSettings } from '../../../settings/AppSettings'
 import { t as translate } from '../../../i18n'
 import { Fragment } from 'react'
 import { ArrowRight } from 'lucide-react'
@@ -6,16 +8,34 @@ import type { AgentSettings } from '@ramu/shared/types'
 import { accessName } from '../../../chat/AgentControls'
 import { settingsNames, useModelSets } from '../../../models/ModelSets'
 
-/** What the button does, not just "Undo": "Switch back to Opus Medium". */
-export function SwitchBackLabel({ previous }: { previous: AgentSettings }) {
+/** A login by name, as the account picker shows it. */
+function useLoginName() {
+  const { preferences } = useAppSettings()
+  return (s: AgentSettings) =>
+    accountName(preferences.providerBinaries, s.provider, s.accountId ?? 'default', undefined, translate)
+}
+
+const sameLogin = (a: AgentSettings, b: AgentSettings) =>
+  a.provider !== b.provider || (a.accountId ?? 'default') === (b.accountId ?? 'default')
+
+/**
+ * What the button does, not just "Undo": "Switch back to Opus Medium", or to the earlier login when only the login
+ * changed.
+ */
+export function SwitchBackLabel({ previous, next }: { previous: AgentSettings; next?: AgentSettings }) {
   const { catalogs } = useModelSets()
+  const loginName = useLoginName()
   const { model, effort } = settingsNames(previous, catalogs)
+  const sameModel = next && settingsNames(next, catalogs).model === model && next.provider === previous.provider
+  if (next && sameModel && !sameLogin(previous, next))
+    return <>{translate('Switch back to {0}', { '0': loginName(previous) })}</>
   return <>{translate('Switch back to {0}', { '0': effort ? `${model} ${effort}` : model })}</>
 }
 
 /** A settings change in the transcript: "model effort → model effort", then any other part that changed as "old → new". */
 export function SettingsChange({ next, previous }: { next: AgentSettings; previous?: AgentSettings }) {
   const { catalogs } = useModelSets()
+  const loginName = useLoginName()
   const label = (s: AgentSettings) => {
     const { model, effort } = settingsNames(s, catalogs)
     return effort ? `${model} ${effort}` : model
@@ -36,6 +56,8 @@ export function SettingsChange({ next, previous }: { next: AgentSettings; previo
   const changed = [
     [accessName(previous.access), accessName(next.access)],
     [tier(previous), tier(next)],
+    // The login is part of what runs the model: a switch between two logins of one model says which, by name.
+    sameLogin(previous, next) ? [null, null] : [loginName(previous), loginName(next)],
   ]
     .filter(([before, now]) => before && now && before !== now)
     .map(([before, now]) => `${before} → ${now}`)

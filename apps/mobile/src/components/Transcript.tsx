@@ -49,6 +49,7 @@ import { fill, useT, useSay } from '../i18n'
 import { agentErrorView } from '@ramu/shared/chat/agentErrorView'
 import { endedOnError } from '../runtime/turns'
 import { showError } from '../runtime/toast'
+import { accountName } from '@ramu/shared/providers/providers'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import {
@@ -783,6 +784,22 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
     const effort = s.effort ?? model?.defaultEffort
     return effort ? `${name} ${effort.charAt(0).toUpperCase()}${effort.slice(1)}` : name
   }
+  const loginName = (s: import('@ramu/shared/types').AgentSettings) =>
+    accountName(
+      store.appPreferences[chat.computerId]?.providerBinaries,
+      s.provider,
+      s.accountId ?? 'default',
+      undefined,
+      (text, values) => translate(store.language, text, values),
+    )
+  // What "Switch back" returns to: the earlier login when only the login changed, else the earlier model.
+  const backTo = (s: import('@ramu/shared/types').AgentSettings) =>
+    item.settings &&
+    s.provider === item.settings.provider &&
+    label(s) === label(item.settings) &&
+    (s.accountId ?? 'default') !== (item.settings.accountId ?? 'default')
+      ? loginName(s)
+      : label(s)
   let title = item.goalNote ? (strings.goalNotes[item.goalNote] ?? item.title) : item.title
   if (item.title === 'Background command stop requested') title = translate(store.language, item.title)
   // As on the desktop, each model carries its provider's mark: "[Claude] Opus Medium → [Codex] GPT-5.5 High".
@@ -799,11 +816,17 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
       </View>
     )
     const modelChanged = !!before && (before.provider !== next.provider || label(before) !== label(next))
+    // The login is part of what runs the model: a switch between two logins of one model says which, by name.
+    const accountChanged =
+      !!before && before.provider === next.provider && (before.accountId ?? 'default') !== (next.accountId ?? 'default')
     const others = (
       before
-        ? ([[ACCESS[before.access], ACCESS[next.access]]] as const)
-            .filter(([a, b]) => a !== b)
-            .map(([a, b]) => `${a} → ${b}`)
+        ? [
+            ...([[ACCESS[before.access], ACCESS[next.access]]] as const)
+              .filter(([a, b]) => a !== b)
+              .map(([a, b]) => `${a} → ${b}`),
+            ...(accountChanged ? [`${loginName(before!)} → ${loginName(next)}`] : []),
+          ]
         : [ACCESS[next.access]]
     ).join(' · ')
     change = (
@@ -871,7 +894,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
             <T size={font.caption} weight="600" tone="accent">
               {undoing
                 ? 'Switching back…'
-                : `Switch back to ${item.previous ? label(item.previous) : 'previous model'}`}
+                : `Switch back to ${item.previous ? backTo(item.previous) : 'previous model'}`}
             </T>
           </Pressable>
         ) : null}

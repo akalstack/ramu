@@ -17,6 +17,7 @@ import {
 import { requestOutcomes, parseAnswerMessage, questionState } from '@ramu/shared/chat/questions'
 import { goalChanges, goalFactLines } from '@ramu/shared/chat/goalHistory'
 import { providerWaitState, type ProviderWaitState } from '@ramu/shared/chat/providerWait'
+import { foldSettingsChanges } from '@ramu/shared/chat/settingsChanges'
 
 /**
  * The line for a thread at a provider's usage limit. It names the cause and says the thread continues; "Paused" stays
@@ -353,7 +354,11 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
     const next = items.findIndex((item) => (positions.get(item) ?? -1) > group.launchIndex)
     items.splice(group.anchor === null || next < 0 ? items.length : next, 0, row)
   }
-  return items
+  return foldSettingsChanges(
+    items,
+    (item) => (item.kind === 'note' && item.settings ? { settings: item.settings, previous: item.previous } : null),
+    (first, last) => (first.kind === 'note' && last.kind === 'note' ? { ...last, previous: first.previous } : last),
+  )
 }
 
 /** Snapshot the existing occurrences so repeated messages cannot match old history. */

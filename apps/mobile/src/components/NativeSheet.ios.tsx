@@ -110,14 +110,14 @@ function NativeSheetSearch({ search }: { search: SheetSearchProps }) {
             onSubmit(() => search.onSubmit?.()),
           ]}
         />
-        {search.value ? (
-          <Button
-            label={say('Clear search')}
-            systemImage="xmark.circle.fill"
-            modifiers={[labelStyle('iconOnly')]}
-            onPress={() => search.onChangeText('')}
-          />
-        ) : null}
+        {/* Always there, so typing never rebuilds the row: a clear button appearing with the first character took the
+            fixed-width row's space and left the field with none, so only the magnifier showed. */}
+        <Button
+          label={say('Clear search')}
+          systemImage="xmark.circle.fill"
+          modifiers={[labelStyle('iconOnly'), frame({ width: 28 })]}
+          onPress={() => search.onChangeText('')}
+        />
       </HStack>
     </ToolbarItem>
   )

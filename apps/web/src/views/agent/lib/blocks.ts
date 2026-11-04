@@ -3,6 +3,7 @@ import { requestOutcomes } from '@ramu/shared/chat/questions'
 import type { AgentEvent } from '@ramu/shared/types'
 import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { goalChanges } from '@ramu/shared/chat/goalHistory'
+import { foldSettingsChanges } from '@ramu/shared/chat/settingsChanges'
 import type { AgentTask } from '@ramu/shared/types'
 
 const SILENT = new Set<AgentEvent['kind']>([
@@ -87,7 +88,21 @@ export function toBlocks(events: AgentEvent[]): Block[] {
       else blocks.push({ kind: 'tools', tools: [event] })
     } else blocks.push({ kind: 'event', event })
   }
-  return blocks
+  // Back-to-back settings changes read as one, and one that ends where it began (a switch back) leaves no line.
+  return foldSettingsChanges(
+    blocks,
+    (block) =>
+      block.kind === 'event' && block.event.kind === 'settings'
+        ? { settings: block.event.settings, previous: block.event.previous }
+        : null,
+    (first, last) =>
+      first.kind === 'event' &&
+      first.event.kind === 'settings' &&
+      last.kind === 'event' &&
+      last.event.kind === 'settings'
+        ? { ...last, event: { ...last.event, previous: first.event.previous } }
+        : last,
+  )
 }
 
 /** The position of a block in the full list; a tool group is found by its first call. */

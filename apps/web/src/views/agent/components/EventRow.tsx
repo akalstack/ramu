@@ -147,7 +147,7 @@ export function EventRow({
                 >
                   <RotateCcw size={13} aria-hidden="true" />
                   <span className="sr-only">
-                    <SwitchBackLabel previous={e.previous} />
+                    <SwitchBackLabel previous={e.previous} next={e.settings} />
                   </span>
                 </Button>
               )}

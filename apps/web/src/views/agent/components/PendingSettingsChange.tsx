@@ -36,7 +36,7 @@ export function PendingSettingsChange({
           >
             <RotateCcw size={13} aria-hidden="true" />
             <span className="sr-only">
-              <SwitchBackLabel previous={previous} />
+              <SwitchBackLabel previous={previous} next={next} />
             </span>
           </Button>
         </span>
