@@ -1,8 +1,8 @@
 import { ChevronsUpDown, Network, Settings2 } from 'lucide-react'
-import { useSyncExternalStore } from 'react'
+import { useSyncExternalStore, type ReactNode } from 'react'
 import type { Computer, ComputerStatus, Computers } from '@ramu/shared/types'
 import { Menu, type MenuEntry } from '../Menu'
-import { Switch } from '@/components/ui/switch'
+import { DeviceIcon } from '@/components/device-icon'
 import { routeName } from '@ramu/shared/networkLabel'
 import { invoke, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
@@ -40,16 +40,6 @@ function subscribeComputers(listener: () => void) {
 /** One shared computer snapshot per renderer, regardless of how many components display it. */
 export function useComputers(): Computers | null {
   return useSyncExternalStore(subscribeComputers, () => computerState)
-}
-
-/** Whether this window's computer is temporarily unreachable. A rejected pairing never comes back, so it doesn't count. */
-export function useHostConnection(): { offline: boolean; name: string } {
-  const state = useComputers()
-  const host = state?.computers.find((computer) => computer.id === state.current)
-  return {
-    offline: !!host && host.status !== 'connected' && host.status !== 'rejected',
-    name: host?.name ?? t('this host'),
-  }
 }
 
 export const statusText = (status: ComputerStatus) =>
@@ -102,52 +92,45 @@ export function ComputerSwitcher() {
     void invoke('computers.scope', id)
       .then(publishComputers)
       .catch((error) => notifyError(errorText(error), t('Hosts')))
+  const connected = state.computers.filter((computer) => computer.status === 'connected').length
+  // Two lines per host: who it is, then how it is doing. Pausing a connection is in Manage hosts, not in a filter.
+  const row = (icon: ReactNode, title: string, detail: ReactNode) => (
+    <span className="flex w-full min-w-0 items-center gap-2.5 py-0.5">
+      <span className="flex size-7 flex-none items-center justify-center rounded-(--radius-s) bg-fill text-muted-foreground">
+        {icon}
+      </span>
+      <span className="flex min-w-0 grow flex-col">
+        <span className="truncate text-control text-foreground">{title}</span>
+        <span className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">{detail}</span>
+      </span>
+    </span>
+  )
   const items: MenuEntry[] = [
+    { key: 'heading', heading: t('Show threads from') },
     {
       key: 'all',
       selected: !selected,
-      label: (
-        <>
-          <Network size={15} />
-          <span className="grow">{t('All hosts')}</span>
-        </>
+      label: row(
+        <Network size={15} />,
+        t('All hosts'),
+        t('{0} connected · {1} hosts', { 0: connected, 1: state.computers.length }),
       ),
       onSelect: () => select(null),
     },
-    { key: 'hosts-separator', separator: true },
     ...state.computers.map((computer): MenuEntry => ({
       key: computer.id,
       selected: computer.id === selected?.id,
       title: computer.url ?? undefined,
       onSelect: () => select(computer.id),
-      label: (
-        <span className="flex w-full min-w-0 items-center gap-2">
+      label: row(
+        <DeviceIcon name={computer.name} size={15} />,
+        computer.name,
+        <>
           <StatusDot status={computer.status} />
-          <span className="min-w-0 grow truncate">{computer.name}</span>
-          <span className="ml-auto flex-none pl-3 text-right text-caption text-muted-foreground tabular-nums">
-            {[activityText(computer), hostRoute(computer)].filter(Boolean).join(' · ')}
+          <span className="truncate">
+            {[activityText(computer) || statusText(computer.status), hostRoute(computer)].filter(Boolean).join(' · ')}
           </span>
-          {!computer.local && computer.status !== 'rejected' && (
-            // Turns the connection off and on from here; the click must not also pick this host.
-            <span
-              className="flex flex-none items-center"
-              onClick={(event) => event.stopPropagation()}
-              onPointerDown={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              <Switch
-                size="sm"
-                aria-label={t('Keep {0} connected', { 0: computer.name })}
-                checked={computer.status !== 'paused'}
-                onCheckedChange={(on) =>
-                  void invoke('computers.update', computer.id, { enabled: on })
-                    .then(publishComputers)
-                    .catch((error) => notifyError(errorText(error), t('Hosts')))
-                }
-              />
-            </span>
-          )}
-        </span>
+        </>,
       ),
     })),
     { key: 'separator', separator: true },
@@ -168,7 +151,7 @@ export function ComputerSwitcher() {
       label={t('Filter hosts')}
       align="start"
       items={items}
-      menuClassName="min-w-[260px]"
+      menuClassName="min-w-[280px]"
       className="computer-switcher flex w-full min-w-0 items-center justify-start gap-[9px] rounded-(--radius-row) border-0 bg-transparent p-[5px_8px] min-h-8 text-body leading-5 text-soft hover:bg-accent hover:text-foreground aria-expanded:bg-accent [-webkit-app-region:no-drag]"
       icon={
         <>

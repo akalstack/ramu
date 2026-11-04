@@ -1,7 +1,7 @@
 import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
 import { t, useLanguage } from '../i18n'
-import { useHostConnection } from '../workspace/computers'
+import { useHostConnection } from '../workspace/HostProvider'
 import { formatKeys } from '../commands'
 import { NOTE_CLASS, WHERE_CLASS } from './styles'
 

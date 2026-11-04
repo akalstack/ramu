@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { useHost } from '../../../workspace/HostProvider'
-import { useHostConnection } from '../../../workspace/computers'
+import { useHostConnection } from '../../../workspace/HostProvider'
 import { t as translate, useLanguage } from '../../../i18n'
 import { ChevronRight } from 'lucide-react'
 import { ChatActivityButton } from '../../../chat/ChatActivity'

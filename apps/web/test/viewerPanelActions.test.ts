@@ -32,8 +32,10 @@ vi.mock('../src/i18n', () => ({
   t: (text: string, args: Record<string, unknown> = {}) =>
     text.replace(/\{(\w+)\}/g, (_, key: string) => String(args[key] ?? '')),
 }))
-vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ invoke: state.invoke }) }))
-vi.mock('../src/workspace/computers', () => ({ useHostConnection: () => ({ offline: false }) }))
+vi.mock('../src/workspace/HostProvider', () => ({
+  useHost: () => ({ invoke: state.invoke }),
+  useHostConnection: () => ({ offline: false }),
+}))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: (error: Error) => error.message }))
 vi.mock('../src/workspace/workspace', () => ({ useWorkspace: () => ({ dirty: {} }) }))
 vi.mock('../src/views/agent/hooks/useElapsed', () => ({ useElapsed: () => null }))

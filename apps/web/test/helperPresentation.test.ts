@@ -7,7 +7,7 @@ vi.mock('../src/i18n', () => ({
   useLanguage() {},
   t: (value: string, args?: Record<string, string>) => value.replace('{0}', args?.['0'] ?? ''),
 }))
-vi.mock('../src/workspace/computers', () => ({ useHostConnection: () => connection }))
+vi.mock('../src/workspace/HostProvider', () => ({ useHostConnection: () => connection }))
 vi.mock('../src/views/agent/hooks/useElapsed', () => ({ useElapsed: () => null }))
 vi.mock('../src/models/ModelSets', () => ({ modelDisplayName: (name: string) => name }))
 vi.mock('../src/chat/AgentControls', () => ({ providerName: (name: string) => name }))

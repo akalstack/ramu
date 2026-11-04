@@ -1,5 +1,5 @@
 import { helperActions, helperActive, helperStatusLabel, reportPreview } from '@ramu/shared/chat/helperPresentation'
-import { useHostConnection } from '../../../workspace/computers'
+import { useHostConnection } from '../../../workspace/HostProvider'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import { Square, ChevronRight } from 'lucide-react'

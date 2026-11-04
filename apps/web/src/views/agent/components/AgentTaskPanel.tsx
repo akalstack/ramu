@@ -1,6 +1,6 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../composer/viewerAccess'
 import { helperActions, helperActive, helperStatusLabel } from '@ramu/shared/chat/helperPresentation'
-import { useHostConnection } from '../../../workspace/computers'
+import { useHostConnection } from '../../../workspace/HostProvider'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { Button } from '@/components/desktop-button'

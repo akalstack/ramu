@@ -10,8 +10,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open providers': 'Buka provider',
   'Favorites': 'Favorit',
   'Brief': 'Ringkas',
-  'Keep {0} connected': 'Tetap hubungkan {0}',
-  'Turn off to pause this connection without forgetting it.': 'Matikan untuk menjeda koneksi ini tanpa melupakannya.',
   'Float on desktop': 'Mengambang di desktop',
   'Browser, Computer and test device trays get Float: a small live view in a corner, or a window above other apps, with Stop always in reach.': 'Baki Browser, Computer, dan perangkat uji mendapat Mengambang: tampilan langsung kecil di sudut, atau jendela di atas aplikasi lain, dengan Hentikan selalu terjangkau.',
   'Test devices': 'Perangkat uji',
@@ -5299,4 +5297,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Keep working while the screen is locked?': 'Tetap bekerja saat layar terkunci?',
   'This Mac is locked, so its main display cannot be seen or controlled. Unlock it, or allow one app instead: with “Keep working while the screen is locked” on, work in an app continues behind the lock screen.': 'Mac ini terkunci, jadi layar utamanya tidak bisa dilihat atau dikendalikan. Buka kuncinya, atau izinkan satu aplikasi saja: dengan “Tetap bekerja saat layar terkunci” menyala, pekerjaan di aplikasi itu berlanjut di balik layar kunci.',
   'This Mac is locked, so its main display cannot be used. Allow one app: with “Keep working while the screen is locked” on, the agent works in it behind the lock screen.': 'Mac ini terkunci, jadi layar utamanya tidak bisa dipakai. Izinkan satu aplikasi: dengan “Tetap bekerja saat layar terkunci” menyala, agen bekerja di aplikasi itu di balik layar kunci.',
+  'Show threads from': 'Tampilkan thread dari',
+  '{0} connected · {1} hosts': '{0} tersambung · {1} host',
+  'Turn off to pause this connection without forgetting it.': 'Matikan untuk menjeda koneksi ini tanpa melupakannya.',
 }

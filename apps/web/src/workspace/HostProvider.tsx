@@ -4,6 +4,7 @@ import { invokerFor, ramu } from '../ipc'
 import { LOCAL_HOST, ownHostId } from '../hosts'
 import { useComputers } from './computers'
 import { stableContext } from '../lib/stableContext'
+import { t } from '../i18n'
 
 export interface HostApi {
   id: string
@@ -28,4 +29,17 @@ export function useHost(): HostApi {
   const computers = useComputers()
   const status = computers?.computers.find((computer) => computer.id === id)?.status ?? null
   return useMemo(() => ({ id, isLocal: id === LOCAL_HOST, status, invoke: invokerFor(id) }), [id, status])
+}
+
+/**
+ * Whether the host this part of the window shows is temporarily unreachable: a thread's own host, not whichever one
+ * the window has selected. A rejected pairing never comes back, so it doesn't count.
+ */
+export function useHostConnection(): { offline: boolean; name: string } {
+  const { id } = useHost()
+  const host = useComputers()?.computers.find((computer) => computer.id === id)
+  return {
+    offline: !!host && host.status !== 'connected' && host.status !== 'rejected',
+    name: host?.name ?? t('this host'),
+  }
 }

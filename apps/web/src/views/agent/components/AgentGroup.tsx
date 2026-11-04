@@ -1,5 +1,5 @@
 import { helperActive } from '@ramu/shared/chat/helperPresentation'
-import { useHostConnection } from '../../../workspace/computers'
+import { useHostConnection } from '../../../workspace/HostProvider'
 import { Spinner } from '@/components/ui/spinner'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
