@@ -930,7 +930,7 @@ export const AgentView = memo(function AgentView({
                 pending.length > 0 ||
                 (!!session && trayAgents.length > 0) ||
                 dockQuestions.length > 0) && (
-                <ComposerTray className="chat-tray">
+                <ComposerTray className="chat-tray" stack>
                   {dockQuestions.length > 0 && (
                     <QuestionDock
                       sessionId={view.sessionId}

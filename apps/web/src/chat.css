@@ -48,8 +48,23 @@
 }
 
 /* Live work (teammates, browser, computer, background commands, a goal) folds into a stack: the first card shows and
-   the edges of the rest peek above the tray. Hovering, focusing inside or opening a section spreads them out, sliding in
-   below the first; the tray grows from its bottom edge, so the composer never moves. */
+   the edges of the rest peek above the tray. Pointing at it or focusing inside (`data-peek`) spreads them over the
+   conversation without moving it (see ComposerTray); an open section keeps them spread in the layout. */
+.composer-tray-slot {
+  position: relative;
+  flex: none;
+  margin-bottom: calc(-1 * var(--composer-tray-overlap));
+}
+.composer-tray-slot > .composer-tray {
+  margin-bottom: 0;
+}
+.composer-tray-slot > .composer-tray[data-peek] {
+  position: absolute;
+  bottom: 0;
+  inset-inline: var(--composer-tray-inset);
+  width: auto;
+  box-shadow: 0 -12px 32px rgb(0 0 0 / 0.22);
+}
 .composer-tray-stack {
   display: flex;
   flex-direction: column;
@@ -63,9 +78,7 @@
     translate 260ms var(--ease),
     border-color 260ms var(--ease);
 }
-.chat-tray:not(:hover, :focus-within, :has(.composer-tray-stack [data-panel-open]))
-  .composer-tray-stack
-  > :nth-child(n + 2) {
+.chat-tray:not([data-peek], :has(.composer-tray-stack [data-panel-open])) .composer-tray-stack > :nth-child(n + 2) {
   height: 0;
   opacity: 0;
   translate: 0 -6px;
@@ -94,16 +107,14 @@
   bottom: calc(100% + 6px);
 }
 .chat-tray:has(.composer-tray-stack > :nth-child(2)):not(
-    :hover,
-    :focus-within,
+    [data-peek],
     :has(.composer-tray-stack [data-panel-open])
   )::before {
   opacity: 0.6;
   translate: 0;
 }
 .chat-tray:has(.composer-tray-stack > :nth-child(3)):not(
-    :hover,
-    :focus-within,
+    [data-peek],
     :has(.composer-tray-stack [data-panel-open])
   )::after {
   opacity: 0.32;
