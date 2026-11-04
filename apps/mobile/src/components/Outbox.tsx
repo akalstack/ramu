@@ -1,12 +1,13 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
-import { useEffect, useState } from 'react'
-import { useT } from '../i18n'
+import { useState } from 'react'
+import { useSay, useT } from '../i18n'
 import { WorktreeBaseReview } from './WorktreeBaseReview'
-import { ActionSheetIOS, ActivityIndicator, Alert, Platform, Pressable, View } from 'react-native'
+import { ActionSheetIOS, Alert, Platform, Pressable, View } from 'react-native'
 import { Clock, CornerDownRight, ListPlus } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore, type OutboxItem } from '../runtime/store'
 import { T, tap } from './ui'
+import { LongMessage } from './Transcript'
 
 /** Asks how to cancel an outbox item: edit puts the text back in the composer, delete drops it. */
 export function confirmCancel(
@@ -52,8 +53,6 @@ export function confirmCancel(
 }
 
 /** A normal send shows nothing beyond its bubble; a mark appears only if the host is taking this long to answer. */
-const SLOW_SEND_MS = 2000
-
 /**
  * A message that is still on the phone. On its way it looks like the sent message that will replace it, as on the
  * desktop, and the words stay for what needs the person: it is held for a host, or its delivery is in doubt.
@@ -75,14 +74,8 @@ export function PendingBubble({
     item.state === 'accepted' ||
     (!viewOnly && store.isOnline(item.computerId) && (item.state === 'sending' || item.state === 'waiting'))
   const t = useT()
+  const say = useSay()
   const [reviewing, setReviewing] = useState(false)
-  const [slow, setSlow] = useState(false)
-  useEffect(() => {
-    setSlow(false)
-    if (!delivering || item.state === 'accepted') return
-    const timer = setTimeout(() => setSlow(true), SLOW_SEND_MS)
-    return () => clearTimeout(timer)
-  }, [delivering, item.state])
   const ModeIcon = item.mode === 'steer' ? CornerDownRight : item.mode === 'queue' ? ListPlus : Clock
   return (
     <>
@@ -107,9 +100,20 @@ export function PendingBubble({
             ...(delivering ? {} : { borderWidth: 1, borderStyle: 'dashed' as const, borderColor: c.lineStrong }),
           }}
         >
-          <T style={{ lineHeight: 21 }}>{item.text}</T>
+          {/* Drawn as the sent message will be (Markdown, long ones cut to a preview), so the swap does not move the
+              transcript; the floating pill above the composer says it is sending. */}
+          {delivering ? (
+            <LongMessage
+              text={item.text}
+              expanded={false}
+              label={say('Show more')}
+              accent={c.accent}
+              onToggle={() => {}}
+            />
+          ) : (
+            <T style={{ lineHeight: 21 }}>{item.text}</T>
+          )}
         </View>
-        {slow ? <ActivityIndicator size="small" color={c.muted} style={{ transform: [{ scale: 0.7 }] }} /> : null}
         {delivering ? null : (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingRight: 4 }}>
             <ModeIcon size={12} color={c.muted} />

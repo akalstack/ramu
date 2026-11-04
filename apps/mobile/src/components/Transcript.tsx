@@ -1013,7 +1013,7 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
 }
 
 /** A sent message, or only its beginning with a control to show the rest when it is long. */
-function LongMessage({
+export function LongMessage({
   text,
   expanded,
   label,

@@ -58,7 +58,8 @@ import { STANDALONE } from '../../../runtime/types'
 import { Header, HeaderButton, HeaderMenu, Screen, PageLegendList } from '../../../components/Screen'
 import type { LegendListRef } from '@legendapp/list/react-native'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
-import { ThreadActivity } from '../../../components/ThreadActivity'
+import { ThreadActivity, type ThreadActivityHandle } from '../../../components/ThreadActivity'
+import { WorkingLine } from '../../../components/WorkingLine'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
 import { BrowserActivity } from '../../../components/BrowserActivity'
 import { BrowserNotice, useThreadBrowserTabs } from '../../../components/BrowserNotice'
@@ -105,6 +106,11 @@ import * as Clipboard from 'expo-clipboard'
 const TURN_PAGE = 15
 
 const RowSeparator = () => <View style={{ height: space.m + 2 }} />
+
+/** The band kept above the composer for the floating working pill (32 points) and its breathing room. */
+const PILL_BAND = 44
+/** The jump-to-latest button at the band's right end, with a gap: the pill keeps clear of it on both sides. */
+const JUMP_ROOM = 34 + space.l + space.s
 
 export default function ChatScreen() {
   const tr = useSay()
@@ -177,6 +183,7 @@ export default function ChatScreen() {
   const [away, setAway] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [composerHeight, setComposerHeight] = useState(120)
+  const activityHandle = useRef<ThreadActivityHandle>(null)
   const [selection, setSelection] = useState<MessageSelection | null>(null)
   // The selection bar sits on the composer, and the jump-to-latest button stacks above it rather than under it.
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
@@ -184,7 +191,9 @@ export default function ChatScreen() {
   // The keyboard handler then sets the offset itself: the end when following, else the same lines stay above the keys.
   const ios = Platform.OS === 'ios'
   const slack = Math.max(0, insets.bottom - space.s)
-  const coverFor = (keys: number) => composerHeight + (keys ? keys - slack : 0)
+  // The working pill floats in a band kept above the composer at all times, so the transcript never jumps when a turn
+  // starts or ends.
+  const coverFor = (keys: number) => composerHeight + PILL_BAND + (keys ? keys - slack : 0)
   const metrics = useRef({ offset: 0, content: 0, viewport: 0, cover: 0 })
   const settling = useRef<ReturnType<typeof setTimeout> | null>(null)
   const keyboardTarget = useRef<number | null>(null)
@@ -1205,7 +1214,7 @@ export default function ChatScreen() {
                   padding: space.l,
                   paddingBottom: ios
                     ? space.l
-                    : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height,
+                    : (floatingChrome ? composerHeight + PILL_BAND + space.l : space.l) + keyboard.height,
                 }}
                 onLayout={(event) => {
                   metrics.current.viewport = event.nativeEvent.layout.height
@@ -1282,6 +1291,7 @@ export default function ChatScreen() {
                     activity={
                       <>
                         <ThreadActivity
+                          handle={activityHandle}
                           chat={chat}
                           leading={
                             <>
@@ -1505,13 +1515,37 @@ export default function ChatScreen() {
                     }
                   />
                 </ComposerDock>
+                {/* The turn's status, centered in its band above the composer; the selection bar takes the band while open. */}
+                {selection ? null : (
+                  <View
+                    pointerEvents="box-none"
+                    // Inset on both sides by the jump button's room, so the centered pill never runs under it.
+                    style={{
+                      position: 'absolute',
+                      left: JUMP_ROOM,
+                      right: JUMP_ROOM,
+                      bottom: composerHeight + (PILL_BAND - 32) / 2,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <WorkingLine
+                      chat={chat}
+                      sending={pending.length > 0}
+                      onPress={() => activityHandle.current?.openWorking()}
+                    />
+                  </View>
+                )}
                 <Presence
                   visible={away}
                   fade={false}
+                  // In the pill band, at its right end over Send: in thumb reach, beside the working pill rather than on it,
+                  // and off the middle of the transcript. Above the selection bar while that holds the band.
                   style={{
                     position: 'absolute',
-                    alignSelf: 'center',
-                    bottom: composerHeight + (selection ? selectionBarHeight : 0) + space.s,
+                    right: space.l,
+                    bottom: selection
+                      ? composerHeight + selectionBarHeight + space.s
+                      : composerHeight + (PILL_BAND - 34) / 2,
                   }}
                 >
                   <Pressable

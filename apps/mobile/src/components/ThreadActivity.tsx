@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useImperativeHandle, useState, type ReactNode, type Ref } from 'react'
 import { ScrollView, View } from 'react-native'
 import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { mobileThreadActivity } from '../runtime/threadActivity'
@@ -27,14 +27,24 @@ import { Helpers } from './Helpers'
 import { InputRequests } from './InputRequests'
 import { GoalQueueTray } from './Composer'
 import { LimitTray } from './LimitTray'
+export interface ThreadActivityHandle {
+  openWorking(): void
+}
+
 export function ThreadActivity({
   chat,
   actions = [],
   leading,
   children,
+  handle,
 }: {
   chat: Chat
   children?: ReactNode
+  /**
+   * The screen floats the working pill itself, centered above the composer, so the row never grows or shrinks with
+   * it; this opens the turn's sheet from there.
+   */
+  handle?: Ref<ThreadActivityHandle>
   /** Status pills (computer, browser) that sit first in the row and manage their own visibility. */
   leading?: ReactNode
   actions?: { label: string; icon: Icon; onPress(): void }[]
@@ -44,6 +54,7 @@ export function ThreadActivity({
   const id = store.language === 'id'
   const activity = mobileThreadActivity(chat, online)
   const [opened, setOpened] = useState<ActivityKind | 'more' | null>(null)
+  useImperativeHandle(handle, () => ({ openWorking: () => setOpened('working') }), [])
   const [adviceSeen, setAdviceSeen] = useState(false)
   const unread = adviceSeen ? 0 : (chat.unreadAdvice ?? 0)
   // A fresh host count (new advice arrived, or the host cleared it) replaces the local "seen" mark.
@@ -129,7 +140,7 @@ export function ThreadActivity({
         style={{ flexGrow: 0, marginTop: space.xs }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-          <WorkingLine chat={chat} onPress={() => setOpened('working')} />
+          {handle ? null : <WorkingLine chat={chat} onPress={() => setOpened('working')} />}
           {leading}
           {actions.map(({ label, icon, onPress }) => (
             <ActivityPill key={label} icon={icon} label={label} accessibilityLabel={label} iconOnly onPress={onPress} />

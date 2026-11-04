@@ -181,10 +181,8 @@ function NativeLift({
   children: ReactNode
 }) {
   const height = useKeyboardFrame()
-  const following = useAnimatedStyle(
-    () => ({ transform: [{ translateY: lift - Math.max(0, height.value - slack) }] }),
-    [lift, slack],
-  )
+  // Reanimated's plugin captures lift and slack itself; a dependency list is for the web and warns on a phone.
+  const following = useAnimatedStyle(() => ({ transform: [{ translateY: lift - Math.max(0, height.value - slack) }] }))
   return (
     <Reanimated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style, { bottom: lift }, following]}>
       {children}
@@ -241,10 +239,9 @@ function NativePadding({
   const rest = useKeyboardHeight().height
   const padding = rest ? Math.max(0, rest - slack) : 0
   const height = useKeyboardFrame()
-  const following = useAnimatedStyle(
-    () => ({ transform: [{ translateY: padding - Math.max(0, height.value - slack) }] }),
-    [padding, slack],
-  )
+  const following = useAnimatedStyle(() => ({
+    transform: [{ translateY: padding - Math.max(0, height.value - slack) }],
+  }))
   return <Reanimated.View style={[style, { paddingBottom: padding }, following]}>{children}</Reanimated.View>
 }
 

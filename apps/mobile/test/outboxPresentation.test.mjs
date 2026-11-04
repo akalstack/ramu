@@ -33,10 +33,10 @@ test('delivery shows the complete submitted text immediately without offering an
   const tree = bubble(true)
   assert.equal(tree.props.disabled, true)
   assert.equal(tree.props.accessibilityLabel, 'Sending: Hello')
-  assert.equal(tree.props.children[0].props.children.props.children, 'Hello')
+  // Drawn as the sent message will be, so the swap does not move the transcript.
+  assert.equal(tree.props.children[0].props.children.props.text, 'Hello')
   // On its way it reads as the sent message: no status words under the bubble.
   assert.equal(tree.props.children[1], null)
-  assert.equal(tree.props.children[2], null)
 })
 
 test('offline and uncertain messages remain available to review or cancel', () => {
@@ -49,7 +49,6 @@ test('offline and uncertain messages remain available to review or cancel', () =
 test('acknowledged delivery stays visible as sent while the phone reconnects', () => {
   const tree = bubble(false, 'accepted')
   assert.equal(tree.props.disabled, true)
-  assert.equal(tree.props.children[0].props.children.props.children, 'Hello')
+  assert.equal(tree.props.children[0].props.children.props.text, 'Hello')
   assert.equal(tree.props.children[1], null)
-  assert.equal(tree.props.children[2], null)
 })

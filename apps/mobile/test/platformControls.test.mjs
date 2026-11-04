@@ -1402,6 +1402,9 @@ function hookHarness() {
       memo: (component) => component,
       useMemo: memo,
       useCallback: (callback, deps) => memo(() => callback, deps),
+      useImperativeHandle(ref, create) {
+        if (ref && typeof ref === 'object') ref.current = create()
+      },
       useState(initial) {
         const index = stateIndex++
         if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial
