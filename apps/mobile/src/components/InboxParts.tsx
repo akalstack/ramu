@@ -17,7 +17,7 @@ export function Chips<K extends string>({
 }: {
   value: K
   onChange: (key: K) => void
-  options: { key: K; label: string; count?: number }[]
+  options: { key: K; label: string; count?: number; status?: import('../runtime/types').ComputerStatus }[]
 }) {
   return (
     <ScrollView
@@ -31,6 +31,7 @@ export function Chips<K extends string>({
           key={option.key}
           label={option.label}
           count={option.count}
+          status={option.status}
           selected={option.key === value}
           onPress={() => onChange(option.key)}
         />

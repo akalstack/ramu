@@ -18,7 +18,7 @@ import { TEXT_SCALE, font, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
 import { ago, useT, type Strings, useSay } from '../i18n'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
-import { Pill, Row, StatusIcon, T, tap } from './ui'
+import { ConnectionDot, Pill, Row, StatusIcon, T, tap } from './ui'
 import { ChatActionsSheet, useChatCommands } from './ChatActions'
 import { SwipeRow } from './SwipeRow'
 import { useComputerUse } from '../runtime/computerUse'
@@ -106,10 +106,11 @@ export const ChatRow = memo(function ChatRow({
         ]
   const meta = (
     <>
+      {/* The app's status dot, as on the host list, rather than a word competing with the thread's own status. */}
       {!online ? (
-        <T size={font.caption} tone="muted">
-          {strings.offline}
-        </T>
+        <View accessible accessibilityLabel={strings.offline}>
+          <ConnectionDot status="offline" size={7} />
+        </View>
       ) : null}
       {shortKey ? (
         <T

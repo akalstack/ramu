@@ -21,7 +21,7 @@ import {
   useLinkAccount,
 } from '../runtime/link'
 import { GlassButton } from './Screen'
-import { Card, T, tap } from './ui'
+import { Card, ConnectionDot, T, tap } from './ui'
 
 export function LinkHosts() {
   const { c } = useTheme()
@@ -211,10 +211,13 @@ export function LinkHosts() {
                   <T weight="600" numberOfLines={1}>
                     {host.name}
                   </T>
-                  <T size={font.caption} tone="muted">
-                    {host.sharedBy ? `${say('Shared by {0}', { 0: host.sharedBy })} · ` : ''}
-                    {already ? say('Already connected') : host.online ? say('Online') : say('Offline')}
-                  </T>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <ConnectionDot status={host.online ? 'online' : 'offline'} size={7} />
+                    <T size={font.caption} tone="muted" style={{ flexShrink: 1 }}>
+                      {host.sharedBy ? `${say('Shared by {0}', { 0: host.sharedBy })} · ` : ''}
+                      {already ? say('Already connected') : host.online ? say('Online') : say('Offline')}
+                    </T>
+                  </View>
                 </View>
               </Pressable>
             )

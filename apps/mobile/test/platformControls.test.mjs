@@ -4858,7 +4858,8 @@ for (const os of ['ios', 'android']) {
     online = false
     tree = ChatRow({ chat })
     assert.match(find(tree, 'Row').props.accessibilityLabel, /Offline · last-known activity/)
-    assert.ok(nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Offline'))
+    // Offline shows as the app's status dot, still named for VoiceOver.
+    assert.ok(nodes(tree).some((node) => node.props?.accessibilityLabel === 'Offline'))
     tree = ChatRow({ chat: { ...chat, status: 'needs-input', inputSummary: undefined } })
     assert.match(find(tree, 'Row').props.accessibilityLabel, /Waiting for your input/)
     assert.ok(!nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Approval'))

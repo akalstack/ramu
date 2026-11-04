@@ -327,7 +327,7 @@ export default function InboxScreen() {
             onChange={(id) => setHostFilter(id || null)}
             options={[
               { key: '', label: t.allHosts },
-              ...store.computers.map((pc) => ({ key: pc.id, label: `${pc.name} · ${t[pc.status]}` })),
+              ...store.computers.map((pc) => ({ key: pc.id, label: pc.name, status: pc.status })),
             ]}
           />
         ) : null}

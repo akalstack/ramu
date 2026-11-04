@@ -270,8 +270,11 @@ export function Chip({
   accessibilityLabel,
   onLongPress,
   accessibilityHint,
+  status,
 }: {
   label: string
+  /** A host's connection, drawn as the app's status dot before the label instead of a word. */
+  status?: ComputerStatus
   count?: number
   selected?: boolean
   onPress: () => void
@@ -318,6 +321,7 @@ export function Chip({
       })}
     >
       {I ? <I size={14} color={selected ? c.accent : c.soft} strokeWidth={1.9} /> : null}
+      {status ? <ConnectionDot status={status} size={7} /> : null}
       <T
         size={small ? font.caption : font.control}
         weight={selected ? '600' : '500'}
