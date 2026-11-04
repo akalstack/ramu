@@ -55,5 +55,6 @@ The sidebar footer shows each provider's remaining allowance. Account names and 
 ## Provider notes
 
 - OpenCode 2 runs one `opencode serve` per thread; OpenCode 1.x and Antigravity use ACP.
+- Antigravity lists the models your Google plan offers, including its Claude and GPT models. Ramu identifies itself to the runtime as Zed, because Google offers those models only to the ACP clients it allows. Thinking levels show only on models that have them.
 - ACP runtimes cannot take input mid-turn, so **Steer** cancels the turn and continues with your message.
 - Cursor steers within the turn.

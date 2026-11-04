@@ -164,7 +164,9 @@ export class AcpRpc {
   async initialize(): Promise<Wire> {
     const result = await this.request('initialize', {
       protocolVersion: 1,
-      clientInfo: { name: 'ramu', version: '0.0.1' },
+      // Antigravity offers its Claude and GPT models only to allowlisted clients such as Zed; everyone else gets Gemini.
+      clientInfo:
+        this.provider === 'antigravity' ? { name: 'zed', version: '0.0.0' } : { name: 'ramu', version: '0.0.1' },
       clientCapabilities: {
         fs: { readTextFile: false, writeTextFile: false },
         terminal: this.terminal,
@@ -191,28 +193,40 @@ const EFFORTS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 
 const effortConfig = (session: Wire): Wire | undefined =>
   (session.configOptions ?? []).find((c: Wire) => c.category === 'thought_level')
 const optionsOf = (config: Wire): Wire[] => (config.options ?? []).flatMap((option: Wire) => option.options ?? [option])
-export function acpSessionModels(provider: AcpProvider, session: Wire): AgentModel[] {
+const effortsOf = (level: Wire | undefined) => {
+  const efforts = level
+    ? optionsOf(level)
+        .map((o) => o.value as ReasoningEffort)
+        .filter((value) => EFFORTS.includes(value))
+    : []
+  return {
+    efforts,
+    defaultEffort: efforts.includes(level?.currentValue) ? (level!.currentValue as ReasoningEffort) : null,
+  }
+}
+/**
+ * `levels` holds the reasoning option each model showed once selected (`undefined` when it has none). Without it, the
+ * session-wide option stands for every model.
+ */
+export function acpSessionModels(
+  provider: AcpProvider,
+  session: Wire,
+  levels?: Map<string, Wire | undefined>,
+): AgentModel[] {
   const config = (session.configOptions ?? []).find((c: Wire) => c.category === 'model' || c.id === 'model')
   const models: Wire[] = config
     ? optionsOf(config).map((m) => ({ ...m, id: m.value, name: m.name }))
     : (session.models?.availableModels ?? []).map((m: Wire) => ({ ...m, id: m.modelId, name: m.name }))
   const current = config?.currentValue ?? session.models?.currentModelId
   // ACP exposes reasoning as one session-wide option; only levels Ramu understands can be offered.
-  const level = effortConfig(session)
-  const efforts = level
-    ? optionsOf(level)
-        .map((o) => o.value as ReasoningEffort)
-        .filter((value) => EFFORTS.includes(value))
-    : []
-  const defaultEffort = efforts.includes(level?.currentValue) ? (level!.currentValue as ReasoningEffort) : null
+  const shared = effortsOf(effortConfig(session))
   return models.map((m) => ({
     provider,
     id: m.id,
     name: m.name || m.id,
     ...modelLegacyMetadata(m),
     ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
-    efforts,
-    defaultEffort,
+    ...(levels?.has(m.id) ? effortsOf(levels.get(m.id)) : shared),
     isDefault: m.id === current,
   }))
 }
@@ -235,6 +249,21 @@ export function observeAcpPlan(provider: AcpProvider, accountId: string, session
   acpPlans.set(key, { plan: tier.name.trim(), ...(upgrade ? { upgradeUrl: upgrade } : {}) })
   if (before && before.plan !== tier.name.trim()) for (const listener of planListeners) listener(provider, accountId)
 }
+/** Antigravity's thinking levels belong to Gemini alone, so each model is selected once on the throwaway session to read its own. */
+async function modelLevels(rpc: AcpRpc, session: Wire): Promise<Map<string, Wire | undefined>> {
+  const config = (session.configOptions ?? []).find((c: Wire) => c.category === 'model' || c.id === 'model')
+  const levels = new Map<string, Wire | undefined>()
+  if (!config) return levels
+  levels.set(config.currentValue, effortConfig(session))
+  for (const { value } of optionsOf(config)) {
+    if (levels.has(value)) continue
+    const changed = await rpc
+      .request('session/set_config_option', { sessionId: session.sessionId, configId: config.id, value })
+      .catch(() => null)
+    if (Array.isArray(changed?.configOptions)) levels.set(value, effortConfig({ configOptions: changed.configOptions }))
+  }
+  return levels
+}
 export async function acpModels(provider: AcpProvider, accountId?: string): Promise<AgentModel[]> {
   const rpc = new AcpRpc(provider, homedir(), accountId)
   rpc.onMessage = (m) => {
@@ -245,7 +274,7 @@ export async function acpModels(provider: AcpProvider, accountId?: string): Prom
     await rpc.initialize()
     const session = await rpc.request('session/new', { cwd: homedir(), mcpServers: [] })
     observeAcpPlan(provider, accountId ?? 'default', session)
-    return acpSessionModels(provider, session)
+    return acpSessionModels(provider, session, provider === 'antigravity' ? await modelLevels(rpc, session) : undefined)
   } finally {
     await rpc.close()
   }

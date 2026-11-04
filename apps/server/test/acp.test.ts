@@ -40,6 +40,8 @@ const send=m=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',...m})+'\\n');
 let promptID; let current='';
 const finish=()=>send({id:promptID,result:{stopReason:'end_turn'}});
 const session={sessionId:'session-1',configOptions:[{id:'model',category:'model',type:'select',currentValue:'wire-model',options:[{value:'wire-model',name:'Wire model'}]},{id:'mode',category:'mode',type:'select',currentValue:'agent',options:[{value:'agent',name:'Agent'},{value:'ask',name:'Ask'},...JSON.parse(process.env.RAMU_EXTRA_MODES||'[]')]}]};
+const levels={id:'thinking_level',category:'thought_level',type:'select',currentValue:'high',options:[{value:'low'},{value:'high'}]};
+if(process.env.RAMU_TWO_MODELS)session.configOptions=[{id:'model',category:'model',type:'select',currentValue:'gemini',options:[{value:'gemini',name:'Gemini'},{value:'claude',name:'Claude'}]},levels];
 if(process.env.RAMU_LEGACY_MODES){session.configOptions=undefined;session.models={currentModelId:'wire-model',availableModels:[{modelId:'wire-model',name:'Wire model'}]};session.modes={availableModes:[{id:'agent'},{id:'ask'},{id:'auto'},...JSON.parse(process.env.RAMU_EXTRA_MODES||'[]').map(mode=>({id:mode.value}))]};}
 rl.on('line',line=>{
  fs.appendFileSync(process.env.RAMU_ACP_LOG,line+'\\n');const m=JSON.parse(line);
@@ -59,6 +61,7 @@ rl.on('line',line=>{
   if(m.method==='session/load')send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'historical'}}}});
   send({id:m.id,result:session});
  }
+ if(process.env.RAMU_TWO_MODELS&&m.method==='session/set_config_option'&&m.params.configId==='model'){send({id:m.id,result:{configOptions:[session.configOptions[0],...(m.params.value==='gemini'?[levels]:[])]}});return;}
  if(['session/set_config_option','session/set_model','session/set_mode'].includes(m.method))send({id:m.id,result:{}});
  if(m.method==='session/cancel'&&!process.env.RAMU_IGNORE_CANCEL)send({id:promptID,result:{stopReason:'cancelled'}});
  if(m.method==='session/prompt'){
@@ -122,6 +125,18 @@ it('discovers advertised models and authenticates Cursor without prompting', asy
     { provider: 'cursor', id: 'wire-model', name: 'Wire model', efforts: [], defaultEffort: null, isDefault: true },
   ])
   expect(log().find((m) => m.method === 'authenticate').params).toEqual({ methodId: 'cursor_login' })
+})
+it('identifies as Zed to Antigravity alone, and reads each Antigravity model’s own thinking levels', async () => {
+  vi.stubEnv('RAMU_TWO_MODELS', '1')
+  expect(await acpModels('antigravity')).toMatchObject([
+    { id: 'gemini', efforts: ['low', 'high'], defaultEffort: 'high', isDefault: true },
+    { id: 'claude', efforts: [], defaultEffort: null, isDefault: false },
+  ])
+  expect(log().find((m) => m.method === 'initialize').params.clientInfo.name).toBe('zed')
+  rmSync(join(dir, 'wire'))
+  await acpModels('opencode')
+  expect(log().find((m) => m.method === 'initialize').params.clientInfo.name).toBe('ramu')
+  expect(log().some((m) => m.method === 'session/set_config_option')).toBe(false)
 })
 it('supports grouped config options and legacy model lists', () => {
   expect(
