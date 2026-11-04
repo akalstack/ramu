@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { cn } from 'cn'
 import { Eye, EyeOff, Gauge } from 'lucide-react'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentProvider, ContextUsage, UsageReading } from '@ramu/shared/types'
 import {
   accountName,
@@ -671,16 +671,44 @@ function WeekActivity() {
   )
 }
 
+/** Room kept at the end of the meter for the "+N" chip when not every provider fits. */
+const MORE_WIDTH = 30
+
 /**
- * Pinned to the bottom of the sidebar: one line with each provider's highest window for the login in use, so it never
- * squeezes the chat list. The window is named once it needs attention; a click opens every login in Plan usage.
+ * Pinned to the bottom of the sidebar: one line with each provider's highest window for the login in use, tightest
+ * first, so it never squeezes the chat list. What does not fit becomes "+N" rather than being cut off; the window is
+ * named once a limit is reached. A click opens every login in Plan usage.
  */
 export function UsageFooter() {
   useLanguage()
   const { preferences } = useAppSettings()
   const all = useVisibleUsage()
   const groups = byProvider(all)
+    .map((group) => ({ ...group, peak: peakUsage(all, group.provider)! }))
+    .sort((a, b) => b.peak.usedPercent - a.peak.usedPercent)
   const [open, setOpen] = useState(false)
+  const box = useRef<HTMLButtonElement>(null)
+  // How many providers fit; Infinity while every one is laid out to be measured.
+  const [fit, setFit] = useState(Infinity)
+  const signature = groups.map(({ provider, peak }) => `${provider}:${peak.usedPercent}:${usageTone(peak)}`).join(',')
+  useEffect(() => setFit(Infinity), [signature])
+  useEffect(() => {
+    const element = box.current
+    if (!element) return
+    const observer = new ResizeObserver(() => setFit(Infinity))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  useLayoutEffect(() => {
+    const element = box.current
+    if (fit !== Infinity || !element) return
+    const items = [...element.querySelectorAll<HTMLElement>('[data-usage-item]')]
+    const end = element.getBoundingClientRect().right - parseFloat(getComputedStyle(element).paddingRight)
+    const overflows = (item: HTMLElement, room = 0) => item.getBoundingClientRect().right > end - room
+    const last = items.at(-1)
+    const first = last && overflows(last) ? items.findIndex((item) => overflows(item, MORE_WIDTH)) : -1
+    setFit(first < 0 ? items.length : Math.max(1, first))
+  }, [fit])
   if (!preferences.showUsageLimits || !groups.length) return null
   const label = groups
     .map(
@@ -688,29 +716,35 @@ export function UsageFooter() {
         `${providerName(provider)}: ${[five && `5-hour ${five.usedPercent}%`, weekly && `${weekly.window === 'monthly' ? 'monthly' : 'weekly'} ${weekly.usedPercent}%`].filter(Boolean).join(', ')}`,
     )
     .join('; ')
+  const shown = groups.slice(0, fit)
+  const hidden = groups.slice(fit)
   return (
     <div className="usage-footer flex flex-none items-center">
       <Button
+        ref={box}
         type="button"
         variant="ghost"
-        className="h-8 min-w-0 w-full flex-1 flex-nowrap justify-start gap-2.5 overflow-hidden rounded-(--radius-row) bg-fill px-2.5 text-[length:var(--font-caption)] leading-4 font-normal text-soft [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:bg-fill dark:hover:bg-hover aria-expanded:bg-hover active:not-aria-[haspopup]:translate-y-0"
+        className="h-8 min-w-0 w-full flex-1 flex-nowrap justify-start gap-3 overflow-hidden rounded-(--radius-row) bg-fill px-2.5 text-[length:var(--font-caption)] leading-4 font-normal text-soft [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:bg-fill dark:hover:bg-hover aria-expanded:bg-hover active:not-aria-[haspopup]:translate-y-0"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={t('Plan usage. {0}', { '0': label })}
         title={t('Plan usage')}
         onClick={() => setOpen(true)}
       >
-        <Gauge className="size-[calc(var(--font-caption)+3px)] flex-none text-muted-foreground" />
-        {groups.map(({ provider }) => {
-          const peak = peakUsage(all, provider)!,
-            tone = usageTone(peak)
+        {shown.map(({ provider, peak }) => {
+          const tone = usageTone(peak)
           return (
-            <span key={provider} className="usage-compact-item inline-flex flex-none items-center gap-1">
+            <span
+              key={provider}
+              data-usage-item
+              className="usage-compact-item inline-flex flex-none items-center gap-1"
+              title={`${providerName(provider)} · ${windowLabel(peak)} · ${usageStatusText(peak)}`}
+            >
               <ProviderIcon provider={provider} size="calc(var(--font-caption) + 2px)" />
               <span className={cn('text-[length:var(--font-caption)] leading-4 tabular-nums', toneText[tone])}>
                 {peak.usedPercent}%
               </span>
-              {tone !== 'ok' && (
+              {tone === 'bad' && (
                 <span className="usage-window-label -ml-px text-[length:calc(var(--font-caption)-2px)] leading-3.5 text-muted-foreground">
                   {windowLabel(peak, true)}
                 </span>
@@ -718,6 +752,14 @@ export function UsageFooter() {
             </span>
           )
         })}
+        {hidden.length > 0 && (
+          <span
+            className="ml-auto flex-none rounded-(--radius-s) bg-hover px-1.5 text-[length:calc(var(--font-caption)-1px)] leading-4 text-muted-foreground tabular-nums"
+            title={hidden.map(({ provider, peak }) => `${providerName(provider)} ${peak.usedPercent}%`).join(' · ')}
+          >
+            +{hidden.length}
+          </span>
+        )}
       </Button>
       <UsageDialog open={open} onOpenChange={setOpen} />
     </div>
