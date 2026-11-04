@@ -19,6 +19,8 @@ export interface PlatformReadiness {
   missing: { item: string; fix: string }[]
   /** Ready to boot and watch, but taps need this optional helper. */
   note?: string
+  /** The terminal command that installs the helper; the host can also run it with `testDevices.installHelper`. */
+  install?: string
 }
 
 export interface TestDeviceStatus {

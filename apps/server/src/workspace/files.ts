@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { cp, lstat, mkdir, opendir, readdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from 'node:path'
+import { ripgrep } from './ripgrep'
 import type {
   DirEntry,
   FileContent,
@@ -40,9 +41,8 @@ export function searchText(
     args.push('--glob', `!${pattern}`)
   args.push('--glob', '!**/.git/**', '--glob', '!**/.git', '--', options.query, '.')
   return new Promise((resolve, reject) => {
-    const executable =
-      ['/opt/homebrew/bin/rg', '/usr/local/bin/rg', '/usr/bin/rg'].find((path) => existsSync(path)) ?? 'rg'
-    const child = spawn(executable, args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
+    const rg = ripgrep() ?? { file: 'rg' }
+    const child = spawn(rg.file, args, { cwd: root, argv0: rg.argv0, stdio: ['ignore', 'pipe', 'pipe'] })
     const matches: SearchMatch[] = []
     let pending = '',
       stderr = '',

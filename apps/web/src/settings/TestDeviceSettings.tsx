@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Smartphone } from 'lucide-react'
+import { Check, Copy, Smartphone } from 'lucide-react'
 import type { PlatformReadiness, TestDeviceStatus } from '@ramu/shared/testDevices'
 import { SettingsGroupTitle, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
@@ -8,7 +8,25 @@ import { t, useLanguage } from '../i18n'
 import { invokeOn } from '../ipc'
 import { errorText } from '../lib/errors'
 
-function Readiness({ title, value }: { title: string; value: PlatformReadiness }) {
+function Readiness({
+  title,
+  value,
+  installing,
+  canInstall,
+  onInstall,
+}: {
+  title: string
+  value: PlatformReadiness
+  installing: boolean
+  canInstall: boolean
+  onInstall: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const copy = (command: string) =>
+    void navigator.clipboard.writeText(command).then(() => {
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    })
   return (
     <div className="flex flex-col gap-0.5 py-1 text-caption">
       <p className={`m-0 ${value.ready ? 'text-foreground' : 'text-muted-foreground'}`}>
@@ -19,7 +37,21 @@ function Readiness({ title, value }: { title: string; value: PlatformReadiness }
           {entry.item}: {entry.fix}
         </p>
       ))}
-      {value.note && <p className="m-0 text-muted-foreground">{value.note}</p>}
+      {value.note && <p className="m-0 text-muted-foreground">{t(value.note)}</p>}
+      {value.install && (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <Button size="xs" disabled={!canInstall || installing} onClick={onInstall}>
+            {installing ? t('Installing…') : t('Install idb')}
+          </Button>
+          <Button variant="ghost" size="xs" onClick={() => copy(value.install!)}>
+            {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+            {copied ? t('Copied') : t('Copy command')}
+          </Button>
+          <code className="min-w-0 flex-1 truncate text-muted-foreground" title={value.install}>
+            {value.install}
+          </code>
+        </div>
+      )}
     </div>
   )
 }
@@ -43,6 +75,14 @@ export function TestDeviceSettings({ hostId, readOnly }: { hostId: string; readO
   useEffect(() => {
     void load()
   }, [load])
+  const [installing, setInstalling] = useState(false)
+  const installHelper = () => {
+    setInstalling(true)
+    setError(null)
+    invokeOn(hostId, 'testDevices.installHelper')
+      .then(load, (cause) => setError(t(errorText(cause))))
+      .finally(() => setInstalling(false))
+  }
   const running = status?.devices.filter((device) => device.running) ?? []
   return (
     <section className="flex flex-col" aria-label={t('Test devices')}>
@@ -67,8 +107,20 @@ export function TestDeviceSettings({ hostId, readOnly }: { hostId: string; readO
       </SettingsRow>
       {status && (
         <>
-          <Readiness title="iOS" value={status.ios} />
-          <Readiness title="Android" value={status.android} />
+          <Readiness
+            title="iOS"
+            value={status.ios}
+            installing={installing}
+            canInstall={!readOnly}
+            onInstall={installHelper}
+          />
+          <Readiness
+            title="Android"
+            value={status.android}
+            installing={installing}
+            canInstall={!readOnly}
+            onInstall={installHelper}
+          />
         </>
       )}
       {running.map((device) => (

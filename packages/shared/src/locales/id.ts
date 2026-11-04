@@ -5302,4 +5302,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Turn off to pause this connection without forgetting it.': 'Matikan untuk menjeda koneksi ini tanpa melupakannya.',
   'Copy table': 'Salin tabel',
   'Resume control': 'Lanjutkan kendali',
+  'Copy command': 'Salin perintah',
+  'Install idb': 'Pasang idb',
+  'Watching works. To let agents tap and type, install idb.': 'Menonton sudah bisa. Agar agent bisa mengetuk dan mengetik, pasang idb.',
+  'Tapping an iOS Simulator needs idb. Install it in Settings › Computer use › Test devices.': 'Mengetuk iOS Simulator memerlukan idb. Pasang di Pengaturan › Penggunaan komputer › Perangkat uji.',
+  'Install Homebrew from brew.sh first, then try again.': 'Pasang Homebrew dari brew.sh terlebih dahulu, lalu coba lagi.',
+  'Install the Xcode command line tools with xcode-select --install, then try again.': 'Pasang Xcode command line tools dengan xcode-select --install, lalu coba lagi.',
+  'idb installation is already running.': 'Pemasangan idb sedang berjalan.',
+  'Install idb on the owning host.': 'Pasang idb di host pemilik.',
+  'idb installed without its executables. Try again.': 'idb terpasang tanpa file yang bisa dijalankan. Coba lagi.',
 }

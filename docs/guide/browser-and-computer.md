@@ -28,7 +28,7 @@ macOS needs the Open Computer Use tool: **Install & set up** installs it and ask
 
 ## Test devices
 
-**Settings → Computer use → Test devices** (off by default) lets agents check an app on an iOS Simulator or Android emulator on the host. It shows what each platform is missing and how to fix it. Xcode, the Android SDK and the optional iOS tap helper `idb` are your install.
+**Settings → Computer use → Test devices** (off by default) lets agents check an app on an iOS Simulator or Android emulator on the host. It shows what each platform is missing and how to fix it. Xcode and the Android SDK are your install. Watching an iOS Simulator works without anything else; to let agents tap and type, **Install idb** sets up the helper (Homebrew's `idb-companion` and a pinned `fb-idb` in `~/.ramu/tools`), or **Copy command** gives you the same install for your own terminal.
 
 The agent boots a device, installs a build from the workspace (`.app` or `.apk`), launches it and reads its logs, with no shell. The device then works like computer use: observe, tap, type, watch and take control. One thread holds a device at a time, at most two run per host, and an idle device shuts down after 15 minutes.
 

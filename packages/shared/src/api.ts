@@ -215,6 +215,8 @@ export interface RamuMethods {
   'testDevices.status'(): import('./testDevices').TestDeviceStatus
   'testDevices.setEnabled'(enabled: boolean): void
   'testDevices.stop'(id: string): void
+  /** Installs the optional helper that lets agents tap and type on iOS Simulators. */
+  'testDevices.installHelper'(): void
   'computer.status'(): {
     enabled: boolean
     runtime: import('./computerBridge').ComputerRuntimeStatus

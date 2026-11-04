@@ -4,7 +4,7 @@ Open an issue before a substantial feature or architecture change. For fixes, in
 
 ## Development
 
-Use Git, Node.js 24, pnpm 11.21.0, and ripgrep (`rg`, needed by project search and its tests):
+Use Git, Node.js 24 and pnpm 11.21.0. Project search uses your `rg` when installed and otherwise the ripgrep inside the bundled Claude binary:
 
 ```sh
 npm install --global pnpm@11.21.0

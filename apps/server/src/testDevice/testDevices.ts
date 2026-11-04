@@ -23,6 +23,7 @@ import {
   type TestDeviceStatus,
 } from '@ramu/shared/testDevices'
 import { redactSecrets } from '../memory/secrets'
+import { idbCompanion, idbExecutable, idbInstallCommand } from './idb'
 
 const run = promisify(execFile)
 const OPTIONS = { timeout: 60_000, maxBuffer: 32_000_000 }
@@ -42,12 +43,6 @@ const androidTool = (relativePath: string) => {
   const path = root ? join(root, relativePath) : ''
   return path && existsSync(path) ? path : null
 }
-const onPath = async (command: string) =>
-  run('/usr/bin/env', ['which', command], { timeout: 5000 }).then(
-    ({ stdout }) => stdout.trim() || null,
-    () => null,
-  )
-
 interface Running {
   platform: 'ios' | 'android'
   /** The simulator UDID or the adb serial. */
@@ -100,9 +95,10 @@ export class TestDevices {
           item: 'Xcode',
           fix: 'Install Xcode from the App Store, open it once, then run xcode-select --install.',
         })
-      if (!(await onPath('idb')))
-        ios.note =
-          'Watching works. To let agents tap and type, install idb: brew install facebook/fb/idb-companion and pip install fb-idb.'
+      if (!idbExecutable() || !idbCompanion()) {
+        ios.note = 'Watching works. To let agents tap and type, install idb.'
+        ios.install = idbInstallCommand()
+      }
     }
     ios.ready = !ios.missing.length
     const android: PlatformReadiness = { ready: false, missing: [] }
@@ -402,8 +398,6 @@ export class TestDevices {
       entry.lastUse = Date.now()
       return entry
     }
-    let idb: string | null | undefined
-    const idbPath = async () => (idb === undefined ? (idb = await onPath('idb')) : idb)
     // iOS input is in points, captures in pixels; recent iPhones and iPads draw three or two pixels per point.
     let scale = 3
     return {
@@ -459,12 +453,14 @@ export class TestDevices {
           else await input('swipe', n(action.fromX), n(action.fromY), n(action.toX), n(action.toY), '600')
           return
         }
-        const path = await idbPath()
-        if (!path)
+        const path = idbExecutable()
+        const companion = idbCompanion()
+        if (!path || !companion)
           throw new ComputerNotRun(
-            'Tapping an iOS Simulator needs idb. Install it with brew install facebook/fb/idb-companion and pip install fb-idb.',
+            'Tapping an iOS Simulator needs idb. Install it in Settings › Computer use › Test devices.',
           )
-        const ui = (...args: string[]) => run(path, ['ui', ...args, '--udid', entry.handle], OPTIONS)
+        const ui = (...args: string[]) =>
+          run(path, ['--companion-path', companion, 'ui', ...args, '--udid', entry.handle], OPTIONS)
         const p = (value: number) => String(Math.round(value / scale))
         if (action.kind === 'click') await ui('tap', p(action.x), p(action.y))
         else if (action.kind === 'type') await ui('text', action.text)
