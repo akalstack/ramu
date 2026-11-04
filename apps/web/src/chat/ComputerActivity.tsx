@@ -54,7 +54,7 @@ function HandoffNotice({
 }: {
   taskId: string
   session: ComputerSessionSummary
-  run: (work: () => Promise<unknown>) => Promise<void>
+  run: (work: () => Promise<unknown>) => Promise<unknown>
 }) {
   const { invoke } = useHost()
   if (!session.handoffRequest) return null
@@ -93,17 +93,27 @@ function Viewer({
   taskId,
   session,
   onClose,
-  run,
+  reload,
   onAsked,
 }: {
   taskId: string
   session: ComputerSessionSummary
   onClose(): void
-  run: (work: () => Promise<unknown>) => Promise<void>
+  reload: () => Promise<void>
   onAsked(): void
 }) {
   const { invoke } = useHost()
   const { viewOnly, canWrite } = useHostWriteAccess()
+  // Its own errors, shown in the viewer: the tray's line is hidden behind this dialog while it is open.
+  const { run, error: inputError, needed } = useComputerRun(reload)
+  // Closing drops what is still queued, so no click or key reaches the computer after the viewer is gone.
+  const open = useRef(true)
+  useEffect(
+    () => () => {
+      open.current = false
+    },
+    [],
+  )
   const [frame, setFrame] = useState<Frame | null>(null)
   const [now, setNow] = useState(Date.now())
   const [error, setError] = useState('')
@@ -132,12 +142,16 @@ function Viewer({
       clearInterval(timer)
     }
   }, [invoke, taskId, live, canWrite])
-  // Closing the viewer ends human control's input even when the picture came as video.
+  // Closing the viewer pauses human control's input, whether the picture came as video or frames. Only closing: the
+  // host's connection state changing under an open viewer must not pause the person who is using it.
+  const closing = useRef({ invoke, taskId, canWrite })
+  closing.current = { invoke, taskId, canWrite }
   useEffect(
     () => () => {
-      if (canWrite()) void invoke('computer.disconnect', taskId).catch(() => {})
+      const { invoke: send, taskId: thread, canWrite: allowed } = closing.current
+      if (allowed()) void send('computer.disconnect', thread).catch(() => {})
     },
-    [invoke, taskId, canWrite],
+    [],
   )
   useEffect(() => {
     if (live) return
@@ -168,8 +182,6 @@ function Viewer({
     return () => {
       active = false
       clearInterval(timer)
-      // A human controller that closes the viewer pauses input rather than leaving it open unseen.
-      canWrite() && void invoke('computer.disconnect', taskId).catch(() => {})
     }
   }, [invoke, taskId, live, canWrite])
   const stale = !live && !!frame && now - frame.capturedAt > COMPUTER_FRAME_STALE_MS
@@ -192,7 +204,9 @@ function Viewer({
       typing.current.text += action.text
       return
     }
-    const deliver = (next: ComputerAction) => run(() => invoke('computer.input', taskId, generation, capturedAt, next))
+    const deliver = async (next: ComputerAction) => {
+      if (open.current) await run(() => invoke('computer.input', taskId, generation, capturedAt, next))
+    }
     if (action.kind === 'type') {
       const pending = { text: action.text }
       typing.current = pending
@@ -408,6 +422,7 @@ function Viewer({
         {!viewOnly && showsLocalInputLimit(current) && (
           <span className="text-caption text-muted-foreground">{t(LOCAL_INPUT_LIMIT)}</span>
         )}
+        <ComputerProblem needed={needed} error={inputError} />
       </DialogContent>
     </Dialog>
   )
@@ -608,9 +623,26 @@ export function ComputerActivity({ state }: { state: ComputerActivityState }) {
               </Button>
               {!viewOnly &&
                 (session.controller.kind === 'human' ? (
-                  <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
-                    {t('Give back to agent')}
-                  </Button>
+                  <>
+                    {/* Closing the viewer while in control pauses input; picking it up again is one step. */}
+                    {session.paused && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() =>
+                          void run(async () => {
+                            if ((await takeOrRequest(invoke, taskId)) === 'asked') setAsked(true)
+                            else setViewing(true)
+                          })
+                        }
+                      >
+                        {t('Resume control')}
+                      </Button>
+                    )}
+                    <Button size="sm" onClick={() => void run(() => invoke('computer.giveToAgent', taskId))}>
+                      {t('Give back to agent')}
+                    </Button>
+                  </>
                 ) : (
                   <Button
                     size="sm"
@@ -671,7 +703,7 @@ export function ComputerActivity({ state }: { state: ComputerActivityState }) {
         <Viewer
           taskId={taskId}
           session={session}
-          run={run}
+          reload={reload}
           onAsked={() => setAsked(true)}
           onClose={() => setViewing(false)}
         />
