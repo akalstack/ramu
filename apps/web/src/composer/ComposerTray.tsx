@@ -32,7 +32,8 @@ export function ComposerTray({ className, stack = false, ...props }: ComponentPr
     if (!stack || !element) return
     // The height to hold in the layout is the folded one, so it is only read while the stack is not spread.
     const observer = new ResizeObserver(() => {
-      if (!element.hasAttribute('data-float')) setFolded(element.offsetHeight)
+      // Exact, not rounded: holding even half a pixel less or more would make the conversation re-settle on hover.
+      if (!element.hasAttribute('data-float')) setFolded(element.getBoundingClientRect().height)
     })
     observer.observe(element)
     return () => observer.disconnect()
