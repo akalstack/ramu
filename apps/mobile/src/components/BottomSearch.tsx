@@ -4,7 +4,6 @@ import { Stack } from 'expo-router'
 import type { SearchBarCommands } from 'react-native-screens'
 import { Search } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
-import { Glass } from './Glass'
 import type { SheetSearchProps } from './NativeSheet'
 
 /**
@@ -54,20 +53,23 @@ export function BottomSearch({
         ) : null}
       </>
     )
-  // Inside a sheet there is no navigation bar to hold the native bar, so this draws the same glass capsule.
+  // Inside a sheet there is no navigation bar to hold the native bar, so this draws its look: a filled capsule with the
+  // system's small magnifier. A plain view, not glass: the glass view did not lay its children out as a row, and the
+  // field collapsed to the icon as soon as it held text.
   return (
     <View style={{ paddingHorizontal: space.l, paddingVertical: space.s }}>
-      <Glass
-        radius={radius.full}
+      <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          gap: space.s,
-          paddingHorizontal: space.m + 2,
-          minHeight: 48,
+          gap: 6,
+          paddingHorizontal: space.m,
+          minHeight: 44,
+          borderRadius: radius.full,
+          backgroundColor: c.fill,
         }}
       >
-        <Search size={19} color={c.muted} />
+        <Search size={16} color={c.muted} strokeWidth={2.2} />
         <TextInput
           value={value}
           onChangeText={onChangeText}
@@ -79,9 +81,9 @@ export function BottomSearch({
           returnKeyType="search"
           onSubmitEditing={onSubmit}
           clearButtonMode="while-editing"
-          style={{ flex: 1, minHeight: 44, color: c.text, fontSize: font.body }}
+          style={{ flex: 1, minWidth: 0, minHeight: 44, color: c.text, fontSize: font.body }}
         />
-      </Glass>
+      </View>
     </View>
   )
 }
