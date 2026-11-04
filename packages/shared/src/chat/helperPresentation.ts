@@ -11,6 +11,9 @@ import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 export const helperIdentity = (host: string, session: string, helper: string): string =>
   JSON.stringify([host, session, helper])
 export const helperActive = (task: AgentTask): boolean => task.status === 'running' && !task.recovered
+/** The agent's own background shell commands still running, such as a dev server; they are not helpers in the transcript. */
+export const runningCommands = (events: AgentEvent[]): AgentTask[] =>
+  latestTasks(events).filter((task) => task.taskType === 'local_bash' && task.background && helperActive(task))
 export function helperActions(task: AgentTask, connected: boolean) {
   return {
     canMessage: connected && task.canMessage === true,

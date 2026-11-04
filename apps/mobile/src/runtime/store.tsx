@@ -3,6 +3,7 @@ import { appForeground } from './chatViewport'
 import { PairRequestUnsupported, requestPairing } from '@ramu/shared/pairRequest'
 import { secureRandom } from './secureRandom'
 import { agentActivityLabel, currentStep, turnStartedAt, turnSteps } from '@ramu/shared/chat/agentActivity'
+import { runningCommands } from '@ramu/shared/chat/helperPresentation'
 import './socketTransport'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
 import { mayUse, type DevicePermission, type DevicePermissionsView } from '@ramu/shared/devicePermissions'
@@ -498,6 +499,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                       : inputSummary(events, sessionId),
                     compacting:
                       chat.executionState !== 'stopped' && chat.executionState !== 'failed' && isCompacting(events),
+                    commands: runningCommands(events),
                   }
                 : chat,
             ),
@@ -766,6 +768,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 step: currentStep(sessionState, events),
                 steps: turnSteps(events),
                 compacting: sessionState !== 'stopped' && sessionState !== 'failed' && isCompacting(events),
+                commands: runningCommands(events),
                 items: transcript(
                   events,
                   snapshot.events.map((x) => x.seq),

@@ -133,7 +133,13 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
     writable() &&
     chat.sessionId &&
     Alert.alert(
-      id ? 'Hentikan agen ini?' : 'Stop this agent?',
+      task.taskType === 'local_bash'
+        ? id
+          ? 'Hentikan perintah ini?'
+          : 'Stop this command?'
+        : id
+          ? 'Hentikan agen ini?'
+          : 'Stop this agent?',
       id ? 'Thread utama tetap berjalan.' : 'The main thread keeps going.',
       [
         { text: id ? 'Batal' : 'Cancel', style: 'cancel' },

@@ -290,3 +290,14 @@ test('a thread that stopped on an error can continue from it, past its end marke
   ])
   assert.equal(endedOnError(later, later.find((row) => row.kind === 'error').id), false)
 })
+
+test("the phone lists the agent's running background commands with its active agents", async () => {
+  const { mobileThreadActivity } = await import('../src/runtime/threadActivity.ts')
+  const command = { agentId: 'bash-1', name: 'pnpm dev', status: 'running', taskType: 'local_bash', background: true }
+  const activity = mobileThreadActivity({ items: [], queue: [], status: 'idle', commands: [command] }, true)
+  assert.deepEqual(
+    activity.helpers.map((task) => task.agentId),
+    ['bash-1'],
+  )
+  assert.equal(activity.model.counts.active, 1)
+})

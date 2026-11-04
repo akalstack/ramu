@@ -25,11 +25,15 @@ export function normalizeHelperGroups(items: TranscriptItem[]): TranscriptItem[]
 export function mobileThreadActivity(chat: Chat, connected: boolean) {
   const lastUser = chat.items.findLastIndex((item) => item.kind === 'user')
   const groups = chat.items.flatMap((item, index) => (item.kind === 'agents' ? [{ item, index }] : []))
-  const helpers = groups
-    .filter(({ item }) => !item.advisor)
-    .flatMap(({ item, index }) =>
-      item.agents.filter((task) => (index >= lastUser && lastUser >= 0 && !item.earlier) || helperActive(task)),
-    )
+  const helpers = [
+    ...groups
+      .filter(({ item }) => !item.advisor)
+      .flatMap(({ item, index }) =>
+        item.agents.filter((task) => (index >= lastUser && lastUser >= 0 && !item.earlier) || helperActive(task)),
+      ),
+    // Background commands sit with the helpers, as on the desktop, so a running one can be found and stopped.
+    ...(chat.commands ?? []).map((task) => ({ ...task, id: task.agentId, type: task.taskType ?? '' })),
+  ]
   const advisors = groups.filter(({ item }) => item.advisor).flatMap(({ item }) => item.agents)
   const requests = chat.items.filter(
     (item) =>

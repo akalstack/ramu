@@ -148,6 +148,8 @@ export type TranscriptItem = (
 export interface Chat extends Task {
   executionState?: import('@ramu/shared/types').AgentSessionState
   compacting?: boolean
+  /** The agent's own background commands still running, listed with its helpers so they can be seen and stopped. */
+  commands?: import('@ramu/shared/types').AgentTask[]
   activityLabel?: string | null
   /** When the running turn began, for its elapsed time. */
   turnStartedAt?: number | null

@@ -7066,6 +7066,7 @@ function deliveryStoreHarness() {
     },
     '@ramu/shared/chat/inputSummary': { inputSummary: () => null },
     '@ramu/shared/chat/compaction': { isCompacting: () => false },
+    '@ramu/shared/chat/helperPresentation': { runningCommands: () => [] },
     '@ramu/shared/chat/threadStatus': { newerTaskSnapshot: (_, next) => next },
   })
   const render = () => hooks.render(() => StoreProvider({ children: null })).props.value
