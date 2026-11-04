@@ -620,6 +620,20 @@ describe('locked screen', () => {
     ).rejects.toThrow(/locked/)
     expect(locked.status()).toMatchObject({ available: false, reason: 'locked' })
   })
+
+  it('lets the person in control reach the lock screen to unlock it, but never an agent', async () => {
+    const { MacosComputerBackend } = await import('../src/computer/macos')
+    const ran: string[] = []
+    const locked = new MacosComputerBackend(async (file) => {
+      ran.push(file)
+      return '<key>CGSSessionScreenIsLocked</key><true/>'
+    }, 'darwin')
+    const display = { id: 'display:main', kind: 'display' as const, name: 'Main' }
+    await expect(locked.perform(display, { kind: 'key', key: 'a' })).rejects.toThrow(/locked/)
+    expect(ran).not.toContain('/usr/bin/osascript')
+    await locked.perform(display, { kind: 'key', key: 'a' }, { byPerson: true })
+    expect(ran).toContain('/usr/bin/osascript')
+  })
 })
 
 describe('app scrolling', () => {

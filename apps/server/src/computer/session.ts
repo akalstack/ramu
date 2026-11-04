@@ -367,7 +367,7 @@ export class ComputerSession {
     await this.yieldToLocalInput(deviceId)
     this.claims?.take(claimKey(this.runtime.id, this.grant.target), this)
     try {
-      this.publish(await this.backend.perform(this.grant.target, action), this.lease.generation)
+      this.publish(await this.backend.perform(this.grant.target, action, { byPerson: true }), this.lease.generation)
     } catch (error) {
       if (error instanceof ComputerNotRun) throw new ComputerRefusal(error.message)
       throw new ComputerRefusal(

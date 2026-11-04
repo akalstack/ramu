@@ -335,9 +335,10 @@ export class MacosComputerBackend implements ComputerBackend {
     }
   }
 
-  async perform(target: ComputerTarget, action: ComputerAction): Promise<void> {
+  async perform(target: ComputerTarget, action: ComputerAction, options?: { byPerson?: boolean }): Promise<void> {
     if (this.platform !== 'darwin') throw new Error('Computer use currently supports macOS.')
-    if (await this.locked()) throw new ComputerNotRun(LOCKED_MESSAGE)
+    // The person in control may click and type at the lock screen, to unlock it as they would at the Mac. An agent may not.
+    if (!options?.byPerson && (await this.locked())) throw new ComputerNotRun(LOCKED_MESSAGE)
     void target
     const scale = this.lastScale
     this.injecting++

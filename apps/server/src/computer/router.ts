@@ -68,8 +68,12 @@ export class ComputerRouter implements ComputerBackend {
     return this.pick(target).capture(target, options)
   }
 
-  perform(target: ComputerTarget, action: ComputerAction): Promise<ComputerCapture | void> {
-    return this.pick(target).perform(target, action)
+  perform(
+    target: ComputerTarget,
+    action: ComputerAction,
+    options?: { byPerson?: boolean },
+  ): Promise<ComputerCapture | void> {
+    return this.pick(target).perform(target, action, options)
   }
 
   releaseInput(target: ComputerTarget): void {

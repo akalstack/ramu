@@ -68,8 +68,15 @@ export interface ComputerBackend {
    * full accessibility tree) to send it sooner.
    */
   capture(target: ComputerTarget, options?: { forViewer?: boolean }): Promise<ComputerCapture>
-  /** Resolves with the target as it looks after the action when the backend got that picture along with it. */
-  perform(target: ComputerTarget, action: ComputerAction): Promise<ComputerCapture | void>
+  /**
+   * Resolves with the target as it looks after the action when the backend got that picture along with it. `byPerson`:
+   * the person in control sent it, so it may reach the lock screen (to unlock); an agent's input never does.
+   */
+  perform(
+    target: ComputerTarget,
+    action: ComputerAction,
+    options?: { byPerson?: boolean },
+  ): Promise<ComputerCapture | void>
   /** Release held keys and buttons after cancellation, an ownership change or connection loss. */
   releaseInput(target: ComputerTarget): void
   /**
