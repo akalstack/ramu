@@ -1,3 +1,4 @@
+import { pendingThreads } from './composer/pendingThreads'
 import { LoadingDots } from '@/components/loading-dots'
 import { BranchNameEditor } from './workspace/BranchNameEditor'
 import { WorkspaceNameDialog } from './workspace/WorkspaceNameDialog'
@@ -414,6 +415,23 @@ export function NewTask({
       title ||
       (context[0] ? titleFrom(t('Discuss {0}', { '0': context[0].path.split(/[\\/]/).pop() ?? context[0].path })) : '')
     if (!messageTitle) throw new Error(t('Add a message or file before starting.'))
+    // The host is away: the thread waits on this computer under an id made here, and starts there once it is back.
+    if (host.status !== 'connected') {
+      if (attachments.length) throw new Error(t('Attachments need the host. Remove them, or send once it is back.'))
+      pendingThreads().add({
+        hostId: host.id,
+        projectId: auto ? null : projectId,
+        mode: mode === 'worktree' ? 'worktree' : 'current',
+        workspaceId: workspaceId ?? undefined,
+        title: messageTitle,
+        prompt,
+        settings: agentDraft.settings,
+        context,
+      })
+      const consumed = consumeDraft()
+      if (consumed.unchanged && consumed.persisted) agentDraft.consume()
+      return
+    }
     if (!general && !workspaceDraft.confirmed) {
       throw new Error(t('Choose where to work before starting. The saved workspace choice could not be restored.'))
     }

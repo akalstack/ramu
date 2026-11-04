@@ -8,6 +8,7 @@ import { useWorkspace } from '../workspace/workspace'
 import { useAppSettings } from '../settings/AppSettings'
 import { useAddProject } from '../workspace/addProject'
 import { useHost } from '../workspace/HostProvider'
+import { PendingThreadsSection } from '../composer/WaitingThreads'
 import { Collapse } from './projects/Collapse'
 import { ICON_BUTTON_CLASS, pinnedFirst } from './projects/constants'
 import { useProjectsDragDrop } from './projects/dnd'
@@ -63,6 +64,8 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
         onDrop={onDrop}
       >
         <ThreadSelectionBar actions={bulk} />
+        {/* Threads started here while this host was away; each starts there once it is back. */}
+        <PendingThreadsSection hostId={host.id} />
         {pinned.length > 0 && (
           <>
             <SectionHead

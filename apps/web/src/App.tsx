@@ -1,4 +1,5 @@
 import { ResourcesStatus } from './chat/ResourcesStatus'
+import { PendingThreadDelivery } from './composer/WaitingThreads'
 import { useHostWriteAccess } from './composer/useHostWriteAccess'
 import { ownHostId } from './hosts'
 import { openBrowser, presentBrowser } from './views/browserPane'
@@ -776,6 +777,7 @@ function Shell() {
       {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
       <Notifications />
+      <PendingThreadDelivery />
       <PairingRequestDialog />
       <PermissionRequestDialog />
       <PairBackDialog />
