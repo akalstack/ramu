@@ -1,3 +1,4 @@
+import { ResourcesStatus } from './chat/ResourcesStatus'
 import { useHostWriteAccess } from './composer/useHostWriteAccess'
 import { ownHostId } from './hosts'
 import { openBrowser, presentBrowser } from './views/browserPane'
@@ -1054,6 +1055,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
         <span className="grow flex-1 min-w-0 text-left" />
         {usage}
         <AppUpdateButton />
+        <ResourcesStatus />
         <BackgroundActivity />
       </footer>
     )
@@ -1123,6 +1125,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
       <span className="grow flex-1 min-w-0 text-left" />
       {usage}
       <AppUpdateButton />
+      <ResourcesStatus />
       <BackgroundActivity />
     </footer>
   )

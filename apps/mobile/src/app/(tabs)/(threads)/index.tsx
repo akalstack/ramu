@@ -12,6 +12,7 @@ import {
   MessagesSquare,
   Search,
   Gauge,
+  MemoryStick,
   SquarePen,
   Ellipsis,
   WifiOff,
@@ -28,6 +29,7 @@ import { STANDALONE, type Chat, type MobileProject } from '../../../runtime/type
 import { ago, useT } from '../../../i18n'
 import { Header, HeaderButton, LargeTitle, Screen, useScrolledUnderBar, PageFlatList } from '../../../components/Screen'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
+import { HostResources } from '../../../components/HostResources'
 import { ChatRow } from '../../../components/ChatRow'
 import { ProjectActionsSheet } from '../../../components/ChatActions'
 import { Disclosure, animateLayout } from '../../../components/Motion'
@@ -95,6 +97,7 @@ export default function Threads() {
     return () => back.remove()
   }, [selection.on])
   const [usageOpen, setUsageOpen] = useState(false)
+  const [resourcesOpen, setResourcesOpen] = useState(false)
 
   type StatusFilter = 'all' | 'running' | 'needs-input' | 'failed' | 'archived'
   const { filter: initialFilter } = useLocalSearchParams<{ filter?: string }>()
@@ -566,6 +569,16 @@ export default function Threads() {
                   onPress={() => setUsageOpen(true)}
                 />
               ) : null}
+              {/* What each host's threads hold in memory, and Stop: the desktop's status-bar Resources. */}
+              {computers.some((host) => (merged || host.id === selected) && host.access !== 'viewer') ? (
+                <HeaderButton
+                  actionId="tab-resources"
+                  icon={MemoryStick}
+                  label={say('Resources')}
+                  systemIcon="memorychip"
+                  onPress={() => setResourcesOpen(true)}
+                />
+              ) : null}
               {actions}
             </>
           }
@@ -707,6 +720,9 @@ export default function Threads() {
             }}
           />
         </SheetGroup>
+      </Sheet>
+      <Sheet open={resourcesOpen} onClose={() => setResourcesOpen(false)} title={say('Resources')}>
+        {resourcesOpen ? <HostResources host={merged ? null : selected} /> : null}
       </Sheet>
       <PlanUsageSheet
         hosts={merged ? computers.map((host) => host.id) : [selected]}

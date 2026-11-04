@@ -19,7 +19,7 @@ import { Group, Section } from './InboxParts'
 type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<unknown>
 const POLL_MS = 5000
 
-/** Figures for each online owner host, read only while the Running tab is on screen. */
+/** Figures for each online owner host, read only while the Resources sheet is open. */
 function useSnapshots(host: string | null) {
   const store = useStore()
   const ids = store.computers
@@ -112,8 +112,8 @@ function ThreadRow({ hostId, thread, divider }: { hostId: string; thread: Thread
   )
 }
 
-/** The same host line, figures and Stop as the desktop's Running tab; hidden when a host gives no reading. */
-export function InboxResources({ host }: { host: string | null }) {
+/** The same host line, figures and Stop as the desktop's Resources panel; hidden when a host gives no reading. */
+export function HostResources({ host }: { host: string | null }) {
   const say = useSay()
   const store = useStore()
   const snapshots = useSnapshots(host)

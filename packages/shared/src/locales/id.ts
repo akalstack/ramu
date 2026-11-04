@@ -171,6 +171,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Runs {0} with Allow edits': 'Menjalankan {0} dengan Izinkan edit',
   'Add a note': 'Tambahkan catatan',
   'Resources': 'Sumber daya',
+  'Reading resources…': 'Membaca sumber daya…',
+  'Close resources': 'Tutup sumber daya',
   'Low memory': 'Memori hampir habis',
   'Busy': 'Sibuk',
   'Idle': 'Menganggur',

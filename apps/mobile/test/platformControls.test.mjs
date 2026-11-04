@@ -7398,7 +7398,7 @@ test('Threads uses native toolbar buttons and its usage action opens the shared 
     nodes(native)
       .filter((node) => node.type === 'ToolbarButton')
       .map((node) => node.props.accessibilityLabel),
-    ['Plan usage', 'Search', 'Settings'],
+    ['Plan usage', 'Resources', 'Search', 'Settings'],
   )
   assert.ok(!nodes(native).some((node) => node.type === 'ToolbarView'))
   const usage = nodes(native).find(
