@@ -34,6 +34,41 @@ async function ready(now = () => 1000) {
 }
 
 describe('computer session', () => {
+  it('lets one thread act on the main display at a time, while different apps run side by side', async () => {
+    let clock = 1000
+    const { backend, performed } = fake()
+    const service = new ComputerService(backend, () => clock)
+    const start = async (thread: string, target = grant.target) => {
+      const session = service.grant(thread, { ...grant, target })
+      session.open(`${thread}-run`)
+      return { session, frame: await session.observe(`${thread}-run`) }
+    }
+    const first = await start('t1')
+    const second = await start('t2')
+    await first.session.act('t1-run', first.frame.id, { kind: 'click', x: 1, y: 1 })
+    // Watching stays shared; acting is refused while the first thread has the display.
+    const again = await second.session.observe('t2-run')
+    await expect(second.session.act('t2-run', again.id, { kind: 'click', x: 1, y: 1 })).rejects.toThrow(
+      /Another thread is controlling the main display/,
+    )
+    const notes = await start('t3', { id: 'app:Notes', kind: 'app', name: 'Notes' })
+    const mail = await start('t4', { id: 'app:Mail', kind: 'app', name: 'Mail' })
+    await notes.session.act('t3-run', notes.frame.id, { kind: 'key', key: 'a' })
+    await mail.session.act('t4-run', mail.frame.id, { kind: 'key', key: 'b' })
+    const sameApp = await start('t5', { id: 'app:Notes', kind: 'app', name: 'Notes' })
+    await expect(sameApp.session.act('t5-run', sameApp.frame.id, { kind: 'key', key: 'c' })).rejects.toThrow(
+      /Another thread is using Notes/,
+    )
+    // The first thread's run ends: the display is free at once. An idle claim also lapses.
+    service.endRun('t1', 't1-run')
+    const freed = await second.session.observe('t2-run')
+    await second.session.act('t2-run', freed.id, { kind: 'click', x: 2, y: 2 })
+    clock += 60_000
+    const later = await sameApp.session.observe('t5-run')
+    await sameApp.session.act('t5-run', later.id, { kind: 'key', key: 'd' })
+    expect(performed).toHaveLength(5)
+  })
+
   it('requires the latest observation and consumes it on every action', async () => {
     const { session, frame, performed } = await ready()
     await session.act('run1', frame.id, { kind: 'click', x: 10, y: 10 })

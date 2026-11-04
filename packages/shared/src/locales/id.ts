@@ -4802,6 +4802,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Page up': 'Halaman atas',
   Shortcuts: 'Pintasan',
   'Stop the agent': 'Hentikan agen',
+  'Open the thread': 'Buka thread',
+  'Live view options': 'Opsi tampilan langsung',
+  'Stops the agent’s work in this thread.': 'Menghentikan pekerjaan agen di thread ini.',
   'Stops the agent’s work in this thread; access to the computer stays.':
     'Menghentikan pekerjaan agen di thread ini; akses ke komputer tetap ada.',
   'Switch app': 'Ganti aplikasi',

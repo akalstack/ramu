@@ -1,6 +1,7 @@
 import type { ComputerBackend, ComputerGrant } from '@ramu/shared/computerBridge'
 import { EvidenceFiles } from './evidence'
 import { ComputerSession } from './session'
+import { TargetClaims } from './claims'
 
 /** Sessions keyed by thread. A grant is bound to one target; a different target needs a new matching grant. */
 export class ComputerService {
@@ -25,7 +26,11 @@ export class ComputerService {
   constructor(
     readonly backend: ComputerBackend,
     private readonly now: () => number = Date.now,
-  ) {}
+  ) {
+    this.claims = new TargetClaims(now)
+  }
+  /** One claim per display or app across every thread's session. */
+  private readonly claims: TargetClaims
 
   /** Screenshots handed to providers that do not show MCP images; removed with the run or the grant. */
   readonly evidence = new EvidenceFiles()
@@ -43,8 +48,8 @@ export class ComputerService {
     this.sessions.get(threadId)?.revoke()
     void this.evidence.clear(threadId)
     const session = runtime
-      ? new ComputerSession(grant, runtime.backend, this.now, { id: runtime.id, name: runtime.name })
-      : new ComputerSession(grant, this.backend, this.now)
+      ? new ComputerSession(grant, runtime.backend, this.now, { id: runtime.id, name: runtime.name }, this.claims)
+      : new ComputerSession(grant, this.backend, this.now, undefined, this.claims)
     this.sessions.set(threadId, session)
     return session
   }

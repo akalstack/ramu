@@ -1,11 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes } from 'react'
-import { ExternalLink, Globe, Monitor, PictureInPicture2, Square, X } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react'
+import { Ellipsis, ExternalLink, Globe, Monitor, PictureInPicture2, X } from 'lucide-react'
 import { livePlacement, livePosition, liveState, liveSurface, type LiveSurface } from '@ramu/shared/liveView'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
+import { Menu, type MenuEntry } from '../Menu'
 import { notifyError } from '../chat/Notifications'
+import { readThreadTabs } from '../chat/BrowserActivity'
 import { useViewOnly } from '../composer/useViewOnly'
 import { t, useLanguage } from '../i18n'
 import { ramu } from '../ipc'
@@ -33,14 +35,10 @@ function useSurfaces(taskId: string) {
     let live = true
     const read = async () => {
       const session = await invoke('computer.session', taskId).catch(() => null)
-      const hostTabs = await invoke('hostBrowser.list', taskId).catch(() => [] as BrowserTabInfo[])
-      const desktopTabs = await ramu.invoke('browser.list', hostId, taskId).catch(() => [] as BrowserTabInfo[])
+      const browser = await readThreadTabs(invoke, hostId, taskId).catch(() => ({ tabs: [], hostBrowser: false }))
       if (!live) return
       setComputer(session)
-      setTabs([
-        ...hostTabs.map((tab) => ({ ...tab, host: true })),
-        ...desktopTabs.map((tab) => ({ ...tab, host: false })),
-      ])
+      setTabs(browser.tabs.map((tab) => ({ ...tab, host: browser.hostBrowser })))
     }
     void read()
     const timer = setInterval(() => void read(), 3000)
@@ -139,11 +137,68 @@ function Body({
           : state === 'finished'
             ? t('Finished')
             : t('Idle')
+  const surfaces: { key: string; label: string; icon: ReactNode; surface: LiveSurface; selected: boolean }[] = [
+    ...(computer
+      ? [
+          {
+            key: 'computer',
+            label: computer.target.name || t('Computer'),
+            icon: <Monitor size={12} />,
+            surface: { kind: 'computer' } as const,
+            selected: surface?.kind === 'computer',
+          },
+        ]
+      : []),
+    ...tabs.map((tab) => ({
+      key: tab.id,
+      label: tab.title || hostOf(tab.url) || t('Browser'),
+      icon: <Globe size={12} />,
+      surface: { kind: 'browser', tabId: tab.id, host: tab.host } as const,
+      selected: surface?.kind === 'browser' && surface.tabId === tab.id,
+    })),
+  ]
+  const shown = surfaces.find((entry) => entry.selected)
+  const menu: MenuEntry[] = [
+    ...(!viewOnly
+      ? [
+          {
+            key: 'stop-agent',
+            label: t('Stop the agent'),
+            title: t('Stops the agent’s work in this thread.'),
+            disabled: !online,
+            onSelect: () => void stopAgent(),
+          },
+        ]
+      : []),
+    ...(!viewOnly && computer
+      ? [
+          {
+            key: 'stop-computer',
+            label: t('Stop computer use'),
+            title: t('Ends this thread’s access to the computer.'),
+            danger: true,
+            onSelect: () => void host.invoke('computer.stop', taskId).catch(() => {}),
+          },
+        ]
+      : []),
+  ]
+  const tone =
+    state === 'needs-you'
+      ? 'bg-warn'
+      : state === 'failed'
+        ? 'bg-bad'
+        : state === 'working'
+          ? 'bg-brand'
+          : 'bg-muted-foreground/50'
   return (
     <>
-      <div {...handle} className={`flex items-center gap-1.5 px-2 pt-1.5 ${handle?.className ?? ''}`}>
+      <div {...handle} className={`flex items-start gap-2 px-3 pt-2.5 ${handle?.className ?? ''}`}>
+        <span
+          aria-hidden
+          className={`mt-[7px] size-2 flex-none rounded-full ${online ? tone : 'bg-muted-foreground/50'} ${state === 'working' && online ? 'motion-safe:animate-pulse' : ''}`}
+        />
         <div className="min-w-0 flex-1">
-          <p className="m-0 truncate text-control font-medium">{task?.title ?? t('Thread')}</p>
+          <p className="m-0 truncate text-control font-medium leading-5">{task?.title ?? t('Thread')}</p>
           <p
             className={`m-0 truncate text-caption ${state === 'needs-you' ? 'text-warn' : state === 'failed' ? 'text-bad' : 'text-muted-foreground'}`}
             role="status"
@@ -151,8 +206,18 @@ function Body({
             {[online ? stateText : t('Reconnecting…'), hostName].filter(Boolean).join(' · ')}
           </p>
         </div>
-        {!inWindow && (
-          <>
+        <div className="-mr-1 flex flex-none items-center">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t('Open')}
+            title={t('Open the thread')}
+            disabled={!online}
+            onClick={onOpen}
+          >
+            <ExternalLink size={13} />
+          </Button>
+          {!inWindow && (
             <Button
               variant="ghost"
               size="icon-xs"
@@ -166,16 +231,16 @@ function Body({
                 })
               }}
             >
-              <PictureInPicture2 size={12} />
+              <PictureInPicture2 size={13} />
             </Button>
-          </>
-        )}
-        <Button variant="ghost" size="icon-xs" aria-label={t('Close live view')} onClick={onClose}>
-          <X size={13} />
-        </Button>
+          )}
+          <Button variant="ghost" size="icon-xs" aria-label={t('Close live view')} onClick={onClose}>
+            <X size={14} />
+          </Button>
+        </div>
       </div>
       <div
-        className={`relative mx-2 mt-1.5 overflow-hidden rounded-(--radius-s) bg-muted ${inWindow ? 'min-h-0 flex-1' : 'aspect-video'}`}
+        className={`relative mx-2.5 mt-2 overflow-hidden rounded-(--radius-s) bg-muted ${inWindow ? 'min-h-0 flex-1' : 'aspect-video'}`}
       >
         {image && online ? (
           <img
@@ -192,37 +257,33 @@ function Body({
                 : t('Nothing to show yet. The view follows Browser and Computer when the agent uses them.')}
           </p>
         )}
+        {shown && surfaces.length === 1 && (
+          <span className="pointer-events-none absolute bottom-1.5 left-1.5 inline-flex max-w-[calc(100%-12px)] items-center gap-1 rounded-(--radius-xs) bg-card/85 px-1.5 py-0.5 text-caption text-foreground backdrop-blur-sm">
+            {shown.icon}
+            <span className="truncate">{shown.label}</span>
+          </span>
+        )}
       </div>
-      <div className="flex flex-wrap items-center gap-1 px-2 py-1.5">
-        {(computer || tabs.length > 1) && (
-          <div className="flex gap-0.5" role="group" aria-label={t('Show')}>
-            {computer && (
+      <div className="flex items-center gap-1 px-2.5 py-2">
+        {surfaces.length > 1 ? (
+          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-none" role="group" aria-label={t('Show')}>
+            {surfaces.map((entry) => (
               <Button
-                variant={surface?.kind === 'computer' ? 'secondary' : 'ghost'}
-                size="icon-xs"
-                aria-label={t('Computer')}
-                aria-pressed={surface?.kind === 'computer'}
-                onClick={() => pinLiveSurface({ kind: 'computer' })}
+                key={entry.key}
+                variant={entry.selected ? 'secondary' : 'ghost'}
+                size="xs"
+                className="min-w-0 max-w-[132px] flex-none"
+                aria-pressed={entry.selected}
+                title={entry.label}
+                onClick={() => pinLiveSurface(entry.surface)}
               >
-                <Monitor size={12} />
-              </Button>
-            )}
-            {tabs.map((tab) => (
-              <Button
-                key={tab.id}
-                variant={surface?.kind === 'browser' && surface.tabId === tab.id ? 'secondary' : 'ghost'}
-                size="icon-xs"
-                aria-label={tab.title || tab.url}
-                title={tab.title || tab.url}
-                onClick={() => pinLiveSurface({ kind: 'browser', tabId: tab.id, host: tab.host })}
-              >
-                <Globe size={12} />
+                {entry.icon}
+                <span className="truncate">{entry.label}</span>
               </Button>
             ))}
           </div>
-        )}
-        {inWindow && (
-          <label className="flex items-center gap-1.5 text-caption text-muted-foreground">
+        ) : inWindow ? (
+          <label className="flex min-w-0 flex-1 items-center gap-1.5 text-caption text-muted-foreground">
             <Checkbox
               checked={pin?.hideFromSharing ?? true}
               onCheckedChange={(checked) => {
@@ -232,26 +293,36 @@ function Body({
             />
             {t('Hide from screen sharing')}
           </label>
+        ) : (
+          <span className="flex-1" />
         )}
-        <span className="flex-1" />
-        {!viewOnly && computer && (
-          <Button variant="ghost" size="xs" onClick={() => void host.invoke('computer.stop', taskId).catch(() => {})}>
-            {t('Stop computer use')}
-          </Button>
+        {menu.length > 0 && (
+          <Menu label={t('Live view options')} icon={<Ellipsis size={14} />} align="end" items={menu} />
         )}
-        {!viewOnly && (
-          <Button variant="ghost" size="xs" disabled={!online} onClick={() => void stopAgent()}>
-            <Square size={10} />
-            {t('Stop the agent')}
-          </Button>
-        )}
-        <Button variant="ghost" size="xs" disabled={!online} onClick={onOpen}>
-          <ExternalLink size={11} />
-          {t('Open')}
-        </Button>
       </div>
+      {inWindow && surfaces.length > 1 && (
+        <label className="flex items-center gap-1.5 px-3 pb-2 text-caption text-muted-foreground">
+          <Checkbox
+            checked={pin?.hideFromSharing ?? true}
+            onCheckedChange={(checked) => {
+              setLiveWindow(true, !!checked)
+              void ramu.invoke('live.window', true, !!checked).catch(() => {})
+            }}
+          />
+          {t('Hide from screen sharing')}
+        </label>
+      )}
     </>
   )
+}
+
+/** A tab's site for its label when the page has no title. */
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).host
+  } catch {
+    return ''
+  }
 }
 
 /** One small view of a thread's Browser or Computer that stays in a corner while the person works elsewhere in Ramu. */
@@ -331,7 +402,7 @@ export function LiveView() {
   return (
     <aside
       ref={box}
-      className="fixed z-50 w-[320px] max-w-[calc(100vw-32px)] rounded-(--radius-m) border border-edge bg-card text-foreground shadow-(--shadow-float)"
+      className="fixed z-50 w-[340px] max-w-[calc(100vw-32px)] overflow-hidden rounded-(--radius-l) border border-edge bg-card text-foreground shadow-(--shadow-float)"
       style={{ left: at.left, top: at.top }}
       aria-label={t('Live view')}
     >

@@ -22,6 +22,7 @@ On the phone, the Browser pill opens a full-screen viewer. **Open on this phone*
 - On desktop, the header's **Computer** button (⌘⌥M) opens the viewer. While you control the screen, your clicks and keys go to it; Escape returns the keyboard to Ramu.
 - On the phone, tap, hold, drag and pinch work like a remote desktop, with a keyboard button for text.
 - **Stop the agent** and **Stop computer use** are always one tap away.
+- Several threads can watch the same screen, but only one acts on the main display at a time, since it has one pointer and keyboard. Apps work in the background, so threads can act in different apps at once; one app takes one thread at a time. A thread that finds the display or app busy waits and tries again, and the other thread's claim lapses when its run ends or after 45 seconds without an action. Your own input always wins.
 
 macOS needs the Open Computer Use tool: **Install & set up** installs it and asks for Accessibility and Screen Recording.
 
@@ -33,6 +34,6 @@ The agent boots a device, installs a build from the workspace (`.app` or `.apk`)
 
 ## Float
 
-**Float** on the desktop's Browser and Computer trays keeps a small live view of the thread while you work elsewhere in Ramu. Drag it by its title to put it anywhere in the window (or focus the title and use the arrow keys); it keeps that place. It always shows the thread's state with **Stop the agent**, **Open** and Close. **Keep on top of other apps** moves it into a small window above every app, hidden from screen sharing by default. Turn Float off in **Settings → Threads → Float on desktop**.
+**Float** on the desktop's Browser and Computer trays keeps a small live view of the thread while you work elsewhere in Ramu. Drag it by its title to put it anywhere in the window (or focus the title and use the arrow keys); it keeps that place. It shows the thread's state, **Open** and Close, a chip for each screen or tab it can show, and **Stop the agent** and **Stop computer use** under ⋯. **Keep on top of other apps** moves it into a small window above every app, hidden from screen sharing by default. Turn Float off in **Settings → Threads → Float on desktop**.
 
 The phone has no Float: Browser, Computer and test devices show as pills that open the full-screen viewer.

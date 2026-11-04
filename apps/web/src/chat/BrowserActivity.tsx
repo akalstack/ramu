@@ -13,6 +13,24 @@ import { ComposerTraySection } from '../composer/ComposerTraySection'
 import { floatLiveView } from '../liveView/liveViewStore'
 import { useAppSettings } from '../settings/AppSettings'
 
+/**
+ * The thread's browser tabs: the host browser's while it is on, otherwise this desktop's own browser for its own host.
+ * One or the other, never both, so a tab is listed once.
+ */
+export async function readThreadTabs(
+  invoke: ReturnType<typeof useHost>['invoke'],
+  host: string,
+  taskId: string,
+): Promise<{ tabs: BrowserTabInfo[]; hostBrowser: boolean }> {
+  const status = await invoke('hostBrowser.status').catch(() => null)
+  if (status?.enabled)
+    return {
+      tabs: (await invoke('hostBrowser.list', taskId)).map((tab) => ({ ...tab, hostId: host })),
+      hostBrowser: true,
+    }
+  return { tabs: host === ownHostId() ? await ramu.invoke('browser.list', host, taskId) : [], hostBrowser: false }
+}
+
 /** Native tabs remain discoverable after an agent turn, without activating background threads or hosts. */
 export function useBrowserActivity(taskId: string | undefined, visible: boolean) {
   const { id: host, invoke } = useHost()
@@ -30,12 +48,7 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
     const load = async () => {
       const mine = ++revision
       try {
-        const status = await invoke('hostBrowser.status').catch(() => null)
-        const tabs = status?.enabled
-          ? (await invoke('hostBrowser.list', taskId)).map((tab) => ({ ...tab, hostId: host }))
-          : host === ownHostId()
-            ? await ramu.invoke('browser.list', host, taskId)
-            : []
+        const { tabs } = await readThreadTabs(invoke, host, taskId)
         if (active && mine === revision) setReading({ scope, tabs, stale: false })
       } catch {
         if (active && mine === revision)

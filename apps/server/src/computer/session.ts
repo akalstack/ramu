@@ -25,6 +25,7 @@ import {
   type LeaseRefusal,
   type LeaseState,
 } from '@ramu/shared/control/lease'
+import { claimKey, claimRefusal, type TargetClaims } from './claims'
 
 /** Viewers refresh at most about four times a second however many are watching. */
 const VIEW_MIN_INTERVAL_MS = 250
@@ -75,7 +76,15 @@ export class ComputerSession {
     private readonly now: () => number = Date.now,
     /** The computer whose screen this is: `local` is the execution host itself. */
     readonly runtime: { id: string; name: string } = { id: 'local', name: 'This computer' },
+    /** Shared by every thread's session, so two threads never act on the same target at once. */
+    private readonly claims?: TargetClaims,
   ) {}
+
+  /** Acting needs the target to itself; another thread acting on it just now refuses this one. */
+  private claimTarget() {
+    if (this.claims && !this.claims.claim(claimKey(this.runtime.id, this.grant.target), this))
+      refuse(claimRefusal(this.grant.target))
+  }
 
   get target() {
     return this.grant.target
@@ -287,6 +296,7 @@ export class ComputerSession {
       await this.yieldToLocalInput(null)
       const admitted = admitAgentAction(this.lease, runId, generation)
       if (!admitted.ok) return refuse(REFUSALS[admitted.refused])
+      this.claimTarget()
       this.lease = admitted.state
       this.latest = null // every action consumes the observation, even if it fails
       try {
@@ -340,6 +350,7 @@ export class ComputerSession {
     validateAction(action, Infinity, Infinity)
     // The person at the computer outranks a remote controller.
     await this.yieldToLocalInput(deviceId)
+    this.claims?.take(claimKey(this.runtime.id, this.grant.target), this)
     try {
       await this.backend.perform(this.grant.target, action)
     } catch (error) {
@@ -370,13 +381,17 @@ export class ComputerSession {
     const before = this.lease
     this.lease = revokeAgent(this.lease, runId)
     this.latest = null
-    if (this.lease !== before) this.backend.releaseInput(this.grant.target)
+    if (this.lease !== before) {
+      this.backend.releaseInput(this.grant.target)
+      this.claims?.release(this)
+    }
   }
 
   /** The grant was revoked or the session closed. Nothing continues. */
   revoke() {
     this.closed = true
     this.latest = null
+    this.claims?.release(this)
     this.backend.releaseInput(this.grant.target)
   }
 
