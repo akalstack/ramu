@@ -234,7 +234,7 @@ export interface RamuMethods {
     }
   }
   /** Installs the pinned Open Computer Use release for app-scoped access. Owning host only. */
-  /** Whether the agent can keep working while the Mac is locked (Open Computer Use's Locked Use). */
+  /** Whether the agent can keep working while the Mac is locked (Open Computer Use's Locked Use). Paired owner devices may read it. */
   'computer.lockedUse'(): ComputerLockedUse
   /** Starts the macOS installer and permission prompts on the host. Owning host only. */
   'computer.lockedUseEnable'(): ComputerLockedUse

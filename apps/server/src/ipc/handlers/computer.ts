@@ -153,7 +153,8 @@ export const registerComputerHandlers: RegisterHandlers = ({
       },
     },
     // Working through a locked screen installs macOS sign-in components, so it is reviewed and started on the owning host.
-    'computer.lockedUse': { args: z.tuple([]), run: () => (admin(), lockedUse.status()) },
+    // Whether it is on is only read, so a paired owner device sees it too.
+    'computer.lockedUse': { args: z.tuple([]), run: () => (owner(), lockedUse.status()) },
     'computer.lockedUseEnable': { args: z.tuple([]), run: () => (admin(), lockedUse.enable()) },
     'computer.lockedUseDisable': { args: z.tuple([]), run: () => (admin(), lockedUse.disable()) },
     'computer.installApps': {

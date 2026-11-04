@@ -267,7 +267,15 @@ function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: 
       clearTimeout(stop)
     }
   }, [waiting, read])
-  if (!visible || !state) return null
+  if (!visible) return null
+  if (!state)
+    return error ? (
+      <p role="alert" className="m-[0_0_12px] text-caption text-destructive">
+        {error}
+      </p>
+    ) : null
+  // It installs into that Mac's sign-in and asks for its administrator password, so only that Mac can change it.
+  const here = hostId === ownHostId()
   const act = async (work: () => Promise<LockedUse>, after?: () => void) => {
     if (!canWrite()) return
     setError('')
@@ -285,14 +293,15 @@ function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: 
     : waiting
       ? t('Finish the permission and password prompts on this Mac…')
       : t('Off. The agent stops at the lock screen.')
+  const where = here ? '' : ` ${t('Change it in Ramu on that Mac; it asks for that Mac’s administrator password.')}`
   return (
     <>
       <SettingsRow>
-        <SettingsLabel title={t('Keep working while the screen is locked')} help={help} />
+        <SettingsLabel title={t('Keep working while the screen is locked')} help={help + where} />
         <Switch
           aria-label={t('Keep working while the screen is locked')}
           checked={state.enabled}
-          disabled={waiting}
+          disabled={waiting || !here}
           onCheckedChange={(checked) =>
             checked ? setConfirming(true) : void act(() => invokeOn(hostId, 'computer.lockedUseDisable'))
           }

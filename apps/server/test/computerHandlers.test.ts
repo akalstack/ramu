@@ -57,6 +57,12 @@ function setup(deviceId: string | undefined, admin: boolean, text?: string, elig
 }
 
 describe('computer handlers', () => {
+  it('lets a paired owner device read Locked Use but change it only on the host', async () => {
+    const paired = setup('laptop', false, undefined, () => true)
+    expect(await paired.call('computer.lockedUse')).toEqual({ enabled: false })
+    expect(() => paired.call('computer.lockedUseDisable')).toThrow(/owning host/)
+    expect(() => setup('phone', false).call('computer.lockedUse')).toThrow(/owner device/)
+  })
   it('requires the setting and the owning host before a grant', async () => {
     const owner = setup('local', true)
     await expect(owner.call('computer.grant', 't1', { observe: true, input: true })).rejects.toThrow(/Settings/)

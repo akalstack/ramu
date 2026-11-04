@@ -5293,4 +5293,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Update Ramu on {0} to use this.': 'Perbarui Ramu di {0} untuk memakai ini.',
   '{0} invites this computer to connect back, so you can open its threads, files and terminals from here too. It joins Hosts you use; you can forget it any time.': '{0} mengundang komputer ini untuk menyambung balik, jadi kamu juga bisa membuka thread, file, dan terminalnya dari sini. Host itu masuk ke Host yang kamu pakai; kamu bisa melupakannya kapan saja.',
   '{0} will be able to open this computer’s threads, files and terminals, with full access. Ramu asks on {0} first; nothing connects until its owner accepts.': '{0} akan bisa membuka thread, file, dan terminal komputer ini dengan akses penuh. Ramu bertanya di {0} dulu; tidak ada yang tersambung sampai pemiliknya menerima.',
+  'Change it in Ramu on that Mac; it asks for that Mac’s administrator password.': 'Ubah di Ramu pada Mac itu; Mac itu akan meminta kata sandi administratornya.',
 }
