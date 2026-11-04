@@ -1504,6 +1504,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Shared files, terminals, worktrees, and other threads stay open.':
     'File bersama, terminal, worktree, dan thread lain tetap terbuka.',
   'Earlier conversations': 'Thread sebelumnya',
+  Recent: 'Terbaru',
   'Recent threads': 'Thread terbaru',
   'Recent threads per project': 'Thread terbaru per proyek',
   'Older threads stay available under Show more.': 'Thread lama tetap bisa dibuka lewat Lihat lebih banyak.',

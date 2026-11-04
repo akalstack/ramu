@@ -9,6 +9,8 @@ import {
   Folder,
   FolderGit2,
   Network,
+  History,
+  Folders,
   MessagesSquare,
   Search,
   Gauge,
@@ -59,6 +61,9 @@ const PER_PROJECT = 3
 /** Done threads shown once the Done card is opened, before "Show more". */
 const DONE_PAGE = 10
 const DONE_KEY = 'section:done'
+
+/** Where this phone remembers how the thread list is drawn: by project (default) or by recent activity. */
+const THREAD_LIST_KEY = 'pref-device:threadList'
 
 export default function Threads() {
   const { c } = useTheme()
@@ -139,6 +144,8 @@ export default function Threads() {
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }, [scoped, filter])
   const filtering = filter !== 'all'
+  // The desktop's sidebar switch, kept on this phone: threads grouped by project, or one list by recent activity.
+  const recentMode = store.drafts?.[THREAD_LIST_KEY] === 'recent'
   // A thread marked done leaves its project (and Pinned) for one Done card at the bottom; archived ones list as they are.
   const { open, done } = useMemo(
     () => (filter === 'archived' ? { open: mine, done: [] } : splitDone(mine)),
@@ -193,14 +200,17 @@ export default function Threads() {
         ),
       )
     }
-    if (filtering) {
-      // A status filter answers "which threads are …?", so its results are one flat list labelled by project.
+    if (filtering || recentMode) {
+      // A status filter answers "which threads are …?", and recent mode asks what moved last, so each is one flat list
+      // labelled by project.
       const recent = recentThreads(unpinned, historyLimit)
       if (recent.threads.length) {
         out.push({
           key: 'label:recent',
           kind: 'label',
-          text: chips.find((chip) => chip.key === filter)?.label ?? t.homeAll,
+          text: filtering
+            ? (chips.find((chip) => chip.key === filter)?.label ?? t.homeAll)
+            : translate(store.language, 'Recent threads'),
         })
         group(
           'recent',
@@ -288,6 +298,7 @@ export default function Threads() {
     historyLimit,
     filtering,
     filter,
+    recentMode,
     merged,
     projects,
     computers,
@@ -619,8 +630,8 @@ export default function Threads() {
               </View>
             ) : null}
 
-            {/* Filters appear once there is something to filter: another host, or threads in a second state. */}
-            {multi || filtering || chips.some((chip) => chip.key !== 'all' && chip.count > 0) ? (
+            {/* The row holds the list switch, and the filters once there is something to filter. */}
+            {live.length || multi ? (
               <HScroll
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -639,6 +650,14 @@ export default function Threads() {
                     onPress={() => setHostSheet(true)}
                   />
                 ) : null}
+                <Chip
+                  label={recentMode ? say('Recent') : t.projects}
+                  icon={recentMode ? History : Folders}
+                  accessibilityLabel={
+                    recentMode ? say('Group threads by project') : say('Show threads by recent activity')
+                  }
+                  onPress={() => store.setDraft(THREAD_LIST_KEY, recentMode ? 'projects' : 'recent')}
+                />
                 {chips
                   .filter((chip) => chip.key === 'all' || chip.key === filter || chip.count > 0)
                   .map((chip) => (
