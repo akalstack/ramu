@@ -3,6 +3,7 @@
 // one reply line, `ok` or `err <reason>`, in order:
 //   move x y | click x y button count | scroll x y dx dy | drag fx fy tx ty | key code flags | type <base64 UTF-8>
 // button: 0 left, 1 right, 2 middle. Pointer moves are posted as they come; nothing else waits on them.
+import Carbon
 import CoreGraphics
 import Foundation
 
@@ -48,13 +49,53 @@ func key(_ code: CGKeyCode, flags: UInt64) {
   }
 }
 
-/// One Unicode event per UTF-16 unit keeps accents, IME output and emoji intact.
+/// Which key, with which modifiers, types each character on the current keyboard layout. Secure fields (the lock
+/// screen's password, any password box) read the key that was pressed and ignore the attached text, so a character
+/// sent on a placeholder key would arrive as that key's letter.
+func layoutKeys() -> [Character: (CGKeyCode, CGEventFlags)] {
+  guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+    let pointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+  else { return [:] }
+  let data = Unmanaged<CFData>.fromOpaque(pointer).takeUnretainedValue() as Data
+  var keys: [Character: (CGKeyCode, CGEventFlags)] = [:]
+  // Plain keys first, so a character reachable without modifiers keeps the plainest way to type it.
+  let states: [(UInt32, CGEventFlags)] = [
+    (0, []), (UInt32(shiftKey >> 8), .maskShift), (UInt32(optionKey >> 8), .maskAlternate),
+    (UInt32((shiftKey | optionKey) >> 8), [.maskShift, .maskAlternate]),
+  ]
+  data.withUnsafeBytes { raw in
+    guard let layout = raw.bindMemory(to: UCKeyboardLayout.self).baseAddress else { return }
+    for (modifiers, flags) in states {
+      for code in 0..<128 {
+        var dead: UInt32 = 0
+        var length = 0
+        var chars = [UniChar](repeating: 0, count: 4)
+        let status = UCKeyTranslate(
+          layout, UInt16(code), UInt16(kUCKeyActionDown), modifiers, UInt32(LMGetKbdType()),
+          OptionBits(kUCKeyTranslateNoDeadKeysBit), &dead, chars.count, &length, &chars)
+        guard status == noErr, length == 1, let character = String(utf16CodeUnits: chars, count: 1).first,
+          keys[character] == nil
+        else { continue }
+        keys[character] = (CGKeyCode(code), flags)
+      }
+    }
+  }
+  return keys
+}
+
+/// Each character on the key that types it, with its text attached; one the layout cannot type goes as text alone.
 func type(_ text: String) {
-  for unit in text.utf16 {
-    var character = unit
+  let keys = layoutKeys()
+  for character in text {
+    let units = Array(String(character).utf16)
+    let (code, flags) = keys[character] ?? (0, [])
+    let known = keys[character] != nil
     for down in [true, false] {
-      let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: down)
-      event?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &character)
+      let event = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down)
+      if known { event?.flags = flags }
+      units.withUnsafeBufferPointer { buffer in
+        event?.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: buffer.baseAddress)
+      }
       post(event)
     }
   }
