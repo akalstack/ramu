@@ -29,10 +29,32 @@ export function parseScreenLocked(registry: string): boolean {
   return /<key>CGSSessionScreenIsLocked<\/key>\s*<true\/>/.test(registry)
 }
 
+export type ScreenState = 'open' | 'locked' | 'away'
+
+/**
+ * The screen as this user's session sees it. `away` is the login window (or another user) on the physical screen with
+ * this session running behind it: Fast User Switching, or the lock screen's account list. Registry session entries are
+ * flat dictionaries, so the one holding this user's id is the text between its surrounding dict tags.
+ */
+export function parseScreenState(registry: string, uid: number): ScreenState {
+  const id = new RegExp(`<key>kCGSSessionUserIDKey</key>\\s*<integer>${uid}</integer>`).exec(registry)
+  if (id) {
+    const start = registry.lastIndexOf('<dict>', id.index)
+    const end = registry.indexOf('</dict>', id.index)
+    const session = registry.slice(start, end === -1 ? undefined : end)
+    if (/<key>kCGSSessionOnConsoleKey<\/key>\s*<false\/>/.test(session)) return 'away'
+  }
+  return parseScreenLocked(registry) ? 'locked' : 'open'
+}
+
 // macOS keeps screen capture and posted input away from the lock screen, so the whole display waits for an unlock.
 // Open Computer Use's Locked Use reaches one app behind it, which is what an app grant uses.
 export const LOCKED_MESSAGE =
   'This Mac is locked, so its main display cannot be seen or controlled. Unlock it, or allow one app instead: with “Keep working while the screen is locked” on, work in an app continues behind the lock screen.'
+
+// The login window belongs to macOS itself; only system software such as Screen Sharing can type into it.
+export const AWAY_MESSAGE =
+  'This Mac is showing its login window, so its main display cannot be seen or controlled from Ramu: macOS lets only system software, such as Screen Sharing, type there. Sign in at the Mac or with Screen Sharing, then open the display again.'
 
 /** The main display. App- and window-scoped confinement needs a driver that can enforce it, so it is not claimed. */
 export const MAIN_DISPLAY: ComputerTarget = { id: 'display:main', kind: 'display', name: 'Main display' }
@@ -266,27 +288,37 @@ export class MacosComputerBackend implements ComputerBackend {
     if (this.platform === 'darwin') void this.input.available()
   }
 
-  private lock: { locked: boolean; at: number } = { locked: false, at: 0 }
+  private lock: { state: ScreenState; at: number } = { state: 'open', at: 0 }
 
   /** Cached for two seconds so a viewer polling every few milliseconds does not shell out every time. */
-  async locked(): Promise<boolean> {
-    if (this.platform !== 'darwin') return false
-    if (Date.now() - this.lock.at < 2000) return this.lock.locked
+  private async screen(): Promise<ScreenState> {
+    if (this.platform !== 'darwin') return 'open'
+    if (Date.now() - this.lock.at < 2000) return this.lock.state
     try {
-      this.lock = {
-        locked: parseScreenLocked(await this.exec('/usr/sbin/ioreg', ['-n', 'Root', '-d1', '-a'])),
-        at: Date.now(),
-      }
+      const registry = await this.exec('/usr/sbin/ioreg', ['-n', 'Root', '-d1', '-a'])
+      this.lock = { state: parseScreenState(registry, process.getuid?.() ?? -1), at: Date.now() }
     } catch {
-      this.lock = { locked: false, at: Date.now() }
+      this.lock = { state: 'open', at: Date.now() }
     }
-    return this.lock.locked
+    return this.lock.state
+  }
+
+  async locked(): Promise<boolean> {
+    return (await this.screen()) !== 'open'
+  }
+
+  async awayFromScreen(): Promise<boolean> {
+    return (await this.screen()) === 'away'
+  }
+
+  private refusal(state: ScreenState): ComputerNotRun {
+    return new ComputerNotRun(state === 'away' ? AWAY_MESSAGE : LOCKED_MESSAGE)
   }
 
   status(): ComputerRuntimeStatus {
     // The last known lock state; capture and input look again before they act.
-    if (this.platform === 'darwin' && this.lock.locked)
-      return { available: false, reason: 'locked', detail: LOCKED_MESSAGE }
+    if (this.platform === 'darwin' && this.lock.state !== 'open')
+      return { available: false, reason: 'locked', detail: this.lock.state === 'away' ? AWAY_MESSAGE : LOCKED_MESSAGE }
     if (this.platform !== 'darwin')
       return { available: false, reason: 'unsupported', detail: 'Computer use currently supports macOS.' }
     if (this.permission) return this.permission
@@ -295,7 +327,8 @@ export class MacosComputerBackend implements ComputerBackend {
 
   async capture(target: ComputerTarget): Promise<ComputerCapture> {
     if (this.platform !== 'darwin') throw new Error('Computer use currently supports macOS.')
-    if (await this.locked()) throw new ComputerNotRun(LOCKED_MESSAGE)
+    const state = await this.screen()
+    if (state !== 'open') throw this.refusal(state)
     if (target.kind !== 'display') throw new Error('Only display capture is supported.')
     const dir = await mkdtemp(join(tmpdir(), 'ramu-screen-'))
     const raw = join(dir, 'screen.png')
@@ -392,8 +425,10 @@ export class MacosComputerBackend implements ComputerBackend {
 
   async perform(target: ComputerTarget, action: ComputerAction, options?: { byPerson?: boolean }): Promise<void> {
     if (this.platform !== 'darwin') throw new Error('Computer use currently supports macOS.')
-    // The person in control may click and type at the lock screen, to unlock it as they would at the Mac. An agent may not.
-    if (!options?.byPerson && (await this.locked())) throw new ComputerNotRun(LOCKED_MESSAGE)
+    // The person in control may click and type at the lock screen, to unlock it as they would at the Mac. An agent may
+    // not, and nobody reaches the login window: input from this session would go nowhere.
+    const state = await this.screen()
+    if (state === 'away' || (state === 'locked' && !options?.byPerson)) throw this.refusal(state)
     void target
     const scale = this.lastScale
     const command = inputCommand(action, scale)

@@ -5295,6 +5295,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Almost done: {0}': 'Hampir selesai: {0}',
   'Open permission setup': 'Buka penyiapan izin',
   'Keep working while the screen is locked?': 'Tetap bekerja saat layar terkunci?',
+  'This Mac is showing its login window, so its main display cannot be seen or controlled from Ramu: macOS lets only system software, such as Screen Sharing, type there. Sign in at the Mac or with Screen Sharing, then open the display again.':
+    'Mac ini sedang menampilkan jendela login, jadi layar utamanya tidak bisa dilihat atau dikendalikan dari Ramu: macOS hanya mengizinkan perangkat lunak sistem, seperti Berbagi Layar, mengetik di sana. Masuk di Mac atau lewat Berbagi Layar, lalu buka layar lagi.',
   'This Mac is locked, so its main display cannot be seen or controlled. Unlock it, or allow one app instead: with “Keep working while the screen is locked” on, work in an app continues behind the lock screen.': 'Mac ini terkunci, jadi layar utamanya tidak bisa dilihat atau dikendalikan. Buka kuncinya, atau izinkan satu aplikasi saja: dengan “Tetap bekerja saat layar terkunci” menyala, pekerjaan di aplikasi itu berlanjut di balik layar kunci.',
   'This Mac is locked, so its main display cannot be used. Allow one app: with “Keep working while the screen is locked” on, the agent works in it behind the lock screen.': 'Mac ini terkunci, jadi layar utamanya tidak bisa dipakai. Izinkan satu aplikasi: dengan “Tetap bekerja saat layar terkunci” menyala, agen bekerja di aplikasi itu di balik layar kunci.',
   'Show threads from': 'Tampilkan thread dari',

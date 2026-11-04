@@ -95,6 +95,11 @@ export interface ComputerBackend {
   useScale?(scale: number): void
   /** Whether the computer's screen is locked, for the backends that can tell. Screen video cannot see past the lock. */
   locked?(): Promise<boolean>
+  /**
+   * Whether this user's session is off the physical screen: the login window or another user is shown there. Nothing
+   * this session posts reaches that screen, and its video shows the session's own hidden desktop instead.
+   */
+  awayFromScreen?(): Promise<boolean>
   /** How often a watched target is worth capturing, in milliseconds. Cheap streaming backends return less than the default. */
   frameInterval?(target: ComputerTarget): number
   /** Prepares slow one-time setup (for example building a native helper) before the first capture needs it. */

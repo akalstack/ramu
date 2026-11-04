@@ -319,7 +319,9 @@ const computerVideo = new RtcViewers(new VideoFeed(), async (threadId, deviceId)
       (devices.list().some((device) => device.id === deviceId && device.role !== 'viewer') &&
         devices.allows(deviceId, 'computer')))
   // A window's video goes blank behind the lock screen; ending it sends the viewer back to snapshots, which still work.
-  return allowed && (session.target.kind !== 'app' || !(await computer.backend.locked?.()))
+  if (!allowed || (session.target.kind === 'app' && (await computer.backend.locked?.()))) return false
+  // With the login window on the screen, display video would show this session's hidden desktop, which takes no input.
+  return session.target.kind !== 'display' || !(await computer.backend.awayFromScreen?.())
 })
 const ocuBackend = new OcuBackend(
   undefined,

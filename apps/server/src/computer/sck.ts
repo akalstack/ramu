@@ -8,7 +8,7 @@ import {
   ComputerTarget,
 } from '@ramu/shared/computerBridge'
 import SOURCE from '../../native/ramu-capture.swift?raw'
-import { LOCKED_MESSAGE } from './macos'
+import { AWAY_MESSAGE, LOCKED_MESSAGE } from './macos'
 import { ensureHelper } from './nativeHelper'
 
 export type CaptureMessage =
@@ -183,6 +183,10 @@ export class SckDisplayBackend implements ComputerBackend {
     return this.inner.locked?.() ?? Promise.resolve(false)
   }
 
+  awayFromScreen(): Promise<boolean> {
+    return this.inner.awayFromScreen?.() ?? Promise.resolve(false)
+  }
+
   /** Builds the helpers in the background so the first viewer and the first click do not wait for the compiler. */
   warm(): void {
     if (this.platform === 'darwin') void this.build().catch(() => {})
@@ -196,7 +200,8 @@ export class SckDisplayBackend implements ComputerBackend {
 
   async capture(target: ComputerTarget): Promise<ComputerCapture> {
     // The stream would show the lock screen; say so instead of presenting it as the person's desktop.
-    if (await this.inner.locked?.()) throw new ComputerNotRun(LOCKED_MESSAGE)
+    if (await this.inner.locked?.())
+      throw new ComputerNotRun((await this.inner.awayFromScreen?.()) ? AWAY_MESSAGE : LOCKED_MESSAGE)
     if (this.broken || this.platform !== 'darwin' || target.kind !== 'display') return this.inner.capture(target)
     this.stream ??= new ScreenStream(async () => this.launch(await this.build()))
     try {

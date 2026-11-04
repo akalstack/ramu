@@ -626,6 +626,30 @@ describe('locked screen', () => {
     expect(locked.status()).toMatchObject({ available: false, reason: 'locked' })
   })
 
+  it('knows when the login window is on the screen and this session runs behind it', async () => {
+    const { parseScreenState, MacosComputerBackend, AWAY_MESSAGE } = await import('../src/computer/macos')
+    const session = (uid: number, onConsole: boolean, extra = '') =>
+      `<dict><key>kCGSSessionOnConsoleKey</key><${onConsole}/>${extra}<key>kCGSSessionUserIDKey</key><integer>${uid}</integer></dict>`
+    const loginWindow = `<key>IOConsoleUsers</key><array>${session(0, true)}${session(501, false)}</array>`
+    expect(parseScreenState(loginWindow, 501)).toBe('away')
+    expect(
+      parseScreenState(`<array>${session(501, true, '<key>CGSSessionScreenIsLocked</key><true/>')}</array>`, 501),
+    ).toBe('locked')
+    expect(parseScreenState(`<array>${session(501, true)}</array>`, 501)).toBe('open')
+    const uid = process.getuid?.() ?? -1
+    const away = new MacosComputerBackend(
+      async () => `<array>${session(0, true)}${session(uid, false)}</array>`,
+      'darwin',
+      () => 'Mac',
+      async () => null,
+    )
+    const display = { id: 'display:main', kind: 'display' as const, name: 'Main' }
+    // Even the person in control is told why: their keys would never reach the login window.
+    await expect(away.perform(display, { kind: 'key', key: 'a' }, { byPerson: true })).rejects.toThrow(AWAY_MESSAGE)
+    await expect(away.capture(display)).rejects.toThrow(AWAY_MESSAGE)
+    expect(await away.awayFromScreen()).toBe(true)
+  })
+
   it('posts every input through one long-lived helper, each waiting for its own reply', async () => {
     const { MacosComputerBackend, inputCommand } = await import('../src/computer/macos')
     const { EventEmitter } = await import('node:events')
