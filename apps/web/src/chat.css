@@ -58,7 +58,7 @@
 .composer-tray-slot > .composer-tray {
   margin-bottom: 0;
 }
-.composer-tray-slot > .composer-tray[data-peek] {
+.composer-tray-slot > .composer-tray[data-float] {
   position: absolute;
   bottom: 0;
   inset-inline: var(--composer-tray-inset);
