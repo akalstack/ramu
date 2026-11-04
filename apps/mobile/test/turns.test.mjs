@@ -59,6 +59,31 @@ test('failed tools stay visible outside the fold, and stopped turns say so', () 
   assert.equal(rows[2].status, 'failed')
 })
 
+test('an answer that mentions aborting, or a turn steered into, still reads as worked', () => {
+  const answered = [
+    ...finished.slice(0, 4),
+    {
+      kind: 'result',
+      isError: false,
+      text: 'I added an AbortController so the request can be interrupted.',
+      costUsd: null,
+      at: 66_000,
+    },
+  ]
+  assert.equal(foldTurns(transcript(answered), false, false)[1].label, 'Worked for 1m 5s')
+  const steered = [...finished.slice(0, 3), { kind: 'user', text: 'also add tests', at: 4_000 }, ...finished.slice(3)]
+  const rows = foldTurns(transcript(steered), false, false).filter((r) => r.kind === 'summary')
+  assert.deepEqual(
+    rows.map((r) => r.label),
+    ['Worked for 2s'],
+  )
+  const stopped = [
+    ...finished.slice(0, 3),
+    { kind: 'result', isError: false, text: 'cancelled', costUsd: null, at: 5_000 },
+  ]
+  assert.equal(foldTurns(transcript(stopped), false, false)[1].label, 'Stopped after 4s')
+})
+
 const goal = (patch = {}) => ({
   id: 'g1',
   objective: 'Login works',

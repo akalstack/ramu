@@ -2,6 +2,7 @@ import type { AgentEvent } from '@ramu/shared/types'
 import { helperGroups } from '@ramu/shared/chat/helperPresentation'
 import { toolKind } from '@ramu/shared/chat/agentTools'
 import { visibleMessage } from '@ramu/shared/chat/visibleMessage'
+import { resultStopped } from '@ramu/shared/chat/turnResult'
 import { describeRamuTool, ramuTool, ramuToolHasOwnUi } from '@ramu/shared/chat/ramuTools'
 import { fileToolDiffs, fileToolLine } from '@ramu/shared/chat/fileTools'
 import type { Chat, ToolKind, TranscriptItem } from './types'
@@ -292,8 +293,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
               : 'Conversation compacted',
         failed: e.state === 'failed',
       })
-    else if (e.kind === 'result')
-      items.push({ kind: 'end', id, ended: true, interrupted: e.isError || /interrupt|abort/i.test(e.text) })
+    else if (e.kind === 'result') items.push({ kind: 'end', id, ended: true, interrupted: resultStopped(e) })
     else if (e.kind === 'state' && ['idle', 'failed', 'stopped'].includes(e.state))
       items.push({ kind: 'end', id, ended: false, interrupted: false })
     // Keep exact event positions even for requests whose IDs are provider-owned.

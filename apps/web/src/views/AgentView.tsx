@@ -17,6 +17,7 @@ import { t as translate, useLanguage } from '../i18n'
 import { ScrollToLatestButton } from './agent/components/ScrollToLatestButton'
 import { isCompacting } from '@ramu/shared/chat/compaction'
 import { Button } from '@/components/desktop-button'
+import { reportedStop } from '@ramu/shared/chat/turnResult'
 import {
   MessageScroller,
   MessageScrollerContent,
@@ -392,7 +393,8 @@ export const AgentView = memo(function AgentView({
     interrupted ||
     (!!lastResult &&
       events.lastIndexOf(lastResult) > lastUserIndex &&
-      /interrupt|abort/i.test(lastResult.kind === 'result' ? lastResult.text : ''))
+      lastResult.kind === 'result' &&
+      reportedStop(lastResult))
   useEffect(() => {
     if (working) setInterrupted(false)
   }, [working])

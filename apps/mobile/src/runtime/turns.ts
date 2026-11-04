@@ -52,7 +52,9 @@ export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boole
       const folded = work.filter(settled)
       const kept = work.filter((item) => !settled(item))
       const endedAt = (result ?? ends[0])?.at ?? body.findLast((item) => item.at !== undefined)?.at
-      const done = Boolean(result) && !result!.interrupted
+      // A message steered into a running turn starts the next turn before the result; with no stop, failure or idle
+      // in between, the agent carried on rather than stopped.
+      const done = result ? !result.interrupted : !isLast && !ends.length
       const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
       const label = done
         ? duration !== undefined

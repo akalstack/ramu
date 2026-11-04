@@ -1,5 +1,6 @@
 import type { AgentEvent } from '@ramu/shared/types'
 import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
+import { resultStopped } from '@ramu/shared/chat/turnResult'
 import { type Turn } from '../types'
 
 /** One user message and everything the agent did in answer to it. */
@@ -18,7 +19,7 @@ export function toTurns(blocks: Block[], events: AgentEvent[]): Turn[] {
     turn.items.push(block)
     if (block.kind === 'event' && block.event.kind === 'result') {
       turn.ended = true
-      turn.interrupted = block.event.isError || /interrupt|abort/i.test(block.event.text)
+      turn.interrupted = resultStopped(block.event)
       turn.endedAt = block.event.at
     }
   })
@@ -36,6 +37,12 @@ export function toTurns(blocks: Block[], events: AgentEvent[]): Turn[] {
     )
       ends.set(user, event.at)
   }
-  for (const turn of turns) turn.endedAt ??= ends.get(turn.user?.kind === 'event' ? turn.user.event : null)
+  turns.forEach((turn, index) => {
+    const key = turn.user?.kind === 'event' ? turn.user.event : null
+    turn.endedAt ??= ends.get(key)
+    // A message steered into a running turn starts the next turn before the agent reports a result; with no stop or
+    // failure in between, the agent carried on rather than stopped.
+    if (!turn.ended && index < turns.length - 1 && !ends.has(key)) turn.ended = true
+  })
   return turns
 }
