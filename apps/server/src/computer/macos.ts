@@ -26,8 +26,10 @@ export function parseScreenLocked(registry: string): boolean {
   return /<key>CGSSessionScreenIsLocked<\/key>\s*<true\/>/.test(registry)
 }
 
+// macOS keeps screen capture and posted input away from the lock screen, so the whole display waits for an unlock.
+// Open Computer Use's Locked Use reaches one app behind it, which is what an app grant uses.
 export const LOCKED_MESSAGE =
-  'The computer is locked. Unlock it, or turn on “Keep working while the screen is locked” in Settings → Computer use.'
+  'This Mac is locked, so its main display cannot be seen or controlled. Unlock it, or allow one app instead: with “Keep working while the screen is locked” on, work in an app continues behind the lock screen.'
 
 /** The main display. App- and window-scoped confinement needs a driver that can enforce it, so it is not claimed. */
 export const MAIN_DISPLAY: ComputerTarget = { id: 'display:main', kind: 'display', name: 'Main display' }

@@ -692,6 +692,7 @@ export function ComputerGrantDialog({ state }: { state: ComputerActivityState })
   const [open, setOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [ready, setReady] = useState(false)
+  const [locked, setLocked] = useState(false)
   const [apps, setApps] = useState<string[]>([])
   const [appHint, setAppHint] = useState('')
   const [app, setApp] = useState('')
@@ -715,6 +716,7 @@ export function ComputerGrantDialog({ state }: { state: ComputerActivityState })
       const apps = status?.enabled && appsReady ? await invoke('computer.apps').catch(() => []) : []
       if (!active) return
       setReady(!!status?.enabled && (status.runtime.available || appsReady))
+      setLocked(!!status && !status.runtime.available && status.runtime.reason === 'locked')
       setAppHint(status?.apps && !status.apps.available ? (status.apps.detail ?? '') : '')
       setApps(apps)
       setLoaded(true)
@@ -760,9 +762,18 @@ export function ComputerGrantDialog({ state }: { state: ComputerActivityState })
                     </Button>
                   </>
                 )}
-                <Button size="sm" variant={apps.length ? 'secondary' : 'default'} onClick={() => grant({})}>
-                  {t('Allow main display')}
-                </Button>
+                {!locked && (
+                  <Button size="sm" variant={apps.length ? 'secondary' : 'default'} onClick={() => grant({})}>
+                    {t('Allow main display')}
+                  </Button>
+                )}
+                {locked && (
+                  <p className="m-0 basis-full text-caption text-muted-foreground" role="status">
+                    {t(
+                      'This Mac is locked, so its main display cannot be used. Allow one app: with “Keep working while the screen is locked” on, the agent works in it behind the lock screen.',
+                    )}
+                  </p>
+                )}
               </div>
             ) : (
               <Button
