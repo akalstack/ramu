@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 // The code frame pulls in Monaco, which needs a browser; the markdown map only spreads it in.
 vi.mock('../src/chat/ChatCodeBlock', () => ({ chatCodeComponents: {} }))
+vi.mock('../src/ipc', () => ({ copyText: vi.fn() }))
+vi.mock('../src/chat/Notifications', () => ({ notifyError: vi.fn() }))
 const { chatMarkdownComponents } = await import('../src/chat/ChatMarkdown')
 
 const render = (markdown: string) =>

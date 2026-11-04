@@ -9,6 +9,8 @@ vi.mock('../src/i18n', () => ({
   formatLocale: () => 'en-US',
 }))
 vi.mock('../src/chat/ChatCodeBlock', () => ({ chatCodeComponents: {} }))
+vi.mock('../src/ipc', () => ({ copyText: vi.fn() }))
+vi.mock('../src/chat/Notifications', () => ({ notifyError: vi.fn() }))
 vi.mock('../src/chat/ChatReferences', () => ({
   ChatLink: ({ children }: { children: React.ReactNode }) => children,
 }))

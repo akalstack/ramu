@@ -4,6 +4,49 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { chatCodeComponents } from './ChatCodeBlock'
+import { useRef, useState, type ReactNode } from 'react'
+import { Check, Copy } from 'lucide-react'
+import { Button } from '@/components/desktop-button'
+import { copyText } from '../ipc'
+import { errorText } from '../lib/errors'
+import { notifyError } from './Notifications'
+import { t } from '../i18n'
+import { tableClipboard } from './richCopy'
+
+/** A table with its own Copy, which pastes as cells into a spreadsheet and as a table into a document. */
+function CopyableTable({ children }: { children: ReactNode }) {
+  const frame = useRef<HTMLDivElement>(null)
+  const [done, setDone] = useState(false)
+  const copy = () => {
+    const table = frame.current?.querySelector('table')
+    if (!table) return
+    const { text, html } = tableClipboard(table)
+    void copyText(text, html).then(
+      () => {
+        setDone(true)
+        window.setTimeout(() => setDone(false), 1200)
+      },
+      (error) => notifyError(errorText(error), t('Copy table')),
+    )
+  }
+  return (
+    <div ref={frame} className="group/table relative my-3 w-fit max-w-full">
+      <div className="overflow-hidden rounded-lg border border-line bg-card/50">
+        <Table className="w-auto border-collapse border-spacing-0 text-control">{children}</Table>
+      </div>
+      <Button
+        variant="secondary"
+        size="icon-xs"
+        className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover/table:opacity-100 focus-visible:opacity-100"
+        aria-label={t('Copy table')}
+        title={t('Copy table')}
+        onClick={copy}
+      >
+        {done ? <Check size={13} /> : <Copy size={13} />}
+      </Button>
+    </div>
+  )
+}
 
 /**
  * Markdown elements drawn with shadcn parts, shared by every chat surface that renders agent text: tables, rules,
@@ -11,11 +54,7 @@ import { chatCodeComponents } from './ChatCodeBlock'
  */
 export const chatMarkdownComponents: Components = {
   ...chatCodeComponents,
-  table: ({ children }) => (
-    <div className="my-3 w-fit max-w-full overflow-hidden rounded-lg border border-line bg-card/50">
-      <Table className="w-auto border-collapse border-spacing-0 text-control">{children}</Table>
-    </div>
-  ),
+  table: ({ children }) => <CopyableTable>{children}</CopyableTable>,
   thead: ({ children }) => <TableHeader className="bg-fill">{children}</TableHeader>,
   tbody: ({ children }) => <TableBody>{children}</TableBody>,
   tr: ({ children }) => <TableRow className="border-line">{children}</TableRow>,

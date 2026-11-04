@@ -1101,7 +1101,8 @@ export interface RamuMethods {
     options: { selection: string; editable: boolean; comment: boolean },
     point: { x: number; y: number },
   ): 'cut' | 'undo' | 'redo' | 'selectAll' | 'find' | 'comment' | { paste: string } | null
-  'clipboard.write'(text: string): void
+  /** Writes plain text, with an HTML version when there is one, so rich targets keep tables, lists and links. */
+  'clipboard.write'(text: string, html?: string): void
   'term.menu'(selection: string, point: { x: number; y: number }): 'selectAll' | 'clear' | { paste: string } | null
   'agent.list'(taskId: string): AgentSessionInfo[]
   'agent.get'(sessionId: string): AgentSessionInfo

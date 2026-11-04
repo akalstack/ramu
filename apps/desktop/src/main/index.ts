@@ -50,6 +50,7 @@ import {
   dialog,
   ipcMain,
   clipboard,
+  ClipboardItem,
   safeStorage,
   systemPreferences,
   powerMonitor,
@@ -1085,7 +1086,16 @@ async function main() {
     }
     if (method === 'clipboard.write') {
       if (typeof args[0] !== 'string' || args[0].length > 5_000_000) throw new Error('Invalid clipboard text')
-      return clipboard.writeText(args[0])
+      if (args[1] !== undefined && (typeof args[1] !== 'string' || args[1].length > 10_000_000))
+        throw new Error('Invalid clipboard HTML')
+      // One write with both forms: rich targets read the HTML, everything else the text.
+      if (!args[1]) return clipboard.writeText(args[0])
+      return clipboard.write([
+        new ClipboardItem({
+          'text/plain': new Blob([args[0]], { type: 'text/plain' }),
+          'text/html': new Blob([args[1]], { type: 'text/html' }),
+        }),
+      ])
     }
     if (method === 'term.menu') {
       const point = args[1] as { x?: unknown; y?: unknown } | null

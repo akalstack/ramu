@@ -79,4 +79,6 @@ export function invokerFor(host: string): Invoke {
 }
 
 /** The renderer has no clipboard permission, so copying goes through the main process. */
-export const copyText = (text: string) => invoke('clipboard.write', text)
+/** Copies text, and its HTML form when given, as one clipboard entry. */
+export const copyText = (text: string, html?: string) =>
+  html ? invoke('clipboard.write', text, html) : invoke('clipboard.write', text)

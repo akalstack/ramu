@@ -73,7 +73,7 @@ export const AssistantText = memo(function AssistantText({
         {actions && !writing && (
           <MessageActions latest={latest} className="mt-2">
             <MessageTime at={e.at} />
-            <CopyButton text={e.text} />
+            <CopyButton text={e.text} markdown />
             <MessageQuoteActions text={e.text} />
           </MessageActions>
         )}

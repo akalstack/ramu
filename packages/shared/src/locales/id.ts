@@ -5300,4 +5300,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Show threads from': 'Tampilkan thread dari',
   '{0} connected · {1} hosts': '{0} tersambung · {1} host',
   'Turn off to pause this connection without forgetting it.': 'Matikan untuk menjeda koneksi ini tanpa melupakannya.',
+  'Copy table': 'Salin tabel',
 }
