@@ -1,5 +1,5 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../composer/viewerAccess'
-import { helperActions, helperActive } from '@ramu/shared/chat/helperPresentation'
+import { helperActions, helperActive, helperStatusLabel } from '@ramu/shared/chat/helperPresentation'
 import { useHostConnection } from '../../../workspace/computers'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
@@ -18,7 +18,9 @@ import { toBlocks } from '../lib/blocks'
 import { ToolGroup } from './ToolGroup'
 import { AssistantText } from './AssistantText'
 import { TurnDiff } from './TurnDiff'
-import { TASK_STATUS, TaskStatusIcon, taskMeta } from './TaskStatus'
+import { HelperIcon, RoleTag, TASK_STATUS, TaskStatusIcon, taskMeta } from './TaskStatus'
+import { ActivityText } from '../../../chat/ActivityText'
+import { cn } from 'cn'
 import { AgentTaskCard } from './AgentTaskCard'
 import { ThinkingRow } from './ThinkingRow'
 import {
@@ -116,6 +118,8 @@ export function AgentTaskPanel({
   }, [own.length])
   const actions = task ? helperActions(task, !offline) : { canStop: false, canMessage: false }
   const status = task ? effectiveStatus(task, live) : 'stopped'
+  const working = !offline && !!task && helperActive(task)
+  const meta = task ? taskMeta(task, status) : ''
   const send = async () => {
     if (readOnly || !task || !draft.trim() || sending) return
     setSending(true)
@@ -131,7 +135,7 @@ export function AgentTaskPanel({
       className="agent-panel absolute inset-[0_0_0_auto] z-6 w-[min(440px,_100%)] flex flex-col bg-canvas [box-shadow:-16px_0_32px_rgba(0,_0,_0,_0.28)] [animation:fade_0.12s_var(--ease)] [box-sizing:border-box] min-w-0 max-w-full overflow-hidden [border-left:var(--pane-border-width)_solid_var(--pane-border-color)]"
       aria-label={task ? translate('Agent {0}', { '0': task.name }) : translate('Agents')}
     >
-      <header className={PANEL_HEADER_CLASS}>
+      <header className={cn(PANEL_HEADER_CLASS, task && 'min-h-14 gap-2.5 py-2 [border-bottom:1px_solid_var(--line)]')}>
         {task && tasks.length > 1 && (
           <Button
             variant="ghost"
@@ -146,18 +150,35 @@ export function AgentTaskPanel({
         )}
         {task ? (
           <>
-            <TaskStatusIcon status={status} active={!offline && Boolean(task && helperActive(task))} />
-            <span className={PANEL_TITLE_CLASS} title={task.name}>
-              {task.name}
+            <HelperIcon task={task} />
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className={PANEL_TITLE_CLASS} title={task.name}>
+                  {task.name}
+                </span>
+                <RoleTag task={task} />
+              </span>
+              <span className="flex min-w-0 items-center gap-1 text-caption text-muted-foreground">
+                <TaskStatusIcon status={status} active={working} />
+                <ActivityText active={status === 'running' && working} className="flex-none">
+                  {offline ? `${translate('Last known')} · ` : ''}
+                  {translate(helperStatusLabel(task))}
+                </ActivityText>
+                {meta && (
+                  <span className="min-w-0 truncate" title={meta}>
+                    · {meta}
+                  </span>
+                )}
+              </span>
             </span>
           </>
         ) : (
           <>
             <Bot size={15} />
             <span className={PANEL_TITLE_CLASS}>{translate('Agents')}</span>
+            <span className="grow flex-1 min-w-0 text-left" />
           </>
         )}
-        <span className="grow flex-1 min-w-0 text-left" />
         {task && actions.canStop && !readOnly && (
           <Button variant="ghost" size="sm" className={GHOST_TEXT_BUTTON_CLASS} onClick={() => onStop(task)}>
             <Square size={11} />
@@ -225,9 +246,6 @@ export function AgentTaskPanel({
         </div>
       ) : (
         <>
-          <div className="agent-panel-meta p-[8px_14px_0] flex-none muted text-muted-foreground small text-caption">
-            {[translate(TASK_STATUS[status]), taskMeta(task, status)].filter(Boolean).join(' · ')}
-          </div>
           <div ref={body} className={PANEL_BODY_CLASS}>
             {task.recoveryError && (
               <p className="muted text-muted-foreground small text-caption" role="status">

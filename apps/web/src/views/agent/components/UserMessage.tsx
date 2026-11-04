@@ -1,8 +1,8 @@
-import { useContext } from 'react'
+import { useContext, useLayoutEffect, useRef, useState } from 'react'
 import { ReferenceText } from '../../../chat/ChatReferences'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { AppWindow, Bot, ChevronRight, Lightbulb, Pencil, ShieldQuestion, Square } from 'lucide-react'
+import { AppWindow, Bot, ChevronDown, ChevronRight, Lightbulb, Pencil, ShieldQuestion, Square } from 'lucide-react'
 import { sentInteractiveAttachments } from '@ramu/shared/interactive'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -20,8 +20,7 @@ import { Attachments } from '../../../composer/Attachments'
 import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { visibleText } from '../lib/messages'
 import { ThreadAgents } from '../lib/threadAgents'
-import { ProviderIcon } from '../../../models/ProviderIcon'
-import { RoleTag, TaskStatusIcon } from './TaskStatus'
+import { HelperIcon, RoleTag, TaskStatusIcon } from './TaskStatus'
 import { REPORT_STATUS } from '@ramu/shared/chat/helperPresentation'
 import { MessageTime } from './MessageTime'
 import { CopyButton } from './CopyButton'
@@ -264,20 +263,26 @@ function TaskReport({
   const status = REPORT_ICON[report.verb]
   // A teammate replies turn after turn, so only a reply that went wrong needs a status.
   const showStatus = !(agent?.teammate && report.verb === 'finished')
+  const [expanded, setExpanded] = useState(false)
+  const [long, setLong] = useState(false)
+  const body = useRef<HTMLDivElement>(null)
+  // Whether the report runs past its preview; measured while folded, kept while open.
+  useLayoutEffect(() => {
+    const el = body.current
+    if (el && !expanded) setLong(el.scrollHeight > el.clientHeight + 1)
+  }, [report.body, expanded])
   return (
-    <Button
-      variant="ghost"
-      type="button"
-      className="task-report m-[8px_0] flex h-auto w-full items-start justify-start gap-2.5 whitespace-normal rounded-(--radius-m) bg-raised p-[10px_12px] text-left font-normal disabled:opacity-100"
-      disabled={!agent}
-      onClick={() => agent && onOpenAgent?.(agent.agentId)}
-      title={agent ? translate('Open agent {0}', { 0: report.name }) : undefined}
-    >
-      <span className="grid size-7 flex-none place-items-center rounded-(--radius-s) bg-accent text-soft">
-        {agent?.provider ? <ProviderIcon provider={agent.provider} size={14} /> : <Bot size={15} />}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex min-w-0 items-center gap-2">
+    <div className="task-report m-[8px_0] flex flex-col rounded-(--radius-m) bg-raised">
+      <Button
+        variant="ghost"
+        type="button"
+        className="flex h-auto w-full items-center justify-start gap-2.5 whitespace-normal rounded-(--radius-m) p-[8px_12px] text-left font-normal disabled:opacity-100"
+        disabled={!agent}
+        onClick={() => agent && onOpenAgent?.(agent.agentId)}
+        aria-label={agent ? translate('Open agent {0}', { 0: report.name }) : undefined}
+      >
+        <HelperIcon task={agent} />
+        <span className="flex min-w-0 flex-1 items-center gap-2">
           <span className="truncate font-semibold text-foreground">{report.name}</span>
           {agent && <RoleTag task={agent} />}
           {showStatus && (
@@ -287,12 +292,34 @@ function TaskReport({
             </span>
           )}
         </span>
-        <span className={`${MSG_CLASS} assistant text-soft`}>
+        {agent && <ChevronRight size={14} className={CARET_CLASS} />}
+      </Button>
+      <div className="flex flex-col items-start px-3 pb-2 pl-[50px]">
+        <div
+          ref={body}
+          className={`${MSG_CLASS} assistant w-full text-soft [&>:first-child]:mt-0 ${
+            expanded
+              ? ''
+              : `max-h-[7.5rem] overflow-hidden ${long ? '[mask-image:linear-gradient(to_bottom,black_55%,transparent)]' : ''}`
+          }`}
+        >
           <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
             {report.body}
           </Markdown>
-        </span>
-      </span>
-    </Button>
+        </div>
+        {long && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2 mt-0.5 text-caption text-muted-foreground"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? translate('Show less') : translate('Show full report')}
+            <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </Button>
+        )}
+      </div>
+    </div>
   )
 }

@@ -1,5 +1,6 @@
 import { formatLocale, t, useLanguage } from '../../../i18n'
-import { CircleCheck, CircleSlash, CircleX, Clock } from 'lucide-react'
+import { Bot, CircleCheck, CircleSlash, CircleX, Clock, SquareTerminal } from 'lucide-react'
+import { ProviderIcon } from '../../../models/ProviderIcon'
 import { providerName } from '../../../chat/AgentControls'
 import type { AgentTask, AgentWork } from '@ramu/shared/types'
 import { helperRole } from '@ramu/shared/chat/helperPresentation'
@@ -36,6 +37,24 @@ export function RoleTag({ task }: { task: Pick<AgentTask, 'teammate' | 'taskType
     <span className="flex-none rounded-(--radius-s) bg-fill px-1.5 text-caption leading-[18px] text-muted-foreground">
       {t(label)}
       {detail ? ` · ${t(detail)}` : ''}
+    </span>
+  )
+}
+
+/** A helper's tile: its model's logo, a terminal for a background command, or a generic agent. */
+export function HelperIcon({ task }: { task?: Pick<AgentTask, 'taskType' | 'provider'> }) {
+  return (
+    <span
+      className="grid size-7 flex-none place-items-center rounded-(--radius-s) bg-accent text-soft"
+      aria-hidden="true"
+    >
+      {task?.taskType === 'local_bash' ? (
+        <SquareTerminal size={15} />
+      ) : task?.provider ? (
+        <ProviderIcon provider={task.provider} size={14} />
+      ) : (
+        <Bot size={15} />
+      )}
     </span>
   )
 }

@@ -1,16 +1,15 @@
-import { helperActions, helperActive, helperStatusLabel } from '@ramu/shared/chat/helperPresentation'
+import { helperActions, helperActive, helperStatusLabel, reportPreview } from '@ramu/shared/chat/helperPresentation'
 import { useHostConnection } from '../../../workspace/computers'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { Bot, Square, ChevronRight, SquareTerminal } from 'lucide-react'
+import { Square, ChevronRight } from 'lucide-react'
 import { providerName } from '../../../chat/AgentControls'
 import { effectiveStatus } from '@ramu/shared/chat/agentTasks'
 import type { AgentTask } from '@ramu/shared/types'
-import { ProviderIcon } from '../../../models/ProviderIcon'
 import { modelDisplayName } from '../../../models/ModelSets'
 import { toolLabel } from '../lib/toolSummary'
 import { useElapsed } from '../hooks/useElapsed'
-import { RoleTag, TASK_STATUS, TaskStatusIcon, taskMeta, workSummary } from './TaskStatus'
+import { HelperIcon, RoleTag, TASK_STATUS, TaskStatusIcon, taskMeta, workSummary } from './TaskStatus'
 import { CARET_CLASS, ICON_BUTTON_CLASS } from '../styles'
 import { ActivityText } from '../../../chat/ActivityText'
 
@@ -33,11 +32,11 @@ export function AgentTaskCard({
   const actions = helperActions(task, !offline)
   const status = effectiveStatus(task, live)
   useElapsed(task.startedAt, !offline && helperActive(task))
-  const final = task.error ?? task.summary
+  const final = reportPreview(task.error ?? task.summary ?? '')
   const detail =
     status === 'running'
-      ? (task.summary ??
-        (task.lastTool ? translate('Using {0}', { 0: toolLabel(task.lastTool) }) : translate('Starting…')))
+      ? reportPreview(task.summary ?? '') ||
+        (task.lastTool ? translate('Using {0}', { 0: toolLabel(task.lastTool) }) : translate('Starting…'))
       : final && final.toLowerCase() !== TASK_STATUS[status].toLowerCase()
         ? final
         : undefined
@@ -52,15 +51,7 @@ export function AgentTaskCard({
         aria-label={translate('Open agent {0}', { '0': task.name })}
         onClick={onOpen}
       >
-        <span className="agent-task-icon flex-none grid place-items-center w-7 h-7 rounded-(--radius-s) bg-accent text-soft">
-          {task.taskType === 'local_bash' ? (
-            <SquareTerminal size={15} />
-          ) : task.provider ? (
-            <ProviderIcon provider={task.provider} size={14} />
-          ) : (
-            <Bot size={15} />
-          )}
-        </span>
+        <HelperIcon task={task} />
         <span className="agent-task-text flex-1 min-w-0 flex flex-col gap-0.5">
           <span className="agent-task-title flex items-center gap-2 min-w-0">
             <span className="agent-task-name min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-foreground">

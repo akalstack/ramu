@@ -79,7 +79,7 @@ function teammatePreamble(mode: TeammateMode): string {
 }
 
 const TEAMMATE_TOOL =
-  'Your final reply goes to the lead as your report. To reach the lead before that, use teammate_message with to "lead".'
+  'Your final reply goes to the lead as your report and shows in the thread, so keep it short: the answer in one or two sentences, then at most five bullets with file paths where they help. No headings, preamble or recap of what you read. To reach the lead before that, use teammate_message with to "lead".'
 
 /** Why a teammate exchange refuses another message until the person writes. */
 export const TEAMMATE_PAUSED = `The exchange with the teammate paused after ${TEAMMATE_ROUNDS} rounds without the person. Wait for them to write.`

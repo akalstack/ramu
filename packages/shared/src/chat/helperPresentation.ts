@@ -134,3 +134,26 @@ export function helperGroups(events: AgentEvent[]): {
     history: latest.filter((t) => t.taskType !== 'advisor' && !selected.includes(t)),
   }
 }
+
+/**
+ * A helper's report as one plain line for a card: its first paragraph without Markdown marks, so "**Verdict:** yes" reads
+ * "Verdict: yes" and a heading or list marker does not lead the line.
+ */
+export function reportPreview(report: string): string {
+  const paragraph =
+    report
+      .replace(/```[\s\S]*?(```|$)/g, '\n\n')
+      .split(/\n\s*\n/)
+      .map((block) => block.trim())
+      .find((block) => block && !/^(#{1,6}\s|[-*_]{3,}$)/.test(block)) ?? ''
+  // A list says one thing per item; its first item stands for it.
+  const lead = /^(?:[-*+]|\d+[.)])\s/.test(paragraph) ? paragraph.split('\n')[0]! : paragraph
+  return lead
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/(^|[^\w*])[*_]([^*_\s][^*_]*?)[*_](?![\w*])/g, '$1$2')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+}

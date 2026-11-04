@@ -5280,4 +5280,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Waiting for {0} to allow it': 'Menunggu {0} mengizinkannya',
   'Waiting for {0} to allow {1}': 'Menunggu {0} mengizinkan {1}',
   'What this device may do there': 'Yang boleh dilakukan perangkat ini di sana',
+  'Show full report': 'Lihat laporan lengkap',
 }
