@@ -132,15 +132,15 @@ it('reports the caller role for client action hiding, defaulting local and legac
   expect(accessOf(undefined)).toBe('owner')
 })
 
-it('lets a viewer device reach only the computer screen watching methods, never input or grants', async () => {
+it('lets a viewer device read whether a thread has a computer, never its screen, input or setup', async () => {
   const f = await fixture()
   const viewer = f.devices.redeem(f.devices.createCode(f.now(), 'viewer').code, 'Phone', f.now())!.device
-  for (const method of ['computer.frame', 'computer.session', 'computer.rtcOffer'])
-    expect(deviceMayInvoke(viewer, method)).toBe(true)
+  expect(deviceMayInvoke(viewer, 'computer.session')).toBe(true)
   for (const method of [
+    'computer.frame',
+    'computer.rtcOffer',
     'computer.input',
     'computer.takeControl',
-    'computer.grantViewer',
     'computer.setEnabled',
     'computer.revoke',
   ])

@@ -31,7 +31,7 @@ export function ReferenceChipIcon({ chip }: { chip: ReferenceChip }) {
  */
 export const REFERENCE_CHIP = {
   className:
-    'inline-flex h-auto min-h-0 max-w-[min(100%,var(--reference-chip-width))] items-baseline gap-(--reference-chip-gap) rounded-none border-0 bg-transparent p-0 align-baseline text-[length:inherit] leading-[inherit] font-normal whitespace-nowrap text-[color:var(--accent)]! no-underline! [&>:first-child]:flex-none [&>svg]:self-center [&>span]:min-w-0 [&>span]:border-0 [&>span]:border-b [&>span]:border-solid [&>span]:border-b-transparent [&>span]:leading-[1.15] [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-[0.95em] [a&]:hover:bg-transparent [a&]:hover:[&>span]:border-b-current [a&]:hover:[&>span]:[border-bottom-style:dotted]',
+    'inline-flex h-auto min-h-0 max-w-[min(100%,var(--reference-chip-width))] items-baseline gap-(--reference-chip-gap) rounded-none border-0 bg-transparent p-0 align-baseline text-[length:inherit] leading-[inherit] font-normal whitespace-nowrap text-[color:var(--accent)]! no-underline! [&>:first-child]:flex-none [&>svg]:self-center [&>span]:min-w-0 [&>span]:border-0 [&>span]:border-b [&>span]:border-solid [&>span]:border-b-transparent [&>span]:leading-[1.15] [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-[0.95em] [&:is(a,button,[role=button])]:cursor-pointer [&:is(a,button,[role=button])]:hover:bg-transparent [&:is(a,button,[role=button])]:hover:[&>span]:border-b-current [&:is(a,button,[role=button])]:focus-visible:[&>span]:border-b-current',
   style: {
     '--reference-chip-width': `${REFERENCE_APPEARANCE.maxWidth}px`,
     '--reference-chip-gap': `${REFERENCE_APPEARANCE.gap}px`,

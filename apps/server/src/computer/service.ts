@@ -49,31 +49,6 @@ export class ComputerService {
     return session
   }
 
-  /** Devices the owner allowed to watch (and optionally drive) a thread's computer. The owning host is always allowed. */
-  private viewers = new Map<string, Map<string, { input: boolean }>>()
-
-  grantViewer(threadId: string, deviceId: string, input: boolean) {
-    const devices = this.viewers.get(threadId) ?? new Map()
-    devices.set(deviceId, { input })
-    this.viewers.set(threadId, devices)
-  }
-
-  revokeViewer(threadId: string, deviceId: string) {
-    this.viewers.get(threadId)?.delete(deviceId)
-    this.session(threadId)?.controllerDisconnected(deviceId)
-  }
-
-  listViewers(threadId: string): { deviceId: string; input: boolean }[] {
-    return [...(this.viewers.get(threadId) ?? [])].map(([deviceId, { input }]) => ({ deviceId, input }))
-  }
-
-  /** `observe` and `input` need an explicit grant for any device but the owning host (`local`). */
-  viewerAccess(threadId: string, deviceId: string): { observe: boolean; input: boolean } {
-    if (deviceId === 'local') return { observe: true, input: true }
-    const entry = this.viewers.get(threadId)?.get(deviceId)
-    return { observe: !!entry, input: !!entry?.input }
-  }
-
   /** Thread metadata only; grants and evidence remain private to the service. */
   sessionThreads(): string[] {
     return [...this.sessions.keys()]
@@ -88,7 +63,6 @@ export class ComputerService {
     this.accessRuns.delete(threadId)
     this.sessions.get(threadId)?.revoke()
     this.sessions.delete(threadId)
-    this.viewers.delete(threadId)
     void this.evidence.clear(threadId)
   }
 

@@ -33,7 +33,7 @@ import { APP_AUTO_UPDATE } from '@ramu/shared/updates'
 import { useComputers } from '../workspace/computers'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { PermissionNeeded } from './DevicePermissions'
-import { reducedMotion } from '../workspace/panelMotion'
+import { revealFound } from '../lib/revealFound'
 
 export const SETTINGS_GROUPS = SETTINGS_MENU_GROUPS
 
@@ -369,39 +369,11 @@ export function SettingsPage({
         rows.find((element) => text(element).startsWith(wanted.slice(0, 12)))
       return row?.closest<HTMLElement>('.settings-row') ?? row
     }
-    const highlight = (target: HTMLElement) => {
-      target.classList.remove('flash')
-      // Restarts the animation when the same row is chosen twice.
-      void target.offsetWidth
-      target.classList.add('flash')
-      target.addEventListener('animationend', () => target.classList.remove('flash'), { once: true })
-    }
     let tries = 0
     const attempt = () => {
       const target = find()
-      if (!target) {
-        if (++tries < 40) window.requestAnimationFrame(attempt)
-        return
-      }
-      const scroller = target.closest<HTMLElement>('.settings-page-content')
-      const box = target.getBoundingClientRect()
-      const view = scroller?.getBoundingClientRect()
-      const visible = !!view && box.top >= view.top + 24 && box.bottom <= view.bottom - 24
-      if (visible || !scroller || reducedMotion()) {
-        target.scrollIntoView({ block: 'center' })
-        highlight(target)
-        return
-      }
-      target.scrollIntoView({ block: 'center', behavior: 'smooth' })
-      let done = false
-      const settle = () => {
-        if (done) return
-        done = true
-        highlight(target)
-      }
-      scroller.addEventListener('scrollend', settle, { once: true })
-      // Browsers without scrollend, or a scroll too short to fire it.
-      window.setTimeout(settle, 450)
+      if (target) revealFound(target, target.closest<HTMLElement>('.settings-page-content'))
+      else if (++tries < 40) window.requestAnimationFrame(attempt)
     }
     window.requestAnimationFrame(attempt)
   }
@@ -560,7 +532,7 @@ export function SettingsPage({
               ))
             )}
           </nav>
-          <div className="settings-page-content [&_>_h3]:text-heading [&_>_h3]:font-semibold [&_>_h3]:m-[0_0_20px] [&_.flash:not(.settings-row)]:[animation:settings-flash_2.2s_ease-out] [&_.flash:not(.settings-row)]:rounded-(--radius-s) [&_.settings-form_>_div_>_h4]:m-[18px_0_10px] [&_.settings-form_>_div_>_p]:m-[8px_0_12px] [&_.settings-form_>_div_>_p]:leading-[1.55] flex-1 min-w-0 overflow-y-auto p-[24px_28px]">
+          <div className="settings-page-content [&_>_h3]:text-heading [&_>_h3]:font-semibold [&_>_h3]:m-[0_0_20px] [&_.settings-form_>_div_>_h4]:m-[18px_0_10px] [&_.settings-form_>_div_>_p]:m-[8px_0_12px] [&_.settings-form_>_div_>_p]:leading-[1.55] flex-1 min-w-0 overflow-y-auto p-[24px_28px]">
             <h3>{t(SETTINGS_SECTIONS.find((entry) => entry.id === section)!.label)}</h3>
             <fieldset
               className="settings-fields p-0 m-0 [border:0] min-w-0"

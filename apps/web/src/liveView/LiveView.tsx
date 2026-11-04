@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { ExternalLink, Globe, Monitor, Move, PictureInPicture2, Square, X } from 'lucide-react'
-import { liveState, liveSurface, type LiveSurface } from '@ramu/shared/liveView'
+import { useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes } from 'react'
+import { ExternalLink, Globe, Monitor, PictureInPicture2, Square, X } from 'lucide-react'
+import { livePlacement, livePosition, liveState, liveSurface, type LiveSurface } from '@ramu/shared/liveView'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
 import { Button } from '@/components/desktop-button'
@@ -15,15 +15,14 @@ import { useHostOverviews } from '../workspace/hostOverview'
 import { HostProvider, useHost } from '../workspace/HostProvider'
 import { useHostSelection } from '../workspace/HostSelection'
 import { useAppSettings } from '../settings/AppSettings'
-import { closeLiveView, moveLiveView, pinLiveSurface, setLiveWindow, useLiveViewPin } from './liveViewStore'
+import { closeLiveView, pinLiveSurface, placeLiveView, setLiveWindow, useLiveViewPin } from './liveViewStore'
 
 const FRAME_MS = 1000
-const CORNER_CLASS = {
-  'bottom-right': 'right-4 bottom-4',
-  'bottom-left': 'left-4 bottom-4',
-  'top-left': 'left-4 top-14',
-  'top-right': 'right-4 top-14',
-} as const
+/** Inside Ramu's window the view keeps clear of its edges and of the title bar. */
+const MARGIN = 16,
+  TITLE_BAR = 56,
+  NUDGE = 24
+const boundsOf = () => ({ width: window.innerWidth, height: window.innerHeight, margin: MARGIN, top: TITLE_BAR })
 
 /** What the thread has to show: computer use while granted, and its browser tabs. Read only while the view is open. */
 function useSurfaces(taskId: string) {
@@ -99,11 +98,14 @@ function Body({
   onOpen,
   onClose,
   inWindow,
+  handle,
 }: {
   taskId: string
   onOpen: () => void
   onClose: () => void
   inWindow: boolean
+  /** Makes the header the handle that moves the view inside Ramu's window. */
+  handle?: HTMLAttributes<HTMLDivElement>
 }) {
   useLanguage()
   const pin = useLiveViewPin()
@@ -139,7 +141,7 @@ function Body({
             : t('Idle')
   return (
     <>
-      <div className="flex items-center gap-1.5 px-2 pt-1.5">
+      <div {...handle} className={`flex items-center gap-1.5 px-2 pt-1.5 ${handle?.className ?? ''}`}>
         <div className="min-w-0 flex-1">
           <p className="m-0 truncate text-control font-medium">{task?.title ?? t('Thread')}</p>
           <p
@@ -165,9 +167,6 @@ function Body({
               }}
             >
               <PictureInPicture2 size={12} />
-            </Button>
-            <Button variant="ghost" size="icon-xs" aria-label={t('Move live view')} onClick={moveLiveView}>
-              <Move size={12} />
             </Button>
           </>
         )}
@@ -268,10 +267,72 @@ export function LiveView() {
       offOpen()
     }
   }, [select])
-  if (!pin || pin.window || !preferences.liveViewDesktop) return null
+  const box = useRef<HTMLElement>(null)
+  const [size, setSize] = useState({ width: 320, height: 320 })
+  const [, setViewport] = useState(0)
+  // While dragged, the view follows the pointer; on release it saves its share of the free space.
+  const [drag, setDrag] = useState<{ left: number; top: number } | null>(null)
+  const shown = !!pin && !pin.window && preferences.liveViewDesktop
+  useLayoutEffect(() => {
+    const element = box.current
+    if (!shown || !element) return
+    const measure = () => setSize({ width: element.offsetWidth, height: element.offsetHeight })
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    const resize = () => setViewport((n) => n + 1)
+    window.addEventListener('resize', resize)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', resize)
+    }
+  }, [shown])
+  if (!pin || !shown) return null
+  const at = drag ?? livePlacement(pin.position, boundsOf(), size)
+  const drop = (left: number, top: number) => placeLiveView(livePosition(left, top, boundsOf(), size))
+  const handle: HTMLAttributes<HTMLDivElement> = {
+    className: drag ? 'cursor-grabbing' : 'cursor-grab',
+    tabIndex: 0,
+    role: 'group',
+    'aria-label': t('Live view. Drag, or use the arrow keys, to move it.'),
+    onPointerDown: (event) => {
+      if (event.button !== 0 || (event.target as HTMLElement).closest('button, a, input, [role="checkbox"]')) return
+      event.preventDefault()
+      const start = { x: event.clientX, y: event.clientY, ...at }
+      const header = event.currentTarget
+      header.setPointerCapture(event.pointerId)
+      let last = { left: start.left, top: start.top }
+      const move = (next: PointerEvent) => {
+        const free = livePlacement({ x: 1, y: 1 }, boundsOf(), size)
+        last = {
+          left: Math.min(free.left, Math.max(MARGIN, start.left + next.clientX - start.x)),
+          top: Math.min(free.top, Math.max(TITLE_BAR, start.top + next.clientY - start.y)),
+        }
+        setDrag(last)
+      }
+      const end = () => {
+        header.removeEventListener('pointermove', move)
+        header.removeEventListener('pointerup', end)
+        header.removeEventListener('pointercancel', end)
+        drop(last.left, last.top)
+        setDrag(null)
+      }
+      header.addEventListener('pointermove', move)
+      header.addEventListener('pointerup', end)
+      header.addEventListener('pointercancel', end)
+    },
+    onKeyDown: (event) => {
+      const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key]
+      if (!step || event.target !== event.currentTarget) return
+      event.preventDefault()
+      drop(at.left + step[0]! * NUDGE, at.top + step[1]! * NUDGE)
+    },
+  }
   return (
     <aside
-      className={`fixed z-50 w-[320px] max-w-[calc(100vw-32px)] rounded-(--radius-m) border border-edge bg-card text-foreground shadow-(--shadow-float) ${CORNER_CLASS[pin.corner]}`}
+      ref={box}
+      className="fixed z-50 w-[320px] max-w-[calc(100vw-32px)] rounded-(--radius-m) border border-edge bg-card text-foreground shadow-(--shadow-float)"
+      style={{ left: at.left, top: at.top }}
       aria-label={t('Live view')}
     >
       <HostProvider hostId={pin.hostId}>
@@ -281,6 +342,7 @@ export function LiveView() {
           inWindow={false}
           onOpen={() => select(pin.hostId, { kind: 'task', taskId: pin.taskId })}
           onClose={closeLiveView}
+          handle={handle}
         />
       </HostProvider>
     </aside>

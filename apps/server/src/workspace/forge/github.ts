@@ -1104,7 +1104,8 @@ export interface RepoHookConfig {
  */
 async function hookCall<T>(cwd: string, method: string, path: string, body?: unknown): Promise<T> {
   const direct = await directAccess(cwd)
-  if (direct) return apiRequest<T>(direct, path, { method, ...(body === undefined ? {} : { body }) }).catch(directFailure)
+  if (direct)
+    return apiRequest<T>(direct, path, { method, ...(body === undefined ? {} : { body }) }).catch(directFailure)
   if (body === undefined) {
     const out = await gh(cwd, ['api', path.slice(1), '--method', method])
     return (out.trim() ? JSON.parse(out) : null) as T

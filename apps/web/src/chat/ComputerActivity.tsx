@@ -644,7 +644,7 @@ export function ComputerActivity({ state }: { state: ComputerActivityState }) {
             {t('This Mac may sleep when idle and stop the agent. Turn on Keep awake in Settings → System.')}
           </span>
         )}
-        {!viewOnly && <ComputerSharing taskId={taskId} />}
+        {!viewOnly && <ComputerSharing />}
         <ComputerProblem needed={needed} error={error} />
       </div>
       {viewing && (

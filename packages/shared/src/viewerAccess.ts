@@ -63,16 +63,9 @@ const viewerMethods = new Set([
   'liveActivity.register',
   'liveActivity.unregister',
 ])
-// A viewer-role device is read-only: it may watch a computer only when the host's owner granted it that thread's
-// screen (checked again by the handler on every call, including every frame). Input, control and every setup or
-// grant method stay owner-only whatever grant exists.
-const viewerComputerMethods = new Set([
-  'computer.session',
-  'computer.frame',
-  'computer.rtcOffer',
-  'computer.rtcKeyFrame',
-  'computer.rtcClose',
-])
+// A viewer-role device is read-only and holds no device permissions, so the screen itself, which needs Computer use,
+// stays with owner devices; a viewer may still read whether a thread has a computer.
+const viewerComputerMethods = new Set(['computer.session'])
 /** Shared client projection and server policy; grants and resource checks remain on the host. */
 export const viewerMayInvoke = (method: string): boolean =>
   viewerMethods.has(method) || viewerComputerMethods.has(method)

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { nextCorner, type LiveSurface, type LiveViewPin } from '@ramu/shared/liveView'
+import type { LivePosition, LiveSurface, LiveViewPin } from '@ramu/shared/liveView'
 
 const KEY = 'ramu.live-view'
 const listeners = new Set<() => void>()
@@ -28,7 +28,7 @@ export const floatLiveView = (hostId: string, taskId: string, pinned?: LiveSurfa
     hostId,
     taskId,
     ...(pinned ? { pinned } : {}),
-    corner: pin?.corner ?? 'bottom-right',
+    ...(pin?.position ? { position: pin.position } : {}),
     hideFromSharing: pin?.hideFromSharing ?? true,
   })
 export const closeLiveView = () => write(null)
@@ -37,7 +37,7 @@ export const pinLiveSurface = (pinned: LiveSurface | undefined) => {
   const { pinned: _old, ...rest } = pin
   write(pinned ? { ...rest, pinned } : rest)
 }
-export const moveLiveView = () => pin && write({ ...pin, corner: nextCorner(pin.corner) })
+export const placeLiveView = (position: LivePosition) => pin && write({ ...pin, position })
 export const setLiveWindow = (open: boolean, hideFromSharing = pin?.hideFromSharing ?? true) =>
   pin && write({ ...pin, window: open, hideFromSharing })
 

@@ -11,6 +11,8 @@ import { HelperBreadcrumb } from '../HomeAgents'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { focusComposer } from '../composer/ComposerInput'
 import { Spinner } from '@/components/ui/spinner'
+import { quoteSource } from '@ramu/shared/chat/quoteSource'
+import { revealFound } from '../lib/revealFound'
 import { ChatMentions } from '../chat/ChatReferences'
 import { ThreadAgents } from './agent/lib/threadAgents'
 import { t as translate, useLanguage } from '../i18n'
@@ -438,6 +440,26 @@ export const AgentView = memo(function AgentView({
     setPendingSettings(null)
   }
   prepareRetry.current = applyPendingSettings
+  /**
+   * Leads a quote in the message box back to where it was said: that message scrolls into view and lights up for a
+   * moment. A message in turns not drawn yet is found with Find instead, which reaches further back.
+   */
+  const showQuote = (quote: string) => {
+    const blocks = [...(root.current?.querySelectorAll<HTMLElement>('.transcript [data-block-index]') ?? [])]
+    const source = quoteSource(
+      blocks.map((element) => ({ element, text: element.innerText })),
+      quote,
+    )
+    if (source) revealFound(source.element)
+    else
+      openFind(
+        quote
+          .split('\n')
+          .map((line) => line.trim())
+          .find(Boolean)
+          ?.slice(0, 80),
+      )
+  }
   /** Adds a Markdown quote to the message box and puts the cursor after it. */
   const quoteIntoDraft = (text: string) => {
     const quoted = quoteLines(text)
@@ -1048,16 +1070,7 @@ export const AgentView = memo(function AgentView({
                   ))
                 }
                 onChange={setDraft}
-                // A quote's first line is enough to find where it came from; Find scrolls there and marks it.
-                onFindInChat={(text) =>
-                  openFind(
-                    text
-                      .split('\n')
-                      .map((line) => line.trim())
-                      .find(Boolean)
-                      ?.slice(0, 80),
-                  )
-                }
+                onShowQuote={showQuote}
                 onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
                 chat
                 teammate={composerTeammate}

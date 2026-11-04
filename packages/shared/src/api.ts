@@ -266,9 +266,6 @@ export interface RamuMethods {
     scope: { observe: boolean; input: boolean; app?: string; runtime?: string },
   ): ComputerSessionSummary | null
   'computer.revoke'(threadId: string): void
-  'computer.grantViewer'(threadId: string, deviceId: string, input: boolean): void
-  'computer.revokeViewer'(threadId: string, deviceId: string): void
-  'computer.viewers'(threadId: string): { deviceId: string; input: boolean }[]
   /** Current per-thread computer access on this host. Owning and paired owner devices only. */
   'computer.sessions'(): (ComputerSessionSummary & { threadId: string })[]
   'computer.session'(threadId: string): ComputerSessionSummary | null

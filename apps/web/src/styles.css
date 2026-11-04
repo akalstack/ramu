@@ -1329,34 +1329,38 @@ kbd {
   @apply text-brand;
   @apply font-semibold;
 }
-/* A found setting: the wash and an inset ring arrive quickly, hold long enough to be found, then fade. The ring is
-   inset so a row inside a rounded card is not clipped. */
-@keyframes settings-flash {
+/* A found setting, or the message a quote came from: a wash and a thin ring arrive, hold long enough to be found and
+   fade. They live on an overlay that only fades, so the row's own surface is never replaced and the end of the fade
+   matches every theme. */
+.found-flash {
+  position: relative;
+}
+.found-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-s);
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  pointer-events: none;
+  opacity: 0;
+  animation: found-flash 2.2s ease-out;
+}
+@keyframes found-flash {
   0% {
-    background: transparent;
-    box-shadow: inset 0 0 0 1px transparent;
+    opacity: 0;
   }
   12%,
   62% {
-    background: var(--accent-wash);
-    box-shadow: inset 0 0 0 1px var(--accent);
+    opacity: 1;
   }
   100% {
-    background: transparent;
-    box-shadow: inset 0 0 0 1px transparent;
+    opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  @keyframes settings-flash {
-    0%,
-    80% {
-      background: var(--accent-wash);
-      box-shadow: inset 0 0 0 1px var(--accent);
-    }
-    100% {
-      background: transparent;
-      box-shadow: inset 0 0 0 1px transparent;
-    }
+  .found-flash::after {
+    animation-timing-function: step-end;
   }
 }
 

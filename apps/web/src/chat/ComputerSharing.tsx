@@ -1,71 +1,76 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { NetworkDevice } from '@ramu/shared/types'
+import { grantActive } from '@ramu/shared/devicePermissions'
 import { Button } from '@/components/desktop-button'
 import { ramu } from '../ipc'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
 import { useHost } from '../workspace/HostProvider'
 
-/** The owner decides which paired devices may watch this thread's screen, and whether they may also steer it. */
-export function ComputerSharing({ taskId }: { taskId: string }) {
-  const { invoke, isLocal } = useHost()
+/**
+ * Which of this computer's paired devices can watch and control it from Ramu: those holding the Computer use permission,
+ * the same one Remote access manages. A device without it can be allowed here for a day; anything longer is in Remote
+ * access. Viewer devices hold no permissions, so they are not listed.
+ */
+export function ComputerSharing() {
+  const { isLocal } = useHost()
   const [devices, setDevices] = useState<NetworkDevice[]>([])
-  const [shared, setShared] = useState<{ deviceId: string; input: boolean }[]>([])
   const [error, setError] = useState('')
   const load = useCallback(async () => {
     try {
-      const [network, viewers] = await Promise.all([ramu.invoke('network.status'), invoke('computer.viewers', taskId)])
-      setDevices(network.devices.filter((device) => device.role !== 'viewer'))
-      setShared(viewers)
+      const network = await ramu.invoke('network.status')
+      setDevices(network.devices.filter((device) => device.role !== 'viewer' && device.kind !== 'host'))
       setError('')
     } catch (reason) {
       setError(t(errorText(reason)))
     }
-  }, [invoke, taskId])
+  }, [])
   useEffect(() => {
     void load()
   }, [load])
   if (!isLocal || (!devices.length && !error)) return null
-  const act = async (work: () => Promise<unknown>) => {
+  const allow = async (device: NetworkDevice) => {
     try {
-      await work()
+      await ramu.invoke('network.setDevicePermission', device.id, 'computer', 'day')
     } catch (reason) {
       setError(t(errorText(reason)))
     }
     await load()
   }
+  const now = Date.now()
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-caption text-muted-foreground">{t('Paired devices')}</span>
       {devices.map((device) => {
-        const entry = shared.find((viewer) => viewer.deviceId === device.id)
+        // A device paired before permissions holds every one of them.
+        const allowed = !device.permissions || grantActive(device.permissions.computer, now)
+        const never = device.blocked?.includes('computer')
         return (
           <div key={device.id} className="flex flex-wrap items-center gap-2 text-caption">
             <span className="min-w-0 flex-1 truncate">
-              {device.name}
-              {entry ? ` · ${entry.input ? t('Can control') : t('Can watch')}` : ''}
+              <span className="text-foreground">{device.name}</span>
+              <span className="text-muted-foreground">
+                {' · '}
+                {allowed
+                  ? t('Can watch and control this from Ramu')
+                  : never
+                    ? t('Computer use is set to Never')
+                    : t('Needs Computer use to watch')}
+              </span>
             </span>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => void act(() => invoke('computer.grantViewer', taskId, device.id, false))}
-            >
-              {t('Watch')}
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => void act(() => invoke('computer.grantViewer', taskId, device.id, true))}
-            >
-              {t('Control')}
-            </Button>
-            {entry && (
+            {!allowed && !never && (
+              <Button size="sm" variant="secondary" onClick={() => void allow(device)}>
+                {t('Allow for 1 day')}
+              </Button>
+            )}
+            {!allowed && (
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => void act(() => invoke('computer.revokeViewer', taskId, device.id))}
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'remote' } }))
+                }
               >
-                {t('Revoke')}
+                {t('Remote access')}
               </Button>
             )}
           </div>

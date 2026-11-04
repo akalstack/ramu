@@ -16,7 +16,7 @@ On the phone, the Browser pill opens a full-screen viewer. **Open on this phone*
 
 ## Computer use
 
-**Settings → Computer use** is off by default. Once on, each thread still needs a screen or app grant, and paired devices need the host's **Computer use** permission.
+**Settings → Computer use** is off by default. Once on, each thread still needs a screen or app grant, and paired devices need the host's **Computer use** permission. The Computer tray lists your paired devices and whether each can watch and control; **Allow for 1 day** grants that permission there, and Remote access sets anything longer.
 
 - The agent calls `computer_open`, optionally naming one app. Main threads open automatically once computer use is on; helpers ask.
 - On desktop, the header's **Computer** button (⌘⌥M) opens the viewer. While you control the screen, your clicks and keys go to it; Escape returns the keyboard to Ramu.
@@ -33,6 +33,6 @@ The agent boots a device, installs a build from the workspace (`.app` or `.apk`)
 
 ## Float
 
-**Float** on the desktop's Browser and Computer trays keeps a small live view of the thread in a corner while you work elsewhere in Ramu. It always shows the thread's state with **Stop the agent**, **Open** and Close. **Keep on top of other apps** moves it into a small window above every app, hidden from screen sharing by default. Turn Float off in **Settings → Threads → Float on desktop**.
+**Float** on the desktop's Browser and Computer trays keeps a small live view of the thread while you work elsewhere in Ramu. Drag it by its title to put it anywhere in the window (or focus the title and use the arrow keys); it keeps that place. It always shows the thread's state with **Stop the agent**, **Open** and Close. **Keep on top of other apps** moves it into a small window above every app, hidden from screen sharing by default. Turn Float off in **Settings → Threads → Float on desktop**.
 
 The phone has no Float: Browser, Computer and test devices show as pills that open the full-screen viewer.

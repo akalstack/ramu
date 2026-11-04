@@ -92,13 +92,13 @@ export const registerComputerHandlers: RegisterHandlers = ({
     return threadId
   }
   const enabled = () => workspace.getAppState<boolean>('computer:enabled', false) === true
-  const viewer = (threadId: string, input: boolean) => {
+  const viewer = (threadId: string) => {
     const service = ready()
     const who = device()
-    const pairedOwner = who !== 'local' && !!host.browserGrantEligible?.(who)
-    const access = service.viewerAccess(thread(threadId), who)
-    if (!pairedOwner && !(input ? access.input : access.observe))
+    // The host itself, or a paired owner device: the call already passed this device's Computer use permission.
+    if (who !== 'local' && !host.browserGrantEligible?.(who))
       throw new Error('This device was not granted access to this computer.')
+    thread(threadId)
     const session = service.session(threadId)
     if (!session) throw new Error('No computer is granted to this thread.')
     return session
@@ -374,23 +374,6 @@ export const registerComputerHandlers: RegisterHandlers = ({
       },
     },
     'computer.revoke': { args: z.tuple([id]), run: (threadId: string) => owner().revoke(thread(threadId)) },
-    'computer.grantViewer': {
-      args: z.tuple([id, id, z.boolean()]),
-      run: (threadId: string, deviceId: string, input: boolean) => {
-        const service = admin()
-        const session = service.session(thread(threadId))
-        if (!session) throw new Error('Grant a computer to this thread first.')
-        // Input needs a full-access device; a read-only (viewer) device can only ever be given the screen to watch.
-        if (input && !host.browserGrantEligible?.(deviceId))
-          throw new Error('Choose a paired owner device. A viewer device can only watch.')
-        service.grantViewer(threadId, deviceId, input)
-      },
-    },
-    'computer.revokeViewer': {
-      args: z.tuple([id, id]),
-      run: (threadId: string, deviceId: string) => admin().revokeViewer(thread(threadId), deviceId),
-    },
-    'computer.viewers': { args: z.tuple([id]), run: (threadId: string) => admin().listViewers(thread(threadId)) },
     'computer.sessions': {
       args: z.tuple([]),
       run: () =>
@@ -409,7 +392,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
     'computer.takeControl': {
       args: z.tuple([id]),
       run: (threadId: string) => {
-        viewer(threadId, true).takeControl(device())
+        viewer(threadId).takeControl(device())
         return summary(threadId)
       },
     },
@@ -417,16 +400,16 @@ export const registerComputerHandlers: RegisterHandlers = ({
     'computer.requestHandoff': {
       args: z.tuple([id]),
       run: (threadId: string) => {
-        viewer(threadId, true).requestHandoff(device())
+        viewer(threadId).requestHandoff(device())
         return summary(threadId)
       },
     },
     'computer.approveHandoff': {
       args: z.tuple([id]),
       run: (threadId: string) => {
-        const session = viewer(threadId, true)
+        const session = viewer(threadId)
         const requester = session.handoffRequest
-        if (requester && !ready().viewerAccess(threadId, requester).input)
+        if (requester && requester !== 'local' && !host.browserGrantEligible?.(requester))
           throw new Error('That device is no longer allowed to control this computer.')
         session.approveHandoff(device())
         return summary(threadId)
@@ -435,7 +418,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
     'computer.declineHandoff': {
       args: z.tuple([id]),
       run: (threadId: string) => {
-        viewer(threadId, true).declineHandoff(device())
+        viewer(threadId).declineHandoff(device())
         return summary(threadId)
       },
     },
@@ -446,14 +429,14 @@ export const registerComputerHandlers: RegisterHandlers = ({
         const runs = agents.list(threadId)
         const run = runs.findLast((session) => ['starting', 'running'].includes(session.state)) ?? runs.at(-1)
         if (!run) throw new Error('This thread has no agent to give control to.')
-        viewer(threadId, true).giveToAgent(device(), run.id)
+        viewer(threadId).giveToAgent(device(), run.id)
         return summary(threadId)
       },
     },
     'computer.stop': {
       args: z.tuple([id]),
       run: (threadId: string) => {
-        const session = viewer(threadId, false)
+        const session = viewer(threadId)
         for (const run of agents.list(threadId)) session.stop(run.id)
         session.controllerDisconnected(device())
         return summary(threadId)
@@ -465,7 +448,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
       // idle screen costs a few bytes. Every request is authorized on its own.
       args: z.union([z.tuple([id]), z.tuple([id, z.string().max(80)])]),
       run: async (threadId: string, since?: string) => {
-        const { capture, hash, ...meta } = await viewer(threadId, false).view(since, since ? FRAME_WAIT_MS : 0)
+        const { capture, hash, ...meta } = await viewer(threadId).view(since, since ? FRAME_WAIT_MS : 0)
         if (since === hash) return { ...meta, hash, unchanged: true as const }
         return { ...meta, hash, mimeType: capture.mimeType, data: capture.data }
       },
@@ -476,7 +459,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
       args: z.tuple([id, z.string().min(20).max(60_000)]),
       run: async (threadId: string, offer: string) => {
         if (!video) throw new Error('Update this host for video.')
-        const session = viewer(threadId, false)
+        const session = viewer(threadId)
         if (session.runtime.id !== 'local' || session.target.kind !== 'display')
           throw new Error('Video is available for this computer’s main display. Use image frames for this target.')
         return video.answer(threadId, device(), offer)
@@ -485,7 +468,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
     'computer.rtcKeyFrame': {
       args: z.tuple([id, z.string().uuid()]),
       run: (threadId: string, peerId: string) => {
-        viewer(threadId, false)
+        viewer(threadId)
         video?.keyFrame(peerId, device())
       },
     },
@@ -496,15 +479,15 @@ export const registerComputerHandlers: RegisterHandlers = ({
     'computer.input': {
       args: z.tuple([id, z.number().int().min(0), z.number(), action]),
       run: (threadId: string, generation: number, capturedAt: number, input: ComputerAction) =>
-        viewer(threadId, true).humanInput(device(), generation, { capturedAt }, input),
+        viewer(threadId).humanInput(device(), generation, { capturedAt }, input),
     },
     'computer.focus': {
       args: z.tuple([id]),
-      run: (threadId: string) => viewer(threadId, true).focusedField(device()),
+      run: (threadId: string) => viewer(threadId).focusedField(device()),
     },
     'computer.disconnect': {
       args: z.tuple([id]),
-      run: (threadId: string) => viewer(threadId, false).controllerDisconnected(device()),
+      run: (threadId: string) => viewer(threadId).controllerDisconnected(device()),
     },
   }
 }

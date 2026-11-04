@@ -307,10 +307,15 @@ const mobilePush = new MobilePush(
   (sessionId) => schedules.hasSession(sessionId),
 )
 const computerBroker = new BrokerHub()
-const computerVideo = new RtcViewers(new VideoFeed(), (threadId, deviceId) => {
-  const access = computer.viewerAccess(threadId, deviceId)
-  return access.observe && !!computer.session(threadId)
-})
+// Video goes to the host itself, or to a paired owner device holding Computer use, as every other computer call does.
+const computerVideo = new RtcViewers(
+  new VideoFeed(),
+  (threadId, deviceId) =>
+    !!computer.session(threadId) &&
+    (deviceId === 'local' ||
+      (devices.list().some((device) => device.id === deviceId && device.role !== 'viewer') &&
+        devices.allows(deviceId, 'computer'))),
+)
 const ocuBackend = new OcuBackend(
   undefined,
   undefined,

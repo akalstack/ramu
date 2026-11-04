@@ -68,16 +68,14 @@ describe('computer handlers', () => {
     expect(() => remote.call('computer.setEnabled', true)).toThrow(/owner device/)
   })
 
-  it('resets access and pointer defaults and revokes active sessions and viewer grants', async () => {
+  it('resets access and pointer defaults and revokes active sessions', async () => {
     const owner = setup('local', true)
     owner.call('computer.setEnabled', true)
     owner.call('computer.setGlobalPointer', true)
     await owner.call('computer.grant', 't1', { observe: true, input: true })
-    owner.computer.grantViewer('t1', 'phone', true)
     await owner.call('computer.resetDefaults')
     expect(await owner.call('computer.status')).toMatchObject({ enabled: false, globalPointer: false })
     expect(owner.computer.session('t1')).toBeUndefined()
-    expect(owner.computer.viewerAccess('t1', 'phone')).toEqual({ observe: false, input: false })
     const remote = setup('phone', false)
     await expect(remote.call('computer.resetDefaults')).rejects.toThrow(/owning host/)
   })
@@ -104,27 +102,29 @@ describe('computer handlers', () => {
     await expect(phone.call('computer.installApps')).rejects.toThrow(/owning host/)
   })
 
-  it('lets a paired device watch only after an explicit viewer grant, and drive only with input', async () => {
+  it('lets a paired owner device watch and drive a thread’s computer, and refuses any other device', async () => {
     const owner = setup('local', true)
     owner.call('computer.setEnabled', true)
     await owner.call('computer.grant', 't1', { observe: true, input: true })
-    const phone = setup('phone', false)
-    // The phone talks to the same service in a real host; share it here.
-    Object.assign(phone, {})
-    owner.computer.grantViewer('t1', 'phone', false)
-    const viewerMethods = registerComputerHandlers({
-      computer: owner.computer,
-      host: { canAdministerIntegrations: () => false, browserDevice: () => 'phone' },
-      workspace: { getTask: () => ({}), getAppState: (_: string, fallback: unknown) => fallback },
-      agents: { list: () => [{ id: 'run1', state: 'running' }] },
-    } as unknown as HandlerContext)
-    const run = (name: string, ...args: unknown[]) =>
-      viewerMethods[name]!.run(...(viewerMethods[name]!.args.parse(args) as unknown[]))
-    expect(await run('computer.frame', 't1')).toMatchObject({ width: 100 })
-    expect(() => run('computer.takeControl', 't1')).toThrow(/not granted/)
-    owner.computer.grantViewer('t1', 'phone', true)
-    expect(run('computer.takeControl', 't1')).toMatchObject({ controller: { kind: 'human', deviceId: 'phone' } })
-    expect(run('computer.giveToAgent', 't1')).toMatchObject({ controller: { kind: 'agent', runId: 'run1' } })
+    const methods = (eligible: boolean) =>
+      registerComputerHandlers({
+        computer: owner.computer,
+        host: {
+          canAdministerIntegrations: () => false,
+          browserDevice: () => 'phone',
+          browserGrantEligible: () => eligible,
+        },
+        workspace: { getTask: () => ({}), getAppState: (_: string, fallback: unknown) => fallback },
+        agents: { list: () => [{ id: 'run1', state: 'running' }] },
+      } as unknown as HandlerContext)
+    const call = (eligible: boolean, name: string, ...args: unknown[]) => {
+      const handlers = methods(eligible)
+      return handlers[name]!.run(...(handlers[name]!.args.parse(args) as unknown[]))
+    }
+    expect(await call(true, 'computer.frame', 't1')).toMatchObject({ width: 100 })
+    expect(call(true, 'computer.takeControl', 't1')).toMatchObject({ controller: { kind: 'human', deviceId: 'phone' } })
+    expect(call(true, 'computer.giveToAgent', 't1')).toMatchObject({ controller: { kind: 'agent', runId: 'run1' } })
+    await expect(call(false, 'computer.frame', 't1')).rejects.toThrow(/not granted/)
   })
 
   it('never sends the agent-only accessibility text to a viewer frame', async () => {

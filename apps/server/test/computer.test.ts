@@ -166,23 +166,6 @@ describe('computer frame waiting', () => {
   })
 })
 
-describe('computer viewers', () => {
-  it('lets the owning host in and others only with an explicit grant', () => {
-    const service = new ComputerService(fake().backend)
-    service.grant('t', grant)
-    expect(service.viewerAccess('t', 'local')).toEqual({ observe: true, input: true })
-    expect(service.viewerAccess('t', 'phone')).toEqual({ observe: false, input: false })
-    service.grantViewer('t', 'phone', false)
-    expect(service.viewerAccess('t', 'phone')).toEqual({ observe: true, input: false })
-    service.revokeViewer('t', 'phone')
-    expect(service.viewerAccess('t', 'phone').observe).toBe(false)
-    // A new grant for another target replaces earlier viewer permissions.
-    service.grantViewer('t', 'phone', true)
-    service.revoke('t')
-    expect(service.viewerAccess('t', 'phone').observe).toBe(false)
-  })
-})
-
 describe('macOS backend helpers', () => {
   it('maps keys and builds scripts from numbers and JSON only', () => {
     expect(keyCode('Enter')).toBe(36)
