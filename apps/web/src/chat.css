@@ -36,53 +36,45 @@
 .start-chips > .start-context {
   min-height: 32px;
 }
-.chat-tray > * + *,
-.composer-tray-stack > * + * {
+.chat-tray > * + * {
   border-top: 1px solid var(--line);
 }
-.chat-tray > .composer-tray-stack:empty {
-  display: none;
-}
-.chat-tray > .composer-tray-stack:empty:first-child + * {
-  border-top: 0;
-}
 
-/* Live work (teammates, browser, computer, background commands, a goal) folds into a stack: the first card shows and
-   the edges of the rest peek above the tray. Pointing at it or focusing inside (`data-peek`) spreads them over the
-   conversation without moving it (see ComposerTray); an open section keeps them spread in the layout. */
-.composer-tray-slot {
-  position: relative;
-  flex: none;
-  margin-bottom: calc(-1 * var(--composer-tray-overlap));
-}
-.composer-tray-slot > .composer-tray {
-  margin-bottom: 0;
-}
-.composer-tray-slot > .composer-tray[data-float] {
+/* Live work (teammates, browser, computer, background commands, a goal) folds into a stack (see TrayStack): the first
+   card is the tray's own row and the rest wait in a layer above the tray, whose edges peek over it. Pointing at the
+   tray or focusing inside (`data-peek`) fades that layer in, and an open section keeps it there. The layer is never
+   in the layout, so the conversation does not move while the stack spreads or folds. */
+.composer-tray-spread {
   position: absolute;
-  bottom: 0;
-  inset-inline: var(--composer-tray-inset);
-  width: auto;
-  box-shadow: 0 -12px 32px rgb(0 0 0 / 0.22);
-}
-.composer-tray-stack {
+  bottom: 100%;
+  inset-inline: 0;
+  z-index: 2;
   display: flex;
-  flex-direction: column;
-  interpolate-size: allow-keywords;
-}
-.composer-tray-stack > :nth-child(n + 2) {
-  overflow: hidden;
-  transition:
-    height 260ms var(--ease),
-    opacity 200ms var(--ease),
-    translate 260ms var(--ease),
-    border-color 260ms var(--ease);
-}
-.chat-tray:not([data-peek], :has(.composer-tray-stack [data-panel-open])) .composer-tray-stack > :nth-child(n + 2) {
-  height: 0;
+  flex-direction: column-reverse;
+  padding: 2px 6px;
+  border-radius: var(--radius-l) var(--radius-l) 0 0;
+  background: var(--composer-tray);
+  box-shadow: 0 -12px 32px rgb(0 0 0 / 0.22);
   opacity: 0;
-  translate: 0 -6px;
-  border-top-color: transparent;
+  translate: 0 6px;
+  visibility: hidden;
+  transition:
+    opacity 180ms var(--ease),
+    translate 220ms var(--ease),
+    visibility 0s linear 220ms;
+}
+.composer-tray-spread > * + * {
+  border-bottom: 1px solid var(--line);
+}
+.chat-tray[data-peek] .composer-tray-spread,
+.composer-tray-spread:has([data-panel-open]) {
+  opacity: 1;
+  translate: 0;
+  visibility: visible;
+  transition:
+    opacity 180ms var(--ease),
+    translate 220ms var(--ease),
+    visibility 0s;
 }
 .chat-tray::before,
 .chat-tray::after {
@@ -106,28 +98,28 @@
   inset-inline: 28px;
   bottom: calc(100% + 6px);
 }
-.chat-tray:has(.composer-tray-stack > :nth-child(2)):not(
+.chat-tray:has(.composer-tray-spread > :nth-child(1)):not(
     [data-peek],
-    :has(.composer-tray-stack [data-panel-open])
+    :has(.composer-tray-spread [data-panel-open])
   )::before {
   opacity: 0.6;
   translate: 0;
 }
-.chat-tray:has(.composer-tray-stack > :nth-child(3)):not(
+.chat-tray:has(.composer-tray-spread > :nth-child(2)):not(
     [data-peek],
-    :has(.composer-tray-stack [data-panel-open])
+    :has(.composer-tray-spread [data-panel-open])
   )::after {
   opacity: 0.32;
   translate: 0;
 }
 @media (prefers-reduced-motion: reduce) {
-  .composer-tray-stack > :nth-child(n + 2),
+  .composer-tray-spread,
   .chat-tray::before,
   .chat-tray::after {
     transition: none;
   }
 }
-:root[data-reduce-motion] .composer-tray-stack > :nth-child(n + 2),
+:root[data-reduce-motion] .composer-tray-spread,
 :root[data-reduce-motion] .chat-tray::before,
 :root[data-reduce-motion] .chat-tray::after {
   transition: none;

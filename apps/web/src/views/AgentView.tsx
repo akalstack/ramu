@@ -69,6 +69,7 @@ import { useHostConnection } from '../workspace/computers'
 import { HostWaitNote, ProviderWaitNote } from '../models/ProviderWait'
 import { ComposerTray } from '../composer/ComposerTray'
 import { ComposerStack } from '../composer/ComposerStack'
+import { TrayStack } from '../composer/TrayStack'
 import { limitTrayView, providerWaitState } from '@ramu/shared/chat/providerWait'
 import { useAutoResume } from '../models/useAutoResume'
 import { useLimitRetry } from '../models/useLimitRetry'
@@ -947,7 +948,7 @@ export const AgentView = memo(function AgentView({
                   {hostOffline && <HostWaitNote name={hostName} />}
                   {providerWait && <ProviderWaitNote retry={limitRetry} autoResume={autoResume} readOnly={viewOnly} />}
                   {/* Live work folds into a stack under its first card; what needs the person stays outside it. */}
-                  <div className="composer-tray-stack">
+                  <TrayStack>
                     {session && trayAgents.length > 0 && (
                       <AgentsSection
                         agents={trayAgents}
@@ -958,7 +959,9 @@ export const AgentView = memo(function AgentView({
                       />
                     )}
                     {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
-                    <ComputerActivity state={computerActivity} />
+                    {computerActivity.taskId && computerActivity.session && (
+                      <ComputerActivity state={computerActivity} />
+                    )}
                     {backgroundTerminals.terminals.length > 0 && (
                       <BackgroundTerminalsSection state={backgroundTerminals} />
                     )}
@@ -974,7 +977,7 @@ export const AgentView = memo(function AgentView({
                         }}
                       />
                     )}
-                  </div>
+                  </TrayStack>
                   {(queued.length > 0 || pending.length > 0) && (
                     <QueuedMessages
                       sessionId={view.sessionId}
