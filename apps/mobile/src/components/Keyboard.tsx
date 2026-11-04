@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Dimensions,
   Keyboard,
@@ -239,10 +239,32 @@ function NativePadding({
   const rest = useKeyboardHeight().height
   const padding = rest ? Math.max(0, rest - slack) : 0
   const height = useKeyboardFrame()
-  const following = useAnimatedStyle(() => ({
-    transform: [{ translateY: padding - Math.max(0, height.value - slack) }],
-  }))
-  return <Reanimated.View style={[style, { paddingBottom: padding }, following]}>{children}</Reanimated.View>
+  // What the keyboard has yet to travel, on the UI thread: the padded content is pushed back by it.
+  const travel = useDerivedValue(() => padding - Math.max(0, height.value - slack))
+  const following = useAnimatedStyle(() => ({ transform: [{ translateY: travel.value }] }))
+  return (
+    <KeyboardTravel.Provider value={travel}>
+      <Reanimated.View style={[style, { paddingBottom: padding }, following]}>{children}</Reanimated.View>
+    </KeyboardTravel.Provider>
+  )
+}
+
+const KeyboardTravel = createContext<SharedValue<number> | null>(null)
+
+/**
+ * Content centred in the space above the keyboard (the new-thread mark and question). Centring moves it half as far
+ * as the keyboard, but the padding around it jumps to the keyboard's resting height at once; without this it ran
+ * ahead of the keys for a few frames and snapped back. It takes back half the remaining travel, on the UI thread.
+ */
+export function KeyboardCentered({ children }: { children: ReactNode }) {
+  const travel = useContext(KeyboardTravel)
+  if (!travel) return <View>{children}</View>
+  return <CenteredInTravel travel={travel}>{children}</CenteredInTravel>
+}
+
+function CenteredInTravel({ travel, children }: { travel: SharedValue<number>; children: ReactNode }) {
+  const half = useAnimatedStyle(() => ({ transform: [{ translateY: -travel.value / 2 }] }))
+  return <Reanimated.View style={half}>{children}</Reanimated.View>
 }
 
 /** Shared floating input surface for threads and side questions. Keep keyboard lift and safe-area padding in one place. */

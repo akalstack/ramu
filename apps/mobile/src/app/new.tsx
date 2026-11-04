@@ -42,7 +42,7 @@ import { useStore } from '../runtime/store'
 import { STANDALONE } from '../runtime/types'
 import { useT, useSay } from '../i18n'
 import { Header, HeaderButton, PageScrollView, Screen } from '../components/Screen'
-import { KeyboardPadding, useKeyboardOpen } from '../components/Keyboard'
+import { KeyboardCentered, KeyboardPadding, useKeyboardOpen } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
 import { Row, Sheet, T, tap } from '../components/ui'
@@ -590,14 +590,16 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           <View style={{ flex: 1, justifyContent: 'center', padding: space.l }}>
             {/* The desktop's start screen: the animated mark (tap it) over the same question, centred. One size with the
                 keyboard up or down: only its place moves, with the space the keyboard leaves, so nothing flickers. */}
-            <View style={{ alignItems: 'center', gap: space.s }}>
-              <View style={{ marginBottom: space.s }}>
-                <AnimatedMark size={48} />
+            <KeyboardCentered>
+              <View style={{ alignItems: 'center', gap: space.s }}>
+                <View style={{ marginBottom: space.s }}>
+                  <AnimatedMark size={48} />
+                </View>
+                <T size={font.hero - 4} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
+                  {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
+                </T>
               </View>
-              <T size={font.hero - 4} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
-                {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
-              </T>
-            </View>
+            </KeyboardCentered>
           </View>
         )}
         <View style={{ paddingBottom: Math.max(insets.bottom, space.s) + (asTab && !keyboardOpen ? space.m : 0) }}>
