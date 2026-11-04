@@ -24,6 +24,12 @@ import { agentSettings, attachmentIds, fileContext, id, text } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
 /** Chat sessions: sending prompts, interrupting, answering questions and permissions, and attachments. */
+/** An archived thread takes no new messages; it is unarchived first, which is what both apps offer instead. */
+function assertOpen(workspace: { getTask(id: string): { status: string } }, taskId: string) {
+  if (workspace.getTask(taskId).status === 'archived')
+    throw new Error('This thread is archived. Unarchive it to continue.')
+}
+
 export const registerAgentHandlers: RegisterHandlers = (ctx) => {
   const { host, workspace, agents, attachmentStore, withContext, rules, getSharedMcp } = ctx
   return {
@@ -203,6 +209,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       ) => {
         if (taskId.startsWith('project:') || taskId.startsWith('worktree:'))
           throw new Error('Start a thread to run the agent.')
+        assertOpen(workspace, taskId)
         if (settings) await agents.validateSettings(settings)
         prompt = await withContext(workspace, taskId, prompt, context)
         const scope = workspace.agentScope(taskId)
@@ -217,6 +224,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.string().max(1_000_000), z.enum(['queue', 'steer']), attachmentIds, fileContext]),
       run: async (s: string, t: string, mode: 'queue' | 'steer', attachmentIds?: string[], context?: FileContext[]) => {
         const taskId = agents.get(s).taskId
+        assertOpen(workspace, taskId)
         workspace.setDone(taskId, false)
         t = await withContext(workspace, taskId, t, context)
         agents.resetTeammateRounds(s)
@@ -238,6 +246,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.send': {
       args: z.tuple([id, text]),
       run: (s: string, t: string) => {
+        assertOpen(workspace, agents.get(s).taskId)
         workspace.setDone(agents.get(s).taskId, false)
         return lockSession(ctx, s, () => agents.send(s, t))
       },
@@ -246,6 +255,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.sendQueuedNow': {
       args: z.tuple([id, id, z.boolean().optional()]),
       run: (s: string, messageId: string, interrupt?: boolean) => {
+        assertOpen(workspace, agents.get(s).taskId)
         workspace.setDone(agents.get(s).taskId, false)
         return lockSession(ctx, s, () => agents.sendQueuedNow(s, messageId, interrupt))
       },

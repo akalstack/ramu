@@ -1488,6 +1488,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Archive thread': 'Arsipkan thread',
   'Archive threads': 'Arsipkan thread',
   Unarchive: 'Keluarkan dari arsip',
+  'This thread is archived.': 'Thread ini diarsipkan.',
   'Unarchive thread': 'Keluarkan thread dari arsip',
   'Archived (': 'Diarsipkan (',
   'Delete thread': 'Hapus thread',

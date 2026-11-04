@@ -478,7 +478,11 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     },
     'tasks.done': {
       args: z.tuple([id, z.boolean()]),
-      run: (t: string, done: boolean) => workspace.setDone(t, done),
+      run: (t: string, done: boolean) => {
+        const task = workspace.setDone(t, done)
+        if (done) agents.holdThread(t)
+        return task
+      },
     },
     'tasks.archive': {
       args: z.tuple([id, z.boolean()]),

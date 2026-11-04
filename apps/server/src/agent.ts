@@ -667,6 +667,17 @@ export class AgentService {
     return this.parts.store.listByTask()
   }
 
+  /**
+   * A thread marked done takes no automatic next turn: its queued messages and an active goal pause, and wait for the
+   * person to continue it.
+   */
+  holdThread(taskId: string): void {
+    for (const session of this.listByTask().get(taskId) ?? []) {
+      this.parts.dispatcher.pauseQueue(session.id)
+      if (this.getGoal(session.id)?.status === 'active') this.controlGoal(session.id, 'pause')
+    }
+  }
+
   changes(...args: Parameters<SessionStore['changes']>) {
     return this.parts.store.changes(...args)
   }

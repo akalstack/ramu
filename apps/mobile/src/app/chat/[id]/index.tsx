@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Activity,
+  Archive,
   ArrowDown,
   Check,
   CircleArrowUp,
@@ -94,7 +95,7 @@ import {
   type ItemMeta,
 } from '../../../components/Transcript'
 import { SelectionBar } from '../../../components/SelectionBar'
-import { Chip, ConnectionDot, IconButton, Segmented, Sheet, T, tap } from '../../../components/ui'
+import { Button, Chip, ConnectionDot, IconButton, Segmented, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { PendingBubble } from '../../../components/Outbox'
@@ -1317,247 +1318,283 @@ export default function ChatScreen() {
                 ) : null}
                 {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
                 <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
-                  <Composer
-                    activity={
-                      <>
-                        <ThreadActivity
-                          inlineStatus
-                          chat={chat}
-                          leading={
-                            <>
-                              <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
-                              <BrowserNotice chat={chat} tabs={browserTabs.tabs} onOpen={() => setTool('browser')} />
-                            </>
-                          }
-                          actions={[
-                            ...(toolActivity.terminal
-                              ? [{ label: 'Terminal', icon: SquareTerminal, onPress: openTerminal }]
-                              : []),
-                          ]}
-                        >
-                          <BackgroundTerminals
-                            key={`${chat.computerId}:${chat.taskId}`}
-                            chat={chat}
-                            open={backgroundFor === chat.id}
-                            onOpen={() => setBackgroundFor(chat.id)}
-                            onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
-                          />
-                        </ThreadActivity>
-                      </>
-                    }
-                    running={running}
-                    model={joining ? joining.model : staged?.chatId === chat.id ? staged.model : currentModel}
-                    onModel={joining ? chooseJoinModel : changeModel}
-                    onSend={async (text, mode, attachments, context) => {
-                      if (editing) return submitEdit(text, mode, attachments, context)
-                      if (staged?.chatId === chat.id) {
-                        const m = staged.model
-                        setStaged(null)
-                        await store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
-                      }
-                      // "/aside question" (or "/btw") asks beside the chat: the agent keeps working and never sees it.
-                      const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(text.trim())
-                      if (side && !attachments?.length && chat.sessionId)
-                        // One side chat per thread: /btw continues it rather than starting another.
-                        return store
-                          .invoke(chat.computerId, 'aside.list', chat.sessionId)
-                          .then((asides) => {
-                            const latest = asides.find((aside) => aside.id === sideChat(asides).continueId)
-                            return store.invoke(
-                              chat.computerId,
-                              'aside.ask',
-                              chat.sessionId!,
-                              latest?.id ?? null,
-                              latest?.quote ?? '',
-                              latest?.quoteFrom ?? 'assistant',
-                              side[1]!.trim(),
+                  {chat.status === 'archived' && !viewer ? (
+                    // An archived thread takes no messages; it is unarchived first, which is offered right here.
+                    <Glass
+                      radius={radius.xl}
+                      style={{
+                        marginHorizontal: space.s + 2,
+                        padding: space.m,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: space.m,
+                      }}
+                    >
+                      <Archive size={18} color={c.muted} />
+                      <T tone="soft" style={{ flex: 1 }}>
+                        {tr('This thread is archived.')}
+                      </T>
+                      <Button
+                        kind="secondary"
+                        title={tr('Unarchive')}
+                        onPress={() =>
+                          void store
+                            .invoke(chat.computerId, 'tasks.archive', chat.taskId, false)
+                            .then(() => store.refresh(chat.computerId))
+                            .catch((error) =>
+                              Alert.alert(tr('Unarchive'), error instanceof Error ? error.message : String(error)),
                             )
-                          })
-                          .then(() => {
-                            router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
-                          })
-                      // `@lead` goes to the main agent; `@name` talks to a teammate here or brings a model or custom
-                      // agent in; without a mention, a teammate chosen as the recipient gets it.
-                      const lead = /^@(?:lead|main)\s+/i.test(text.trim())
-                      if (lead) setRecipientId(null)
-                      const mention =
-                        chat.sessionId && chat.settings && !attachments?.length && !lead
-                          ? resolveMention(text, teammates, models, agents)
-                          : null
-                      const target =
-                        mention ??
-                        (recipient && !lead && !attachments?.length && text.trim() && !text.trim().startsWith('/')
-                          ? ({ kind: 'teammate', task: recipient, body: text.trim() } as const)
-                          : null)
-                      if (target && chat.sessionId && chat.settings) {
-                        const base = chat.settings
-                        const sessionId = chat.sessionId
-                        if (target.kind === 'teammate')
-                          return store
-                            .invoke(chat.computerId, 'agent.messageTask', sessionId, target.task.agentId, target.body)
-                            .then(() => setRecipientId(target.task.agentId))
-                        // What the composer showed for this teammate is what it joins with.
-                        const start = joiningTeammate(target, base)
-                        const shown = joining?.key === start.key ? joining : null
-                        const chosen = shown?.model
-                        const settings: AgentSettings = chosen
-                          ? {
-                              ...start.settings,
-                              ...chosen.settings,
-                              provider: chosen.provider,
-                              model: chosen.model,
-                              effort: (chosen.effort || null) as AgentSettings['effort'],
+                        }
+                      />
+                    </Glass>
+                  ) : (
+                    <Composer
+                      activity={
+                        <>
+                          <ThreadActivity
+                            inlineStatus
+                            chat={chat}
+                            leading={
+                              <>
+                                <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
+                                <BrowserNotice chat={chat} tabs={browserTabs.tabs} onOpen={() => setTool('browser')} />
+                              </>
                             }
-                          : start.settings
-                        return store
-                          .invoke(
-                            chat.computerId,
-                            'agent.addTeammate',
-                            sessionId,
-                            settings,
-                            shown?.mode ?? start.mode,
-                            target.kind === 'agent' ? `${target.agent.instructions}\n\n${target.body}` : target.body,
-                          )
-                          .then((joined) => setRecipientId(joined.agentId))
+                            actions={[
+                              ...(toolActivity.terminal
+                                ? [{ label: 'Terminal', icon: SquareTerminal, onPress: openTerminal }]
+                                : []),
+                            ]}
+                          >
+                            <BackgroundTerminals
+                              key={`${chat.computerId}:${chat.taskId}`}
+                              chat={chat}
+                              open={backgroundFor === chat.id}
+                              onOpen={() => setBackgroundFor(chat.id)}
+                              onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
+                            />
+                          </ThreadActivity>
+                        </>
                       }
-                      following.current = true
-                      return store.send(chat.id, text, mode, attachments, context)
-                    }}
-                    taskId={chat.taskId || undefined}
-                    chatId={chat.id}
-                    onFindQuote={findQuote}
-                    teammate={composerTeammate}
-                    header={
-                      joining ? (
-                        // One row says who joins and how; × takes the mention out and the message goes to the thread again.
-                        // The composer's text inset, so the row lines up with what is typed below it.
-                        <View style={{ width: '100%', gap: 4, paddingLeft: space.s + 4, paddingVertical: 2 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                            <ProviderIcon provider={joining.model.provider} size={14} />
-                            <T size={font.control} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
-                              {tr('{0} joins as', { 0: joining.name })}
-                            </T>
-                            <View style={{ flex: 1, minWidth: 140, maxWidth: 220, marginLeft: 'auto' }}>
-                              <Segmented<TeammateMode>
-                                small
-                                value={joining.mode}
-                                onChange={(mode) => setJoinEdits({ key: joining.key, model: joinOwn?.model, mode })}
-                                options={[
-                                  { key: 'review', label: tr('Review') },
-                                  { key: 'take-over', label: tr('Take over') },
-                                ]}
+                      running={running}
+                      model={joining ? joining.model : staged?.chatId === chat.id ? staged.model : currentModel}
+                      onModel={joining ? chooseJoinModel : changeModel}
+                      onSend={async (text, mode, attachments, context) => {
+                        if (editing) return submitEdit(text, mode, attachments, context)
+                        if (staged?.chatId === chat.id) {
+                          const m = staged.model
+                          setStaged(null)
+                          await store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
+                        }
+                        // "/aside question" (or "/btw") asks beside the chat: the agent keeps working and never sees it.
+                        const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(text.trim())
+                        if (side && !attachments?.length && chat.sessionId)
+                          // One side chat per thread: /btw continues it rather than starting another.
+                          return store
+                            .invoke(chat.computerId, 'aside.list', chat.sessionId)
+                            .then((asides) => {
+                              const latest = asides.find((aside) => aside.id === sideChat(asides).continueId)
+                              return store.invoke(
+                                chat.computerId,
+                                'aside.ask',
+                                chat.sessionId!,
+                                latest?.id ?? null,
+                                latest?.quote ?? '',
+                                latest?.quoteFrom ?? 'assistant',
+                                side[1]!.trim(),
+                              )
+                            })
+                            .then(() => {
+                              router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
+                            })
+                        // `@lead` goes to the main agent; `@name` talks to a teammate here or brings a model or custom
+                        // agent in; without a mention, a teammate chosen as the recipient gets it.
+                        const lead = /^@(?:lead|main)\s+/i.test(text.trim())
+                        if (lead) setRecipientId(null)
+                        const mention =
+                          chat.sessionId && chat.settings && !attachments?.length && !lead
+                            ? resolveMention(text, teammates, models, agents)
+                            : null
+                        const target =
+                          mention ??
+                          (recipient && !lead && !attachments?.length && text.trim() && !text.trim().startsWith('/')
+                            ? ({ kind: 'teammate', task: recipient, body: text.trim() } as const)
+                            : null)
+                        if (target && chat.sessionId && chat.settings) {
+                          const base = chat.settings
+                          const sessionId = chat.sessionId
+                          if (target.kind === 'teammate')
+                            return store
+                              .invoke(chat.computerId, 'agent.messageTask', sessionId, target.task.agentId, target.body)
+                              .then(() => setRecipientId(target.task.agentId))
+                          // What the composer showed for this teammate is what it joins with.
+                          const start = joiningTeammate(target, base)
+                          const shown = joining?.key === start.key ? joining : null
+                          const chosen = shown?.model
+                          const settings: AgentSettings = chosen
+                            ? {
+                                ...start.settings,
+                                ...chosen.settings,
+                                provider: chosen.provider,
+                                model: chosen.model,
+                                effort: (chosen.effort || null) as AgentSettings['effort'],
+                              }
+                            : start.settings
+                          return store
+                            .invoke(
+                              chat.computerId,
+                              'agent.addTeammate',
+                              sessionId,
+                              settings,
+                              shown?.mode ?? start.mode,
+                              target.kind === 'agent' ? `${target.agent.instructions}\n\n${target.body}` : target.body,
+                            )
+                            .then((joined) => setRecipientId(joined.agentId))
+                        }
+                        following.current = true
+                        return store.send(chat.id, text, mode, attachments, context)
+                      }}
+                      taskId={chat.taskId || undefined}
+                      chatId={chat.id}
+                      onFindQuote={findQuote}
+                      teammate={composerTeammate}
+                      header={
+                        joining ? (
+                          // One row says who joins and how; × takes the mention out and the message goes to the thread again.
+                          // The composer's text inset, so the row lines up with what is typed below it.
+                          <View style={{ width: '100%', gap: 4, paddingLeft: space.s + 4, paddingVertical: 2 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                              <ProviderIcon provider={joining.model.provider} size={14} />
+                              <T size={font.control} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
+                                {tr('{0} joins as', { 0: joining.name })}
+                              </T>
+                              <View style={{ flex: 1, minWidth: 140, maxWidth: 220, marginLeft: 'auto' }}>
+                                <Segmented<TeammateMode>
+                                  small
+                                  value={joining.mode}
+                                  onChange={(mode) => setJoinEdits({ key: joining.key, model: joinOwn?.model, mode })}
+                                  options={[
+                                    { key: 'review', label: tr('Review') },
+                                    { key: 'take-over', label: tr('Take over') },
+                                  ]}
+                                />
+                              </View>
+                              <IconButton
+                                icon={X}
+                                label={tr('Don’t add {0}', { 0: joining.name })}
+                                size={32}
+                                tone="muted"
+                                onPress={() => writeDraft(draftText.replace(/^@\S+\s*/, ''))}
                               />
                             </View>
-                            <IconButton
-                              icon={X}
-                              label={tr('Don’t add {0}', { 0: joining.name })}
-                              size={32}
-                              tone="muted"
-                              onPress={() => writeDraft(draftText.replace(/^@\S+\s*/, ''))}
-                            />
-                          </View>
-                          <T size={font.caption} tone="muted" numberOfLines={1} style={{ paddingBottom: 4 }}>
-                            {joining.mode === 'review'
-                              ? tr('Reads the changes and reports. Never edits.')
-                              : tr('Edits while the lead waits, then hands back.')}
-                          </T>
-                        </View>
-                      ) : teammates.length && !viewer ? (
-                        <ScrollView
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                          keyboardShouldPersistTaps="always"
-                        >
-                          {/* Who the next message goes to: a recipient, not a view, so the row says "To". */}
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-                            <T size={font.caption} tone="muted" style={{ paddingLeft: space.s, paddingRight: 2 }}>
-                              {tr('To')}
+                            <T size={font.caption} tone="muted" numberOfLines={1} style={{ paddingBottom: 4 }}>
+                              {joining.mode === 'review'
+                                ? tr('Reads the changes and reports. Never edits.')
+                                : tr('Edits while the lead waits, then hands back.')}
                             </T>
-                            <Chip
-                              small
-                              label={tr('Main agent')}
-                              selected={!recipient}
-                              onPress={() => setRecipientId(null)}
-                            />
-                            {teammates.map((task) => (
-                              <Chip
-                                key={task.agentId}
-                                small
-                                icon={Users}
-                                label={task.name}
-                                maxLabelWidth={140}
-                                selected={recipient?.agentId === task.agentId}
-                                accessibilityLabel={tr('To {0}', { 0: task.name })}
-                                accessibilityHint={tr('Touch and hold to see its work')}
-                                onPress={() => setRecipientId(task.agentId)}
-                                onLongPress={() => setTeammateShown(task.agentId)}
-                              />
-                            ))}
                           </View>
-                        </ScrollView>
-                      ) : undefined
-                    }
-                    computerId={chat.computerId}
-                    draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
-                    onStop={() => store.stop(chat.id)}
-                    goal={chat.goal}
-                    queue={chat.queue}
-                    queuePaused={chat.queuePaused}
-                    onResumeQueue={
-                      chat.sessionId
-                        ? () =>
-                            void store
-                              .invoke(chat.computerId, 'agent.resumeQueue', chat.sessionId!)
-                              .then(() => store.refresh(chat.computerId))
-                              .catch(() => {})
-                        : undefined
-                    }
-                    onToggleGoal={() => store.toggleGoal(chat.id)}
-                    onClearGoal={() => store.clearGoal(chat.id)}
-                    onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
-                    onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
-                    onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
-                    offline={offline}
-                    restore={restore}
-                    limited={!!limit && !running}
-                    resumeLabel={limit && !stopped ? (limit.action === 'resume' ? t.resume : t.tryAgain) : undefined}
-                    onResume={
-                      limit && !running && limit.primary && !stopped
-                        ? () => {
-                            following.current = true
-                            void store.retryLimitNow(chat.id)
-                          }
-                        : stopped
+                        ) : teammates.length && !viewer ? (
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            keyboardShouldPersistTaps="always"
+                          >
+                            {/* Who the next message goes to: a recipient, not a view, so the row says "To". */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                              <T size={font.caption} tone="muted" style={{ paddingLeft: space.s, paddingRight: 2 }}>
+                                {tr('To')}
+                              </T>
+                              <Chip
+                                small
+                                label={tr('Main agent')}
+                                selected={!recipient}
+                                onPress={() => setRecipientId(null)}
+                              />
+                              {teammates.map((task) => (
+                                <Chip
+                                  key={task.agentId}
+                                  small
+                                  icon={Users}
+                                  label={task.name}
+                                  maxLabelWidth={140}
+                                  selected={recipient?.agentId === task.agentId}
+                                  accessibilityLabel={tr('To {0}', { 0: task.name })}
+                                  accessibilityHint={tr('Touch and hold to see its work')}
+                                  onPress={() => setRecipientId(task.agentId)}
+                                  onLongPress={() => setTeammateShown(task.agentId)}
+                                />
+                              ))}
+                            </View>
+                          </ScrollView>
+                        ) : undefined
+                      }
+                      computerId={chat.computerId}
+                      draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
+                      onStop={() => store.stop(chat.id)}
+                      goal={chat.goal}
+                      queue={chat.queue}
+                      queuePaused={chat.queuePaused}
+                      onResumeQueue={
+                        chat.sessionId
+                          ? () =>
+                              void store
+                                .invoke(chat.computerId, 'agent.resumeQueue', chat.sessionId!)
+                                .then(() => store.refresh(chat.computerId))
+                                .catch(() => {})
+                          : undefined
+                      }
+                      onToggleGoal={() => store.toggleGoal(chat.id)}
+                      onClearGoal={() => store.clearGoal(chat.id)}
+                      onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
+                      onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
+                      onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
+                      offline={offline}
+                      restore={restore}
+                      limited={!!limit && !running}
+                      resumeLabel={limit && !stopped ? (limit.action === 'resume' ? t.resume : t.tryAgain) : undefined}
+                      onResume={
+                        limit && !running && limit.primary && !stopped
                           ? () => {
                               following.current = true
-                              void store.send(
-                                chat.id,
-                                '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
-                                'steer',
-                              )
+                              void store.retryLimitNow(chat.id)
                             }
-                          : undefined
-                    }
-                    editing={editing ? { label: tr('Rewound to before your message. Change it and send.') } : undefined}
-                    onCancelEdit={() => {
-                      setEditing(null)
-                      setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
-                    }}
-                    placeholder={
-                      offline
-                        ? `Message · sends when ${computer?.name ?? 'it'} is back`
-                        : limit && !running
-                          ? fill(
-                              t[limitPlaceholderKey(limit)],
-                              limit.resetAt !== undefined
-                                ? new Date(limit.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                : '',
-                            )
-                          : joining
-                            ? tr('Tell {0} what to do', { 0: joining.name })
+                          : stopped
+                            ? () => {
+                                following.current = true
+                                void store.send(
+                                  chat.id,
+                                  '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
+                                  'steer',
+                                )
+                              }
                             : undefined
-                    }
-                  />
+                      }
+                      editing={
+                        editing ? { label: tr('Rewound to before your message. Change it and send.') } : undefined
+                      }
+                      onCancelEdit={() => {
+                        setEditing(null)
+                        setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
+                      }}
+                      placeholder={
+                        offline
+                          ? `Message · sends when ${computer?.name ?? 'it'} is back`
+                          : limit && !running
+                            ? fill(
+                                t[limitPlaceholderKey(limit)],
+                                limit.resetAt !== undefined
+                                  ? new Date(limit.resetAt).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })
+                                  : '',
+                              )
+                            : joining
+                              ? tr('Tell {0} what to do', { 0: joining.name })
+                              : undefined
+                      }
+                    />
+                  )}
                 </ComposerDock>
                 <Presence
                   visible={away}
