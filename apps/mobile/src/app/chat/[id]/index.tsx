@@ -172,7 +172,6 @@ export default function ChatScreen() {
     },
     [],
   )
-  const smoothSendScroll = useRef(false)
   const reducedMotion = useReducedMotion()
   const userScrolling = useRef(false)
   const [away, setAway] = useState(false)
@@ -1242,10 +1241,10 @@ export default function ChatScreen() {
                 onContentSizeChange={(_, height) => {
                   metrics.current.content = height
                   settleReveal()
-                  if (following.current && !settling.current && Date.now() - held.current > 600) {
-                    toEnd(smoothSendScroll.current && !reducedMotion)
-                    smoothSendScroll.current = false
-                  }
+                  // Pinned to the end without animating, as the desktop's transcript is: sending changes the content several
+                  // times in a row (sending, the sent message, the reply), and an animated scroll interrupted by each one
+                  // moved the view up and down.
+                  if (following.current && !settling.current && Date.now() - held.current > 600) toEnd(false)
                 }}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
@@ -1391,7 +1390,6 @@ export default function ChatScreen() {
                           .then((joined) => setRecipientId(joined.agentId))
                       }
                       following.current = true
-                      smoothSendScroll.current = true
                       return store.send(chat.id, text, mode, attachments, context)
                     }}
                     taskId={chat.taskId || undefined}
