@@ -294,6 +294,48 @@ describe('open computer use backend', () => {
   })
 })
 
+describe('open computer use connection', () => {
+  const target = { id: 'app:Chrome', kind: 'app' as const, name: 'Chrome' }
+  it('starts a new helper when the old one has gone, and asks a read again but never repeats input', async () => {
+    const { OcuBackend } = await import('../src/computer/ocu')
+    const clients: { onclose?: () => void; calls: string[] }[] = []
+    let failNext = false
+    const backend = new OcuBackend(
+      () => '/bin/ocu',
+      async () => {
+        const client = {
+          calls: [] as string[],
+          onclose: undefined as (() => void) | undefined,
+          callTool: async ({ name }: { name: string }) => {
+            client.calls.push(name)
+            if (failNext) {
+              failNext = false
+              throw new Error('MCP error -32000: Connection closed')
+            }
+            return { content: [{ type: 'text', text: 'Chrome — com.google.Chrome [running]' }] }
+          },
+          close: async () => {},
+        }
+        clients.push(client)
+        return client
+      },
+    )
+    expect(await backend.apps()).toEqual(['Chrome'])
+    // The helper exits between calls: the next one goes to a new helper without failing first.
+    clients[0]!.onclose?.()
+    expect(await backend.apps()).toEqual(['Chrome'])
+    expect(clients).toHaveLength(2)
+    // A read that hits a closed connection is asked again once.
+    failNext = true
+    expect(await backend.apps()).toEqual(['Chrome'])
+    expect(clients).toHaveLength(3)
+    // Input is not: it may already have run.
+    failNext = true
+    await expect(backend.perform(target, { kind: 'click', x: 1, y: 1 })).rejects.toThrow(/Connection closed/)
+    expect(clients.flatMap((client) => client.calls).filter((name) => name === 'click')).toHaveLength(1)
+  })
+})
+
 describe('open computer use install', () => {
   it.runIf(process.platform === 'darwin')(
     'installs the pinned release into Ramu’s tools folder and verifies its version',

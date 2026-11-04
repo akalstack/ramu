@@ -19,7 +19,13 @@ import { findExecutable } from '../providers/providerBinaries'
 export interface OcuClient {
   callTool(request: { name: string; arguments: Record<string, unknown> }): Promise<unknown>
   close(): Promise<void>
+  /** Set by the backend: the helper went away, so the next call starts a new one instead of failing on this one. */
+  onclose?: () => void
 }
+
+/** Tools that only read, so one that failed because the helper had just gone away can run again on a new one. */
+const READ_ONLY_TOOLS = new Set(['list_apps', 'get_app_state'])
+const closedConnection = (error: unknown) => /connection closed|not connected/i.test(String(error))
 
 interface ToolResult {
   isError?: boolean
@@ -298,14 +304,28 @@ export class OcuBackend implements ComputerBackend {
       await previous?.close().catch(() => {})
     }
     this.connectedWithPointer = pointer
-    this.client ??= this.connect(path, pointer).catch((error) => {
-      this.client = null
-      throw error
-    })
+    if (!this.client) {
+      const pending: Promise<OcuClient> = this.connect(path, pointer).then(
+        (client) => {
+          // Open Computer Use can exit between calls (a Locked Use session ending, a crash); forget it at once.
+          const before = client.onclose
+          client.onclose = () => {
+            before?.()
+            if (this.client === pending) this.client = null
+          }
+          return client
+        },
+        (error) => {
+          if (this.client === pending) this.client = null
+          throw error
+        },
+      )
+      this.client = pending
+    }
     return this.client
   }
 
-  private async call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+  private async call(name: string, args: Record<string, unknown>, retry = true): Promise<ToolResult> {
     const client = await this.session()
     let result: ToolResult
     try {
@@ -313,6 +333,8 @@ export class OcuBackend implements ComputerBackend {
     } catch (error) {
       this.client = null
       await client.close().catch(() => {})
+      // Input is never sent twice: it may have run. A read can simply be asked again of a fresh helper.
+      if (retry && READ_ONLY_TOOLS.has(name) && closedConnection(error)) return this.call(name, args, false)
       throw error
     }
     if (result.isError) throw new Error(result.content?.find((part) => part.type === 'text')?.text ?? `${name} failed`)
