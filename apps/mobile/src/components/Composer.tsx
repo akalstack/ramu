@@ -1,7 +1,7 @@
 import { isModelListed } from '@ramu/shared/providers/modelVisibility'
 import { SheetFlatList as FlatList } from './ui'
 import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFocusEffect } from 'expo-router'
 import {
   Alert,
@@ -1736,7 +1736,8 @@ function ContextChip({
   const say = useSay()
   const content = (
     <>
-      {typeof I === 'function' ? <I size={12} color={c.accent} /> : I}
+      {/* Lucide icons are forwardRef objects, not functions: anything that is not already an element is a component. */}
+      {isValidElement(I) ? I : I ? <IconOf icon={I as typeof FileText} color={c.accent} /> : null}
       <T size={font.caption + 1} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
         {label}
       </T>
@@ -1997,4 +1998,8 @@ function SendChoice({
       {children}
     </MenuView>
   )
+}
+
+function IconOf({ icon: I, color }: { icon: typeof FileText; color: string }) {
+  return <I size={12} color={color} />
 }

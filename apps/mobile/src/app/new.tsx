@@ -42,7 +42,7 @@ import { useStore } from '../runtime/store'
 import { STANDALONE } from '../runtime/types'
 import { useT, useSay } from '../i18n'
 import { Header, HeaderButton, PageScrollView, Screen } from '../components/Screen'
-import { useKeyboardInset } from '../components/Keyboard'
+import { KeyboardPadding, useKeyboardOpen } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
 import { Button, Row, Sheet, T, tap } from '../components/ui'
@@ -90,7 +90,7 @@ function TrayButton({
 
 export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const say = useSay()
-  const keyboardInset = useKeyboardInset()
+  const keyboardOpen = useKeyboardOpen()
   const { c } = useTheme()
   const t = useT()
   const router = useRouter()
@@ -573,7 +573,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           {projectPicker}
         </PageScrollView>
       ) : null}
-      <View style={{ flex: 1, paddingBottom: keyboardInset, display: picker === 'project' ? 'none' : 'flex' }}>
+      <KeyboardPadding style={{ flex: 1, display: picker === 'project' ? 'none' : 'flex' }}>
         {/* Nothing here scrolls: the hero simply centers in the space above the composer. */}
         {routing ? (
           <View
@@ -600,7 +600,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
               </T>
             </View>
           </View>
-        ) : keyboardInset === 0 ? (
+        ) : !keyboardOpen ? (
           <View style={{ flex: 1, justifyContent: 'center', padding: space.l }}>
             <View style={{ alignItems: 'center', gap: space.s }}>
               {/* The desktop's start screen: the animated mark (tap it) over the same question, centred. */}
@@ -620,7 +620,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
             </T>
           </View>
         )}
-        <View style={{ paddingBottom: Math.max(insets.bottom, space.s) + (asTab && !keyboardInset ? space.m : 0) }}>
+        <View style={{ paddingBottom: Math.max(insets.bottom, space.s) + (asTab && !keyboardOpen ? space.m : 0) }}>
           {modelNotice || agentDraft.choice.selection || (agentDraft.blocked && preset) ? (
             <View style={{ paddingHorizontal: space.m, gap: space.s }}>
               {modelNotice ? (
@@ -758,7 +758,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
             }}
           />
         </View>
-      </View>
+      </KeyboardPadding>
 
       <Sheet open={picker === 'host'} onClose={() => setPicker(null)} title={t.computers}>
         <SheetGroup>
