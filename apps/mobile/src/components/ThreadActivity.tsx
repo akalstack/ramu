@@ -111,13 +111,20 @@ export function ThreadActivity({
               : 'Resumes on its own when the limit resets'
             : null
   const primaryKind: ActivityKind | 'more' = primary ?? 'more'
-  const secondary = activity.model.secondary.filter((kind) => kind !== 'working').slice(0, 1)
+  // Only what needs the person earns a second pill; helpers, a goal, advice and the queue wait under "More", so the row
+  // stays at the most urgent thing, the live tools and More.
+  const secondary = activity.model.secondary
+    .filter((kind) => kind === 'connection' || kind === 'input' || kind === 'provider')
+    .slice(0, 1)
   const kinds = [
     ...new Set<ActivityKind | 'more'>([
       // The working line before these pills says what the agent is doing, compaction included.
       ...(primary && primary !== 'working' ? [primaryKind] : []),
       ...secondary,
-      ...(activity.groups.length || activity.model.secondary.length > 1 ? ['more' as const] : []),
+      ...(activity.groups.length ||
+      activity.model.secondary.some((kind) => kind !== 'working' && !(secondary as ActivityKind[]).includes(kind))
+        ? ['more' as const]
+        : []),
     ]),
   ]
   return (
