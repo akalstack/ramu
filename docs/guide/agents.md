@@ -68,6 +68,8 @@ On the phone, long-press a thread and choose **Select**, then tap more threads; 
 
 In a thread on iPhone, long-press a word to select it and drag the handles to select more, as on the desktop. The bar above the message box quotes, starts a thread with, asks aside about or copies the selection; **More** has the whole message's actions. On Android, long-press a message to select its text.
 
+A quote, a tagged file or another reference in the message box opens when you press it: a quote shows in full with **Show in conversation**, which scrolls to the message it came from and marks it, and **Remove**; a file offers **Open** and **Copy path**. On the phone a quote opens from its chip above the message box, and a tagged file offers **Open** while the cursor is in it.
+
 ## Projects on other hosts
 
 With **Auto** as the destination, Home also weighs the projects on your other connected hosts. A request that belongs to one of them starts there, in that project's default checkout, and the thread opens. When more than one project could fit, Home asks. For work that spans several repositories, add them to one project: a folder that holds them all gives one thread every repository.

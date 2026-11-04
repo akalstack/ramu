@@ -149,13 +149,13 @@ export function TeammatesSection({
         )
       }
     >
-      <ul className="m-0 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
+      <ul className="my-0 -mx-1.5 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
         {teammates.map((task) => (
           <li key={task.agentId} className="flex min-h-8 items-center gap-2 text-control">
             <RowButton
               size="sm"
               stacked
-              className="w-auto flex-1 min-w-0 -ml-2 px-2 py-1"
+              className="w-auto flex-1 min-w-0 px-1.5 py-1"
               title={t('Start a message with @{0} to talk to it', { 0: teammateHandle(task.name) })}
               onClick={() => onOpen(task.agentId)}
             >

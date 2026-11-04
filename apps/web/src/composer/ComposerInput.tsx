@@ -2,6 +2,8 @@ import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState, typ
 import { createPortal } from 'react-dom'
 import { Folder, Quote, SquareTerminal, Users, WandSparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Button } from '@/components/desktop-button'
 import { FileIcon } from '../editor/FileIcon'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { REFERENCE_CHIP } from '../chat/ReferenceChipView'
@@ -85,54 +87,102 @@ export function focusComposer(root: Element | null, caret?: number) {
   if (input && caret !== undefined) selectComposerInput(input, caret)
 }
 
-export function InlineChip({ chip, onOpen }: { chip: DraftChip; onOpen?: (target: string) => void }) {
+/** What a chip stands for, in full, for its popover: a quote's text, a file's path, a skill's or command's name. */
+function chipDetail(chip: DraftChip) {
+  if (chip.kind === 'quote') return chip.label
+  if (chip.kind === 'mention') return t('This message goes to {0}', { '0': chip.label })
+  if (chip.kind === 'file') return localFileLink(chip.target!)?.path ?? chip.target!
+  return chip.source
+}
+
+/**
+ * One reference in the draft. A press opens a popover with what it stands for in full and what can be done with it:
+ * open a file, find a quote's source in the conversation, copy a path, or remove the reference.
+ */
+export function InlineChip({
+  chip,
+  onOpen,
+  onFind,
+  onRemove,
+}: {
+  chip: DraftChip
+  onOpen?: (target: string) => void
+  /** Finds a quote's source in the conversation; absent outside a thread. */
+  onFind?: (text: string) => void
+  onRemove?: () => void
+}) {
+  const [open, setOpen] = useState(false)
   const target = chip.kind === 'file' ? chip.target : undefined
-  const folder = target !== undefined && isFolderLike(localFileLink(target)?.path ?? target)
-  const open = target && onOpen ? () => onOpen(target) : undefined
+  const path = target !== undefined ? (localFileLink(target)?.path ?? target) : undefined
+  const folder = path !== undefined && isFolderLike(path)
+  const detail = chipDetail(chip)
+  const act = (run: () => void) => () => {
+    setOpen(false)
+    run()
+  }
   return (
-    <Badge
-      variant="secondary"
-      {...REFERENCE_CHIP}
-      title={
-        open
-          ? folder
-            ? t('Show {0} in Explorer', { '0': target })
-            : t('Open {0} in editor', { '0': target })
-          : chip.kind === 'mention'
-            ? `@${chip.target}`
-            : (chip.target ?? chip.label)
-      }
-      {...(open
-        ? {
-            render: <a href={target} />,
-            // The chip is one atom in the draft: a press opens it instead of moving the caret.
-            onMouseDown: (event: React.MouseEvent) => event.preventDefault(),
-            onClick: (event: React.MouseEvent) => {
-              event.preventDefault()
-              open()
-            },
-          }
-        : {})}
-    >
-      {folder ? (
-        <Folder data-icon="inline-start" aria-hidden="true" />
-      ) : chip.kind === 'skill' ? (
-        <WandSparkles data-icon="inline-start" className="text-brand" aria-hidden="true" />
-      ) : chip.kind === 'file' ? (
-        <FileIcon path={localFileLink(chip.target!)?.path ?? chip.target!} />
-      ) : chip.kind === 'quote' ? (
-        <Quote data-icon="inline-start" aria-hidden="true" />
-      ) : chip.kind === 'mention' ? (
-        chip.provider ? (
-          <ProviderIcon provider={chip.provider} size={14} />
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        nativeButton={false}
+        render={
+          <Badge
+            variant="secondary"
+            {...REFERENCE_CHIP}
+            title={chip.kind === 'mention' ? `@${chip.target}` : detail}
+            // The chip is one atom in the draft: a press opens its popover instead of moving the caret.
+            onMouseDown={(event: React.MouseEvent) => event.preventDefault()}
+          />
+        }
+      >
+        {folder ? (
+          <Folder data-icon="inline-start" aria-hidden="true" />
+        ) : chip.kind === 'skill' ? (
+          <WandSparkles data-icon="inline-start" className="text-brand" aria-hidden="true" />
+        ) : chip.kind === 'file' ? (
+          <FileIcon path={path!} />
+        ) : chip.kind === 'quote' ? (
+          <Quote data-icon="inline-start" aria-hidden="true" />
+        ) : chip.kind === 'mention' ? (
+          chip.provider ? (
+            <ProviderIcon provider={chip.provider} size={14} />
+          ) : (
+            <Users data-icon="inline-start" aria-hidden="true" />
+          )
         ) : (
-          <Users data-icon="inline-start" aria-hidden="true" />
-        )
-      ) : (
-        <SquareTerminal data-icon="inline-start" aria-hidden="true" />
-      )}
-      <span className="truncate">{chip.label.replace(/\n/g, ' ')}</span>
-    </Badge>
+          <SquareTerminal data-icon="inline-start" aria-hidden="true" />
+        )}
+        <span className="truncate">{chip.label.replace(/\n/g, ' ')}</span>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={6} className="w-[min(360px,calc(100vw-16px))] gap-2 p-3">
+        <p
+          className={`m-0 max-h-48 overflow-y-auto text-control whitespace-pre-wrap break-words ${chip.kind === 'quote' ? 'border-l-2 border-(--line-strong) pl-2.5 text-soft' : 'font-mono text-caption text-muted-foreground'}`}
+        >
+          {detail}
+        </p>
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          {target && onOpen && (
+            <Button size="sm" variant="secondary" onClick={act(() => onOpen(target))}>
+              {folder ? t('Show in Explorer') : t('Open')}
+            </Button>
+          )}
+          {chip.kind === 'quote' && onFind && (
+            <Button size="sm" variant="secondary" onClick={act(() => onFind(chip.label))}>
+              {t('Show in conversation')}
+            </Button>
+          )}
+          {path && (
+            <Button size="sm" variant="ghost" onClick={act(() => void navigator.clipboard.writeText(path))}>
+              {t('Copy path')}
+            </Button>
+          )}
+          {onRemove && (
+            <Button size="sm" variant="ghost" onClick={act(onRemove)}>
+              {t('Remove')}
+            </Button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -148,8 +198,10 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> & {
   readOnly?: boolean
   /** Who a message can start with; a leading `@handle` naming one draws as that model or teammate. */
   mentions?: readonly DraftMention[]
-  /** Opens a referenced file or folder when its chip is pressed. */
+  /** Opens a referenced file or folder from its chip. */
   onOpenFile?: (target: string) => void
+  /** Finds a quote's source in the conversation, from its chip. */
+  onFindQuote?: (text: string) => void
 }
 const NO_MENTIONS: readonly DraftMention[] = []
 export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function ComposerInput(
@@ -161,6 +213,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
     readOnly,
     mentions = NO_MENTIONS,
     onOpenFile,
+    onFindQuote,
     onKeyDown,
     onPaste,
     ...props
@@ -361,7 +414,28 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
         }}
       />
       {portals.map(({ node, chip }) =>
-        createPortal(<InlineChip chip={chip} onOpen={onOpenFile} />, node, `${chip.start}:${chip.kind}`),
+        createPortal(
+          <InlineChip
+            chip={chip}
+            onOpen={onOpenFile}
+            onFind={onFindQuote}
+            onRemove={
+              readOnly
+                ? undefined
+                : () => {
+                    const at = current.current.indexOf(chip.source)
+                    if (at < 0) return
+                    // A quote is followed by the blank line that separated it from the message; it goes with it.
+                    let end = at + chip.source.length
+                    while (chip.kind === 'quote' && current.current[end] === '\n' && end < at + chip.source.length + 2)
+                      end++
+                    commit(current.current.slice(0, at) + current.current.slice(end), at)
+                  }
+            }
+          />,
+          node,
+          `${chip.start}:${chip.kind}`,
+        ),
       )}
     </>
   )

@@ -1048,6 +1048,16 @@ export const AgentView = memo(function AgentView({
                   ))
                 }
                 onChange={setDraft}
+                // A quote's first line is enough to find where it came from; Find scrolls there and marks it.
+                onFindInChat={(text) =>
+                  openFind(
+                    text
+                      .split('\n')
+                      .map((line) => line.trim())
+                      .find(Boolean)
+                      ?.slice(0, 80),
+                  )
+                }
                 onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
                 chat
                 teammate={composerTeammate}

@@ -22,6 +22,7 @@ import {
 import type { useHostSettings } from '../runtime/useHostSettings'
 import { Button, Card, Divider, Row, SectionLabel, Sheet, T, Toggle } from './ui'
 import { SheetGroup, SheetOption } from './SheetOptions'
+import { SettingHighlight } from './SettingHighlight'
 import { useSay } from '../i18n'
 
 type Host = ReturnType<typeof useHostSettings>
@@ -40,16 +41,18 @@ export function ToggleRow({
   disabled?: boolean
 }) {
   return (
-    <Row
-      accessibilityRole="switch"
-      accessibilityState={{ checked: value, disabled }}
-      disabled={disabled}
-      style={{ paddingVertical: space.m, opacity: disabled ? 0.5 : 1 }}
-      onPress={() => onChange(!value)}
-    >
-      <RowLabel title={title} help={help} />
-      <Toggle accessibilityLabel={title} disabled={disabled} value={value} onValueChange={onChange} />
-    </Row>
+    <SettingHighlight title={title}>
+      <Row
+        accessibilityRole="switch"
+        accessibilityState={{ checked: value, disabled }}
+        disabled={disabled}
+        style={{ paddingVertical: space.m, opacity: disabled ? 0.5 : 1 }}
+        onPress={() => onChange(!value)}
+      >
+        <RowLabel title={title} help={help} />
+        <Toggle accessibilityLabel={title} disabled={disabled} value={value} onValueChange={onChange} />
+      </Row>
+    </SettingHighlight>
   )
 }
 
@@ -73,36 +76,38 @@ export function ChoiceRow({
   const current = options.find((option) => option.value === value)
   return (
     <>
-      <Row
-        accessibilityRole="button"
-        accessibilityLabel={`${title}, ${current?.label ?? String(value)}`}
-        disabled={disabled}
-        style={{ paddingVertical: space.m, opacity: disabled ? 0.5 : 1 }}
-        onPress={() => setOpen(true)}
-      >
-        {/* The value sits under the explanation, not beside it, so neither is squeezed into a narrow column and cut off. */}
-        <View style={{ flex: 1, gap: space.s }}>
-          <RowLabel title={title} help={help} />
-          <View
-            style={{
-              alignSelf: 'flex-start',
-              maxWidth: '100%',
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: space.xs,
-              backgroundColor: c.fill,
-              borderRadius: radius.s + 2,
-              paddingHorizontal: space.m,
-              paddingVertical: space.xs + 2,
-            }}
-          >
-            <T size={font.control} weight="500" numberOfLines={2} style={{ flexShrink: 1 }}>
-              {current?.label ?? String(value ?? '')}
-            </T>
-            <ChevronsUpDown size={14} color={c.muted} />
+      <SettingHighlight title={title}>
+        <Row
+          accessibilityRole="button"
+          accessibilityLabel={`${title}, ${current?.label ?? String(value)}`}
+          disabled={disabled}
+          style={{ paddingVertical: space.m, opacity: disabled ? 0.5 : 1 }}
+          onPress={() => setOpen(true)}
+        >
+          {/* The value sits under the explanation, not beside it, so neither is squeezed into a narrow column and cut off. */}
+          <View style={{ flex: 1, gap: space.s }}>
+            <RowLabel title={title} help={help} />
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                maxWidth: '100%',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.xs,
+                backgroundColor: c.fill,
+                borderRadius: radius.s + 2,
+                paddingHorizontal: space.m,
+                paddingVertical: space.xs + 2,
+              }}
+            >
+              <T size={font.control} weight="500" numberOfLines={2} style={{ flexShrink: 1 }}>
+                {current?.label ?? String(value ?? '')}
+              </T>
+              <ChevronsUpDown size={14} color={c.muted} />
+            </View>
           </View>
-        </View>
-      </Row>
+        </Row>
+      </SettingHighlight>
       <Sheet open={open} onClose={() => setOpen(false)} title={title}>
         <SheetGroup footer={help}>
           {options.map((option) => (
@@ -143,32 +148,34 @@ export function TextRow({
   const { c } = useTheme()
   const [draft, setDraft] = useState<string | null>(null)
   return (
-    <View style={{ padding: space.l, gap: space.s, opacity: disabled ? 0.5 : 1 }}>
-      <RowLabel title={title} help={help} />
-      <TextInput
-        editable={!disabled}
-        multiline
-        maxLength={maxLength}
-        value={draft ?? value}
-        placeholder={placeholder}
-        placeholderTextColor={c.placeholder}
-        accessibilityLabel={title}
-        onChangeText={setDraft}
-        onBlur={() => {
-          if (draft !== null && draft !== value) onCommit(draft)
-          setDraft(null)
-        }}
-        style={{
-          minHeight: 88,
-          textAlignVertical: 'top',
-          color: c.text,
-          fontSize: font.body,
-          backgroundColor: c.fill,
-          borderRadius: radius.s + 2,
-          padding: space.m,
-        }}
-      />
-    </View>
+    <SettingHighlight title={title}>
+      <View style={{ padding: space.l, gap: space.s, opacity: disabled ? 0.5 : 1 }}>
+        <RowLabel title={title} help={help} />
+        <TextInput
+          editable={!disabled}
+          multiline
+          maxLength={maxLength}
+          value={draft ?? value}
+          placeholder={placeholder}
+          placeholderTextColor={c.placeholder}
+          accessibilityLabel={title}
+          onChangeText={setDraft}
+          onBlur={() => {
+            if (draft !== null && draft !== value) onCommit(draft)
+            setDraft(null)
+          }}
+          style={{
+            minHeight: 88,
+            textAlignVertical: 'top',
+            color: c.text,
+            fontSize: font.body,
+            backgroundColor: c.fill,
+            borderRadius: radius.s + 2,
+            padding: space.m,
+          }}
+        />
+      </View>
+    </SettingHighlight>
   )
 }
 

@@ -28,7 +28,8 @@ import {
 import { useT, useSay } from '../../i18n'
 import { accountName } from '@ramu/shared/providers/providers'
 import { useAccountLogins } from '../../runtime/useAccountLogins'
-import { Header, Screen, useScrolledUnderBar, PageScrollView as ScrollView } from '../../components/Screen'
+import { Header, Screen, useScrolledUnderBar } from '../../components/Screen'
+import { SettingScroll } from '../../components/SettingHighlight'
 import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
 import { Button, Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
 import { ComputerScope } from '../../components/SettingsChrome'
@@ -429,7 +430,7 @@ const desktopOnly: Partial<Record<SettingsSection, string>> = {
 
 export default function SettingsSectionPage() {
   const edge = useScrolledUnderBar()
-  const { section: param } = useLocalSearchParams<{ section: string }>()
+  const { section: param, target } = useLocalSearchParams<{ section: string; target?: string }>()
   const section = sectionById(String(param))
   const { computers, selected, language, mayUse } = useStore()
   const host = useHostSettings(selected)
@@ -442,7 +443,8 @@ export default function SettingsSectionPage() {
   return (
     <Screen bg="window">
       <Header align="center" title={translate(language, section.label)} scrollEdge scrolled={edge.scrolled} />
-      <ScrollView
+      <SettingScroll
+        target={target ? String(target) : undefined}
         onScroll={edge.onScroll}
         scrollEventThrottle={16}
         contentInsetAdjustmentBehavior="automatic"
@@ -476,7 +478,7 @@ export default function SettingsSectionPage() {
         ) : null}
         {id === 'memory' ? <MemoryList key={selected} hostId={selected} /> : null}
         {note ? <Hint>{translate(language, note)}</Hint> : null}
-      </ScrollView>
+      </SettingScroll>
     </Screen>
   )
 }

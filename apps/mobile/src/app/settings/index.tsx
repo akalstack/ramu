@@ -31,7 +31,8 @@ export default function SettingsMenu() {
   const results = q
     ? searchSettings(q, host.state.status === 'ready' ? host.state.settings : null, (text) => translate(language, text))
     : []
-  const open = (section: SettingsSection) => router.push({ pathname: '/settings/[section]', params: { section } })
+  const open = (section: SettingsSection, target?: string) =>
+    router.push({ pathname: '/settings/[section]', params: target ? { section, target } : { section } })
   return (
     <Screen bg="window">
       <Header modal align="center" title={t.settings} scrollEdge scrolled={edge.scrolled} />
@@ -98,7 +99,7 @@ export default function SettingsMenu() {
               results.map((hit, index) => (
                 <View key={`${hit.section}:${hit.title}`}>
                   {index ? <Divider inset={60} /> : null}
-                  <Row onPress={() => open(hit.section)} style={{ paddingVertical: space.m }}>
+                  <Row onPress={() => open(hit.section, hit.title)} style={{ paddingVertical: space.m }}>
                     <SectionIcon section={hit.section} />
                     <View style={{ flex: 1, gap: 2 }}>
                       <T>{hit.title}</T>

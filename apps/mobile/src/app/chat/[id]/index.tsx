@@ -66,6 +66,8 @@ import { useThreadToolActivity } from '../../../runtime/useThreadToolActivity'
 import { ComputerActivity } from '../../../components/ComputerActivity'
 import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { translate } from '@ramu/shared/i18n'
+import { quoteSource } from '@ramu/shared/chat/quoteSource'
+import { showToast } from '../../../runtime/toast'
 import { Composer } from '../../../components/Composer'
 import { ContinueOnHostSheet } from '../../../components/ContinueOnHost'
 import { teammatesOf } from '../../../components/Teammate'
@@ -499,6 +501,23 @@ export default function ChatScreen() {
     return { pageRows, hiddenTurns: hidden }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [rows, turnsShown, staged, chat?.id, chat?.provider, chat?.settings] by design; the values it reads beyond these are current as of that run
   }, [rows, turnsShown, staged, chat?.id, chat?.provider, chat?.settings])
+  // A quote in the composer leads back to the message it came from: that row scrolls into view and lights up.
+  const [found, setFound] = useState<{ id: string; at: number } | null>(null)
+  const findQuote = (quote: string) => {
+    const messages = pageRows.flatMap((row, index) =>
+      row.kind === 'text' || row.kind === 'user' || row.kind === 'report'
+        ? [{ id: row.id, index, text: row.kind === 'report' ? row.body : row.text }]
+        : [],
+    )
+    const source = quoteSource(messages, quote)
+    if (!source) {
+      showToast(translate(store.language, 'The quoted message is not in the loaded turns.'))
+      return
+    }
+    following.current = false
+    scroll.current?.scrollToIndex({ index: source.index, animated: true, viewPosition: 0.3 })
+    setFound({ id: source.id, at: Date.now() })
+  }
   // Where each message sits in time and in its turn: date labels above turns, time and copy under each turn's last answer.
   const itemMeta = useMemo(() => {
     const map = new Map<string, ItemMeta>()
@@ -528,6 +547,7 @@ export default function ChatScreen() {
     seen.current.add(item.id)
     return (
       <TranscriptListRow
+        found={found?.id === item.id ? found.at : undefined}
         item={item}
         chat={chat!}
         date={itemMeta.get(item.id)?.date}
@@ -1358,6 +1378,7 @@ export default function ChatScreen() {
                     }}
                     taskId={chat.taskId || undefined}
                     chatId={chat.id}
+                    onFindQuote={findQuote}
                     teammate={composerTeammate}
                     header={
                       joining ? (

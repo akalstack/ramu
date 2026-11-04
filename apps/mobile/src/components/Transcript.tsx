@@ -45,6 +45,7 @@ import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Chip, Sheet, T, tap, type Icon } from './ui'
 import type { ElicitationField } from '@ramu/shared/types'
 import { ActivityText, Arrive, Breathe, Collapse, Disclosure } from './Motion'
+import { Glow } from './Glow'
 import { InteractiveVisibility } from './InteractiveVisibility'
 import { ProviderIcon } from './Logos'
 import { ThemeProposal } from './ThemeProposal'
@@ -399,6 +400,8 @@ interface RowProps {
   streaming: boolean
   fresh: boolean
   visible: boolean
+  /** Set when a quote's Show in conversation led here: the row lights up once per value. */
+  found?: number
 }
 /** Rows that read the rest of the chat: an error offers Retry only while it ended the thread; teammates read it whole. */
 const READS_ITEMS = new Set<TranscriptItem['kind']>(['error', 'agents'])
@@ -415,12 +418,15 @@ export const TranscriptListRow = memo(function TranscriptListRow({
   streaming,
   fresh,
   visible,
+  found,
 }: RowProps) {
   const meta = useMemo(() => ({ date, footer, streaming, fresh }), [date, footer, streaming, fresh])
   return (
     <Arrive animate={fresh}>
       <InteractiveVisibility.Provider value={visible}>
-        <TranscriptItemView item={item} chat={chat} meta={meta} />
+        <Glow pulse={found ?? null} delay={350}>
+          <TranscriptItemView item={item} chat={chat} meta={meta} />
+        </Glow>
       </InteractiveVisibility.Provider>
     </Arrive>
   )
@@ -434,6 +440,7 @@ function sameRow(previous: RowProps, next: RowProps): boolean {
     previous.streaming === next.streaming &&
     previous.fresh === next.fresh &&
     previous.visible === next.visible &&
+    previous.found === next.found &&
     (previous.chat === next.chat ||
       (!READS_ITEMS.has(next.item.kind) && rowChatKey(previous.chat) === rowChatKey(next.chat)))
   )

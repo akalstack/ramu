@@ -34,6 +34,7 @@ import {
   Play,
   Plus,
   Quote,
+  Search,
   Send,
   ShieldCheck,
   Square,
@@ -648,7 +649,10 @@ export function Composer({
   scope,
   chatId,
   teammate,
+  onFindQuote,
 }: {
+  /** Leads a quote back to the message it came from in this thread. */
+  onFindQuote?: (quote: string) => void
   draftKey?: string
   computerId?: string
   taskId?: string
@@ -887,6 +891,12 @@ export function Composer({
   const fieldText = split.body.slice(prefix.length)
   const editField = (value: string) => edit(prefix + value)
   const chips = useMemo(() => composerDraft(fieldText).segments, [fieldText])
+  const fieldCaret = caret - prefix.length
+  const fileAtCaret = composerDraft(fieldText).chips.find(
+    (part) => part.kind === 'file' && fieldCaret > part.start && fieldCaret <= part.end,
+  )?.target
+  const [quoteOpen, setQuoteOpen] = useState<number | null>(null)
+  const openQuote = quoteOpen === null ? undefined : split.quotes[quoteOpen]
   const append = (value: string) => {
     const next = text + value
     setText(next)
@@ -1095,7 +1105,7 @@ export function Composer({
           running={running}
         />
       )}
-      {attachments.length || context.length || split.quotes.length ? (
+      {attachments.length || context.length || split.quotes.length || (fileAtCaret && chatId && taskId) ? (
         <View
           style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.m, paddingTop: space.s }}
         >
@@ -1105,9 +1115,19 @@ export function Composer({
               icon={Quote}
               label={quote.label.replace(/\s+/g, ' ')}
               detail={quote.label}
+              open={() => setQuoteOpen(index)}
               remove={() => removeQuote(index)}
             />
           ))}
+          {/* A tagged file sits in the text, where a tap only moves the cursor: with the cursor in it, it can open. */}
+          {fileAtCaret && chatId && taskId ? (
+            <ContextChip
+              icon={<FileIcon path={fileAtCaret} size={13} />}
+              label={fileAtCaret.split('/').at(-1) ?? fileAtCaret}
+              detail={fileAtCaret}
+              open={() => void files.openLink(fileAtCaret)}
+            />
+          ) : null}
           {attachments.map((a) => (
             <ContextChip
               key={a.id}
@@ -1483,6 +1503,39 @@ export function Composer({
             ))}
         </SheetGroup>
       </Sheet>
+      {/* A quote in full, with the way back to where it was said. */}
+      <Sheet open={!!openQuote} onClose={() => setQuoteOpen(null)} title={say('Quote')}>
+        {openQuote ? (
+          <View style={{ paddingHorizontal: space.l, paddingTop: space.s, gap: space.m }}>
+            <View style={{ borderLeftWidth: 2, borderLeftColor: c.lineStrong, paddingLeft: space.m }}>
+              <T tone="soft" selectable style={{ lineHeight: 21 }}>
+                {openQuote.label}
+              </T>
+            </View>
+          </View>
+        ) : null}
+        <SheetGroup>
+          {onFindQuote ? (
+            <SheetOption
+              icon={Search}
+              title={say('Show in conversation')}
+              onPress={() => {
+                const quote = openQuote?.label
+                setQuoteOpen(null)
+                if (quote) onFindQuote(quote)
+              }}
+            />
+          ) : null}
+          <SheetOption
+            icon={X}
+            title={say('Remove')}
+            onPress={() => {
+              if (quoteOpen !== null) removeQuote(quoteOpen)
+              setQuoteOpen(null)
+            }}
+          />
+        </SheetGroup>
+      </Sheet>
       <Sheet open={menu === 'settings'} onClose={() => setMenu(null)} title={say('Agent settings')}>
         <SheetGroup title={say('Permissions')} footer={say('Applies to this thread from its next step.')}>
           {ACCESS_MODES.map((mode) => (
@@ -1648,7 +1701,8 @@ function ContextChip({
   detail?: string
   /** Opens what the chip stands for, such as a pinned file in the file screen. */
   open?: () => void
-  remove: () => void
+  /** Absent for a chip that only points at something in the text, such as the tagged file under the cursor. */
+  remove?: () => void
 }) {
   const { c } = useTheme()
   const say = useSay()
@@ -1690,18 +1744,22 @@ function ContextChip({
       ) : (
         content
       )}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Remove ${label}`}
-        hitSlop={8}
-        onPress={() => {
-          tap()
-          remove()
-        }}
-        style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
-      >
-        <X size={12} color={c.muted} />
-      </Pressable>
+      {remove ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${label}`}
+          hitSlop={8}
+          onPress={() => {
+            tap()
+            remove()
+          }}
+          style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <X size={12} color={c.muted} />
+        </Pressable>
+      ) : (
+        <View style={{ width: 6 }} />
+      )}
     </View>
   )
 }

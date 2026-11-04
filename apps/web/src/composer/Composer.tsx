@@ -60,6 +60,7 @@ export function Composer({
   allowEmpty = false,
   chat = false,
   teammate,
+  onFindInChat,
 }: {
   value: string
   scopeId?: string
@@ -94,6 +95,8 @@ export function Composer({
   chat?: boolean
   /** The thread's teammate, or how to add one, for `@` and `/teammate`. */
   teammate?: ComposerTeammate
+  /** Finds text in this thread's conversation, so a quote leads back to its source. */
+  onFindInChat?: (text: string) => void
 }) {
   useLanguage()
   const ws = useWorkspace()
@@ -558,6 +561,7 @@ export function Composer({
           ref={ref}
           mentions={teammate?.mentions}
           onOpenFile={scopeId && ws.task(scopeId) ? openFileLink : undefined}
+          onFindQuote={onFindInChat}
           readOnly={dictating || submitting}
           autoFocus={autoFocus}
           value={
