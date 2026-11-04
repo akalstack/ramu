@@ -66,6 +66,17 @@
 .composer-tray-spread > * + * {
   border-bottom: 1px solid var(--line);
 }
+/* Spread, the layer and the tray read as one panel: a divider where they meet, and only the layer's top is rounded. */
+.composer-tray-spread {
+  border-bottom: 1px solid var(--line);
+}
+.chat-tray {
+  transition: border-radius 180ms var(--ease);
+}
+.chat-tray:is([data-peek], :has(.composer-tray-spread [data-panel-open])):has(.composer-tray-spread) {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
 .chat-tray[data-peek] .composer-tray-spread,
 .composer-tray-spread:has([data-panel-open]) {
   opacity: 1;
