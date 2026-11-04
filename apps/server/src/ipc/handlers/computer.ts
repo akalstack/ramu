@@ -356,8 +356,9 @@ export const registerComputerHandlers: RegisterHandlers = ({
     },
     'computer.input': {
       args: z.tuple([id, z.number().int().min(0), z.number(), action]),
-      run: (threadId: string, generation: number, capturedAt: number, input: ComputerAction) =>
-        viewer(threadId).humanInput(device(), generation, { capturedAt }, input),
+      // The frame time stays in the call for clients that send it; input is no longer refused for an old picture.
+      run: (threadId: string, generation: number, _capturedAt: number, input: ComputerAction) =>
+        viewer(threadId).humanInput(device(), generation, input),
     },
     'computer.focus': {
       args: z.tuple([id]),

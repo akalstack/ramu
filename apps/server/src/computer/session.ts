@@ -1,7 +1,6 @@
 import type { BrowserFieldFocus } from '@ramu/shared/browserBridge'
 import { createHash, randomUUID } from 'node:crypto'
 import {
-  COMPUTER_FRAME_STALE_MS,
   ComputerNotRun,
   MAX_COMPUTER_TEXT,
   type ComputerAction,
@@ -353,14 +352,16 @@ export class ComputerSession {
     }
   }
 
-  /** Human input waits for the agent's in-flight work, then needs a fresh frame; it never replays after reconnect. */
-  async humanInput(deviceId: string, generation: number, frame: { capturedAt: number }, action: ComputerAction) {
+  /**
+   * Human input waits for the agent's in-flight work and never replays after reconnect. It is not refused for an old
+   * picture: a person acts on what they see, and a slow app snapshot is no reason to swallow their click.
+   */
+  async humanInput(deviceId: string, generation: number, action: ComputerAction) {
     this.alive()
     if (!this.grant.input) refuse('Input is not granted for this computer.')
     const admitted = admitHumanInput(this.lease, deviceId, generation)
     if (!admitted.ok) return refuse(REFUSALS[admitted.refused])
     if (!humanInputReady(this.lease)) refuse('The agent is finishing its last action. Try again in a moment.')
-    if (this.now() - frame.capturedAt > COMPUTER_FRAME_STALE_MS) refuse('The screen is stale. Wait for a fresh frame.')
     validateAction(action, Infinity, Infinity)
     // The person at the computer outranks a remote controller.
     await this.yieldToLocalInput(deviceId)

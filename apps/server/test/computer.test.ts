@@ -106,20 +106,19 @@ describe('computer session', () => {
     expect(performed).toHaveLength(1)
   })
 
-  it('lets only the human controller send input, and not against a stale frame', async () => {
+  it('lets only the human controller send input, even when the picture is old', async () => {
     let time = 1000
     const { session, performed } = await ready(() => time)
     session.takeControl('phone')
     const { generation } = session.state
-    await expect(
-      session.humanInput('tablet', generation, { capturedAt: 1000 }, { kind: 'key', key: 'a' }),
-    ).rejects.toThrow()
-    await session.humanInput('phone', generation, { capturedAt: 1000 }, { kind: 'type', text: 'hi' })
-    expect(performed).toEqual([{ kind: 'type', text: 'hi' }])
-    time = 7000
-    await expect(
-      session.humanInput('phone', generation, { capturedAt: 1000 }, { kind: 'key', key: 'a' }),
-    ).rejects.toThrow(/stale/)
+    await expect(session.humanInput('tablet', generation, { kind: 'key', key: 'a' })).rejects.toThrow()
+    await session.humanInput('phone', generation, { kind: 'type', text: 'hi' })
+    time = 70_000
+    await session.humanInput('phone', generation, { kind: 'key', key: 'a' })
+    expect(performed).toEqual([
+      { kind: 'type', text: 'hi' },
+      { kind: 'key', key: 'a' },
+    ])
   })
 
   it('pauses on controller disconnect without handing control back, releasing held input', async () => {

@@ -200,7 +200,7 @@ function ComputerViewer({
         io.current.invoke(chat.computerId, 'computer.input', taskId, current.generation, Date.now(), action),
       )
     }
-    if (!frame || stale || !human) return Promise.resolve()
+    if (!frame || !human) return Promise.resolve()
     return act(() =>
       io.current.invoke(chat.computerId, 'computer.input', taskId, frame.generation, frame.capturedAt, action),
     )
@@ -372,14 +372,14 @@ function ComputerViewer({
       key: 'keys',
       title: t('Keys and shortcuts'),
       icon: Command,
-      disabled: !human || stale,
+      disabled: !human,
       onPress: () => setKeysOpen(true),
     },
     {
       key: 'paste',
       title: t('Paste'),
       icon: ClipboardPaste,
-      disabled: !human || stale,
+      disabled: !human,
       onPress: () =>
         void act(async () => {
           const value = (await Clipboard.getStringAsync()).slice(0, 2000)
@@ -499,7 +499,7 @@ function ComputerViewer({
             ? t('Tap to click, hold to right-click, drag to scroll, hold then drag to move, pinch to zoom')
             : undefined
         }
-        accessibilityActions={human && !stale && surface ? [{ name: 'activate' }] : []}
+        accessibilityActions={human && surface ? [{ name: 'activate' }] : []}
         onAccessibilityAction={() =>
           surface && send({ kind: 'click', x: Math.floor(surface.width / 2), y: Math.floor(surface.height / 2) })
         }
@@ -573,7 +573,6 @@ function ComputerViewer({
                   key={entry.id}
                   kind="secondary"
                   title={t(entry.label)}
-                  disabled={stale}
                   onPress={() => void (typed.current = typed.current.then(() => send(entry.action)))}
                 />
               ))}

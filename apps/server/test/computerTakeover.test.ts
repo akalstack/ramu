@@ -56,9 +56,9 @@ describe('local mouse and keyboard use', () => {
     session.takeControl('phone')
     const generation = session.state.generation
     busy = true
-    await expect(
-      session.humanInput('phone', generation, { capturedAt: 1000 }, { kind: 'key', key: 'a' }),
-    ).rejects.toThrow(/mouse or keyboard/)
+    await expect(session.humanInput('phone', generation, { kind: 'key', key: 'a' })).rejects.toThrow(
+      /mouse or keyboard/,
+    )
     expect(session.state.controller).toEqual({ kind: 'human', deviceId: 'local' })
   })
 

@@ -193,7 +193,7 @@ function Viewer({
   const typing = useRef<{ text: string } | null>(null)
   const send = (action: ComputerAction) => {
     if (!canWrite() || !human) return
-    if (!live && (!frame || stale)) return
+    if (!live && !frame) return
     const generation = live ? liveSession.generation : frame!.generation
     const capturedAt = live ? Date.now() : frame!.capturedAt
     if (

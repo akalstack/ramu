@@ -106,13 +106,13 @@ describe('computer session', () => {
     session.takeControl('phone')
     // The agent's last action has not settled, so human input is held back.
     const view = { capturedAt: 1000 }
-    await expect(
-      session.humanInput('phone', session.state.generation, view, { kind: 'key', key: 'x' }),
-    ).rejects.toThrow(/finishing/)
+    await expect(session.humanInput('phone', session.state.generation, { kind: 'key', key: 'x' })).rejects.toThrow(
+      /finishing/,
+    )
     release()
     await inFlight
     await queuedResult
-    await session.humanInput('phone', session.state.generation, view, { kind: 'key', key: 'x' })
+    await session.humanInput('phone', session.state.generation, { kind: 'key', key: 'x' })
     expect(backend.performed.map((action) => ('key' in action ? action.key : ''))).toEqual(['a', 'x'])
   })
 
@@ -125,7 +125,7 @@ describe('computer session', () => {
     }
     const first = await session.view()
     session.takeControl('phone')
-    await session.humanInput('phone', session.state.generation, { capturedAt: 1000 }, { kind: 'click', x: 1, y: 1 })
+    await session.humanInput('phone', session.state.generation, { kind: 'click', x: 1, y: 1 })
     const next = await session.view(first.hash)
     expect(next.capture.data).toBe('QUZURVI=')
   })
@@ -136,11 +136,11 @@ describe('computer session', () => {
     const generation = session.state.generation
     const frame = { capturedAt: 1000 }
     const action: ComputerAction = { kind: 'click', x: 5, y: 5 }
-    await expect(session.humanInput('tablet', generation, frame, action)).rejects.toThrow(/does not control/)
-    await expect(session.humanInput('phone', generation - 1, frame, action)).rejects.toThrow(/Control changed/)
-    tick(6000)
-    await expect(session.humanInput('phone', generation, frame, action)).rejects.toThrow(/stale/)
-    await session.humanInput('phone', generation, { capturedAt: 7000 }, action)
+    await expect(session.humanInput('tablet', generation, action)).rejects.toThrow(/does not control/)
+    await expect(session.humanInput('phone', generation - 1, action)).rejects.toThrow(/Control changed/)
+    // An old picture is no reason to refuse a person's input.
+    tick(60_000)
+    await session.humanInput('phone', generation, action)
   })
 
   it('lets another of the person’s devices take over, and back', () => {
