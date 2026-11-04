@@ -163,7 +163,10 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
     else if (e.kind === 'theme') items.push({ kind: 'theme', id, theme: e.theme })
     else if (e.kind === 'threads-started') items.push({ kind: 'threads', id, threads: e.threads })
     else if (e.kind === 'continued') items.push({ kind: 'continued', id, event: e })
-    else if (e.kind === 'text') items.push({ kind: 'text', id, text: e.text })
+    // A block can open empty as a reply starts; an empty row would blink in and out at the end of the chat.
+    else if (e.kind === 'text') {
+      if (e.text.trim()) items.push({ kind: 'text', id, text: e.text })
+    } else if (e.kind === 'thinking' && e.text.trim()) items.push({ kind: 'thinking', id, text: e.text })
     else if (e.kind === 'error') items.push({ kind: 'error', id, message: e.message })
     else if (e.kind === 'content') {
       const text = e.content

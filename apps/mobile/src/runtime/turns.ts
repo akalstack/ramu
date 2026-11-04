@@ -18,6 +18,7 @@ export function endedOnError(items: TranscriptItem[], id: string): boolean {
 const settled = (item: TranscriptItem) =>
   item.kind === 'text' ||
   (item.kind === 'tool' && item.status === 'completed') ||
+  item.kind === 'thinking' ||
   (item.kind === 'plan' && item.entries.every((entry) => entry.status === 'completed')) ||
   (item.kind === 'permission' && item.decision === 'allow') ||
   (item.kind === 'elicitation' && item.outcome !== undefined) ||

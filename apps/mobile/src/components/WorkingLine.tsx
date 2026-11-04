@@ -10,19 +10,22 @@ import { T, tap } from './ui'
 import { Shimmer } from './Motion'
 
 /**
- * The turn's live status: what the agent is doing (the running command or file), and how long the turn has run.
- * Tapping it opens the turn's latest steps and Stop. `inline` draws it as the desktop does, a shimmering line at the end
- * of the running turn in the transcript; otherwise it is a pill in the composer's activity row.
+ * The turn's live status. As a pill in the composer's activity row it says what the agent is doing (the running
+ * command or file) and for how long, and opens the turn's latest steps and Stop. `inline` is the desktop's status line
+ * at the end of the running turn instead.
  */
 export function WorkingLine({
   chat,
   sending,
   inline,
+  quiet,
   onPress,
 }: {
   chat: Chat
   sending?: boolean
   inline?: boolean
+  /** Inline only: the newest row already says what the agent is doing, so the line keeps its place but says nothing. */
+  quiet?: boolean
   onPress?(): void
 }) {
   const store = useStore()
@@ -44,45 +47,22 @@ export function WorkingLine({
     : running
       ? (chat.step ?? { label: 'Working' })
       : { label: 'Sending…' }
+  // The desktop's ChatStatus: what the agent is doing, shimmering at the end of the turn, nothing to tap. How long the
+  // turn took shows once it folds into "Worked for…".
   if (inline)
     return (
-      <Pressable
+      <View
+        accessibilityRole="text"
         accessibilityLiveRegion="polite"
-        accessibilityRole={onPress ? 'button' : undefined}
-        accessibilityLabel={[t(step.label), step.detail, running && since ? elapsedText(now - since) : null]
-          .filter(Boolean)
-          .join(', ')}
-        disabled={!onPress}
-        hitSlop={6}
-        onPress={() => {
-          tap()
-          onPress?.()
-        }}
-        style={({ pressed }) => ({
-          flexDirection: 'row',
-          alignItems: 'center',
-          alignSelf: 'flex-start',
-          gap: space.s,
-          minHeight: 28,
-          maxWidth: '100%',
-          opacity: pressed ? 0.6 : 1,
-        })}
+        // One height from sending to the turn's end, whatever it says, so the end of the chat never shifts under it.
+        style={{ height: 24, justifyContent: 'center' }}
       >
-        <Shimmer size={font.control} singleLine>
-          {t(step.label)}
-        </Shimmer>
-        {step.detail ? (
-          <T size={font.caption} tone="muted" mono numberOfLines={1} style={{ flexShrink: 1 }}>
-            {step.detail}
-          </T>
-        ) : null}
-        {running && since ? (
-          <T size={font.caption} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
-            {elapsedText(now - since)}
-          </T>
-        ) : null}
-        {onPress ? <ChevronRight size={12} color={c.muted} /> : null}
-      </Pressable>
+        {quiet ? null : (
+          <Shimmer size={font.control} singleLine>
+            {t(running ? (chat.compacting ? 'Compacting context…' : (chat.activityLabel ?? 'Working')) : 'Sending…')}
+          </Shimmer>
+        )}
+      </View>
     )
   return (
     <Pressable

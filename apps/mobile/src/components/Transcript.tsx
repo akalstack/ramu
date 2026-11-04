@@ -64,7 +64,7 @@ import { composerDraft, type DraftMention } from '@ramu/shared/chat/composerDraf
 import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Chip, Sheet, T, tap, type Icon } from './ui'
 import type { ElicitationField } from '@ramu/shared/types'
-import { ActivityText, Arrive, Breathe, Collapse, Disclosure } from './Motion'
+import { ActivityText, Arrive, Breathe, Collapse, Disclosure, Shimmer } from './Motion'
 import { Glow } from './Glow'
 import { InteractiveVisibility } from './InteractiveVisibility'
 import { ProviderIcon } from './Logos'
@@ -649,6 +649,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
           {meta?.footer && !meta.streaming ? <AnswerFooter at={item.at} text={item.text} /> : null}
         </MessageActions>
       )
+    case 'thinking':
+      return <ThinkingRow text={item.text} live={Boolean(meta?.streaming)} />
     case 'interactive':
       return <InteractiveBlock reference={item.reference} chat={chat} />
     case 'image':
@@ -2022,5 +2024,47 @@ function InteractiveBlock({
       chat={chat}
       onAsk={(text) => menu?.quote(text)}
     />
+  )
+}
+
+/**
+ * Reasoning the provider shared, as the desktop's ThinkingRow: while it streams its newest lines show under a
+ * shimmering "Thinking"; once the agent moves on it folds to "Thought" and opens on a tap.
+ */
+function ThinkingRow({ text, live }: { text: string; live: boolean }) {
+  const { c } = useTheme()
+  const say = useSay()
+  const [open, setOpen] = useState(false)
+  if (live)
+    return (
+      <View style={{ gap: space.xs }}>
+        <Shimmer size={font.control}>{say('Thinking')}</Shimmer>
+        <T size={font.caption} tone="muted" style={{ lineHeight: 18 }}>
+          {text.length > 600 ? `…${text.slice(-600)}` : text}
+        </T>
+      </View>
+    )
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        hitSlop={6}
+        onPress={() => setOpen((value) => !value)}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 2 }}
+      >
+        <T size={font.control} tone="muted">
+          {say('Thought')}
+        </T>
+        <Disclosure open={open} color={c.muted} />
+      </Pressable>
+      <Collapse open={open}>
+        <View style={{ paddingTop: space.xs, paddingLeft: space.s, borderLeftWidth: 1, borderLeftColor: c.line }}>
+          <T size={font.caption} tone="muted" style={{ lineHeight: 18 }}>
+            {text}
+          </T>
+        </View>
+      </Collapse>
+    </View>
   )
 }

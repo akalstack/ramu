@@ -58,7 +58,7 @@ import { STANDALONE } from '../../../runtime/types'
 import { Header, HeaderButton, HeaderMenu, Screen, PageLegendList } from '../../../components/Screen'
 import type { LegendListRef } from '@legendapp/list/react-native'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
-import { ThreadActivity, type ThreadActivityHandle } from '../../../components/ThreadActivity'
+import { ThreadActivity } from '../../../components/ThreadActivity'
 import { WorkingLine } from '../../../components/WorkingLine'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
 import { BrowserActivity } from '../../../components/BrowserActivity'
@@ -177,7 +177,6 @@ export default function ChatScreen() {
   const [away, setAway] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [composerHeight, setComposerHeight] = useState(120)
-  const activityHandle = useRef<ThreadActivityHandle>(null)
   const [selection, setSelection] = useState<MessageSelection | null>(null)
   // The selection bar sits on the composer, and the jump-to-latest button stacks above it rather than under it.
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
@@ -558,7 +557,8 @@ export default function ChatScreen() {
         chat={chat!}
         date={itemMeta.get(item.id)?.date}
         footer={itemMeta.get(item.id)?.footer}
-        streaming={false}
+        // Only reasoning is drawn live; a reply's text settles block by block on its own.
+        streaming={item.kind === 'thinking' && running && item === rows.at(-1)}
         fresh={fresh && item.kind !== 'user'}
         visible={contentScreenFocused && visibleContentRows.has(item.id)}
       />
@@ -575,6 +575,12 @@ export default function ChatScreen() {
   const project =
     chat.projectId === STANDALONE ? 'Standalone' : store.projects.find((p) => p.id === chat.projectId)?.name
   const running = chat.status === 'running'
+  const lastRow = rows.at(-1)
+  const lastShowsWork =
+    running &&
+    (lastRow?.kind === 'thinking' ||
+      (lastRow?.kind === 'tool' && lastRow.status === 'in_progress') ||
+      (lastRow?.kind === 'tools' && lastRow.tools.some((tool) => tool.status === 'in_progress')))
   // Stopped by you or failed since the last message: the empty send button becomes Continue.
   const lastUser = chat.items.findLastIndex((item) => item.kind === 'user')
   const stopped =
@@ -1255,13 +1261,9 @@ export default function ChatScreen() {
                         <PendingBubble item={o} computer={computer?.name ?? 'the host'} onEdit={editPending} />
                       </Arrive>
                     ))}
-                    {/* The running turn's status, at its end as on the desktop; it folds into "Worked for…" when done. */}
-                    <WorkingLine
-                      inline
-                      chat={chat}
-                      sending={pending.length > 0}
-                      onPress={() => activityHandle.current?.openWorking()}
-                    />
+                    {/* The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
+                        (reasoning, or a tool group at work) already says what the agent is doing. */}
+                    <WorkingLine inline quiet={lastShowsWork} chat={chat} sending={pending.length > 0} />
                   </View>
                 }
               />
@@ -1290,7 +1292,7 @@ export default function ChatScreen() {
                     activity={
                       <>
                         <ThreadActivity
-                          handle={activityHandle}
+                          inlineStatus
                           chat={chat}
                           leading={
                             <>

@@ -69,6 +69,8 @@ export type TranscriptItem = (
   /** This thread continues on another host. */
   | { kind: 'continued'; id: string; event: import('@ramu/shared/continuation').ContinuedEvent }
   | { kind: 'text'; id: string; text: string }
+  /** Reasoning the provider shared: live while it streams, then folded to "Thought" as on the desktop. */
+  | { kind: 'thinking'; id: string; text: string }
   | TranscriptTool
   | { kind: 'tools'; id: string; tools: TranscriptTool[] }
   | { kind: 'plan'; id: string; entries: { content: string; status: 'pending' | 'in_progress' | 'completed' }[] }
