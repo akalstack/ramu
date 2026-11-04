@@ -339,11 +339,31 @@ describe('open computer use connection', () => {
 describe('open computer use refusals', () => {
   it('says why working behind the lock screen is refused when another app holds it', async () => {
     const { explained } = await import('../src/computer/ocu')
-    expect(explained('Locked Use belongs to another connection; GUI access is unavailable.')).toMatch(/another app/)
-    expect(explained('Locked Use is unavailable. Enable and validate it in Open Computer Use settings.')).toMatch(
-      /quit it/,
-    )
+    expect(explained('Locked Use belongs to another connection; GUI access is unavailable.')).toMatch(/Another app/)
+    expect(explained('MCP error -32000: Locked Use is unavailable. Enable and validate it.')).toMatch(/Unlock this Mac/)
     expect(explained('Chrome has no window')).toBe('Chrome has no window')
+  })
+})
+
+describe('open computer use helper', () => {
+  it('keeps a live helper through a refusal, so its locked-screen session is not ended', async () => {
+    const { OcuBackend } = await import('../src/computer/ocu')
+    let started = 0
+    const backend = new OcuBackend(
+      () => '/bin/ocu',
+      async () => {
+        started++
+        return {
+          callTool: async () => {
+            throw new Error('MCP error -32000: Chrome is not running')
+          },
+          close: async () => {},
+        }
+      },
+    )
+    await expect(backend.apps()).rejects.toThrow(/not running/)
+    await expect(backend.apps()).rejects.toThrow(/not running/)
+    expect(started).toBe(1)
   })
 })
 

@@ -30,9 +30,11 @@ const READ_ONLY_TOOLS = new Set(['list_apps', 'get_app_state'])
  * server, say) can hold it, and Open Computer Use's own words do not say so.
  */
 export function explained(message: string): string {
-  return /locked use (belongs to another connection|is unavailable)/i.test(message)
-    ? `${message} Working behind the lock screen is held by one app at a time: if another app on this Mac runs Open Computer Use (for example another agent tool), quit it or remove its Open Computer Use server, or unlock the Mac.`
-    : message
+  if (/locked use belongs to another connection/i.test(message))
+    return 'Another app on this Mac is using Open Computer Use behind the lock screen (for example another agent tool). Quit it or remove its Open Computer Use server, then unlock the Mac once.'
+  if (/locked use (is unavailable|stopped)|no active locked use lease/i.test(message))
+    return 'Unlock this Mac once. Working behind the lock screen can only begin after a normal unlock, and it ended when Open Computer Use restarted. It continues through later locks.'
+  return message
 }
 
 /** Enough of the tree for a viewer frame to find the page's scroll area; the agent's observations keep the full tree. */
@@ -343,10 +345,14 @@ export class OcuBackend implements ComputerBackend {
     try {
       result = (await client.callTool({ name, arguments: args })) as ToolResult
     } catch (error) {
+      // Only a helper that is really gone is replaced. Closing a live one for an ordinary refusal would end its
+      // Locked Use session, and a new one cannot start until the Mac is unlocked normally.
+      if (!closedConnection(error))
+        throw error instanceof Error ? new Error(explained(error.message), { cause: error }) : error
       this.client = null
       await client.close().catch(() => {})
       // Input is never sent twice: it may have run. A read can simply be asked again of a fresh helper.
-      if (retry && READ_ONLY_TOOLS.has(name) && closedConnection(error)) return this.call(name, args, false)
+      if (retry && READ_ONLY_TOOLS.has(name)) return this.call(name, args, false)
       throw error instanceof Error ? new Error(explained(error.message), { cause: error }) : error
     }
     if (result.isError)
