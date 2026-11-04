@@ -195,7 +195,7 @@ export class SckDisplayBackend implements ComputerBackend {
   private stream: ScreenStream | null = null
   private broken = false
   constructor(
-    private readonly inner: ComputerBackend & { useScale?(scale: number): void; locked?(): Promise<boolean> },
+    private readonly inner: ComputerBackend & { useScale?(scale: number): void },
     private readonly build: () => Promise<string> = () => ensureHelper(),
     private readonly launch: (path: string) => ChildProcess = (path) =>
       spawn(path, ['--max-edge', '1600', '--fps', '15', '--quality', '0.6'], { stdio: ['pipe', 'pipe', 'pipe'] }),
@@ -204,6 +204,10 @@ export class SckDisplayBackend implements ComputerBackend {
 
   status(): ComputerRuntimeStatus {
     return this.inner.status()
+  }
+
+  locked(): Promise<boolean> {
+    return this.inner.locked?.() ?? Promise.resolve(false)
   }
 
   /** Builds the helper in the background so the first viewer does not wait for the compiler. */

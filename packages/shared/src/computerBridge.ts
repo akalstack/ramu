@@ -79,6 +79,8 @@ export interface ComputerBackend {
   localInputActive?(target: ComputerTarget): Promise<boolean>
   /** The kind of text field focused on the computer, so a phone raises its keyboard after a tap; never the value. */
   focusedField?(target: ComputerTarget): Promise<BrowserFieldFocus>
+  /** Whether the computer's screen is locked, for the backends that can tell. Screen video cannot see past the lock. */
+  locked?(): Promise<boolean>
   /** How often a watched target is worth capturing, in milliseconds. Cheap streaming backends return less than the default. */
   frameInterval?(target: ComputerTarget): number
   /** Prepares slow one-time setup (for example building a native helper) before the first capture needs it. */

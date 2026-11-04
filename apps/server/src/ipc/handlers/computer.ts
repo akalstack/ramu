@@ -338,9 +338,13 @@ export const registerComputerHandlers: RegisterHandlers = ({
       run: async (threadId: string, offer: string) => {
         if (!video) throw new Error('Update this host for video.')
         const session = viewer(threadId)
-        if (session.runtime.id !== 'local' || session.target.kind !== 'display')
-          throw new Error('Video is available for this computer’s main display. Use image frames for this target.')
-        return video.answer(threadId, device(), offer)
+        if (session.runtime.id !== 'local') throw new Error('Video is available for this computer. Use image frames.')
+        if (session.target.kind === 'display') return video.answer(threadId, device(), offer)
+        // An app's window streams while the Mac is unlocked. Behind the lock only Open Computer Use's snapshots see it.
+        if (await ready().backend.locked?.()) throw new Error('This Mac is locked, so the app is shown as snapshots.')
+        // Sized to the app's snapshots, so a point in the video is the same point for Open Computer Use's input.
+        const { width, height } = await session.view()
+        return video.answer(threadId, device(), offer, { kind: 'window', app: session.target.name, width, height })
       },
     },
     'computer.rtcKeyFrame': {

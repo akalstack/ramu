@@ -18,6 +18,10 @@ struct Options {
   var fps = 15
   var quality = 0.6
   var app: String?
+  /// One app's main window instead of the display: its own pixels, whether or not other windows cover it.
+  var window: String?
+  /// The exact picture size, so the stream matches another capture of the same window pixel for pixel.
+  var size: (Int, Int)?
   var h264 = false
   var bitrate = 2_500_000
 }
@@ -31,6 +35,12 @@ func parse() -> Options {
     case "--fps": if let v = args.popFirst(), let n = Int(v), n >= 1, n <= 30 { options.fps = n }
     case "--quality": if let v = args.popFirst(), let q = Double(v), q > 0.1, q <= 1 { options.quality = q }
     case "--app": options.app = args.popFirst()
+    case "--window": options.window = args.popFirst()
+    case "--size":
+      if let v = args.popFirst() {
+        let parts = v.split(separator: "x").compactMap { Int($0) }
+        if parts.count == 2, (2...8192).contains(parts[0]), (2...8192).contains(parts[1]) { options.size = (parts[0], parts[1]) }
+      }
     case "--h264": options.h264 = true
     case "--bitrate": if let v = args.popFirst(), let n = Int(v), n >= 200_000, n <= 20_000_000 { options.bitrate = n }
     default: break
@@ -236,7 +246,19 @@ Task {
     guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first
     else { fail("No display is available to capture.") }
     let filter: SCContentFilter
-    if let name = options.app {
+    var pointsWidth = Double(display.width)
+    var pointsHeight = Double(display.height)
+    if let name = options.window {
+      // The app's largest ordinary window is the one people work in; covered windows still render here.
+      let windows = content.windows.filter {
+        $0.owningApplication?.applicationName == name && $0.windowLayer == 0 && $0.frame.width >= 40 && $0.frame.height >= 40
+      }
+      guard let window = windows.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height })
+      else { fail("\(name) has no window to show.", code: 4) }
+      filter = SCContentFilter(desktopIndependentWindow: window)
+      pointsWidth = Double(window.frame.width)
+      pointsHeight = Double(window.frame.height)
+    } else if let name = options.app {
       let apps = content.applications.filter { $0.applicationName == name }
       if apps.isEmpty { fail("\(name) is not running.", code: 4) }
       filter = SCContentFilter(display: display, including: apps, exceptingWindows: [])
@@ -244,12 +266,11 @@ Task {
       filter = SCContentFilter(display: display, excludingWindows: [])
     }
     let scale = Double(filter.pointPixelScale)
-    let pointsWidth = Double(display.width)
-    let longEdge = Double(max(display.width, display.height)) * scale
+    let longEdge = max(pointsWidth, pointsHeight) * scale
     let shrink = min(1.0, Double(options.maxEdge) / longEdge)
     let configuration = SCStreamConfiguration()
-    configuration.width = max(2, Int((Double(display.width) * scale * shrink).rounded()))
-    configuration.height = max(2, Int((Double(display.height) * scale * shrink).rounded()))
+    configuration.width = options.size?.0 ?? max(2, Int((pointsWidth * scale * shrink).rounded()))
+    configuration.height = options.size?.1 ?? max(2, Int((pointsHeight * scale * shrink).rounded()))
     configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(options.fps))
     configuration.pixelFormat = options.h264 ? kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange : kCVPixelFormatType_32BGRA
     configuration.queueDepth = 3

@@ -98,12 +98,8 @@ function ComputerViewer({
   const [area, setArea] = useState({ width: 0, height: 0 })
   const [current, setCurrent] = useState(session)
   const taskId = chat.taskId!
-  const video = useComputerVideo(
-    chat.computerId,
-    taskId,
-    session.target.kind === 'display' && session.runtime.id === 'local',
-    active,
-  )
+  // The main display and an app's window both stream from the host; an app falls back to snapshots when it is locked.
+  const video = useComputerVideo(chat.computerId, taskId, session.runtime.id === 'local', active)
   const live = video.status === 'live'
   const human = !viewOnly && current.controller.kind === 'human' && current.controlledHere !== false && !current.paused
   useEffect(() => {

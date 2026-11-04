@@ -36,7 +36,13 @@ export function webrtc(): typeof import('react-native-webrtc') | null {
   }
 }
 
-/** Smooth H.264 video of the host's main display. `failed` (or `off`) means the viewer should poll image frames instead. */
+/** After video fails the viewer polls image frames, and tries video again this much later (an app window after unlock). */
+const RETRY_MS = 15_000
+
+/**
+ * Smooth H.264 video of the host's main display, or of the granted app's window. `failed` (or `off`) means the viewer
+ * should poll image frames instead.
+ */
 export function useComputerVideo(
   computerId: string,
   taskId: string,
@@ -47,6 +53,7 @@ export function useComputerVideo(
   const io = useRef(store)
   io.current = store
   const [state, setState] = useState<ComputerVideo>(OFF)
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     const native = eligible && active ? webrtc() : null
     if (!native) {
@@ -63,14 +70,20 @@ export function useComputerVideo(
       setState({ ...OFF, status: 'failed' })
       return
     }
-    const fail = () =>
-      mounted && setState((previous) => ({ ...OFF, width: previous.width, height: previous.height, status: 'failed' }))
+    let retry: ReturnType<typeof setTimeout> | undefined
+    const fail = () => {
+      if (!mounted) return
+      setState((previous) => ({ ...OFF, width: previous.width, height: previous.height, status: 'failed' }))
+      retry ??= setTimeout(() => setAttempt((value) => value + 1), RETRY_MS)
+    }
+    let connected = false
     const timer = setTimeout(() => {
-      if (mounted) setState((previous) => (previous.status === 'live' ? previous : { ...OFF, status: 'failed' }))
+      if (mounted && !connected) fail()
     }, CONNECT_TIMEOUT_MS)
     const events = pc as unknown as PeerEvents<InstanceType<typeof native.MediaStreamTrack>>
     events.addEventListener('track', (event) => {
       const stream = event.streams?.[0] ?? new native.MediaStream([event.track])
+      connected = true
       if (mounted) setState((previous) => ({ ...previous, status: 'live', streamURL: stream.toURL() }))
     })
     events.addEventListener('connectionstatechange', () => {
@@ -100,9 +113,10 @@ export function useComputerVideo(
     return () => {
       mounted = false
       clearTimeout(timer)
+      clearTimeout(retry)
       pc.close()
       if (peerId) void io.current.invoke(computerId, 'computer.rtcClose', taskId, peerId).catch(() => {})
     }
-  }, [computerId, taskId, eligible, active])
+  }, [computerId, taskId, eligible, active, attempt])
   return state
 }

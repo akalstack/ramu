@@ -1,6 +1,6 @@
 import { randomUUID, randomBytes } from 'node:crypto'
 import { MediaStreamTrack, RTCPeerConnection, RTCRtpCodecParameters } from 'werift'
-import { packetizeH264, type PacketizerState, type VideoFeed, type VideoInfo } from './video'
+import { packetizeH264, VideoFeed, type PacketizerState, type VideoInfo, type VideoSource } from './video'
 
 const MAX_PEERS_PER_THREAD = 4
 const GATHER_TIMEOUT_MS = 4000
@@ -18,6 +18,7 @@ interface Peer {
   threadId: string
   deviceId: string
   pc: RTCPeerConnection
+  feed: VideoFeed
   unsubscribe(): void
 }
 
@@ -29,19 +30,40 @@ interface Peer {
 export class RtcViewers {
   private peers = new Map<string, Peer>()
   private timer: ReturnType<typeof setInterval> | null = null
+  /** App windows, one feed each, shared by everyone watching that window at that size. */
+  private windows = new Map<string, VideoFeed>()
   constructor(
     private readonly feed: VideoFeed,
-    /** True while the thread's grant still lets this device watch. */
-    private readonly allowed: (threadId: string, deviceId: string) => boolean,
+    /** True while the thread's grant still lets this device watch (and its picture can still be captured). */
+    private readonly allowed: (threadId: string, deviceId: string) => boolean | Promise<boolean>,
     private readonly iceServers: { urls: string | string[] }[] = [],
+    private readonly windowFeed: (source: VideoSource & { kind: 'window' }) => VideoFeed = (source) =>
+      new VideoFeed(source),
   ) {}
+
+  private feedFor(source: VideoSource): VideoFeed {
+    if (source.kind === 'display') return this.feed
+    const key = `${source.app}\n${source.width}x${source.height}`
+    let feed = this.windows.get(key)
+    if (!feed) {
+      feed = this.windowFeed(source)
+      this.windows.set(key, feed)
+    }
+    return feed
+  }
 
   count(threadId: string): number {
     return [...this.peers.values()].filter((peer) => peer.threadId === threadId).length
   }
 
-  async answer(threadId: string, deviceId: string, offer: string): Promise<{ id: string; sdp: string } & VideoInfo> {
+  async answer(
+    threadId: string,
+    deviceId: string,
+    offer: string,
+    source: VideoSource = { kind: 'display' },
+  ): Promise<{ id: string; sdp: string } & VideoInfo> {
     if (this.count(threadId) >= MAX_PEERS_PER_THREAD) throw new Error('Too many viewers are watching this computer.')
+    const feed = this.feedFor(source)
     const pc = new RTCPeerConnection({ codecs: { audio: [], video: [H264()] }, iceServers: this.iceServers })
     const id = randomUUID()
     const track = new MediaStreamTrack({ kind: 'video' })
@@ -68,12 +90,12 @@ export class RtcViewers {
           started = false
           // A key frame sent before the connection was up is gone, and a still screen makes no new one: ask again now
           // and a couple more times in case the first request races the receiver's decoder starting.
-          for (const delay of [0, 400, 1200]) setTimeout(() => this.keyFrame(id, deviceId), delay).unref?.()
+          for (const delay of [0, 400, 1200]) setTimeout(() => feed.requestKeyFrame(), delay).unref?.()
         }
         if (connection === 'failed' || connection === 'closed' || connection === 'disconnected') close()
       })
       const start = Date.now()
-      subscription = await this.feed.subscribe((unit) => {
+      subscription = await feed.subscribe((unit) => {
         // A viewer can only start decoding at a key frame; send nothing until the first one.
         if (!connected || (!started && !unit.key)) return
         started = true
@@ -91,7 +113,7 @@ export class RtcViewers {
       ])
       const description = pc.localDescription
       if (!description) throw new Error('The video connection could not be prepared.')
-      this.peers.set(id, { id, threadId, deviceId, pc, unsubscribe: subscription.unsubscribe })
+      this.peers.set(id, { id, threadId, deviceId, pc, feed, unsubscribe: subscription.unsubscribe })
       this.watch()
       return { id, sdp: description.sdp, ...subscription.info }
     } catch (error) {
@@ -103,7 +125,8 @@ export class RtcViewers {
 
   /** The viewer asks for a fresh key frame, for example after packet loss. Only its own peer can ask. */
   keyFrame(id: string, deviceId: string) {
-    if (this.peers.get(id)?.deviceId === deviceId) this.feed.requestKeyFrame()
+    const peer = this.peers.get(id)
+    if (peer?.deviceId === deviceId) peer.feed.requestKeyFrame()
   }
 
   /** Only the device that opened a peer can close it. */
@@ -130,12 +153,18 @@ export class RtcViewers {
   closeAll() {
     for (const id of [...this.peers.keys()]) this.close(id)
     this.feed.stop()
+    for (const feed of this.windows.values()) feed.stop()
+    this.windows.clear()
   }
 
   private watch() {
     if (this.timer) return
     this.timer = setInterval(() => {
-      for (const peer of [...this.peers.values()]) if (!this.allowed(peer.threadId, peer.deviceId)) this.close(peer.id)
+      for (const peer of [...this.peers.values()])
+        void Promise.resolve(this.allowed(peer.threadId, peer.deviceId)).then(
+          (ok) => ok || this.close(peer.id),
+          () => this.close(peer.id),
+        )
     }, CHECK_MS)
     this.timer.unref?.()
   }

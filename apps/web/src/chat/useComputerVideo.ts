@@ -11,14 +11,17 @@ export interface ComputerVideo {
 
 const OFF: ComputerVideo = { status: 'off', stream: null, width: 0, height: 0 }
 const CONNECT_TIMEOUT_MS = 10_000
+/** After video fails the viewer uses image frames, and tries video again this much later (an app window after unlock). */
+const RETRY_MS = 15_000
 
 /**
- * Smooth video of the host's main display over WebRTC. The offer and answer go through the authenticated host connection;
+ * Smooth video of the host's main display, or of the granted app's window, over WebRTC. The offer and answer go through the authenticated host connection;
  * when the connection cannot be made, `failed` tells the viewer to use the image frames instead.
  */
 export function useComputerVideo(taskId: string, eligible: boolean): ComputerVideo {
   const { invoke } = useHost()
   const [state, setState] = useState<ComputerVideo>(OFF)
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     if (!eligible || typeof RTCPeerConnection === 'undefined') {
       setState(OFF)
@@ -26,14 +29,17 @@ export function useComputerVideo(taskId: string, eligible: boolean): ComputerVid
     }
     let active = true
     let peerId: string | null = null
+    let retry: ReturnType<typeof setTimeout> | undefined
     const pc = new RTCPeerConnection()
-    const fail = () =>
-      active &&
+    const fail = () => {
+      if (!active) return
       setState((previous) =>
         previous.status === 'live' ? { ...previous, status: 'failed' } : { ...OFF, status: 'failed' },
       )
+      retry ??= setTimeout(() => setAttempt((value) => value + 1), RETRY_MS)
+    }
     const timer = setTimeout(() => {
-      if (active) setState((previous) => (previous.status === 'live' ? previous : { ...OFF, status: 'failed' }))
+      if (active && pc.connectionState !== 'connected') fail()
     }, CONNECT_TIMEOUT_MS)
     pc.addTransceiver('video', { direction: 'recvonly' })
     pc.ontrack = (event) => {
@@ -68,9 +74,10 @@ export function useComputerVideo(taskId: string, eligible: boolean): ComputerVid
     return () => {
       active = false
       clearTimeout(timer)
+      clearTimeout(retry)
       pc.close()
       if (peerId) void invoke('computer.rtcClose', taskId, peerId).catch(() => {})
     }
-  }, [invoke, taskId, eligible])
+  }, [invoke, taskId, eligible, attempt])
   return state
 }

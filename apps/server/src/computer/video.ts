@@ -78,8 +78,22 @@ export interface VideoInfo {
   scale: number
 }
 
+/** What a feed shows: the main display, or one app's window at an exact size (that of the app's snapshots). */
+export type VideoSource = { kind: 'display' } | { kind: 'window'; app: string; width: number; height: number }
+
+const helperArgs = (source: VideoSource) => [
+  '--h264',
+  '--max-edge',
+  '1600',
+  '--fps',
+  '30',
+  '--bitrate',
+  '2500000',
+  ...(source.kind === 'window' ? ['--window', source.app, '--size', `${source.width}x${source.height}`] : []),
+]
+
 /**
- * One hardware H.264 stream of the main display, shared by every viewer. It starts with the first viewer, asks the helper
+ * One hardware H.264 stream of the main display or one app window, shared by every viewer of it. It starts with the first viewer, asks the helper
  * for a key frame when another joins, and stops a few seconds after the last one leaves.
  */
 export class VideoFeed {
@@ -89,10 +103,9 @@ export class VideoFeed {
   private infoWaiters: ((info: VideoInfo | Error) => void)[] = []
   private idle: ReturnType<typeof setTimeout> | null = null
   constructor(
+    source: VideoSource = { kind: 'display' },
     private readonly launch: () => Promise<ChildProcess> = async () =>
-      spawn(await ensureHelper(), ['--h264', '--max-edge', '1600', '--fps', '30', '--bitrate', '2500000'], {
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }),
+      spawn(await ensureHelper(), helperArgs(source), { stdio: ['pipe', 'pipe', 'pipe'] }),
     private readonly idleMs = 4000,
   ) {}
 

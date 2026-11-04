@@ -120,7 +120,8 @@ function Viewer({
   const [capturing, setCapturing] = useState(false)
   const capturingNow = useRef(capturing)
   capturingNow.current = capturing
-  const video = useComputerVideo(taskId, session.target.kind === 'display' && session.runtime.id === 'local')
+  // The main display and an app's window both stream from this computer; an app falls back to snapshots when locked.
+  const video = useComputerVideo(taskId, session.runtime.id === 'local')
   const live = video.status === 'live'
   const [liveSession, setLiveSession] = useState(session)
   const current = live ? liveSession : session

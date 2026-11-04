@@ -142,6 +142,30 @@ describe('rtc viewers', () => {
     expect(viewers.count('thread')).toBe(0)
   }, 15000)
 
+  it('streams an app window from a feed of its own, shared by everyone watching that window', async () => {
+    const display = fakeFeed()
+    const windows: { source: unknown; feed: ReturnType<typeof fakeFeed> }[] = []
+    const viewers = new RtcViewers(
+      display.feed,
+      () => true,
+      [],
+      (source) => {
+        const feed = fakeFeed()
+        windows.push({ source, feed })
+        return feed.feed
+      },
+    )
+    closers.push(() => viewers.closeAll())
+    const chrome = { kind: 'window' as const, app: 'Google Chrome', width: 1280, height: 647 }
+    for (const thread of ['one', 'two']) {
+      const { pc, sdp } = await viewerOffer()
+      closers.push(() => pc.close())
+      await viewers.answer(thread, 'phone', sdp, chrome)
+    }
+    expect(windows).toEqual([{ source: chrome, feed: expect.anything() }])
+    expect(display.raw.requestKeyFrame).not.toHaveBeenCalled()
+  }, 30000)
+
   it('closes every viewer of a thread when asked, leaving other threads watching', async () => {
     const { feed } = fakeFeed()
     const viewers = new RtcViewers(feed, () => true)

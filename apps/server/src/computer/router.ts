@@ -26,6 +26,11 @@ export class ComputerRouter implements ComputerBackend {
     return this.apps.status()
   }
 
+  /** The display backend reads the lock; an app backend acts behind it, but no screen video can see it. */
+  locked(): Promise<boolean> {
+    return this.display.locked?.() ?? Promise.resolve(false)
+  }
+
   /** What an app grant can use: the display runtime's status is separate from whether app control is installed. */
   appStatus(): ComputerRuntimeStatus {
     return this.apps.status()

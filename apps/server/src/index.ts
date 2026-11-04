@@ -311,14 +311,16 @@ const mobilePush = new MobilePush(
   (sessionId) => schedules.hasSession(sessionId),
 )
 // Video goes to the host itself, or to a paired owner device holding Computer use, as every other computer call does.
-const computerVideo = new RtcViewers(
-  new VideoFeed(),
-  (threadId, deviceId) =>
-    !!computer.session(threadId) &&
+const computerVideo = new RtcViewers(new VideoFeed(), async (threadId, deviceId) => {
+  const session = computer.session(threadId)
+  const allowed =
+    !!session &&
     (deviceId === 'local' ||
       (devices.list().some((device) => device.id === deviceId && device.role !== 'viewer') &&
-        devices.allows(deviceId, 'computer'))),
-)
+        devices.allows(deviceId, 'computer')))
+  // A window's video goes blank behind the lock screen; ending it sends the viewer back to snapshots, which still work.
+  return allowed && (session.target.kind !== 'app' || !(await computer.backend.locked?.()))
+})
 const ocuBackend = new OcuBackend(
   undefined,
   undefined,
