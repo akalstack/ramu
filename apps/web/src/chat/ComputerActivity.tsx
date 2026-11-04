@@ -5,7 +5,7 @@ import { floatLiveView } from '../liveView/liveViewStore'
 import { OPEN_COMPUTER_EVENT } from './openComputer'
 import { useAppSettings } from '../settings/AppSettings'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
-import { COMPUTER_FRAME_STALE_MS, type ComputerAction } from '@ramu/shared/computerBridge'
+import { COMPUTER_FRAME_STALE_MS, MAX_COMPUTER_TEXT, type ComputerAction } from '@ramu/shared/computerBridge'
 import {
   LOCAL_INPUT_LIMIT,
   computerKeyAction,
@@ -176,14 +176,34 @@ function Viewer({
   const surface = live && video.width ? { width: video.width, height: video.height } : frame
   // Input goes out one action at a time, so a typed word or a shortcut never arrives out of order.
   const queue = useRef<Promise<void>>(Promise.resolve())
+  // Text typed while earlier input is still on its way joins one action, so a password does not cost a round trip per
+  // character. Anything else closes the run, which keeps keys in the order they were pressed.
+  const typing = useRef<{ text: string } | null>(null)
   const send = (action: ComputerAction) => {
     if (!canWrite() || !human) return
     if (!live && (!frame || stale)) return
     const generation = live ? liveSession.generation : frame!.generation
     const capturedAt = live ? Date.now() : frame!.capturedAt
-    queue.current = queue.current.then(() =>
-      run(() => invoke('computer.input', taskId, generation, capturedAt, action)),
-    )
+    if (
+      action.kind === 'type' &&
+      typing.current &&
+      typing.current.text.length + action.text.length <= MAX_COMPUTER_TEXT
+    ) {
+      typing.current.text += action.text
+      return
+    }
+    const deliver = (next: ComputerAction) => run(() => invoke('computer.input', taskId, generation, capturedAt, next))
+    if (action.kind === 'type') {
+      const pending = { text: action.text }
+      typing.current = pending
+      queue.current = queue.current.then(() => {
+        if (typing.current === pending) typing.current = null
+        return deliver({ kind: 'type', text: pending.text })
+      })
+      return
+    }
+    typing.current = null
+    queue.current = queue.current.then(() => deliver(action))
   }
   const videoElement = useRef<HTMLVideoElement>(null)
   useEffect(() => {
@@ -291,7 +311,7 @@ function Viewer({
           }
           className={cn(
             'relative min-h-0 flex-1 overflow-hidden rounded-lg bg-black/80 outline-none select-none',
-            human && 'cursor-crosshair',
+            human && 'cursor-default',
             capturing && 'ring-2 ring-primary',
           )}
           onFocus={() => setCapturing(human)}
