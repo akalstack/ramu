@@ -16,9 +16,10 @@ export const MARK_VIEW_BOX = `${MARK.origin} ${MARK.origin} ${MARK.size} ${MARK.
 
 /**
  * The launch image is the 1024-unit artwork drawn this many points wide (the phone's splash `imageWidth`), so the
- * startup mark is this size and sits where the launch image left it.
+ * startup mark is this size and sits where the launch image left it: 80 points, which reads as a logo rather than a
+ * poster on a phone and in a desktop window alike.
  */
-export const LAUNCH_IMAGE_WIDTH = 200
+export const LAUNCH_IMAGE_WIDTH = 152
 export const STARTUP_MARK_SIZE = (LAUNCH_IMAGE_WIDTH * MARK.size) / 1024
 
 /** How the mark wakes: the stem rocks back and the dot hops up and over, then both settle. Startup and tap share it. */

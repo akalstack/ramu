@@ -2,18 +2,11 @@ import { reducedMotion } from './workspace/panelMotion'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import icon from '../../../assets/icon.svg'
 import wordmark from '../../../assets/wordmark.svg'
 import { MARK, MARK_VIEW_BOX, MARK_WAKE, STARTUP_FADE, STARTUP_MARK_SIZE } from '@ramu/shared/brandMark'
 
 // Shared across screen mounts, reset when the app's renderer starts again.
 let markRevealed = false
-
-/** The approved flat app icon, shared with the desktop and README assets. */
-export function BrandMark({ size, className }: { size: number; className?: string }) {
-  useLanguage()
-  return <img className={className} src={icon} width={size} height={size} alt="" draggable={false} />
-}
 
 /** The same r + dot as the app icon, without its tile, for quiet empty states. */
 export function AnimatedMark({ size, className = '' }: { size: number; className?: string }) {
@@ -74,8 +67,12 @@ export function RamuGlyph({ size, className }: { size: number; className?: strin
 export function BootScreen() {
   useLanguage()
   return (
+    // The startup screen's mark at its size and place, so a slow settings read looks like the same screen held.
     <div className="boot h-full grid place-items-center bg-canvas" role="status" aria-label={t('Starting Ramu')}>
-      <BrandMark className="boot-mark [animation:ramu-boot_700ms_cubic-bezier(.22,_1,_.36,_1)_both]" size={104} />
+      <svg width={STARTUP_MARK_SIZE} height={STARTUP_MARK_SIZE} viewBox={MARK_VIEW_BOX} fill="none" aria-hidden="true">
+        <path d={MARK.stem} style={{ stroke: 'var(--brand-mark)' }} strokeWidth="120" strokeLinecap="round" />
+        <circle {...MARK.dot} fill={MARK.dotColor} />
+      </svg>
     </div>
   )
 }

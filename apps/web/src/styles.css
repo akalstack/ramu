@@ -1061,20 +1061,9 @@ kbd {
     transform: translateY(0) scale(1);
   }
 }
-@keyframes ramu-boot {
-  0% {
-    opacity: 0;
-    transform: translateY(8px) scale(0.9);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .animated-mark-reveal .animated-mark-stem,
-  .animated-mark-reveal .animated-mark-dot,
-  .boot-mark {
+  .animated-mark-reveal .animated-mark-dot {
     @apply [animation:none];
   }
 }
