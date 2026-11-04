@@ -68,6 +68,7 @@ import { loadConfig } from './config'
 import { DeviceStore, isHostAccess, validLifetime, type DeviceInfo } from './remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
 import { PermissionRequests } from './remote/permissionRequests'
+import { PairBackInvites } from './remote/pairBackInvites'
 import { deviceOsSchema, readHostOs } from './remote/hostOs'
 import {
   DEVICE_PERMISSIONS,
@@ -146,6 +147,10 @@ const pairingRequests = new PairingRequests({
 const hostOs = readHostOs()
 const permissionRequests = new PermissionRequests(Date.now, (requests) => {
   const message = `data: ${JSON.stringify({ channel: 'permission:requests', payload: { requests } })}\n\n`
+  for (const client of hostClients) if (!client.destroyed) writeEvent(client, message)
+})
+const pairBackInvites = new PairBackInvites(Date.now, (invites) => {
+  const message = `data: ${JSON.stringify({ channel: 'pairBack:invites', payload: { invites } })}\n\n`
   for (const client of hostClients) if (!client.destroyed) writeEvent(client, message)
 })
 const remoteAccess = new RemoteAccess({
@@ -833,6 +838,9 @@ async function performInvoke(
         'The host declined this permission. Ask the person there to allow it in Settings → Remote access.',
       )
     permissionRequests.ask(device, args[0])
+  } else if (method === 'device.inviteBack') {
+    if (!device) throw new Error('This computer is already here.')
+    pairBackInvites.invite(device, args?.[0])
   } else if (method === 'browser.bridge.attach') {
     if (remote || typeof args?.[0] !== 'string' || !desktopClients.has(args[0]))
       throw new Error('A local desktop event stream is required.')
@@ -1795,9 +1803,15 @@ async function networkMethod(method: string, args: unknown[]) {
     await link.deleteAccount()
     return networkStatus()
   }
+  if (method === 'network.pairBackInvites') return pairBackInvites.list()
+  if (method === 'network.dismissPairBack') {
+    pairBackInvites.dismiss(z.string().max(100).parse(args[0]))
+    return
+  }
   if (method === 'network.revoke') {
     if (typeof args[0] !== 'string') throw new Error('Invalid device')
     devices.revoke(args[0])
+    pairBackInvites.forget(args[0])
     dropRevoked()
     return networkStatus()
   }

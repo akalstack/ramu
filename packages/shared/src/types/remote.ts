@@ -153,6 +153,21 @@ export interface NetworkSettingsInput {
   /** Let nearby devices see this host's name. Leave out to keep the saved choice. */
   discoverable?: boolean
 }
+/**
+ * A paired computer inviting this host to connect back to it: the person there chose it, and the person here accepts by
+ * connecting. It carries a one-time code for that computer, never a token of this host.
+ */
+export interface PairBackInvite {
+  id: string
+  /** The paired device that sent it. */
+  deviceId: string
+  /** That computer's name, as it introduces itself. */
+  name: string
+  /** Its addresses, tried in order; Ramu Link's comes last. */
+  urls: string[]
+  code: string
+  expiresAt: number
+}
 export interface PairingOffer {
   /** Non-secret handle for cancelling this offer or asking what became of it. */
   offerId: string

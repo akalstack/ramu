@@ -8,6 +8,8 @@ A **host** is a computer that runs Ramu's workspace server: your agents, termina
 
 **Hosts you use** lists every host this computer works on. **Add a host** offers hosts on your Ramu Link account first, then hosts nearby, then one field that takes a pairing link, an address and code, or an SSH host (`user@host` or a name from `~/.ssh/config`). Each host shows its status and route, **Open**, and under ⋯ its **Connection settings…**, **Pause connection** and **Forget…**. A paused host shows **Resume**. A host's row also has **Agents here can start threads on** that host, and names any permission this computer lacks there with one **Request** for all of it; **Connection settings…** lists each permission. On the phone, Settings → Remote access shows the same for the selected host.
 
+To work both ways, choose **Let {host} connect here…** under a connected host's ⋯. Ramu makes a code on this computer and asks on that host; once its owner taps **Connect**, each computer can open the other, and this one lists it under **Devices that can use this host**. Nobody types a code, and nothing connects until that owner accepts.
+
 To have agents use another computer's screen, add that computer as a host and run the thread there; each host's agents use only its own screen.
 
 **Let other devices use this host** decides who can reach this computer:

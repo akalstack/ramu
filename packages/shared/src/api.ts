@@ -589,6 +589,12 @@ export interface RamuMethods {
   'device.requestPermission'(permission: import('./devicePermissions').DevicePermission): void
   /** A one-time code that only pairs this device's own computer for agents. Needs the Agents permission. */
   'device.agentPairing'(): { code: string }
+  /** Invites the person at this host to connect back to the calling computer with the code it made for that. */
+  'device.inviteBack'(invite: Pick<import('./types').PairBackInvite, 'name' | 'urls' | 'code' | 'expiresAt'>): void
+  /** Invitations from paired computers to connect back to them. Host only. */
+  'network.pairBackInvites'(): import('./types').PairBackInvite[]
+  /** Answers an invitation, accepted or not, so it is not offered again. Host only. */
+  'network.dismissPairBack'(id: string): void
   'network.revoke'(deviceId: string): NetworkStatus
   /** Days an unused device stays paired (1 to 3650), `never`, or null for the server default. Host-only, like the rest of `network.*`. */
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus
@@ -1341,6 +1347,7 @@ export type PushEvents = {
   'device:permissions': Record<string, never>
   /** Nearby devices waiting for the person at this host to allow them. Sent only to apps on the host itself. */
   'pairing:requests': { requests: NetworkStatus['requests'] }
+  'pairBack:invites': { invites: import('./types').PairBackInvite[] }
   /** Paired devices asking for a permission, waiting for the person here. Sent only to apps on the host itself. */
   'permission:requests': { requests: NetworkStatus['permissionRequests'] }
   /** Link state changed; Settings reads `network.status` again. Sent only to apps on the host itself. */

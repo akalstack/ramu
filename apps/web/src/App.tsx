@@ -58,6 +58,7 @@ import { CreatePullRequestHost } from './git/CreatePullRequestHost'
 import { openPublishRepository, PublishRepositoryHost } from './git/PublishRepositoryHost'
 import { PairingRequestDialog } from './settings/PairingRequestDialog'
 import { PermissionRequestDialog } from './settings/PermissionRequestDialog'
+import { PairBackDialog } from './settings/PairBackDialog'
 import { Notifications, notifyError } from './chat/Notifications'
 import { SummaryHost } from './summaries/SummaryHost'
 import { TitleTooltips } from './TitleTooltips'
@@ -776,6 +777,7 @@ function Shell() {
       <Notifications />
       <PairingRequestDialog />
       <PermissionRequestDialog />
+      <PairBackDialog />
       <TitleTooltips />
       <Fragment key={`dialogs:${shownHost}`}>
         <ProviderSetupTerminal />

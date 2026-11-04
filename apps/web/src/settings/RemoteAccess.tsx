@@ -31,7 +31,8 @@ import { RowButton } from '@/components/row-button'
 import { Dialog as ConfirmDialog, Dropdown, Menu, timeAgo } from '../Menu'
 import { learnedRoutes } from '@ramu/shared/hostProof'
 import { hostOfUrl, networkName, VIRTUAL_INTERFACE } from '@ramu/shared/networkLabel'
-import { copyText, invoke, invokeUncachedOn, ramu } from '../ipc'
+import { copyText, invoke, invokeOn, invokeUncachedOn, ramu } from '../ipc'
+import { ownHostId } from '../hosts'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
 import { t, useLanguage } from '../i18n'
@@ -704,6 +705,7 @@ function Computers({ state }: { state: ComputerList }) {
   const [adding, setAdding] = useState<{ link?: string; repair?: Computer } | null>(null),
     [editing, setEditing] = useState<string | null>(null)
   const [forgetting, setForgetting] = useState<string | null>(null)
+  const [inviting, setInviting] = useState<Computer | null>(null)
   const others = state.computers.filter((computer) => !computer.local)
   const [agentHosts, setAgentHosts] = useState<AgentHostSummary[] | null>(null)
   const [everywhere, setEverywhere] = useState({ on: false, seq: 0 })
@@ -838,6 +840,15 @@ function Computers({ state }: { state: ComputerList }) {
                     disabled={busy}
                     items={[
                       { key: 'settings', label: t('Connection settings…'), onSelect: () => setEditing(computer.id) },
+                      ...(computer.status === 'connected'
+                        ? [
+                            {
+                              key: 'invite',
+                              label: t('Let {0} connect here…', { 0: computer.name }),
+                              onSelect: () => setInviting(computer),
+                            },
+                          ]
+                        : []),
                       ...(computer.status === 'paused' || computer.status === 'rejected'
                         ? []
                         : [
@@ -888,6 +899,13 @@ function Computers({ state }: { state: ComputerList }) {
         </div>
       )}
       {adding && <AddHostDialog {...adding} onClose={() => setAdding(null)} />}
+      {inviting && (
+        <InviteBackDialog
+          computer={inviting}
+          from={state.computers.find((computer) => computer.local)?.name ?? state.deviceName}
+          onClose={() => setInviting(null)}
+        />
+      )}
       {selected && <ComputerSettings key={selected.id} computer={selected} onClose={() => setEditing(null)} />}
       {forgetting !== null && (
         <ConfirmDialog
@@ -909,6 +927,97 @@ function Computers({ state }: { state: ComputerList }) {
         </ConfirmDialog>
       )}
     </Section>
+  )
+}
+
+/**
+ * Invites a host to connect back to this computer, so each can open the other. This computer makes a full-access code
+ * and hands it to that host, whose owner connects with one tap; nobody types it, and nothing connects until they do.
+ */
+function InviteBackDialog({ computer, from, onClose }: { computer: Computer; from: string; onClose: () => void }) {
+  useLanguage()
+  const own = ownHostId()
+  const [reachable, setReachable] = useState<boolean | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const owner = useRef(crypto.randomUUID()).current
+  useEffect(() => {
+    void invokeOn(own, 'network.status').then(
+      (status) => setReachable(status.reachable),
+      () => setReachable(false),
+    )
+  }, [own])
+  const send = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const offer = await invokeOn(own, 'network.pair', 'owner', owner)
+      if (!offer.urls.length) throw new Error(t('This computer has no address another host can reach yet.'))
+      await invokeOn(computer.id, 'device.inviteBack', {
+        name: from,
+        urls: offer.urls.map((entry) => entry.url),
+        code: offer.code,
+        expiresAt: offer.expiresAt,
+      })
+      setSent(true)
+    } catch (reason) {
+      const message = errorText(reason)
+      setError(/unknown method/i.test(message) ? t('Update Ramu on {0} to use this.', { 0: computer.name }) : message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose()
+      }}
+    >
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>
+            {sent
+              ? t('Invitation sent to {0}', { 0: computer.name })
+              : t('Let {0} connect here?', { 0: computer.name })}
+          </DialogTitle>
+          <DialogDescription>
+            {sent
+              ? t(
+                  'Ramu asks on {0}. Once its owner connects, it appears under Devices that can use this host, where you can revoke it.',
+                  { 0: computer.name },
+                )
+              : t(
+                  '{0} will be able to open this computer’s threads, files and terminals, with full access. Ramu asks on {0} first; nothing connects until its owner accepts.',
+                  { 0: computer.name },
+                )}
+          </DialogDescription>
+        </DialogHeader>
+        {reachable === false && !sent && (
+          <p role="status" className="m-0 text-caption text-muted-foreground">
+            {t('Turn on Ramu Link or Local network or VPN below first, so {0} can reach this computer.', {
+              0: computer.name,
+            })}
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="m-0 text-caption text-bad">
+            {error}
+          </p>
+        )}
+        <DialogFooter>
+          <Button variant={sent ? 'default' : 'secondary'} disabled={busy} onClick={onClose}>
+            {sent ? t('Done') : t('Cancel')}
+          </Button>
+          {!sent && (
+            <Button variant="default" disabled={busy || !reachable} onClick={() => void send()}>
+              {busy ? t('Sending…') : t('Send invitation')}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
