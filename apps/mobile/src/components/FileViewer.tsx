@@ -1,5 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Linking, ScrollView, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { SvgXml } from 'react-native-svg'
 import { Check, Copy, FileQuestion, FolderSearch, Pencil, X } from 'lucide-react-native'
@@ -19,7 +19,7 @@ import { Markdown, ReferenceContext, type ReferenceActions } from '../components
 import { markdownLinkTarget, previewImagePath } from '@ramu/shared/workspace/fileLinks'
 import { useOpenLink } from '../runtime/openFile'
 import { diffMethod, type Revision } from '../runtime/gitRevision'
-import { Button, Segmented, T, tap } from '../components/ui'
+import { Button, Segmented, T } from '../components/ui'
 
 type Mode = 'file' | 'changes' | 'staged' | 'revision'
 const IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i
@@ -506,27 +506,20 @@ export function FileViewer({
             style={{ flex: 1 }}
           />
         )}
-        {(markdown || svg) && state.kind === 'text' ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              tap()
-              setPreview((p) => !p)
-            }}
-            style={{
-              height: 40,
-              paddingHorizontal: space.m,
-              borderRadius: radius.m,
-              justifyContent: 'center',
-              backgroundColor: c.raised2,
-            }}
-          >
-            <T size={font.control} weight="500" tone="text">
-              {preview ? 'Source' : 'Preview'}
-            </T>
-          </Pressable>
-        ) : null}
       </View>
+      {/* How the file reads is a choice about its content, so it sits with the content, not beside the tabs. */}
+      {(markdown || svg) && state.kind === 'text' && mode === 'file' ? (
+        <Segmented<'preview' | 'source'>
+          small
+          value={preview ? 'preview' : 'source'}
+          onChange={(next) => setPreview(next === 'preview')}
+          options={[
+            { key: 'preview', label: say('Preview') },
+            { key: 'source', label: say('Source') },
+          ]}
+          style={{ alignSelf: 'flex-end', width: 180 }}
+        />
+      ) : null}
     </View>
   )
 

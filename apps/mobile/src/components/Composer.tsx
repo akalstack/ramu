@@ -191,10 +191,14 @@ export function ModelChip({
     setProvider(null)
     setQuery('')
   }
-  const commit = (m: ModelRow, chosen: string) => {
-    onChange({ settings: value.settings, provider: m.provider, model: m.model, effort: chosen })
+  // The picker closes first and the choice applies once it has gone: a model change mid-conversation asks for
+  // confirmation, and iOS cannot show that alert over a full-screen picker that is still closing, so it was dropped.
+  const choose = (choice: ModelChoice) => {
     close()
+    setTimeout(() => onChange(choice), Platform.OS === 'ios' ? 450 : 0)
   }
+  const commit = (m: ModelRow, chosen: string) =>
+    choose({ settings: value.settings, provider: m.provider, model: m.model, effort: chosen })
   // One provider's models, or with a query and no provider every model that matches, across providers.
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -396,10 +400,7 @@ export function ModelChip({
               models={models}
               prefs={store.modelPrefs[computerId ?? store.selected]}
               computerId={computerId ?? store.selected}
-              onChange={(choice) => {
-                onChange(choice)
-                close()
-              }}
+              onChange={choose}
             />
             {/* Models straight away, as on the desktop: each provider's first few, with the rest one tap further. */}
             {providers.map((p) => {
