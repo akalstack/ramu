@@ -51,7 +51,7 @@ For packaged macOS checks, run `RAMU_PACKAGED_EXECUTABLE=/path/to/Ramu pnpm test
 
 ## Updates and the background service
 
-The app checks stable releases from `ahxar/ramu`; drafts and prereleases are excluded. Tags with a hyphen (`v0.2.0-alpha.1`) publish as prereleases and are installed manually; a plain `vX.Y.Z` tag is the stable channel that updates reach. Downloads require a matching ZIP and checksum file. Automatic installation requires a signed macOS app and compatible signed ZIP. Unsigned macOS and other platforms use manual installation.
+The app checks stable releases from `akalstack/ramu`; drafts and prereleases are excluded. Tags with a hyphen (`v0.2.0-alpha.1`) publish as prereleases and are installed manually; a plain `vX.Y.Z` tag is the stable channel that updates reach. Downloads require a matching ZIP and checksum file. Automatic installation requires a signed macOS app and compatible signed ZIP. Unsigned macOS and other platforms use manual installation.
 
 Auto-update stays off (`APP_AUTO_UPDATE` in `packages/shared/src/updates.ts`) until builds are signed with an Apple Developer ID. The service still checks for releases, and Settings links to the GitHub release for a manual install. Once signed builds ship, set the flag to `true` to restore the **Auto-update Ramu** setting and in-app downloads.
 

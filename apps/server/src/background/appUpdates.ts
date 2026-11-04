@@ -7,7 +7,7 @@ import { newerVersion } from '@ramu/shared/version'
 import { APP_AUTO_UPDATE, type AppRelease, type AppUpdateStatus } from '@ramu/shared/updates'
 import type { AppPreferences } from '@ramu/shared/types'
 
-export const RAMU_RELEASES = 'https://github.com/ahxar/ramu/releases'
+export const RAMU_RELEASES = 'https://github.com/akalstack/ramu/releases'
 const assetSchema = z.object({
   name: z.string(),
   size: z.number().int().positive(),
@@ -24,7 +24,7 @@ const releaseSchema = z.object({
 export function releaseAssetUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
-    return parsed.origin === 'https://github.com' && parsed.pathname.startsWith('/ahxar/ramu/releases/download/')
+    return parsed.origin === 'https://github.com' && parsed.pathname.startsWith('/akalstack/ramu/releases/download/')
   } catch {
     return false
   }
@@ -146,7 +146,7 @@ export class AppUpdateService {
       const ready = this.state.phase === 'ready'
       this.change({ phase: 'checking', error: null })
       try {
-        const response = await fetch('https://api.github.com/repos/ahxar/ramu/releases/latest', {
+        const response = await fetch('https://api.github.com/repos/akalstack/ramu/releases/latest', {
           signal: AbortSignal.any([AbortSignal.timeout(20_000), this.abort.signal]),
           headers: {
             Accept: 'application/vnd.github+json',

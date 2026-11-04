@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Backdrop } from './Backdrop'
 
-const REPO = 'https://github.com/ahxar/ramu'
+const REPO = 'https://github.com/akalstack/ramu'
 const RELEASES = `${REPO}/releases`
 
 type Provider = { id: string; name: string; logo: string; signIn: string }
@@ -453,7 +453,7 @@ function Source() {
       <div className="terminal" role="img" aria-label="Terminal commands to run Ramu from source">
         <pre>
           <code>
-            <span className="t-dim">$ </span>git clone https://github.com/ahxar/ramu.git{'\n'}
+            <span className="t-dim">$ </span>git clone https://github.com/akalstack/ramu.git{'\n'}
             <span className="t-dim">$ </span>cd ramu{'\n'}
             <span className="t-dim">$ </span>pnpm install --frozen-lockfile{'\n'}
             <span className="t-dim">$ </span>pnpm dev{'\n'}

@@ -22,18 +22,18 @@ const fixture = (body: string) => ({
   tag_name: 'v0.2.0',
   draft: false,
   prerelease: false,
-  html_url: 'https://github.com/ahxar/ramu/releases/tag/v0.2.0',
+  html_url: 'https://github.com/akalstack/ramu/releases/tag/v0.2.0',
   published_at: '2026-10-12T00:00:00Z',
   assets: [
     {
       name: `${process.platform}-${process.arch}-Ramu.zip`,
       size: body.length,
-      browser_download_url: 'https://github.com/ahxar/ramu/releases/download/v0.2.0/Ramu.zip',
+      browser_download_url: 'https://github.com/akalstack/ramu/releases/download/v0.2.0/Ramu.zip',
     },
     {
       name: `SHA256SUMS-${process.platform}-${process.arch}.txt`,
       size: 80,
-      browser_download_url: 'https://github.com/ahxar/ramu/releases/download/v0.2.0/SHA256SUMS.txt',
+      browser_download_url: 'https://github.com/akalstack/ramu/releases/download/v0.2.0/SHA256SUMS.txt',
     },
   ],
 })

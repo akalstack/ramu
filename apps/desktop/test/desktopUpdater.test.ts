@@ -39,11 +39,11 @@ const status = (version: string): AppUpdateStatus => ({
   downloadedBytes: 3,
   release: {
     version,
-    notesUrl: `https://github.com/ahxar/ramu/releases/tag/v${version}`,
+    notesUrl: `https://github.com/akalstack/ramu/releases/tag/v${version}`,
     publishedAt: '2026-10-12T00:00:00Z',
     assetName: 'darwin-arm64-Ramu.zip',
-    assetUrl: 'https://github.com/ahxar/ramu/releases/download/v0.3.0/Ramu.zip',
-    checksumsUrl: 'https://github.com/ahxar/ramu/releases/download/v0.3.0/SHA256SUMS.txt',
+    assetUrl: 'https://github.com/akalstack/ramu/releases/download/v0.3.0/Ramu.zip',
+    checksumsUrl: 'https://github.com/akalstack/ramu/releases/download/v0.3.0/SHA256SUMS.txt',
     size: 3,
   },
 })

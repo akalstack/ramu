@@ -8,9 +8,9 @@
 <p align="center">An open-source workspace for coding with agents, on desktop and mobile.</p>
 
 <p align="center">
-  <a href="https://github.com/ahxar/ramu/actions/workflows/ci.yml"><img src="https://github.com/ahxar/ramu/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/akalstack/ramu/actions/workflows/ci.yml"><img src="https://github.com/akalstack/ramu/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6" alt="License: MIT" /></a>
-  <a href="https://github.com/ahxar/ramu/releases">Downloads</a> ·
+  <a href="https://github.com/akalstack/ramu/releases">Downloads</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
@@ -45,7 +45,7 @@ Provider capabilities vary. Agents run on your host, which must stay awake; mobi
 
 ## Get started
 
-Download installers and SHA-256 checksums from [GitHub Releases](https://github.com/ahxar/ramu/releases).
+Download installers and SHA-256 checksums from [GitHub Releases](https://github.com/akalstack/ramu/releases).
 
 Ramu is in alpha. Release targets are **macOS arm64/x64** and **Linux x64**; Linux packaged GUI validation is pending. Windows is not supported yet. CI macOS builds are unsigned and not notarized. Install alpha updates manually; automatic installation requires a signed macOS app and excludes prereleases.
 
@@ -56,7 +56,7 @@ Install and sign in to an agent provider, select it in **Settings → Providers*
 Requires Git, Node.js 24 and pnpm 11.21.0. Project search and replace use your [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) when installed, and otherwise the copy inside the bundled Claude binary. Native dependencies may need Python 3 and a C/C++ toolchain (Xcode Command Line Tools on macOS; `build-essential` on Debian/Ubuntu).
 
 ```sh
-git clone https://github.com/ahxar/ramu.git
+git clone https://github.com/akalstack/ramu.git
 cd ramu
 npm install --global pnpm@11.21.0
 pnpm install --frozen-lockfile
@@ -75,7 +75,7 @@ Built with Electron, React, React Native, and TypeScript. See the [architecture]
 | `pnpm make` | Build installers for the current platform |
 | `pnpm server serve` | Run the workspace server without the desktop app (after `pnpm build`) |
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and validation requirements. [Report bugs or request features](https://github.com/ahxar/ramu/issues/new/choose); report vulnerabilities through [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and validation requirements. [Report bugs or request features](https://github.com/akalstack/ramu/issues/new/choose); report vulnerabilities through [SECURITY.md](SECURITY.md).
 
 ## Docs
 

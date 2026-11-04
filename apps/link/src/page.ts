@@ -240,7 +240,7 @@ const LEGAL = {
   terms: {
     en: {
       title: 'Ramu Link terms',
-      body: `<p>Ramu is free, open-source software. The app is under the MIT license, and this service under the <a href="https://github.com/ahxar/ramu/tree/main/apps/link">AGPL-3.0</a>. These terms cover only the hosted Ramu Link service.</p>
+      body: `<p>Ramu is free, open-source software. The app is under the MIT license, and this service under the <a href="https://github.com/akalstack/ramu/tree/main/apps/link">AGPL-3.0</a>. These terms cover only the hosted Ramu Link service.</p>
 <h2>Plans</h2>
 <ul>
 <li><strong>Free</strong> links up to 3 computers and relays up to 60 hours a month. The count starts again on the first of each month (UTC). Direct connections never count.</li>
@@ -251,11 +251,11 @@ const LEGAL = {
 <h2>Payment and cancelling</h2>
 <p>Paddle sells Plus as merchant of record, so its checkout terms apply to the payment. Cancel at any time; Plus continues until the end of the period paid for. If Plus ends, nothing is deleted: computers beyond the Free plan's 3 stay listed and stop taking relayed connections until you unlink some or renew.</p>
 <h2>The service</h2>
-<p>Ramu Link is provided as is, without warranty. It may change, and these terms with it; a change that affects a paid plan is announced before it applies. You can always run your own Ramu Link from <a href="https://github.com/ahxar/ramu/tree/main/apps/link">its source code</a>.</p>`,
+<p>Ramu Link is provided as is, without warranty. It may change, and these terms with it; a change that affects a paid plan is announced before it applies. You can always run your own Ramu Link from <a href="https://github.com/akalstack/ramu/tree/main/apps/link">its source code</a>.</p>`,
     },
     id: {
       title: 'Ketentuan Ramu Link',
-      body: `<p>Ramu adalah perangkat lunak gratis dan open source. Aplikasinya berlisensi MIT, dan layanan ini berlisensi <a href="https://github.com/ahxar/ramu/tree/main/apps/link">AGPL-3.0</a>. Ketentuan ini hanya untuk layanan Ramu Link yang dihosting.</p>
+      body: `<p>Ramu adalah perangkat lunak gratis dan open source. Aplikasinya berlisensi MIT, dan layanan ini berlisensi <a href="https://github.com/akalstack/ramu/tree/main/apps/link">AGPL-3.0</a>. Ketentuan ini hanya untuk layanan Ramu Link yang dihosting.</p>
 <h2>Paket</h2>
 <ul>
 <li><strong>Free</strong> menautkan hingga 3 komputer dan me-relay hingga 60 jam per bulan. Hitungan mulai lagi setiap tanggal 1 (UTC). Koneksi langsung tidak pernah dihitung.</li>
@@ -266,7 +266,7 @@ const LEGAL = {
 <h2>Pembayaran dan pembatalan</h2>
 <p>Paddle menjual Plus sebagai merchant of record, jadi ketentuan checkout-nya berlaku untuk pembayaran. Batalkan kapan saja; Plus berlanjut sampai akhir periode yang sudah dibayar. Jika Plus berakhir, tidak ada yang dihapus: komputer di luar 3 milik paket Free tetap terdaftar dan berhenti menerima koneksi relay sampai Anda melepas beberapa atau memperpanjang.</p>
 <h2>Layanan</h2>
-<p>Ramu Link disediakan apa adanya, tanpa jaminan. Layanan ini bisa berubah, begitu pula ketentuannya; perubahan yang memengaruhi paket berbayar diumumkan sebelum berlaku. Anda selalu bisa menjalankan Ramu Link sendiri dari <a href="https://github.com/ahxar/ramu/tree/main/apps/link">kode sumbernya</a>.</p>`,
+<p>Ramu Link disediakan apa adanya, tanpa jaminan. Layanan ini bisa berubah, begitu pula ketentuannya; perubahan yang memengaruhi paket berbayar diumumkan sebelum berlaku. Anda selalu bisa menjalankan Ramu Link sendiri dari <a href="https://github.com/akalstack/ramu/tree/main/apps/link">kode sumbernya</a>.</p>`,
     },
   },
 } as const

@@ -7,7 +7,7 @@ import { HostUpdater, isSupervised, sourceCheckout, type HostUpdateDeps } from '
 
 const release = {
   version: '0.2.0',
-  notesUrl: 'https://github.com/ahxar/ramu/releases/tag/v0.2.0',
+  notesUrl: 'https://github.com/akalstack/ramu/releases/tag/v0.2.0',
   publishedAt: '',
   assetUrl: '',
   assetName: 'a.zip',

@@ -1,6 +1,6 @@
 # Trademarks
 
-The code licenses ([MIT](LICENSE) and, for `apps/link`, [AGPL-3.0](apps/link/LICENSE)) cover the code only. They grant no rights to the names **Ramu** and **Ramu Link**, the Ramu logo or the icon in [`assets/branding`](assets/branding). These belong to the Ramu project, maintained by [ahxar](https://github.com/ahxar).
+The code licenses ([MIT](LICENSE) and, for `apps/link`, [AGPL-3.0](apps/link/LICENSE)) cover the code only. They grant no rights to the names **Ramu** and **Ramu Link**, the Ramu logo or the icon in [`assets/branding`](assets/branding). These belong to the Ramu project, maintained by [Akalstack](https://github.com/akalstack).
 
 ## You can, without asking
 

@@ -53,12 +53,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ahxar/ramu.git"
+    "url": "git+https://github.com/akalstack/ramu.git"
   },
   "bugs": {
-    "url": "https://github.com/ahxar/ramu/issues"
+    "url": "https://github.com/akalstack/ramu/issues"
   },
-  "homepage": "https://github.com/ahxar/ramu#readme",
+  "homepage": "https://github.com/akalstack/ramu#readme",
   "enriched-markdown": {
     "enableMath": false
   }

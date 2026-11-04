@@ -78,7 +78,7 @@ module.exports = {
           productName: 'Ramu',
           bin: 'Ramu',
           maintainer: 'Ramu contributors',
-          homepage: 'https://github.com/ahxar/ramu',
+          homepage: 'https://github.com/akalstack/ramu',
           icon: join(repoRoot, 'assets', 'icon.png'),
           categories: ['Development'],
         },
