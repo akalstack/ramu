@@ -106,6 +106,22 @@ if (process.env.RAMU_USER_DATA) app.setPath('userData', process.env.RAMU_USER_DA
 // End-to-end runs stay out of the way: windows are created hidden and unfocused, and macOS shows no Dock icon.
 // Hidden pages would otherwise be throttled, so throttling is off; tests emulate focus through Playwright.
 /** One window shows only so many chats; anything longer is not this app asking. */
+
+/**
+ * Starts the app again. Under `pnpm dev` electron-vite ends with this process, which would leave a relaunched app on a
+ * dev server that is gone, so it exits with the code scripts/dev.mjs restarts electron-vite on; cleanup still runs first.
+ */
+function relaunch() {
+  const code = Number(process.env.RAMU_DEV_RELAUNCH)
+  if (process.env.ELECTRON_RENDERER_URL && code) {
+    app.once('will-quit', (event) => {
+      event.preventDefault()
+      app.exit(code)
+    })
+  } else app.relaunch()
+  app.quit()
+}
+
 const MAX_FOLLOWED_THREADS = 64
 const e2eHeadless = process.env.RAMU_E2E_HEADLESS === '1'
 // The background service opened the app only to show a nearby device's pairing request; the window waits for a click.
@@ -1316,14 +1332,12 @@ async function main() {
       }
       await ensureRuntime(userData, daemonPath)
       if (startup) loginService(userData, daemonPath, true)
-      app.relaunch()
-      app.quit()
+      relaunch()
       return
     }
     if (method === 'app.relaunch') {
       if (remote) throw new Error(t('Not available while connected to another host'))
-      app.relaunch()
-      app.quit()
+      relaunch()
       return
     }
     if (method === 'updates.restart') {
