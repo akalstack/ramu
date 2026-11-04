@@ -327,6 +327,8 @@ const ocuBackend = new OcuBackend(
   () => workspace.getAppState<boolean>('computer:globalPointer', false) === true,
 )
 const computer = new ComputerService(new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), ocuBackend))
+// With computer use on, the native helpers are ready before the first frame or click needs them.
+if (workspace.getAppState<boolean>('computer:enabled', false) === true) computer.backend.warm?.()
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {

@@ -128,13 +128,28 @@ describe('physical input detection on macOS', () => {
   it('treats recent input as the person unless Ramu injected it', async () => {
     let idle = 300_000_000
     const exec = vi.fn(async (file: string) => (file.endsWith('ioreg') ? registry(idle) : ''))
-    const backend = new MacosComputerBackend(exec, 'darwin')
-    expect(await backend.localInputActive()).toBe(true)
-    idle = 5_000_000_000
-    expect(await backend.localInputActive()).toBe(false)
-    await backend.perform(display, { kind: 'key', key: 'a' })
-    idle = 50_000_000
-    expect(await backend.localInputActive()).toBe(false)
+    const backend = new MacosComputerBackend(
+      exec,
+      'darwin',
+      () => 'Mac',
+      async () => null,
+    )
+    // A reading is reused for a few hundred milliseconds, so each check below is a fresh one.
+    let now = 1_000_000
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    try {
+      expect(await backend.localInputActive()).toBe(true)
+      idle = 5_000_000_000
+      now += 1000
+      expect(await backend.localInputActive()).toBe(false)
+      await backend.perform(display, { kind: 'key', key: 'a' })
+      // Just past the reading's reuse, and still within the slack after Ramu's own key.
+      idle = 50_000_000
+      now += 420
+      expect(await backend.localInputActive()).toBe(false)
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('releases held input after an interrupted action settles', async () => {
@@ -147,7 +162,12 @@ describe('physical input detection on macOS', () => {
       }
       return ''
     })
-    const backend = new MacosComputerBackend(exec, 'darwin')
+    const backend = new MacosComputerBackend(
+      exec,
+      'darwin',
+      () => 'Mac',
+      async () => null,
+    )
     const pending = backend.perform(display, { kind: 'drag', fromX: 1, fromY: 1, toX: 9, toY: 9 })
     await new Promise((resolve) => setTimeout(resolve, 5))
     backend.releaseInput()

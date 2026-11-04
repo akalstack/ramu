@@ -171,6 +171,20 @@ export function BrowserViewer({
     const subscription = AppState.addEventListener('change', (state) => setActive(state === 'active'))
     return () => subscription.remove()
   }, [])
+  // Closing the viewer or leaving the app while in control hands the tab back to the thread's agent (or to its next
+  // run), so nobody has to resume it later. What was held is read while the app was still active; declared before the
+  // polling effect so this runs before its disconnect.
+  const handBack = useRef<{ tabId?: string; controlled: boolean }>({ controlled: false })
+  if (active) handBack.current = { tabId, controlled }
+  useEffect(() => {
+    if (!active) return
+    return () => {
+      const held = handBack.current
+      if (held.controlled && held.tabId && chat.taskId && allowed())
+        void io.current.invoke(chat.computerId, 'hostBrowser.release', chat.taskId, held.tabId).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the viewer stops being in front; the rest is read at that moment
+  }, [active])
   useEffect(() => {
     if (viewOnly || !active || !chat.taskId || !online) return
     let mounted = true

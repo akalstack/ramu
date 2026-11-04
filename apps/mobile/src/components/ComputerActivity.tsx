@@ -106,17 +106,20 @@ function ComputerViewer({
     const subscription = AppState.addEventListener('change', (state) => setActive(state === 'active'))
     return () => subscription.remove()
   }, [])
-  // Losing the viewer pauses human control whichever transport it used: backgrounding or closing releases input.
+  // Closing the viewer or leaving the app hands control back to the thread's agent, so nobody has to resume it later;
+  // without an agent the person's control pauses instead.
+  const handBack = useRef(() => {})
+  handBack.current = () => {
+    if (!writable()) return
+    void io.current
+      .invoke(chat.computerId, 'computer.giveToAgent', taskId)
+      .catch(() => io.current.invoke(chat.computerId, 'computer.disconnect', taskId))
+      .catch(() => {})
+  }
   useEffect(() => {
-    if (active) return
-    if (writable()) void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
-  }, [active, chat.computerId, taskId, writable])
-  useEffect(
-    () => () => {
-      if (writable()) void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
-    },
-    [chat.computerId, taskId, writable],
-  )
+    if (!active) handBack.current()
+  }, [active])
+  useEffect(() => () => handBack.current(), [])
   // Frames stop and the last one is dropped when the app is backgrounded, so no screen lingers in the app switcher.
   useEffect(() => {
     if (!active || live) {
@@ -159,7 +162,6 @@ function ComputerViewer({
     return () => {
       mounted = false
       clearTimeout(timer)
-      if (writable()) void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
     }
   }, [active, live, chat.computerId, taskId, writable])
   // With video there is no frame to carry the control generation, so read the session once a second.

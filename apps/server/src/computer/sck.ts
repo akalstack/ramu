@@ -179,9 +179,10 @@ export class SckDisplayBackend implements ComputerBackend {
     return this.inner.locked?.() ?? Promise.resolve(false)
   }
 
-  /** Builds the helper in the background so the first viewer does not wait for the compiler. */
+  /** Builds the helpers in the background so the first viewer and the first click do not wait for the compiler. */
   warm(): void {
     if (this.platform === 'darwin') void this.build().catch(() => {})
+    this.inner.warm?.()
   }
 
   /** Frames are already cheap, so a watched display can be read near the stream rate. */

@@ -613,7 +613,12 @@ describe('locked screen', () => {
     const { parseScreenLocked, MacosComputerBackend, LOCKED_MESSAGE } = await import('../src/computer/macos')
     expect(parseScreenLocked('<key>CGSSessionScreenIsLocked</key>\n\t\t\t<true/>')).toBe(true)
     expect(parseScreenLocked('<key>kCGSSessionOnConsoleKey</key><true/>')).toBe(false)
-    const locked = new MacosComputerBackend(async () => '<key>CGSSessionScreenIsLocked</key><true/>', 'darwin')
+    const locked = new MacosComputerBackend(
+      async () => '<key>CGSSessionScreenIsLocked</key><true/>',
+      'darwin',
+      () => 'Mac',
+      async () => null,
+    )
     await expect(locked.capture({ id: 'display:main', kind: 'display', name: 'Main' })).rejects.toThrow(LOCKED_MESSAGE)
     await expect(
       locked.perform({ id: 'display:main', kind: 'display', name: 'Main' }, { kind: 'key', key: 'a' }),
@@ -621,14 +626,25 @@ describe('locked screen', () => {
     expect(locked.status()).toMatchObject({ available: false, reason: 'locked' })
   })
 
-  it('moves the pointer through one long-lived helper instead of a script per move', async () => {
-    const { MacosComputerBackend } = await import('../src/computer/macos')
+  it('posts every input through one long-lived helper, each waiting for its own reply', async () => {
+    const { MacosComputerBackend, inputCommand } = await import('../src/computer/macos')
     const { EventEmitter } = await import('node:events')
     const written: string[] = []
     const ran: string[] = []
     let started = 0
+    const stdout = new EventEmitter()
     const helper = Object.assign(new EventEmitter(), {
-      stdin: Object.assign(new EventEmitter(), { writable: true, write: (line: string) => written.push(line) }),
+      stdout,
+      stdin: Object.assign(new EventEmitter(), {
+        writable: true,
+        write: (line: string) => {
+          written.push(line.trim())
+          // Moves get no reply; everything else is answered in order.
+          if (!line.startsWith('move'))
+            setTimeout(() => stdout.emit('data', Buffer.from(line.startsWith('key 999') ? 'err no\n' : 'ok\n')), 1)
+          return true
+        },
+      }),
     })
     const backend = new MacosComputerBackend(
       async (file) => (ran.push(file), ''),
@@ -638,19 +654,27 @@ describe('locked screen', () => {
     )
     const display = { id: 'display:main', kind: 'display' as const, name: 'Main' }
     await backend.perform(display, { kind: 'move', x: 100, y: 50 })
-    await backend.perform(display, { kind: 'move', x: 120, y: 60 })
+    await backend.perform(display, { kind: 'click', x: 100, y: 50 })
+    await backend.perform(display, { kind: 'type', text: 'hé' })
     expect(started).toBe(1)
-    expect(written).toHaveLength(2)
+    expect(written).toEqual(['move 100 50', 'click 100 50 0 1', `type ${Buffer.from('hé').toString('base64')}`])
     expect(ran).not.toContain('/usr/bin/osascript')
+    expect(inputCommand({ kind: 'key', key: 'k', modifiers: ['Meta'] }, 2)).toBe('key 40 1048576')
+    expect(inputCommand({ kind: 'key', key: 'F13' }, 2)).toBeNull()
   })
 
   it('lets the person in control reach the lock screen to unlock it, but never an agent', async () => {
     const { MacosComputerBackend } = await import('../src/computer/macos')
     const ran: string[] = []
-    const locked = new MacosComputerBackend(async (file) => {
-      ran.push(file)
-      return '<key>CGSSessionScreenIsLocked</key><true/>'
-    }, 'darwin')
+    const locked = new MacosComputerBackend(
+      async (file) => {
+        ran.push(file)
+        return '<key>CGSSessionScreenIsLocked</key><true/>'
+      },
+      'darwin',
+      () => 'Mac',
+      async () => null,
+    )
     const display = { id: 'display:main', kind: 'display' as const, name: 'Main' }
     await expect(locked.perform(display, { kind: 'key', key: 'a' })).rejects.toThrow(/locked/)
     expect(ran).not.toContain('/usr/bin/osascript')

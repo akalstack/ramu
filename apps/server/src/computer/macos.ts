@@ -1,6 +1,7 @@
 import type { BrowserFieldFocus } from '@ramu/shared/browserBridge'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
-import POINTER_SOURCE from '../../native/ramu-pointer.swift?raw'
+import INPUT_SOURCE from '../../native/ramu-input.swift?raw'
+import { NativeInput } from './nativeInput'
 import { ensureHelper } from './nativeHelper'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
@@ -94,6 +95,33 @@ const CHARS: Record<string, number> = {
   k: 40,
   n: 45,
   m: 46,
+}
+
+/**
+ * One input as a line for the native input helper (see ramu-input.swift), in screen points. Null for a key this Mac has
+ * no code for.
+ */
+export function inputCommand(action: ComputerAction, scale: number): string | null {
+  const p = (value: number) => Math.round((value / scale) * 100) / 100
+  switch (action.kind) {
+    case 'move':
+      return `move ${p(action.x)} ${p(action.y)}`
+    case 'click': {
+      const button = action.button === 'right' ? 1 : action.button === 'middle' ? 2 : 0
+      return `click ${p(action.x)} ${p(action.y)} ${button} ${action.clickCount ?? 1}`
+    }
+    case 'scroll':
+      return `scroll ${p(action.x)} ${p(action.y)} ${Math.round(action.dx)} ${Math.round(action.dy)}`
+    case 'drag':
+      return `drag ${p(action.fromX)} ${p(action.fromY)} ${p(action.toX)} ${p(action.toY)}`
+    case 'key': {
+      const code = keyCode(action.key)
+      if (code === null) return null
+      return `key ${code} ${(action.modifiers ?? []).reduce((all, key) => all | FLAGS[key], 0)}`
+    }
+    case 'type':
+      return `type ${Buffer.from(action.text, 'utf8').toString('base64')}`
+  }
 }
 
 export function keyCode(key: string): number | null {
@@ -212,6 +240,7 @@ export function parseSipsSize(output: string): { width: number; height: number }
 
 /** Frames are shrunk so a phone can poll them: the long edge is capped and the image is a mid-quality JPEG. */
 export const MAX_FRAME_EDGE = 1600
+const HID_IDLE_REUSE_MS = 400
 
 /**
  * macOS local broker: `screencapture` for the display and Quartz events for input. Screen Recording and Accessibility
@@ -223,31 +252,18 @@ export class MacosComputerBackend implements ComputerBackend {
     private readonly exec: Run = run,
     private readonly platform: NodeJS.Platform = process.platform,
     private readonly name: () => string = hostname,
-    /** A process that moves the pointer as fast as it is told; null falls back to a script per move. */
-    private readonly pointerHelper: () => Promise<ChildProcess | null> = async () =>
-      spawn(await ensureHelper(POINTER_SOURCE, 'ramu-pointer'), [], { stdio: ['pipe', 'ignore', 'ignore'] }),
-  ) {}
+    /** One process that posts input as it arrives; null falls back to a script per action. */
+    inputHelper: () => Promise<ChildProcess | null> = async () =>
+      spawn(await ensureHelper(INPUT_SOURCE, 'ramu-input'), [], { stdio: ['pipe', 'pipe', 'ignore'] }),
+  ) {
+    this.input = new NativeInput(inputHelper)
+  }
 
-  private pointer: Promise<ChildProcess | null> | null = null
+  private readonly input: NativeInput
 
-  /** Moves are many and tiny: they go to one long-lived helper instead of starting a script for each. */
-  private async move(x: number, y: number): Promise<boolean> {
-    this.pointer ??= this.pointerHelper().then(
-      (child) => {
-        child?.once('exit', () => (this.pointer = null))
-        child?.once('error', () => (this.pointer = null))
-        child?.stdin?.on('error', () => (this.pointer = null))
-        return child
-      },
-      () => null,
-    )
-    const child = await this.pointer
-    if (!child?.stdin?.writable) {
-      this.pointer = null
-      return false
-    }
-    child.stdin.write(`${x} ${y}\n`)
-    return true
+  /** Builds and starts the input helper ahead of the first action. */
+  warm(): void {
+    if (this.platform === 'darwin') void this.input.available()
   }
 
   private lock: { locked: boolean; at: number } = { locked: false, at: 0 }
@@ -353,10 +369,20 @@ export class MacosComputerBackend implements ComputerBackend {
     }
   }
 
+  // Reading the HID idle time starts a process; a burst of remote input asks within a few hundred milliseconds.
+  private idle: { ms: number | null; at: number } = { ms: null, at: 0 }
+
   async localInputActive(): Promise<boolean> {
     if (this.platform !== 'darwin' || this.injecting > 0) return false
     try {
-      const idle = parseHidIdleMs(await this.exec('/usr/sbin/ioreg', ['-r', '-d', '1', '-c', 'IOHIDSystem']))
+      const now = Date.now()
+      if (now - this.idle.at >= HID_IDLE_REUSE_MS)
+        this.idle = {
+          ms: parseHidIdleMs(await this.exec('/usr/sbin/ioreg', ['-r', '-d', '1', '-c', 'IOHIDSystem'])),
+          at: now,
+        }
+      // Idle time grows while the reading is reused, so age it rather than read it again.
+      const idle = this.idle.ms === null ? null : this.idle.ms + (Date.now() - this.idle.at)
       if (idle === null || idle >= LOCAL_INPUT_WINDOW_MS) return false
       return Date.now() - idle > this.lastInjectionEnd + INJECTION_SLACK_MS
     } catch {
@@ -370,13 +396,13 @@ export class MacosComputerBackend implements ComputerBackend {
     if (!options?.byPerson && (await this.locked())) throw new ComputerNotRun(LOCKED_MESSAGE)
     void target
     const scale = this.lastScale
-    if (action.kind === 'move' && (await this.move(action.x / scale, action.y / scale))) {
-      this.lastInjectionEnd = Date.now()
-      return
-    }
+    const command = inputCommand(action, scale)
+    if (command === null && action.kind === 'key') throw new Error(`Unsupported key: ${action.key}`)
     this.injecting++
     try {
-      await this.exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', actionScript(action, scale)])
+      // The helper answers each action as soon as it is posted; a script per action is the fallback.
+      if (command && (await this.input.available())) await this.input.send(command, action.kind !== 'move')
+      else await this.exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', actionScript(action, scale)])
     } catch (error) {
       this.permission = {
         available: false,

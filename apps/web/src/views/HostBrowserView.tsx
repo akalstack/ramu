@@ -140,6 +140,18 @@ export function HostBrowserView({
       }
     }
   }
+  // Closing or hiding the browser while in control hands the tab back to the thread's agent (or to its next run), so
+  // nobody has to resume it later. Declared before the polling effect so this runs before its disconnect.
+  const handBack = useRef({ controlled, tabId, host, taskId, allowed })
+  handBack.current = { controlled, tabId, host, taskId, allowed }
+  useEffect(() => {
+    if (!visible) return
+    return () => {
+      const held = handBack.current
+      if (held.controlled && held.tabId && held.allowed())
+        void held.host.invoke('hostBrowser.release', held.taskId, held.tabId).catch(() => {})
+    }
+  }, [visible])
   useEffect(() => {
     if (!visible || !foreground || viewOnly) return
     let active = true
