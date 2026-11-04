@@ -2,7 +2,7 @@ import { BrowserInputQueue, watchBrowserFrames } from '@ramu/shared/browserLiveV
 import { BrowserTabChip, type BrowserTabActions } from './BrowserTabChip'
 import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Plus, RotateCw, Upload } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Keyboard, Plus, RotateCw, Upload } from 'lucide-react'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import type {
   BrowserDialog,
@@ -11,11 +11,11 @@ import type {
   BrowserScreenshot,
   BrowserPageSnapshot,
 } from '@ramu/shared/browserBridge'
-import { BROWSER_INPUT_KEY } from '@ramu/shared/browserBridge'
+import { BROWSER_INPUT_KEY, browserShortcuts } from '@ramu/shared/browserBridge'
 import type { ViewDescriptor } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
-import { Dropdown } from '../Menu'
+import { Dropdown, Menu } from '../Menu'
 import { useHost } from '../workspace/HostProvider'
 import { useAppSettings } from '../settings/AppSettings'
 import { t } from '../i18n'
@@ -31,6 +31,7 @@ import { refusedPermission, type DevicePermission } from '@ramu/shared/devicePer
 
 const MAC = navigator.platform.toUpperCase().includes('MAC')
 /** Shortcuts that edit the page: select all, copy, cut, undo, redo, and word or line jumps with the arrows. */
+const SHORTCUTS = browserShortcuts()
 const PAGE_SHORTCUTS = /^([acxzy]|Arrow(Up|Down|Left|Right)|Backspace|Delete|Home|End)$/
 
 /** Live compositor frames over the authenticated host connection. Native desktop tabs use BrowserView directly. */
@@ -410,6 +411,28 @@ export function HostBrowserView({
             }}
             disabled={!!tab && !own}
           />
+          {own && tab && (
+            <Menu
+              label={t('Keys')}
+              icon={<Keyboard size={14} />}
+              align="end"
+              disabled={busy}
+              items={[
+                { key: 'keys-heading', heading: t('Keys') },
+                ...SHORTCUTS.keys.map((entry) => ({
+                  key: entry.id,
+                  label: t(entry.label),
+                  onSelect: () => input(entry.input),
+                })),
+                { key: 'shortcuts-heading', heading: t('Shortcuts') },
+                ...SHORTCUTS.shortcuts.map((entry) => ({
+                  key: entry.id,
+                  label: t(entry.label),
+                  onSelect: () => input(entry.input),
+                })),
+              ]}
+            />
+          )}
           {own && tab && (
             <Button
               type="button"

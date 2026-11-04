@@ -13,6 +13,7 @@ import * as transcriptChanges from '../src/runtime/transcriptChanges.ts'
 import * as phoneBehavior from '../src/runtime/busyMode.ts'
 import * as chatPresentation from '../../../packages/shared/src/chat/presentation.ts'
 import * as browserViewerState from '../src/runtime/browserViewerState.ts'
+import * as browserBridge from '../../../packages/shared/src/browserBridge.ts'
 import * as remoteKeyboard from '../src/runtime/remoteKeyboard.ts'
 import * as computerGestures from '../src/runtime/computerGestures.ts'
 import * as sharedViewerAccess from '../../../packages/shared/src/viewerAccess.ts'
@@ -204,6 +205,7 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id === '@ramu/shared/browserLiveViewer')
         return load('../../../packages/shared/src/browserLiveViewer.ts', os, {}, globals)
       if (id === '@ramu/shared/browserLinks') return browserLinks
+      if (id === '@ramu/shared/browserBridge') return browserBridge
       if (id === '@ramu/shared/chat/toolActivity') return toolActivity
       if (id === './sendJournal') return sendJournal
       if (id === '@ramu/shared/mapBounded') return { mapBounded: (items, _limit, run) => Promise.all(items.map(run)) }

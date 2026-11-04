@@ -8,9 +8,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardPaste,
+  Command,
   Download,
   Ellipsis,
   FileText,
+  Keyboard as KeyboardIcon,
   Plus,
   RotateCw,
   Upload,
@@ -30,6 +32,7 @@ import type {
   BrowserDownloadInfo,
   BrowserPageSnapshot,
 } from '@ramu/shared/browserBridge'
+import { browserShortcuts } from '@ramu/shared/browserBridge'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { translate } from '@ramu/shared/i18n'
 import {
@@ -73,6 +76,7 @@ import {
 } from '../runtime/browserViewerState'
 
 /** This device's choice of page layout. Phone layout is the default; Desktop layout is remembered once chosen. */
+const SHORTCUTS = browserShortcuts()
 const LAYOUT_KEY = 'pref-device:browserLayout'
 /** This device's search for typed words, as the desktop's Settings → Browser → Search engine. */
 const SEARCH_KEY = 'pref-device:searchEngine'
@@ -112,6 +116,7 @@ export function BrowserViewer({
   const draftValue = useRef(draft)
   draftValue.current = draft
   const keyboard = useRef<RemoteKeyboardHandle>(null)
+  const [typing, setTyping] = useState(false)
   const [error, setError] = useState('')
   const [frameError, setFrameError] = useState('')
   const [frameReady, setFrameReady] = useState(false)
@@ -124,7 +129,9 @@ export function BrowserViewer({
   const [observation, setObservation] = useState<BrowserPageSnapshot | null>(null)
   const [uploadPath, setUploadPath] = useState('')
   const [phonePage, setPhonePage] = useState<{ url: string; rewritten: boolean; fromTab?: BrowserTabInfo } | null>(null)
-  const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | 'display' | 'search' | null>(null)
+  const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | 'display' | 'search' | 'keys' | null>(
+    null,
+  )
   const downloadsOpen = panel === 'downloads'
   const menu = useViewerMenu()
   const addressField = useRef<import('react-native').TextInputInstance>(null)
@@ -492,6 +499,7 @@ export function BrowserViewer({
   const phoneUrl = tab && computer ? phoneBrowserUrl(tab.url, computer.address) : null
   const fileInputs = observation?.elements.filter((element) => element.type === 'file') ?? []
   const MENU_ITEMS: Record<ReturnType<typeof browserMenu>[number], Omit<ViewerMenuItem, 'key'>> = {
+    keys: { title: t('Keys and shortcuts'), icon: Command, onPress: () => setPanel('keys') },
     paste: {
       title: t('Paste'),
       icon: ClipboardPaste,
@@ -791,9 +799,47 @@ export function BrowserViewer({
             </T>
           </View>
         )}
+        {own && tab ? (
+          <View style={{ position: 'absolute', right: space.m, bottom: space.m }}>
+            <ControlPill
+              icon={KeyboardIcon}
+              label={typing ? t('Hide keyboard') : t('Show keyboard')}
+              selected={typing}
+              size={48}
+              onPress={() => (typing ? keyboard.current?.close() : keyboard.current?.open())}
+            />
+          </View>
+        ) : null}
       </View>
-      {own ? <RemoteKeyboard handle={keyboard} label={t('Typing into the website')} onKeys={typeKeys} /> : null}
+      {own ? (
+        <RemoteKeyboard
+          handle={keyboard}
+          label={t('Typing into the website')}
+          onFocusChange={setTyping}
+          onKeys={typeKeys}
+        />
+      ) : null}
       <ViewerMenu at={menu.at} onClose={menu.close} items={menuItems} label={t('Close menu')} />
+      {/* Keys a phone keyboard lacks, and everyday shortcuts; the sheet stays open for several presses in a row. */}
+      <Sheet open={panel === 'keys' && own} onClose={() => setPanel(null)} title={t('Keys and shortcuts')}>
+        {(
+          [
+            ['Keys', SHORTCUTS.keys],
+            ['Shortcuts', SHORTCUTS.shortcuts],
+          ] as const
+        ).map(([heading, entries]) => (
+          <View key={heading} style={{ paddingHorizontal: space.l, paddingBottom: space.m, gap: space.s }}>
+            <T tone="muted" size={font.caption} weight="600">
+              {t(heading)}
+            </T>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+              {entries.map((entry) => (
+                <Button key={entry.id} kind="secondary" title={t(entry.label)} onPress={() => input(entry.input)} />
+              ))}
+            </View>
+          </View>
+        ))}
+      </Sheet>
       <Sheet open={panel === 'search'} onClose={() => setPanel(null)} title={t('Search engine')}>
         <SheetGroup>
           {SEARCH_ENGINES.map((entry) => (

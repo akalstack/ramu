@@ -25,6 +25,44 @@ export type BrowserInputModifier = BrowserModifier | 'Primary'
 export const BROWSER_INPUT_KEY =
   /^(Enter|Escape|Tab|Arrow(Up|Down|Left|Right)|Backspace|Delete|Home|End|PageUp|PageDown|[a-z])$/
 export type BrowserMouseButton = 'left' | 'right' | 'middle'
+
+export type BrowserShortcut = { id: string; label: string; input: Extract<BrowserHumanInput, { kind: 'key' }> }
+
+/**
+ * The same keys and editing shortcuts the computer viewers offer, for a website. Paste is left out: the viewer pastes
+ * its own clipboard as text, while a pressed shortcut would paste the host's.
+ */
+export function browserShortcuts(): { keys: BrowserShortcut[]; shortcuts: BrowserShortcut[] } {
+  const key = (id: string, label: string, name: string, modifiers?: BrowserInputModifier[]): BrowserShortcut => ({
+    id,
+    label,
+    input: { kind: 'key', key: name, ...(modifiers ? { modifiers } : {}) },
+  })
+  return {
+    keys: [
+      key('escape', 'Esc', 'Escape'),
+      key('tab', 'Tab', 'Tab'),
+      key('enter', 'Enter', 'Enter'),
+      key('backspace', 'Backspace', 'Backspace'),
+      key('delete', 'Delete', 'Delete'),
+      key('up', '↑', 'ArrowUp'),
+      key('down', '↓', 'ArrowDown'),
+      key('left', '←', 'ArrowLeft'),
+      key('right', '→', 'ArrowRight'),
+      key('home', 'Home', 'Home'),
+      key('end', 'End', 'End'),
+      key('pageUp', 'Page up', 'PageUp'),
+      key('pageDown', 'Page down', 'PageDown'),
+    ],
+    shortcuts: [
+      key('copy', 'Copy', 'c', ['Primary']),
+      key('cut', 'Cut', 'x', ['Primary']),
+      key('undo', 'Undo', 'z', ['Primary']),
+      key('redo', 'Redo', 'z', ['Primary', 'Shift']),
+      key('selectAll', 'Select all', 'a', ['Primary']),
+    ],
+  }
+}
 export type BrowserPageAction =
   | { kind: 'upload'; snapshot: number; ref: number; name: string; data: string }
   | { kind: 'click'; snapshot: number; ref: number; button?: BrowserMouseButton; clickCount?: 1 | 2 | 3 }

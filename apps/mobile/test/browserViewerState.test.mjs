@@ -108,6 +108,7 @@ test('the overflow menu lists only actions that work for this tab and browser', 
     'closeTab',
   ])
   assert.deepEqual(browserMenu({ hasTab: true, own: true, hostManaged: true, fileInput: true, phonePage: true }), [
+    'keys',
     'paste',
     'hardReload',
     'display',
