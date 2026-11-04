@@ -21,7 +21,6 @@ import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { Pill, Row, StatusIcon, T, tap } from './ui'
 import { ChatActionsSheet, useChatCommands } from './ChatActions'
 import { SwipeRow } from './SwipeRow'
-import { ComputerUseNotice } from './ComputerUseNotice'
 import { useComputerUse } from '../runtime/computerUse'
 import { Monitor } from 'lucide-react-native'
 import { useStore } from '../runtime/store'
@@ -95,12 +94,14 @@ export const ChatRow = memo(function ChatRow({
             label: say(commands.done ? 'Reopen' : 'Mark done'),
             color: c.primary,
             onPress: () => void commands.toggleDone(),
+            removes: true,
           },
           {
             icon: commands.archived ? ArchiveRestore : Archive,
             label: commands.archived ? 'Unarchive' : 'Archive',
             color: c.warn,
             onPress: () => void commands.toggleArchive(),
+            removes: true,
           },
         ]
   const meta = (
@@ -206,6 +207,7 @@ export const ChatRow = memo(function ChatRow({
               <T size={font.body} weight="500" numberOfLines={stacked ? 2 : 1} style={{ flex: 1 }}>
                 {chat.title}
               </T>
+              {/* The mark alone: the thread opens on its notice, with Stop and the screen, when it matters. */}
               {computerUse ? (
                 <Monitor size={13} color={c.warn} accessibilityLabel={say('Computer access active')} />
               ) : null}
@@ -230,8 +232,6 @@ export const ChatRow = memo(function ChatRow({
                 {meta}
               </View>
             ) : null}
-            {computerUse ? <ComputerUseNotice chat={chat} /> : null}
-
             {hasDetail ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 {project ? (

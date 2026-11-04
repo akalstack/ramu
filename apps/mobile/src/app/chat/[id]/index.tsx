@@ -1427,13 +1427,14 @@ export default function ChatScreen() {
                     header={
                       joining ? (
                         // One row says who joins and how; × takes the mention out and the message goes to the thread again.
-                        <View style={{ gap: 6 }}>
+                        // The composer's text inset, so the row lines up with what is typed below it.
+                        <View style={{ width: '100%', gap: 4, paddingLeft: space.s + 4, paddingVertical: 2 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
                             <ProviderIcon provider={joining.model.provider} size={14} />
                             <T size={font.control} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
                               {tr('{0} joins as', { 0: joining.name })}
                             </T>
-                            <View style={{ flex: 1, minWidth: 150 }}>
+                            <View style={{ flex: 1, minWidth: 140, maxWidth: 220, marginLeft: 'auto' }}>
                               <Segmented<TeammateMode>
                                 small
                                 value={joining.mode}
@@ -1447,12 +1448,12 @@ export default function ChatScreen() {
                             <IconButton
                               icon={X}
                               label={tr('Don’t add {0}', { 0: joining.name })}
-                              size={28}
+                              size={32}
                               tone="muted"
                               onPress={() => writeDraft(draftText.replace(/^@\S+\s*/, ''))}
                             />
                           </View>
-                          <T size={font.caption} tone="muted" numberOfLines={1}>
+                          <T size={font.caption} tone="muted" numberOfLines={1} style={{ paddingBottom: 4 }}>
                             {joining.mode === 'review'
                               ? tr('Reads the changes and reports. Never edits.')
                               : tr('Edits while the lead waits, then hands back.')}
