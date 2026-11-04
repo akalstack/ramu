@@ -71,6 +71,7 @@ import type {
   AgentSettings,
   ModelPreferences,
   ProviderCatalog,
+  ModelNotice,
   AgentScope,
   ProjectAction,
   ProjectActionSettings,
@@ -1174,6 +1175,9 @@ export interface RamuMethods {
     context?: FileContext[],
   ): AgentSessionInfo
   'agent.catalog'(refresh?: boolean): ProviderCatalog[]
+  /** Models a provider started offering since the host first knew it, until a device dismisses them. */
+  'models.news'(): ModelNotice[]
+  'models.dismissNews'(provider: import('./types').AgentProvider, model: string): void
   'agent.configure'(sessionId: string, settings: AgentSettings): AgentSessionInfo
   'files.all'(taskId: string): { repoId: string; path: string }[]
   'files.resolveLink'(
@@ -1383,6 +1387,8 @@ export type PushEvents = {
   /** The chat's transcript was cut back: events from `seq` on are gone. */
   'agent:rewound': { sessionId: string; seq: number }
   'usage:changed': UsageReading[]
+  /** The new-model notices changed: one appeared, or a device dismissed one. */
+  'models:news': ModelNotice[]
   /** A login was signed in, signed out or given a key: names, emails and usage are read again. */
   'logins:changed': Record<string, never>
   'context:changed': { sessionId: string; context: ContextUsage }

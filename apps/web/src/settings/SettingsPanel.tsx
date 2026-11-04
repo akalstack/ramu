@@ -284,6 +284,14 @@ export function SettingsPanel({
                   description="This host reads public model lists (models.dev and LiteLLM) once a day to tag new models and ones their provider is retiring or calls deprecated. Nothing about you is sent. Off, Ramu tags older versions as legacy on its own."
                 />
               )}
+              {page === 'models' && (
+                <ToggleRow
+                  {...draftProps}
+                  setting="newModelNotices"
+                  title="Tell me about new models"
+                  description="When a provider starts offering a model you have not had before, every device shows it once, and the model list tags it New."
+                />
+              )}
               {pageKeys && (
                 <div className="settings-maintenance flex items-center gap-2 pt-3 justify-between">
                   <Button variant="ghost" className={GHOST_BUTTON_CLASS} disabled={busy} onClick={() => setReset(page)}>

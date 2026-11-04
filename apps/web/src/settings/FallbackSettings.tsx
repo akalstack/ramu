@@ -64,13 +64,13 @@ function stepFor(model: AgentModel, previous?: FallbackStep | null): FallbackSte
 function UsageHint({ provider, usage }: { provider: AgentProvider; usage: UsageReading[] }) {
   useLanguage()
   const peak = peakUsage(usage, provider)
-  if (!peak) return null
+  // One width for every row, reading or not, so "Limited" does not narrow its row's pickers beside a "64%".
   return (
     <span
-      className={`fallback-usage [&.warn]:text-warn [&.bad]:text-bad flex-none min-w-[34px] text-right text-caption tabular-nums text-muted-foreground ${usageTone(peak)}`}
-      title={t('Highest usage window for {0}', { '0': providerName(provider) })}
+      className={`fallback-usage [&.warn]:text-warn [&.bad]:text-bad w-16 flex-none truncate text-right text-caption tabular-nums text-muted-foreground ${peak ? usageTone(peak) : ''}`}
+      title={peak ? t('Highest usage window for {0}', { '0': providerName(provider) }) : undefined}
     >
-      {peak.status === 'limited' ? t('Limited') : `${peak.usedPercent}%`}
+      {peak ? (peak.status === 'limited' ? t('Limited') : `${peak.usedPercent}%`) : ''}
     </span>
   )
 }
@@ -241,7 +241,7 @@ function OrderEditor({
     if (model) onChange([...chain, stepFor(model)])
   }
   return (
-    <section className="fallback-chain [&_+_.fallback-chain]:mt-2 flex flex-col gap-1.5 p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-fill">
+    <section className="fallback-chain [&_+_.fallback-chain]:mt-2 mb-6 flex flex-col gap-1.5 p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-fill">
       <header className="fallback-chain-heading [&_strong]:text-foreground flex items-center gap-[7px] min-h-[26px] text-soft text-control">
         <strong>{title}</strong>
         <span className="grow flex-1 min-w-0 text-left" />
@@ -319,7 +319,7 @@ function OrderEditor({
       <Button
         variant="ghost"
         size="sm"
-        className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption fallback-add mt-1 mb-6 -ml-2 self-start gap-1.5 text-soft"
+        className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption fallback-add mt-1 -ml-2 self-start gap-1.5 text-soft"
         disabled={disabled || chain.length >= 10}
         onClick={add}
       >

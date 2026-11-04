@@ -83,6 +83,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   teammateSuggestions: boolean
   /** The host reads public model catalogs (models.dev, LiteLLM) daily for release and retirement dates. */
   modelCatalogLookups: boolean
+  /** Every device is told once when a provider starts offering a model the host has not seen it offer before. */
+  newModelNotices: boolean
   /** Inbox offers one box that proposes actions across threads and schedules. Off until someone wants it. */
   operator: boolean
   /** A few words the person writes about this host (`GPU box`, `office network`), matched when suggesting one. */
@@ -184,6 +186,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   agentThreads: true,
   teammateSuggestions: true,
   modelCatalogLookups: true,
+  newModelNotices: true,
   operator: false,
   hostDescription: '',
   liveViewDesktop: true,

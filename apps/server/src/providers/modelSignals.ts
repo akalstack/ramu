@@ -1,7 +1,9 @@
 // Public facts about models that their CLIs do not report: when each was released (models.dev, the catalog OpenCode
 // keeps) and when a provider retires it or calls it deprecated (models.dev and LiteLLM's model list). The host reads
 // both at most once a day, keeps only the few fields it uses, and works from its cached copy or without them when the
-// network fails. Nothing about the person is sent; these are plain downloads of public files.
+// network fails. A daily read asks whether each file changed (ETag, Last-Modified), so an unchanged one costs a short
+// reply rather than megabytes, and one source failing keeps the other. Nothing about the person is sent; these are
+// plain downloads of public files.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { AgentModel, ProviderCatalog } from '@ramu/shared/types'
@@ -113,10 +115,24 @@ export function applyModelSignals(catalog: ProviderCatalog, signals: ModelSignal
   }
 }
 
+/** One source's last good reading and what the server said identifies that version of the file. */
+interface SourceCache {
+  signals: ModelSignals
+  etag?: string
+  modified?: string
+}
+type SourceName = 'dev' | 'litellm'
+
 interface Cache {
   fetchedAt: number
   signals: ModelSignals
+  sources?: Partial<Record<SourceName, SourceCache>>
 }
+
+const SOURCES: { name: SourceName; url: string; parse: (data: unknown) => ModelSignals }[] = [
+  { name: 'dev', url: MODELS_DEV_URL, parse: fromModelsDev },
+  { name: 'litellm', url: LITELLM_URL, parse: fromLiteLlm },
+]
 
 /** Downloads the two sources daily and keeps the merged signals in memory and on disk. */
 export class ModelSignalSource {
@@ -150,8 +166,30 @@ export class ModelSignalSource {
   refresh(now = Date.now()): Promise<void> {
     this.refreshing ??= (async () => {
       try {
-        const [dev, litellm] = await Promise.all([this.read(MODELS_DEV_URL), this.read(LITELLM_URL)])
-        this.cache = { fetchedAt: now, signals: mergeSignals(fromModelsDev(dev), fromLiteLlm(litellm)) }
+        const before = this.cache?.sources ?? {}
+        const read = await Promise.all(
+          SOURCES.map(async ({ name, url, parse }) => {
+            try {
+              return [name, await this.read(url, parse, before[name])] as const
+            } catch {
+              return [name, null] as const
+            }
+          }),
+        )
+        const sources: Partial<Record<SourceName, SourceCache>> = {}
+        for (const [name, source] of read) {
+          const kept = source ?? before[name]
+          if (kept) sources[name] = kept
+        }
+        const failed = read.some(([, source]) => !source)
+        if (!Object.keys(sources).length) throw new Error('No model list could be read.')
+        // A source that failed keeps its last good copy; the read is tried again within the hour, not tomorrow.
+        this.cache = {
+          fetchedAt: failed ? (this.cache?.fetchedAt ?? 0) : now,
+          signals: mergeSignals(sources.dev?.signals ?? {}, sources.litellm?.signals ?? {}),
+          sources,
+        }
+        if (failed) this.failedAt = now
         mkdirSync(dirname(this.path), { recursive: true })
         writeFileSync(`${this.path}.tmp`, JSON.stringify(this.cache), { mode: 0o600 })
         renameSync(`${this.path}.tmp`, this.path)
@@ -165,16 +203,32 @@ export class ModelSignalSource {
     return this.refreshing
   }
 
-  private async read(url: string): Promise<unknown> {
+  /** One source, asking first whether it changed since `previous`; an unchanged file keeps `previous` as it is. */
+  private async read(
+    url: string,
+    parse: (data: unknown) => ModelSignals,
+    previous: SourceCache | undefined,
+  ): Promise<SourceCache> {
     const response = await this.fetcher(url, {
       signal: AbortSignal.timeout(20_000),
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...(previous?.etag ? { 'If-None-Match': previous.etag } : {}),
+        ...(previous?.modified ? { 'If-Modified-Since': previous.modified } : {}),
+      },
     })
+    if (response.status === 304 && previous) return previous
     if (!response.ok) throw new Error(`${url} answered ${response.status}`)
     const length = Number(response.headers.get('content-length') ?? 0)
     if (length > MAX_BYTES) throw new Error(`${url} is larger than Ramu reads`)
     const text = await response.text()
     if (text.length > MAX_BYTES) throw new Error(`${url} is larger than Ramu reads`)
-    return JSON.parse(text) as unknown
+    const etag = response.headers.get('etag')
+    const modified = response.headers.get('last-modified')
+    return {
+      signals: parse(JSON.parse(text) as unknown),
+      ...(etag ? { etag } : {}),
+      ...(modified ? { modified } : {}),
+    }
   }
 }

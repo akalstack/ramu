@@ -143,6 +143,12 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     },
     'agent.scope': { args: z.tuple([id]), run: (taskId: string) => workspace.agentScope(taskId) },
     'agent.catalog': { args: z.tuple([z.boolean().optional()]), run: (refresh?: boolean) => agents.catalog(refresh) },
+    'models.news': { args: z.tuple([]), run: () => agents.modelNews?.notices() ?? [] },
+    'models.dismissNews': {
+      args: z.tuple([agentSettings.shape.provider, z.string().min(1).max(200)]),
+      run: (provider: import('@ramu/shared/types').AgentProvider, model: string) =>
+        agents.modelNews?.dismiss(provider, model),
+    },
     'agent.configure': {
       args: z.tuple([id, agentSettings]),
       run: (s: string, settings: AgentSettings) => lockSession(ctx, s, () => agents.configure(s, settings)),

@@ -27,7 +27,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
   editor: ['defaultMarkdownView', 'previewTabs', 'editorFontSize', 'terminalFontSize', 'defaultTerminalDock'],
   access: ['defaultAccess'],
   browser: ['agentBrowser'],
-  models: ['defaultAutoFallback', 'fallback', 'modelCatalogLookups'],
+  models: ['defaultAutoFallback', 'fallback', 'modelCatalogLookups', 'newModelNotices'],
   workflows: ['goals', 'subagents', 'advisor'],
   memory: ['memory'],
   chats: [

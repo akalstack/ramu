@@ -379,6 +379,13 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           help: 'This host reads public model lists (models.dev and LiteLLM) once a day to tag new models and ones their provider is retiring or calls deprecated. Nothing about you is sent. Off, Ramu tags older versions as legacy on its own.',
           words: 'new legacy deprecated retiring release date models.dev litellm',
         },
+        {
+          kind: 'toggle',
+          path: 'newModelNotices',
+          title: 'Tell me about new models',
+          help: 'When a provider starts offering a model you have not had before, every device shows it once, and the model list tags it New.',
+          words: 'new model notification notice announce',
+        },
       ],
     },
     {

@@ -159,6 +159,7 @@ export const appPreferences = z.object({
   agentThreads: z.boolean().default(true),
   teammateSuggestions: z.boolean().default(true),
   modelCatalogLookups: z.boolean().default(true),
+  newModelNotices: z.boolean().default(true),
   operator: z.boolean().default(false),
   hostDescription: z.string().trim().max(80).default(''),
   liveViewDesktop: z.boolean().default(true),

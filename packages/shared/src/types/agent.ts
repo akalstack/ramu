@@ -55,6 +55,14 @@ export interface AgentModel {
   /** ISO date its provider retires it, when one is announced and still ahead. */
   retiresAt?: string
 }
+/** A model a provider started offering after the host already knew that provider, until a device dismisses it. */
+export interface ModelNotice {
+  provider: AgentProvider
+  model: string
+  name: string
+  at: number
+}
+
 export interface ProviderCatalog {
   provider: AgentProvider
   models: AgentModel[]

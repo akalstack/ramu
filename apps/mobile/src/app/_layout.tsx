@@ -7,6 +7,7 @@ import { UndoToast } from '../components/UndoToast'
 import { showError } from '../runtime/toast'
 import { Overlays } from '../components/Overlays'
 import { InboxBadge } from '../components/InboxBadge'
+import { ModelNewsToast } from '../components/ModelNewsToast'
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -47,6 +48,7 @@ function Navigator() {
       <UndoToast />
       <Overlays />
       <InboxBadge />
+      <ModelNewsToast />
       <PushRouting />
       <LiveActivityMonitor />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />

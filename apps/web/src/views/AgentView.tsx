@@ -944,32 +944,35 @@ export const AgentView = memo(function AgentView({
                     />
                   )}
                   {hostOffline && <HostWaitNote name={hostName} />}
-                  {session && teammates.length > 0 && (
-                    <TeammatesSection
-                      sessionId={session.id}
-                      teammates={teammates}
-                      readOnly={viewOnly}
-                      onOpen={(agentId) => setOpenAgent(agentId)}
-                    />
-                  )}
-                  {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
-                  <ComputerActivity state={computerActivity} />
-                  {backgroundTerminals.terminals.length > 0 && (
-                    <BackgroundTerminalsSection state={backgroundTerminals} />
-                  )}
                   {providerWait && <ProviderWaitNote retry={limitRetry} autoResume={autoResume} readOnly={viewOnly} />}
-                  {liveGoal && (
-                    <GoalBar
-                      goal={liveGoal}
-                      readOnly={viewOnly}
-                      onControl={(action) => {
-                        void act(() => invoke('agent.goal.control', view.sessionId, action))
-                      }}
-                      onVerify={(command) => {
-                        void act(() => invoke('agent.goal.verify', view.sessionId, command))
-                      }}
-                    />
-                  )}
+                  {/* Live work folds into a stack under its first card; what needs the person stays outside it. */}
+                  <div className="composer-tray-stack">
+                    {session && teammates.length > 0 && (
+                      <TeammatesSection
+                        sessionId={session.id}
+                        teammates={teammates}
+                        readOnly={viewOnly}
+                        onOpen={(agentId) => setOpenAgent(agentId)}
+                      />
+                    )}
+                    {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
+                    <ComputerActivity state={computerActivity} />
+                    {backgroundTerminals.terminals.length > 0 && (
+                      <BackgroundTerminalsSection state={backgroundTerminals} />
+                    )}
+                    {liveGoal && (
+                      <GoalBar
+                        goal={liveGoal}
+                        readOnly={viewOnly}
+                        onControl={(action) => {
+                          void act(() => invoke('agent.goal.control', view.sessionId, action))
+                        }}
+                        onVerify={(command) => {
+                          void act(() => invoke('agent.goal.verify', view.sessionId, command))
+                        }}
+                      />
+                    )}
+                  </div>
                   {(queued.length > 0 || pending.length > 0) && (
                     <QueuedMessages
                       sessionId={view.sessionId}

@@ -1,5 +1,6 @@
 import { classifyLegacyCatalog } from '../providers/modelLifecycle'
 import { applyModelSignals, type ModelSignals } from '../providers/modelSignals'
+import type { ModelNews } from '../providers/modelNews'
 import { providerAccountId } from '../providers/providerBinaries'
 import { acpModels } from '../providers/acp'
 import { launchCompatibility } from '../providers/launchCompatibility'
@@ -22,6 +23,8 @@ export interface CatalogServiceHost extends Partial<
   providerQuery: QueryFn
   /** Release and retirement dates from public catalogs, when the host may read them. */
   modelSignals?(): ModelSignals
+  /** Learns which models each provider offers, announces new ones and tags them New. */
+  modelNews?(): Pick<ModelNews, 'observe' | 'tag'> | undefined
 }
 
 /** Model catalog discovery (cached) and validation of a chat's settings against it. */
@@ -41,12 +44,19 @@ export class CatalogService {
     // until the catalog or the signals change.
     const classify = (catalogs: ProviderCatalog[]) => {
       const signals = this.host.modelSignals?.() ?? EMPTY
-      if (this.classified?.raw !== catalogs || this.classified.signals !== signals)
+      if (this.classified?.raw !== catalogs || this.classified.signals !== signals) {
+        const news = this.host.modelNews?.()
+        // Each discovery is observed once: a model a known provider did not offer before is announced.
+        if (this.classified?.raw !== catalogs) news?.observe(catalogs)
         this.classified = {
           raw: catalogs,
           signals,
-          result: catalogs.map((catalog) => classifyLegacyCatalog(applyModelSignals(catalog, signals))),
+          result: catalogs.map((catalog) => {
+            const dated = applyModelSignals(catalog, signals)
+            return classifyLegacyCatalog(news ? news.tag(dated) : dated)
+          }),
         }
+      }
       return this.classified.result
     }
     if (process.env.RAMU_FAKE_AGENT === '1') return Promise.resolve(classify(fakeCatalogs()))

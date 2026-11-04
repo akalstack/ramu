@@ -20,7 +20,9 @@ Each provider card shows whether its installed version is **Supported**, **Limit
 
 The model picker lists each provider's models. **Legacy** marks an older version once a newer one of the same family is listed, or a model its provider calls deprecated or has retired; **Show legacy models** reveals them. **New** marks a model released in the last two weeks, and **Retires ‹date›** one whose retirement is announced within 90 days.
 
-Release and retirement dates come from public model lists, [models.dev](https://models.dev) and [LiteLLM's](https://github.com/BerriAI/litellm), which each host reads once a day and keeps a small copy of. Nothing about you is sent. Offline it uses its last copy. **Look up model dates online** (Settings → Models) turns the lookups off; Legacy then comes from versions alone.
+Release and retirement dates come from public model lists, [models.dev](https://models.dev) and [LiteLLM's](https://github.com/BerriAI/litellm), which each host reads once a day and keeps a small copy of. A daily read asks whether each list changed, so an unchanged one is not downloaded again, and one list failing keeps the other. Nothing about you is sent. Offline it uses its last copy.
+
+When a provider starts offering a model your host has not seen it offer before, every device shows it once (**See models**), and the model list tags it **New** for two weeks when no release date says otherwise. Turning a provider on does not announce everything it has. **Tell me about new models** (Settings → Models) turns this off. **Look up model dates online** (Settings → Models) turns the lookups off; Legacy then comes from versions alone.
 
 ## Accounts
 

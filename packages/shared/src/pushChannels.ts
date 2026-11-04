@@ -23,6 +23,7 @@ export const HOST_PUSH_CHANNELS = [
   'summaries:changed',
   'rules:changed',
   'usage:changed',
+  'models:news',
   'logins:changed',
   'settings:changed',
   'settings:models',
@@ -79,7 +80,13 @@ export type PushMessage = { [K in keyof PushEvents]: { channel: K; payload: Push
 /** The same as listener arguments; checking the channel narrows the payload. */
 export type PushArgs = { [K in keyof PushEvents]: [channel: K, payload: PushEvents[K]] }[keyof PushEvents]
 
-const ARRAY_PAYLOADS = new Set<string>(['activity:changed', 'usage:changed', 'notices:changed', 'providers:updates'])
+const ARRAY_PAYLOADS = new Set<string>([
+  'activity:changed',
+  'usage:changed',
+  'notices:changed',
+  'providers:updates',
+  'models:news',
+])
 
 /** Fields a client reads straight away on the busiest channels, with their type. */
 const REQUIRED: Partial<Record<keyof PushEvents, Record<string, 'string' | 'number' | 'boolean' | 'object'>>> = {

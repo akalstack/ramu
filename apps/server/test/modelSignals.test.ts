@@ -138,3 +138,31 @@ it('downloads at most daily, keeps a copy on disk, and works from it or without 
   await offline.refresh(Date.now() + 2 * 86_400_000)
   expect(offline.current()['claude-opus-5']).toEqual({ released: '2026-07-24' })
 })
+
+it('asks whether each list changed, keeps an unchanged one without downloading it, and keeps a source that failed', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-signals-'))
+  dirs.push(dir)
+  const asked: Record<string, string | null> = {}
+  let litellmDown = false
+  const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+    const headers = new Headers(init?.headers)
+    asked[url] = headers.get('if-none-match')
+    if (url === LITELLM_URL && litellmDown) throw new Error('offline')
+    if (headers.get('if-none-match') === `"${url}"`) return new Response(null, { status: 304 })
+    const body =
+      url === MODELS_DEV_URL
+        ? { anthropic: { models: { 'claude-opus-5': { release_date: '2026-07-24' } } } }
+        : { 'claude-sonnet-4-5': { litellm_provider: 'anthropic', deprecation_date: '2026-11-30' } }
+    return new Response(JSON.stringify(body), { headers: { etag: `"${url}"` } })
+  }) as unknown as typeof fetch
+  const source = new ModelSignalSource(join(dir, 'model-signals.json'), () => true, fetcher)
+  await source.refresh(1)
+  await source.refresh(2 * 86_400_000)
+  // The second read named the version it had, and the unchanged answer kept the signals.
+  expect(asked[MODELS_DEV_URL]).toBe(`"${MODELS_DEV_URL}"`)
+  expect(source.current(2 * 86_400_000)['claude-opus-5']).toEqual({ released: '2026-07-24' })
+  // One list failing keeps its last good copy beside the other.
+  litellmDown = true
+  await source.refresh(4 * 86_400_000)
+  expect(source.current(4 * 86_400_000)['claude-sonnet-4-5']).toEqual({ retires: '2026-11-30' })
+})

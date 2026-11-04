@@ -118,6 +118,8 @@ export class AgentService {
   preferences: (() => AppPreferences) | undefined
   /** Release and retirement dates from public model catalogs; set by the host, absent in tests. */
   modelSignals: (() => import('./providers/modelSignals').ModelSignals) | undefined
+  /** New-model notices and tags; set by the host, absent in tests. */
+  modelNews: import('./providers/modelNews').ModelNews | undefined
   /** Told when a chat's transcript is cut back, so clients drop the events from `seq` on. */
   onRewound: ((id: string, seq: number) => void) | undefined
   /** Told whenever a chat's context window usage changes. */
@@ -172,6 +174,7 @@ export class AgentService {
       cancelPendingStarts: (...a) => parts.subagents.cancelPendingStarts(...a),
       catalog: (...a) => this.catalog(...a),
       modelSignals: () => this.modelSignals?.() ?? NO_SIGNALS,
+      modelNews: () => this.modelNews,
       get childRequests() {
         return parts.requests.childRequests
       },

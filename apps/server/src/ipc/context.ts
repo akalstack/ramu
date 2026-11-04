@@ -11,6 +11,7 @@ import { KeepAwakeService } from '../background/keepAwake'
 import { AttachmentStore } from '../attachments'
 import { AppUpdateService } from '../background/appUpdates'
 import { HostUpdater, isSupervised, runCommand, sourceCheckout } from '../background/hostUpdate'
+import { ModelNews } from '../providers/modelNews'
 import { ModelSignalSource } from '../providers/modelSignals'
 import { runtimeVersion } from '../build'
 import { configureProviderAccounts, providerEnvironment } from '../providers/providerBinaries'
@@ -215,6 +216,14 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
       () => loadPreferences().modelCatalogLookups !== false,
     )
     agents.modelSignals = () => signals.current()
+    agents.modelNews = new ModelNews(
+      {
+        get: (key, fallback) => workspace.getAppState(key, fallback),
+        set: (key, value) => workspace.setAppState(key, value),
+      },
+      () => loadPreferences().newModelNotices !== false,
+      (notices) => host.send('models:news', notices),
+    )
     agents.refreshAccountUsage = (provider) => accountUsage.refresh(provider)
     // An upgrade or downgrade changes which models a login offers and how its usage is counted: read both again now.
     const planChanged = (provider: AgentProvider, accountId: string) => {

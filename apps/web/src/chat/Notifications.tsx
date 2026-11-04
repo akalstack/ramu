@@ -12,6 +12,7 @@ import { useHostSelection } from '../workspace/HostSelection'
 import { useHost } from '../workspace/HostProvider'
 import { TOAST_MS, notices, useNotificationPanelOpen } from './notificationCenter'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
+import type { ModelNotice } from '@ramu/shared/types'
 
 type Notification = { id: string; message: string; source: string }
 
@@ -120,6 +121,70 @@ export function Notifications() {
       for (const id of updateIds) hide(id)
     }
   }, [preferences.providerUpdateChecks])
+  // A model a provider started offering: told once on every device, and gone everywhere once dismissed on one.
+  useEffect(() => {
+    if (!preferences.newModelNotices) return
+    let active = true
+    const shown = new Set<string>()
+    const hide = (id: string) => {
+      notify.close(id)
+      notices.remove(id)
+    }
+    const accept = (list: ModelNotice[]) => {
+      if (!active) return
+      const current = new Set(list.map((notice) => `model-news:${notice.provider}:${notice.model}`))
+      for (const id of shown)
+        if (!current.has(id)) {
+          hide(id)
+          shown.delete(id)
+        }
+      for (const notice of list) {
+        const id = `model-news:${notice.provider}:${notice.model}`
+        if (shown.has(id)) continue
+        shown.add(id)
+        const title = t('New model: {0}', { '0': notice.name })
+        const description = t('{0} offers it now. It is tagged New in the model list.', {
+          '0': providerName(notice.provider),
+        })
+        const icon = <ProviderIcon provider={notice.provider} size={18} />
+        const dismiss = () => {
+          hide(id)
+          void invoke('models.dismissNews', notice.provider, notice.model).catch(() => {})
+        }
+        const open = () => {
+          dismiss()
+          window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } }))
+        }
+        notify.add<AppToastData>({
+          id,
+          timeout: TOAST_MS.update,
+          title,
+          description,
+          data: { icon, onDismiss: dismiss },
+          actionProps: { children: t('See models'), onClick: open },
+        })
+        notices.add({
+          id,
+          title,
+          description,
+          type: 'info',
+          icon,
+          actionLabel: t('See models'),
+          onAction: open,
+          onDismiss: dismiss,
+        })
+      }
+    }
+    const off = on('models:news', accept)
+    void invoke('models.news')
+      .then(accept)
+      .catch(() => {})
+    return () => {
+      active = false
+      off()
+      for (const id of shown) hide(id)
+    }
+  }, [preferences.newModelNotices, invoke, on])
   const dismissProvider = (status: ProviderStatus) => {
     dismissedUpdates.current.add(`${status.provider}:${status.binary}:${status.latestVersion}`)
     void ramu.invoke('providers.dismissUpdate', status.provider, status.binary, status.latestVersion!).catch(() => {})
