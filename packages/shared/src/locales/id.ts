@@ -127,6 +127,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Thread options': 'Opsi thread',
   'Start on {0} instead': 'Mulai di {0} saja',
   'Attachments need the host. Remove them, or send once it is back.': 'Lampiran memerlukan host. Hapus lampiran, atau kirim setelah host kembali.',
+  default: 'bawaan',
   'Touch and hold to see its work': 'Sentuh lama untuk melihat pekerjaannya',
   'To {0}': 'Ke {0}',
   'Add teammate…': 'Tambah rekan…',

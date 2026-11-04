@@ -127,8 +127,9 @@ type ModelRow = {
 }
 
 /**
- * The model picker is three small steps so it never has to draw hundreds of rows at once (OpenCode lists very many):
- * providers, then that provider's models in a searchable virtualized list, then the reasoning effort. Choosing an effort closes it.
+ * The model picker shows each provider's first models, with the rest of a provider one tap further and a search across
+ * all of them, so it never draws hundreds of rows at once (OpenCode lists very many). A model with several reasoning
+ * efforts opens them as chips under its row; choosing one closes the picker.
  */
 export function ModelChip({
   value,
@@ -177,7 +178,8 @@ export function ModelChip({
   const { c } = useTheme()
   const [open, setOpen] = useState(false)
   const [provider, setProvider] = useState<AgentProvider | null>(null)
-  const [picking, setPicking] = useState<ModelRow | null>(null)
+  // The model whose reasoning efforts are open under its row; one tap away from choosing, with nothing to scroll to.
+  const [expanded, setExpanded] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   // An empty model means "the provider's default": show which model that is rather than just the provider.
   const current =
@@ -187,7 +189,7 @@ export function ModelChip({
   const effort = value.effort || current?.defaultEffort || ''
   const close = () => {
     setOpen(false)
-    setPicking(null)
+    setExpanded(null)
     setProvider(null)
     setQuery('')
   }
@@ -209,69 +211,91 @@ export function ModelChip({
         (!needle || `${m.label} ${m.model} ${providerNames[m.provider]}`.toLowerCase().includes(needle)),
     )
   }, [models, provider, query])
-  const title = picking ? picking.label : provider ? providerNames[provider] : 'Model'
-  const back = picking
-    ? () => setPicking(null)
-    : provider
-      ? () => {
-          setProvider(null)
-          setQuery('')
-        }
-      : undefined
+  const title = provider ? providerNames[provider] : 'Model'
+  const back = provider
+    ? () => {
+        setProvider(null)
+        setQuery('')
+      }
+    : undefined
   const offline = !store.isOnline(computerId ?? store.selected)
   const providerCount = provider ? models.filter((m) => m.provider === provider).length : models.length
-  // Search stays at the top of every step but the effort choice, as in the app's other pickers.
-  const searchProps = picking
-    ? undefined
-    : {
-        value: query,
-        onChangeText: setQuery,
-        placeholder: provider
-          ? `Search ${providerCount} ${providerNames[provider]} models`
-          : `Search ${providerCount} models`,
-      }
+  const searchProps = {
+    value: query,
+    onChangeText: setQuery,
+    placeholder: provider
+      ? `Search ${providerCount} ${providerNames[provider]} models`
+      : `Search ${providerCount} models`,
+  }
   const [limit, setLimit] = useState(MODEL_PAGE)
   useEffect(() => setLimit(MODEL_PAGE), [provider, query])
   const modelRow = (m: ModelRow) => {
     const selected = current?.provider === m.provider && current.model === m.model
+    const key = `${m.provider}:${m.model}`
+    const open = expanded === key
+    // The effort to mark: this thread's own for its current model, else the model's default.
+    const marked = selected ? effort : m.defaultEffort
     return (
-      <Row
-        key={`${m.provider}:${m.model}`}
-        onPress={() => {
-          tap()
-          if (m.efforts.length > 1) setPicking(m)
-          else commit(m, m.efforts[0] ?? '')
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-            <T weight={selected ? '600' : '400'} numberOfLines={1} style={{ flexShrink: 1 }}>
-              {m.label}
+      <View key={key}>
+        <Row
+          accessibilityState={m.efforts.length > 1 ? { expanded: open } : undefined}
+          onPress={() => {
+            tap()
+            if (m.efforts.length > 1) setExpanded(open ? null : key)
+            else commit(m, m.efforts[0] ?? '')
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+              <T weight={selected ? '600' : '400'} numberOfLines={1} style={{ flexShrink: 1 }}>
+                {m.label}
+              </T>
+              {m.tags.legacy ? <Pill>{say('Legacy')}</Pill> : null}
+              {m.tags.isNew ? (
+                <Pill tone="accent" wash={c.accentWash}>
+                  {say('New')}
+                </Pill>
+              ) : null}
+              {m.tags.retires ? (
+                <Pill tone="warn" wash={c.warnWash}>
+                  {say('Retires {0}', {
+                    0: new Date(m.tags.retires).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                  })}
+                </Pill>
+              ) : null}
+            </View>
+            <T size={font.caption} tone="muted" mono numberOfLines={1}>
+              {m.model}
             </T>
-            {m.tags.legacy ? <Pill>{say('Legacy')}</Pill> : null}
-            {m.tags.isNew ? (
-              <Pill tone="accent" wash={c.accentWash}>
-                {say('New')}
-              </Pill>
-            ) : null}
-            {m.tags.retires ? (
-              <Pill tone="warn" wash={c.warnWash}>
-                {say('Retires {0}', {
-                  0: new Date(m.tags.retires).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-                })}
-              </Pill>
-            ) : null}
           </View>
-          <T size={font.caption} tone="muted" mono numberOfLines={1}>
-            {m.model}
-          </T>
-        </View>
-        {selected ? (
-          <Check size={17} color={c.accent} />
-        ) : m.efforts.length > 1 ? (
-          <ChevronRight size={15} color={c.placeholder} />
+          {selected ? (
+            <Check size={17} color={c.accent} />
+          ) : m.efforts.length > 1 ? (
+            <ChevronRight size={15} color={c.placeholder} />
+          ) : null}
+        </Row>
+        {open ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: space.s,
+              paddingHorizontal: space.l,
+              paddingBottom: space.m,
+            }}
+          >
+            {m.efforts.map((e) => (
+              <Chip
+                key={e}
+                small
+                label={e === m.defaultEffort ? `${e} · ${say('default')}` : e}
+                selected={e === marked}
+                onPress={() => commit(m, e)}
+              />
+            ))}
+          </View>
         ) : null}
-      </Row>
+      </View>
     )
   }
   return (
@@ -281,7 +305,7 @@ export function ModelChip({
         accessibilityLabel={`Model: ${label}${effort ? `, ${effort}` : ''}`}
         onPress={() => {
           tap()
-          setPicking(null)
+          setExpanded(null)
           setProvider(null)
           setQuery('')
           setOpen(true)
@@ -323,42 +347,10 @@ export function ModelChip({
         {back ? (
           <Row onPress={back}>
             <ChevronLeft size={18} color={c.soft} />
-            <T tone="soft">{picking ? 'Back to models' : 'All providers'}</T>
+            <T tone="soft">All providers</T>
           </Row>
         ) : null}
-        {picking ? (
-          <View>
-            <T
-              size={font.caption}
-              weight="600"
-              tone="muted"
-              style={{
-                paddingHorizontal: space.l,
-                paddingTop: space.s,
-                paddingBottom: 4,
-                textTransform: 'uppercase',
-                letterSpacing: 0.3,
-              }}
-            >
-              Reasoning effort
-            </T>
-            {picking.efforts.map((e) => {
-              const selected =
-                picking.provider === value.provider && picking.model === value.model
-                  ? e === value.effort
-                  : e === picking.defaultEffort
-              return (
-                <Row key={e} onPress={() => commit(picking, e)}>
-                  <T style={{ flex: 1, textTransform: 'capitalize' }} weight={selected ? '600' : '400'}>
-                    {e}
-                    {e === picking.defaultEffort ? '  · default' : ''}
-                  </T>
-                  {selected ? <Check size={17} color={c.accent} /> : null}
-                </Row>
-              )
-            })}
-          </View>
-        ) : provider || query.trim() ? (
+        {provider || query.trim() ? (
           <View>
             {shown.slice(0, limit).map(modelRow)}
             {shown.length > limit ? (
