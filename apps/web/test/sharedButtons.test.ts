@@ -32,5 +32,6 @@ it('keeps reorder gesture states in the shared activator, with image panning sep
     .filter((path) => /\bcursor-grab\b/.test(readFileSync(path, 'utf8')))
     .map((path) => relative(SRC, path))
     .filter((path) => path !== 'composer/Attachments.tsx') // Panning an image is not a reorder handle.
+    .filter((path) => path !== 'liveView/LiveView.tsx') // Moving the floating live view is not a reorder either.
   expect(handles).toEqual(['components/drag-handle.tsx'])
 })

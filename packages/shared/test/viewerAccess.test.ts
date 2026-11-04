@@ -13,12 +13,14 @@ it.each([
   'settings.app.snapshot',
   'schedules.list',
   'reviews.get',
-  'computer.frame',
-  'computer.rtcOffer',
+  'computer.session',
   'notifications.register',
 ])('keeps viewer read/request-answer access for %s', (method) => expect(viewerMayInvoke(method)).toBe(true))
 
 it.each([
+  // The screen needs Computer use, which a viewer never holds.
+  'computer.frame',
+  'computer.rtcOffer',
   'agent.submit',
   'agent.stop',
   'agent.goal.control',
