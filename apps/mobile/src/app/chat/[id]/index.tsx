@@ -1,3 +1,4 @@
+import { HelperDetails } from '../../../components/Helpers'
 import { deliveryVisible, visibleText } from '../../../runtime/transcript'
 import { transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome } from '../../../runtime/navigation'
@@ -341,6 +342,8 @@ export default function ChatScreen() {
   // Kept on this phone for this thread: after talking to a teammate, plain messages keep going to it.
   const [recipientId, setRecipientId] = useState<string | null>(null)
   const recipient = teammates.find((task) => task.agentId === recipientId) ?? null
+  // A teammate's own work (its task, output, report, Stop), opened from its chip with a long press.
+  const [teammateShown, setTeammateShown] = useState<string | null>(null)
   const viewer = computer?.access === 'viewer'
   const hostId = chat?.computerId
   const catalogs = hostId ? store.catalogs[hostId] : undefined
@@ -1465,7 +1468,11 @@ export default function ChatScreen() {
                           showsHorizontalScrollIndicator={false}
                           keyboardShouldPersistTaps="always"
                         >
-                          <View style={{ flexDirection: 'row', gap: space.xs }}>
+                          {/* Who the next message goes to: a recipient, not a view, so the row says "To". */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                            <T size={font.caption} tone="muted" style={{ paddingLeft: space.s, paddingRight: 2 }}>
+                              {tr('To')}
+                            </T>
                             <Chip
                               small
                               label={tr('Main agent')}
@@ -1481,7 +1488,9 @@ export default function ChatScreen() {
                                 maxLabelWidth={140}
                                 selected={recipient?.agentId === task.agentId}
                                 accessibilityLabel={tr('To {0}', { 0: task.name })}
+                                accessibilityHint={tr('Touch and hold to see its work')}
                                 onPress={() => setRecipientId(task.agentId)}
+                                onLongPress={() => setTeammateShown(task.agentId)}
                               />
                             ))}
                           </View>
@@ -1601,6 +1610,15 @@ export default function ChatScreen() {
           </CancelPendingSettings.Provider>
         </ChatMentions.Provider>
       </MessageMenu.Provider>
+      {teammateShown ? (
+        <HelperDetails
+          task={chat.items
+            .flatMap((item) => (item.kind === 'agents' ? item.agents : []))
+            .findLast((agent) => agent.agentId === teammateShown)}
+          chat={chat}
+          onClose={() => setTeammateShown(null)}
+        />
+      ) : null}
       <Presence
         visible={Boolean(toast)}
         style={{ position: 'absolute', left: space.l, right: space.l, top: belowHeader(insets.top) }}

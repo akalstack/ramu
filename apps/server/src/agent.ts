@@ -1062,6 +1062,10 @@ export class AgentService {
     return this.parts.tasks.stopTask(...args)
   }
 
+  dismissTeammate(...args: Parameters<AgentTasks['dismissTeammate']>) {
+    return this.parts.tasks.dismissTeammate(...args)
+  }
+
   messageTask(...args: Parameters<AgentTasks['messageTask']>) {
     return this.parts.tasks.messageTask(...args)
   }

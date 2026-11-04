@@ -4,7 +4,7 @@ import { useHostConnection } from '../../../workspace/HostProvider'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { Button } from '@/components/desktop-button'
-import { ArrowLeft, Bot, Square, X } from 'lucide-react'
+import { ArrowLeft, Bot, Square, X, UserMinus } from 'lucide-react'
 import { visibleText } from '../lib/messages'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
@@ -48,6 +48,7 @@ export function AgentTaskPanel({
   onSelect,
   onClose,
   onStop,
+  onDismiss,
   readOnly = false,
   onMessage,
 }: {
@@ -63,6 +64,8 @@ export function AgentTaskPanel({
   onClose: () => void
   readOnly?: boolean
   onStop: (task: AgentTask) => void
+  /** Takes a teammate out of the thread, working or not; nobody addresses it afterwards. */
+  onDismiss?: (task: AgentTask) => void
   onMessage: (task: AgentTask, text: string) => Promise<void>
 }) {
   useLanguage()
@@ -179,11 +182,20 @@ export function AgentTaskPanel({
             <span className="grow flex-1 min-w-0 text-left" />
           </>
         )}
-        {task && actions.canStop && !readOnly && (
-          <Button variant="ghost" size="sm" className={GHOST_TEXT_BUTTON_CLASS} onClick={() => onStop(task)}>
-            <Square size={11} />
-            {translate('Stop')}
+        {task?.teammate && onDismiss && !readOnly && task.status !== 'stopped' && task.status !== 'failed' ? (
+          <Button variant="ghost" size="sm" className={GHOST_TEXT_BUTTON_CLASS} onClick={() => onDismiss(task)}>
+            <UserMinus size={12} />
+            {translate('Remove from thread')}
           </Button>
+        ) : (
+          task &&
+          actions.canStop &&
+          !readOnly && (
+            <Button variant="ghost" size="sm" className={GHOST_TEXT_BUTTON_CLASS} onClick={() => onStop(task)}>
+              <Square size={11} />
+              {translate('Stop')}
+            </Button>
+          )
         )}
         <Button
           variant="ghost"

@@ -1139,6 +1139,10 @@ export const AgentView = memo(function AgentView({
               onSelect={setOpenAgent}
               onClose={() => setOpenAgent(null)}
               onStop={stopTask}
+              onDismiss={(task) => {
+                setOpenAgent(null)
+                void act(() => invoke('agent.dismissTeammate', view.sessionId, task.agentId))
+              }}
               readOnly={viewOnly}
               onMessage={(task, text) => act(() => invoke('agent.messageTask', view.sessionId, task.agentId, text))}
             />

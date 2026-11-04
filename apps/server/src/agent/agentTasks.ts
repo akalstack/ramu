@@ -144,6 +144,22 @@ export class AgentTasks {
     throw new Error('That agent is no longer running.')
   }
 
+  /**
+   * Takes a teammate out of the thread: it stops if it is working, and once ended neither the lead nor the person can
+   * address it, so a thread with many teammates can let go of the ones it no longer needs. A finished teammate cannot
+   * be stopped, so without this it stayed in the conversation for good.
+   */
+  async dismissTeammate(id: string, agentId: string): Promise<void> {
+    const task = this.host.task(id, agentId)
+    if (!task?.teammate) throw new Error('That is not a teammate in this thread.')
+    if (task.status === 'stopped' || task.status === 'failed') return
+    if (task.status === 'running' && task.canStop === true) await this.stopTask(id, agentId)
+    // A teammate between turns still holds its own session; end it too, so it frees what it used.
+    else if (this.host.children.get(agentId)?.parentId === id) await this.host.stopAndWait(agentId)
+    if (this.host.task(id, agentId)?.status !== 'stopped')
+      this.updateTask(id, agentId, { status: 'stopped', canMessage: false, endedAt: task.endedAt ?? Date.now() })
+  }
+
   async messageTask(id: string, agentId: string, message: string): Promise<void> {
     let text = message
     const task = this.host.task(id, agentId)

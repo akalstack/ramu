@@ -268,11 +268,15 @@ export function Chip({
   small,
   maxLabelWidth,
   accessibilityLabel,
+  onLongPress,
+  accessibilityHint,
 }: {
   label: string
   count?: number
   selected?: boolean
   onPress: () => void
+  onLongPress?: () => void
+  accessibilityHint?: string
   icon?: Icon
   chevron?: boolean
   fill?: boolean
@@ -287,10 +291,20 @@ export function Chip({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ selected: Boolean(selected) }}
+      accessibilityHint={accessibilityHint}
       onPress={() => {
         tap()
         onPress()
       }}
+      onLongPress={
+        onLongPress
+          ? () => {
+              tap()
+              onLongPress()
+            }
+          : undefined
+      }
+      delayLongPress={350}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',

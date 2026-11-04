@@ -262,7 +262,38 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
           </T>
         )}
         {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[id ? 'id' : 'en']}</T> : null}
-        {chat.sessionId && actions.canStop && !viewOnly ? (
+        {/* A teammate stays in the thread until it is let go, even between turns, so it gets that instead of Stop. */}
+        {chat.sessionId && task.teammate && !viewOnly && task.status !== 'stopped' && task.status !== 'failed' ? (
+          <Button
+            kind="danger"
+            title={id ? 'Keluarkan dari thread' : 'Remove from thread'}
+            onPress={() =>
+              writable() &&
+              Alert.alert(
+                id ? `Keluarkan ${task.name}?` : `Remove ${task.name}?`,
+                id
+                  ? 'Berhenti jika sedang bekerja, dan tidak lagi menerima pesan dari kamu atau agen utama.'
+                  : 'It stops if it is working, and neither you nor the lead can message it afterwards.',
+                [
+                  { text: id ? 'Batal' : 'Cancel', style: 'cancel' },
+                  {
+                    text: id ? 'Keluarkan' : 'Remove',
+                    style: 'destructive',
+                    onPress: () => {
+                      if (!writable()) return
+                      onClose()
+                      void latestStore.current
+                        .invoke(chat.computerId, 'agent.dismissTeammate', chat.sessionId!, task.agentId)
+                        .catch((error) =>
+                          Alert.alert(id ? 'Tidak dapat mengeluarkan' : 'Could not remove', String(error)),
+                        )
+                    },
+                  },
+                ],
+              )
+            }
+          />
+        ) : chat.sessionId && actions.canStop && !viewOnly ? (
           <Button kind="danger" title={id ? 'Hentikan agen' : 'Stop agent'} onPress={stop} />
         ) : null}
         <Button kind="ghost" title={id ? 'Kembali ke thread' : 'Back to thread'} onPress={onClose} />

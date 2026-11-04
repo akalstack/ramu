@@ -120,6 +120,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Talk to teammate {0} · {1}': 'Bicara dengan rekan {0} · {1}',
   'Main agent': 'Agen utama',
   'To the main agent': 'Ke agen utama',
+  'Remove from thread': 'Keluarkan dari thread',
+  'Touch and hold to see its work': 'Sentuh lama untuk melihat pekerjaannya',
   'To {0}': 'Ke {0}',
   'Add teammate…': 'Tambah rekan…',
   'Bring another model into this thread': 'Bawa model lain ke thread ini',

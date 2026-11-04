@@ -59,6 +59,19 @@ it('checks helper capabilities again at the server action boundary', async () =>
     f.close()
   }
 })
+it('lets a finished teammate go, so it leaves the thread instead of staying forever', async () => {
+  const f = fixture({ agentId: 'a', name: 'Opus', status: 'completed', teammate: true, canMessage: true })
+  try {
+    await f.service.dismissTeammate('parent', 'a')
+    expect(f.task()).toMatchObject({ status: 'stopped', canMessage: false })
+    await expect(f.service.messageTask('parent', 'a', 'still there?')).rejects.toThrow(/cannot receive messages/)
+    await expect(
+      fixture({ agentId: 'b', name: 'Helper', status: 'completed' }).service.dismissTeammate('parent', 'b'),
+    ).rejects.toThrow(/not a teammate/)
+  } finally {
+    f.close()
+  }
+})
 it('preserves child request ownership when forwarding a question to its parent', () => {
   const record = vi.fn()
   const childRequests = new Map<string, ForwardedRequest>()

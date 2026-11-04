@@ -1269,6 +1269,8 @@ export interface RamuMethods {
   'agent.backgroundTool'(sessionId: string, toolUseId: string): boolean
   /** Stops one sub-agent or background task; the main agent keeps going. */
   'agent.stopTask'(sessionId: string, agentId: string): void
+  /** Takes a teammate out of the thread: it stops if working, and nobody can address it afterwards. */
+  'agent.dismissTeammate'(sessionId: string, agentId: string): void
   /** Sends a message to a sub-agent through the main agent (Claude SendMessage, Codex send_input). */
   'agent.messageTask'(sessionId: string, agentId: string, text: string): void
   'customAgents.list'(): import('./customAgents').CustomAgent[]

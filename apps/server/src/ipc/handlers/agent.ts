@@ -284,6 +284,10 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.string().min(1).max(200)]),
       run: (s: string, agentId: string) => agents.stopTask(s, agentId),
     },
+    'agent.dismissTeammate': {
+      args: z.tuple([id, z.string().min(1).max(200)]),
+      run: (s: string, agentId: string) => lockSession(ctx, s, () => agents.dismissTeammate(s, agentId)),
+    },
     'agent.messageTask': {
       args: z.tuple([id, z.string().min(1).max(200), z.string().min(1).max(100_000)]),
       run: (s: string, agentId: string, text: string) =>
