@@ -55,7 +55,7 @@ export const PANEL_LABEL_CLASS =
 
 /** Scrolling body of a panel. */
 export const PANEL_BODY_CLASS =
-  'agent-panel-body [&_.msg-wrap.user]:self-end [&_.msg-wrap.user]:max-w-[90%] [&_.msg-wrap.user_.msg.user]:mt-0 [&_>_*]:min-w-0 [&_>_*]:max-w-full [&_>_*]:flex-none [&_>_*]:[overflow-wrap:anywhere] flex-1 min-h-0 overflow-auto flex flex-col gap-2.5 p-[10px_14px_16px]'
+  'agent-panel-body [&_.msg-wrap.user]:self-end [&_.msg-wrap.user]:max-w-[90%] [&_.msg-wrap.user_.msg.user]:mt-0 [&_>_*]:min-w-0 [&_>_*]:max-w-full [&_>_*]:flex-none [&_>_*]:[overflow-wrap:anywhere] flex-1 min-h-0 overflow-auto scroll-fade-y flex flex-col gap-2.5 p-[14px_14px_28px]'
 
 /** A half of the selection split button. */
 export const SELECTION_ACTION_CLASS =

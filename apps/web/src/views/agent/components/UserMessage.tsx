@@ -262,6 +262,8 @@ function TaskReport({
   const agents = useContext(ThreadAgents)
   const agent = agents.findLast((task) => task.name === report.name)
   const status = REPORT_ICON[report.verb]
+  // A teammate replies turn after turn, so only a reply that went wrong needs a status.
+  const showStatus = !(agent?.teammate && report.verb === 'finished')
   return (
     <Button
       variant="ghost"
@@ -278,10 +280,12 @@ function TaskReport({
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate font-semibold text-foreground">{report.name}</span>
           {agent && <RoleTag task={agent} />}
-          <span className="inline-flex flex-none items-center gap-1 text-caption text-muted-foreground">
-            {status && <TaskStatusIcon status={status} />}
-            {translate(REPORT_STATUS[report.verb] ?? report.verb)}
-          </span>
+          {showStatus && (
+            <span className="inline-flex flex-none items-center gap-1 text-caption text-muted-foreground">
+              {status && <TaskStatusIcon status={status} />}
+              {translate(REPORT_STATUS[report.verb] ?? report.verb)}
+            </span>
+          )}
         </span>
         <span className={`${MSG_CLASS} assistant text-soft`}>
           <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>

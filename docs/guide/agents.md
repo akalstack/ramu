@@ -33,7 +33,7 @@ The mention shows as that model's icon and name. While a message brings a new te
 
 Once you talk to a teammate it becomes the recipient: the **To** chip in the composer shows it, and plain messages keep going to it until you choose **Main agent** there or start a message with `@lead`. A thread holds up to four teammates; the same model twice is numbered (`Opus 5.5 2`).
 
-- **Review** (default) reads the latest changes and replies with findings. It never edits, whatever the thread allows.
+- **Review** (default) reads the latest changes and replies with findings. It never edits, whatever the thread allows. On Claude it can run commands that only read, such as `git diff`, `git log`, `ls` and `grep`; tests, builds and anything that writes are refused, so it names them for the lead to run.
 - **Take over** edits while the main agent waits, then hands back with a summary. A custom agent that may edit joins this way.
 
 Before each message, a teammate gets a short catch-up on what the thread said and which files changed since it last took part. The main agent and teammates also message each other by name: `teammate_message` sends a note, and `teammate_ask` lets the main agent ask a teammate and get the reply inside its own turn. Each teammate's bar above the composer and its card show what it changed (files and lines) and its turns and reported cost.

@@ -450,10 +450,11 @@ const READ_DENIED: Record<string, RegExp> = {
   jq: /^--(?:rawfile|slurpfile|from-file)$/,
 }
 
-function isRead(words: string[]): boolean {
+/** `anywhere` also accepts paths outside the workspace, for sessions that may read but never write. */
+function isRead(words: string[], anywhere = false): boolean {
   const [exe = '', ...rest] = words
   if (!READ_COMMANDS.has(exe)) return false
-  if (!safeWords(rest) || rest.some(sensitive)) return false
+  if ((!anywhere && !safeWords(rest)) || rest.some(sensitive)) return false
   const denied = READ_DENIED[exe]
   if (denied && rest.some((word) => denied.test(word))) return false
   if (exe === 'uniq' && positional(rest).length > 1) return false
@@ -755,6 +756,25 @@ export function judgeCommand(command: string): AutoVerdict {
 export function isRoutineGitRead(command: string): boolean {
   const segments = parseCommand(command.trim())
   return !!segments && segments.length === 1 && isGitRead(segments[0]!) && riskOf(segments[0]!).length === 0
+}
+
+/**
+ * Whether a command line only reads, for a session that may never write (a Review teammate). Wider than Auto's
+ * routine reads, since a refusal here cannot be approved: any path, and any Git read verb with options that cannot
+ * write or run a program. Shell syntax this file cannot read, wrappers and risky options still count as writing.
+ */
+export function readsOnly(command: string): boolean {
+  const segments = parseCommand(command.trim())
+  return (
+    !!segments &&
+    segments.every((words) => {
+      if (riskOf(words).length) return false
+      if (isRead(words, true) || isVersion(words) || isGitRead(words)) return true
+      if (words[0] !== 'git') return false
+      const { verb, args } = gitSplit(words)
+      return verb in GIT_READ_FLAGS && !args.some((word) => DANGEROUS_OPTION.test(word) || sensitive(word))
+    })
+  )
 }
 
 export function matchesAutoCommandRule(id: string, command: string): boolean {

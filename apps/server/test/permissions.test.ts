@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type AgentSettings, type AgentSessionState } from '@ramu/shared/types'
-import { claudeHooks, createCanUseTool, dangerousCommandHooks } from '../src/agent/permissions'
+import { claudeHooks, createCanUseTool, dangerousCommandHooks, readOnlyBashHooks } from '../src/agent/permissions'
 import type { PendingRequest } from '../src/agent/types'
 
 function fixture(access: AgentSettings['access'], restricted = false) {
@@ -140,4 +140,52 @@ it('turns a dangerous Bash call into an ask before Claude runs it, and leaves ro
     hookSpecificOutput: { permissionDecision: 'ask', permissionDecisionReason: expect.stringContaining('remote') },
   })
   expect(claudeHooks(undefined, undefined)).toBeUndefined()
+})
+
+it('lets a read-only reviewer run commands that only read, anywhere, and refuses the rest with the reason', async () => {
+  const hook = readOnlyBashHooks().PreToolUse![0]!.hooks[0]!
+  const decide = async (command: string) =>
+    (
+      (await hook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } } as never, 'id', {
+        signal: new AbortController().signal,
+      })) as { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason?: string } }
+    ).hookSpecificOutput
+  for (const command of [
+    'cd /Users/me/project && git log --oneline -5 | wc -l',
+    'git diff HEAD~3 -- src',
+    'cat package.json | head -50',
+    'ls apps packages 2>/dev/null',
+    'grep -rn TODO /abs/repo/src',
+  ])
+    expect((await decide(command)).permissionDecision, command).toBe('allow')
+  for (const command of [
+    'pnpm test',
+    'rm -rf dist',
+    'git commit -m x',
+    'git diff --output=patch.txt',
+    'echo hi > notes.md',
+    'cat .env',
+    'bash -c "ls"',
+  ]) {
+    const decision = await decide(command)
+    expect(decision.permissionDecision, command).toBe('deny')
+    expect(decision.permissionDecisionReason).toMatch(/read-only reviewer/)
+  }
+})
+
+it('keeps file-changing tools away from a read-only session while Bash is decided by command', async () => {
+  const pending = new Map<string, PendingRequest>()
+  const canUseTool = createCanUseTool({
+    settings: { ...DEFAULT_AGENT_SETTINGS, access: 'edits' },
+    pending,
+    record: () => {},
+    setState: () => {},
+    readOnly: true,
+  })
+  const call = (name: string, input: Record<string, unknown>) =>
+    canUseTool(name, input, { signal: new AbortController().signal, toolUseID: name, requestId: name })
+  expect(await call('Edit', {})).toMatchObject({ behavior: 'deny' })
+  expect(await call('Bash', { command: 'git status' })).toMatchObject({ behavior: 'allow' })
+  expect(await call('Bash', { command: 'npm install' })).toMatchObject({ behavior: 'deny' })
+  expect(pending.size).toBe(0)
 })

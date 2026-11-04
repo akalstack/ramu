@@ -2,6 +2,7 @@ import { matchesCommand } from './permissionApprovals'
 import { randomUUID } from 'node:crypto'
 import type { CanUseTool, Options, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import { dangerousCommand, type CommandScope } from './dangerousCommands'
+import { readsOnly } from './autoCommandRules'
 import type { AgentEvent, AgentQuestion, AgentSessionState, AgentSettings } from '@ramu/shared/types'
 import { summarizeInput } from './toolSummaries'
 import type { PendingRequest } from './types'
@@ -59,7 +60,38 @@ export function claudeHooks(...sets: (Options['hooks'] | undefined)[]): Options[
 }
 
 /** Claude tools a read-only session may not use, even with full access, because each can change files. */
-export const READ_ONLY_DENIED = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']
+export const READ_ONLY_DENIED = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit']
+
+const READ_ONLY_COMMAND =
+  'You are a read-only reviewer: commands may only read (ls, cat, grep, find, git status, diff, log, show…). This one could change something or run a program, so it did not run. Read the files instead, or name the command in your findings for the lead to run.'
+
+/**
+ * A read-only session keeps Bash for commands that only read, decided before the call in every permission mode: a
+ * read runs without asking, anything else is refused with the reason.
+ */
+export function readOnlyBashHooks(): NonNullable<Options['hooks']> {
+  return {
+    PreToolUse: [
+      {
+        matcher: 'Bash',
+        hooks: [
+          async (input) => {
+            if (input.hook_event_name !== 'PreToolUse') return {}
+            const command = (input.tool_input as { command?: unknown } | undefined)?.command
+            const reads = typeof command === 'string' && readsOnly(command)
+            return {
+              hookSpecificOutput: {
+                hookEventName: 'PreToolUse' as const,
+                permissionDecision: reads ? ('allow' as const) : ('deny' as const),
+                ...(reads ? {} : { permissionDecisionReason: READ_ONLY_COMMAND }),
+              },
+            }
+          },
+        ],
+      },
+    ],
+  }
+}
 
 /** Claude's `canUseTool` hook: auto-allows Ramu's own tools, otherwise asks the user. */
 export function createCanUseTool({
@@ -74,6 +106,12 @@ export function createCanUseTool({
     new Promise<PermissionResult>((resolve) => {
       if (readOnly && READ_ONLY_DENIED.includes(toolName))
         return resolve({ behavior: 'deny', message: 'You are a read-only reviewer. Read files and report findings.' })
+      if (readOnly && toolName === 'Bash')
+        return resolve(
+          typeof toolInput.command === 'string' && readsOnly(toolInput.command)
+            ? { behavior: 'allow', updatedInput: toolInput }
+            : { behavior: 'deny', message: READ_ONLY_COMMAND },
+        )
       if (restricted)
         return resolve(
           /^mcp__ramu__/.test(toolName)
