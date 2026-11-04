@@ -36,6 +36,23 @@ import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 const cancelWaitMs = () => Number(process.env.RAMU_ACP_CANCEL_WAIT_MS) || 15_000
 type Wire = Record<string, any>
 /** OpenCode chats run on `opencode serve`; its `opencode acp` server only lists models. */
+/**
+ * The folders an ACP agent may use beyond its working directory. Antigravity refuses any path outside the folders it is
+ * given ("outside the allowed workspace directories"), while Claude and Codex read the whole machine in Auto and Full
+ * access. Those levels give Antigravity the home folder too, so it can read other projects and configuration the same
+ * way; writing there still passes its own safety review and Ramu's approvals. Edits and read-only chats stay in scope.
+ */
+export function reachableDirectories(
+  settings: Pick<AgentSettings, 'provider' | 'access'>,
+  additionalDirs: readonly string[],
+  readOnly: boolean,
+  home = homedir(),
+): string[] {
+  const wide =
+    settings.provider === 'antigravity' && !readOnly && (settings.access === 'auto' || settings.access === 'full')
+  return wide && !additionalDirs.includes(home) ? [...additionalDirs, home] : [...additionalDirs]
+}
+
 type AcpProvider = 'cursor' | 'antigravity' | 'opencode'
 /** Trust qualified tool identities, never arguments or a command's descriptive title. */
 function isRamuCall(call: Wire | undefined, provider: AcpProvider): boolean {
@@ -463,7 +480,7 @@ class AcpSession implements AgentRunner {
       this.session = await this.rpc.request(method, {
         ...(resume ? { sessionId: resume } : {}),
         cwd: this.scope.cwd,
-        additionalDirectories: this.scope.additionalDirs,
+        additionalDirectories: reachableDirectories(this.settings, this.scope.additionalDirs, this.readOnly),
         mcpServers: [
           ...acpMcpServers(
             sessionMcpServers(
