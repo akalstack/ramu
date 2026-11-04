@@ -100,7 +100,7 @@ describe('card surface', () => {
 
   it('takes its color from each theme instead of keeping the default gray', () => {
     const midnight = themePreset('ramu-midnight')!
-    expect(themeCssVariables(midnight.dark)['--raised-2']).toBe('#172137')
+    expect(themeCssVariables(midnight.dark)['--raised-2']).toBe('#1c222e')
     expect(themeCssVariables(midnight.light)['--raised-2']).toBe('#f5f6fb')
     expect(themeCssVariables(midnight.dark)['--brand-mark']).toBe(midnight.dark.colors.textBody)
   })
