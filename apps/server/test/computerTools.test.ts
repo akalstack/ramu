@@ -5,6 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { ComputerService } from '../src/computer/service'
 import { registerComputerTools } from '../src/computer/tools'
+import { ComputerRouter } from '../src/computer/router'
 
 const cleanup: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -187,4 +188,18 @@ it('does not give helpers automatic computer access', async () => {
   expect((await s.client.callTool({ name: 'computer_open', arguments: { app: 'Notes' } })).isError).toBe(true)
   expect(s.request).toHaveBeenCalledOnce()
   expect(s.grant).not.toHaveBeenCalled()
+})
+
+it('tells an agent on a locked Mac that one app still works behind the lock screen', async () => {
+  const available = { available: true as const, computer: { id: 'local', name: 'Mac' } }
+  const locked = { available: false as const, reason: 'locked' as const }
+  const backend = { status: () => locked, capture: vi.fn(), perform: vi.fn(), releaseInput: vi.fn() }
+  const apps = { ...backend, status: () => available, apps: async () => ['Finder'] }
+  const s = await setup(async () => true, new ComputerService(new ComputerRouter(backend, apps)))
+  const status = await s.client.callTool({ name: 'computer_status', arguments: {} })
+  const text = (status.content as { type: string; text: string }[])[0]!.text
+  expect(JSON.parse(text)).toMatchObject({
+    runtime: { reason: 'locked' },
+    lockedScreen: expect.stringMatching(/app target/),
+  })
 })
