@@ -134,7 +134,7 @@ export function KeyboardLift({
   const slack = Platform.OS === 'android' ? -space.s : Math.max(0, insets.bottom - space.s)
   if (Platform.OS !== 'web')
     return (
-      <NativeLift slack={slack} style={style}>
+      <NativeLift slack={slack} lift={keyboard.height ? Math.max(0, keyboard.height - slack) : 0} style={style}>
         {children}
       </NativeLift>
     )
@@ -163,11 +163,30 @@ function useReanimatedFrame(): SharedValue<number> {
 const useKeyboardFrame = nativeKeyboard ? useControllerFrame : useReanimatedFrame
 
 /** The lift, frame by frame on the UI thread, in step with the system keyboard's own animation. */
-function NativeLift({ slack, style, children }: { slack: number; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+/**
+ * Layout goes straight to where the keyboard will rest, so a tap is measured at the button's real place from the start;
+ * a translate covers the distance the keys have yet to travel and reaches zero as they settle. Animating layout from
+ * the UI thread left Pressable measuring the old place, and the first tap on Send was cancelled.
+ */
+function NativeLift({
+  slack,
+  lift,
+  style,
+  children,
+}: {
+  slack: number
+  /** Where the keyboard rests, from its will-show event. */
+  lift: number
+  style?: StyleProp<ViewStyle>
+  children: ReactNode
+}) {
   const height = useKeyboardFrame()
-  const lifted = useAnimatedStyle(() => ({ bottom: Math.max(0, height.value - slack) }), [slack])
+  const following = useAnimatedStyle(
+    () => ({ transform: [{ translateY: lift - Math.max(0, height.value - slack) }] }),
+    [lift, slack],
+  )
   return (
-    <Reanimated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style, lifted]}>
+    <Reanimated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style, { bottom: lift }, following]}>
       {children}
     </Reanimated.View>
   )
@@ -218,9 +237,15 @@ function NativePadding({
   style?: StyleProp<ViewStyle>
   children: ReactNode
 }) {
+  // As in NativeLift: the padding is where the keyboard will rest, and a translate covers what is left of its travel.
+  const rest = useKeyboardHeight().height
+  const padding = rest ? Math.max(0, rest - slack) : 0
   const height = useKeyboardFrame()
-  const padded = useAnimatedStyle(() => ({ paddingBottom: Math.max(0, height.value - slack) }), [slack])
-  return <Reanimated.View style={[style, padded]}>{children}</Reanimated.View>
+  const following = useAnimatedStyle(
+    () => ({ transform: [{ translateY: padding - Math.max(0, height.value - slack) }] }),
+    [padding, slack],
+  )
+  return <Reanimated.View style={[style, { paddingBottom: padding }, following]}>{children}</Reanimated.View>
 }
 
 /** Shared floating input surface for threads and side questions. Keep keyboard lift and safe-area padding in one place. */

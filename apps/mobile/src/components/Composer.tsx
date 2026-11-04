@@ -12,10 +12,12 @@ import {
   Text,
   TextInput,
   UIManager,
+  type TextStyle,
   View,
   useWindowDimensions,
 } from 'react-native'
 import { MenuView } from '@react-native-menu/menu'
+import { markdownRuns, type MarkdownMark } from '@ramu/shared/chat/markdownRuns'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
 import { SuggestionList, useComposerSuggest, type ComposerTeammate } from './ComposerSuggest'
@@ -1306,7 +1308,7 @@ export function Composer({
             <Text style={{ color: c.text }}>
               {chips.map((part, index) =>
                 part.kind === 'text' ? (
-                  part.source
+                  <MarkdownText key={index} source={part.source} />
                 ) : (
                   <Text key={index} style={{ color: c.accent, fontWeight: REFERENCE_APPEARANCE.fontWeight }}>
                     {part.source}
@@ -2002,4 +2004,40 @@ function SendChoice({
 
 function IconOf({ icon: I, color }: { icon: typeof FileText; color: string }) {
   return <I size={12} color={color} />
+}
+
+/**
+ * Markdown as it is typed, as the desktop's box shows it: every character stays, markers dim, and bold, italic, struck,
+ * linked, quoted and code text take their look, so the caret never jumps.
+ */
+function MarkdownText({ source }: { source: string }) {
+  const { c } = useTheme()
+  const look = (marks: MarkdownMark[]): TextStyle => ({
+    ...(marks.includes('marker') ? { color: c.muted } : null),
+    ...(marks.includes('strong') || marks.includes('heading') ? { fontWeight: '600' as const } : null),
+    ...(marks.includes('emphasis') ? { fontStyle: 'italic' as const } : null),
+    ...(marks.includes('strike') ? { color: c.muted, textDecorationLine: 'line-through' as const } : null),
+    ...(marks.includes('quote') ? { color: c.soft } : null),
+    ...(marks.includes('link') ? { color: c.accent } : null),
+    ...(marks.includes('code')
+      ? {
+          fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+          backgroundColor: c.fill,
+          fontSize: Math.round(font.body * 0.92),
+        }
+      : null),
+  })
+  return (
+    <>
+      {markdownRuns(source).map((run, index) =>
+        run.marks.length ? (
+          <Text key={index} style={look(run.marks)}>
+            {run.text}
+          </Text>
+        ) : (
+          run.text
+        ),
+      )}
+    </>
+  )
 }
