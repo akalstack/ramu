@@ -13,3 +13,4 @@ packages/shared/src/locales/
 releases/
 *.min.js
 *.md
+.astro/

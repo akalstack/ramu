@@ -1,0 +1,250 @@
+---
+import '@/styles/global.css'
+import { Backdrop } from '@/components/backdrop'
+import { Demo } from '@/components/demo'
+import { ProviderLogo } from '@/components/provider-logo'
+import { LinkButton } from '@/components/site-button'
+import { MOBILE_SETUP, PROVIDERS, RELEASES, REPO } from '@/lib/site'
+
+const title = 'Ramu — Keep your agents moving'
+const description =
+  'One open-source workspace for your coding agents, editor, terminals, and Git. Keep working across provider limits, share memory between models, and continue on iOS or Android.'
+const canonical = new URL('/', Astro.site)
+
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Ramu',
+  description,
+  url: canonical.href,
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'macOS, Linux, iOS, Android',
+  license: 'https://opensource.org/licenses/MIT',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  downloadUrl: RELEASES,
+  sameAs: [REPO],
+  publisher: { '@type': 'Organization', name: 'Akalstack', url: 'https://github.com/akalstack' },
+}
+
+const WORK = [
+  {
+    title: 'Keep going through usage limits',
+    body: 'Set your preferred provider order. Ramu switches with visible thread context when a limit is reached. If all are limited, it waits and resumes when capacity returns, even after a restart.',
+  },
+  {
+    title: 'Get another model’s perspective',
+    body: 'Let your agent consult a second model for advice and review. Delegate tasks to helpers across providers, with optional isolated checkouts.',
+  },
+  {
+    title: 'Give longer tasks a goal',
+    body: 'Keep an objective moving across turns and provider changes. Pause, resume, and set continuation limits so you stay in control.',
+  },
+  {
+    title: 'Carry knowledge between agents',
+    body: 'Share project knowledge and preferences across providers. Read, edit, and restore earlier versions of your notes.',
+  },
+  {
+    title: 'Turn finished work into lessons',
+    body: 'Capture reusable skills and lessons from completed tasks. Choose automatic updates or review them first, with revision history.',
+  },
+  {
+    title: 'Leave work running',
+    body: 'Threads and terminals keep running when you close the window. Schedule recurring tasks, recover unfinished threads after a restart, and catch up with recaps.',
+  },
+]
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#131315" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ramu" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL('/og.png', Astro.site)} />
+    <meta name="twitter:card" content="summary" />
+    <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+  </head>
+  <body>
+    <a class="skip" href="#work">Skip to content</a>
+
+    <header class="nav">
+      <div class="nav-inner">
+        <a class="nav-brand" href="#top" aria-label="Ramu home">
+          <img src="/wordmark.svg" alt="Ramu" height="22" />
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="#providers">Providers</a>
+          <a href="#work">Features</a>
+          <a href="#review">Review</a>
+          <a href="#mobile">Mobile</a>
+          <a href={`${REPO}#guides`}>Docs</a>
+          <a class="nav-cta" href="#download">Download</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" id="top">
+        <Backdrop client:idle />
+        <h1>Keep your agents moving.</h1>
+        <p class="hero-sub">
+          Bring your coding agents, editor, terminals, and Git together. Keep work moving across provider limits, carry
+          context between models, and continue from your phone.
+        </p>
+        <div class="hero-actions">
+          <LinkButton tone="primary" href="#download">Get Ramu</LinkButton>
+          <LinkButton href={REPO}>Read the source</LinkButton>
+          <span class="hero-note">MIT licensed · Desktop + iOS and Android companion</span>
+        </div>
+        <Demo client:load />
+      </section>
+
+      <section class="section" id="providers">
+        <div class="section-head">
+          <h2>Your agents. Your existing accounts.</h2>
+          <p>
+            Use Claude Code, Codex, OpenCode, Cursor, and Antigravity in one workspace. Connect your provider accounts
+            and choose the right model for each task.
+          </p>
+        </div>
+        <ul class="ingredients">
+          {
+            PROVIDERS.map((p) => (
+              <li>
+                <ProviderLogo provider={p} size={40} />
+                <div>
+                  <h3>{p.name}</h3>
+                  <p>{p.signIn}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+
+      <section class="section section-split" id="work">
+        <div class="section-head sticky">
+          <h2>Less restarting. More finishing.</h2>
+          <p>
+            Keep the objective, conversation, and project knowledge together as the work continues. Your computer must
+            stay awake. Provider capabilities vary.
+          </p>
+        </div>
+        <ul class="rows">
+          {
+            WORK.map((w) => (
+              <li>
+                <h3>{w.title}</h3>
+                <p>{w.body}</p>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+
+      <section class="section section-split" id="review">
+        <div class="section-head">
+          <h2>See what changed. Decide what stays.</h2>
+          <p>
+            Review recorded changes for each turn and send inline feedback to your agent. Undo selected changes with
+            conflict checks to protect later edits.
+          </p>
+          <ul class="checks">
+            <li>Monaco editor and split terminals beside the thread</li>
+            <li>Branches, staging, stashes, and sync</li>
+            <li>Unsent drafts kept per thread across restarts</li>
+          </ul>
+        </div>
+        <figure class="diff" aria-label="Example diff with a review comment">
+          <figcaption>
+            <span>src/middleware/limit.ts</span>
+            <span class="diff-stat"><b class="add">+42</b> <b class="del">−3</b></span>
+          </figcaption>
+          <pre><code><span class="ln ctx"><i>12</i>{'export function limit(opts: LimitOptions) {'}</span><span class="ln del"><i>13</i>{'  const windowMs = 1000'}</span><span class="ln add"><i>13</i>{'  const windowMs = opts.windowMs ?? 60_000'}</span><span class="ln add"><i>14</i>{'  const hits = new Map<string, number[]>()'}</span><span class="ln ctx"><i>15</i>{'  return async (req, res, next) => {'}</span></code></pre>
+          <div class="comment">
+            <b>You</b> Key by API key, not IP. Several customers share one proxy.
+            <div class="comment-actions">
+              <span>Sent to Codex</span>
+              <span class="comment-undo" aria-hidden="true">Undo this change</span>
+            </div>
+          </div>
+        </figure>
+      </section>
+
+      <section class="section section-split" id="mobile">
+        <div class="section-head">
+          <h2>Step away from your desk. Stay with the work.</h2>
+          <p>
+            Pair the iOS or Android companion with your computer. Follow live agent progress, send the next instruction,
+            and respond when an agent needs you.
+          </p>
+          <LinkButton className="mt-5" href={MOBILE_SETUP}>Set up mobile</LinkButton>
+        </div>
+        <div class="section-head">
+          <ul class="checks">
+            <li>Chat, choose models, and manage goals</li>
+            <li>Review diffs and send comments to your agent</li>
+            <li>Stage changes, commit, and sync with Git</li>
+            <li>Use live terminals and switch between paired computers</li>
+          </ul>
+          <p>Agents run on your computer. Keep it awake and reachable while you connect from your phone.</p>
+        </div>
+      </section>
+
+      <section class="section section-split" id="source">
+        <div class="section-head">
+          <h2>Your workspace, open to build on.</h2>
+          <p>
+            MIT licensed, with a desktop app, mobile companion, and a workspace server you can run headless. Read the
+            code, contribute, or make it your own.
+          </p>
+          <LinkButton className="mt-5" href={REPO}>Browse the source</LinkButton>
+        </div>
+        <div class="terminal" role="img" aria-label="Terminal commands to run Ramu from source">
+          <pre><code><span class="t-dim">$ </span>git clone {REPO}.git{'\n'}<span class="t-dim">$ </span>cd ramu{'\n'}<span class="t-dim">$ </span>pnpm install --frozen-lockfile{'\n'}<span class="t-dim">$ </span>pnpm dev{'\n'}<span class="t-ok">ready</span> <span class="t-dim">Node 24, pnpm 11.21.0</span></code></pre>
+        </div>
+      </section>
+
+      <section class="download" id="download">
+        <div class="download-inner">
+          <h2>Bring your next task to Ramu.</h2>
+          <p>
+            Download the desktop alpha, connect a provider, and open a repository. Add the mobile companion to keep up
+            from your phone.
+          </p>
+          <div class="hero-actions">
+            <LinkButton tone="primary" href={RELEASES}>macOS (Apple silicon and Intel)</LinkButton>
+            <LinkButton href={RELEASES}>Linux x64</LinkButton>
+            <LinkButton href={MOBILE_SETUP}>iOS and Android setup</LinkButton>
+          </div>
+          <p class="download-fine">
+            Installers and SHA-256 checksums are on GitHub Releases. macOS builds are unsigned and not notarized; install
+            alpha updates manually. Linux GUI validation is pending. Windows is experimental, with no release downloads.
+            See the <a href={`${REPO}/blob/main/docs/guide/providers.md`}>provider setup guide</a>.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <img src="/ramu-logo.svg" alt="Ramu" height="22" />
+      <span>MIT licensed. Provider names and logos belong to their owners.</span>
+      <nav aria-label="Footer">
+        <a href={REPO}>GitHub</a>
+        <a href={RELEASES}>Releases</a>
+        <a href={`${REPO}/blob/main/CONTRIBUTING.md`}>Contributing</a>
+        <a href={`${REPO}/blob/main/SECURITY.md`}>Security</a>
+      </nav>
+    </footer>
+  </body>
+</html>

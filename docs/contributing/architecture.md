@@ -19,7 +19,7 @@ Call an ongoing conversation and its work a **thread** in product copy. A **task
 | `apps/desktop` | Electron windows, menus, native dialogs, the preload bridge, update checks, packaging. Reaches the server through `@ramu/client-runtime`. |
 | `apps/web` | React workspace UI and Monaco editor, rendered in the desktop app. |
 | `apps/mobile` | Expo companion app that pairs with a server over the network. Built from source; there are no store or TestFlight builds yet. |
-| `apps/site` | Project website. |
+| `apps/site` | Project website (getramu.dev): static Astro pages, with React islands for the hero demo and backdrop, and shadcn/ui components. |
 | `packages/shared` | Domain types, the API method table, and pure helpers used by every app, grouped into `chat/`, `review/`, `search/`, `workspace/` and `providers/` (import as `@ramu/shared/<folder>/<module>`). |
 | `packages/contracts` | Wire protocol: versions, capabilities, request encoding. |
 | `packages/client-runtime` | Node client for a server: Unix socket or authenticated WebSocket, reconnects, limits. |
