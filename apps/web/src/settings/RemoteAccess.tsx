@@ -45,6 +45,7 @@ import { LinkSettings } from './ReachThisHost'
 import { AccountHosts } from './AccountHosts'
 import { HostUpdateLine, UpdateAllHosts } from './HostUpdates'
 import { DeviceIcon } from '@/components/device-icon'
+import { DIALOG_SCROLLS, DialogScrollBody } from '@/components/dialog-scroll-body'
 import { osLine } from '@ramu/shared/deviceOs'
 import { isSshTarget } from '@ramu/shared/hostTarget'
 import { RamuGlyph } from '../Brand'
@@ -529,7 +530,7 @@ function PairDialog({ onClose }: { onClose: () => void }) {
         if (!open) onClose()
       }}
     >
-      <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-[520px]" aria-describedby={undefined}>
+      <DialogContent className={`${DIALOG_SCROLLS} sm:max-w-[520px]`} aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{joined ? t('{0} is paired', { 0: joined.name }) : t('Pair a device')}</DialogTitle>
           {!joined && (
@@ -540,109 +541,113 @@ function PairDialog({ onClose }: { onClose: () => void }) {
             </DialogDescription>
           )}
         </DialogHeader>
-        {!joined && (
-          <Dropdown
-            label={t('Device access')}
-            value={role}
-            options={[
-              { value: 'owner', label: t('Full access') },
-              { value: 'viewer', label: t('View threads and answer requests') },
-            ]}
-            onChange={(value) => setRole(value as 'owner' | 'viewer')}
-          />
-        )}
-        {error && (
-          <p className="text-bad small text-caption" role="alert">
-            {error}
-          </p>
-        )}
-        {joined ? (
-          <p className="muted text-muted-foreground">
-            {t(joined.role === 'viewer' ? 'View threads and answer requests' : 'Full access')}
-            {' · '}
-            {t('It can now use this host. You can revoke it any time from Devices that can use this host.')}
-          </p>
-        ) : (
-          offer && (
-            <>
-              <div className="flex items-center justify-between gap-3 rounded-(--radius-m) bg-fill p-[14px_16px]">
-                <div>
-                  <span className="sr-only">{t('Pairing code')}</span>
-                  <div
-                    className={`font-mono text-[28px] font-semibold tracking-[0.12em] ${expired ? 'text-muted-foreground line-through' : ''}`}
-                  >
-                    {offer.code}
-                  </div>
-                  <div className="muted text-muted-foreground small text-caption">
-                    {expired ? t('Expired') : t('Works once · expires in {0}', { 0: countdown(offer.expiresAt, now) })}
-                  </div>
-                </div>
-                {expired ? (
-                  <Button variant="secondary" onClick={create}>
-                    {t('New code')}
-                  </Button>
-                ) : (
-                  <CopyButton text={offer.code} label={t('Copy code')} />
-                )}
-              </div>
-              {!expired && offer.urls.length > 0 && (
-                <div className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-[4px_6px_4px_12px]">
-                  <Link2 size={14} className="flex-none text-muted-foreground" aria-hidden />
-                  <span className="grow flex-1 min-w-0 truncate text-control">{t('Pairing link')}</span>
-                  <span className="muted text-muted-foreground small text-caption flex-none">
-                    {t('Open it on a device that has Ramu')}
-                  </span>
-                  <CopyButton
-                    text={encodePairLink({
-                      url: qrUrl || offer.urls[0]!.url,
-                      code: offer.code,
-                      expiresAt: offer.expiresAt,
-                    })}
-                    label={t('Copy pairing link')}
-                  />
-                </div>
-              )}
-              {qr && !expired && (
-                <div className="flex flex-col items-center gap-2">
-                  <img src={qr} width={240} height={240} alt="Scan this pairing offer with Ramu on your phone" />
-                  <Dropdown
-                    label={t('QR host address')}
-                    value={qrUrl || offer.urls[0]!.url}
-                    options={offer.urls.map((entry) => ({ value: entry.url, label: entry.url }))}
-                    onChange={setQrUrl}
-                  />
-                </div>
-              )}
-              <div className="flex flex-col gap-1">
-                <span className="muted text-muted-foreground small text-caption">{t('Addresses this host has')}</span>
-                {urls.length ? (
-                  urls.map((entry) => (
+        <DialogScrollBody>
+          {!joined && (
+            <Dropdown
+              label={t('Device access')}
+              value={role}
+              options={[
+                { value: 'owner', label: t('Full access') },
+                { value: 'viewer', label: t('View threads and answer requests') },
+              ]}
+              onChange={(value) => setRole(value as 'owner' | 'viewer')}
+            />
+          )}
+          {error && (
+            <p className="text-bad small text-caption" role="alert">
+              {error}
+            </p>
+          )}
+          {joined ? (
+            <p className="muted text-muted-foreground">
+              {t(joined.role === 'viewer' ? 'View threads and answer requests' : 'Full access')}
+              {' · '}
+              {t('It can now use this host. You can revoke it any time from Devices that can use this host.')}
+            </p>
+          ) : (
+            offer && (
+              <>
+                <div className="flex items-center justify-between gap-3 rounded-(--radius-m) bg-fill p-[14px_16px]">
+                  <div>
+                    <span className="sr-only">{t('Pairing code')}</span>
                     <div
-                      key={entry.url}
-                      className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-[4px_6px_4px_12px]"
+                      className={`font-mono text-[28px] font-semibold tracking-[0.12em] ${expired ? 'text-muted-foreground line-through' : ''}`}
                     >
-                      <code className="font-mono text-control grow flex-1 min-w-0 truncate">{entry.url}</code>
-                      <span className="muted text-muted-foreground small text-caption flex-none">
-                        {entry.interface}
-                      </span>
-                      <CopyButton text={entry.url} label={t('Copy address')} />
+                      {offer.code}
                     </div>
-                  ))
-                ) : (
-                  <p className="muted text-muted-foreground small text-caption">
-                    {t('No network address found. Connect this host to a network or VPN.')}
-                  </p>
+                    <div className="muted text-muted-foreground small text-caption">
+                      {expired
+                        ? t('Expired')
+                        : t('Works once · expires in {0}', { 0: countdown(offer.expiresAt, now) })}
+                    </div>
+                  </div>
+                  {expired ? (
+                    <Button variant="secondary" onClick={create}>
+                      {t('New code')}
+                    </Button>
+                  ) : (
+                    <CopyButton text={offer.code} label={t('Copy code')} />
+                  )}
+                </div>
+                {!expired && offer.urls.length > 0 && (
+                  <div className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-[4px_6px_4px_12px]">
+                    <Link2 size={14} className="flex-none text-muted-foreground" aria-hidden />
+                    <span className="grow flex-1 min-w-0 truncate text-control">{t('Pairing link')}</span>
+                    <span className="muted text-muted-foreground small text-caption flex-none">
+                      {t('Open it on a device that has Ramu')}
+                    </span>
+                    <CopyButton
+                      text={encodePairLink({
+                        url: qrUrl || offer.urls[0]!.url,
+                        code: offer.code,
+                        expiresAt: offer.expiresAt,
+                      })}
+                      label={t('Copy pairing link')}
+                    />
+                  </div>
                 )}
-                {hidden > 0 && (
-                  <Button variant="ghost" className="self-start" onClick={() => setShowOther(true)}>
-                    {t('Show {0} more (Docker, VM and other virtual networks)', { 0: other.length })}
-                  </Button>
+                {qr && !expired && (
+                  <div className="flex flex-col items-center gap-2">
+                    <img src={qr} width={240} height={240} alt="Scan this pairing offer with Ramu on your phone" />
+                    <Dropdown
+                      label={t('QR host address')}
+                      value={qrUrl || offer.urls[0]!.url}
+                      options={offer.urls.map((entry) => ({ value: entry.url, label: entry.url }))}
+                      onChange={setQrUrl}
+                    />
+                  </div>
                 )}
-              </div>
-            </>
-          )
-        )}
-        <DialogFooter className="sticky bottom-0 z-10 bg-popover">
+                <div className="flex flex-col gap-1">
+                  <span className="muted text-muted-foreground small text-caption">{t('Addresses this host has')}</span>
+                  {urls.length ? (
+                    urls.map((entry) => (
+                      <div
+                        key={entry.url}
+                        className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-[4px_6px_4px_12px]"
+                      >
+                        <code className="font-mono text-control grow flex-1 min-w-0 truncate">{entry.url}</code>
+                        <span className="muted text-muted-foreground small text-caption flex-none">
+                          {entry.interface}
+                        </span>
+                        <CopyButton text={entry.url} label={t('Copy address')} />
+                      </div>
+                    ))
+                  ) : (
+                    <p className="muted text-muted-foreground small text-caption">
+                      {t('No network address found. Connect this host to a network or VPN.')}
+                    </p>
+                  )}
+                  {hidden > 0 && (
+                    <Button variant="ghost" className="self-start" onClick={() => setShowOther(true)}>
+                      {t('Show {0} more (Docker, VM and other virtual networks)', { 0: other.length })}
+                    </Button>
+                  )}
+                </div>
+              </>
+            )
+          )}
+        </DialogScrollBody>
+        <DialogFooter>
           <Button
             variant={joined ? 'default' : 'secondary'}
             className={joined ? undefined : 'bg-fill hover:bg-fill-hover'}
@@ -771,9 +776,11 @@ function Computers({ state }: { state: ComputerList }) {
               <div className="min-w-0 grow">
                 <div className="flex min-w-0 items-center gap-2">
                   <strong className="truncate text-body font-medium">{computer.name}</strong>
-                  <span className="flex-none text-caption text-muted-foreground">
-                    {computer.local ? t('This computer') : computer.ssh ? t('SSH') : t('Remote')}
-                  </span>
+                  {!computer.local && (
+                    <span className="flex-none text-caption text-muted-foreground">
+                      {computer.ssh ? t('SSH') : t('Remote')}
+                    </span>
+                  )}
                   {computer.id === state.current && (
                     <span className="flex-none rounded-full bg-primary/10 px-2 py-0.5 text-caption text-(--accent)">
                       {t('Showing')}
@@ -866,7 +873,8 @@ function Computers({ state }: { state: ComputerList }) {
                 )}
               </div>
             </div>
-            <div className="ml-[44px] flex flex-col empty:hidden">
+            {/* Under the name: Ramu's version and updates, then what this device may do there, set apart by a rule. */}
+            <div className="ml-[44px] flex flex-col gap-1 empty:hidden">
               <HostUpdateLine computer={computer} />
               {computer.grantedUnreachable && (
                 <p role="status" className="m-[6px_0_0] text-caption text-muted-foreground">
@@ -875,7 +883,11 @@ function Computers({ state }: { state: ComputerList }) {
                   )}
                 </p>
               )}
-              {!computer.local && computer.status === 'connected' && <HostAccess computer={computer} agents={agents} />}
+              {!computer.local && computer.status === 'connected' && (
+                <div className="mt-1.5 flex flex-col gap-1 border-t border-border pt-1.5 empty:hidden">
+                  <HostAccess computer={computer} agents={agents} />
+                </div>
+              )}
             </div>
           </article>
         ))}
@@ -1113,148 +1125,150 @@ function AddHostDialog({ link, repair, onClose }: { link?: string; repair?: Comp
         }
       }}
     >
-      <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-[540px]">
+      <DialogContent className={`${DIALOG_SCROLLS} sm:max-w-[540px]`}>
         <DialogHeader>
           <DialogTitle>{repair ? t('Pair {0} again', { 0: repair.name }) : t('Add a host')}</DialogTitle>
           <DialogDescription>
             {t('Its projects, agents and terminals stay on that host. This computer opens and controls them.')}
           </DialogDescription>
         </DialogHeader>
-        <div className="inline-flex gap-1 self-start rounded-(--radius-s) bg-fill p-0.5" role="group">
-          {tabs.map((tab) => (
-            <Button
-              key={tab.mode}
-              variant="ghost"
-              size="sm"
-              aria-pressed={mode === tab.mode}
-              className={mode === tab.mode ? 'bg-hover text-foreground' : 'text-muted-foreground'}
-              disabled={busy || !!asking}
-              onClick={() => {
-                setMode(tab.mode)
-                setError(null)
-              }}
-            >
-              {tab.icon}
-              {tab.label}
-            </Button>
-          ))}
-        </div>
-        {asking ? (
-          <div role="status" className="flex flex-col items-start gap-2 rounded-(--radius-m) bg-fill p-[14px_16px]">
-            {asking.code ? (
-              <>
-                <span className="text-control">
-                  {t('Allow this computer on {0} if it shows this number', { 0: asking.name })}
-                </span>
-                <span className="font-mono text-[28px] font-semibold tracking-[0.12em]">{asking.code}</span>
-              </>
-            ) : (
-              <span className="text-control">{t('Asking {0}…', { 0: asking.name })}</span>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setAsking(null)
-                void Promise.resolve(invoke('computers.cancelPairRequest')).catch(() => {})
-              }}
-            >
-              {t('Cancel')}
-            </Button>
+        <DialogScrollBody>
+          <div className="inline-flex gap-1 self-start rounded-(--radius-s) bg-fill p-0.5" role="group">
+            {tabs.map((tab) => (
+              <Button
+                key={tab.mode}
+                variant="ghost"
+                size="sm"
+                aria-pressed={mode === tab.mode}
+                className={mode === tab.mode ? 'bg-hover text-foreground' : 'text-muted-foreground'}
+                disabled={busy || !!asking}
+                onClick={() => {
+                  setMode(tab.mode)
+                  setError(null)
+                }}
+              >
+                {tab.icon}
+                {tab.label}
+              </Button>
+            ))}
           </div>
-        ) : mode === 'account' ? (
-          <AccountHosts
-            onConnect={(host) =>
-              ask(host.name, () => Promise.resolve(invoke('linkAccount.connect', host.hostId, host.name)))
-            }
-          />
-        ) : mode === 'nearby' ? (
-          <NearbyHosts
-            onFallback={() => setMode('address')}
-            onChoose={(host, url) =>
-              ask(
-                host.name,
-                () => Promise.resolve(invoke('computers.pairByRequest', url, host.name)),
-                () => {
-                  setMode('address')
-                  setText(url)
-                  setAddress(url)
-                  setName((current) => current || host.name)
-                  setCode('')
-                  setFocusCode(true)
-                },
-              )
-            }
-          />
-        ) : (
-          <form
-            id="add-host"
-            className="flex flex-col gap-3"
-            onSubmit={(event) => {
-              event.preventDefault()
-              submit()
-            }}
-          >
-            <Input
-              aria-label={t('Link, address or SSH host')}
-              placeholder={t('Pairing link, 100.64.0.7:7788 or user@host')}
-              autoFocus={!focusCode}
-              autoCapitalize="none"
-              spellCheck={false}
-              value={text}
-              disabled={busy}
-              aria-invalid={!!error && !ssh && !address}
-              onChange={(event) => read(event.target.value)}
+          {asking ? (
+            <div role="status" className="flex flex-col items-start gap-2 rounded-(--radius-m) bg-fill p-[14px_16px]">
+              {asking.code ? (
+                <>
+                  <span className="text-control">
+                    {t('Allow this computer on {0} if it shows this number', { 0: asking.name })}
+                  </span>
+                  <span className="font-mono text-[28px] font-semibold tracking-[0.12em]">{asking.code}</span>
+                </>
+              ) : (
+                <span className="text-control">{t('Asking {0}…', { 0: asking.name })}</span>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setAsking(null)
+                  void Promise.resolve(invoke('computers.cancelPairRequest')).catch(() => {})
+                }}
+              >
+                {t('Cancel')}
+              </Button>
+            </div>
+          ) : mode === 'account' ? (
+            <AccountHosts
+              onConnect={(host) =>
+                ask(host.name, () => Promise.resolve(invoke('linkAccount.connect', host.hostId, host.name)))
+              }
             />
-            {aliases.length > 0 && (
-              <Dropdown
-                label={t('SSH config aliases')}
-                value=""
-                placeholder={t('Choose from your SSH config')}
-                options={aliases.map((alias) => ({ value: alias, label: alias }))}
-                onChange={read}
+          ) : mode === 'nearby' ? (
+            <NearbyHosts
+              onFallback={() => setMode('address')}
+              onChoose={(host, url) =>
+                ask(
+                  host.name,
+                  () => Promise.resolve(invoke('computers.pairByRequest', url, host.name)),
+                  () => {
+                    setMode('address')
+                    setText(url)
+                    setAddress(url)
+                    setName((current) => current || host.name)
+                    setCode('')
+                    setFocusCode(true)
+                  },
+                )
+              }
+            />
+          ) : (
+            <form
+              id="add-host"
+              className="flex flex-col gap-3"
+              onSubmit={(event) => {
+                event.preventDefault()
+                submit()
+              }}
+            >
+              <Input
+                aria-label={t('Link, address or SSH host')}
+                placeholder={t('Pairing link, 100.64.0.7:7788 or user@host')}
+                autoFocus={!focusCode}
+                autoCapitalize="none"
+                spellCheck={false}
+                value={text}
                 disabled={busy}
+                aria-invalid={!!error && !ssh && !address}
+                onChange={(event) => read(event.target.value)}
               />
-            )}
-            <p className="m-0 text-caption text-muted-foreground">
-              {ssh
-                ? t(
-                    'Connects through SSH with your keys and ~/.ssh/config. Ramu must already be installed on that host; it is started there if it is not running, and no port is opened to the network.',
-                  )
-                : t(
-                    'On that host, open Remote access and choose Pair a device. Paste its link, or type its address and code.',
-                  )}
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {!ssh && (
-                <Input
-                  aria-label={t('Pairing code')}
-                  placeholder={t('Pairing code')}
-                  autoFocus={focusCode}
-                  autoCapitalize="characters"
-                  spellCheck={false}
-                  value={code}
+              {aliases.length > 0 && (
+                <Dropdown
+                  label={t('SSH config aliases')}
+                  value=""
+                  placeholder={t('Choose from your SSH config')}
+                  options={aliases.map((alias) => ({ value: alias, label: alias }))}
+                  onChange={read}
                   disabled={busy}
-                  onChange={(event) => setCode(event.target.value)}
                 />
               )}
-              <Input
-                aria-label={t('Name')}
-                placeholder={t('Name (optional)')}
-                maxLength={60}
-                value={name}
-                disabled={busy}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </div>
-          </form>
-        )}
-        {error && (
-          <p className="m-0 text-caption text-bad" role="alert">
-            {error}
-          </p>
-        )}
-        <DialogFooter className="sticky bottom-0 z-10 bg-popover">
+              <p className="m-0 text-caption text-muted-foreground">
+                {ssh
+                  ? t(
+                      'Connects through SSH with your keys and ~/.ssh/config. Ramu must already be installed on that host; it is started there if it is not running, and no port is opened to the network.',
+                    )
+                  : t(
+                      'On that host, open Remote access and choose Pair a device. Paste its link, or type its address and code.',
+                    )}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {!ssh && (
+                  <Input
+                    aria-label={t('Pairing code')}
+                    placeholder={t('Pairing code')}
+                    autoFocus={focusCode}
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    value={code}
+                    disabled={busy}
+                    onChange={(event) => setCode(event.target.value)}
+                  />
+                )}
+                <Input
+                  aria-label={t('Name')}
+                  placeholder={t('Name (optional)')}
+                  maxLength={60}
+                  value={name}
+                  disabled={busy}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </div>
+            </form>
+          )}
+          {error && (
+            <p className="m-0 text-caption text-bad" role="alert">
+              {error}
+            </p>
+          )}
+        </DialogScrollBody>
+        <DialogFooter>
           <Button variant="secondary" disabled={busy} onClick={onClose}>
             {t('Cancel')}
           </Button>
@@ -1328,109 +1342,113 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
         if (!open && !busy) onClose()
       }}
     >
-      <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-[540px]">
+      <DialogContent className={`${DIALOG_SCROLLS} sm:max-w-[540px]`}>
         <DialogHeader>
           <DialogTitle>{t('Connection settings')}</DialogTitle>
           <DialogDescription>
             {t('Saved on this device. The other host’s projects and settings stay as they are.')}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5 text-caption text-muted-foreground">
-            {t('Name')}
-            <Input
-              aria-label={t('Host name')}
-              maxLength={60}
-              value={name}
-              disabled={busy}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </label>
-          <div className="rounded-(--radius-s) bg-fill px-3 py-2">
-            <div className="flex items-center gap-2">
-              <code className="min-w-0 grow truncate text-caption" title={computer.url ?? ''}>
-                {computer.url}
-              </code>
-              <CopyButton text={computer.url ?? ''} label={t('Copy address')} />
+        <DialogScrollBody>
+          <div className="flex flex-col gap-4">
+            <label className="flex flex-col gap-1.5 text-caption text-muted-foreground">
+              {t('Name')}
+              <Input
+                aria-label={t('Host name')}
+                maxLength={60}
+                value={name}
+                disabled={busy}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </label>
+            <div className="rounded-(--radius-s) bg-fill px-3 py-2">
+              <div className="flex items-center gap-2">
+                <code className="min-w-0 grow truncate text-caption" title={computer.url ?? ''}>
+                  {computer.url}
+                </code>
+                <CopyButton text={computer.url ?? ''} label={t('Copy address')} />
+              </div>
+              <p className="m-0 text-caption text-muted-foreground">
+                {computer.url?.startsWith('https:') ? t('HTTPS connection') : t('HTTP · use a VPN or trusted network')}
+                {computer.pairedAt
+                  ? ` · ${t('Paired {0}', { 0: new Date(computer.pairedAt).toLocaleDateString() })}`
+                  : ''}
+              </p>
             </div>
-            <p className="m-0 text-caption text-muted-foreground">
-              {computer.url?.startsWith('https:') ? t('HTTPS connection') : t('HTTP · use a VPN or trusted network')}
-              {computer.pairedAt
-                ? ` · ${t('Paired {0}', { 0: new Date(computer.pairedAt).toLocaleDateString() })}`
-                : ''}
-            </p>
-          </div>
-          {routes.length > 1 && (
+            {routes.length > 1 && (
+              <div className="flex items-center justify-between gap-4">
+                <span>
+                  <strong className="text-body font-medium">{t('Network')}</strong>
+                  <span className="block mt-1 text-caption text-muted-foreground">
+                    {t(
+                      'Both devices must be on the network you pick. Ramu checks it is the same host before switching.',
+                    )}
+                  </span>
+                </span>
+                <Dropdown
+                  label={t('Network')}
+                  value={computer.url ?? ''}
+                  disabled={busy}
+                  options={routes.map((route) => ({
+                    value: route,
+                    label: `${t(networkName(hostOfUrl(route)))} · ${hostOfUrl(route)}`,
+                  }))}
+                  onChange={(next) => void switchNetwork(next)}
+                />
+              </div>
+            )}
             <div className="flex items-center justify-between gap-4">
               <span>
-                <strong className="text-body font-medium">{t('Network')}</strong>
+                <strong className="text-body font-medium">{t('Keep connected')}</strong>
                 <span className="block mt-1 text-caption text-muted-foreground">
-                  {t('Both devices must be on the network you pick. Ramu checks it is the same host before switching.')}
+                  {t(
+                    'Turn off to pause this connection without forgetting it. No retries or announcements are used while paused.',
+                  )}
                 </span>
               </span>
+              <Switch aria-label={t('Keep connected')} checked={enabled} disabled={busy} onCheckedChange={setEnabled} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-body">{t('Reconnect')}</span>
               <Dropdown
-                label={t('Network')}
-                value={computer.url ?? ''}
-                disabled={busy}
-                options={routes.map((route) => ({
-                  value: route,
-                  label: `${t(networkName(hostOfUrl(route)))} · ${hostOfUrl(route)}`,
-                }))}
-                onChange={(next) => void switchNetwork(next)}
+                label={t('Reconnect')}
+                value={retryMode}
+                disabled={busy || !enabled}
+                options={[
+                  { value: 'events', label: t('When the network or host returns') },
+                  { value: 'periodic', label: t('Also check every five minutes') },
+                ]}
+                onChange={(value) => setRetryMode(value as 'events' | 'periodic')}
               />
             </div>
-          )}
-          <div className="flex items-center justify-between gap-4">
-            <span>
-              <strong className="text-body font-medium">{t('Keep connected')}</strong>
-              <span className="block mt-1 text-caption text-muted-foreground">
-                {t(
-                  'Turn off to pause this connection without forgetting it. No retries or announcements are used while paused.',
-                )}
-              </span>
-            </span>
-            <Switch aria-label={t('Keep connected')} checked={enabled} disabled={busy} onCheckedChange={setEnabled} />
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-body">{t('Reconnect')}</span>
-            <Dropdown
-              label={t('Reconnect')}
-              value={retryMode}
-              disabled={busy || !enabled}
-              options={[
-                { value: 'events', label: t('When the network or host returns') },
-                { value: 'periodic', label: t('Also check every five minutes') },
-              ]}
-              onChange={(value) => setRetryMode(value as 'events' | 'periodic')}
-            />
-          </div>
-          <p className="m-0 text-caption text-muted-foreground">
-            {retryMode === 'events'
-              ? t(
-                  'Waits for a network change, waking from sleep, a signed host announcement, or Retry. No periodic connection checks.',
-                )
-              : t(
-                  'Uses the same wake-up signals and a quiet five-minute check if an announcement cannot reach this device.',
-                )}
-          </p>
-          <p className="m-0 text-caption text-muted-foreground">
-            {t(
-              'Host announcements need a reachable LAN or VPN path. If your network blocks them, use Retry or enable five-minute checks.',
-            )}
-          </p>
-          {computer.status === 'connected' && (
-            <div className="flex flex-col gap-2 border-t border-border pt-4">
-              <strong className="text-body font-medium">{t('What this device may do there')}</strong>
-              <HostPermissionList computer={computer} />
-            </div>
-          )}
-          {error && (
-            <p role="alert" className="m-0 text-caption text-bad">
-              {error}
+            <p className="m-0 text-caption text-muted-foreground">
+              {retryMode === 'events'
+                ? t(
+                    'Waits for a network change, waking from sleep, a signed host announcement, or Retry. No periodic connection checks.',
+                  )
+                : t(
+                    'Uses the same wake-up signals and a quiet five-minute check if an announcement cannot reach this device.',
+                  )}
             </p>
-          )}
-        </div>
-        <DialogFooter className="sticky bottom-0 z-10 bg-popover">
+            <p className="m-0 text-caption text-muted-foreground">
+              {t(
+                'Host announcements need a reachable LAN or VPN path. If your network blocks them, use Retry or enable five-minute checks.',
+              )}
+            </p>
+            {computer.status === 'connected' && (
+              <div className="flex flex-col gap-2 border-t border-border pt-4">
+                <strong className="text-body font-medium">{t('What this device may do there')}</strong>
+                <HostPermissionList computer={computer} />
+              </div>
+            )}
+            {error && (
+              <p role="alert" className="m-0 text-caption text-bad">
+                {error}
+              </p>
+            )}
+          </div>
+        </DialogScrollBody>
+        <DialogFooter>
           <Button variant="secondary" disabled={busy} onClick={onClose}>
             {t('Cancel')}
           </Button>

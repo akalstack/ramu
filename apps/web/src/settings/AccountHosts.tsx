@@ -44,7 +44,7 @@ export function AccountHosts({ onConnect }: { onConnect: (host: LinkAccountHost)
   }
   if (!status) return null
   const serviceField = showService || (status.service !== null && status.service !== DEFAULT_LINK_SERVICE)
-  const caption = 'm-[0_0_12px] text-caption text-muted-foreground'
+  const caption = 'm-0 text-caption text-muted-foreground'
 
   if (!status.account)
     return (

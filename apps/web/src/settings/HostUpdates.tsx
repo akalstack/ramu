@@ -88,7 +88,7 @@ export function HostUpdateLine({ computer, onChanged }: { computer: Computer; on
     }
   }
   return (
-    <div className="mt-1 ml-[44px] flex min-w-0 flex-wrap items-center gap-2 text-caption text-muted-foreground">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 text-caption text-muted-foreground">
       <span className="min-w-0 truncate">{parts.join(' · ') || t('Up to date')}</span>
       {summary.nextVersion && (
         <Button variant="secondary" size="xs" disabled={!!busy} onClick={() => setConfirming(true)}>

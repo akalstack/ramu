@@ -371,18 +371,17 @@ function AgentsSwitch({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the grant arrives; `connect` reads the current render
   }, [wanted, held, hosts])
   const label = t('Agents here can start threads on {0}', { 0: computer.name })
+  const note = declined
+    ? t('Declined by the host')
+    : !linked && (asked || wanted)
+      ? t('Waiting for {0} to allow it', { 0: computer.name })
+      : null
   return (
-    <div className="flex min-h-7 items-center gap-3">
-      <SettingsLabel
-        title={label}
-        help={
-          declined
-            ? t('Declined by the host')
-            : !linked && (asked || wanted)
-              ? t('Waiting for {0} to allow it', { 0: computer.name })
-              : undefined
-        }
-      />
+    <div className="flex min-h-8 items-center justify-between gap-3">
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate text-control text-soft">{label}</span>
+        {note && <span className="text-caption text-muted-foreground">{note}</span>}
+      </span>
       <Switch
         aria-label={label}
         checked={!!linked || (wanted && !declined)}
