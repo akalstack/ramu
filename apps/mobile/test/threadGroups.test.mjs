@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { groupKey, groupThreads } from '../src/runtime/threadGroups.ts'
+import { groupKey, groupThreads, splitDone } from '../src/runtime/threadGroups.ts'
 
 const thread = (id, projectId, lastActiveAt, status = 'idle', computerId = 'a') => ({
   id,
@@ -76,4 +76,21 @@ test('standalone threads and colliding project IDs stay separate per host', () =
     ],
   )
   assert.notEqual(groups[0].key, groups[1].key)
+})
+
+test('threads marked done leave their projects for one Done list, most recently finished first', () => {
+  const { open, done } = splitDone([
+    { id: 'a', doneAt: null },
+    { id: 'b', doneAt: 10 },
+    { id: 'c', doneAt: 30 },
+    { id: 'd' },
+  ])
+  assert.deepEqual(
+    open.map((thread) => thread.id),
+    ['a', 'd'],
+  )
+  assert.deepEqual(
+    done.map((thread) => thread.id),
+    ['c', 'b'],
+  )
 })

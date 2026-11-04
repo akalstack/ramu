@@ -1,6 +1,17 @@
 /** Threads that need someone, or are still working, are never hidden by a group's cap. */
 const active = (status: string) => status === 'running' || status === 'needs-input' || status === 'failed'
 
+/**
+ * As on the desktop, threads marked done leave their projects, Pinned and the standalone bucket for one Done list, most
+ * recently finished first. Sending a message reopens a thread, which brings it back.
+ */
+export function splitDone<T extends { doneAt?: number | null }>(threads: readonly T[]): { open: T[]; done: T[] } {
+  return {
+    open: threads.filter((thread) => !thread.doneAt),
+    done: threads.filter((thread) => thread.doneAt).sort((a, b) => b.doneAt! - a.doneAt!),
+  }
+}
+
 /** Projects are qualified by host: two hosts can both have a standalone bucket or a colliding project ID. */
 export const groupKey = (computerId: string, projectId: string) => `${computerId}\u0000${projectId}`
 

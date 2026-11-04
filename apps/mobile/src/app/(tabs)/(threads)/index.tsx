@@ -1,6 +1,6 @@
 import { translate } from '@ramu/shared/i18n'
 import { recentThreads } from '../../../runtime/recentThreads'
-import { groupThreads, type ThreadGroup } from '../../../runtime/threadGroups'
+import { groupThreads, splitDone, type ThreadGroup } from '../../../runtime/threadGroups'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BackHandler, Platform, Pressable, ScrollView as HScroll, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
@@ -18,6 +18,7 @@ import {
   X,
   Archive,
   Check,
+  CircleCheck,
   Trash2,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
@@ -45,12 +46,16 @@ type HomeRow = { key: string } & Position &
     | { kind: 'outbox'; o: OutboxItem }
     | { kind: 'chat'; chat: Chat; project?: string; divider?: boolean }
     | { kind: 'project'; group: ThreadGroup<Chat, MobileProject>; closed: boolean }
+    | { kind: 'done'; count: number; closed: boolean }
     // `group` set: show the rest of one project (or fewer again); unset: more of the flat filtered list.
     | { kind: 'more'; group?: string; hidden?: number }
   )
 
 /** Newest threads each project shows before "Show more"; running, waiting and failed ones always show. */
 const PER_PROJECT = 3
+/** Done threads shown once the Done card is opened, before "Show more". */
+const DONE_PAGE = 10
+const DONE_KEY = 'section:done'
 
 export default function Threads() {
   const { c } = useTheme()
@@ -95,7 +100,8 @@ export default function Threads() {
   const [filter, setFilter] = useState<StatusFilter>(initialFilter === 'archived' ? 'archived' : 'all')
   const [projectMenu, setProjectMenu] = useState<MobileProject | null>(null)
   // Folded projects and projects showing all their threads, by group key (host + project).
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  // Done starts folded, as on the desktop: finished work stays reachable without crowding the projects.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set([DONE_KEY]))
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const toggle = (set: typeof setCollapsed, key: string) => {
     tap()
@@ -129,10 +135,15 @@ export default function Threads() {
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }, [scoped, filter])
   const filtering = filter !== 'all'
-  const pinned = mine
+  // A thread marked done leaves its project (and Pinned) for one Done card at the bottom; archived ones list as they are.
+  const { open, done } = useMemo(
+    () => (filter === 'archived' ? { open: mine, done: [] } : splitDone(mine)),
+    [mine, filter],
+  )
+  const pinned = open
     .filter((x) => x.pinnedAt !== null && filter !== 'archived')
     .sort((a, b) => b.pinnedAt! - a.pinnedAt!)
-  const unpinned = mine.filter((x) => !pinned.includes(x))
+  const unpinned = open.filter((x) => !pinned.includes(x))
   const live = scoped.filter((x) => x.status !== 'archived')
   const chips: { key: StatusFilter; label: string; count: number }[] = [
     { key: 'all', label: t.homeAll, count: live.length },
@@ -214,12 +225,31 @@ export default function Threads() {
         index ? space.m : 0,
       )
     })
+    if (done.length) {
+      const closed = collapsed.has(DONE_KEY)
+      const all = expanded.has(DONE_KEY)
+      const shown = closed ? [] : all ? done : done.slice(0, DONE_PAGE)
+      group(
+        'done',
+        [
+          { key: 'head', kind: 'done', count: done.length, closed } as HomeRow,
+          ...shown.map(
+            (chat) => ({ key: chat.id, kind: 'chat', chat, project: labelOf(chat), divider: true }) as HomeRow,
+          ),
+          ...(!closed && done.length > DONE_PAGE
+            ? [{ key: 'more', kind: 'more', group: DONE_KEY, hidden: all ? 0 : done.length - DONE_PAGE } as HomeRow]
+            : []),
+        ],
+        groups.length ? space.m : 0,
+      )
+    }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mount only] by design; the values it reads beyond these are current as of that run
   }, [
     outbox,
     pinned,
     unpinned,
+    done,
     projectList,
     historyLimit,
     filtering,
@@ -286,6 +316,34 @@ export default function Threads() {
         })()
       ) : row.kind === 'chat' ? (
         <ChatRow chat={row.chat} project={row.project} divider={row.divider} selectable />
+      ) : row.kind === 'done' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={translate(store.language, 'Done')}
+          accessibilityState={{ expanded: !row.closed }}
+          onPress={() => toggle(setCollapsed, DONE_KEY)}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.s,
+            paddingHorizontal: space.l,
+            minHeight: 50,
+            backgroundColor: pressed ? c.pressed : 'transparent',
+          })}
+        >
+          <CircleCheck size={16} color={c.soft} strokeWidth={1.8} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+              <T weight="600">{translate(store.language, 'Done')}</T>
+              <Disclosure open={!row.closed} size={13} color={c.muted} />
+            </View>
+            {row.closed ? (
+              <T size={font.caption} tone="muted">
+                {translate(store.language, '{count} threads', { count: row.count })}
+              </T>
+            ) : null}
+          </View>
+        </Pressable>
       ) : row.kind === 'more' ? (
         <Row
           onPress={() => (row.group ? toggle(setExpanded, row.group) : setHistoryLimit((limit) => limit + 20))}
@@ -589,8 +647,7 @@ export default function Threads() {
               id: x.id as string | null,
               name: x.name,
               status: x.status,
-              help:
-                x.status === 'online' || !x.lastSeen ? t[x.status] : `${t[x.status]} · ${ago(x.lastSeen)}`,
+              help: x.status === 'online' || !x.lastSeen ? t[x.status] : `${t[x.status]} · ${ago(x.lastSeen)}`,
             })),
           ].map((o) => (
             <SheetOption
