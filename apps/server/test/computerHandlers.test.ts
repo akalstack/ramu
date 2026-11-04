@@ -24,7 +24,9 @@ vi.mock('../src/computer/lockedUse', () => ({
 }))
 
 function setup(deviceId: string | undefined, admin: boolean, text?: string, eligible = () => false) {
+  const scales: number[] = []
   const backend: ComputerBackend = {
+    useScale: (scale) => void scales.push(scale),
     status: () => ({ available: true, computer: { id: 'local', name: 'Mac' } }),
     capture: async () => ({
       mimeType: 'image/png',
@@ -50,13 +52,22 @@ function setup(deviceId: string | undefined, admin: boolean, text?: string, elig
     },
     agents: { list: () => [{ id: 'run1', state: 'running' }] },
     awake: { status: () => ({ active: true }) },
+    computerVideo: { answer: async () => ({ id: 'peer', sdp: 'v=0', width: 1600, height: 1000, scale: 1.6 }) },
   } as unknown as HandlerContext)
   const call = (name: string, ...args: unknown[]) =>
     methods[name]!.run(...(methods[name]!.args.parse(args) as unknown[]))
-  return { call, computer }
+  return { call, computer, scales }
 }
 
 describe('computer handlers', () => {
+  it('maps input from display video at the scale the video reports', async () => {
+    const host = setup('local', true)
+    host.call('computer.setEnabled', true)
+    await host.call('computer.grant', 't1', { observe: true, input: true })
+    await host.call('computer.rtcOffer', 't1', 'v=0 '.repeat(10))
+    expect(host.scales).toEqual([1.6])
+  })
+
   it('lets a paired owner device read Locked Use but change it only on the host', async () => {
     const paired = setup('laptop', false, undefined, () => true)
     expect(await paired.call('computer.lockedUse')).toEqual({ enabled: false })

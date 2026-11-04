@@ -88,6 +88,11 @@ export interface ComputerBackend {
   localInputActive?(target: ComputerTarget): Promise<boolean>
   /** The kind of text field focused on the computer, so a phone raises its keyboard after a tap; never the value. */
   focusedField?(target: ComputerTarget): Promise<BrowserFieldFocus>
+  /**
+   * The picture people act on has this many pixels per screen point. Live video says so when it starts, since without
+   * snapshots the backend would otherwise map a point in the video to the wrong place on the screen.
+   */
+  useScale?(scale: number): void
   /** Whether the computer's screen is locked, for the backends that can tell. Screen video cannot see past the lock. */
   locked?(): Promise<boolean>
   /** How often a watched target is worth capturing, in milliseconds. Cheap streaming backends return less than the default. */

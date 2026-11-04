@@ -175,6 +175,10 @@ export class SckDisplayBackend implements ComputerBackend {
     return this.inner.status()
   }
 
+  useScale(scale: number): void {
+    this.inner.useScale?.(scale)
+  }
+
   locked(): Promise<boolean> {
     return this.inner.locked?.() ?? Promise.resolve(false)
   }

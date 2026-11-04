@@ -26,6 +26,10 @@ export class ComputerRouter implements ComputerBackend {
     return this.apps.status()
   }
 
+  useScale(scale: number): void {
+    this.display.useScale?.(scale)
+  }
+
   /** The display backend reads the lock; an app backend acts behind it, but no screen video can see it. */
   locked(): Promise<boolean> {
     return this.display.locked?.() ?? Promise.resolve(false)

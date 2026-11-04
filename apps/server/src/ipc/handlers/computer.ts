@@ -340,7 +340,12 @@ export const registerComputerHandlers: RegisterHandlers = ({
         if (!video) throw new Error('Update this host for video.')
         const session = viewer(threadId)
         if (session.runtime.id !== 'local') throw new Error('Video is available for this computer. Use image frames.')
-        if (session.target.kind === 'display') return video.answer(threadId, device(), offer)
+        if (session.target.kind === 'display') {
+          const answer = await video.answer(threadId, device(), offer)
+          // Input from this viewer is in the video's pixels; map them to screen points at the video's own scale.
+          ready().backend.useScale?.(answer.scale)
+          return answer
+        }
         // An app's window streams while the Mac is unlocked. Behind the lock only Open Computer Use's snapshots see it.
         if (await ready().backend.locked?.()) throw new Error('This Mac is locked, so the app is shown as snapshots.')
         // Sized to the app's snapshots, so a point in the video is the same point for Open Computer Use's input.
