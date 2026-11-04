@@ -1,10 +1,10 @@
 import { reducedMotion } from './workspace/panelMotion'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/desktop-button'
-import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import icon from '../../../assets/icon.svg'
 import wordmark from '../../../assets/wordmark.svg'
-import startupLogo from '../../../assets/startup-logo.svg?raw'
+import { MARK, MARK_VIEW_BOX, MARK_WAKE, STARTUP_FADE, STARTUP_MARK_SIZE } from '@ramu/shared/brandMark'
 
 // Shared across screen mounts, reset when the app's renderer starts again.
 let markRevealed = false
@@ -19,7 +19,8 @@ export function BrandMark({ size, className }: { size: number; className?: strin
 export function AnimatedMark({ size, className = '' }: { size: number; className?: string }) {
   useLanguage()
   const [reveal, setReveal] = useState(false)
-  const [tap, setTap] = useState(0)
+  const stem = useRef<SVGPathElement>(null)
+  const dot = useRef<SVGCircleElement>(null)
   useLayoutEffect(() => {
     if (markRevealed) return
     markRevealed = true
@@ -34,12 +35,11 @@ export function AnimatedMark({ size, className = '' }: { size: number; className
       aria-label={t('Animate Ramu logo')}
       onClick={() => {
         setReveal(false)
-        setTap((count) => count + 1)
+        wakeMark(stem.current, dot.current)
       }}
     >
       <svg
-        key={tap}
-        className={`size-auto animated-mark [&.start-mark]:bg-transparent [&.start-mark]:[border-radius:0] [&.start-mark]:mb-3 overflow-visible shrink-0 ${tap ? 'animated-mark-tap' : reveal ? 'animated-mark-reveal' : ''} ${className}`}
+        className={`size-auto animated-mark [&.start-mark]:bg-transparent [&.start-mark]:[border-radius:0] [&.start-mark]:mb-3 overflow-visible shrink-0 ${reveal ? 'animated-mark-reveal' : ''} ${className}`}
         width={size}
         height={size}
         viewBox="240 240 540 540"
@@ -47,27 +47,26 @@ export function AnimatedMark({ size, className = '' }: { size: number; className
         aria-hidden="true"
       >
         <path
+          ref={stem}
           className="animated-mark-stem"
-          d="M356 694V518C356 402 434 334 548 334"
+          d={MARK.stem}
           pathLength="1"
           style={{ stroke: 'var(--brand-mark)' }}
           strokeWidth="120"
           strokeLinecap="round"
         />
-        <circle className="animated-mark-dot" cx="664" cy="622" r="72" fill="#7d6cff" />
+        <circle ref={dot} className="animated-mark-dot" {...MARK.dot} fill={MARK.dotColor} />
       </svg>
     </Button>
   )
 }
 
-const MARK_STEM = 'M356 694V518C356 402 434 334 548 334'
-
 /** The r + dot in the current text color: Ramu's own tool calls in a chat, sized like any other tool icon. */
 export function RamuGlyph({ size, className }: { size: number; className?: string }) {
   return (
-    <svg className={className} width={size} height={size} viewBox="240 240 540 540" fill="none" aria-hidden="true">
-      <path d={MARK_STEM} stroke="currentColor" strokeWidth="120" strokeLinecap="round" />
-      <circle cx="664" cy="622" r="72" fill="currentColor" />
+    <svg className={className} width={size} height={size} viewBox={MARK_VIEW_BOX} fill="none" aria-hidden="true">
+      <path d={MARK.stem} stroke="currentColor" strokeWidth="120" strokeLinecap="round" />
+      <circle {...MARK.dot} fill="currentColor" />
     </svg>
   )
 }
@@ -81,31 +80,56 @@ export function BootScreen() {
   )
 }
 
-/** Keep one animation mounted while the nested application providers load. */
+/**
+ * The mark wakes: the stem rocks and the dot hops, from the shared keyframes the phone uses too. Returns when it settles,
+ * at once with reduced motion.
+ */
+function wakeMark(stem: SVGElement | null, dot: SVGElement | null): Promise<void> {
+  if (!stem || !dot || reducedMotion() || typeof stem.animate !== 'function') return Promise.resolve()
+  const timing = { duration: MARK_WAKE.duration, easing: 'ease-in-out' }
+  stem.style.transformOrigin = `${MARK.stemPivot[0]}px ${MARK.stemPivot[1]}px`
+  dot.style.transformOrigin = `${MARK.dot.cx}px ${MARK.dot.cy}px`
+  stem.animate(
+    MARK_WAKE.stem.map((frame) => ({ offset: frame.at, transform: `rotate(${frame.rotate}deg)` })),
+    timing,
+  )
+  const hop = dot.animate(
+    MARK_WAKE.dot.map((frame) => ({
+      offset: frame.at,
+      transform: `translate(${frame.x}px, ${frame.y}px) scale(${frame.scaleX}, ${frame.scaleY})`,
+    })),
+    timing,
+  )
+  return hop.finished.then(
+    () => undefined,
+    () => undefined,
+  )
+}
+
+/**
+ * Keeps the mark on screen while the nested application providers load. It starts where the phone's launch image
+ * leaves it, the same size in the middle, wakes once, and fades into the app when that is ready.
+ */
 export function StartupScreen({ ready, children }: { ready: boolean; children: ReactNode }) {
   useLanguage()
-  const [motionDone, setMotionDone] = useState(() => reducedMotion())
+  const [motionDone, setMotionDone] = useState(false)
   const [closed, setClosed] = useState(false)
+  const stem = useRef<SVGPathElement>(null)
+  const dot = useRef<SVGCircleElement>(null)
   const released = ready && motionDone
   useEffect(() => {
-    if (reducedMotion()) setMotionDone(true)
-  }, [ready])
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const reduced = () => {
-      if (media.matches) setMotionDone(true)
-    }
-    media.addEventListener('change', reduced)
-    // Also release if animation events are suppressed by the renderer.
-    const timer = window.setTimeout(() => setMotionDone(true), 1600)
+    let alive = true
+    void wakeMark(stem.current, dot.current).then(() => alive && setMotionDone(true))
+    // Also release if the renderer suppresses animations.
+    const timer = window.setTimeout(() => setMotionDone(true), MARK_WAKE.duration + 600)
     return () => {
-      media.removeEventListener('change', reduced)
+      alive = false
       window.clearTimeout(timer)
     }
   }, [])
   useEffect(() => {
     if (!released) return
-    const timer = window.setTimeout(() => setClosed(true), 220)
+    const timer = window.setTimeout(() => setClosed(true), STARTUP_FADE + 20)
     return () => window.clearTimeout(timer)
   }, [released])
 
@@ -121,18 +145,29 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
       </div>
       {!closed && (
         <div
-          className={`startup-overlay [&.startup-released]:opacity-0 [&.startup-released]:pointer-events-none fixed inset-0 z-1000 grid place-items-center bg-canvas opacity-100 [transition:opacity_200ms_ease] ${released ? ' startup-released' : ''}`}
+          className={`startup-overlay [&.startup-released]:opacity-0 [&.startup-released]:pointer-events-none fixed inset-0 z-1000 grid place-items-center bg-canvas opacity-100 ${released ? ' startup-released' : ''}`}
+          style={{ transition: reducedMotion() ? 'none' : `opacity ${STARTUP_FADE}ms ease` }}
           role="status"
           aria-label={t('Starting Ramu')}
           aria-hidden={released}
         >
-          <div
-            className="startup-logo [&_>_svg]:block [&_>_svg]:w-full [&_>_svg]:h-auto [&_>_svg]:overflow-visible w-[min(280px,_calc(100vw_-_48px))] [color:var(--text)]"
-            dangerouslySetInnerHTML={{ __html: startupLogo }}
-            onAnimationEnd={(event) => {
-              if (event.animationName === 'ramu-startup-dot') setMotionDone(true)
-            }}
-          />
+          <svg
+            width={STARTUP_MARK_SIZE}
+            height={STARTUP_MARK_SIZE}
+            viewBox={MARK_VIEW_BOX}
+            fill="none"
+            className="overflow-visible"
+            aria-hidden="true"
+          >
+            <path
+              ref={stem}
+              d={MARK.stem}
+              style={{ stroke: 'var(--brand-mark)' }}
+              strokeWidth="120"
+              strokeLinecap="round"
+            />
+            <circle ref={dot} {...MARK.dot} fill={MARK.dotColor} />
+          </svg>
         </div>
       )}
     </>

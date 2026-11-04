@@ -21,13 +21,7 @@ const clean = (svg) =>
     .replace(/\s+/g, ' ')
     .trim()
 
-const startup = read('assets/startup-logo.svg')
-const letters = startup.slice(
-  startup.indexOf('<g class="startup-letters"'),
-  startup.indexOf('<circle class="startup-dot"'),
-)
 const svgs = {
-  startupLetters: clean(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 431.579 136">${letters}</svg>`),
   wordmark: clean(read('assets/wordmark.svg')),
   'claude-code': clean(read('apps/web/src/assets/providers/claude.svg')),
   codex: clean(read('apps/web/src/assets/providers/openai.svg')),

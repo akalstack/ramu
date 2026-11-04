@@ -1010,7 +1010,11 @@ test('new thread with Auto moves to the composer once its host connects after th
     '../runtime/store': { useStore: () => store },
     '../runtime/types': { STANDALONE: 'no-project' },
     '../i18n': { useT: () => ({ newChat: 'New thread' }) },
-    '../components/Keyboard': { useKeyboardInset: () => keyboard, useKeyboardOpen: () => keyboard > 0, KeyboardPadding: 'KeyboardPadding' },
+    '../components/Keyboard': {
+      useKeyboardInset: () => keyboard,
+      useKeyboardOpen: () => keyboard > 0,
+      KeyboardPadding: 'KeyboardPadding',
+    },
   })
   const render = () => hooks.render(() => NewChat({ asTab }))
   assert.equal(find(render(), 'Header').props.title, 'Choose a project')
@@ -1054,7 +1058,11 @@ test('new thread switches projects and composer in one flow without losing the d
     '../runtime/store': { useStore: () => store },
     '../runtime/types': { STANDALONE: 'no-project' },
     '../i18n': { useT: () => ({ newChat: 'New thread' }) },
-    '../components/Keyboard': { useKeyboardInset: () => keyboard, useKeyboardOpen: () => keyboard > 0, KeyboardPadding: 'KeyboardPadding' },
+    '../components/Keyboard': {
+      useKeyboardInset: () => keyboard,
+      useKeyboardOpen: () => keyboard > 0,
+      KeyboardPadding: 'KeyboardPadding',
+    },
   })
   const render = () => hooks.render(() => NewChat({ asTab }))
   let tree = render()
@@ -1166,7 +1174,11 @@ test('a new-thread form keeps its chosen host when the global selection changes'
     '../runtime/store': { useStore: () => store },
     '../runtime/types': { STANDALONE: 'no-project' },
     '../i18n': { useT: () => ({ newChat: 'New thread' }) },
-    '../components/Keyboard': { useKeyboardInset: () => 0, useKeyboardOpen: () => 0 > 0, KeyboardPadding: 'KeyboardPadding' },
+    '../components/Keyboard': {
+      useKeyboardInset: () => 0,
+      useKeyboardOpen: () => 0 > 0,
+      KeyboardPadding: 'KeyboardPadding',
+    },
   })
   NewChat()
   store.selected = 'b'
@@ -1321,7 +1333,11 @@ for (const os of ['ios', 'android']) {
       '../runtime/store': { useStore: () => store },
       '../runtime/types': { STANDALONE: 'no-project' },
       '../i18n': { useT: () => ({ browseFiles: 'Browse files' }) },
-      '../components/Keyboard': { useKeyboardInset: () => 0, useKeyboardOpen: () => 0 > 0, KeyboardPadding: 'KeyboardPadding' },
+      '../components/Keyboard': {
+        useKeyboardInset: () => 0,
+        useKeyboardOpen: () => 0 > 0,
+        KeyboardPadding: 'KeyboardPadding',
+      },
     })
     const render = () => {
       cursor = 0
@@ -2798,7 +2814,11 @@ for (const os of ['ios', 'android']) {
       '../runtime/store': { useStore: () => store },
       '../runtime/types': { STANDALONE: 'no-project' },
       '../i18n': { useT: () => ({ newChat: 'New thread' }) },
-      '../components/Keyboard': { useKeyboardInset: () => 0, useKeyboardOpen: () => 0 > 0, KeyboardPadding: 'KeyboardPadding' },
+      '../components/Keyboard': {
+        useKeyboardInset: () => 0,
+        useKeyboardOpen: () => 0 > 0,
+        KeyboardPadding: 'KeyboardPadding',
+      },
     })
     const render = () => hooks.render(() => NewChat())
     render()
@@ -2975,7 +2995,11 @@ for (const os of ['ios', 'android']) {
       '../runtime/store': { useStore: () => store },
       '../runtime/types': { STANDALONE: 'no-project' },
       '../i18n': { useT: () => ({ renameWorkspace: 'Rename workspace' }) },
-      '../components/Keyboard': { useKeyboardInset: () => 0, useKeyboardOpen: () => 0 > 0, KeyboardPadding: 'KeyboardPadding' },
+      '../components/Keyboard': {
+        useKeyboardInset: () => 0,
+        useKeyboardOpen: () => 0 > 0,
+        KeyboardPadding: 'KeyboardPadding',
+      },
     })
     const render = () => hooks.render(() => NewChat())
     let tree = render()
@@ -3356,7 +3380,11 @@ for (const os of ['ios', 'android']) {
       '../runtime/store': { useStore: () => store },
       '../runtime/types': { STANDALONE: 'no-project' },
       '../i18n': { useT: () => components },
-      '../components/Keyboard': { useKeyboardInset: () => 0, useKeyboardOpen: () => 0 > 0, KeyboardPadding: 'KeyboardPadding' },
+      '../components/Keyboard': {
+        useKeyboardInset: () => 0,
+        useKeyboardOpen: () => 0 > 0,
+        KeyboardPadding: 'KeyboardPadding',
+      },
     })
     const render = () => hooks.render(() => NewChat())
     render()
@@ -4132,7 +4160,11 @@ for (const os of ['ios', 'android']) {
       '../runtime/store': { useStore: () => store },
       '../runtime/types': { STANDALONE: 'no-project' },
       '../i18n': { useT: () => copy },
-      '../components/Keyboard': { useKeyboardInset: () => 0, useKeyboardOpen: () => 0 > 0, KeyboardPadding: 'KeyboardPadding' },
+      '../components/Keyboard': {
+        useKeyboardInset: () => 0,
+        useKeyboardOpen: () => 0 > 0,
+        KeyboardPadding: 'KeyboardPadding',
+      },
     })
     const render = () => hooks.render(() => NewChat())
     render()

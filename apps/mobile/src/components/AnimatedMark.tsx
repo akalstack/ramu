@@ -15,11 +15,13 @@ import { useReducedMotion } from './Motion'
 import { tap as haptic } from './ui'
 import { useSay } from '../i18n'
 
+import { MARK, MARK_VIEW_BOX, MARK_WAKE } from '@ramu/shared/brandMark'
+
 // The desktop's AnimatedMark (apps/web/src/Brand.tsx): the r stem draws in and the dot drops onto it once per launch;
-// tapping the mark makes the dot hop again. Same geometry, same keyframes (styles.css ramu-stem/dot/tap-*).
-const VIEW = 540,
-  ORIGIN = 240
-const STEM = 'M356 694V518C356 402 434 334 548 334'
+// tapping the mark wakes it again with the shared keyframes the startup screen uses.
+const VIEW = MARK.size,
+  ORIGIN = MARK.origin
+const STEM = MARK.stem
 const STEM_LENGTH = 440
 let revealed = false
 
@@ -54,13 +56,7 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
   const replay = () => {
     haptic()
     if (reduced) return
-    hop.setValue(0)
-    Animated.timing(hop, {
-      toValue: 1,
-      duration: 650,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start()
+    wake(hop)
   }
   // Numbers, not a "12.03px" string: RN's transformOrigin parser only reads whole numbers before px, so a decimal like 12.03px
   // became 3px…29629 and flung the dot and stem off screen whenever they scaled or rotated.
@@ -80,16 +76,8 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
   const dropX = drop.interpolate({ inputRange: [0, 0.48, 0.72, 0.88, 1], outputRange: [0.45, 1.16, 0.94, 1.03, 1] })
   const dropSY = drop.interpolate({ inputRange: [0, 0.48, 0.72, 0.88, 1], outputRange: [0.45, 0.84, 1.06, 0.97, 1] })
   const dropOpacity = drop.interpolate({ inputRange: [0, 0.48, 1], outputRange: [0, 1, 1] })
-  const hopRange = [0, 0.18, 0.46, 0.76, 0.9, 1]
-  const hopX = hop.interpolate({ inputRange: hopRange, outputRange: [0, 0, 30, 0, 0, 0].map((v) => v * k) })
-  const hopY = hop.interpolate({ inputRange: hopRange, outputRange: [0, 8, -110, 6, -10, 0].map((v) => v * k) })
-  const hopSX = hop.interpolate({ inputRange: hopRange, outputRange: [1, 1.18, 0.9, 1.12, 0.97, 1] })
-  const hopSY = hop.interpolate({ inputRange: hopRange, outputRange: [1, 0.82, 1.1, 0.88, 1.03, 1] })
-  const tilt = hop.interpolate({
-    inputRange: [0, 0.28, 0.62, 0.82, 1],
-    outputRange: ['0deg', '-9deg', '4deg', '-2deg', '0deg'],
-  })
-  const viewBox = `${ORIGIN} ${ORIGIN} ${VIEW} ${VIEW}`
+  const { tilt, hopX, hopY, hopSX, hopSY } = wakeMotion(hop, k)
+  const viewBox = MARK_VIEW_BOX
   const stem = useAnimatedProps(() => ({
     strokeDashoffset: STEM_LENGTH * (1 - draw.value),
     opacity: interpolate(draw.value, [0, 0.12, 1], [0, 1, 1]),
@@ -126,7 +114,7 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
           ]}
         >
           <Svg width={size} height={size} viewBox={viewBox}>
-            <Circle cx={664} cy={622} r={72} fill="#7d6cff" />
+            <Circle {...MARK.dot} fill={MARK.dotColor} />
           </Svg>
         </Animated.View>
       </View>
@@ -134,7 +122,68 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
   )
 }
 
-const VIEW_BOX = `${ORIGIN} ${ORIGIN} ${VIEW} ${VIEW}`
+/** Plays the shared wake on a 0→1 value, on the native driver. */
+export function wake(value: Animated.Value, done?: () => void) {
+  value.setValue(0)
+  Animated.timing(value, {
+    toValue: 1,
+    duration: MARK_WAKE.duration,
+    easing: Easing.inOut(Easing.ease),
+    useNativeDriver: true,
+  }).start(({ finished }) => finished && done?.())
+}
+
+/** The shared wake keyframes as transforms for a mark drawn `k` points per artwork unit. */
+export function wakeMotion(value: Animated.Value, k: number) {
+  const dot = MARK_WAKE.dot
+  const range = dot.map((frame) => frame.at)
+  return {
+    tilt: value.interpolate({
+      inputRange: MARK_WAKE.stem.map((frame) => frame.at),
+      outputRange: MARK_WAKE.stem.map((frame) => `${frame.rotate}deg`),
+    }),
+    hopX: value.interpolate({ inputRange: range, outputRange: dot.map((frame) => frame.x * k) }),
+    hopY: value.interpolate({ inputRange: range, outputRange: dot.map((frame) => frame.y * k) }),
+    hopSX: value.interpolate({ inputRange: range, outputRange: dot.map((frame) => frame.scaleX) }),
+    hopSY: value.interpolate({ inputRange: range, outputRange: dot.map((frame) => frame.scaleY) }),
+  }
+}
+
+/** The mark at rest that wakes on `value`: the startup screen's, where the launch image leaves it. */
+export function WakingMark({ size, value }: { size: number; value: Animated.Value }) {
+  const { c } = useTheme()
+  const k = size / VIEW
+  const { tilt, hopX, hopY, hopSX, hopSY } = wakeMotion(value, k)
+  const at = (x: number, y: number) => ({
+    left: 0,
+    top: 0,
+    width: size,
+    height: size,
+    position: 'absolute' as const,
+    transformOrigin: [(x - ORIGIN) * k, (y - ORIGIN) * k, 0],
+  })
+  return (
+    <View style={{ width: size, height: size, overflow: 'visible' }}>
+      <Animated.View style={[at(MARK.stemPivot[0], MARK.stemPivot[1]), { transform: [{ rotate: tilt }] }]}>
+        <Svg width={size} height={size} viewBox={MARK_VIEW_BOX}>
+          <Path d={STEM} stroke={c.text} strokeWidth={120} strokeLinecap="round" fill="none" />
+        </Svg>
+      </Animated.View>
+      <Animated.View
+        style={[
+          at(MARK.dot.cx, MARK.dot.cy),
+          { transform: [{ translateX: hopX }, { translateY: hopY }, { scaleX: hopSX }, { scaleY: hopSY }] },
+        ]}
+      >
+        <Svg width={size} height={size} viewBox={MARK_VIEW_BOX}>
+          <Circle {...MARK.dot} fill={MARK.dotColor} />
+        </Svg>
+      </Animated.View>
+    </View>
+  )
+}
+
+const VIEW_BOX = MARK_VIEW_BOX
 
 /** The r + dot in one color: Ramu's own tool calls in a chat, sized like any other tool icon. */
 export function RamuGlyph({ size, color }: { size: number; color: string }) {
