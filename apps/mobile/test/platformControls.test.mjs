@@ -1093,8 +1093,8 @@ test('new thread switches projects and composer in one flow without losing the d
   composer = find(tree, 'Composer')
   assert.equal(composer.props.draftKey, draftKey)
   assert.equal(store.drafts[draftKey], 'Keep this task')
-  assert.ok(nodes(tree).some((node) => node.type === 'AnimatedMark' && node.props.size === 32))
-  assert.ok(nodes(tree).some((node) => node.props?.children === 'What should we work on?'))
+  // With the keyboard up the same mark and question stay at one size; only their place moves.
+  assert.ok(nodes(tree).some((node) => node.type === 'AnimatedMark' && node.props.size === 48))
   assert.ok(
     !nodes(tree).some((node) => typeof node.props?.children === 'string' && node.props.children.startsWith('Runs on ')),
   )

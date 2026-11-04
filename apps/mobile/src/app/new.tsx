@@ -586,24 +586,18 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
               </T>
             </View>
           </View>
-        ) : !keyboardOpen ? (
+        ) : (
           <View style={{ flex: 1, justifyContent: 'center', padding: space.l }}>
+            {/* The desktop's start screen: the animated mark (tap it) over the same question, centred. One size with the
+                keyboard up or down: only its place moves, with the space the keyboard leaves, so nothing flickers. */}
             <View style={{ alignItems: 'center', gap: space.s }}>
-              {/* The desktop's start screen: the animated mark (tap it) over the same question, centred. */}
               <View style={{ marginBottom: space.s }}>
-                <AnimatedMark size={56} />
+                <AnimatedMark size={48} />
               </View>
-              <T size={font.hero} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
+              <T size={font.hero - 4} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
                 {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
               </T>
             </View>
-          </View>
-        ) : (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: space.l, gap: space.s }}>
-            <AnimatedMark size={32} />
-            <T size={24} weight="600" style={{ textAlign: 'center' }}>
-              {store.language === 'id' ? 'Apa yang ingin kita kerjakan?' : 'What should we work on?'}
-            </T>
           </View>
         )}
         <View style={{ paddingBottom: Math.max(insets.bottom, space.s) + (asTab && !keyboardOpen ? space.m : 0) }}>
