@@ -515,7 +515,10 @@ export default function ChatScreen() {
       return
     }
     following.current = false
-    scroll.current?.scrollToIndex({ index: source.index, animated: true, viewPosition: 0.3 })
+    // A row not laid out yet can refuse to be scrolled to; the highlight still marks it once it is.
+    try {
+      scroll.current?.scrollToIndex({ index: source.index, animated: true, viewPosition: 0.3 })
+    } catch {}
     setFound({ id: source.id, at: Date.now() })
   }
   // Where each message sits in time and in its turn: date labels above turns, time and copy under each turn's last answer.

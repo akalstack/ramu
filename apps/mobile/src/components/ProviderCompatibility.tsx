@@ -9,6 +9,7 @@ import { font, space, useTheme } from '../theme'
 import { Button, Card, Divider, SectionLabel, T } from './ui'
 import { Hint } from './SettingRows'
 import { ProviderLogins } from './ProviderLogins'
+import { ProviderIcon } from './Logos'
 import { useHostSettings } from '../runtime/useHostSettings'
 
 /** Last result per host, so an unreachable host still shows what was known, marked as stale. */
@@ -99,48 +100,89 @@ export function ProviderCompatibility({ hostId }: { hostId: string }) {
             // A custom executable path is set on the host; its own status already withholds updates for it.
             const plan = compatibilityPlan(status, { customBinary: false, canUpdate: online && !status.updateError })
             const bad = result?.status === 'incompatible'
+            const tone = bad
+              ? c.bad
+              : result?.status === 'limited'
+                ? c.warn
+                : result?.status === 'supported'
+                  ? c.ok
+                  : c.muted
+            // What to do about it, in one line, instead of a stack of notes.
+            const guidance = [
+              plan.manualInstall
+                ? t(
+                    'Ramu cannot pick a compatible release for you. Install a compatible version manually, then check again.',
+                  )
+                : '',
+              plan.actions.includes('update-ramu') ? t('Update Ramu on the host to change this bundled runtime.') : '',
+              plan.actions.includes('change-path') ? t('Change the executable path in Ramu on the host.') : '',
+            ].filter(Boolean)
             return (
               <View key={status.provider}>
                 {index ? <Divider inset={space.l} /> : null}
-                <View style={{ padding: space.m, gap: space.s }}>
-                  <View style={{ flexDirection: 'row', gap: space.s }}>
-                    <T weight="600" style={{ flex: 1 }}>
-                      {providerName(status.provider)}
-                    </T>
-                    <T tone="muted" size={font.caption}>
-                      {status.version ?? ''}
-                    </T>
+                <View style={{ padding: space.m, gap: space.m }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                    <View
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 8,
+                        backgroundColor: c.fill,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <ProviderIcon provider={status.provider} size={16} />
+                    </View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <T weight="600">{providerName(status.provider)}</T>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: tone }} />
+                        <T
+                          size={font.caption}
+                          tone={bad ? 'bad' : 'muted'}
+                          numberOfLines={2}
+                          style={{ flex: 1 }}
+                          accessibilityRole={bad ? 'alert' : undefined}
+                          accessibilityLiveRegion="polite"
+                        >
+                          {result
+                            ? t(compatibilitySummary(result).key, compatibilitySummary(result).values)
+                            : t('Compatibility is not reported by this host.')}
+                        </T>
+                      </View>
+                    </View>
+                    {status.version ? (
+                      <T size={font.caption} tone="muted" mono>
+                        {status.version}
+                      </T>
+                    ) : null}
                   </View>
+                  {result?.affects?.length || result?.recommend || (stale && result) ? (
+                    <T size={font.caption} tone="muted">
+                      {[
+                        result?.affects?.length ? `${result.affects.join(', ')}.` : '',
+                        result?.recommend ? t('Recommended version: {0}', { '0': result.recommend }) : '',
+                        stale && result ? t('Showing the last result; the host is not reachable.') : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    </T>
+                  ) : null}
                   {/* Each login with how it signs in now (plan or API key), and a switch to stop using it. */}
-                  <ProviderLogins status={status} settings={settings} disabled={!online} />
-                  <T
-                    size={font.caption}
-                    tone={bad ? 'bad' : 'muted'}
-                    accessibilityRole={bad ? 'alert' : undefined}
-                    accessibilityLiveRegion="polite"
+                  <View
+                    style={{
+                      borderRadius: 10,
+                      backgroundColor: c.fill,
+                      paddingHorizontal: space.m,
+                      paddingVertical: space.s,
+                    }}
                   >
-                    {result
-                      ? t(compatibilitySummary(result).key, compatibilitySummary(result).values)
-                      : t('Compatibility is not reported by this host.')}
-                    {result?.affects?.length ? ` ${result.affects.join(', ')}.` : ''}
-                    {result?.recommend ? ` ${t('Recommended version: {0}', { '0': result.recommend })}` : ''}
-                    {stale && result ? ` ${t('Showing the last result; the host is not reachable.')}` : ''}
-                  </T>
-                  {plan.manualInstall ? (
+                    <ProviderLogins status={status} settings={settings} disabled={!online} />
+                  </View>
+                  {guidance.length ? (
                     <T size={font.caption} tone="muted">
-                      {t(
-                        'Ramu cannot pick a compatible release for you. Install a compatible version manually, then check again.',
-                      )}
-                    </T>
-                  ) : null}
-                  {plan.actions.includes('update-ramu') ? (
-                    <T size={font.caption} tone="muted">
-                      {t('Update Ramu on the host to change this bundled runtime.')}
-                    </T>
-                  ) : null}
-                  {plan.actions.includes('change-path') ? (
-                    <T size={font.caption} tone="muted">
-                      {t('Change the executable path in Ramu on the host.')}
+                      {guidance.join(' ')}
                     </T>
                   ) : null}
                   {result && (result.status === 'incompatible' || result.status === 'limited') ? (

@@ -35,6 +35,9 @@ export const ReferenceContext = createContext<ReferenceActions>({
  */
 export const MessageTextSelection = createContext<((block: string, text: string | null) => void) | null>(null)
 
+/** Without the native text view: a long-pressed paragraph opens its message for selecting, starting on that paragraph. */
+export const MessageBlockPress = createContext<((block: string) => void) | null>(null)
+
 /**
  * Whether this app binary has the native text view behind word-by-word selection. Expo Go and builds made before it
  * was added do not, and drawing it there fails with "UnimplementedView"; those keep React Native's Text instead.
@@ -185,6 +188,7 @@ function textRuns(node: ReactNode, out: TextRun[] = []): TextRun[] {
 function Inline({ text, style, live }: { text: string; style?: TextStyle; live?: boolean }) {
   const { c } = useTheme()
   const report = useContext(MessageTextSelection)
+  const pressBlock = useContext(MessageBlockPress)
   const block = useId()
   const actions = useContext(ReferenceContext)
   const nodes = inline(text, 'i', c, actions)
@@ -202,7 +206,11 @@ function Inline({ text, style, live }: { text: string; style?: TextStyle; live?:
         {nodes}
       </UITextView>
     )
-  return <Text style={look}>{nodes}</Text>
+  return (
+    <Text style={look} onLongPress={pressBlock && !live ? () => pressBlock(text) : undefined}>
+      {nodes}
+    </Text>
+  )
 }
 
 function MarkdownImage({ src, alt }: { src: string; alt: string }) {

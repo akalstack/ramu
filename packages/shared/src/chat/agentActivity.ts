@@ -41,6 +41,41 @@ export function turnStartedAt(events: readonly AgentEvent[]): number | null {
   return null
 }
 
+const COMMAND_KEYS = ['command', 'query', 'pattern', 'url', 'description']
+const PATH_KEYS = ['file_path', 'absolute_path', 'path', 'dir_path']
+
+/** A string argument of a JSON tool input, read even when a long input arrived cut short. */
+function argument(summary: string, keys: string[]): string | undefined {
+  let input: Record<string, unknown> | null = null
+  try {
+    input = JSON.parse(summary) as Record<string, unknown>
+  } catch {}
+  for (const key of keys) {
+    const raw = input
+      ? input[key]
+      : /^"((?:[^"\\]|\\.)*)/.exec(summary.split(`"${key}"`)[1]?.replace(/^\s*:\s*/, '') ?? '')?.[1]
+    let value = raw
+    if (!input && typeof raw === 'string')
+      try {
+        value = JSON.parse(`"${raw}"`) as string
+      } catch {}
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return undefined
+}
+
+/**
+ * The command, file or query a tool works on, in one short line. Some providers summarise a call as its JSON input, whose
+ * first line is just "{", so the telling argument is read from it instead: a file by its name, a command as written.
+ */
+export function toolStepDetail(event: { summary: string; locations?: { path: string }[] }): string {
+  const summary = event.summary.trim()
+  if (!/^[{[]/.test(summary)) return summary.split('\n')[0]!.slice(0, 80)
+  const path = argument(summary, PATH_KEYS) ?? event.locations?.[0]?.path
+  const line = argument(summary, COMMAND_KEYS) ?? (path ? path.split(/[\\/]/).filter(Boolean).at(-1) : undefined)
+  return (line ?? '').trim().split('\n')[0]!.slice(0, 80)
+}
+
 /** One action of the running turn, for the working sheet: what it did and whether it has finished. */
 export interface TurnStep extends AgentStep {
   done: boolean
@@ -57,7 +92,7 @@ export function turnSteps(events: readonly AgentEvent[], limit = 6): TurnStep[] 
     if (event.kind === 'tool-result' && !event.running) finished.add(event.toolUseId)
     else if (event.kind === 'tool-use') {
       const done = finished.has(event.toolUseId)
-      const detail = event.summary.trim().split('\n')[0]!.slice(0, 80)
+      const detail = toolStepDetail(event)
       steps.push({ label: toolVerb(KIND_VERB[toolKind(event)], !done), done, ...(detail ? { detail } : {}) })
     }
   }
@@ -89,7 +124,7 @@ export function currentStep(state: AgentSessionState | undefined, events: readon
     if (event.agentId) continue
     if (event.kind === 'tool-result' && !event.running) finished.add(event.toolUseId)
     else if (event.kind === 'tool-use' && !finished.has(event.toolUseId)) {
-      const detail = event.summary.trim().split('\n')[0]!.slice(0, 80)
+      const detail = toolStepDetail(event)
       return { label: toolVerb(KIND_VERB[toolKind(event)], true), ...(detail ? { detail } : {}) }
     } else if (event.kind === 'user' || event.kind === 'result') break
   }

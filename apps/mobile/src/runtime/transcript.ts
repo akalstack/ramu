@@ -354,17 +354,79 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
 }
 
 /** Snapshot the existing occurrences so repeated messages cannot match old history. */
-/** A message as a person reads it, without Markdown's marks: what a selection in the thread shows and quotes. */
-export function readableText(markdown: string): string {
-  return markdown
-    .replace(/^ {0,3}```.*$\n?/gm, '')
-    .replace(/^ {0,3}#{1,6}\s+/gm, '')
-    .replace(/^ {0,3}>\s?/gm, '')
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/(\*\*|__|~~|`)(.+?)\1/g, '$2')
-    .replace(/(^|[\s(])[*_]([^\s*_][^*_\n]*)[*_](?=[\s).,!?:;]|$)/gm, '$1$2')
-    .trim()
+/** How a run of a message's text is drawn while it is open for selecting. */
+export type ReadableStyle = 'body' | 'strong' | 'em' | 'code' | 'heading' | 'marker'
+export interface ReadableRun {
+  text: string
+  style: ReadableStyle
 }
+
+const INLINE =
+  /(\*\*|__)(.+?)\1|`([^`\n]+)`|~~(.+?)~~|!?\[([^\]]*)\]\([^)]*\)|(^|[\s(])[*_]([^\s*_][^*_\n]*?)[*_](?=[\s).,!?:;]|$)/g
+
+function inlineRuns(line: string, base: ReadableStyle, out: ReadableRun[]) {
+  let at = 0
+  for (const match of line.matchAll(INLINE)) {
+    const lead = match[6] ?? ''
+    const start = match.index + lead.length
+    if (start > at || lead) out.push({ text: line.slice(at, match.index) + lead, style: base })
+    if (match[2] !== undefined) out.push({ text: match[2], style: base === 'heading' ? 'heading' : 'strong' })
+    else if (match[3] !== undefined) out.push({ text: match[3], style: 'code' })
+    else if (match[4] !== undefined) out.push({ text: match[4], style: base })
+    else if (match[5] !== undefined) out.push({ text: match[5], style: base })
+    else out.push({ text: match[7]!, style: base === 'heading' ? 'heading' : 'em' })
+    at = match.index + match[0].length
+  }
+  if (at < line.length) out.push({ text: line.slice(at), style: base })
+}
+
+/**
+ * A message as it reads, in styled runs: Markdown marks become the look they stand for (a heading, bold, code, a bullet),
+ * so the text opened for selecting looks like the message and what is copied is what was read.
+ */
+export function readableRuns(markdown: string): ReadableRun[] {
+  const out: ReadableRun[] = []
+  let fenced = false
+  const lines = markdown.replace(/\r\n?/g, '\n').trim().split('\n')
+  lines.forEach((raw, index) => {
+    if (index) out.push({ text: '\n', style: 'body' })
+    if (/^ {0,3}(```|~~~)/.test(raw)) {
+      fenced = !fenced
+      out.pop()
+      return
+    }
+    if (fenced) return void out.push({ text: raw, style: 'code' })
+    if (/^ {0,3}([-*_])( *\1){2,} *$/.test(raw)) return
+    let line = raw.replace(/^ {0,3}>\s?/, '')
+    const heading = /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(line)
+    if (heading) return inlineRuns(heading[1]!, 'heading', out)
+    const item = /^(\s*)([-*+]|\d+[.)])\s+(\[[ xX]\]\s+)?/.exec(line)
+    if (item) {
+      const marker = /\d/.test(item[2]!) ? item[2]! : '•'
+      out.push({ text: `${item[1]!.replace(/\t/g, '  ')}${marker} `, style: 'marker' })
+      line = line.slice(item[0].length)
+    }
+    inlineRuns(line, 'body', out)
+  })
+  // Neighbouring runs of one look join, and blank runs between blocks stay single blank lines.
+  const joined: ReadableRun[] = []
+  for (const run of out) {
+    const last = joined.at(-1)
+    if (last && last.style === run.style) last.text += run.text
+    else if (run.text) joined.push({ ...run })
+  }
+  // A fence on the first or last line leaves a bare line break at that end.
+  if (joined[0]) joined[0].text = joined[0].text.replace(/^\n+/, '')
+  if (joined.at(-1)) joined.at(-1)!.text = joined.at(-1)!.text.replace(/\n+$/, '')
+  return joined.filter((run) => run.text)
+}
+
+/** A message's text as it reads, without Markdown marks. */
+export const readableText = (markdown: string): string =>
+  readableRuns(markdown)
+    .map((run) => run.text)
+    .join('')
+    .replace(/\n{3,}/g, '\n\n')
 
 export function deliveryBaseline(chat: Chat, text: string) {
   const shown = visibleText(text)

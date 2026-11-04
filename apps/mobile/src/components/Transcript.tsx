@@ -8,9 +8,21 @@ import { changedFile } from '../runtime/diff'
 import { Helpers, ReportCard } from './Helpers'
 import { InteractiveContent } from './InteractiveContent'
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActionSheetIOS, Alert, Image, Linking, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
+import {
+  ActionSheetIOS,
+  Alert,
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextStyle,
+} from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { readableText } from '../runtime/transcript'
+import { readableRuns, readableText, type ReadableStyle } from '../runtime/transcript'
 import type { Attachment } from '@ramu/shared/types'
 import { useRouter } from 'expo-router'
 import {
@@ -38,7 +50,14 @@ import { endedOnError } from '../runtime/turns'
 import { showError } from '../runtime/toast'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
-import { Markdown, MessageTextSelection, nativeSelection, ReferenceBadge, ReferenceContext } from './Markdown'
+import {
+  Markdown,
+  MessageBlockPress,
+  MessageTextSelection,
+  nativeSelection,
+  ReferenceBadge,
+  ReferenceContext,
+} from './Markdown'
 import { draftChip } from '@ramu/shared/chat/referenceChip'
 import { composerDraft, type DraftMention } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
@@ -117,24 +136,42 @@ export interface MessageSelection {
 }
 
 /**
- * A message opened for selecting, in place: the system's own handles, loupe and word snapping over plain text, which
- * React Native's Text cannot report. It is an input only for that: no keyboard, and its text cannot change.
+ * A message opened for selecting, in place, where this app has no native text view: the system's own handles, loupe and
+ * word snapping, which React Native's Text cannot report. It reads like the message (headings, bold, code and bullets
+ * keep their look) and starts on the paragraph that was pressed. It is an input only for that: no keyboard, and its text
+ * cannot change.
  */
 function SelectableMessage({
   text,
+  block,
   from,
   more,
   done,
 }: {
   text: string
+  /** The paragraph that was long-pressed, selected first; without one, the whole message is. */
+  block: string | null
   from: 'user' | 'assistant'
   more(): void
   done(): void
 }) {
   const { c } = useTheme()
   const menu = useContext(MessageMenu)
-  const readable = useMemo(() => readableText(text), [text])
-  const [range, setRange] = useState({ start: 0, end: readable.length })
+  const runs = useMemo(() => readableRuns(text), [text])
+  const readable = useMemo(() => runs.map((run) => run.text).join(''), [runs])
+  const [range, setRange] = useState(() => {
+    const pressed = block ? readableText(block) : ''
+    const start = pressed ? readable.indexOf(pressed) : -1
+    return start < 0 ? { start: 0, end: readable.length } : { start, end: start + pressed.length }
+  })
+  const look: Record<ReadableStyle, TextStyle> = {
+    body: {},
+    strong: { fontWeight: '600', color: c.text },
+    em: { fontStyle: 'italic' },
+    code: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: font.body - 2 },
+    heading: { fontWeight: '700', color: c.text, fontSize: font.body + 2 },
+    marker: { color: c.muted },
+  }
   const picked = readable.slice(range.start, range.end).trim()
   const select = menu?.select
   useEffect(() => {
@@ -147,7 +184,6 @@ function SelectableMessage({
       autoFocus
       multiline
       scrollEnabled={false}
-      value={readable}
       selection={range}
       onSelectionChange={(event) => setRange(event.nativeEvent.selection)}
       onBlur={done}
@@ -157,7 +193,15 @@ function SelectableMessage({
       selectionColor={c.accent}
       accessibilityLabel={readable}
       style={{ color: c.body, fontSize: font.body, lineHeight: 22, padding: 0, textAlignVertical: 'top' }}
-    />
+    >
+      <Text>
+        {runs.map((run, index) => (
+          <Text key={index} style={look[run.style]}>
+            {run.text}
+          </Text>
+        ))}
+      </Text>
+    </TextInput>
   )
 }
 
@@ -186,7 +230,8 @@ function MessageActions({
   const menu = useContext(MessageMenu)
   const latestMenu = useRef(menu)
   latestMenu.current = menu
-  const [selecting, setSelecting] = useState(false)
+  // The message open for selecting, and the paragraph that was pressed to open it.
+  const [selecting, setSelecting] = useState<{ block: string | null } | null>(null)
   // A native selection, by block, so clearing one block does not drop another's; `clears` remounts to clear them all.
   const picked = useRef<string | null>(null)
   const [clears, setClears] = useState(0)
@@ -258,25 +303,27 @@ function MessageActions({
       ])
   }
   openRef.current = open
-  if (selecting) return <SelectableMessage text={text} from={from} more={open} done={() => setSelecting(false)} />
+  const startSelecting = (block: string | null) => {
+    if (!text.trim()) return
+    tap()
+    if (menu) setSelecting({ block })
+    else open()
+  }
+  if (selecting)
+    return (
+      <SelectableMessage text={text} block={selecting.block} from={from} more={open} done={() => setSelecting(null)} />
+    )
   return (
     <Pressable
       // On iOS a long press selects a word natively, so the message itself takes none; "More" in the bar has the rest.
-      onLongPress={
-        native
-          ? undefined
-          : () => {
-              if (!text.trim()) return
-              tap()
-              if (menu) setSelecting(true)
-              else open()
-            }
-      }
+      onLongPress={native ? undefined : () => startSelecting(null)}
       delayLongPress={350}
       accessibilityHint="Long-press to select text"
     >
       <MessageTextSelection.Provider value={report}>
-        <View key={clears}>{children}</View>
+        <MessageBlockPress.Provider value={native ? null : startSelecting}>
+          <View key={clears}>{children}</View>
+        </MessageBlockPress.Provider>
       </MessageTextSelection.Provider>
     </Pressable>
   )

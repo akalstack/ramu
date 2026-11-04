@@ -124,7 +124,7 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
           </Row>
         ) : null}
         {setup?.mcp.map((server, index) => (
-          <View key={server.key}>
+          <View key={`${server.key}:${index}`}>
             {index ? <Divider inset={space.l} /> : null}
             <Row style={{ paddingVertical: space.m }}>
               <RowLabel
@@ -172,7 +172,7 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
           </View>
         ))}
         {mcp?.providerManaged?.map((server, index) => (
-          <View key={`${server.provider}:${server.name}`}>
+          <View key={`${server.provider}:${server.name}:${index}`}>
             {index || mcp.connections.length ? <Divider inset={space.l} /> : null}
             <Row style={{ paddingVertical: space.m }}>
               <RowLabel
@@ -198,7 +198,7 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
           </Row>
         ) : null}
         {skills?.map((skill, index) => (
-          <View key={skill.name}>
+          <View key={`${skill.name}:${index}`}>
             {index ? <Divider inset={space.l} /> : null}
             <Row style={{ paddingVertical: space.m }}>
               <RowLabel

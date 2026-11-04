@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  Animated,
   Dimensions,
-  Easing,
   Keyboard,
   LayoutAnimation,
   Platform,
@@ -16,12 +14,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { space } from '../theme'
 
 /**
- * Keyboard height, animated with the keyboard's own curve on iOS. Android (edge-to-edge, so the window is not
- * resized for the keyboard) only reports after the keyboard has moved, so its lift uses a short standard ease. KeyboardAvoidingView only pads, so
- * it cannot move absolutely positioned chrome (the floating composer and search bar); this can.
+ * Keyboard height, laid out with the keyboard's own curve on iOS. Android (edge-to-edge, so the window is not resized for
+ * the keyboard) only reports after the keyboard has moved, so its lift uses a short standard ease. KeyboardAvoidingView
+ * only pads, so it cannot move absolutely positioned chrome (the floating composer and search bar); this can.
+ *
+ * It moves layout, not a native-driven transform: the New Architecture measures views without such a transform, so a
+ * button lifted by one is measured where it would sit with the keyboard closed, and a tap that moves a hair is cancelled.
  */
 export function useKeyboardHeight(onWillMove?: (to: number) => void) {
-  const value = useRef(new Animated.Value(0)).current
   const [height, setHeight] = useState(0)
   const notify = useRef(onWillMove)
   notify.current = onWillMove
@@ -29,13 +29,12 @@ export function useKeyboardHeight(onWillMove?: (to: number) => void) {
     const move = (to: number, duration: number) => {
       // Before the state change renders, so a screen can note whether the reader was at the bottom.
       notify.current?.(to)
+      LayoutAnimation.configureNext(
+        Platform.OS === 'ios'
+          ? { duration: duration || 250, update: { duration: duration || 250, type: LayoutAnimation.Types.keyboard } }
+          : LayoutAnimation.create(220, LayoutAnimation.Types.easeOut, LayoutAnimation.Properties.opacity),
+      )
       setHeight(to)
-      Animated.timing(value, {
-        toValue: to,
-        duration: duration || 220,
-        easing: Platform.OS === 'ios' ? Easing.bezier(0.17, 0.59, 0.4, 0.77) : Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start()
     }
     if (Platform.OS === 'android') {
       const show = Keyboard.addListener('keyboardDidShow', (e) => move(e.endCoordinates.height, 0))
@@ -54,8 +53,8 @@ export function useKeyboardHeight(onWillMove?: (to: number) => void) {
       frame.remove()
       hide.remove()
     }
-  }, [value])
-  return { value, height }
+  }, [])
+  return { height }
 }
 
 /**
@@ -111,14 +110,11 @@ export function KeyboardLift({
   // Android reports the keyboard height without the navigation-bar inset (edge to edge), so the children's own bottom
   // padding would sit under the keys: lift a little more instead, leaving them `space.s` above the keyboard.
   const slack = Platform.OS === 'android' ? -space.s : Math.max(0, insets.bottom - space.s)
-  const translateY = useMemo(
-    () => keyboard.value.interpolate({ inputRange: [0, 1, 2000], outputRange: [0, slack - 1, slack - 2000] }),
-    [keyboard.value, slack],
-  )
+  const lift = keyboard.height ? Math.max(0, keyboard.height - slack) : 0
   return (
-    <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style, { transform: [{ translateY }] }]}>
+    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style, { bottom: lift }]}>
       {children}
-    </Animated.View>
+    </View>
   )
 }
 
