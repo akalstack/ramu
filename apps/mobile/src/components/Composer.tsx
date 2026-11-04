@@ -704,8 +704,19 @@ export function Composer({
   const textInput = useRef<import('react-native').TextInputInstance>(null)
   useEffect(() => {
     if (!autoFocus) return
-    const frame = requestAnimationFrame(() => textInput.current?.focus())
-    return () => cancelAnimationFrame(frame)
+    // iOS ignores a focus while the screen is still sliding in or a sheet above it is closing, so look again once each
+    // has had time to finish; the first focus that takes ends it, and a field already in use is left alone.
+    let took = false
+    const tries = [0, 350, 700].map((delay) =>
+      setTimeout(() => {
+        if (took || textInput.current?.isFocused()) {
+          took = true
+          return
+        }
+        textInput.current?.focus()
+      }, delay),
+    )
+    return () => tries.forEach(clearTimeout)
   }, [autoFocus])
   const { c } = useTheme()
   const t = useT()

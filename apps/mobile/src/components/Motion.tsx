@@ -380,3 +380,20 @@ export function Presence({
     </Animated.View>
   )
 }
+
+/**
+ * A floating button that swells a little under a held thumb and settles back on release, on the UI thread. Only the
+ * drawn content scales: the Pressable around it keeps its frame, so the New Architecture never misreads the touch.
+ */
+export function PressGrow({ pressed, children }: { pressed: boolean; children: ReactNode }) {
+  const reduced = useReducedMotion()
+  const scale = useSharedValue(1)
+  useEffect(() => {
+    scale.value = withTiming(pressed && !reduced ? 1.18 : 1, {
+      duration: pressed ? 160 : 200,
+      easing: ReEasing.out(ReEasing.cubic),
+    })
+  }, [pressed, reduced, scale])
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
+  return <Reanimated.View style={style}>{children}</Reanimated.View>
+}

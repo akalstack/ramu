@@ -97,7 +97,7 @@ import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../componen
 import { PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
-import { Arrive, Presence, useReducedMotion } from '../../../components/Motion'
+import { Arrive, Presence, PressGrow, useReducedMotion } from '../../../components/Motion'
 import { ChatActionsSheet, confirmChatDeletion, offerThreadUndo } from '../../../components/ChatActions'
 import * as Clipboard from 'expo-clipboard'
 
@@ -178,6 +178,8 @@ export default function ChatScreen() {
   const [scrolled, setScrolled] = useState(false)
   const [composerHeight, setComposerHeight] = useState(120)
   const [selection, setSelection] = useState<MessageSelection | null>(null)
+  // The selection bar sits on the composer, and the jump-to-latest button stacks above it rather than under it.
+  const [selectionBarHeight, setSelectionBarHeight] = useState(0)
   // iOS: the composer and keyboard cover the list's bottom through UIScrollView.contentInset, which moves no content.
   // The keyboard handler then sets the offset itself: the end when following, else the same lines stay above the keys.
   const ios = Platform.OS === 'ios'
@@ -1267,7 +1269,10 @@ export default function ChatScreen() {
               <KeyboardLift keyboard={keyboard}>
                 <BottomFade height={composerHeight * 0.75} color={c.window} />
                 {selection ? (
-                  <View style={{ position: 'absolute', left: 0, right: 0, bottom: composerHeight }}>
+                  <View
+                    style={{ position: 'absolute', left: 0, right: 0, bottom: composerHeight }}
+                    onLayout={(event) => setSelectionBarHeight(event.nativeEvent.layout.height)}
+                  >
                     <SelectionBar selection={selection} />
                   </View>
                 ) : null}
@@ -1503,7 +1508,11 @@ export default function ChatScreen() {
                 <Presence
                   visible={away}
                   fade={false}
-                  style={{ position: 'absolute', alignSelf: 'center', bottom: composerHeight + space.s }}
+                  style={{
+                    position: 'absolute',
+                    alignSelf: 'center',
+                    bottom: composerHeight + (selection ? selectionBarHeight : 0) + space.s,
+                  }}
                 >
                   <Pressable
                     accessibilityRole="button"
@@ -1517,25 +1526,28 @@ export default function ChatScreen() {
                       setAway(false)
                       toEnd(true)
                     }}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
                   >
-                    {/* Not interactive glass: its press bulge balloons a button this small over the transcript. */}
-                    <Glass
-                      radius={radius.full}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: floatingChrome ? undefined : c.raised,
-                      }}
-                    >
-                      {running ? (
-                        <ActivityIndicator size="small" color={c.text} style={{ transform: [{ scale: 0.75 }] }} />
-                      ) : (
-                        <ArrowDown size={16} color={c.text} strokeWidth={2} />
-                      )}
-                    </Glass>
+                    {({ pressed }) => (
+                      <PressGrow pressed={pressed}>
+                        {/* Not interactive glass: its press bulge balloons a button this small over the transcript. */}
+                        <Glass
+                          radius={radius.full}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: floatingChrome ? undefined : c.raised,
+                          }}
+                        >
+                          {running ? (
+                            <ActivityIndicator size="small" color={c.text} style={{ transform: [{ scale: 0.75 }] }} />
+                          ) : (
+                            <ArrowDown size={16} color={c.text} strokeWidth={2} />
+                          )}
+                        </Glass>
+                      </PressGrow>
+                    )}
                   </Pressable>
                 </Presence>
               </KeyboardLift>
