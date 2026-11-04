@@ -336,6 +336,17 @@ describe('open computer use connection', () => {
   })
 })
 
+describe('open computer use refusals', () => {
+  it('says why working behind the lock screen is refused when another app holds it', async () => {
+    const { explained } = await import('../src/computer/ocu')
+    expect(explained('Locked Use belongs to another connection; GUI access is unavailable.')).toMatch(/another app/)
+    expect(explained('Locked Use is unavailable. Enable and validate it in Open Computer Use settings.')).toMatch(
+      /quit it/,
+    )
+    expect(explained('Chrome has no window')).toBe('Chrome has no window')
+  })
+})
+
 describe('open computer use frames', () => {
   const target = { id: 'app:Chrome', kind: 'app' as const, name: 'Chrome' }
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='

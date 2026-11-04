@@ -25,6 +25,16 @@ export interface OcuClient {
 
 /** Tools that only read, so one that failed because the helper had just gone away can run again on a new one. */
 const READ_ONLY_TOOLS = new Set(['list_apps', 'get_app_state'])
+/**
+ * Locked Use belongs to one connection at a time. Another app running its own Open Computer Use (an agent tool's MCP
+ * server, say) can hold it, and Open Computer Use's own words do not say so.
+ */
+export function explained(message: string): string {
+  return /locked use (belongs to another connection|is unavailable)/i.test(message)
+    ? `${message} Working behind the lock screen is held by one app at a time: if another app on this Mac runs Open Computer Use (for example another agent tool), quit it or remove its Open Computer Use server, or unlock the Mac.`
+    : message
+}
+
 /** Enough of the tree for a viewer frame to find the page's scroll area; the agent's observations keep the full tree. */
 const VIEWER_TREE_NODES = 120
 const closedConnection = (error: unknown) => /connection closed|not connected/i.test(String(error))
@@ -337,9 +347,10 @@ export class OcuBackend implements ComputerBackend {
       await client.close().catch(() => {})
       // Input is never sent twice: it may have run. A read can simply be asked again of a fresh helper.
       if (retry && READ_ONLY_TOOLS.has(name) && closedConnection(error)) return this.call(name, args, false)
-      throw error
+      throw error instanceof Error ? new Error(explained(error.message), { cause: error }) : error
     }
-    if (result.isError) throw new Error(result.content?.find((part) => part.type === 'text')?.text ?? `${name} failed`)
+    if (result.isError)
+      throw new Error(explained(result.content?.find((part) => part.type === 'text')?.text ?? `${name} failed`))
     return result
   }
 
