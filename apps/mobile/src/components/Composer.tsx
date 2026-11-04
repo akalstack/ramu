@@ -11,9 +11,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  UIManager,
   View,
   useWindowDimensions,
 } from 'react-native'
+import { MenuView } from '@react-native-menu/menu'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
 import { SuggestionList, useComposerSuggest, type ComposerTeammate } from './ComposerSuggest'
@@ -1334,7 +1336,7 @@ export function Composer({
           <ModelChip value={model} onChange={onModel} computerId={computerId} limited={limited} />
 
           <View style={{ flex: 1 }} />
-          {running && has && !offline ? (
+          {running && has && !offline && !nativeMenu ? (
             <IconButton
               icon={otherMode === 'queue' ? ListPlus : CornerDownRight}
               label={otherMode === 'queue' ? t.queue : t.steer}
@@ -1393,44 +1395,59 @@ export function Composer({
               <Play size={15} color={c.text} fill={c.text} />
             </Pressable>
           ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                offline
-                  ? 'Add to outbox'
-                  : limited
-                    ? t.queue
-                    : running
-                      ? mode === 'queue'
-                        ? t.queue
-                        : t.steer
-                      : 'Send'
-              }
-              disabled={!has || viewOnly || busy || uploading || dictating}
-              // A 34-point button beside the keyboard is easy to miss; the touch area reaches past it.
-              hitSlop={10}
-
-              onPress={() => {
-                tap()
-                void submit()
+            <SendChoice
+              enabled={running && has && !offline && !limited && !viewOnly && !busy && !uploading && !dictating}
+              mode={mode}
+              labels={{
+                queue: t.queue,
+                steer: t.steer,
+                queueHelp: say('Send when the agent finishes its turn'),
+                steerHelp: say('Send after active tools finish'),
+                menu: say('Choose how to send this message'),
               }}
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: radius.full,
-                backgroundColor: has ? c.primary : c.fill,
-                alignItems: 'center',
-                justifyContent: 'center',
+              onChoose={(chosen) => {
+                tap()
+                void submit(chosen)
               }}
             >
-              {offline ? (
-                <Clock size={16} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
-              ) : running ? (
-                <CornerDownRight size={18} color={has ? c.primaryInk : c.placeholder} />
-              ) : (
-                <ArrowUp size={18} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
-              )}
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  offline
+                    ? 'Add to outbox'
+                    : limited
+                      ? t.queue
+                      : running
+                        ? mode === 'queue'
+                          ? t.queue
+                          : t.steer
+                        : 'Send'
+                }
+                disabled={!has || viewOnly || busy || uploading || dictating}
+                // A 34-point button beside the keyboard is easy to miss; the touch area reaches past it.
+                hitSlop={10}
+                onPress={() => {
+                  tap()
+                  void submit()
+                }}
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: radius.full,
+                  backgroundColor: has ? c.primary : c.fill,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {offline ? (
+                  <Clock size={16} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
+                ) : running ? (
+                  <CornerDownRight size={18} color={has ? c.primaryInk : c.placeholder} />
+                ) : (
+                  <ArrowUp size={18} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
+                )}
+              </Pressable>
+            </SendChoice>
           )}
         </View>
       </View>
@@ -1928,5 +1945,56 @@ function QuickSteps({
         </Pressable>
       ) : null}
     </View>
+  )
+}
+
+/**
+ * Whether this app binary has the native menu. Builds made before it was added do not, and drawing it there fails, so
+ * those keep the separate button for the other way of sending.
+ */
+const nativeMenu = (() => {
+  if (Platform.OS === 'web') return false
+  try {
+    return UIManager.hasViewManagerConfig('MenuView')
+  } catch {
+    return false
+  }
+})()
+
+/**
+ * While the agent works, holding Send opens the system menu with both ways to send, the usual one checked, as T3 Code
+ * does; a tap still sends the usual way.
+ */
+function SendChoice({
+  enabled,
+  mode,
+  labels,
+  onChoose,
+  children,
+}: {
+  enabled: boolean
+  mode: 'queue' | 'steer'
+  labels: { queue: string; steer: string; queueHelp: string; steerHelp: string; menu: string }
+  onChoose(mode: 'queue' | 'steer'): void
+  children: ReactNode
+}) {
+  if (!enabled || !nativeMenu) return <>{children}</>
+  return (
+    <MenuView
+      title={labels.menu}
+      shouldOpenOnLongPress
+      actions={(['steer', 'queue'] as const).map((choice) => ({
+        id: choice,
+        title: labels[choice],
+        subtitle: choice === 'steer' ? labels.steerHelp : labels.queueHelp,
+        image: Platform.OS === 'ios' ? (choice === 'steer' ? 'arrow.turn.down.right' : 'text.append') : undefined,
+        state: choice === mode ? ('on' as const) : ('off' as const),
+      }))}
+      onPressAction={({ nativeEvent }) => {
+        if (nativeEvent.event === 'queue' || nativeEvent.event === 'steer') onChoose(nativeEvent.event)
+      }}
+    >
+      {children}
+    </MenuView>
   )
 }

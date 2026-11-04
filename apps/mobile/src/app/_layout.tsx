@@ -11,6 +11,7 @@ import { ModelNewsToast } from '../components/ModelNewsToast'
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { KeyboardMotion } from '../components/Keyboard'
 import { ThemeProvider, useTheme } from '../theme'
 import { useEffect, useMemo } from 'react'
 import { Platform } from 'react-native'
@@ -90,15 +91,17 @@ function Navigator() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <StoreProvider>
-          <AutomationProvider>
-            <ComputerUseProvider>
-              <Navigator />
-            </ComputerUseProvider>
-          </AutomationProvider>
-        </StoreProvider>
-      </ThemeProvider>
+      <KeyboardMotion>
+        <ThemeProvider>
+          <StoreProvider>
+            <AutomationProvider>
+              <ComputerUseProvider>
+                <Navigator />
+              </ComputerUseProvider>
+            </AutomationProvider>
+          </StoreProvider>
+        </ThemeProvider>
+      </KeyboardMotion>
     </SafeAreaProvider>
   )
 }

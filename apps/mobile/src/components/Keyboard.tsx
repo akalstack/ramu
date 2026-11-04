@@ -5,13 +5,34 @@ import {
   LayoutAnimation,
   Platform,
   StyleSheet,
+  UIManager,
   View,
   type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { KeyboardProvider, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller'
+import Reanimated, { useAnimatedStyle } from 'react-native-reanimated'
 import { space } from '../theme'
+
+/**
+ * Whether this app binary has the native keyboard tracker. Builds made before it was added do not, and drawing its view
+ * there fails, so those keep the JavaScript lift below.
+ */
+export const nativeKeyboard = (() => {
+  if (Platform.OS === 'web') return false
+  try {
+    return UIManager.hasViewManagerConfig('KeyboardControllerView')
+  } catch {
+    return false
+  }
+})()
+
+/** Reports the system keyboard's frame to the UI thread every frame, so lifted chrome moves with the keys exactly. */
+export function KeyboardMotion({ children }: { children: ReactNode }) {
+  return nativeKeyboard ? <KeyboardProvider>{children}</KeyboardProvider> : <>{children}</>
+}
 
 /**
  * Keyboard height, laid out with the keyboard's own curve on iOS. Android (edge-to-edge, so the window is not resized for
@@ -29,11 +50,14 @@ export function useKeyboardHeight(onWillMove?: (to: number) => void) {
     const move = (to: number, duration: number) => {
       // Before the state change renders, so a screen can note whether the reader was at the bottom.
       notify.current?.(to)
-      LayoutAnimation.configureNext(
-        Platform.OS === 'ios'
-          ? { duration: duration || 250, update: { duration: duration || 250, type: LayoutAnimation.Types.keyboard } }
-          : LayoutAnimation.create(220, LayoutAnimation.Types.easeOut, LayoutAnimation.Properties.opacity),
-      )
+      // With the native tracker the lift follows the keys on the UI thread; animating every layout through JavaScript
+      // would start late on a busy screen and drag behind them.
+      if (!nativeKeyboard)
+        LayoutAnimation.configureNext(
+          Platform.OS === 'ios'
+            ? { duration: duration || 250, update: { duration: duration || 250, type: LayoutAnimation.Types.keyboard } }
+            : LayoutAnimation.create(220, LayoutAnimation.Types.easeOut, LayoutAnimation.Properties.opacity),
+        )
       setHeight(to)
     }
     if (Platform.OS === 'android') {
@@ -110,11 +134,29 @@ export function KeyboardLift({
   // Android reports the keyboard height without the navigation-bar inset (edge to edge), so the children's own bottom
   // padding would sit under the keys: lift a little more instead, leaving them `space.s` above the keyboard.
   const slack = Platform.OS === 'android' ? -space.s : Math.max(0, insets.bottom - space.s)
+  if (nativeKeyboard)
+    return (
+      <NativeLift slack={slack} style={style}>
+        {children}
+      </NativeLift>
+    )
   const lift = keyboard.height ? Math.max(0, keyboard.height - slack) : 0
   return (
     <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style, { bottom: lift }]}>
       {children}
     </View>
+  )
+}
+
+/** The lift, frame by frame on the UI thread, in step with the system keyboard's own animation. */
+function NativeLift({ slack, style, children }: { slack: number; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  const { height } = useReanimatedKeyboardAnimation()
+  // `height` runs from 0 to minus the keyboard's height, ready for a translate; layout takes the positive lift instead.
+  const lifted = useAnimatedStyle(() => ({ bottom: Math.max(0, -height.value - slack) }), [slack])
+  return (
+    <Reanimated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style, lifted]}>
+      {children}
+    </Reanimated.View>
   )
 }
 

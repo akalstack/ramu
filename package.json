@@ -2,7 +2,7 @@
   "name": "ramu-monorepo",
   "version": "0.1.0-alpha.1",
   "private": true,
-  "description": "Ramu — your project, every repo, one workspace.",
+  "description": "Ramu \u2014 your project, every repo, one workspace.",
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @ramu/desktop dev",
@@ -58,5 +58,8 @@
   "bugs": {
     "url": "https://github.com/ahxar/ramu/issues"
   },
-  "homepage": "https://github.com/ahxar/ramu#readme"
+  "homepage": "https://github.com/ahxar/ramu#readme",
+  "enriched-markdown": {
+    "enableMath": false
+  }
 }

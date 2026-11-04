@@ -29,6 +29,7 @@ allowBuilds:
   fs-xattr: true
   macos-alias: true
   node-pty: true
+  react-native-enriched-markdown: true
   workerd: true
 minimumReleaseAgeExclude:
   - '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.295'
@@ -68,6 +69,7 @@ minimumReleaseAgeExclude:
   - node-forge@1.4.1
 patchedDependencies:
   '@bsky.app/react-native-uitextview@2.7.1': patches/@bsky.app__react-native-uitextview@2.7.1.patch
+  '@react-native-menu/menu@2.0.0': patches/@react-native-menu__menu@2.0.0.patch
   react-native-screens@4.30.0: patches/react-native-screens@4.30.0.patch
 # Patched transitive versions (pnpm audit).
 overrides:

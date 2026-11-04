@@ -1,3 +1,4 @@
+import { MessageSelectionMenuContext, nativeMarkdown } from './NativeMarkdown'
 import { ContinuedCard } from './ContinueOnHost'
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
 import { FileIcon } from './FileIcon'
@@ -236,7 +237,9 @@ function MessageActions({
   const picked = useRef<string | null>(null)
   const [clears, setClears] = useState(0)
   const select = menu?.select
-  const native = nativeSelection && !!select && !!markdown
+  // The native Markdown view selects across the whole message and carries its own menu, as T3 Code's does.
+  const whole = nativeMarkdown && !!markdown
+  const native = !whole && nativeSelection && !!select && !!markdown
   const report = useMemo(
     () =>
       native
@@ -312,6 +315,23 @@ function MessageActions({
   if (selecting)
     return (
       <SelectableMessage text={text} block={selecting.block} from={from} more={open} done={() => setSelecting(null)} />
+    )
+  if (whole)
+    return (
+      <MessageSelectionMenuContext.Provider
+        value={
+          menu
+            ? {
+                quote: (picked) => menu.quote(picked),
+                quoteNew: (picked) => menu.quoteNew(picked),
+                aside: menu.readOnly ? undefined : (picked) => latestMenu.current?.aside(picked, from),
+                more: () => openRef.current(),
+              }
+            : { quote: () => {}, quoteNew: () => {}, more: () => openRef.current() }
+        }
+      >
+        {children}
+      </MessageSelectionMenuContext.Provider>
     )
   return (
     <Pressable
@@ -924,8 +944,9 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
   )
   const hasText = rest.some((part) => part.kind !== 'text' || part.source.trim())
   // Markdown lays out blocks, so a message with inline badges stays one line of text and keeps them in place.
+  // The native Markdown view draws file and skill references as links, so a message with them stays selectable too.
   const plain =
-    hasText && rest.every((part) => part.kind === 'text')
+    hasText && (nativeMarkdown || rest.every((part) => part.kind === 'text'))
       ? rest
           .map((part) => part.source)
           .join('')

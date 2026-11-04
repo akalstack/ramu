@@ -11,6 +11,8 @@ import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { font, radius, space, useTheme } from '../theme'
 import { UITextView } from '@bsky.app/react-native-uitextview'
 import { selectedText, type TextRun } from '../runtime/selectedText'
+import { NativeMarkdown, nativeMarkdown } from './NativeMarkdown'
+import { nativeMarkdownSource } from '../runtime/nativeMarkdownSource'
 
 // Native markdown for agent replies: headings, lists, tasks, quotes, tables, rules, coloured code, emphasis and links.
 // Kept native: shared's react-markdown renderer depends on the DOM.
@@ -449,10 +451,16 @@ export function Markdown({
   /** The reply started while the chat was open, so even its first block fades in (a reopened chat shows it settled). */
   fresh?: boolean
 }) {
-  const blocks = useMemo(() => parseBlocks(streaming ? closePartial(text) : text), [text, streaming])
+  const actions = useContext(ReferenceContext)
+  const source = useMemo(() => (nativeMarkdown ? nativeMarkdownSource(text) : null), [text])
+  const blocks = useMemo(
+    () => (source === null ? parseBlocks(streaming ? closePartial(text) : text) : []),
+    [source, text, streaming],
+  )
   // Blocks on screen when the reply mounts (a chat opened mid-stream) stay put; blocks that appear later fade in whole,
   // once, on the native driver, so a busy JavaScript thread never stalls them.
   const [settledCount] = useState(() => (fresh ? 0 : blocks.length))
+  if (source !== null) return <NativeMarkdown source={source} streaming={streaming} muted={muted} actions={actions} />
   return (
     <View style={{ gap: space.m, opacity: muted ? 0.8 : 1 }}>
       {blocks.map((block, index) => (

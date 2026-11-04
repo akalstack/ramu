@@ -241,6 +241,9 @@ function load(file, os, overrides = {}, globals = {}) {
           { get: (target, key) => (key in target ? target[key] : String(key)) },
         )
       if (id.endsWith('/theme')) return theme
+      // Builds without the native Markdown view, as in Expo Go: messages keep the React Native renderer and its selection.
+      if (id.endsWith('/NativeMarkdown'))
+        return { nativeMarkdown: false, MessageSelectionMenuContext: require('react').createContext(null) }
       // A thread's status line and origin read from the real rules; bulk thread actions only run when a test taps them.
       if (id === '@ramu/shared/chat/threadStatus' || id === './threadStatus')
         return load('../../../packages/shared/src/chat/threadStatus.ts', os, {}, globals)
