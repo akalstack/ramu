@@ -39,7 +39,7 @@ import {
 import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
 import { useAutomation } from '../../../runtime/automation'
-import { useChat, useStore } from '../../../runtime/store'
+import { useChat, useStore, type OutboxItem } from '../../../runtime/store'
 import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../runtime/busyMode'
 import { sharedValue } from '@ramu/shared/sharedFields'
 import { foldTurns } from '../../../runtime/turns'
@@ -107,6 +107,9 @@ const TURN_PAGE = 15
 
 const RowSeparator = () => <View style={{ height: space.m + 2 }} />
 
+/** A transcript row, or a message from this phone on its way to the host. */
+type ListRow = TranscriptItem | { kind: 'pending'; id: string; outbox: OutboxItem }
+
 export default function ChatScreen() {
   const tr = useSay()
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -134,6 +137,10 @@ export default function ChatScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const scroll = useRef<LegendListRef>(null)
+  // The host's row for a message sent from here keeps the key its sending row had (see listRows).
+  const aliases = useRef(new Map<string, string>())
+  const handedOver = useRef<OutboxItem[]>([])
+  const rowKey = (item: ListRow) => aliases.current.get(item.id) ?? item.id
   const [contentScreenFocused, setContentScreenFocused] = useState(false)
   const toolActivity = useThreadToolActivity(chat, contentScreenFocused)
   const [visibleContentRows, setVisibleContentRows] = useState<Set<string>>(() => new Set())
@@ -547,9 +554,16 @@ export default function ChatScreen() {
   }, [pageRows, store.language])
   // New rows fade in on their own (`fresh` below). A screen-wide layout animation is not used here: it left the list's
   // row positions behind their measured sizes, drawing a tall message over the reply under it.
-  const renderRow = ({ item }: { item: TranscriptItem; index: number }) => {
-    const fresh = !seen.current.has(item.id)
-    seen.current.add(item.id)
+  const renderRow = ({ item }: { item: ListRow; index: number }) => {
+    const key = rowKey(item)
+    const fresh = !seen.current.has(key)
+    seen.current.add(key)
+    if (item.kind === 'pending')
+      return (
+        <Arrive animate={fresh && item.outbox.createdAt >= openedAt.current}>
+          <PendingBubble item={item.outbox} computer={computer?.name ?? 'the host'} onEdit={editPending} />
+        </Arrive>
+      )
     return (
       <TranscriptListRow
         found={found?.id === item.id ? found.at : undefined}
@@ -683,6 +697,21 @@ export default function ChatScreen() {
   const offline = !store.isOnline(chat.computerId)
   // Keep the submitted text visible while the host accepts it.
   const pending = store.outbox.filter((o) => o.chatId === chat.id && !deliveryVisible(o, chat))
+  // A message on its way is a row of the list, as T3 Code does it, not a footer: the list follows it in like any row,
+  // and when the host's copy arrives that row keeps the same key. The list then sees one row whose size it already
+  // knows, instead of a bubble removed from the footer and a new row it must measure, which moved the chat up and down.
+  for (const sent of handedOver.current)
+    if (!pending.some((item) => item.id === sent.id)) {
+      const shown = visibleText(sent.text)
+      const arrived = pageRows.findLast(
+        (row) => row.kind === 'user' && row.text === shown && !aliases.current.has(row.id),
+      )
+      if (arrived) aliases.current.set(arrived.id, `pending:${sent.id}`)
+    }
+  handedOver.current = pending
+  const listRows: ListRow[] = pending.length
+    ? [...pageRows, ...pending.map((outbox) => ({ kind: 'pending' as const, id: `pending:${outbox.id}`, outbox }))]
+    : pageRows
   const editPending = (text: string) => setRestore((r) => ({ text, n: (r?.n ?? 0) + 1 }))
   const openScm = () => router.push({ pathname: '/chat/[id]/scm', params: { id: chat.id } })
   const openChanges = () => router.push({ pathname: '/chat/[id]/changes', params: { id: chat.id } })
@@ -1191,15 +1220,16 @@ export default function ChatScreen() {
                     ) : null}
                   </View>
                 }
-                data={pageRows}
+                data={listRows}
                 viewabilityConfig={contentViewability}
                 onViewableItemsChanged={contentViewabilityChanged}
                 // Earlier turns arrive above what you are reading; they must not move it.
                 maintainVisibleContentPosition={pagedBack ? { data: true, size: true } : undefined}
-                keyExtractor={(item) => item.id}
+                keyExtractor={rowKey}
                 renderItem={renderRow}
                 // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
-                getItemType={(item) => item.kind}
+                // A message on its way is measured as the sent message it becomes.
+                getItemType={(item) => (item.kind === 'pending' ? 'user' : item.kind)}
                 estimatedItemSize={260}
                 drawDistance={400}
                 // Lays out the newest rows first instead of the whole page from the top.
@@ -1256,11 +1286,6 @@ export default function ChatScreen() {
                 keyboardShouldPersistTaps="handled"
                 ListFooterComponent={
                   <View style={{ gap: space.m, paddingTop: space.m }}>
-                    {pending.map((o) => (
-                      <Arrive key={o.id} animate={o.createdAt >= openedAt.current}>
-                        <PendingBubble item={o} computer={computer?.name ?? 'the host'} onEdit={editPending} />
-                      </Arrive>
-                    ))}
                     {/* The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
                         (reasoning, or a tool group at work) already says what the agent is doing. */}
                     <WorkingLine inline quiet={lastShowsWork} chat={chat} sending={pending.length > 0} />
