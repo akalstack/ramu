@@ -274,10 +274,11 @@ function Viewer({
     pending.dy = 0
     if (dx || dy) send({ kind: 'scroll', ...pending.at, dx, dy })
   }
+  // The alert below explains an error; the header and the empty screen only say the screen is not there.
   const status = live
     ? t('Live video')
     : error
-      ? error
+      ? t('Not available')
       : !frame
         ? t('Connecting…')
         : stale
@@ -442,7 +443,9 @@ function Viewer({
               src={`data:${frame.mimeType};base64,${frame.data}`}
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-control text-muted-foreground">{status}</div>
+            <div className="flex h-full items-center justify-center p-6 text-center text-control text-muted-foreground">
+              {status}
+            </div>
           )}
           {human && !capturing && (frame || live) && (
             <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
@@ -460,7 +463,7 @@ function Viewer({
         {!viewOnly && showsLocalInputLimit(current) && (
           <span className="text-caption text-muted-foreground">{t(LOCAL_INPUT_LIMIT)}</span>
         )}
-        <ComputerProblem needed={needed ?? refusedPermission(sendError)} error={inputError || sendError} />
+        <ComputerProblem needed={needed ?? refusedPermission(sendError)} error={inputError || sendError || error} />
       </DialogContent>
     </Dialog>
   )
@@ -589,7 +592,7 @@ function ComputerProblem({ needed, error }: { needed: DevicePermission | null; e
   if (!error) return null
   return (
     <span role="alert" className="text-caption text-destructive">
-      {error}
+      {t(error)}
     </span>
   )
 }

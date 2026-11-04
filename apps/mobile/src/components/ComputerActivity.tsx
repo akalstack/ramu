@@ -342,10 +342,11 @@ function ComputerViewer({
     current.sent = { dx: current.moved.dx, dy: current.moved.dy, at: Date.now() }
     if (at && (dx || dy)) void send({ kind: 'scroll', x: at.x, y: at.y, dx, dy })
   }
+  // The banner explains an error; the header and the empty screen only say the screen is not there.
   const status = live
     ? t('Live video')
     : error
-      ? error
+      ? t('Not available')
       : !frame
         ? t('Connecting…')
         : stale
@@ -460,7 +461,7 @@ function ComputerViewer({
       ) : null}
       {error ? (
         <ViewerBanner tone="bad">
-          <T size={font.control}>{error}</T>
+          <T size={font.control}>{t(error)}</T>
           <RequestPermission computerId={chat.computerId} message={error} />
         </ViewerBanner>
       ) : null}
@@ -522,9 +523,14 @@ function ComputerViewer({
             ) : null}
           </View>
         ) : (
-          <View pointerEvents="none" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.m }}>
+          <View
+            pointerEvents="none"
+            style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.m, padding: space.xl }}
+          >
             <MonitorIcon size={32} color={theme.muted} strokeWidth={1.5} />
-            <T tone="muted">{status}</T>
+            <T tone="muted" style={{ textAlign: 'center' }}>
+              {status}
+            </T>
           </View>
         )}
         {human ? (
