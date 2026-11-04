@@ -732,8 +732,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               const events = snapshot.events.map((x) => x.event)
               const queue = [...events].reverse().find((e) => e.kind === 'queue')
               const text = [...events].reverse().find((e) => e.kind === 'text' || e.kind === 'user')
-              const latestState = [...events].reverse().find((e) => e.kind === 'state')
-              const sessionState = latestState?.kind === 'state' ? latestState.state : session?.state
+              // The host's own reading, as the desktop uses it: the main session's state and the task's status. Rebuilding
+              // them from events disagreed with it, since hosts do not record a state event for every run and finish.
+              const sessionState = task.executionState ?? session?.state
               chats.push({
                 ...task,
                 id:
@@ -747,18 +748,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 effort: session?.settings.effort ?? '',
                 settings: session?.settings,
                 preview: text && 'text' in text ? visibleText(text.text).slice(-140) : '',
-                status:
-                  sessionState === 'running' || sessionState === 'starting'
-                    ? 'running'
-                    : sessionState === 'needs-input'
-                      ? 'needs-input'
-                      : sessionState === 'failed'
-                        ? 'failed'
-                        : task.status === 'archived'
-                          ? 'archived'
-                          : task.status === 'ready-for-review'
-                            ? 'ready-for-review'
-                            : 'idle',
+                status: task.status,
                 inputSummary: ['stopped', 'failed'].includes(sessionState ?? '')
                   ? null
                   : inputSummary(events, session?.id ?? ''),
