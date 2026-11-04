@@ -45,7 +45,7 @@ import { Header, HeaderButton, PageScrollView, Screen } from '../components/Scre
 import { KeyboardPadding, useKeyboardOpen } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
-import { Button, Row, Sheet, T, tap } from '../components/ui'
+import { Row, Sheet, T, tap } from '../components/ui'
 import { SheetGroup, SheetOption } from '../components/SheetOptions'
 import { otherHostTargets } from '../runtime/otherHostTargets'
 import { BranchNameControls } from '../components/BranchNameControls'
@@ -271,20 +271,6 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     },
   })
   const model = asModelChoice(agentDraft.settings)
-  // Only a problem that stops or changes the send is worth words above the composer; the usual states say nothing.
-  const modelNotice = agentDraft.invalid
-    ? t.projectModelInvalid
-    : !preset || agentDraft.choice.selection || agentDraft.loading
-      ? null
-      : agentDraft.defaults?.status === 'invalid'
-        ? t.projectModelConfigInvalid
-        : agentDraft.defaults?.reason === 'provider'
-          ? t.projectModelProviderUnavailable
-          : agentDraft.defaults?.reason === 'model'
-            ? t.projectModelUnavailable
-            : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
-              ? t.projectModelCatalogFailed
-              : null
   const chooseModel = (next: ModelChoice) =>
     agentDraft.change({
       ...agentDraft.settings,
@@ -621,20 +607,6 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           </View>
         )}
         <View style={{ paddingBottom: Math.max(insets.bottom, space.s) + (asTab && !keyboardOpen ? space.m : 0) }}>
-          {modelNotice || agentDraft.choice.selection || (agentDraft.blocked && preset) ? (
-            <View style={{ paddingHorizontal: space.m, gap: space.s }}>
-              {modelNotice ? (
-                <T tone="muted" size={font.caption}>
-                  {modelNotice}
-                </T>
-              ) : null}
-              {agentDraft.choice.selection ? (
-                <Button title={t.projectModelUseDefault} kind="ghost" onPress={agentDraft.useProjectDefault} />
-              ) : agentDraft.blocked && preset ? (
-                <Button title={t.projectModelUseHost} kind="ghost" onPress={agentDraft.useHostDefault} />
-              ) : null}
-            </View>
-          ) : null}
           <Composer
             key={composerKey}
             running={false}

@@ -268,21 +268,6 @@ export function NewTask({
   const { initialSettings } = useModelSets()
   const agentDraft = useAgentDraft(scopeProject, initialSettings)
   const settings = agentDraft.settings
-  const modelNotice = agentDraft.choice.selection
-    ? t('Model chosen for this draft')
-    : !agentDraft.confirmed
-      ? t('The saved model choice could not be restored. Choose a model again.')
-      : agentDraft.loading
-        ? t('Loading project model defaults…')
-        : agentDraft.defaults?.status === 'invalid'
-          ? t('Project configuration is invalid. Choose a model or correct the file.')
-          : agentDraft.defaults?.reason === 'provider'
-            ? t("The project's preferred provider is unavailable on this host.")
-            : agentDraft.defaults?.reason === 'model'
-              ? t("The project's preferred model is not in this host's catalog.")
-              : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
-                ? t("Could not load the project's model catalog.")
-                : t('Project model default')
   const workspaceDraft = useWorkspaceDraft(host.id, scopeProject, general ? null : ws.composingWorkspace)
   const workspaceId = general ? null : (workspaceDraft.choice.workspaceId ?? null)
   const manualMode = general ? null : workspaceDraft.choice.mode
@@ -706,36 +691,6 @@ export function NewTask({
         )}
       </div>
       <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
-        {(agentDraft.defaults?.requested || agentDraft.blocked || agentDraft.problem) && (
-          <div className="flex flex-wrap items-center gap-2 px-2 text-caption text-muted-foreground" role="status">
-            <span>{modelNotice}</span>
-            {agentDraft.defaults?.requested && (
-              <span>
-                {`${agentDraft.defaults.source ?? 'ramu.json'} · `}
-                {[agentDraft.defaults.requested.provider, agentDraft.defaults.requested.model]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-            )}
-            {agentDraft.choice.selection ? (
-              <Button variant="ghost" size="xs" disabled={busy} onClick={agentDraft.useProjectDefault}>
-                {t('Use project default')}
-              </Button>
-            ) : agentDraft.blocked ? (
-              <Button variant="ghost" size="xs" disabled={busy} onClick={agentDraft.useHostDefault}>
-                {t('Use host default')}
-              </Button>
-            ) : null}
-            {agentDraft.problem && (
-              <>
-                {agentDraft.confirmed && <span>{t('Model choice could not be saved on this device.')}</span>}
-                <Button variant="ghost" size="xs" onClick={agentDraft.retry}>
-                  {t('Retry')}
-                </Button>
-              </>
-            )}
-          </div>
-        )}
         {!general && workspaceDraft.problem && (
           <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
             {workspaceDraft.confirmed

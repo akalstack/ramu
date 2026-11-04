@@ -3929,8 +3929,6 @@ const projectModelCopy = {
   projectModelManual: 'Draft model',
   projectModelLoading: 'Loading project model',
   projectModelDefault: 'Project model default',
-  projectModelUseDefault: 'Use project default',
-  projectModelUseHost: 'Use host default',
 }
 const modelBase = {
   provider: 'codex',

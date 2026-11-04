@@ -574,24 +574,11 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Pilih tampilan saat membuka berkas Markdown. Tautan ke baris tertentu membuka Sumber.',
   Source: 'Sumber',
   'Preview Markdown without editing': 'Lihat Markdown tanpa mengedit',
-  'The saved model choice could not be restored. Choose a model again.':
-    'Pilihan model tersimpan tidak dapat dipulihkan. Pilih model lagi.',
-  'Project configuration is invalid. Choose a model or correct the file.':
-    'Konfigurasi proyek tidak valid. Pilih model atau perbaiki berkasnya.',
-  "The project's preferred provider is unavailable on this host.":
-    'Provider pilihan proyek tidak tersedia di host ini.',
-  "The project's preferred model is not in this host's catalog.": 'Model pilihan proyek tidak ada di katalog host ini.',
-  "Could not load the project's model catalog.": 'Tidak dapat memuat katalog model proyek.',
 
-  'Model chosen for this draft': 'Model dipilih untuk draf ini',
-  'Loading project model defaults…': 'Memuat model bawaan proyek…',
   'Choose a model or use the host default before starting.': 'Pilih model atau gunakan bawaan host sebelum memulai.',
   'Project model default': 'Model bawaan proyek',
   'This host uses host model defaults. Update it for repository preferences.':
     'Host ini memakai model bawaan host. Perbarui untuk preferensi repositori.',
-  'Use project default': 'Gunakan bawaan proyek',
-  'Use host default': 'Gunakan bawaan host',
-  'Model choice could not be saved on this device.': 'Pilihan model tidak dapat disimpan di perangkat ini.',
   'The draft changed. Review the model before sending.': 'Draf berubah. Tinjau model sebelum mengirim.',
   'Project model defaults changed. Review the model before sending.':
     'Model bawaan proyek berubah. Tinjau model sebelum mengirim.',
