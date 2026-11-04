@@ -1,4 +1,3 @@
-import { Button } from '@/components/desktop-button'
 import { SettingsFieldContext } from './settingsField'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { AppPreferences, ModelPreferences } from '@ramu/shared/types'
@@ -8,8 +7,10 @@ import {
   intersectCatalogs,
   sameValue,
   settingValue,
+  type SettingSchema,
   type SettingsSnapshot,
 } from '@ramu/shared/settingsCompatibility'
+import { SettingHosts } from './SettingHosts'
 import { recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { invoke, invokeOn, ramu } from '../ipc'
 import { isViewOnly, VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
@@ -43,6 +44,12 @@ function renderPreferences(saved?: AppPreferences): AppPreferences {
 }
 const currentValue = (snapshot: SettingsSnapshot, path: string) =>
   snapshot.settings.find((field) => field.path === path)?.value
+/** A selected host's side of one setting; see `hosts` in `useSettingsScope`. */
+export type SettingHost = { id: string; name: string; current: boolean } & (
+  | { state: 'ready' | 'locked'; value: unknown; isDefault: boolean; schema: SettingSchema }
+  | { state: 'unknown' }
+  | { state: 'unreachable'; reason?: string }
+)
 interface Target {
   id: string
   name: string
@@ -197,6 +204,25 @@ export function useSettingsScope(section: string) {
         snapshots.some((snapshot) => !sameValue(currentValue(snapshot, path), currentValue(primary!.snapshot!, path))),
     }
   }
+  /**
+   * One setting on each selected host, for its per-host popover: the value there and whether it is the default, or why
+   * that host cannot take it (offline, view-only, an older Ramu that does not know the setting).
+   */
+  const hosts = (path: string): SettingHost[] =>
+    targets.map((entry) => {
+      const base = { id: entry.id, name: entry.name, current: entry.id === (computers?.current ?? '') }
+      if (!entry.snapshot) return { ...base, state: 'unreachable' as const, reason: entry.error }
+      const definition = entry.snapshot.settings.find((field) => field.path === path)
+      if (!definition) return { ...base, state: 'unknown' as const }
+      const fallback = (definition.schema as { default?: unknown }).default
+      return {
+        ...base,
+        state: entry.viewOnly || entry.needsPermission ? ('locked' as const) : ('ready' as const),
+        value: definition.value,
+        isDefault: fallback !== undefined && sameValue(definition.value, fallback),
+        schema: definition.schema,
+      }
+    })
   const mark = (path: string) => {
     setEdited((current) => new Set([...current, path]))
     setMessage(null)
@@ -280,6 +306,7 @@ export function useSettingsScope(section: string) {
     error,
     message,
     field,
+    hosts,
     mark,
     edited,
     save,
@@ -305,25 +332,9 @@ export function SettingsField({
   const state = scope.field(path)
   return (
     <SettingsFieldContext.Provider value={{ path, ...state, mark: () => scope.mark(path) }}>
-      {!compact && state.mixed && (
-        <span className="inline-flex items-center gap-2 text-caption text-muted-foreground" role="status">
-          {t('Mixed')}
-          <Button
-            variant="link"
-            size="xs"
-            type="button"
-            disabled={state.disabled}
-            className="min-h-0 p-0 text-caption text-brand underline"
-            onClick={() => scope.mark(path)}
-          >
-            {t('Use this value for all')}
-          </Button>
-        </span>
-      )}
-      {!compact && state.disabled && (
-        <span className="text-caption text-muted-foreground">
-          {t(scope.readOnlyHosts.length ? VIEW_ONLY_WRITE_NOTICE : 'Not supported by every selected host.')}
-        </span>
+      {!compact && <SettingHosts path={path} scope={scope} />}
+      {!compact && state.disabled && scope.readOnlyHosts.length > 0 && (
+        <span className="text-caption text-muted-foreground">{t(VIEW_ONLY_WRITE_NOTICE)}</span>
       )}
       {compact ? (
         children
@@ -336,28 +347,18 @@ export function SettingsField({
   )
 }
 
+/** Under a setting's title: where it stands on each selected host, and a view-only notice when saving is refused. */
 export function SettingsFieldNotice({ path }: { path: string }) {
   const scope = useContext(SettingsScopeContext)
   if (!scope) return null
-  const state = scope.field(path)
-  return state.disabled ? (
-    <span className="block mt-1 text-caption text-muted-foreground">
-      {t(scope.readOnlyHosts.length ? VIEW_ONLY_WRITE_NOTICE : 'Not supported by every selected host.')}
-    </span>
-  ) : state.mixed ? (
-    <span className="flex flex-wrap items-center gap-2 mt-1 text-caption text-muted-foreground" role="status">
-      {t('Mixed')}
-      <Button
-        variant="link"
-        size="xs"
-        className="min-h-0 p-0 text-caption text-brand underline"
-        type="button"
-        onClick={() => scope.mark(path)}
-      >
-        {t('Use this value for all')}
-      </Button>
-    </span>
-  ) : null
+  return (
+    <>
+      <SettingHosts path={path} scope={scope} />
+      {scope.field(path).disabled && scope.readOnlyHosts.length > 0 && (
+        <span className="block mt-1 text-caption text-muted-foreground">{t(VIEW_ONLY_WRITE_NOTICE)}</span>
+      )}
+    </>
+  )
 }
 
 // Only the settings reads allowed by the host's viewer boundary. A method's suffix is not access evidence.
