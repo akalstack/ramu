@@ -1,4 +1,5 @@
 import { DragHandle } from '@/components/drag-handle'
+import { InlineAction, LocalInlineAction } from '@/components/inline-action'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -149,14 +150,14 @@ export function ProviderLoginRow({
                 : `${t('Signed in')}${state.detail && state.detail !== row.name && provider !== 'opencode' ? ` · ${state.detail}` : ''}${state.plan ? ` · ${planName(state.plan)}` : ''}`
               : t('Not signed in')}
           {state?.signedIn && state.upgradeUrl && (
-            <Button
-              variant="link"
-              size="xs"
-              className="ml-1.5 h-auto p-0 align-baseline"
-              onClick={() => void ramu.invoke('app.openExternal', state.upgradeUrl!).catch(() => {})}
-            >
-              {t('Upgrade plan')}
-            </Button>
+            <>
+              {' · '}
+              <LocalInlineAction
+                onClick={() => void ramu.invoke('app.openExternal', state.upgradeUrl!).catch(() => {})}
+              >
+                {t('Upgrade plan')}
+              </LocalInlineAction>
+            </>
           )}
         </span>
         {mcpSharing?.readiness && (
@@ -166,16 +167,14 @@ export function ProviderLoginRow({
           >
             {readinessLine(mcpSharing.readiness, timeAgo)}
             {mcpSharing.onRecheck && (
-              <Button
-                variant="link"
-                size="xs"
-                className="ml-1.5 h-auto p-0 align-baseline"
+              <InlineAction
+                className="ml-1.5"
                 disabled={mcpSharing.rechecking}
                 aria-label={t('Check MCP access again for {0}', { '0': row.name })}
                 onClick={mcpSharing.onRecheck}
               >
                 {mcpSharing.rechecking ? t('Checking…') : t('Check again')}
-              </Button>
+              </InlineAction>
             )}
           </span>
         )}

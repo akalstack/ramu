@@ -1,4 +1,4 @@
-import { Button } from '@/components/desktop-button'
+import { InlineAction } from '@/components/inline-action'
 import { useContext } from 'react'
 import { SettingsLabel, SettingsRow } from '@/components/settings-row'
 import type { AppPreferences } from '@ramu/shared/types'
@@ -60,15 +60,7 @@ export function LimitChoiceRow({
         ) : mixed ? (
           <span className="flex flex-wrap items-center gap-2 mt-1 text-caption text-muted-foreground" role="status">
             {t('Mixed')}
-            <Button
-              variant="link"
-              size="xs"
-              className="min-h-0 p-0 text-caption text-brand underline"
-              type="button"
-              onClick={markBoth}
-            >
-              {t('Use this value for all')}
-            </Button>
+            <InlineAction onClick={markBoth}>{t('Use this value for all')}</InlineAction>
           </span>
         ) : null}
       </span>

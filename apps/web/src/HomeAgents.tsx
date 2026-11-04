@@ -8,7 +8,7 @@ import { Button } from '@/components/desktop-button'
 import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { ThreadHoverCard } from './sidebar/projects/ThreadHoverCard'
-import { Check, RotateCcw, Square } from 'lucide-react'
+import { ArrowLeft, Check, RotateCcw, Square } from 'lucide-react'
 import { FadeText } from './FadeText'
 import { StateDot, StatusMark } from './sidebar/projects/TaskStateIcon'
 import { ICON_BUTTON_CLASS } from './sidebar/projects/constants'
@@ -362,8 +362,9 @@ export function HelperBreadcrumb({ parentId }: { parentId: string }) {
   return (
     <div className="px-3 pt-2">
       <Button
-        variant="link"
+        variant="ghost"
         size="sm"
+        className="-ml-2 text-muted-foreground hover:text-foreground"
         onClick={() => {
           void invoke('agent.get', parentId)
             .then((parent) => {
@@ -373,6 +374,7 @@ export function HelperBreadcrumb({ parentId }: { parentId: string }) {
             .catch((error) => notifyError(errorText(error)))
         }}
       >
+        <ArrowLeft size={14} />
         {t('Back to parent thread')}
       </Button>
     </div>

@@ -1,4 +1,5 @@
 import { ThreadsStartedCard } from './StartedThreads'
+import { LocalInlineAction } from '@/components/inline-action'
 import { ContinuedCard } from './ContinuedCard'
 import { ThemeCard } from '../../../theme/ThemeCard'
 import { InteractiveContent } from '../../../interactive/InteractiveContent'
@@ -162,14 +163,9 @@ export function EventRow({
                     .map((entry) => `${entry.name} (${translate(MCP_ATTENTION_LABELS[entry.status])})`)
                     .join(', '),
                 })}{' '}
-                <Button
-                  variant="link"
-                  size="xs"
-                  className="h-auto p-0 align-baseline"
-                  onClick={() => window.dispatchEvent(new Event('ramu:mcp-status'))}
-                >
+                <LocalInlineAction onClick={() => window.dispatchEvent(new Event('ramu:mcp-status'))}>
                   {translate('Review access')}
-                </Button>
+                </LocalInlineAction>
               </small>
             )}
             {omissionsLine(e.setupOmissions) && (
@@ -178,9 +174,7 @@ export function EventRow({
                 {onReviewAccess && canReviewAccess(e.setupOmissions) && (
                   <>
                     {' '}
-                    <Button variant="link" size="xs" className="h-auto p-0 align-baseline" onClick={onReviewAccess}>
-                      {translate('Review access')}
-                    </Button>
+                    <LocalInlineAction onClick={onReviewAccess}>{translate('Review access')}</LocalInlineAction>
                   </>
                 )}
               </small>
