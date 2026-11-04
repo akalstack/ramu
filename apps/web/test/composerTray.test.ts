@@ -62,21 +62,21 @@ it('shows a section count after its title with a dot separator that screen reade
 
 it('keeps the first live card in the tray and lifts the rest into the layer above it', () => {
   const html = renderToStaticMarkup(
-    createElement(
-      TrayStack,
-      {},
-      false,
-      createElement('section', { id: 'agents' }),
-      null,
-      createElement('section', { id: 'browser' }),
-      createElement('section', { id: 'goal' }),
-    ),
+    createElement(TrayStack, {
+      children: [
+        false,
+        createElement('section', { id: 'agents', key: 'agents' }),
+        null,
+        createElement('section', { id: 'browser', key: 'browser' }),
+        createElement('section', { id: 'goal', key: 'goal' }),
+      ],
+    }),
   )
   expect(html).toBe(
     '<div class="composer-tray-stack"><section id="agents"></section><div class="composer-tray-spread"><section id="browser"></section><section id="goal"></section></div></div>',
   )
-  expect(renderToStaticMarkup(createElement(TrayStack, {}, createElement('section', { id: 'only' })))).toBe(
+  expect(renderToStaticMarkup(createElement(TrayStack, { children: createElement('section', { id: 'only' }) }))).toBe(
     '<div class="composer-tray-stack"><section id="only"></section></div>',
   )
-  expect(renderToStaticMarkup(createElement(TrayStack, {}, false, null))).toBe('')
+  expect(renderToStaticMarkup(createElement(TrayStack, { children: [false, null] }))).toBe('')
 })

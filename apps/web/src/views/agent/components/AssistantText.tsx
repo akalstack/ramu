@@ -15,6 +15,7 @@ import { Message, MessageContent } from '@/components/ui/message'
 import { MessageActions } from './MessageActions'
 import { MSG_CLASS } from '../styles'
 import { noteArrival, rehypeStreamWords, streamClock } from '../lib/streamWords'
+import { useSmoothText } from '../hooks/useSmoothText'
 
 /** Memoized: the markdown parse is the costliest part of a transcript, and layout changes re-render the chat without changing a message. */
 export const AssistantText = memo(function AssistantText({
@@ -32,8 +33,11 @@ export const AssistantText = memo(function AssistantText({
   sessionId?: string
 }) {
   useLanguage()
-  const clock = useRef(streamClock(e.text))
-  noteArrival(clock.current, e.text)
+  // Written out at a steady pace while it streams; what has arrived but is not shown yet keeps the message live.
+  const text = useSmoothText(e.text, generating)
+  const writing = generating || text.length < e.text.length
+  const clock = useRef(streamClock(text))
+  noteArrival(clock.current, text)
   const rehypePlugins = useMemo(() => [rehypeStreamWords(clock.current)], [])
   // Stable component identities: a fresh `a` function every tick would remount every link.
   const components = useMemo<Components>(
@@ -51,10 +55,10 @@ export const AssistantText = memo(function AssistantText({
     <Message>
       <MessageContent className="gap-0">
         <Bubble variant="ghost" className="w-full">
-          <BubbleContent className={`${MSG_CLASS} assistant${generating ? ' generating' : ''} w-full overflow-visible`}>
+          <BubbleContent className={`${MSG_CLASS} assistant${writing ? ' generating' : ''} w-full overflow-visible`}>
             <Markdown
               remarkPlugins={[remarkGfm, remarkChatReferences]}
-              rehypePlugins={generating ? rehypePlugins : undefined}
+              rehypePlugins={writing ? rehypePlugins : undefined}
               urlTransform={(url) =>
                 url.startsWith(SKILL_REFERENCE_PREFIX) || parseThreadReference(url) || localFileLink(url)
                   ? url
@@ -62,11 +66,11 @@ export const AssistantText = memo(function AssistantText({
               }
               components={components}
             >
-              {e.text}
+              {text}
             </Markdown>
           </BubbleContent>
         </Bubble>
-        {actions && !generating && (
+        {actions && !writing && (
           <MessageActions latest={latest} className="mt-2">
             <MessageTime at={e.at} />
             <CopyButton text={e.text} />

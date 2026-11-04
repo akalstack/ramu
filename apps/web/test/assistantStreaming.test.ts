@@ -10,6 +10,8 @@ vi.mock('react', async (original) => ({
   },
 }))
 vi.mock('../src/i18n', () => ({ useLanguage() {}, t: (text: string) => text }))
+// Pacing has its own tests (smoothText); here every arrival is shown at once so the fade alone is checked.
+vi.mock('../src/views/agent/hooks/useSmoothText', () => ({ useSmoothText: (text: string) => text }))
 vi.mock('../src/chat/ChatMarkdown', () => ({ chatMarkdownComponents: {} }))
 vi.mock('../src/chat/ChatReferences', () => ({ ChatLink: ({ children }: React.PropsWithChildren) => children }))
 vi.mock('../src/views/agent/components/MessageTime', () => ({ MessageTime: () => null }))
