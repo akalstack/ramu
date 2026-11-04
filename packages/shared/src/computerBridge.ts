@@ -63,8 +63,13 @@ export type ComputerRuntimeStatus =
 /** The native side. The server never imports a platform runtime directly; a fake implements this in tests. */
 export interface ComputerBackend {
   status(): ComputerRuntimeStatus
-  capture(target: ComputerTarget): Promise<ComputerCapture>
-  perform(target: ComputerTarget, action: ComputerAction): Promise<void>
+  /**
+   * `forViewer`: the picture is for a person watching, so a backend may leave out what only an agent reads (an app's
+   * full accessibility tree) to send it sooner.
+   */
+  capture(target: ComputerTarget, options?: { forViewer?: boolean }): Promise<ComputerCapture>
+  /** Resolves with the target as it looks after the action when the backend got that picture along with it. */
+  perform(target: ComputerTarget, action: ComputerAction): Promise<ComputerCapture | void>
   /** Release held keys and buttons after cancellation, an ownership change or connection loss. */
   releaseInput(target: ComputerTarget): void
   /**

@@ -264,8 +264,13 @@ export class ComputerSession {
 
   private async frame(runId?: string): Promise<ComputerObservation> {
     const generation = this.lease.generation
-    const capture = await this.backend.capture(this.grant.target)
+    // Without a run the picture is for people watching; an agent's observation keeps everything it reads.
+    const capture = await this.backend.capture(this.grant.target, runId ? undefined : { forViewer: true })
     if (generation !== this.lease.generation || this.closed) refuse('Control changed during capture. Observe again.')
+    return this.observation(capture, generation, runId)
+  }
+
+  private observation(capture: ComputerCapture, generation: number, runId?: string): ComputerObservation {
     const meta = {
       id: randomUUID(),
       targetId: this.grant.target.id,
@@ -281,6 +286,15 @@ export class ComputerSession {
       this.lease = observed(this.lease, runId)
     }
     return { ...meta, capture }
+  }
+
+  /** A picture that came back with an action goes straight to anyone watching, ahead of the next capture. */
+  private publish(capture: ComputerCapture | void, generation: number) {
+    if (!capture || this.closed || generation !== this.lease.generation) return
+    const frame = this.observation(capture, generation)
+    const hash = createHash('sha256').update(capture.data).digest('hex').slice(0, 32)
+    this.shared = { frame, generation, hash }
+    for (const wake of [...this.frameWaiters]) wake()
   }
 
   /** Queued per session; the generation is fixed when the call is made, so a takeover cancels everything waiting. */
@@ -300,7 +314,7 @@ export class ComputerSession {
       this.lease = admitted.state
       this.latest = null // every action consumes the observation, even if it fails
       try {
-        await this.backend.perform(this.grant.target, action)
+        this.publish(await this.backend.perform(this.grant.target, action), generation)
       } catch (error) {
         if (error instanceof ComputerNotRun) throw new ComputerRefusal(error.message)
         throw new ComputerRefusal(
@@ -352,7 +366,7 @@ export class ComputerSession {
     await this.yieldToLocalInput(deviceId)
     this.claims?.take(claimKey(this.runtime.id, this.grant.target), this)
     try {
-      await this.backend.perform(this.grant.target, action)
+      this.publish(await this.backend.perform(this.grant.target, action), this.lease.generation)
     } catch (error) {
       if (error instanceof ComputerNotRun) throw new ComputerRefusal(error.message)
       throw new ComputerRefusal(

@@ -25,6 +25,8 @@ export interface OcuClient {
 
 /** Tools that only read, so one that failed because the helper had just gone away can run again on a new one. */
 const READ_ONLY_TOOLS = new Set(['list_apps', 'get_app_state'])
+/** Enough of the tree for a viewer frame to find the page's scroll area; the agent's observations keep the full tree. */
+const VIEWER_TREE_NODES = 120
 const closedConnection = (error: unknown) => /connection closed|not connected/i.test(String(error))
 
 interface ToolResult {
@@ -348,12 +350,24 @@ export class OcuBackend implements ComputerBackend {
 
   private trees = new Map<string, string[]>()
 
-  async capture(target: ComputerTarget): Promise<ComputerCapture> {
-    const result = await this.call('get_app_state', { app: target.name })
+  async capture(target: ComputerTarget, options?: { forViewer?: boolean }): Promise<ComputerCapture> {
+    // A person watching needs the picture, not the app's full accessibility tree, which is most of a snapshot's cost.
+    const result = await this.call('get_app_state', {
+      app: target.name,
+      ...(options?.forViewer ? { max_tree_nodes: VIEWER_TREE_NODES } : {}),
+    })
+    const capture = this.snapshot(target, result)
+    if (!capture) throw new Error(`${target.name} has no window to show.`)
+    return capture
+  }
+
+  /** The app as a tool result shows it: Open Computer Use answers every action with the app's refreshed state. */
+  private snapshot(target: ComputerTarget, result: ToolResult): ComputerCapture | undefined {
     const tree = result.content?.find((part) => part.type === 'text')?.text ?? ''
-    this.trees.set(target.name, scrollAreas(tree))
+    const areas = scrollAreas(tree)
+    if (areas.length || !this.trees.has(target.name)) this.trees.set(target.name, areas)
     const image = result.content?.find((part) => part.type === 'image' && part.data)
-    if (!image?.data) throw new Error(`${target.name} has no window to show.`)
+    if (!image?.data) return undefined
     const { width, height } = pngSize(Buffer.from(image.data, 'base64'))
     return {
       mimeType: 'image/png',
@@ -365,34 +379,44 @@ export class OcuBackend implements ComputerBackend {
     }
   }
 
-  async perform(target: ComputerTarget, action: ComputerAction): Promise<void> {
+  /** Resolves with the app as the action left it, so a viewer sees the result without waiting for another capture. */
+  async perform(target: ComputerTarget, action: ComputerAction): Promise<ComputerCapture | undefined> {
+    const result = await this.act(target, action)
+    return result && this.snapshot(target, result)
+  }
+
+  private async act(target: ComputerTarget, action: ComputerAction): Promise<ToolResult | undefined> {
     const app = target.name
     switch (action.kind) {
       case 'click':
-        await this.call('click', {
+        return this.call('click', {
           app,
           x: action.x,
           y: action.y,
           ...(action.button ? { mouse_button: action.button } : {}),
           ...(action.clickCount ? { click_count: action.clickCount } : {}),
         })
-        return
       case 'type':
         try {
-          await this.call('type_text', { app, text: action.text })
+          return await this.call('type_text', { app, text: action.text })
         } catch (error) {
           // No focused text field: press the keys instead when every character has one.
           const keys = /focused editable|text entry/i.test(String(error)) ? typingKeys(action.text) : null
           if (!keys) throw error
-          for (const key of keys) await this.call('press_key', { app, key })
+          let last: ToolResult | undefined
+          for (const key of keys) last = await this.call('press_key', { app, key })
+          return last
         }
-        return
       case 'key':
-        await this.call('press_key', { app, key: ocuKey(action.key, action.modifiers) })
-        return
+        return this.call('press_key', { app, key: ocuKey(action.key, action.modifiers) })
       case 'drag':
-        await this.call('drag', { app, from_x: action.fromX, from_y: action.fromY, to_x: action.toX, to_y: action.toY })
-        return
+        return this.call('drag', {
+          app,
+          from_x: action.fromX,
+          from_y: action.fromY,
+          to_x: action.toX,
+          to_y: action.toY,
+        })
       case 'scroll': {
         // Scroll the app's own scroll area, in either direction, when the last observation showed one.
         const area = this.trees.get(app)?.[0]
@@ -401,17 +425,17 @@ export class OcuBackend implements ComputerBackend {
         const direction = vertical ? (action.dy > 0 ? 'down' : 'up') : action.dx > 0 ? 'right' : 'left'
         if (area) {
           try {
-            await this.call('scroll', { app, element_index: area, direction, pages: amount })
-            return
+            return await this.call('scroll', { app, element_index: area, direction, pages: amount })
           } catch (error) {
             if (!vertical) throw error
           }
         }
         if (!vertical) throw new Error('Horizontal scrolling needs a scroll area in the app.')
         const times = Math.max(1, Math.min(10, Math.round(Math.abs(action.dy) / 300)))
+        let last: ToolResult | undefined
         for (let i = 0; i < times; i++)
-          await this.call('press_key', { app, key: action.dy > 0 ? 'Page_Down' : 'Page_Up' })
-        return
+          last = await this.call('press_key', { app, key: action.dy > 0 ? 'Page_Down' : 'Page_Up' })
+        return last
       }
     }
   }

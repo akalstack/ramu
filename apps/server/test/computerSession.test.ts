@@ -23,7 +23,7 @@ class FakeBackend implements ComputerBackend {
   async capture(): Promise<ComputerCapture> {
     return { mimeType: 'image/jpeg', data: 'AA==', width: 400, height: 300, scale: 2 }
   }
-  async perform(_target: ComputerTarget, action: ComputerAction) {
+  async perform(_target: ComputerTarget, action: ComputerAction): Promise<ComputerCapture | void> {
     await this.hold
     if (this.failNext) {
       this.failNext = false
@@ -114,6 +114,20 @@ describe('computer session', () => {
     await queuedResult
     await session.humanInput('phone', session.state.generation, view, { kind: 'key', key: 'x' })
     expect(backend.performed.map((action) => ('key' in action ? action.key : ''))).toEqual(['a', 'x'])
+  })
+
+  it('shows a watcher the picture an action came back with, without waiting for the next capture', async () => {
+    const { session, backend } = setup()
+    const after: ComputerCapture = { mimeType: 'image/png', data: 'QUZURVI=', width: 400, height: 300, scale: 1 }
+    backend.perform = async (_target, action) => {
+      backend.performed.push(action)
+      return after
+    }
+    const first = await session.view()
+    session.takeControl('phone')
+    await session.humanInput('phone', session.state.generation, { capturedAt: 1000 }, { kind: 'click', x: 1, y: 1 })
+    const next = await session.view(first.hash)
+    expect(next.capture.data).toBe('QUZURVI=')
   })
 
   it('accepts human input only from the controller, on a current generation and a fresh frame', async () => {

@@ -336,6 +336,40 @@ describe('open computer use connection', () => {
   })
 })
 
+describe('open computer use frames', () => {
+  const target = { id: 'app:Chrome', kind: 'app' as const, name: 'Chrome' }
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+  it('sends a viewer a light snapshot and hands back the picture an action returns', async () => {
+    const { OcuBackend } = await import('../src/computer/ocu')
+    const calls: { name: string; arguments: Record<string, unknown> }[] = []
+    const backend = new OcuBackend(
+      () => '/bin/ocu',
+      async () => ({
+        callTool: async (request: { name: string; arguments: Record<string, unknown> }) => {
+          calls.push(request)
+          return {
+            content: [
+              { type: 'text', text: 'tree' },
+              { type: 'image', data: png, mimeType: 'image/png' },
+            ],
+          }
+        },
+        close: async () => {},
+      }),
+    )
+    await backend.capture(target, { forViewer: true })
+    await backend.capture(target)
+    expect(calls[0]!.arguments).toMatchObject({ app: 'Chrome', max_tree_nodes: expect.any(Number) })
+    // An agent's observation keeps the whole tree.
+    expect(calls[1]!.arguments).toEqual({ app: 'Chrome' })
+    expect(await backend.perform(target, { kind: 'click', x: 1, y: 1 })).toMatchObject({
+      width: 1,
+      height: 1,
+      data: png,
+    })
+  })
+})
+
 describe('open computer use install', () => {
   it.runIf(process.platform === 'darwin')(
     'installs the pinned release into Ramu’s tools folder and verifies its version',

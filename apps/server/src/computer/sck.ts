@@ -235,7 +235,7 @@ export class SckDisplayBackend implements ComputerBackend {
     }
   }
 
-  perform(target: ComputerTarget, action: ComputerAction): Promise<void> {
+  perform(target: ComputerTarget, action: ComputerAction): Promise<ComputerCapture | void> {
     return this.inner.perform(target, action)
   }
   focusedField(target: ComputerTarget) {

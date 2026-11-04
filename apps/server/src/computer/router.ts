@@ -59,11 +59,11 @@ export class ComputerRouter implements ComputerBackend {
     return this.pick(target).frameInterval?.(target) ?? 250
   }
 
-  capture(target: ComputerTarget): Promise<ComputerCapture> {
-    return this.pick(target).capture(target)
+  capture(target: ComputerTarget, options?: { forViewer?: boolean }): Promise<ComputerCapture> {
+    return this.pick(target).capture(target, options)
   }
 
-  perform(target: ComputerTarget, action: ComputerAction): Promise<void> {
+  perform(target: ComputerTarget, action: ComputerAction): Promise<ComputerCapture | void> {
     return this.pick(target).perform(target, action)
   }
 
