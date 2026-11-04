@@ -425,11 +425,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
                 : () => {
                     const at = current.current.indexOf(chip.source)
                     if (at < 0) return
-                    // A quote is followed by the blank line that separated it from the message; it goes with it.
-                    let end = at + chip.source.length
-                    while (chip.kind === 'quote' && current.current[end] === '\n' && end < at + chip.source.length + 2)
-                      end++
-                    commit(current.current.slice(0, at) + current.current.slice(end), at)
+                    commit(current.current.slice(0, at) + current.current.slice(at + chip.source.length), at)
                   }
             }
           />,

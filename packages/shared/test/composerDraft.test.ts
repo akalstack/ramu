@@ -35,6 +35,13 @@ describe('inline composer atoms', () => {
     expect(draft.chips[0]?.label).toBe('First line\nUse $imagegen here')
     expect(draft.segments.map((segment) => segment.source).join('')).toBe(value)
   })
+
+  it('keeps the blank line after a quote in its chip, so typing continues beside it', () => {
+    const value = '> Quoted\n\nReply'
+    const [quote] = composerDraft(value).chips
+    expect(quote).toMatchObject({ kind: 'quote', start: 0, end: 10, label: 'Quoted' })
+    expect(value.slice(quote!.end)).toBe('Reply')
+  })
   it('leaves code examples and prices as text', () => {
     const value = '`$imagegen` and $100\n```sh\n$HOME\n```'
     expect(composerDraft(value).chips).toHaveLength(0)

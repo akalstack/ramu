@@ -100,7 +100,10 @@ export function Composer({
 }) {
   useLanguage()
   const ws = useWorkspace()
-  const openFileLink = useOpenFileLink(scopeId)
+  // A thread's own composer is scoped by the thread on screen, as its suggestions are; a new thread has none yet.
+  const scope = scopeId ?? ws.ui.activeTaskId ?? undefined
+  const threadId = scope && ws.task(scope) ? scope : undefined
+  const openFileLink = useOpenFileLink(threadId)
   const [caret, setCaret] = useState(value.length)
   const suggestions = useComposerSuggestions(value, caret, scopeId, chat, teammate)
   const [submitting, setSubmitting] = useState(false)
@@ -471,7 +474,7 @@ export function Composer({
                 className="attachment-chip [&_img]:w-[36px] [&_img]:h-[36px] [&_img]:object-cover [&_img]:rounded-(--radius-xs) [&_button]:flex-none [&_svg]:flex-none [&_.attachment-open.file]:inline-flex [&_.attachment-open.file]:items-center [&_.attachment-open.file]:gap-[7px] [&_.attachment-open.file]:p-[5px_9px] [&_.attachment-open.file]:max-w-[240px] [&_.attachment-open.file]:bg-transparent [&_.attachment-open.file]:[border:0] [&_.attachment-open.file]:text-left [&_.attachment-open.file]:justify-start [&_.attachment-open.file]:cursor-pointer [&_.attachment-remove]:top-[-7px] [&_.attachment-remove]:right-[-7px] [&:not(.comments-chip)_.attachment-remove]:opacity-0 [&:not(.comments-chip)_.attachment-remove]:[transition:none] [&:hover_.attachment-remove]:opacity-100 [&:hover_.attachment-remove]:[transition:opacity_0.12s_var(--ease)] [&_button.comments-chip-x]:absolute [&_button.comments-chip-x]:top-[50%] [&_button.comments-chip-x]:right-1 [&_button.comments-chip-x]:bottom-auto [&_button.comments-chip-x]:left-auto [&_button.comments-chip-x]:w-5 [&_button.comments-chip-x]:h-5 [&_button.comments-chip-x]:min-w-0 [&_button.comments-chip-x]:min-h-0 [&_button.comments-chip-x]:m-0 [&_button.comments-chip-x]:p-0 [&_button.comments-chip-x]:grid [&_button.comments-chip-x]:place-items-center [&_button.comments-chip-x]:[border:0] [&_button.comments-chip-x]:rounded-full [&_button.comments-chip-x]:[transform:translateY(-50%)] [&_button.comments-chip-x]:opacity-0 [&_button.comments-chip-x]:[transition:none] [&:hover_button.comments-chip-x]:opacity-100 [&:hover_button.comments-chip-x]:[transition:opacity_0.12s_var(--ease)] [&_button.comments-chip-x:focus-visible]:opacity-100 [&_button.comments-chip-x:focus-visible]:[transition:opacity_0.12s_var(--ease)] inline-flex items-center gap-[7px] max-w-[240px] min-w-0 [border:1px_solid_transparent] rounded-(--radius-s) text-control whitespace-normal relative p-0 bg-hover comments-chip [&:focus-visible]:[border-color:var(--line-strong)] [&_.attachment-open.file]:pr-3 [&_.attachment-open.file]:[transition:none] [&:hover_.attachment-open.file]:pr-[30px] [&:hover_.attachment-open.file]:[mask-image:linear-gradient(to_right,_#000_calc(100%_-_52px),_transparent_calc(100%_-_14px))] [&:focus-within_.attachment-open.file]:pr-[30px] [&:focus-within_.attachment-open.file]:[mask-image:linear-gradient(to_right,_#000_calc(100%_-_52px),_transparent_calc(100%_-_14px))] [&:hover_.comments-chip-x]:opacity-100 [outline:0] relative"
                 title={`${suggestions.repoName(file.repoId)}/${file.path}`}
               >
-                <PinnedFileOpen taskId={scopeId && ws.task(scopeId) ? scopeId : undefined} file={file} />
+                <PinnedFileOpen taskId={threadId} file={file} />
                 <Button
                   variant="secondary"
                   size="icon-xs"
@@ -560,7 +563,7 @@ export function Composer({
         <ComposerInput
           ref={ref}
           mentions={teammate?.mentions}
-          onOpenFile={scopeId && ws.task(scopeId) ? openFileLink : undefined}
+          onOpenFile={threadId ? openFileLink : undefined}
           onFindQuote={onShowQuote}
           readOnly={dictating || submitting}
           autoFocus={autoFocus}

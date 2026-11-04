@@ -46,13 +46,14 @@ export function composerDraft(value: string, mentions: readonly DraftMention[] =
   }))
   for (const match of value.matchAll(/^(?:>[^\n]*\n)+(?:\n)?/gm)) {
     if (code.some((block) => match.index! >= block.start && match.index! < block.end)) continue
-    const source = match[0].trimEnd()
+    // The blank line that ends a quote belongs to it, so what is typed next sits beside the quote, not lines below it,
+    // while the message keeps the line break Markdown needs to end the quote.
     chips.push({
       kind: 'quote',
       start: match.index!,
-      end: match.index! + source.length,
-      source,
-      label: source.replace(/^> ?/gm, '').trim(),
+      end: match.index! + match[0].length,
+      source: match[0],
+      label: match[0].replace(/^> ?/gm, '').trim(),
     })
   }
   let offset = 0

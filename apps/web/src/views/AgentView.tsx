@@ -12,7 +12,8 @@ import { NO_PROJECT } from '@ramu/shared/types'
 import { focusComposer } from '../composer/ComposerInput'
 import { Spinner } from '@/components/ui/spinner'
 import { quoteSource } from '@ramu/shared/chat/quoteSource'
-import { revealFound } from '../lib/revealFound'
+import { revealFound, revealQuote } from '../lib/revealFound'
+import { quoteRange } from '../lib/quoteRange'
 import { ChatMentions } from '../chat/ChatReferences'
 import { ThreadAgents } from './agent/lib/threadAgents'
 import { t as translate, useLanguage } from '../i18n'
@@ -454,7 +455,9 @@ export const AgentView = memo(function AgentView({
       blocks.map((element) => ({ element, text: element.innerText })),
       quote,
     )
-    if (source) revealFound(source.element)
+    const range = source && quoteRange(source.element, quote)
+    if (range) revealQuote(range)
+    else if (source) revealFound(source.element)
     else
       openFind(
         quote

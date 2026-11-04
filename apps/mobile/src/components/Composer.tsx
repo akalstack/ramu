@@ -1687,7 +1687,7 @@ function splitQuotes(text: string) {
   }
   return { quotes, body: body + text.slice(cursor) }
 }
-const joinQuotes = (quotes: string[], body: string) => quotes.map((quote) => `${quote}\n\n`).join('') + body
+const joinQuotes = (quotes: string[], body: string) => quotes.map((quote) => `${quote.trimEnd()}\n\n`).join('') + body
 
 function ContextChip({
   icon: I,

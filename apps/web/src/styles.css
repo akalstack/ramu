@@ -1364,6 +1364,11 @@ kbd {
   }
 }
 
+/* A quote's source: only the quoted words light up, for a moment. */
+::highlight(chat-quote) {
+  @apply [background-color:color-mix(in_srgb,_var(--accent)_32%,_transparent)];
+  @apply text-inherit;
+}
 /* Find in conversation. */
 ::highlight(chat-find) {
   @apply [background-color:color-mix(in_srgb,_var(--accent)_32%,_transparent)];
