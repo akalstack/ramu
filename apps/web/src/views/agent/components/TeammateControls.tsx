@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bot, List, SquareTerminal, Users } from 'lucide-react'
+import { Bot, List, SquareTerminal, Users, X } from 'lucide-react'
 import { RowButton } from '@/components/row-button'
 import { ComposerTraySection } from '../../../composer/ComposerTraySection'
 import { ActivityText } from '../../../chat/ActivityText'
@@ -24,6 +24,8 @@ export interface JoiningTeammate {
   mode: TeammateMode
   setSettings: (settings: AgentSettings) => void
   setMode: (mode: TeammateMode) => void
+  /** Takes the mention out, so the message goes to the thread's own agent again. */
+  remove: () => void
 }
 
 /**
@@ -62,6 +64,7 @@ export function useJoiningTeammate({
     settings,
     mode,
     setMode: (next) => setEdits({ key, settings: own.settings, mode: next }),
+    remove: () => setDraft(draft.replace(/^@\S+\s*/, '')),
     setSettings: (next) => {
       const model = models.find((entry) => entry.provider === next.provider && entry.id === next.model)
       const handle = model ? modelHandle(model) : null
@@ -108,6 +111,16 @@ export function TeammateJoinControls({ joining, disabled }: { joining: JoiningTe
               {value === 'review' ? t('Review') : t('Take over')}
             </Button>
           ))}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            disabled={disabled}
+            aria-label={t('Don’t add {0}', { 0: joining.name })}
+            title={t('Don’t add {0}', { 0: joining.name })}
+            onClick={joining.remove}
+          >
+            <X />
+          </Button>
         </div>
       }
     />

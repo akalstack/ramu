@@ -125,6 +125,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Bring another model into this thread': 'Bawa model lain ke thread ini',
   "Starts a message to this thread's model; change the model and Review or Take over below":
     'Memulai pesan ke model utas ini; ubah model serta Tinjau atau Ambil alih di bawah',
+  '{0} joins as': '{0} bergabung sebagai',
+  'Don’t add {0}': 'Jangan tambahkan {0}',
+  'Reads the changes and reports. Never edits.': 'Membaca perubahan dan melapor. Tidak pernah mengedit.',
+  'Edits while the lead waits, then hands back.': 'Mengedit selagi agen utama menunggu, lalu mengembalikan.',
   '{0} joins this thread and reviews': '{0} bergabung ke thread ini dan meninjau',
   'Bring a second model into this thread': 'Bawa model kedua ke thread ini',
   Teammate: 'Rekan',
@@ -314,7 +318,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Copy details': 'Salin detail',
   'Show details': 'Tampilkan detail',
   'Tell {0} what to do': 'Beri tahu {0} apa yang harus dikerjakan',
-  '{0} joins this thread': '{0} bergabung ke utas ini',
   'Start a message with @{0} to talk to it': 'Mulai pesan dengan @{0} untuk berbicara dengannya',
   'Still working': 'Masih bekerja',
   'Edit from here': 'Edit dari sini',

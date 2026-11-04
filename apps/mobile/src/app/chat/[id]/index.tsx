@@ -34,6 +34,7 @@ import {
   Server,
   SquareTerminal,
   Users,
+  X,
   Plug,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
@@ -92,7 +93,7 @@ import {
   type ItemMeta,
 } from '../../../components/Transcript'
 import { SelectionBar } from '../../../components/SelectionBar'
-import { Chip, ConnectionDot, Segmented, Sheet, T, tap } from '../../../components/ui'
+import { Chip, ConnectionDot, IconButton, Segmented, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { PendingBubble } from '../../../components/Outbox'
@@ -1425,28 +1426,36 @@ export default function ChatScreen() {
                     teammate={composerTeammate}
                     header={
                       joining ? (
-                        <View style={{ gap: space.xs }}>
-                          {/* The model the mention names, with its icon, since the text box itself shows plain text. */}
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-                            <ProviderIcon provider={joining.model.provider} size={13} />
-                            <T size={font.caption} tone="muted">
-                              {tr('{0} joins this thread', { 0: joining.name })}
+                        // One row says who joins and how; × takes the mention out and the message goes to the thread again.
+                        <View style={{ gap: 6 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                            <ProviderIcon provider={joining.model.provider} size={14} />
+                            <T size={font.control} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
+                              {tr('{0} joins as', { 0: joining.name })}
                             </T>
+                            <View style={{ flex: 1, minWidth: 150 }}>
+                              <Segmented<TeammateMode>
+                                small
+                                value={joining.mode}
+                                onChange={(mode) => setJoinEdits({ key: joining.key, model: joinOwn?.model, mode })}
+                                options={[
+                                  { key: 'review', label: tr('Review') },
+                                  { key: 'take-over', label: tr('Take over') },
+                                ]}
+                              />
+                            </View>
+                            <IconButton
+                              icon={X}
+                              label={tr('Don’t add {0}', { 0: joining.name })}
+                              size={28}
+                              tone="muted"
+                              onPress={() => writeDraft(draftText.replace(/^@\S+\s*/, ''))}
+                            />
                           </View>
-                          <Segmented<TeammateMode>
-                            value={joining.mode}
-                            onChange={(mode) => setJoinEdits({ key: joining.key, model: joinOwn?.model, mode })}
-                            options={[
-                              { key: 'review', label: tr('Review') },
-                              { key: 'take-over', label: tr('Take over') },
-                            ]}
-                          />
-                          <T size={font.caption} tone="muted">
+                          <T size={font.caption} tone="muted" numberOfLines={1}>
                             {joining.mode === 'review'
-                              ? tr(
-                                  'Reads the latest changes and replies with findings. It never edits, whatever this thread allows.',
-                                )
-                              : tr('Edits while the lead waits, then hands back with a summary.')}
+                              ? tr('Reads the changes and reports. Never edits.')
+                              : tr('Edits while the lead waits, then hands back.')}
                           </T>
                         </View>
                       ) : teammates.length && !viewer ? (

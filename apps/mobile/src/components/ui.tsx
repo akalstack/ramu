@@ -768,11 +768,14 @@ export function Segmented<K extends string>({
   onChange,
   options,
   style,
+  small,
 }: {
   value: K
   onChange: (key: K) => void
   options: readonly { key: K; label: string; count?: number }[]
   style?: StyleProp<ViewStyle>
+  /** Compact, for a choice inside a toolbar or the composer: 32 points tall, with a slop that keeps it tappable. */
+  small?: boolean
 }) {
   const { c, scheme } = useTheme()
   // iOS look: a gray track with a lifted segment (white in light, a lighter gray in dark). In dark both are white washes
@@ -782,7 +785,15 @@ export function Segmented<K extends string>({
   return (
     <View
       accessibilityRole="tablist"
-      style={[{ flexDirection: 'row', backgroundColor: track, borderRadius: radius.m, padding: 3 }, style]}
+      style={[
+        {
+          flexDirection: 'row',
+          backgroundColor: track,
+          borderRadius: small ? radius.s + 2 : radius.m,
+          padding: small ? 2 : 3,
+        },
+        style,
+      ]}
     >
       {options.map((option) => {
         const selected = option.key === value
@@ -792,6 +803,7 @@ export function Segmented<K extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             accessibilityLabel={option.count ? `${option.label}, ${option.count}` : option.label}
+            hitSlop={small ? 6 : undefined}
             onPress={() => {
               if (!selected) {
                 tap()
@@ -800,10 +812,10 @@ export function Segmented<K extends string>({
             }}
             style={{
               flex: 1,
-              minHeight: 44,
-              paddingVertical: space.s,
+              minHeight: small ? 28 : 44,
+              paddingVertical: small ? 2 : space.s,
               paddingHorizontal: space.xs,
-              borderRadius: radius.m - 3,
+              borderRadius: small ? radius.s : radius.m - 3,
               alignItems: 'center',
               justifyContent: 'center',
               flexDirection: 'row',
@@ -812,7 +824,7 @@ export function Segmented<K extends string>({
             }}
           >
             <T
-              size={font.control}
+              size={small ? font.caption : font.control}
               weight={selected ? '600' : '500'}
               tone="text"
               style={{ opacity: selected ? 1 : 0.7, flexShrink: 1, textAlign: 'center' }}
