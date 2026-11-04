@@ -6,7 +6,7 @@ import { inboxBlockerText } from '../runtime/inboxBlockerText'
 import { pendingRequest } from '../runtime/threadActivity'
 import { useStore } from '../runtime/store'
 import { font, space } from '../theme'
-import { Button, T } from './ui'
+import { Button, ROW_INSET, T } from './ui'
 import { ChatRow } from './ChatRow'
 import { TranscriptItemView } from './Transcript'
 /** The same request IDs and draft keys back the transcript, activity sheet and Inbox. */
@@ -42,12 +42,16 @@ export function InboxThread({ chat, project, divider }: { chat: Chat; project?: 
     <View>
       <ChatRow chat={chat} project={project} divider={divider} />
       {blocker ? (
-        <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.m, paddingBottom: space.xs }}>
+        <T
+          size={font.caption}
+          tone="muted"
+          style={{ paddingLeft: ROW_INSET, paddingRight: space.l, paddingBottom: space.xs }}
+        >
           {inboxBlockerText(blocker, language === 'id' ? 'id' : 'en')}
         </T>
       ) : null}
       {requests.length ? (
-        <View style={{ paddingHorizontal: space.m, paddingBottom: space.s }}>
+        <View style={{ paddingLeft: ROW_INSET - space.s, paddingRight: space.l, paddingBottom: space.s }}>
           <Button
             kind="ghost"
             title={

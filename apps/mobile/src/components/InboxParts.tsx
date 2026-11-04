@@ -14,10 +14,13 @@ export function Chips<K extends string>({
   value,
   onChange,
   options,
+  lead,
 }: {
   value: K
   onChange: (key: K) => void
-  options: { key: K; label: string; count?: number; status?: import('../runtime/types').ComputerStatus }[]
+  options: { key: K; label: string; count?: number }[]
+  /** A control before the chips, such as the host chip. */
+  lead?: ReactNode
 }) {
   return (
     <ScrollView
@@ -26,12 +29,12 @@ export function Chips<K extends string>({
       style={{ flexGrow: 0 }}
       contentContainerStyle={{ paddingHorizontal: space.l, paddingVertical: space.m, gap: space.s }}
     >
+      {lead}
       {options.map((option) => (
         <Chip
           key={option.key}
           label={option.label}
           count={option.count}
-          status={option.status}
           selected={option.key === value}
           onPress={() => onChange(option.key)}
         />

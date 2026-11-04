@@ -388,6 +388,9 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   )
 }
 
+/** Where a full-width list row's text starts after a 16pt leading icon; its divider begins there, as in iOS lists. */
+export const ROW_INSET = space.l + 16 + space.m
+
 export function Divider({ inset = 0 }: { inset?: number }) {
   const { c } = useTheme()
   return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.lineStrong, marginLeft: inset }} />

@@ -169,7 +169,7 @@ export default function Revision() {
           ) : !files ? (
             <ActivityIndicator style={{ marginTop: space.l }} color={c.accent} />
           ) : rows.length ? (
-            <Card>
+            <View style={{ marginHorizontal: -space.l }}>
               {rows.map((file, index) => {
                 const { letter, tone } = revisionLetter(file.status)
                 return (
@@ -206,7 +206,7 @@ export default function Revision() {
                   </View>
                 )
               })}
-            </Card>
+            </View>
           ) : (
             <T tone="muted" style={{ paddingHorizontal: space.l }}>
               {say('This commit changed no files.')}

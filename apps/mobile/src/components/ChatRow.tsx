@@ -1,11 +1,13 @@
-import { memo, useState } from 'react'
-import { StyleSheet, View, useWindowDimensions } from 'react-native'
+import { memo, useState, type ReactNode } from 'react'
+import { View, useWindowDimensions } from 'react-native'
 import { useRouter } from 'expo-router'
 import {
   Archive,
   ArchiveRestore,
+  Bot,
   Check,
   Clock,
+  Folder,
   GitBranch,
   GitFork,
   ListChecks,
@@ -14,13 +16,14 @@ import {
   Sparkles,
 } from 'lucide-react-native'
 import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
-import { TEXT_SCALE, font, useTheme } from '../theme'
-import type { Chat } from '../runtime/types'
+import { TEXT_SCALE, font, space, useTheme } from '../theme'
+import { providerNames, type Chat } from '../runtime/types'
 import { ago, useT, type Strings, useSay } from '../i18n'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
-import { ConnectionDot, Pill, Row, StatusIcon, T, tap } from './ui'
+import { ConnectionDot, Divider, Pill, ROW_INSET, Row, StatusIcon, T, tap } from './ui'
 import { ChatActionsSheet, useChatCommands } from './ChatActions'
 import { SwipeRow } from './SwipeRow'
+import { ProviderIcon } from './Logos'
 import { useComputerUse } from '../runtime/computerUse'
 import { Monitor } from 'lucide-react-native'
 import { useStore } from '../runtime/store'
@@ -41,7 +44,7 @@ const SHORT = {
   finished: ['threadFinished', 'threadFinishedFull'],
 } as const satisfies Record<string, readonly [keyof Strings, keyof Strings]>
 
-/** A chat inside a rounded card; `divider` draws the hairline between stacked rows. */
+/** A chat in a full-width list; `divider` draws the inset hairline above it. */
 export const ChatRow = memo(function ChatRow({
   chat,
   project,
@@ -83,8 +86,12 @@ export const ChatRow = memo(function ChatRow({
   const selecting = !!selectable && selection.on && !chat.pending
   const picked = selecting && selection.ids.has(chat.id)
   const [shortKey, fullKey] = status ? SHORT[status.kind] : []
-  // A thread with no project and nothing to preview is one line; its row is centered instead of leaving a blank line.
-  const hasDetail = Boolean(project || chat.mode === 'worktree' || chat.preview)
+  // A phone has room for where the work happens: the project in mixed lists, a worktree's branch, which agent, helpers.
+  // The current checkout is the default, so it is left unsaid; the exact model is in the thread's composer.
+  const helpers = chat.helperSummary?.active ?? 0
+  const facts = Boolean(project || chat.mode === 'worktree' || helpers)
+  // A thread with nothing to preview or describe is one line; its row is centered instead of leaving a blank line.
+  const hasDetail = Boolean(chat.preview || facts)
   const actions =
     chat.pending || commands.viewOnly || selecting
       ? []
@@ -134,7 +141,8 @@ export const ChatRow = memo(function ChatRow({
   )
   return (
     <>
-      <SwipeRow actions={actions} background={c.raised2} fullSwipe>
+      {divider ? <Divider inset={ROW_INSET} /> : null}
+      <SwipeRow actions={actions} background={c.window} fullSwipe>
         <Row
           onLongPress={
             chat.pending
@@ -154,8 +162,6 @@ export const ChatRow = memo(function ChatRow({
           style={{
             alignItems: hasDetail ? 'flex-start' : 'center',
             paddingVertical: 10,
-            borderTopWidth: divider ? StyleSheet.hairlineWidth : 0,
-            borderTopColor: c.lineStrong,
           }}
           accessibilityLabel={[chat.title, fullKey ? strings[fullKey] : null, !online ? strings.threadOffline : null]
             .filter(Boolean)
@@ -233,22 +239,51 @@ export const ChatRow = memo(function ChatRow({
                 {meta}
               </View>
             ) : null}
-            {hasDetail ? (
+            {chat.preview ? (
+              // The preview is the agent's last word, so its mark leads it: Claude or Codex at a glance.
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                {project ? (
-                  <T size={font.control} tone="soft" numberOfLines={1}>
-                    {project}
-                  </T>
-                ) : null}
-                {chat.mode === 'worktree' ? <GitBranch size={12} color={c.muted} /> : null}
+                <View accessible accessibilityLabel={providerNames[chat.provider]}>
+                  <ProviderIcon provider={chat.provider} size={11} />
+                </View>
                 <T
                   size={font.control}
                   tone={chat.status === 'needs-input' ? 'warn' : chat.status === 'failed' ? 'bad' : 'muted'}
-                  numberOfLines={1}
+                  numberOfLines={stacked ? 3 : 1}
                   style={{ flex: 1 }}
                 >
                   {chat.preview}
                 </T>
+              </View>
+            ) : null}
+            {facts ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: stacked ? 'wrap' : 'nowrap',
+                  alignItems: 'center',
+                  columnGap: space.s,
+                  rowGap: 2,
+                  overflow: 'hidden',
+                }}
+              >
+                {project ? (
+                  <Fact icon={<Folder size={11} color={c.muted} />} grow={!stacked}>
+                    {project}
+                  </Fact>
+                ) : null}
+                {chat.mode === 'worktree' ? (
+                  <Fact icon={<GitBranch size={11} color={c.muted} />} label={say('Isolated worktree')} grow={!stacked}>
+                    {chat.branch || say('Worktree')}
+                  </Fact>
+                ) : null}
+                {helpers ? (
+                  <Fact
+                    icon={<Bot size={11} color={chat.helperSummary?.waiting ? c.warn : c.muted} />}
+                    label={say('{0} helpers', { 0: helpers })}
+                  >
+                    {String(helpers)}
+                  </Fact>
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -269,3 +304,19 @@ export const ChatRow = memo(function ChatRow({
     </>
   )
 })
+
+/** One fact on a thread's detail line: a small mark and a word or two. `grow` lets a long name take the spare width. */
+function Fact({ icon, label, grow, children }: { icon: ReactNode; label?: string; grow?: boolean; children: string }) {
+  return (
+    <View
+      accessible
+      accessibilityLabel={label ? `${label}: ${children}` : children}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: grow ? 1 : 0, minWidth: 0 }}
+    >
+      {icon}
+      <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+        {children}
+      </T>
+    </View>
+  )
+}

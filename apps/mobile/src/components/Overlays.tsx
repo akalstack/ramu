@@ -1,12 +1,11 @@
 import { useEffect, useState, useSyncExternalStore, type ComponentProps } from 'react'
 import { useRouter } from 'expo-router'
-import { Monitor, Plus, RefreshCw, Settings, Search, SquareTerminal } from 'lucide-react-native'
+import { Plus, RefreshCw, Settings, Search } from 'lucide-react-native'
 import { space, useTheme } from '../theme'
-import { counts, useStore } from '../runtime/store'
+import { useStore } from '../runtime/store'
 import { useT } from '../i18n'
 import { HeaderButton } from './Screen'
-import { ConnectionDot, Row, Sheet, T, tap, type Icon } from './ui'
-import { SheetGroup, SheetOption } from './SheetOptions'
+import { Row, Sheet, T, tap, type Icon } from './ui'
 
 // Shared host and connection sheets. New thread uses one native-stack page for its project list and composer.
 
@@ -32,76 +31,11 @@ function signal<V>(initial: V) {
 }
 /** Why an action that needs a computer cannot run: none paired, pairing revoked, or the computer is unreachable. */
 export type NeedComputer = 'none' | 'revoked' | 'offline'
-const computerMenu = signal(false)
 const needComputer = signal<NeedComputer | null>(null)
-export const openComputerMenu = () => computerMenu.set(true)
 export const openNeedComputer = (reason: NeedComputer) => needComputer.set(reason)
 
 /** Let a closing sheet finish before the next screen or sheet appears over it. */
 const later = (run: () => void) => setTimeout(run, 300)
-
-function ComputerMenu() {
-  const t = useT()
-  const router = useRouter()
-  const store = useStore()
-  const open = computerMenu.use()
-  const close = () => computerMenu.set(false)
-  const go = (run: () => void) => {
-    tap()
-    close()
-    later(run)
-  }
-  const projectList = store.projects.filter((p) => p.computerId === store.selected)
-  return (
-    <Sheet open={open} onClose={close} title={t.computers}>
-      <SheetGroup>
-        {store.computers.map((pc) => {
-          const n = counts(store.chats, pc.id)
-          return (
-            <SheetOption
-              key={pc.id}
-              icon={Monitor}
-              title={pc.name}
-              help={[
-                pc.address.replace(/^https?:\/\//, ''),
-                n.running ? `${n.running} ${t.running}` : '',
-                n.waiting ? `${n.waiting} ${t.waiting}` : '',
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-              selected={pc.id === store.selected}
-              trailing={<ConnectionDot status={pc.status} />}
-              onPress={() => {
-                store.select(pc.id)
-                close()
-              }}
-            />
-          )
-        })}
-        <SheetOption icon={Plus} title={t.pair} onPress={() => go(() => router.push('/pair'))} />
-      </SheetGroup>
-      {projectList.length ? (
-        <SheetGroup title={t.terminal}>
-          {projectList.map((p) => (
-            <SheetOption
-              key={p.id}
-              icon={SquareTerminal}
-              title={p.name}
-              onPress={() =>
-                go(() =>
-                  router.push({
-                    pathname: '/terminal',
-                    params: { computer: store.selected, ctx: `project:${p.id.slice(p.id.indexOf(':') + 1)}` },
-                  }),
-                )
-              }
-            />
-          ))}
-        </SheetGroup>
-      ) : null}
-    </Sheet>
-  )
-}
 
 /** The answer to a tap that cannot work yet: say why, and offer the fix, instead of doing nothing. */
 function NeedComputerSheet() {
@@ -155,7 +89,6 @@ function NeedComputerSheet() {
 export function Overlays() {
   return (
     <>
-      <ComputerMenu />
       <NeedComputerSheet />
     </>
   )

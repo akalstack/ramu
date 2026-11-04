@@ -125,7 +125,7 @@ function FileRow({
         flexDirection: 'row',
         alignItems: 'center',
         gap: space.s,
-        paddingLeft: space.m,
+        paddingLeft: space.l,
         paddingRight: 4,
         minHeight: 46,
       }}
@@ -211,7 +211,8 @@ function Group({
           <IconButton icon={action.icon} label={action.label} size={30} tone="muted" onPress={action.onPress} />
         ) : null}
       </View>
-      {count && open ? <Card>{children}</Card> : null}
+      {/* Lists reach the screen edges, out of the page's margin, as every list on the phone does. */}
+      {count && open ? <View style={{ marginHorizontal: -space.l }}>{children}</View> : null}
     </View>
   )
 }
@@ -866,7 +867,7 @@ export default function SourceControl() {
                 >
                   {shownStaged.map((f, i) => (
                     <View key={f.path}>
-                      {i ? <Divider inset={space.m} /> : null}
+                      {i ? <Divider inset={space.l} /> : null}
                       <FileRow
                         file={f}
                         onOpen={() => openFile.open(binding!.repoId, f.path, { mode: 'staged' })}
@@ -898,7 +899,7 @@ export default function SourceControl() {
               >
                 {shownUnstaged.map((f, i) => (
                   <View key={f.path}>
-                    {i ? <Divider inset={space.m} /> : null}
+                    {i ? <Divider inset={space.l} /> : null}
                     <FileRow
                       file={f}
                       onOpen={() => openFile.open(binding!.repoId, f.path, { mode: 'changes' })}
@@ -915,7 +916,7 @@ export default function SourceControl() {
             </>
           ) : null}
           {tab !== 'changes' ? (
-            <Card>
+            <View style={{ marginHorizontal: -space.l }}>
               {tab === 'commits' ? (
                 commits.length ? (
                   commits.map((x, i) => (
@@ -1004,7 +1005,7 @@ export default function SourceControl() {
                   {tr('No saved stashes. Stash changes from the ⋯ menu to set them aside.')}
                 </T>
               )}
-            </Card>
+            </View>
           ) : null}
         </ScrollView>
         {tab === 'changes' && binding && !binding.notGit ? (

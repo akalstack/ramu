@@ -3,7 +3,7 @@ import { View } from 'react-native'
 import type { Schedule } from '@ramu/shared/types'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { CalendarClock, ChevronRight, Pause, Pencil, Play, Trash2, Zap } from 'lucide-react-native'
-import { font, radius, space, useTheme } from '../../../theme'
+import { font, space, useTheme } from '../../../theme'
 import { scoped, useStore } from '../../../runtime/store'
 import { useAutomation } from '../../../runtime/automation'
 import {
@@ -18,9 +18,9 @@ import {
 } from '../../../runtime/scheduleModel'
 import { ago, useT, useSay } from '../../../i18n'
 import { Header, HeaderButton, PageScrollView, Screen } from '../../../components/Screen'
-import { Group, Nothing } from '../../../components/InboxParts'
+import { Nothing } from '../../../components/InboxParts'
 import { useScheduleCommands } from '../../../components/ScheduleRow'
-import { Button, Row, SectionLabel, T, tap } from '../../../components/ui'
+import { Button, Divider, Row, SectionLabel, T, tap } from '../../../components/ui'
 
 function Fact({ label, children }: { label: string; children: string }) {
   return (
@@ -93,9 +93,10 @@ function Detail({
       />
       <PageScrollView
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ padding: space.l, paddingBottom: space.xl * 2, gap: space.l }}
+        contentContainerStyle={{ paddingTop: space.l, paddingBottom: space.xl * 2, gap: space.l }}
       >
-        <View style={{ backgroundColor: c.raised2, borderRadius: radius.l, padding: space.l, gap: space.m }}>
+        {/* Full width, as the schedule list: facts and runs sit on the page, with only the controls inset. */}
+        <View style={{ paddingHorizontal: space.l, gap: space.m }}>
           <Fact label={t.prompt}>{schedule.prompt}</Fact>
           <Fact label={t.repeat}>{describeRule(schedule.rule, lang, schedule.timezone)}</Fact>
           <Fact label={t.upcoming}>{nextRunText(schedule, lang)}</Fact>
@@ -103,11 +104,11 @@ function Detail({
           <Fact label={t.timezone}>{schedule.timezone}</Fact>
         </View>
         {commands.viewOnly && (
-          <T tone="muted" accessibilityRole="alert">
+          <T tone="muted" accessibilityRole="alert" style={{ paddingHorizontal: space.l }}>
             {VIEW_ONLY_SCHEDULE_NOTICE[lang]}
           </T>
         )}
-        <View style={{ flexDirection: 'row', gap: space.s }}>
+        <View style={{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.l }}>
           <Button
             title={commands.paused ? t.resume : t.pause}
             icon={commands.paused ? Play : Pause}
@@ -127,51 +128,51 @@ function Detail({
         <View>
           <SectionLabel>{t.recentRuns}</SectionLabel>
           {runs.length ? (
-            <Group>
+            <View>
               {runs.slice(0, 20).map((run, i) => (
-                <Row
-                  key={run.id}
-                  disabled={!run.taskId}
-                  onPress={() => {
-                    tap()
-                    open(run)
-                  }}
-                  style={{
-                    paddingVertical: 11,
-                    borderTopWidth: i ? 0.5 : 0,
-                    borderTopColor: c.lineStrong,
-                  }}
-                >
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <T weight="500" tone={runTone(run.status)}>
-                      {RUN_LABELS[run.status][lang]}
-                    </T>
-                    <T size={font.control} tone="muted">
-                      {`${formatWhen(run.dueAt, schedule.timezone, lang)} · ${ago(run.dueAt)}`}
-                    </T>
-                    {run.error ? (
-                      <T size={font.control} tone="bad" numberOfLines={3}>
-                        {run.error}
+                <View key={run.id}>
+                  {i ? <Divider inset={space.l} /> : null}
+                  <Row
+                    disabled={!run.taskId}
+                    onPress={() => {
+                      tap()
+                      open(run)
+                    }}
+                    style={{ paddingVertical: 11 }}
+                  >
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <T weight="500" tone={runTone(run.status)}>
+                        {RUN_LABELS[run.status][lang]}
                       </T>
-                    ) : null}
-                  </View>
-                  {run.taskId ? <ChevronRight size={16} color={c.muted} /> : null}
-                </Row>
+                      <T size={font.control} tone="muted">
+                        {`${formatWhen(run.dueAt, schedule.timezone, lang)} · ${ago(run.dueAt)}`}
+                      </T>
+                      {run.error ? (
+                        <T size={font.control} tone="bad" numberOfLines={3}>
+                          {run.error}
+                        </T>
+                      ) : null}
+                    </View>
+                    {run.taskId ? <ChevronRight size={16} color={c.muted} /> : null}
+                  </Row>
+                </View>
               ))}
-            </Group>
+            </View>
           ) : (
             <T tone="muted" style={{ paddingHorizontal: space.l, paddingTop: space.s }}>
               {t.noRuns}
             </T>
           )}
         </View>
-        <Button
-          title={t.delete}
-          icon={Trash2}
-          kind="danger"
-          disabled={commands.disabled}
-          onPress={() => commands.remove(() => goBackOrHome(router))}
-        />
+        <View style={{ paddingHorizontal: space.l }}>
+          <Button
+            title={t.delete}
+            icon={Trash2}
+            kind="danger"
+            disabled={commands.disabled}
+            onPress={() => commands.remove(() => goBackOrHome(router))}
+          />
+        </View>
       </PageScrollView>
     </Screen>
   )

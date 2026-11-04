@@ -16,9 +16,9 @@ import {
   useScrolledUnderBar,
 } from '../../../components/Screen'
 import { TopFade } from '../../../components/Glass'
-import { Group, Nothing } from '../../../components/InboxParts'
+import { Nothing } from '../../../components/InboxParts'
 import { openNeedComputer, useTabActions } from '../../../components/Overlays'
-import { ComputerSwitcher } from '../../../components/ComputerSwitcher'
+import { HostChip } from '../../../components/HostChip'
 import { ScheduleRow } from '../../../components/ScheduleRow'
 import { T } from '../../../components/ui'
 
@@ -61,7 +61,10 @@ export default function SchedulesScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={c.muted} />}
       >
         <LargeTitle>{t.schedules}</LargeTitle>
-        <ComputerSwitcher />
+        {/* Schedules belong to one host, so the host chip has no All hosts here. */}
+        <View style={{ flexDirection: 'row', paddingHorizontal: space.l, paddingTop: space.m }}>
+          <HostChip />
+        </View>
         <T
           tone="muted"
           size={font.control}
@@ -85,7 +88,7 @@ export default function SchedulesScreen() {
           </T>
         ) : null}
         {schedules.length ? (
-          <Group>
+          <View>
             {schedules.map((schedule, i) => (
               <ScheduleRow
                 key={schedule.id}
@@ -95,7 +98,7 @@ export default function SchedulesScreen() {
                 divider={i > 0}
               />
             ))}
-          </Group>
+          </View>
         ) : data.loaded || !online ? (
           <View>
             <Nothing

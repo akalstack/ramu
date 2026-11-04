@@ -10,8 +10,7 @@ import { useAutomation } from '../../../runtime/automation'
 import { useT, useSay } from '../../../i18n'
 import { Header, PageScrollView, Screen } from '../../../components/Screen'
 import { Markdown } from '../../../components/Markdown'
-import { Group } from '../../../components/InboxParts'
-import { IconButton, Row, SectionLabel, T, tap } from '../../../components/ui'
+import { Divider, IconButton, Row, SectionLabel, T, tap } from '../../../components/ui'
 
 const ORDER: LibrarySummaryItem['change'][] = ['added', 'updated', 'merged', 'archived', 'restored']
 const LABEL: Record<LibrarySummaryItem['change'], string> = {
@@ -118,51 +117,57 @@ export default function SummaryScreen() {
               </T>
             ) : null}
             {groups.map((group) => (
-              <View key={group.change}>
+              // Lists reach the screen edges, as everywhere else, out of the page's reading margin.
+              <View key={group.change} style={{ marginHorizontal: -space.l }}>
                 <SectionLabel>{LABEL[group.change]}</SectionLabel>
-                <Group flush>
-                  {group.items.map((item) => (
-                    <Row key={`${item.kind}:${item.id}`} disabled style={{ paddingVertical: 10 }}>
-                      {item.kind === 'memory' ? (
-                        <Brain size={15} color={c.muted} />
-                      ) : (
-                        <Sparkles size={15} color={c.muted} />
-                      )}
-                      <View style={{ flex: 1 }}>
-                        <T numberOfLines={2}>{item.title}</T>
-                        {item.reason ? (
-                          <T size={font.caption} tone="muted" numberOfLines={3}>
-                            {item.reason}
+                <View>
+                  {group.items.map((item, index) => (
+                    <View key={`${item.kind}:${item.id}`}>
+                      {index ? <Divider inset={space.l + 15 + space.m} /> : null}
+                      <Row disabled style={{ paddingVertical: 10 }}>
+                        {item.kind === 'memory' ? (
+                          <Brain size={15} color={c.muted} />
+                        ) : (
+                          <Sparkles size={15} color={c.muted} />
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <T numberOfLines={2}>{item.title}</T>
+                          {item.reason ? (
+                            <T size={font.caption} tone="muted" numberOfLines={3}>
+                              {item.reason}
+                            </T>
+                          ) : null}
+                        </View>
+                        {item.worthALook ? (
+                          <T size={font.caption} tone="warn">
+                            {t.worthALook}
                           </T>
                         ) : null}
-                      </View>
-                      {item.worthALook ? (
-                        <T size={font.caption} tone="warn">
-                          {t.worthALook}
-                        </T>
-                      ) : null}
-                    </Row>
+                      </Row>
+                    </View>
                   ))}
-                </Group>
+                </View>
               </View>
             ))}
             {threads.length ? (
-              <View>
+              <View style={{ marginHorizontal: -space.l }}>
                 <SectionLabel>{t.discussedIn}</SectionLabel>
-                <Group flush>
-                  {threads.map((chat) => (
-                    <Row
-                      key={chat.id}
-                      onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
-                      style={{ paddingVertical: 10 }}
-                    >
-                      <MessageSquare size={15} color={c.muted} />
-                      <T style={{ flex: 1 }} numberOfLines={1}>
-                        {chat.title}
-                      </T>
-                    </Row>
+                <View>
+                  {threads.map((chat, index) => (
+                    <View key={chat.id}>
+                      {index ? <Divider inset={space.l + 15 + space.m} /> : null}
+                      <Row
+                        onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
+                        style={{ paddingVertical: 10 }}
+                      >
+                        <MessageSquare size={15} color={c.muted} />
+                        <T style={{ flex: 1 }} numberOfLines={1}>
+                          {chat.title}
+                        </T>
+                      </Row>
+                    </View>
                   ))}
-                </Group>
+                </View>
               </View>
             ) : null}
             <View

@@ -3,12 +3,11 @@ import { recentThreads } from '../../../runtime/recentThreads'
 import { groupKey, groupThreads, splitDone, type ThreadGroup } from '../../../runtime/threadGroups'
 import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BackHandler, Platform, Pressable, ScrollView as HScroll, View } from 'react-native'
+import { BackHandler, Platform, Pressable, ScrollView as HScroll, StyleSheet, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Folder,
   FolderGit2,
-  Network,
   History,
   Folders,
   MessagesSquare,
@@ -28,19 +27,18 @@ import {
 import { font, radius, space, useTheme } from '../../../theme'
 import { useStore, type OutboxItem } from '../../../runtime/store'
 import { STANDALONE, type Chat, type MobileProject } from '../../../runtime/types'
-import { ago, useT } from '../../../i18n'
+import { useT } from '../../../i18n'
 import { Header, HeaderButton, LargeTitle, Screen, useScrolledUnderBar, PageFlatList } from '../../../components/Screen'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { HostResources } from '../../../components/HostResources'
 import { ChatRow } from '../../../components/ChatRow'
 import { ProjectActionsSheet } from '../../../components/ChatActions'
 import { Disclosure, animateLayout } from '../../../components/Motion'
-import { Chip, ConnectionDot, IconButton, Row, SectionLabel, Sheet, T, tap } from '../../../components/ui'
-import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
+import { Chip, IconButton, Row, SectionLabel, Sheet, T, tap } from '../../../components/ui'
 import { confirmCancel } from '../../../components/Outbox'
 import { TopFade } from '../../../components/Glass'
 import { useTabActions } from '../../../components/Overlays'
-import { ComputerSwitcher } from '../../../components/ComputerSwitcher'
+import { HostChip } from '../../../components/HostChip'
 import { useBulkThreadActions } from '../../../components/BulkThreadActions'
 import { threadSelection, useThreadSelection } from '../../../runtime/threadSelection'
 
@@ -58,7 +56,7 @@ type HomeRow = { key: string } & Position &
 
 /** Newest threads each project shows before "Show more"; running, waiting and failed ones always show. */
 const PER_PROJECT = 3
-/** Done threads shown once the Done card is opened, before "Show more". */
+/** Done threads shown once the Done section is opened, before "Show more". */
 const DONE_PAGE = 10
 const DONE_KEY = 'section:done'
 
@@ -71,12 +69,11 @@ export default function Threads() {
   const router = useRouter()
   const edge = useScrolledUnderBar(40)
   const store = useStore()
-  const { chats, projects, selected, computers, outbox: allOutbox, cancelOutbox, select } = store
+  const { chats, projects, selected, computers, outbox: allOutbox, cancelOutbox } = store
   // With several hosts the list merges all of them by default; picking one host shows just that host.
   const multi = computers.length > 1
   const [allHosts, setAllHosts] = useState(true)
   const merged = multi && allHosts
-  const [hostSheet, setHostSheet] = useState(false)
   // A message being delivered to a connected computer is in the outbox for a moment; only stuck ones (offline or uncertain) belong here.
   const outbox = allOutbox.filter(
     (o) =>
@@ -146,7 +143,7 @@ export default function Threads() {
   const filtering = filter !== 'all'
   // The desktop's sidebar switch, kept on this phone: threads grouped by project, or one list by recent activity.
   const recentMode = store.drafts?.[THREAD_LIST_KEY] === 'recent'
-  // A thread marked done leaves its project (and Pinned) for one Done card at the bottom; archived ones list as they are.
+  // A thread marked done leaves its project (and Pinned) for one Done section at the bottom; archived ones list as they are.
   const { open, done } = useMemo(
     () => (filter === 'archived' ? { open: mine, done: [] } : splitDone(mine)),
     [mine, filter],
@@ -164,7 +161,7 @@ export default function Threads() {
     { key: 'archived', label: t.homeArchived, count: scoped.filter((x) => x.status === 'archived').length },
   ]
 
-  // One flat, virtualized list: labels, outbox items, chats and project headers are each a row, drawn as rounded groups.
+  // One flat, virtualized list: labels, outbox items, chats and project headers are each a row, drawn full width.
   const rows = useMemo(() => {
     const out: HomeRow[] = []
     const group = (key: string, items: HomeRow[], gap = 0) =>
@@ -222,9 +219,9 @@ export default function Threads() {
       }
       return out
     }
-    // Otherwise each project is its own card, the most recently active first, so its menu and new-thread action are always one tap away.
+    // Otherwise each project is its own section, the most recently active first, so its menu and new-thread action are always one tap away.
     // A recurring schedule shows its newest run, with older ones folded in unless they are unread or need something;
-    // opening a card fully (Show more) lists every run, as on the desktop.
+    // opening a section fully (Show more) lists every run, as on the desktop.
     const unread = new Set(
       Object.values(store.inbox).flatMap((notices) =>
         notices.flatMap((notice) => (notice.kind === 'done' && notice.sessionId ? [notice.sessionId] : [])),
@@ -241,7 +238,7 @@ export default function Threads() {
         const key = groupKey(chat.computerId, chat.projectId)
         folded.set(key, (folded.get(key) ?? 0) + 1)
       }
-    // Folded runs count toward a card's "Show more", so a card holding only folded runs can still open them.
+    // Folded runs count toward a section's "Show more", so a section holding only folded runs can still open them.
     const groups = groupThreads(listed, projectList, { limit: PER_PROJECT, expanded, collapsed }).map((g) =>
       expanded.has(g.key) || collapsed.has(g.key) ? g : { ...g, hidden: g.hidden + (folded.get(g.key) ?? 0) },
     )
@@ -253,12 +250,12 @@ export default function Threads() {
         [
           { key: 'head', kind: 'project', group: g, closed } as HomeRow,
           ...g.threads.map(
-            (chat) =>
+            (chat, i) =>
               ({
                 key: chat.id,
                 kind: 'chat',
                 chat,
-                divider: true,
+                divider: i > 0,
                 earlierRuns: expanded.has(g.key) ? undefined : runs.earlierRuns[chat.id],
               }) as HomeRow,
           ),
@@ -278,7 +275,7 @@ export default function Threads() {
         [
           { key: 'head', kind: 'done', count: done.length, closed } as HomeRow,
           ...shown.map(
-            (chat) => ({ key: chat.id, kind: 'chat', chat, project: labelOf(chat), divider: true }) as HomeRow,
+            (chat, i) => ({ key: chat.id, kind: 'chat', chat, project: labelOf(chat), divider: i > 0 }) as HomeRow,
           ),
           ...(!closed && done.length > DONE_PAGE
             ? [{ key: 'more', kind: 'more', group: DONE_KEY, hidden: all ? 0 : done.length - DONE_PAGE } as HomeRow]
@@ -495,18 +492,14 @@ export default function Threads() {
           )
         })()
       )
-    const round = radius.l
+    // Full width, as a phone list: a project's header starts its section, and a hairline closes off the one above.
     return (
       <View
         style={{
-          marginHorizontal: space.l,
           marginTop: row.gap,
-          backgroundColor: c.raised2,
-          overflow: 'hidden',
-          borderTopLeftRadius: row.first ? round : 0,
-          borderTopRightRadius: row.first ? round : 0,
-          borderBottomLeftRadius: row.last ? round : 0,
-          borderBottomRightRadius: row.last ? round : 0,
+          paddingTop: row.gap ? space.xs : 0,
+          borderTopWidth: row.gap ? StyleSheet.hairlineWidth : 0,
+          borderTopColor: c.line,
         }}
       >
         {body}
@@ -610,7 +603,6 @@ export default function Threads() {
         ListHeaderComponent={
           <>
             <LargeTitle>{t.chats}</LargeTitle>
-            {merged ? null : <ComputerSwitcher />}
             {!merged && pc?.status === 'offline' ? (
               <View
                 style={{
@@ -630,47 +622,35 @@ export default function Threads() {
               </View>
             ) : null}
 
-            {/* The row holds the list switch, and the filters once there is something to filter. */}
-            {live.length || multi ? (
-              <HScroll
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                style={{ flexGrow: 0 }}
-                contentContainerStyle={{ paddingHorizontal: space.l, paddingTop: space.m, gap: space.s }}
-              >
-                {multi ? (
+            {/* The row leads with the host, then the list switch, then the filters once there is something to filter. */}
+            <HScroll
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={{ paddingHorizontal: space.l, paddingTop: space.m, gap: space.s }}
+            >
+              <HostChip all={merged} onAll={multi ? setAllHosts : undefined} />
+              <Chip
+                label={recentMode ? say('Recent') : t.projects}
+                icon={recentMode ? History : Folders}
+                accessibilityLabel={
+                  recentMode ? say('Group threads by project') : say('Show threads by recent activity')
+                }
+                onPress={() => store.setDraft(THREAD_LIST_KEY, recentMode ? 'projects' : 'recent')}
+              />
+              {chips
+                .filter((chip) => chip.key === 'all' || chip.key === filter || chip.count > 0)
+                .map((chip) => (
                   <Chip
-                    label={merged ? t.allHosts : (pc?.name ?? t.allHosts)}
-                    accessibilityLabel={t.homeFilterHost}
-                    icon={Network}
-                    chevron
-                    selected={!merged}
-                    maxLabelWidth={150}
-                    onPress={() => setHostSheet(true)}
+                    key={chip.key}
+                    label={chip.label}
+                    count={chip.count}
+                    selected={filter === chip.key}
+                    onPress={() => setFilter(chip.key)}
                   />
-                ) : null}
-                <Chip
-                  label={recentMode ? say('Recent') : t.projects}
-                  icon={recentMode ? History : Folders}
-                  accessibilityLabel={
-                    recentMode ? say('Group threads by project') : say('Show threads by recent activity')
-                  }
-                  onPress={() => store.setDraft(THREAD_LIST_KEY, recentMode ? 'projects' : 'recent')}
-                />
-                {chips
-                  .filter((chip) => chip.key === 'all' || chip.key === filter || chip.count > 0)
-                  .map((chip) => (
-                    <Chip
-                      key={chip.key}
-                      label={chip.label}
-                      count={chip.count}
-                      selected={filter === chip.key}
-                      onPress={() => setFilter(chip.key)}
-                    />
-                  ))}
-              </HScroll>
-            ) : null}
+                ))}
+            </HScroll>
           </>
         }
         ListFooterComponent={
@@ -703,43 +683,6 @@ export default function Threads() {
 
       {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}
       {projectMenu ? <ProjectActionsSheet project={projectMenu} open onClose={() => setProjectMenu(null)} /> : null}
-      <Sheet open={hostSheet} onClose={() => setHostSheet(false)} title={t.homeHost}>
-        <SheetGroup>
-          {[
-            { id: null as string | null, name: t.allHosts },
-            ...computers.map((x) => ({
-              id: x.id as string | null,
-              name: x.name,
-              status: x.status,
-              help: x.status === 'online' || !x.lastSeen ? t[x.status] : `${t[x.status]} · ${ago(x.lastSeen)}`,
-            })),
-          ].map((o) => (
-            <SheetOption
-              key={o.id ?? 'all'}
-              icon={Network}
-              title={o.name}
-              help={'help' in o ? o.help : undefined}
-              trailing={'status' in o ? <ConnectionDot status={o.status} /> : undefined}
-              selected={o.id === null ? merged : !merged && o.id === selected}
-              onPress={() => {
-                if (o.id) select(o.id)
-                setAllHosts(o.id === null)
-                setHostSheet(false)
-              }}
-            />
-          ))}
-        </SheetGroup>
-        <SheetGroup>
-          <SheetOption
-            icon={SquarePen}
-            title={t.pair}
-            onPress={() => {
-              setHostSheet(false)
-              router.push('/pair')
-            }}
-          />
-        </SheetGroup>
-      </Sheet>
       <Sheet open={resourcesOpen} onClose={() => setResourcesOpen(false)} title={say('Resources')}>
         {resourcesOpen ? <HostResources host={merged ? null : selected} /> : null}
       </Sheet>

@@ -20,15 +20,14 @@ import { useAutomation } from '../runtime/automation'
 import { inboxBlockerText } from '../runtime/inboxBlockerText'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
-import { font, space, useTheme } from '../theme'
-import { Group, Nothing } from './InboxParts'
+import { font, space } from '../theme'
+import { Nothing } from './InboxParts'
 import { InputRequests } from './InputRequests'
-import { Button, T } from './ui'
+import { Button, Divider, T } from './ui'
 
 type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<unknown>
 
 function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean; where: (chat: Chat) => string }) {
-  const { c } = useTheme()
   const say = useSay()
   const router = useRouter()
   const store = useStore()
@@ -78,94 +77,98 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
           ? say('Failed')
           : request?.title || inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
   return (
-    <View
-      style={{
-        padding: space.m,
-        gap: space.s,
-        borderTopWidth: divider ? 0.5 : 0,
-        borderTopColor: c.line,
-      }}
-    >
-      <View>
-        <T weight="500" numberOfLines={1}>
-          {title}
-        </T>
-        <T size={font.caption} tone={row.kind === 'failure' ? 'bad' : 'muted'} numberOfLines={2}>
-          {[detail, chat ? where(chat) : ''].filter(Boolean).join(' · ')}
-        </T>
-      </View>
-      {error ? (
-        <T size={font.caption} tone="bad">
-          {error}
-        </T>
-      ) : null}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-        {viewOnly ? null : row.kind === 'failure' ? (
-          <>
-            <Button
-              title={say('Retry')}
-              disabled={off}
-              onPress={() => run(() => retryThread(invoke, { hostId, taskId }))}
-            />
+    <View>
+      {divider ? <Divider inset={space.l} /> : null}
+      <View style={{ paddingHorizontal: space.l, paddingVertical: space.m, gap: space.s }}>
+        <View>
+          <T weight="500" numberOfLines={1}>
+            {title}
+          </T>
+          <T size={font.caption} tone={row.kind === 'failure' ? 'bad' : 'muted'} numberOfLines={2}>
+            {[detail, chat ? where(chat) : ''].filter(Boolean).join(' · ')}
+          </T>
+        </View>
+        {error ? (
+          <T size={font.caption} tone="bad">
+            {error}
+          </T>
+        ) : null}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+          {viewOnly ? null : row.kind === 'failure' ? (
+            <>
+              <Button
+                title={say('Retry')}
+                disabled={off}
+                onPress={() => run(() => retryThread(invoke, { hostId, taskId }))}
+              />
+              <Button
+                kind="secondary"
+                title={say('Mark done')}
+                disabled={off}
+                onPress={() => run(() => invoke(hostId, 'tasks.done', taskId, true).then(() => store.refresh(hostId)))}
+              />
+            </>
+          ) : row.kind === 'low-memory' ? (
+            row.memory.low.idleThreads.length ? (
+              <Button
+                title={say('Stop idle')}
+                disabled={off}
+                onPress={() => run(() => stopIdleThreads(invoke, hostId, row.memory.low.idleThreads))}
+              />
+            ) : null
+          ) : row.kind === 'recap' ? (
             <Button
               kind="secondary"
               title={say('Mark done')}
               disabled={off}
-              onPress={() => run(() => invoke(hostId, 'tasks.done', taskId, true).then(() => store.refresh(hostId)))}
+              onPress={() => run(() => auto.actRecap(hostId, row.recap.item, 'done'))}
             />
-          </>
-        ) : row.kind === 'low-memory' ? (
-          row.memory.low.idleThreads.length ? (
+          ) : request?.kind === 'approval' ? (
             <Button
-              title={say('Stop idle')}
-              disabled={off}
-              onPress={() => run(() => stopIdleThreads(invoke, hostId, row.memory.low.idleThreads))}
-            />
-          ) : null
-        ) : row.kind === 'recap' ? (
-          <Button
-            kind="secondary"
-            title={say('Mark done')}
-            disabled={off}
-            onPress={() => run(() => auto.actRecap(hostId, row.recap.item, 'done'))}
-          />
-        ) : request?.kind === 'approval' ? (
-          <Button
-            title={say('Allow once')}
-            disabled={off}
-            onPress={() =>
-              run(() =>
-                invoke(hostId, 'agent.replyPermission', request.sessionId, request.requestId, true, undefined, 'once'),
-              )
-            }
-          />
-        ) : request?.choices ? (
-          request.choices.options.map((option) => (
-            <Button
-              key={option}
-              kind="secondary"
-              title={option}
+              title={say('Allow once')}
               disabled={off}
               onPress={() =>
                 run(() =>
-                  invoke(hostId, 'agent.replyQuestion', request.sessionId, request.requestId, {
-                    [request.choices!.key]: option,
-                  }),
+                  invoke(
+                    hostId,
+                    'agent.replyPermission',
+                    request.sessionId,
+                    request.requestId,
+                    true,
+                    undefined,
+                    'once',
+                  ),
                 )
               }
             />
-          ))
-        ) : request ? (
-          <Button
-            kind="secondary"
-            title={open ? say('Hide') : say('Answer')}
-            disabled={!online}
-            onPress={() => setOpen((value) => !value)}
-          />
-        ) : null}
-        {chat ? <Button kind="ghost" title={say('Open')} onPress={go} /> : null}
+          ) : request?.choices ? (
+            request.choices.options.map((option) => (
+              <Button
+                key={option}
+                kind="secondary"
+                title={option}
+                disabled={off}
+                onPress={() =>
+                  run(() =>
+                    invoke(hostId, 'agent.replyQuestion', request.sessionId, request.requestId, {
+                      [request.choices!.key]: option,
+                    }),
+                  )
+                }
+              />
+            ))
+          ) : request ? (
+            <Button
+              kind="secondary"
+              title={open ? say('Hide') : say('Answer')}
+              disabled={!online}
+              onPress={() => setOpen((value) => !value)}
+            />
+          ) : null}
+          {chat ? <Button kind="ghost" title={say('Open')} onPress={go} /> : null}
+        </View>
+        {open && chat ? <InputRequests chat={chat} /> : null}
       </View>
-      {open && chat ? <InputRequests chat={chat} /> : null}
     </View>
   )
 }
@@ -202,7 +205,7 @@ export function InboxBrief({ inbox, where }: { inbox: InboxModel; where: (chat: 
           {blockerTallyLine(blockerTally(inbox.waiting), say)}
         </T>
       ) : null}
-      <Group>
+      <View>
         {shown.map((row, index) => (
           <BriefRowView
             key={JSON.stringify([
@@ -215,7 +218,7 @@ export function InboxBrief({ inbox, where }: { inbox: InboxModel; where: (chat: 
             where={where}
           />
         ))}
-      </Group>
+      </View>
       {rows.length > shown.length ? (
         <Button
           kind="ghost"

@@ -11,8 +11,8 @@ import { useT } from '../i18n'
 import { Header, PageScrollView, Screen } from '../components/Screen'
 import { ChatRow } from '../components/ChatRow'
 import { useTabActions } from '../components/Overlays'
-import { Group, Nothing, Section } from '../components/InboxParts'
-import { Row, T } from '../components/ui'
+import { Nothing, Section } from '../components/InboxParts'
+import { Divider, Row, T } from '../components/ui'
 
 const RECENT = 10
 
@@ -146,35 +146,37 @@ export default function SearchScreen() {
         ) : null}
         {results.length ? (
           <Section title={q ? t.chats : t.recent} count={q ? results.length : undefined}>
-            <Group>
+            <View>
               {results.map((chat, i) => (
                 <ChatRow key={chat.id} chat={chat} project={label(chat.computerId, chat.projectId)} divider={i > 0} />
               ))}
-            </Group>
+            </View>
           </Section>
         ) : !messageHits.length ? (
           <Nothing icon={Search} title={q ? t.searchEmpty : t.search} detail={q ? '' : t.searchHint} />
         ) : null}
         {messageHits.length ? (
           <Section title={t.inMessages} count={messageHits.length}>
-            <Group>
+            <View>
               {messageHits.map(({ chat, hit }, i) => (
-                <Row
-                  key={`${chat.id}:${hit.sessionId}:${hit.seq}`}
-                  onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
-                  style={{ paddingVertical: 11, borderTopWidth: i ? 0.5 : 0, borderTopColor: c.lineStrong }}
-                >
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <T weight="500" numberOfLines={1}>
-                      {chat.title}
-                    </T>
-                    <T size={font.control} tone="muted" numberOfLines={2}>
-                      {hit.snippet}
-                    </T>
-                  </View>
-                </Row>
+                <View key={`${chat.id}:${hit.sessionId}:${hit.seq}`}>
+                  {i ? <Divider inset={space.l} /> : null}
+                  <Row
+                    onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
+                    style={{ paddingVertical: 11 }}
+                  >
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <T weight="500" numberOfLines={1}>
+                        {chat.title}
+                      </T>
+                      <T size={font.control} tone="muted" numberOfLines={2}>
+                        {hit.snippet}
+                      </T>
+                    </View>
+                  </Row>
+                </View>
               ))}
-            </Group>
+            </View>
           </Section>
         ) : null}
       </PageScrollView>

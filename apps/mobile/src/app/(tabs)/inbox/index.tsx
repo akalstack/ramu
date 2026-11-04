@@ -14,9 +14,10 @@ import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from 
 import { TopFade } from '../../../components/Glass'
 import { InboxBrief } from '../../../components/InboxBrief'
 import { InboxThread } from '../../../components/InputRequests'
-import { Chips, Group, Nothing, RecapCard, Section } from '../../../components/InboxParts'
+import { Chips, Nothing, RecapCard, Section } from '../../../components/InboxParts'
+import { HostChip } from '../../../components/HostChip'
 import { useTabActions } from '../../../components/Overlays'
-import { Button, Row, T, tap } from '../../../components/ui'
+import { Button, Divider, ROW_INSET, Row, T, tap } from '../../../components/ui'
 
 // Remembered for the session, so coming back to the tab shows the chip you left it on.
 let lastTab: InboxTab = 'brief'
@@ -38,8 +39,9 @@ export default function InboxScreen() {
   const store = useStore()
   const [operatorOpen, setOperatorOpen] = useState(false)
   const auto = useAutomation()
-  const [hostFilter, setHostFilter] = useState<string | null>(null)
-  const host = store.computers.some((pc) => pc.id === hostFilter) ? hostFilter : null
+  // As on Threads: every host at once by default, or the host picked from the host chip.
+  const [allHosts, setAllHosts] = useState(true)
+  const host = allHosts || store.computers.length < 2 ? null : store.selected
   const inbox = buildInbox({
     computerId: host,
     chats: store.chats,
@@ -90,14 +92,14 @@ export default function InboxScreen() {
     [projectName(computerId, projectId), multi ? computerName(computerId) : undefined].filter(Boolean).join(' · ')
   const say = useSay()
   const rows = (list: InboxChat[]) => (
-    <Group>
+    <View>
       {list.map((chat, i) => {
         const full = chat as Chat
         return (
           <InboxThread key={full.id} chat={full} project={where(full.computerId, full.projectId)} divider={i > 0} />
         )
       })}
-    </Group>
+    </View>
   )
   const recap = (r: (typeof inbox.attention)[number], attention: boolean) => {
     const chat = chatOf(r.computerId, r.item.taskId)
@@ -115,37 +117,39 @@ export default function InboxScreen() {
       />
     )
   }
-  const summary = (entry: { computerId: string; summary: LibrarySummary }) => {
+  const summary = (entry: { computerId: string; summary: LibrarySummary }, index: number) => {
     const { summary: s } = entry
     return (
-      <Row
-        key={`${entry.computerId}:${s.id}`}
-        onPress={() => {
-          tap()
-          router.push({ pathname: '/inbox/summary', params: { computer: entry.computerId, id: s.id } })
-        }}
-        style={{ paddingVertical: 11 }}
-      >
-        <Sparkles size={15} color={c.muted} />
-        <T
-          numberOfLines={2}
-          weight={s.status === 'unread' ? '600' : '400'}
-          tone={s.status === 'unread' ? 'text' : 'soft'}
-          style={{ flex: 1 }}
+      <View key={`${entry.computerId}:${s.id}`}>
+        {index ? <Divider inset={ROW_INSET} /> : null}
+        <Row
+          onPress={() => {
+            tap()
+            router.push({ pathname: '/inbox/summary', params: { computer: entry.computerId, id: s.id } })
+          }}
+          style={{ paddingVertical: 11 }}
         >
-          {s.headline}
-        </T>
-        <T size={font.caption} tone="muted">
-          {`${s.items.length} ${t.changesN}`}
-        </T>
-        {s.status === 'unread' ? (
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.accent }} />
-        ) : (
-          <T size={font.caption} tone="muted">
-            {ago(s.periodEnd)}
+          <Sparkles size={15} color={c.muted} />
+          <T
+            numberOfLines={2}
+            weight={s.status === 'unread' ? '600' : '400'}
+            tone={s.status === 'unread' ? 'text' : 'soft'}
+            style={{ flex: 1 }}
+          >
+            {s.headline}
           </T>
-        )}
-      </Row>
+          <T size={font.caption} tone="muted">
+            {`${s.items.length} ${t.changesN}`}
+          </T>
+          {s.status === 'unread' ? (
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.accent }} />
+          ) : (
+            <T size={font.caption} tone="muted">
+              {ago(s.periodEnd)}
+            </T>
+          )}
+        </Row>
+      </View>
     )
   }
   // Notices a computer keeps for every device until the thread is looked at, as the old activity sheet listed them.
@@ -154,37 +158,39 @@ export default function InboxScreen() {
     .flatMap((pc) => (store.inbox[pc.id] ?? []).map((notice) => ({ pc, notice })))
   const missedSection = missed.length ? (
     <Section title={t.missed} count={missed.length}>
-      <Group>
-        {missed.map(({ pc, notice }) => (
-          <Row
-            key={`${pc.id}:${notice.id}`}
-            onPress={() => {
-              tap()
-              store.dismissNotice(pc.id, notice.id)
-              router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(pc.id, notice.taskId) } })
-            }}
-            style={{ paddingVertical: 11 }}
-          >
-            <Bell size={16} color={c.warn} />
-            <View style={{ flex: 1 }}>
-              <T weight="500" numberOfLines={1}>
-                {notice.title}
-              </T>
-              <T size={font.caption} tone="muted" numberOfLines={1}>
-                {[multi ? pc.name : '', notice.body].filter(Boolean).join(' · ')}
-              </T>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t.dismiss}
-              hitSlop={8}
-              onPress={() => store.dismissNotice(pc.id, notice.id)}
+      <View>
+        {missed.map(({ pc, notice }, index) => (
+          <View key={`${pc.id}:${notice.id}`}>
+            {index ? <Divider inset={ROW_INSET} /> : null}
+            <Row
+              onPress={() => {
+                tap()
+                store.dismissNotice(pc.id, notice.id)
+                router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(pc.id, notice.taskId) } })
+              }}
+              style={{ paddingVertical: 11 }}
             >
-              <X size={16} color={c.muted} />
-            </Pressable>
-          </Row>
+              <Bell size={16} color={c.warn} />
+              <View style={{ flex: 1 }}>
+                <T weight="500" numberOfLines={1}>
+                  {notice.title}
+                </T>
+                <T size={font.caption} tone="muted" numberOfLines={1}>
+                  {[multi ? pc.name : '', notice.body].filter(Boolean).join(' · ')}
+                </T>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t.dismiss}
+                hitSlop={8}
+                onPress={() => store.dismissNotice(pc.id, notice.id)}
+              >
+                <X size={16} color={c.muted} />
+              </Pressable>
+            </Row>
+          </View>
         ))}
-      </Group>
+      </View>
       <Pressable
         accessibilityRole="button"
         hitSlop={8}
@@ -240,21 +246,24 @@ export default function InboxScreen() {
         ) : null}
         {background.length ? (
           <Section title={t.onComputer}>
-            <Group>
-              {background.map(({ computer, item }) => (
-                <Row key={`${computer}:${item.id}`} disabled style={{ paddingVertical: 11 }}>
-                  <Activity size={16} color={c.soft} />
-                  <View style={{ flex: 1 }}>
-                    <T weight="500" numberOfLines={1}>
-                      {item.label}
-                    </T>
-                    <T size={font.caption} tone="muted" numberOfLines={1}>
-                      {[multi ? computer : '', item.detail].filter(Boolean).join(' · ')}
-                    </T>
-                  </View>
-                </Row>
+            <View>
+              {background.map(({ computer, item }, index) => (
+                <View key={`${computer}:${item.id}`}>
+                  {index ? <Divider inset={ROW_INSET} /> : null}
+                  <Row disabled style={{ paddingVertical: 11 }}>
+                    <Activity size={16} color={c.soft} />
+                    <View style={{ flex: 1 }}>
+                      <T weight="500" numberOfLines={1}>
+                        {item.label}
+                      </T>
+                      <T size={font.caption} tone="muted" numberOfLines={1}>
+                        {[multi ? computer : '', item.detail].filter(Boolean).join(' · ')}
+                      </T>
+                    </View>
+                  </Row>
+                </View>
               ))}
-            </Group>
+            </View>
           </Section>
         ) : null}
       </>
@@ -293,7 +302,7 @@ export default function InboxScreen() {
       </>
     ),
     learned: inbox.summaries.length ? (
-      <Group>{inbox.summaries.map(summary)}</Group>
+      <View>{inbox.summaries.map(summary)}</View>
     ) : (
       <Nothing icon={Sparkles} title={t.noSummaries} detail={t.noSummariesHint} />
     ),
@@ -321,17 +330,12 @@ export default function InboxScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={c.muted} />}
       >
         <LargeTitle>{t.inbox}</LargeTitle>
-        {multi ? (
-          <Chips
-            value={host ?? ''}
-            onChange={(id) => setHostFilter(id || null)}
-            options={[
-              { key: '', label: t.allHosts },
-              ...store.computers.map((pc) => ({ key: pc.id, label: pc.name, status: pc.status })),
-            ]}
-          />
-        ) : null}
-        <Chips value={tab} onChange={choose} options={chips} />
+        <Chips
+          value={tab}
+          onChange={choose}
+          options={chips}
+          lead={multi ? <HostChip all={allHosts} onAll={setAllHosts} /> : undefined}
+        />
         {body}
       </PageScrollView>
       {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}

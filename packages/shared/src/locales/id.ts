@@ -1447,6 +1447,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Let agents on that computer start threads here, up to the most access you allow.': 'Izinkan agen di komputer itu memulai thread di sini, hingga akses tertinggi yang Anda izinkan.',
   'Needs you': 'Butuh perhatianmu',
   '{0} earlier runs': '{0} eksekusi sebelumnya',
+  '{0} helpers': '{0} helper',
   'No commits': 'Belum ada commit',
   'No commits yet.': 'Belum ada commit.',
   'Add project': 'Tambah proyek',
