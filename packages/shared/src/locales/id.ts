@@ -1970,6 +1970,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'No sign-in email on some hosts; matched because its limits and reset times are identical.':
     'Beberapa host tidak punya email login; dicocokkan karena batas dan waktu resetnya sama persis.',
   'Matched by its limits': 'Dicocokkan dari batasnya',
+  'Refreshes when this provider next runs.': 'Diperbarui saat provider ini berjalan lagi.',
   'Limit reached': 'Batas tercapai',
   'Different in 1 project': 'Berbeda di 1 proyek',
   'Different in {count} projects': 'Berbeda di {count} proyek',
@@ -2015,7 +2016,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Limited: 'Dibatasi',
   'Fallback continues the thread when a usage limit is reached.':
     'Fallback melanjutkan thread saat batas penggunaan tercapai.',
-  ' · refreshes when this provider next runs': ' · diperbarui saat provider ini berjalan lagi',
   'Sub-agent type': 'Jenis sub-agent',
   'Sub-agent fallback order': 'Urutan fallback sub-agent',
   'Where sub-agents run': 'Tempat sub-agent berjalan',

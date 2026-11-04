@@ -19,7 +19,7 @@ export interface LoginUsage {
   /** Where the login is signed in: each host and that host's own account id for it. */
   places: { hostId: string; accountId: string }[]
   readings: UsageReading[]
-  /** Set when hosts without its email were matched by identical limits rather than by a sign-in email. */
+  /** Set when a host without its email was matched to it by identical limits rather than by a sign-in email. */
   matchedBy?: 'limits'
 }
 
@@ -79,12 +79,12 @@ export function loginsAcrossHosts(hosts: readonly HostUsage[]): LoginUsage[] {
       else if (login.readings[same]!.updatedAt < reading.updatedAt) login.readings[same] = reading
       logins.set(key, login)
     }
-  // Logins without an email can still be the same account on two hosts: match those by their limits.
-  const merged: LoginUsage[] = []
+  // A host that does not know a login's email can still be signing in to the same account: match it by its limits, to
+  // a login known by email first, then to another without one. Emailed logins never merge with each other this way.
+  const merged = [...logins.values()].filter((login) => login.email)
   for (const login of logins.values()) {
-    const twin = login.email
-      ? undefined
-      : merged.find((other) => !other.email && other.provider === login.provider && sameLimits(other, login))
+    if (login.email) continue
+    const twin = merged.find((other) => other.provider === login.provider && sameLimits(other, login))
     if (twin) merge(twin, login)
     else merged.push(login)
   }

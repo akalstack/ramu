@@ -413,35 +413,40 @@ function ProviderLogins({
           return (
             <div
               key={`${row.email ?? ''}:${row.places.map((place) => `${place.hostId}/${place.accountId}`).join(',')}`}
-              className={cn('flex flex-col gap-2 px-3 py-2.5', index > 0 && 'border-t border-line')}
+              className={cn(
+                'grid items-start gap-x-6 gap-y-2.5 px-3.5 py-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]',
+                index > 0 && 'border-t border-line',
+              )}
             >
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 truncate text-control" title={row.name}>
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="truncate text-control" title={row.name}>
                   {row.name}
                 </span>
-                {row.inUse && (
-                  <Badge
-                    variant="secondary"
-                    className="h-auto flex-none rounded-(--radius-s) bg-brand/15 px-1.5 py-0 text-caption font-normal text-brand"
-                  >
-                    {t('In use')}
-                  </Badge>
+                {(row.inUse || row.plan) && (
+                  <span className="flex flex-wrap items-center gap-1">
+                    {row.inUse && (
+                      <Badge
+                        variant="secondary"
+                        className="h-auto rounded-(--radius-s) bg-brand/15 px-1.5 py-0 text-caption font-normal text-brand"
+                      >
+                        {t('In use')}
+                      </Badge>
+                    )}
+                    {row.plan && (
+                      <Badge
+                        variant="secondary"
+                        className="h-auto rounded-(--radius-s) bg-hover px-1.5 py-0 text-caption font-normal text-muted-foreground"
+                      >
+                        {capitalize(row.plan)}
+                      </Badge>
+                    )}
+                  </span>
                 )}
-                {row.plan && (
-                  <Badge
-                    variant="secondary"
-                    className="h-auto flex-none rounded-(--radius-s) bg-hover px-1.5 py-0 text-caption font-normal text-muted-foreground"
-                  >
-                    {capitalize(row.plan)}
-                  </Badge>
-                )}
-              </div>
-              {multiHost && (
-                <div className="-mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-muted-foreground">
-                  {row.where.map((place) => (
+                {multiHost &&
+                  row.where.map((place) => (
                     <span
                       key={place.host}
-                      className="inline-flex min-w-0 items-center gap-1.5"
+                      className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground"
                       title={place.inUse ? t('Threads on {0} use this login', { 0: place.host }) : undefined}
                     >
                       <span
@@ -453,32 +458,31 @@ function ProviderLogins({
                       </span>
                     </span>
                   ))}
-                  {row.matchedBy === 'limits' && (
-                    <span
-                      title={t(
-                        'No sign-in email on some hosts; matched because its limits and reset times are identical.',
-                      )}
-                    >
-                      {t('Matched by its limits')}
-                    </span>
-                  )}
-                </div>
-              )}
+                {row.matchedBy === 'limits' && (
+                  <span
+                    className="text-caption text-muted-foreground"
+                    title={t(
+                      'No sign-in email on some hosts; matched because its limits and reset times are identical.',
+                    )}
+                  >
+                    {t('Matched by its limits')}
+                  </span>
+                )}
+                {readings.length > 0 && Date.now() - row.newest > STALE_MS && (
+                  <span className="text-caption text-warn" title={t('Refreshes when this provider next runs.')}>
+                    {t('Updated')} {ageText(row.newest)}
+                  </span>
+                )}
+              </div>
               {readings.length ? (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-2">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-x-4 gap-y-3">
                   {readings.map((reading) => (
                     <WindowMeter key={`${reading.window}:${reading.scope ?? ''}`} reading={reading} />
                   ))}
                 </div>
               ) : (
-                <span className="text-caption text-muted-foreground">
+                <span className="self-center text-caption text-muted-foreground">
                   {t('No reading yet. It appears after this login next runs.')}
-                </span>
-              )}
-              {readings.length > 0 && Date.now() - row.newest > STALE_MS && (
-                <span className="text-caption text-warn">
-                  {t('Updated')} {ageText(row.newest)}
-                  {t(' · refreshes when this provider next runs')}
                 </span>
               )}
             </div>
@@ -561,14 +565,14 @@ function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (ope
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(86vh,820px)] flex-col gap-0 p-0 sm:max-w-[640px]">
-        <DialogHeader className="flex-none flex-row items-start gap-3 border-b border-line px-5 pt-5 pb-4 pr-12">
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="flex max-h-[min(86vh,820px)] flex-col gap-0 p-0 sm:max-w-[680px]">
+        <DialogHeader className="flex-none flex-row items-center gap-3 border-b border-line px-5 py-3.5 pr-12">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <DialogTitle className="flex items-center gap-2 text-base">
               <Gauge size={16} className="text-muted-foreground" />
               {t('Plan usage')}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-caption">
               {multiHost
                 ? t('Every login on every connected host. A login signed in on several hosts shows once.')
                 : t('Every login on this host. Fallback moves a thread to the next one when a limit is reached.')}
@@ -577,7 +581,7 @@ function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (ope
           <Button
             variant="ghost"
             size="sm"
-            className="flex-none"
+            className="flex-none text-muted-foreground"
             aria-pressed={reveal}
             title={reveal ? t('Hide account names and emails') : t('Show account names and emails')}
             onClick={toggleReveal}
@@ -586,7 +590,7 @@ function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (ope
             {reveal ? t('Hide accounts') : t('Show accounts')}
           </Button>
         </DialogHeader>
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto scroll-fade-y px-5 py-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto scroll-fade-y px-5 pt-4 pb-5">
           {!hosts ? (
             <p className="m-0 text-caption text-muted-foreground" role="status">
               {t('Reading usage…')}
@@ -600,7 +604,7 @@ function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (ope
           )}
           <WeekActivity />
         </div>
-        <footer className="flex flex-none items-center gap-2 border-t border-line px-5 py-3 text-caption text-muted-foreground">
+        <footer className="flex flex-none items-center gap-2 border-t border-line px-5 py-2.5 text-caption text-muted-foreground">
           <span className="min-w-0 flex-1">{t('Fallback continues the thread when a usage limit is reached.')}</span>
           <Button variant="ghost" size="sm" className="flex-none" onClick={openFallback}>
             {t('Fallback settings')}

@@ -68,6 +68,22 @@ it('matches a login without an email across hosts by identical limits, and keeps
   ])
 })
 
+it('joins a host that lacks the email to the emailed login with the same limits, keeping its email', () => {
+  const at = (accountId: string | undefined, usedPercent: number) => ({
+    ...reading(accountId, usedPercent, 1_000),
+    window: 'five_hour' as const,
+    resetsAt: 7_000_000,
+  })
+  const logins = loginsAcrossHosts([
+    { hostId: 'a', host: 'Mac', readings: [at(undefined, 87)], emails: { 'claude-code': { default: 'me@x.io' } } },
+    { hostId: 'b', host: 'mini', readings: [at(undefined, 87), { ...at('team', 0), resetsAt: 1_000 }], emails: {} },
+  ])
+  expect(logins.map((login) => [login.email, login.hosts, login.matchedBy])).toEqual([
+    ['me@x.io', ['Mac', 'mini'], 'limits'],
+    [null, ['mini'], undefined],
+  ])
+})
+
 it('lists a login it cannot match by host, never adding percentages', () => {
   const logins = loginsAcrossHosts([
     { hostId: 'a', host: 'Mac', readings: [reading(undefined, 40, 1)], emails: {} },
