@@ -1,37 +1,43 @@
-import { SettingsFieldContext } from '../src/settings/settingsField'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { DEFAULT_APP_PREFERENCES, type UsageReading } from '@ramu/shared/types'
 
-const state = vi.hoisted(() => ({
-  accounts: [{ id: 'second', name: 'Second account' }],
-  own: [
-    { provider: 'claude-code', window: 'five_hour', usedPercent: 100, status: 'limited', updatedAt: Date.now() },
-  ] as UsageReading[],
-  other: [
-    {
-      provider: 'claude-code',
-      accountId: 'second',
-      window: 'five_hour',
-      usedPercent: 3,
-      status: 'ok',
-      updatedAt: Date.now(),
-    },
-    {
-      provider: 'claude-code',
-      accountId: 'second',
-      window: 'weekly',
-      usedPercent: 98,
-      status: 'warning',
-      updatedAt: Date.now(),
-    },
-  ] as UsageReading[],
-}))
+const reading = (accountId: string | undefined, window: UsageReading['window'], usedPercent: number): UsageReading => ({
+  provider: 'claude-code',
+  ...(accountId ? { accountId } : {}),
+  window,
+  usedPercent,
+  status: usedPercent >= 100 ? 'limited' : 'ok',
+  updatedAt: Date.now(),
+})
+const state = vi.hoisted(() => ({ hosts: [] as unknown[], reveal: false }))
+state.hosts = [
+  {
+    hostId: 'local',
+    host: 'Mac',
+    readings: [reading(undefined, 'five_hour', 74), reading('second', 'five_hour', 100)],
+    emails: { 'claude-code': { default: 'me@x.io', second: 'team@x.io' } },
+    logins: {},
+    config: undefined,
+  },
+  {
+    hostId: 'vps',
+    host: 'vps',
+    readings: [reading('acc-9', 'weekly', 66)],
+    emails: { 'claude-code': { 'acc-9': 'ME@x.io' } },
+    logins: {},
+    config: { 'claude-code': { binary: '', accountId: 'acc-9' } },
+  },
+]
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
-  useSyncExternalStore: () => state.own,
-  useState: (initial: unknown) => [Array.isArray(initial) ? state.other : initial, vi.fn()],
+  useSyncExternalStore: () => [reading(undefined, 'five_hour', 74)],
+  // The dialog is open, its hosts are read, and names stay hidden until revealed.
+  useState: (initial: unknown) => [
+    initial === false ? true : initial === null ? state.hosts : typeof initial === 'function' ? state.reveal : initial,
+    vi.fn(),
+  ],
   useEffect() {},
 }))
 vi.mock('../src/i18n', () => ({
@@ -40,9 +46,10 @@ vi.mock('../src/i18n', () => ({
   t: (text: string, values: Record<string, unknown> = {}) =>
     text.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key])),
 }))
-vi.mock('../src/ipc', () => ({ bridge: { on: vi.fn() }, invokerFor: () => vi.fn() }))
+vi.mock('../src/ipc', () => ({ bridge: { on: vi.fn() }, invokerFor: () => vi.fn(), invokeOn: vi.fn() }))
 vi.mock('../src/hosts', () => ({ ownHostId: () => 'local' }))
 vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ id: 'local', invoke: vi.fn() }) }))
+vi.mock('../src/workspace/computers', () => ({ useComputers: () => ({ computers: [] }) }))
 vi.mock('../src/workspace/workspace', () => ({ useHostRuntime: () => ({ on: vi.fn() }) }))
 vi.mock('../src/workspace/workspaceLifetime', () => ({ workspaceVisible: () => true, onWorkspaceVisibility: vi.fn() }))
 vi.mock('../src/settings/AppSettings', () => ({
@@ -50,41 +57,29 @@ vi.mock('../src/settings/AppSettings', () => ({
     preferences: {
       ...DEFAULT_APP_PREFERENCES,
       showUsageLimits: true,
-      providerBinaries: { 'claude-code': { binary: '', accounts: state.accounts } },
+      providerBinaries: { 'claude-code': { binary: '', accounts: [{ id: 'second', name: 'Team' }] } },
     },
   }),
 }))
 vi.mock('../src/models/ProviderIcon', () => ({ ProviderIcon: () => null }))
-vi.mock('../src/components/ui/popover', () => ({
-  Popover: ({ children }: { children: ReactNode }) => createElement('div', null, children),
-  PopoverTrigger: () => null,
-  PopoverContent: ({ children, className }: { children: ReactNode; className: string }) =>
-    createElement('div', { className }, children),
-}))
+vi.mock('@/components/ui/dialog', () => {
+  const box = ({ children }: { children?: ReactNode }) => createElement('div', null, children)
+  return { Dialog: box, DialogContent: box, DialogHeader: box, DialogTitle: box, DialogDescription: box }
+})
 import { UsageFooter } from '../src/settings/Usage'
-it('shows every allowance for other accounts and explicitly labels percentages as used', () => {
-  const html = renderToStaticMarkup(createElement(UsageFooter))
-  expect(html).toContain('Other Claude accounts')
-  expect(html).toContain('Second account')
-  expect(html).toContain('3% used')
-  expect(html).toContain('98% used')
-  expect(html).toContain('5-hour')
-  expect(html).toContain('Weekly')
-})
 
-afterEach(() => {
-  state.accounts = [{ id: 'second', name: 'Second account' }]
-})
-it('keeps cached account disclosure usable inside an unavailable host field', () => {
-  state.accounts = ['second', 'third', 'fourth'].map((id) => ({ id, name: id }))
-  const html = renderToStaticMarkup(
-    createElement(SettingsFieldContext.Provider, {
-      value: { path: 'usage', disabled: true, mixed: false, mark() {} },
-      children: createElement(UsageFooter),
-    }),
-  )
-  const more = html.match(/<button\b[^>]*>\+1 more<\/button>/)?.[0]
-  expect(more).toBeDefined()
-  expect(more).toContain('aria-expanded="false"')
-  expect(more).not.toMatch(/\sdisabled=""/)
+it('shows a login signed in on two hosts once, with where it is used, and every other login', () => {
+  const html = renderToStaticMarkup(createElement(UsageFooter))
+  // One row for me@x.io across Mac and vps, one for the second login: two, not three.
+  expect(html).toContain('2 logins · 1 with room')
+  expect(html).toContain('This host · in use')
+  expect(html).toContain('vps · in use')
+  expect(html).toContain('In use')
+  expect(html).toContain('74% used')
+  expect(html).toContain('66% used')
+  expect(html).toContain('Limit reached')
+  expect(html).toContain('A login signed in on several hosts shows once.')
+  // Names stay hidden until revealed: the second login is numbered, not called Team.
+  expect(html).not.toContain('team@x.io')
+  expect(html).not.toContain('me@x.io')
 })

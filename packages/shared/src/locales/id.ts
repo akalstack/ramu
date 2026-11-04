@@ -140,7 +140,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Agen thread boleh menyarankan model lain untuk bergabung, misalnya untuk meninjau pekerjaannya. Setiap saran meminta izin Anda dulu dan menyebut login yang dipakai.',
   'Asking teammate': 'Bertanya ke rekan',
   'Messaging teammate': 'Mengirim pesan ke rekan',
-  'Other hosts': 'Host lain',
   'Account on {0}': 'Akun di {0}',
   'Runs on': 'Berjalan di',
   'Saved on {0}. Remove it from {1}?': 'Tersimpan di {0}. Hapus dari {1}?',
@@ -1957,6 +1956,20 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Pesan berikutnya naik ke {0}, lebih tinggi di urutan fallback',
   'Show usage limits': 'Tampilkan batas pemakaian',
   'Plan usage': 'Pemakaian paket',
+  '{0} logins · {1} with room': '{0} login · {1} masih ada kuota',
+  'No reading yet. It appears after this login next runs.': 'Belum ada data. Muncul setelah login ini berjalan lagi.',
+  'Every login on every connected host. A login signed in on several hosts shows once.':
+    'Setiap login di setiap host yang terhubung. Login yang masuk di beberapa host ditampilkan sekali.',
+  'Every login on this host. Fallback moves a thread to the next one when a limit is reached.':
+    'Setiap login di host ini. Fallback memindahkan thread ke login berikutnya saat batas tercapai.',
+  'Reading usage…': 'Membaca penggunaan…',
+  'No usage reported yet. It appears once a provider runs.': 'Belum ada penggunaan. Muncul setelah penyedia berjalan.',
+  'Fallback settings': 'Pengaturan fallback',
+  'Threads on {0} use this login': 'Thread di {0} memakai login ini',
+  '{0} · in use': '{0} · dipakai',
+  'No sign-in email on some hosts; matched because its limits and reset times are identical.':
+    'Beberapa host tidak punya email login; dicocokkan karena batas dan waktu resetnya sama persis.',
+  'Matched by its limits': 'Dicocokkan dari batasnya',
   'Limit reached': 'Batas tercapai',
   'Different in 1 project': 'Berbeda di 1 proyek',
   'Different in {count} projects': 'Berbeda di {count} proyek',
@@ -2210,7 +2223,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Next summary around {0}': 'Ringkasan berikutnya sekitar {0}',
   'No branch': 'Tanpa branch',
   'No changes': 'Tidak ada perubahan',
-  'No data yet': 'Belum ada data',
   'No file changes to restore': 'Tidak ada perubahan berkas untuk dipulihkan',
   'No profiles were found. Close {0} and try again, or sign in manually.':
     'Tidak ada profil ditemukan. Tutup {0} lalu coba lagi, atau masuk secara manual.',
@@ -2231,8 +2243,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open a project to search inside its files': 'Buka proyek untuk mencari di dalam berkasnya',
   'Open file in editor': 'Buka berkas di editor',
   'Open link': 'Buka tautan',
-  'Other accounts, used when this one is at its limit': 'Akun lain, dipakai saat akun ini mencapai batas',
-  'Other {0} accounts': 'Akun {0} lainnya',
   'Pending requests': 'Permintaan tertunda',
   'Permission setup started on this Mac. Follow Open Computer Use’s prompts to allow Accessibility and Screen Recording, then return here.':
     'Penyiapan izin dimulai di Mac ini. Ikuti petunjuk Open Computer Use untuk mengizinkan Aksesibilitas dan Perekaman Layar, lalu kembali ke sini.',

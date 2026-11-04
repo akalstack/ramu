@@ -3,28 +3,27 @@ import {
   loginsAcrossHosts,
   peakOf,
   type ActivityTotal,
+  type HostUsage,
   type LoginUsage,
 } from '@ramu/shared/usageAcrossHosts'
 import { useComputers } from '../workspace/computers'
-import { LocalInlineAction } from '@/components/inline-action'
 import { usageTone, usagePercent, usageScopeHint } from '@ramu/shared/usage/presentation'
 export { usageTone } from '@ramu/shared/usage/presentation'
 import { t, useLanguage, formatLocale } from '../i18n'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Separator } from '@/components/ui/separator'
 import { cn } from 'cn'
 import { Eye, EyeOff, Gauge } from 'lucide-react'
-import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { AgentProvider, ContextUsage, UsageReading } from '@ramu/shared/types'
 import {
   accountName,
-  providerAccountOrder,
   providerEnabled,
   providerName,
   type AccountLogin,
+  type ProviderConfiguration,
 } from '@ramu/shared/providers/providers'
 import { bridge, invokeOn, invokerFor } from '../ipc'
 import { ownHostId } from '../hosts'
@@ -279,24 +278,6 @@ function Ring({ percent, className }: { percent: number; className: string }) {
   )
 }
 
-type AccountRows = { id: string; name: string; readings: UsageReading[] }[]
-
-/** One window of the signed-in account: label and percent, a bar, and when it resets. */
-function WindowRow({ reading }: { reading: UsageReading }) {
-  const tone = usageTone(reading),
-    reset = resetText(reading.resetsAt)
-  return (
-    <div className="flex flex-col gap-1.5" title={usageHint(reading)}>
-      <div className="flex justify-between gap-2 text-control">
-        <span>{windowLabel(reading)}</span>
-        <span className={cn('tabular-nums', toneText[tone])}>{usageStatusText(reading)}</span>
-      </div>
-      {usagePercent(reading) !== null && <UsageBar reading={reading} tone={tone} />}
-      {reset && <span className="text-caption text-muted-foreground">{reset}</span>}
-    </div>
-  )
-}
-
 function usageStatusText(reading: UsageReading): string {
   return reading.source === 'notice'
     ? t('Limit reported; usage unavailable')
@@ -307,318 +288,326 @@ function usageStatusText(reading: UsageReading): string {
         : t('{0}% used', { '0': usagePercent(reading)! })
 }
 
-function UsageBar({ reading, tone, thin }: { reading: UsageReading; tone: UsageTone; thin?: boolean }) {
+function UsageBar({ reading, tone }: { reading: UsageReading; tone: UsageTone }) {
   return (
     <Progress
       value={usagePercent(reading)!}
       aria-label={windowLabel(reading)}
       className={cn(
-        '[&_[data-slot=progress-track]]:bg-foreground/10 [&_[data-slot=progress-indicator]]:rounded-full',
-        thin ? '[&_[data-slot=progress-track]]:h-1' : '[&_[data-slot=progress-track]]:h-1.5',
+        '[&_[data-slot=progress-track]]:h-1 [&_[data-slot=progress-track]]:bg-foreground/10 [&_[data-slot=progress-indicator]]:rounded-full',
         toneFill[tone],
       )}
     />
   )
 }
 
-const VISIBLE_ACCOUNTS = 2
-
-/** Show every window: room in a 5-hour window does not imply room in the weekly allowance. */
-function OtherAccounts({ provider, others }: { provider: AgentProvider; others: AccountRows }) {
-  const [expanded, setExpanded] = useState(false)
-  const rows = others.map((account) => ({ ...account, peak: peakUsage(account.readings, provider) }))
-  const shown = expanded
-    ? rows
-    : rows.filter((row, index) => index < VISIBLE_ACCOUNTS || row.peak?.status === 'limited')
-  const hidden = rows.length - shown.length
+/** One limit window of a login: its name and how much is used, a bar, and when it resets. */
+function WindowMeter({ reading }: { reading: UsageReading }) {
+  const tone = usageTone(reading),
+    reset = resetText(reading.resetsAt)
   return (
-    <div
-      className="flex flex-col gap-1.5 border-t border-line pt-2"
-      aria-label={t('Other {0} accounts', { '0': providerName(provider) })}
-    >
-      <span className="text-caption text-muted-foreground">
-        {t('Other accounts, used when this one is at its limit')}
-      </span>
-      {shown.map(({ id, name, readings }) => (
-        <div key={id} className="flex min-w-0 flex-col gap-1.5">
-          <span className="truncate text-caption text-muted-foreground" title={name}>
-            {name}
-          </span>
-          {!readings.length && <span className="text-caption text-muted-foreground">{t('No data yet')}</span>}
-          {readings.map((reading) => (
-            <div
-              key={`${reading.window}:${reading.scope ?? ''}`}
-              className="flex flex-col gap-1"
-              title={[usageHint(reading), resetText(reading.resetsAt)].filter(Boolean).join(' · ')}
-            >
-              <div className="flex justify-between gap-2 text-caption">
-                <span className="text-muted-foreground">{windowLabel(reading)}</span>
-                <span className={cn('tabular-nums', toneText[usageTone(reading)])}>{usageStatusText(reading)}</span>
-              </div>
-              {usagePercent(reading) !== null && <UsageBar reading={reading} tone={usageTone(reading)} thin />}
-            </div>
-          ))}
-        </div>
-      ))}
-      {(hidden > 0 || expanded) && rows.length > VISIBLE_ACCOUNTS && (
-        <LocalInlineAction
-          tone="muted"
-          className="self-start"
-          aria-expanded={expanded}
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? t('Show fewer') : t('+{0} more', { '0': hidden })}
-        </LocalInlineAction>
-      )}
+    <div className="flex min-w-0 flex-col gap-1" title={usageHint(reading)}>
+      <div className="flex items-baseline justify-between gap-2 text-caption">
+        <span className="truncate text-muted-foreground">{windowLabel(reading)}</span>
+        <span className={cn('flex-none tabular-nums', toneText[tone])}>{usageStatusText(reading)}</span>
+      </div>
+      {usagePercent(reading) !== null && <UsageBar reading={reading} tone={tone} />}
+      {reset && <span className="truncate text-[11px] leading-4 text-muted-foreground">{reset}</span>}
     </div>
   )
 }
 
-/** Everything known about one provider's limits. The age only shows once it is stale, since providers only report while they run. */
-function UsageDetail({
+/** Windows in reading order: the short window, then the weekly or monthly allowance, then model-specific ones. */
+const windowOrder = (reading: UsageReading) =>
+  (reading.scope ? 2 : 0) + (reading.window === 'five_hour' ? 0 : reading.window === 'quota' ? 1.5 : 1)
+
+const REVEAL_KEY = 'ramu.usage.accounts'
+
+type HostLogins = HostUsage & {
+  config: ProviderConfiguration | undefined
+  logins: Record<string, Record<string, AccountLogin>>
+}
+
+/** Every connected host's logins and readings, read while the dialog is open. */
+function useHostLogins(open: boolean): HostLogins[] | null {
+  const computers = useComputers()
+  const [hosts, setHosts] = useState<HostLogins[] | null>(null)
+  const list = (computers?.computers ?? []).filter((computer) => computer.status === 'connected')
+  const key = list.map((computer) => computer.id).join(',')
+  useEffect(() => {
+    if (!open) return
+    let live = true
+    const load = () =>
+      void Promise.all(
+        list.map(async (computer) => {
+          const [readings, emails, logins, settings] = await Promise.all([
+            invokeOn(computer.id, 'usage.accounts').catch(() => [] as UsageReading[]),
+            invokeOn(computer.id, 'providers.accountEmails').catch(() => ({})),
+            invokeOn(computer.id, 'providers.accountLogins').catch(() => ({})),
+            invokeOn(computer.id, 'settings.app.get').catch(() => null),
+          ])
+          return {
+            hostId: computer.id,
+            host: computer.name,
+            readings,
+            emails,
+            logins,
+            config: settings?.providerBinaries,
+          }
+        }),
+      ).then((next) => live && setHosts(next))
+    load()
+    const off = bridge.on('usage:changed', load)
+    return () => {
+      live = false
+      off()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the connected host ids
+  }, [open, key])
+  return hosts
+}
+
+/** One login seen across hosts, named and marked for the dialog. */
+type LoginRow = LoginUsage & {
+  name: string
+  /** In use on this host. */
+  inUse: boolean
+  /** Every host it is signed in on, and whether that host's threads use it. */
+  where: { host: string; inUse: boolean }[]
+  plan?: string
+  newest: number
+}
+
+/**
+ * Every login of one provider: the one this host uses first, then the ones with the most room. A login signed in on
+ * several hosts shows once with every host named, since its quota is the same wherever it runs.
+ */
+function ProviderLogins({
   provider,
-  five,
-  weekly,
-  scoped,
-  account,
-  others,
-}: ReturnType<typeof byProvider>[number] & { account?: string; others: AccountRows }) {
+  rows,
+  multiHost,
+}: {
+  provider: AgentProvider
+  rows: LoginRow[]
+  multiHost: boolean
+}) {
   useLanguage()
-  const all = [five, weekly, ...scoped].filter((r): r is UsageReading => !!r)
-  const newest = Math.max(...all.map((r) => r.updatedAt))
-  // The newest reading's plan: after an upgrade or downgrade, older windows may still carry the previous one.
-  const plan = all.filter((r) => r.plan).sort((a, b) => b.updatedAt - a.updatedAt)[0]?.plan
+  const withRoom = rows.filter((row) => {
+    const peak = peakOf(row)
+    return !peak || (peak.status !== 'limited' && peak.usedPercent < 100)
+  }).length
   return (
-    <section className="flex flex-col gap-2.5">
-      <header className="flex items-center gap-[7px] text-control">
-        <ProviderIcon provider={provider} size={15} />
-        <div className="flex min-w-0 flex-col">
-          <strong className="font-semibold">{providerName(provider)}</strong>
-          {account && <span className="truncate text-caption text-muted-foreground">{account}</span>}
-        </div>
-        {plan && (
-          <Badge
-            variant="secondary"
-            className="ml-auto h-auto rounded-(--radius-s) bg-fill px-[7px] py-0.5 text-caption font-normal text-muted-foreground"
-          >
-            {capitalize(plan)}
-          </Badge>
+    <section className="flex flex-col gap-2" aria-label={providerName(provider)}>
+      <header className="flex items-center gap-2">
+        <ProviderIcon provider={provider} size={16} />
+        <h3 className="m-0 text-control font-semibold">{providerName(provider)}</h3>
+        {rows.length > 1 && (
+          <span className="ml-auto text-caption text-muted-foreground">
+            {t('{0} logins · {1} with room', { 0: rows.length, 1: withRoom })}
+          </span>
         )}
       </header>
-      {all.map((reading) => (
-        <WindowRow key={`${reading.window}:${reading.scope ?? ''}`} reading={reading} />
-      ))}
-      {others.length > 0 && <OtherAccounts provider={provider} others={others} />}
-      {Date.now() - newest > STALE_MS && (
-        <span className="text-caption text-warn">
-          {t('Updated')} {ageText(newest)}
-          {t(' · refreshes when this provider next runs')}
-        </span>
-      )}
+      <div className="flex flex-col overflow-hidden rounded-(--radius-m) bg-fill">
+        {rows.map((row, index) => {
+          const readings = [...row.readings].sort((a, b) => windowOrder(a) - windowOrder(b))
+          return (
+            <div
+              key={`${row.email ?? ''}:${row.places.map((place) => `${place.hostId}/${place.accountId}`).join(',')}`}
+              className={cn('flex flex-col gap-2 px-3 py-2.5', index > 0 && 'border-t border-line')}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="min-w-0 truncate text-control" title={row.name}>
+                  {row.name}
+                </span>
+                {row.inUse && (
+                  <Badge
+                    variant="secondary"
+                    className="h-auto flex-none rounded-(--radius-s) bg-brand/15 px-1.5 py-0 text-caption font-normal text-brand"
+                  >
+                    {t('In use')}
+                  </Badge>
+                )}
+                {row.plan && (
+                  <Badge
+                    variant="secondary"
+                    className="h-auto flex-none rounded-(--radius-s) bg-hover px-1.5 py-0 text-caption font-normal text-muted-foreground"
+                  >
+                    {capitalize(row.plan)}
+                  </Badge>
+                )}
+              </div>
+              {multiHost && (
+                <div className="-mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-muted-foreground">
+                  {row.where.map((place) => (
+                    <span
+                      key={place.host}
+                      className="inline-flex min-w-0 items-center gap-1.5"
+                      title={place.inUse ? t('Threads on {0} use this login', { 0: place.host }) : undefined}
+                    >
+                      <span
+                        aria-hidden
+                        className={cn('size-1.5 flex-none rounded-full', place.inUse ? 'bg-brand' : 'bg-foreground/25')}
+                      />
+                      <span className="truncate">
+                        {place.inUse ? t('{0} · in use', { 0: place.host }) : place.host}
+                      </span>
+                    </span>
+                  ))}
+                  {row.matchedBy === 'limits' && (
+                    <span
+                      title={t(
+                        'No sign-in email on some hosts; matched because its limits and reset times are identical.',
+                      )}
+                    >
+                      {t('Matched by its limits')}
+                    </span>
+                  )}
+                </div>
+              )}
+              {readings.length ? (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-2">
+                  {readings.map((reading) => (
+                    <WindowMeter key={`${reading.window}:${reading.scope ?? ''}`} reading={reading} />
+                  ))}
+                </div>
+              ) : (
+                <span className="text-caption text-muted-foreground">
+                  {t('No reading yet. It appears after this login next runs.')}
+                </span>
+              )}
+              {readings.length > 0 && Date.now() - row.newest > STALE_MS && (
+                <span className="text-caption text-warn">
+                  {t('Updated')} {ageText(row.newest)}
+                  {t(' · refreshes when this provider next runs')}
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </section>
   )
 }
 
-const REVEAL_KEY = 'ramu.usage.accounts'
-
-function UsagePopover({
-  trigger,
-  side = 'top',
-  align = 'start',
-}: {
-  trigger: React.ReactElement
-  side?: 'top' | 'bottom'
-  align?: 'start' | 'end'
-}) {
+/**
+ * Plan usage for every login on every connected host, opened from the sidebar meter: one section per provider, one
+ * row per login with all its windows, the login this host uses marked, and the week's activity.
+ */
+function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   useLanguage()
-  const groups = byProvider(useVisibleUsage())
+  const host = useHost()
   const { preferences } = useAppSettings()
-  const [open, setOpen] = useState(false)
-  const rotating = groups.some(
-    ({ provider }) => providerAccountOrder(preferences.providerBinaries, provider).length > 1,
-  )
-  const accountReadings = useAccountUsage(open && rotating)
-  const logins = useAccountLogins(open)
-  // Labels and emails stay hidden until asked for, since the popover opens on hover, also while sharing a screen.
+  const hosts = useHostLogins(open)
+  // Labels and emails stay hidden until asked for, since the dialog may be open while sharing a screen.
   const [reveal, setReveal] = useState(() => deviceStorage.getItem(REVEAL_KEY) === 'shown')
   const toggleReveal = () => {
     deviceStorage.setItem(REVEAL_KEY, reveal ? 'hidden' : 'shown')
     setReveal(!reveal)
   }
-  const accountsOf = (provider: AgentProvider) => {
-    const config = preferences.providerBinaries[provider]
-    const active = config?.accountId || 'default'
-    const order = providerAccountOrder(preferences.providerBinaries, provider)
-    const name = (id: string) =>
-      accountName(preferences.providerBinaries, provider, id, logins[provider]?.[id], t, reveal)
-    return {
-      account: name(active),
-      others: order
-        .filter((id) => id !== active)
-        .map((id) => ({
-          id,
-          name: name(id),
-          readings: accountReadings.filter(
-            (reading) => reading.provider === provider && (reading.accountId ?? 'default') === id,
-          ),
-        })),
-    }
-  }
-  // Hover peeks; a click on the trigger while peeking pins it open instead of closing it.
-  const peeking = useRef(false)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const clearTimer = () => {
-    if (timer.current !== null) {
-      clearTimeout(timer.current)
-      timer.current = null
-    }
-  }
-  useEffect(
-    () => () => {
-      if (timer.current !== null) clearTimeout(timer.current)
-    },
-    [],
-  )
-  const peek = (next: boolean) => {
-    peeking.current = next
-    setOpen(next)
-  }
-  const enter = (event: React.PointerEvent) => {
-    if (event.pointerType === 'touch' || open) return
-    clearTimer()
-    timer.current = setTimeout(() => peek(true), 150)
-  }
-  const leave = (event: React.PointerEvent) => {
-    if (event.pointerType === 'touch' || (!peeking.current && open)) return
-    clearTimer()
-    timer.current = setTimeout(() => peek(false), 200)
-  }
-  const change = (next: boolean, details: { reason: string }) => {
-    clearTimer()
-    if (!next && peeking.current && details.reason === 'trigger-press') {
-      peeking.current = false
-      return
-    }
-    peeking.current = false
-    setOpen(next)
+  const multiHost = (hosts?.length ?? 0) > 1
+  const logins = hosts ? loginsAcrossHosts(hosts) : []
+  const sections = ORDER.flatMap((provider) => {
+    if (!providerEnabled(preferences.providerBinaries, provider)) return []
+    const rows: LoginRow[] = logins
+      .filter((login) => login.provider === provider)
+      .map((login) => {
+        // Named by this host's own label when it is signed in here, otherwise by email or where it is signed in.
+        const here = login.places.find((place) => place.hostId === host.id)
+        const place = here ?? login.places[0]!
+        const source = hosts!.find((entry) => entry.hostId === place.hostId)
+        const name = accountName(
+          source?.config,
+          provider,
+          place.accountId,
+          source?.logins[provider]?.[place.accountId],
+          t,
+          reveal,
+        )
+        const active = here && (preferences.providerBinaries[provider]?.accountId || 'default') === here.accountId
+        const where = hosts!
+          .filter((entry) => login.places.some((place) => place.hostId === entry.hostId))
+          .map((entry) => ({
+            host: entry.hostId === host.id ? t('This host') : entry.host,
+            inUse: login.places.some(
+              (place) =>
+                place.hostId === entry.hostId &&
+                ((entry.hostId === host.id
+                  ? preferences.providerBinaries[provider]?.accountId
+                  : entry.config?.[provider]?.accountId) || 'default') === place.accountId,
+            ),
+          }))
+        const newest = Math.max(...login.readings.map((reading) => reading.updatedAt))
+        const plan = [...login.readings].filter((r) => r.plan).sort((a, b) => b.updatedAt - a.updatedAt)[0]?.plan
+        return {
+          ...login,
+          name,
+          inUse: !!active,
+          where,
+          ...(plan ? { plan } : {}),
+          newest,
+        }
+      })
+      .sort(
+        (a, b) =>
+          Number(b.inUse) - Number(a.inUse) ||
+          Number(b.where.some((place) => place.inUse)) - Number(a.where.some((place) => place.inUse)) ||
+          (peakOf(a)?.usedPercent ?? 0) - (peakOf(b)?.usedPercent ?? 0),
+      )
+    return rows.length ? [{ provider, rows }] : []
+  })
+  const openFallback = () => {
+    onOpenChange(false)
+    window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } }))
   }
   return (
-    <Popover open={open} onOpenChange={change}>
-      <PopoverTrigger
-        render={trigger}
-        onPointerEnter={enter}
-        onPointerLeave={leave}
-        onFocus={(event) => {
-          if (event.currentTarget.matches(':focus-visible')) {
-            clearTimer()
-            peek(true)
-          }
-        }}
-      />
-      <PopoverContent
-        side={side}
-        align={align}
-        sideOffset={6}
-        className="usage-popover w-[280px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-32px)] overflow-y-auto gap-3.5 p-3.5 rounded-(--radius-m) border border-edge bg-card text-foreground ring-0 shadow-(--shadow-float)"
-        aria-label={t('Plan usage')}
-        initialFocus={false}
-        onPointerEnter={clearTimer}
-        onPointerLeave={leave}
-      >
-        <div className="flex items-center gap-1.5 text-caption text-muted-foreground">
-          <Gauge size={14} />
-          <span>{t('Plan usage')}</span>
-          <LocalInlineAction
-            tone="muted"
-            className="ml-auto"
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[min(86vh,820px)] flex-col gap-0 p-0 sm:max-w-[640px]">
+        <DialogHeader className="flex-none flex-row items-start gap-3 border-b border-line px-5 pt-5 pb-4 pr-12">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <DialogTitle className="flex items-center gap-2">
+              <Gauge size={16} className="text-muted-foreground" />
+              {t('Plan usage')}
+            </DialogTitle>
+            <DialogDescription>
+              {multiHost
+                ? t('Every login on every connected host. A login signed in on several hosts shows once.')
+                : t('Every login on this host. Fallback moves a thread to the next one when a limit is reached.')}
+            </DialogDescription>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex-none"
             aria-pressed={reveal}
             title={reveal ? t('Hide account names and emails') : t('Show account names and emails')}
             onClick={toggleReveal}
           >
             {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
             {reveal ? t('Hide accounts') : t('Show accounts')}
-          </LocalInlineAction>
+          </Button>
+        </DialogHeader>
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto scroll-fade-y px-5 py-4">
+          {!hosts ? (
+            <p className="m-0 text-caption text-muted-foreground" role="status">
+              {t('Reading usage…')}
+            </p>
+          ) : sections.length ? (
+            sections.map((section) => <ProviderLogins key={section.provider} {...section} multiHost={multiHost} />)
+          ) : (
+            <p className="m-0 text-caption text-muted-foreground">
+              {t('No usage reported yet. It appears once a provider runs.')}
+            </p>
+          )}
+          <WeekActivity />
         </div>
-        {groups.map((group, index) => (
-          <Fragment key={group.provider}>
-            {index > 0 && <Separator className="h-px bg-line" />}
-            <UsageDetail {...group} {...accountsOf(group.provider)} />
-          </Fragment>
-        ))}
-        {open && <OtherHostLogins reveal={reveal} />}
-        {open && <WeekActivity />}
-        <Separator className="h-px bg-line" />
-        <p className="m-0 text-caption leading-normal whitespace-normal text-muted-foreground">
-          {t('Fallback continues the thread when a usage limit is reached.')}
-        </p>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-/**
- * Logins seen from other connected hosts that this host does not already show, each once. A login used here too is
- * matched by sign-in email and left out; percentages are never added together.
- */
-function OtherHostLogins({ reveal }: { reveal: boolean }) {
-  const host = useHost()
-  const computers = useComputers()
-  const [logins, setLogins] = useState<LoginUsage[]>([])
-  const ids = (computers?.computers ?? [])
-    .filter((computer) => computer.status === 'connected')
-    .map((computer) => computer.id)
-    .join(',')
-  useEffect(() => {
-    let live = true
-    const list = (computers?.computers ?? []).filter((computer) => ids.split(',').includes(computer.id))
-    if (list.length < 2) return
-    void Promise.all(
-      list.map(async (computer) => ({
-        hostId: computer.id,
-        host: computer.name,
-        readings: await invokeOn(computer.id, 'usage.accounts').catch(() => []),
-        emails: await invokeOn(computer.id, 'providers.accountEmails').catch(() => ({})),
-      })),
-    ).then((hosts) => {
-      if (!live) return
-      // A login this host also uses is already shown above, from its own readings.
-      const here = hosts.find((entry) => entry.hostId === host.id)?.host
-      setLogins(loginsAcrossHosts(hosts).filter((login) => !here || !login.hosts.includes(here)))
-    })
-    return () => {
-      live = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the connected host ids
-  }, [ids, host.id])
-  if (!logins.length) return null
-  return (
-    <>
-      <Separator className="h-px bg-line" />
-      <section className="flex flex-col gap-1.5" aria-label={t('Other hosts')}>
-        <p className="m-0 text-caption text-muted-foreground">{t('Other hosts')}</p>
-        {logins.map((login) => {
-          const peak = peakOf(login)
-          return (
-            <div
-              key={`${login.provider}:${login.email ?? login.hosts.join(',')}`}
-              className="flex items-center gap-2 text-caption"
-            >
-              <span className="min-w-0 flex-1 truncate">
-                {[
-                  providerName(login.provider),
-                  (reveal && login.email) || t('Account on {0}', { 0: login.hosts.join(', ') }),
-                ].join(' · ')}
-              </span>
-              {peak && (
-                <span className="flex-none text-muted-foreground tabular-nums">
-                  {`${Math.round(peak.usedPercent)}% · ${windowLabel(peak, true)}`}
-                </span>
-              )}
-            </div>
-          )
-        })}
-      </section>
-    </>
+        <footer className="flex flex-none items-center gap-2 border-t border-line px-5 py-3 text-caption text-muted-foreground">
+          <span className="min-w-0 flex-1">{t('Fallback continues the thread when a usage limit is reached.')}</span>
+          <Button variant="ghost" size="sm" className="flex-none" onClick={openFallback}>
+            {t('Fallback settings')}
+          </Button>
+        </footer>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -655,43 +644,39 @@ function WeekActivity() {
           ),
         })}`
       : ''
+  const notes = [
+    total.unpricedOn.length > 0 && t('Some providers on {0} report no cost', { 0: total.unpricedOn.join(', ') }),
+    total.tokens > 0 &&
+      total.untokenedOn.length > 0 &&
+      t('Some providers on {0} report no tokens', { 0: total.untokenedOn.join(', ') }),
+    total.missing.length > 0 && t('Not counted: {0}', { 0: total.missing.join(', ') }),
+  ].filter(Boolean)
   return (
-    <>
-      <Separator className="h-px bg-line" />
-      <section className="flex flex-col gap-1" aria-label={t('This week')}>
-        <p className="m-0 text-caption text-muted-foreground">{t('This week')}</p>
-        <p className="m-0 text-caption">
+    <section className="flex flex-col gap-1.5" aria-label={t('This week')}>
+      <h3 className="m-0 text-control font-semibold">{t('This week')}</h3>
+      <div className="flex flex-col gap-1 rounded-(--radius-m) bg-fill px-3 py-2.5">
+        <p className="m-0 text-control">
           {t('{0} turns', { 0: total.turns })}
           {money}
           {tokens}
           {total.byHost.length > 1 && ` · ${total.byHost.map((entry) => `${entry.host} ${entry.turns}`).join(', ')}`}
         </p>
-        {total.unpricedOn.length > 0 && (
-          <p className="m-0 text-caption text-muted-foreground">
-            {t('Some providers on {0} report no cost', { 0: total.unpricedOn.join(', ') })}
-          </p>
-        )}
-        {total.tokens > 0 && total.untokenedOn.length > 0 && (
-          <p className="m-0 text-caption text-muted-foreground">
-            {t('Some providers on {0} report no tokens', { 0: total.untokenedOn.join(', ') })}
-          </p>
-        )}
-        {total.missing.length > 0 && (
-          <p className="m-0 text-caption text-muted-foreground">
-            {t('Not counted: {0}', { 0: total.missing.join(', ') })}
-          </p>
-        )}
-      </section>
-    </>
+        {notes.length > 0 && <p className="m-0 text-caption text-muted-foreground">{notes.join(' · ')}</p>}
+      </div>
+    </section>
   )
 }
 
-/** Pinned to the bottom of the sidebar: one line with each provider's highest window, so it never squeezes the chat list. The window is named once it needs attention; everything else is in the popover. */
+/**
+ * Pinned to the bottom of the sidebar: one line with each provider's highest window for the login in use, so it never
+ * squeezes the chat list. The window is named once it needs attention; a click opens every login in Plan usage.
+ */
 export function UsageFooter() {
   useLanguage()
   const { preferences } = useAppSettings()
   const all = useVisibleUsage()
   const groups = byProvider(all)
+  const [open, setOpen] = useState(false)
   if (!preferences.showUsageLimits || !groups.length) return null
   const label = groups
     .map(
@@ -701,72 +686,74 @@ export function UsageFooter() {
     .join('; ')
   return (
     <div className="usage-footer flex flex-none items-center">
-      <UsagePopover
-        trigger={
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-auto min-h-8 min-w-0 w-full flex-1 flex-wrap justify-start gap-x-3 gap-y-1 rounded-(--radius-row) bg-fill px-2.5 py-[5px] text-[length:var(--font-caption)] leading-4 font-normal text-soft [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:bg-fill dark:hover:bg-hover aria-expanded:bg-hover aria-expanded:text-foreground active:not-aria-[haspopup]:translate-y-0"
-            aria-label={t('Plan usage. {0}', { '0': label })}
-          >
-            <Gauge className="size-[calc(var(--font-caption)+3px)] text-muted-foreground" />
-            {groups.map(({ provider }) => {
-              const peak = peakUsage(all, provider)!,
-                tone = usageTone(peak)
-              return (
-                <span key={provider} className="usage-compact-item inline-flex items-center gap-1">
-                  <ProviderIcon provider={provider} size="calc(var(--font-caption) + 2px)" />
-                  <span className={cn('text-[length:var(--font-caption)] leading-4 tabular-nums', toneText[tone])}>
-                    {peak.usedPercent}%
-                  </span>
-                  {tone !== 'ok' && (
-                    <span className="usage-window-label -ml-px text-[length:calc(var(--font-caption)-2px)] leading-3.5 text-muted-foreground">
-                      {windowLabel(peak, true)}
-                    </span>
-                  )}
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-8 min-w-0 w-full flex-1 flex-nowrap justify-start gap-2.5 overflow-hidden rounded-(--radius-row) bg-fill px-2.5 text-[length:var(--font-caption)] leading-4 font-normal text-soft [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:bg-fill dark:hover:bg-hover aria-expanded:bg-hover active:not-aria-[haspopup]:translate-y-0"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={t('Plan usage. {0}', { '0': label })}
+        title={t('Plan usage')}
+        onClick={() => setOpen(true)}
+      >
+        <Gauge className="size-[calc(var(--font-caption)+3px)] flex-none text-muted-foreground" />
+        {groups.map(({ provider }) => {
+          const peak = peakUsage(all, provider)!,
+            tone = usageTone(peak)
+          return (
+            <span key={provider} className="usage-compact-item inline-flex flex-none items-center gap-1">
+              <ProviderIcon provider={provider} size="calc(var(--font-caption) + 2px)" />
+              <span className={cn('text-[length:var(--font-caption)] leading-4 tabular-nums', toneText[tone])}>
+                {peak.usedPercent}%
+              </span>
+              {tone !== 'ok' && (
+                <span className="usage-window-label -ml-px text-[length:calc(var(--font-caption)-2px)] leading-3.5 text-muted-foreground">
+                  {windowLabel(peak, true)}
                 </span>
-              )
-            })}
-          </Button>
-        }
-      />
+              )}
+            </span>
+          )
+        })}
+      </Button>
+      <UsageDialog open={open} onOpenChange={setOpen} />
     </div>
   )
 }
 
-/** With the sidebar hidden: one small ring per provider at the end of the status bar. */
+/** With the sidebar hidden: one small ring per provider at the end of the status bar, opening Plan usage. */
 export function UsageRings() {
   useLanguage()
   const { preferences } = useAppSettings()
   const all = useVisibleUsage()
   const groups = byProvider(all)
+  const [open, setOpen] = useState(false)
   if (!preferences.showUsageLimits || !groups.length) return null
   return (
-    <UsagePopover
-      side="top"
-      align="end"
-      trigger={
-        <Button
-          type="button"
-          variant="ghost"
-          className="usage-rings h-[22px] gap-1 px-1.5 hover:bg-hover dark:hover:bg-hover aria-expanded:bg-hover active:not-aria-[haspopup]:translate-y-0"
-          aria-label={t('Plan usage')}
-        >
-          {groups.map(({ provider }) => {
-            const peak = peakUsage(all, provider)!
-            return (
-              <span
-                key={provider}
-                className="inline-flex"
-                title={`${providerName(provider)} ${windowLabel(peak)} ${peak.usedPercent}%`}
-              >
-                <Ring percent={peak.usedPercent} className={toneStroke[usageTone(peak)]} />
-              </span>
-            )
-          })}
-        </Button>
-      }
-    />
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        className="usage-rings h-[22px] gap-1 px-1.5 hover:bg-hover dark:hover:bg-hover aria-expanded:bg-hover active:not-aria-[haspopup]:translate-y-0"
+        aria-label={t('Plan usage')}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
+        {groups.map(({ provider }) => {
+          const peak = peakUsage(all, provider)!
+          return (
+            <span
+              key={provider}
+              className="inline-flex"
+              title={`${providerName(provider)} ${windowLabel(peak)} ${peak.usedPercent}%`}
+            >
+              <Ring percent={peak.usedPercent} className={toneStroke[usageTone(peak)]} />
+            </span>
+          )
+        })}
+      </Button>
+      <UsageDialog open={open} onOpenChange={setOpen} />
+    </>
   )
 }
 

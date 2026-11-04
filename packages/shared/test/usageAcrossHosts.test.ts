@@ -27,8 +27,45 @@ it('shows a login used on two hosts once, with its newest reading', () => {
     },
   ])
   expect(logins).toHaveLength(1)
-  expect(logins[0]).toMatchObject({ email: 'me@x.io', hosts: ['Mac', 'vps'] })
+  expect(logins[0]).toMatchObject({
+    email: 'me@x.io',
+    hosts: ['Mac', 'vps'],
+    places: [
+      { hostId: 'a', accountId: 'default' },
+      { hostId: 'b', accountId: 'acc-9' },
+    ],
+  })
   expect(peakOf(logins[0]!)?.usedPercent).toBe(55)
+})
+
+it('matches a login without an email across hosts by identical limits, and keeps different ones apart', () => {
+  const at = (
+    accountId: string | undefined,
+    window: UsageReading['window'],
+    usedPercent: number,
+    resetsAt: number,
+  ) => ({
+    ...reading(accountId, usedPercent, 1_000),
+    window,
+    resetsAt,
+  })
+  const logins = loginsAcrossHosts([
+    {
+      hostId: 'a',
+      host: 'Mac',
+      readings: [at(undefined, 'five_hour', 30, 5_000_000), at('two', 'five_hour', 80, 9_000_000)],
+      emails: {},
+    },
+    { hostId: 'b', host: 'vps', readings: [at('x', 'five_hour', 31, 5_030_000)], emails: {} },
+  ])
+  expect(logins.map((login) => [login.hosts, login.matchedBy, peakOf(login)?.usedPercent])).toEqual([
+    [['Mac', 'vps'], 'limits', 30],
+    [['Mac'], undefined, 80],
+  ])
+  expect(logins[0]!.places).toEqual([
+    { hostId: 'a', accountId: 'default' },
+    { hostId: 'b', accountId: 'x' },
+  ])
 })
 
 it('lists a login it cannot match by host, never adding percentages', () => {

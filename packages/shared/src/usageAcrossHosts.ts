@@ -16,7 +16,50 @@ export interface LoginUsage {
   /** The sign-in email, or null for a login that could not be matched and is listed by host. */
   email: string | null
   hosts: string[]
+  /** Where the login is signed in: each host and that host's own account id for it. */
+  places: { hostId: string; accountId: string }[]
   readings: UsageReading[]
+  /** Set when hosts without its email were matched by identical limits rather than by a sign-in email. */
+  matchedBy?: 'limits'
+}
+
+/** Two readings of one window agree when they reset at the same moment and, read close together, show the same use. */
+const RESET_SLACK_MS = 90_000
+const READ_TOGETHER_MS = 15 * 60_000
+const windowKey = (reading: UsageReading) => `${reading.window}\0${reading.scope ?? ''}`
+
+/**
+ * Whether two logins without an email are one account seen from two hosts: every window both report resets at the same
+ * moment, at least one reports a reset, and windows read close together show the same use. Different accounts sharing
+ * every reset time and usage is far less likely than the same quota seen twice; a host's own logins never merge.
+ */
+function sameLimits(a: LoginUsage, b: LoginUsage): boolean {
+  if (a.places.some((place) => b.places.some((other) => other.hostId === place.hostId))) return false
+  let resets = 0
+  for (const reading of a.readings) {
+    const other = b.readings.find((entry) => windowKey(entry) === windowKey(reading))
+    if (!other) continue
+    if (!reading.resetsAt || !other.resetsAt) return false
+    if (Math.abs(reading.resetsAt - other.resetsAt) > RESET_SLACK_MS) return false
+    if (
+      Math.abs(reading.updatedAt - other.updatedAt) < READ_TOGETHER_MS &&
+      Math.abs(reading.usedPercent - other.usedPercent) > 2
+    )
+      return false
+    resets++
+  }
+  return resets > 0
+}
+
+function merge(into: LoginUsage, from: LoginUsage) {
+  for (const host of from.hosts) if (!into.hosts.includes(host)) into.hosts.push(host)
+  into.places.push(...from.places)
+  for (const reading of from.readings) {
+    const same = into.readings.findIndex((entry) => windowKey(entry) === windowKey(reading))
+    if (same < 0) into.readings.push(reading)
+    else if (into.readings[same]!.updatedAt < reading.updatedAt) into.readings[same] = reading
+  }
+  into.matchedBy = 'limits'
 }
 
 export function loginsAcrossHosts(hosts: readonly HostUsage[]): LoginUsage[] {
@@ -26,15 +69,26 @@ export function loginsAcrossHosts(hosts: readonly HostUsage[]): LoginUsage[] {
       const account = reading.accountId ?? 'default'
       const email = emails[reading.provider]?.[account]?.toLowerCase() ?? null
       const key = email ? `${reading.provider}\0${email}` : `${reading.provider}\0${hostId}\0${account}`
-      const login = logins.get(key) ?? { provider: reading.provider, email, hosts: [], readings: [] }
+      const login = logins.get(key) ?? { provider: reading.provider, email, hosts: [], places: [], readings: [] }
       if (!login.hosts.includes(host)) login.hosts.push(host)
+      if (!login.places.some((place) => place.hostId === hostId && place.accountId === account))
+        login.places.push({ hostId, accountId: account })
       const window = (entry: UsageReading) => `${entry.window}\0${entry.scope ?? ''}`
       const same = login.readings.findIndex((entry) => window(entry) === window(reading))
       if (same < 0) login.readings.push(reading)
       else if (login.readings[same]!.updatedAt < reading.updatedAt) login.readings[same] = reading
       logins.set(key, login)
     }
-  return [...logins.values()]
+  // Logins without an email can still be the same account on two hosts: match those by their limits.
+  const merged: LoginUsage[] = []
+  for (const login of logins.values()) {
+    const twin = login.email
+      ? undefined
+      : merged.find((other) => !other.email && other.provider === login.provider && sameLimits(other, login))
+    if (twin) merge(twin, login)
+    else merged.push(login)
+  }
+  return merged
 }
 
 /** The window that decides how close a login is to its limit. */
