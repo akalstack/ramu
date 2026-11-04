@@ -114,6 +114,15 @@ describe('durable dispatch', () => {
     expect(service.runs(s.id)[0]?.dueAt).toBe(at('2026-10-10T02:00:00Z'))
     expect(service.get(s.id).nextRunAt).toBe(at('2026-10-11T02:00:00Z'))
   })
+  it('runs again after the thread of a run still marked running is deleted', async () => {
+    const s = service.save(input({ kind: 'daily', time: '09:00' }), undefined, at('2026-10-09T00:00:00Z'))
+    await service.tick(at('2026-10-10T03:00:00Z'))
+    expect(start).toHaveBeenCalledTimes(1)
+    await ws.deleteTask(service.runs(s.id)[0]!.taskId!, false)
+    await service.tick(at('2026-10-11T03:00:00Z'))
+    expect(start).toHaveBeenCalledTimes(2)
+    expect(service.runs(s.id).find((run) => run.error === 'Thread deleted')?.status).toBe('cancelled')
+  })
   it('catches up a one-time run and completes its schedule permanently', async () => {
     const s = service.save(
       input({ kind: 'once', at: '2026-10-10T09:00:00+07:00' }),

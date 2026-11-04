@@ -60,7 +60,7 @@ it('checks helper capabilities again at the server action boundary', async () =>
   }
 })
 it('lets a finished teammate go, so it leaves the thread instead of staying forever', async () => {
-  const f = fixture({ agentId: 'a', name: 'Opus', status: 'completed', teammate: true, canMessage: true })
+  const f = fixture({ agentId: 'a', name: 'Opus', status: 'completed', teammate: 'review', canMessage: true })
   try {
     await f.service.dismissTeammate('parent', 'a')
     expect(f.task()).toMatchObject({ status: 'stopped', canMessage: false })

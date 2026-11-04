@@ -292,6 +292,27 @@ export class ScheduleService {
     this.changed()
     return this.get(schedule.id)
   }
+  private threadExists(taskId: string): boolean {
+    try {
+      this.workspace.getTask(taskId)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Runs still marked live whose thread is gone are over: they cannot finish and must not hold the schedule. */
+  private settleOrphanRuns(scheduleId: string): void {
+    const live = this.db
+      .prepare(
+        "SELECT id, task_id AS taskId FROM schedule_runs WHERE schedule_id=? AND status IN ('running','needs-input')",
+      )
+      .all(scheduleId) as { id: string; taskId: string | null }[]
+    for (const run of live)
+      if (run.taskId && !this.threadExists(run.taskId))
+        this.db.prepare("UPDATE schedule_runs SET status='cancelled', error='Thread deleted' WHERE id=?").run(run.id)
+  }
+
   /** Remembers (or with null forgets) the repository webhook made for a schedule. */
   setGithubHook(id: string, hook: StoredWebhook['githubHook'] | null): void {
     this.patchData(id, { githubHook: hook ?? undefined })
@@ -651,6 +672,8 @@ export class ScheduleService {
         .all(now) as unknown as ScheduleRun[]
       for (const run of queued) {
         if (this.stopping) break
+        // A run whose thread was deleted never finishes, and held every later run of its schedule back for good.
+        this.settleOrphanRuns(run.scheduleId)
         if (
           this.db
             .prepare(
@@ -662,8 +685,10 @@ export class ScheduleService {
         const s = this.get(run.scheduleId)
         try {
           const fromWebhook = this.workspace.getAppState<RunPrompt | null>(promptKey(run.id), null)
-          const task = run.taskId
-            ? this.workspace.getTask(run.taskId)
+          // A thread made for this run on an earlier try may have been deleted since; the run then starts a new one.
+          const kept = run.taskId && this.threadExists(run.taskId) ? run.taskId : null
+          const task = kept
+            ? this.workspace.getTask(kept)
             : await this.workspace.createTask({
                 projectId: s.projectId,
                 title:
