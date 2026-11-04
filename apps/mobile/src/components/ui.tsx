@@ -626,6 +626,8 @@ function ScreenSheetBody({ title, children, scroll = true, onClose, search }: Om
             </T>
             <IconButton icon={X} label={say('Close')} onPress={onClose} />
           </View>
+          {/* Under the title, so the keyboard never covers it while typing. */}
+          {search ? <BottomSearch {...search} inputOnly /> : null}
           {scroll ? (
             <ScrollView
               style={{ flex: 1 }}
@@ -640,7 +642,6 @@ function ScreenSheetBody({ title, children, scroll = true, onClose, search }: Om
           ) : (
             <View style={{ flex: 1 }}>{children}</View>
           )}
-          {search ? <BottomSearch {...search} inputOnly /> : null}
         </View>
       </SheetScroll.Provider>
     </KeyboardAvoidingView>
