@@ -29,21 +29,18 @@ export const opencodeAdapter = defineAdapter({
     'OPENCODE_API_KEY',
     'OPENCODE_ZEN_API_KEY',
   ],
-  setup(version) {
+  setup() {
     const windows = process.platform === 'win32'
-    const v1 = version?.startsWith('1.')
     return {
-      docsUrl: v1 ? 'https://opencode.ai/docs/' : 'https://opencode.ai/v2/docs/',
-      installCommand: windows ? null : `curl -fsSL https://opencode.ai/${v1 ? '' : 'v2/'}install | bash`,
-      updateCommand: windows ? null : `curl -fsSL https://opencode.ai/${v1 ? '' : 'v2/'}install | bash`,
+      docsUrl: 'https://opencode.ai/v2/docs/',
+      installCommand: windows ? null : 'curl -fsSL https://opencode.ai/v2/install | bash',
+      updateCommand: windows ? null : 'curl -fsSL https://opencode.ai/v2/install | bash',
       setupCommand: 'opencode',
       setupNote:
-        'Open OpenCode in a terminal and use /connect to configure model providers. Version checks stay on your installed major version. On Windows, download the standalone CLI from the setup guide.',
+        'Ramu supports OpenCode 2. Open OpenCode in a terminal and use /connect to configure model providers. On Windows, download the standalone CLI from the setup guide.',
     }
   },
-  latestRelease: npmLatest((current) => (current?.startsWith('1.') ? 'opencode-ai' : '@opencode/cli')),
-  // OpenCode publishes v1 and v2 separately. Never compare a cached release from another line.
-  sameReleaseLine: (installed, release) => (installed?.startsWith('1.') ?? false) === release.startsWith('1.'),
+  latestRelease: npmLatest(() => '@opencode/cli'),
   async signInState(binary, env) {
     const { out } = await runCli(binary, ['auth', 'list'], env)
     const stored = out.split('\n').filter((line) => /\b(stored|env)\b/i.test(line)).length

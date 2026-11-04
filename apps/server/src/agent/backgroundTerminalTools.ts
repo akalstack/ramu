@@ -2,8 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { z } from 'zod'
 import type { TerminalService } from '../workspace/pty'
+import { dangerousCommand } from './dangerousCommands'
 
-export const BACKGROUND_TERMINAL_GUIDE = `Use background_terminal_launch for a development server or watcher that should remain running after your reply. The user can inspect and stop it in Background terminals. Commands run on this thread's execution host, in this session's checkout. After a host restart, saved commands without a verified process handle are Unknown and their saved output is read-only; inspect and verify them before starting anything again. Ramu never replays saved launches automatically. In Full access it launches directly; in other modes each launch asks the person to approve the exact command once, and a refusal must be respected. Never use it to bypass a restriction. A command whose stoppedBy is "user" was stopped by the person; do not restart it without a new instruction.
+export const BACKGROUND_TERMINAL_GUIDE = `Use background_terminal_launch for a development server or watcher that should remain running after your reply. The user can inspect and stop it in Background terminals. Commands run on this thread's execution host, in this session's checkout. After a host restart, saved commands without a verified process handle are Unknown and their saved output is read-only; inspect and verify them before starting anything again. Ramu never replays saved launches automatically. In Full access it launches directly unless the command can destroy work or the machine; otherwise each launch asks the person to approve the exact command once, and a refusal must be respected. Never use it to bypass a restriction. A command whose stoppedBy is "user" was stopped by the person; do not restart it without a new instruction.
 
 To wait for background commands, call background_terminal_wait instead of sleeping or polling inspect: it returns when a command exits, prints text you name (such as "ready" or "error"), goes quiet, or the timeout passes, with the new output. Wait before you rely on a server, finish your turn or report a result that depends on the command.`
 
@@ -32,14 +33,18 @@ export function registerBackgroundTerminalTools(
       let session = scope()
       // App-owned MCP tools can be auto-approved by providers, so outside Full access every launch needs the person's
       // approval of this exact command. The approval is single-use and bound to the access mode it was asked under.
-      if (!full(session)) {
+      // Full access still asks before the few commands that can destroy work or the machine.
+      const danger = full(session) ? dangerousCommand(command, session) : null
+      if (!full(session) || danger) {
         if (!requestApproval)
           throw new Error(
-            'Managed background commands require Full access on this host. Use the native command permission flow instead.',
+            danger
+              ? `${danger}, and this connection cannot ask the person to approve it. Do not run it another way.`
+              : 'Managed background commands require Full access on this host. Use the native command permission flow instead.',
           )
         const access = session.settings.access
         const allowed = await requestApproval(
-          `Run this command in the background and keep it running after the reply:\n\n${command}`,
+          `${danger ? `${danger}. ` : ''}Run this command in the background and keep it running after the reply:\n\n${command}`,
           extra.signal,
         )
         if (!allowed)

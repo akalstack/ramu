@@ -40,7 +40,7 @@ Claude Code, Codex, Cursor and OpenCode logins can use an API key instead of a s
 
 - **Allow edits:** the agent edits files in the project and asks before other actions, where the provider supports asking.
 - **Auto:** Ramu's own tools run without asking; everything else follows the provider's automatic review, so risky commands still ask.
-- **Full access:** nothing asks. Use it only for work you trust.
+- **Full access:** commands and edits run without asking, except the few that can destroy work or the machine: deleting outside the thread's folders, a whole project or `.git`; `git reset --hard`, `git clean -f`, force-pushes and other history rewrites; running as administrator; formatting disks; and shutting down. Those ask once each, with the reason, and cannot be saved as rules. Claude's own safety checks, and ask rules in your Claude settings, also still ask. Cursor's SDK cannot pause a command, so Cursor threads in Full access never ask. Use it only for work you trust.
 
 Approvals default to **Allow once**. For a command you can save a prefix rule (such as `git diff *`) for the project or for every project, from the card in the thread on desktop or on the phone (**Don't ask again…**). A saved approval can be forgotten from the card. **Settings → Permissions → Saved approvals** lists and removes them.
 
@@ -54,7 +54,7 @@ The sidebar footer shows each provider's remaining allowance. Account names and 
 
 ## Provider notes
 
-- OpenCode 2 runs one `opencode serve` per thread; OpenCode 1.x and Antigravity use ACP.
+- Ramu supports OpenCode 2, which runs one `opencode serve` per thread. Antigravity uses ACP.
 - Antigravity lists the models your Google plan offers, including its Claude and GPT models. Ramu identifies itself to the runtime as Zed, because Google offers those models only to the ACP clients it allows. Thinking levels show only on models that have them.
 - ACP runtimes cannot take input mid-turn, so **Steer** cancels the turn and continues with your message.
 - Cursor steers within the turn.

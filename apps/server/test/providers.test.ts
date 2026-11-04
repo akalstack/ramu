@@ -131,14 +131,10 @@ it('reports missing binaries while preserving configuration and setup help', asy
   })
   expect(providerBinary('cursor')).toBe(bin)
 })
-it('uses official sources and keeps OpenCode major release lines separate', async () => {
+it('uses official sources, with OpenCode on its v2 package', async () => {
   const network = mockReleases()
-  await latestProviderRelease('opencode', '1.18.0')
   await latestProviderRelease('opencode', '2.0.25')
-  expect(network.mock.calls.map((c) => c[0])).toEqual([
-    'https://registry.npmjs.org/opencode-ai/latest',
-    'https://registry.npmjs.org/%40opencode%2Fcli/latest',
-  ])
+  expect(network.mock.calls.map((c) => c[0])).toEqual(['https://registry.npmjs.org/%40opencode%2Fcli/latest'])
   expect((await latestProviderRelease('cursor', null)).version).toBe('2026.10.01-e373342')
   expect((await latestProviderRelease('antigravity', null)).version).toBe('1.3.0')
 })

@@ -6,11 +6,11 @@ import { acpMcpServers, sessionMcpServers, configuredMcpStatus } from './discove
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { providerAdapter } from './adapters'
 import type { SelectionTransition } from './selectionTransition'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
 import { AcpEvents, nativeShell } from './acpEvents'
+import { dangerousCommand } from '../agent/dangerousCommands'
 import type {
   AgentEvent,
   AgentModel,
@@ -35,6 +35,7 @@ import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 /** How long a cancelled turn may take to end before steering or interrupting gives up. */
 const cancelWaitMs = () => Number(process.env.RAMU_ACP_CANCEL_WAIT_MS) || 15_000
 type Wire = Record<string, any>
+/** OpenCode chats run on `opencode serve`; its `opencode acp` server only lists models. */
 type AcpProvider = 'cursor' | 'antigravity' | 'opencode'
 /** Trust qualified tool identities, never arguments or a command's descriptive title. */
 function isRamuCall(call: Wire | undefined, provider: AcpProvider): boolean {
@@ -77,14 +78,13 @@ export class AcpRpc {
     private provider: AcpProvider,
     cwd: string,
     accountId?: string,
-    extraEnv: Record<string, string> = {},
   ) {
     const { command, args } = acpCommand(provider)
     this.child = trackProcess(
       spawn(command, args, {
         cwd,
         stdio: 'pipe',
-        env: { ...providerEnvironment(provider, undefined, accountId), ...extraEnv },
+        env: providerEnvironment(provider, undefined, accountId),
       }),
     )
     this.child.stderr.resume()
@@ -171,7 +171,6 @@ export class AcpRpc {
         fs: { readTextFile: false, writeTextFile: false },
         terminal: this.terminal,
         session: { compaction: {} },
-        ...(this.provider === 'opencode' ? { _meta: { 'opencode/child-session-updates': true } } : {}),
       },
     })
     if (result.protocolVersion !== 1) throw new Error('Unsupported ACP protocol version')
@@ -334,63 +333,6 @@ export async function acpAside({
     await rpc.close()
   }
 }
-/**
- * OpenCode reads inline config from the environment. Denying its `task` permission removes the native sub-agent tool,
- * so every sub-agent goes through `ramu_agent`. Its `skills` setting lists Ramu's managed-skill export without touching the
- * user's own skill folders. Existing inline config is kept.
- */
-export function openCodeConfigEnv(
-  connection: McpConnection | undefined,
-  existing = process.env.OPENCODE_CONFIG_CONTENT,
-  access?: AgentSettings['access'],
-): Record<string, string> {
-  const skillPaths = connection?.skillsDir
-    ? (providerAdapter('opencode').skillsLaunch?.(connection.skillsDir).configPaths ?? [])
-    : []
-  if (access !== 'edits' && connection?.nativeSubagents !== false && !skillPaths.length) return {}
-  let config: Wire
-  try {
-    config = existing ? JSON.parse(existing) : {}
-  } catch {
-    return {}
-  }
-  if (!config || typeof config !== 'object' || Array.isArray(config)) return {}
-  const permission =
-    config.permission && typeof config.permission === 'object' && !Array.isArray(config.permission)
-      ? config.permission
-      : {}
-  // `skills` is a list of folders, or the older `{ paths, urls }` object.
-  const legacy = config.skills && typeof config.skills === 'object' && !Array.isArray(config.skills)
-  const listed: string[] = Array.isArray(config.skills) ? config.skills : legacy ? (config.skills.paths ?? []) : []
-  const merged = [...new Set([...listed, ...skillPaths])]
-  return {
-    OPENCODE_CONFIG_CONTENT: JSON.stringify({
-      ...config,
-      ...(access === 'edits' || connection?.nativeSubagents === false
-        ? {
-            permission: {
-              ...(access === 'edits'
-                ? {
-                    '*': 'ask',
-                    read: { '*': 'allow', '*.env': 'ask', '*.env.*': 'ask', '*.env.example': 'allow' },
-                    glob: 'allow',
-                    grep: 'allow',
-                    lsp: 'allow',
-                    skill: 'allow',
-                    todowrite: 'allow',
-                    question: 'allow',
-                  }
-                : {}),
-              ...permission,
-              ...(access === 'edits' ? { edit: 'allow', bash: 'ask' } : {}),
-              ...(connection?.nativeSubagents === false ? { task: 'deny' } : {}),
-            },
-          }
-        : {}),
-      ...(skillPaths.length ? { skills: legacy ? { ...config.skills, paths: merged } : merged } : {}),
-    }),
-  }
-}
 /** Runs the runtime's own sign-in. Antigravity opens the browser itself and stores the credentials in its home. */
 export async function acpSignIn(
   provider: AcpProvider,
@@ -479,18 +421,7 @@ class AcpSession implements AgentRunner {
 
   async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
     const provider = this.settings.provider as AcpProvider
-    this.rpc = new AcpRpc(
-      provider,
-      this.scope.cwd,
-      this.settings.accountId ?? 'default',
-      provider === 'opencode'
-        ? openCodeConfigEnv(
-            this.connection,
-            undefined,
-            !this.readOnly && !this.connection?.restricted ? this.settings.access : undefined,
-          )
-        : {},
-    )
+    this.rpc = new AcpRpc(provider, this.scope.cwd, this.settings.accountId ?? 'default')
     this.rpc.terminal = !!this.terminals
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => {
@@ -611,7 +542,8 @@ class AcpSession implements AgentRunner {
           ? this.settings.access === 'edits'
             ? ['auto_edit']
             : this.settings.access === 'full'
-              ? ['yolo']
+              ? // Not yolo: commands must still reach Ramu so it can stop the dangerous few.
+                ['auto_edit']
               : ['auto_edit', 'auto', 'default']
           : this.settings.access === 'auto'
             ? ['auto']
@@ -783,6 +715,14 @@ class AcpSession implements AgentRunner {
     this.emit({ kind: 'request-resolved', requestId: id, outcome })
     if (!this.pending.size) this.emit({ kind: 'state', state: 'running' })
   }
+  /** Why full access must still ask before this permission request's shell command, or null. */
+  private fullAccessDanger(p: Wire): string | null {
+    if (!p.toolCall?.rawInput) return null
+    const tool = p.toolCall._meta?.claudeCode?.toolName || p.toolCall.rawInput?._toolName || p.toolCall.kind || ''
+    if (!['execute', 'command', 'Bash', 'bash', 'run_command'].includes(tool)) return null
+    const command = nativeShell(p.toolCall.rawInput, undefined)?.command
+    return command ? dangerousCommand(command, this.scope) : null
+  }
   replyPermission(id: string, allow: boolean): void {
     const m = this.pending.get(id)
     if (!m || m.question) throw new Error('That request is no longer pending')
@@ -869,19 +809,6 @@ class AcpSession implements AgentRunner {
         }
         this.emit(event)
       }
-      return
-    }
-    if (m.method === 'opencode/session/child_update') {
-      // Sub-agent progress; rootSessionId ties it to this chat.
-      if (
-        !this.loading &&
-        p.rootSessionId === this.sessionId &&
-        p.type === 'update' &&
-        p.update &&
-        typeof p.childSessionId === 'string'
-      )
-        for (const event of this.events.consumeChild(p.childSessionId, String(p.title ?? ''), p.update))
-          this.emit(event)
       return
     }
     if (m.method === 'cursor/update_todos') {
@@ -975,10 +902,10 @@ class AcpSession implements AgentRunner {
         return
       } else if (
         m.method !== 'cursor/create_plan' &&
-        (this.settings.access === 'full' ||
+        ((this.settings.access === 'full' && !this.fullAccessDanger(p)) ||
           (this.settings.access === 'auto' &&
-            (this.settings.provider === 'opencode' ||
-              (!!this.connection && isRamuCall(p.toolCall, this.settings.provider as AcpProvider)))) ||
+            !!this.connection &&
+            isRamuCall(p.toolCall, this.settings.provider as AcpProvider)) ||
           (this.settings.access === 'edits' && p.toolCall?.kind === 'edit'))
       ) {
         this.replyPermission(id, true)
@@ -1004,7 +931,11 @@ class AcpSession implements AgentRunner {
                 ),
               }
             : {}),
-          detail: p.plan || JSON.stringify(p.toolCall?.rawInput ?? {}),
+          detail:
+            (this.settings.access === 'full' && this.fullAccessDanger(p)
+              ? `${this.fullAccessDanger(p)}\nFull access still asks before this.\n`
+              : '') + (p.plan || JSON.stringify(p.toolCall?.rawInput ?? {})),
+          ...(this.settings.access === 'full' ? { approvalOnceOnly: true } : {}),
         })
       this.emit({ kind: 'state', state: 'needs-input' })
       return

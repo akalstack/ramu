@@ -6,6 +6,7 @@ import { codexMcpConfig, sessionMcpServers, configuredMcpStatus } from './discov
 import { classifyLimit } from './limitClassifier'
 import { elicitationRequest, elicitationContent } from '../agent/elicitation'
 import { attachmentPrompt } from '../attachments'
+import { dangerousCommand } from '../agent/dangerousCommands'
 import { agentContent } from '@ramu/shared/chat/agentContent'
 import { toolDescription, toolInput } from './acpEvents'
 // Codex's local app-server protocol, using the user's existing CLI login.
@@ -270,8 +271,10 @@ class CodexSession implements CodexRunner {
 
   private policies() {
     if (this.readOnly) return { approvalPolicy: 'never', sandboxPolicy: { type: 'readOnly' } }
+    // Full access still routes commands through approval so Ramu can stop the dangerous few; it answers the rest at
+    // once, and nothing runs sandboxed.
     return this.settings.access === 'full'
-      ? { approvalPolicy: 'never', sandboxPolicy: { type: 'dangerFullAccess' } }
+      ? { approvalPolicy: 'untrusted', sandboxPolicy: { type: 'dangerFullAccess' } }
       : {
           approvalPolicy: this.settings.access === 'auto' ? 'on-request' : 'untrusted',
           sandboxPolicy: {
@@ -648,7 +651,39 @@ class CodexSession implements CodexRunner {
     }
     if (m.id !== undefined) {
       const id = String(m.id)
-      if (m.method === 'item/commandExecution/requestApproval' || m.method === 'item/fileChange/requestApproval') {
+      if (
+        this.settings.access === 'full' &&
+        !this.readOnly &&
+        (m.method === 'item/commandExecution/requestApproval' ||
+          m.method === 'item/fileChange/requestApproval' ||
+          m.method === 'item/permissions/requestApproval')
+      ) {
+        const command = Array.isArray(p.command) ? p.command.join(' ') : p.command
+        const danger = typeof command === 'string' ? dangerousCommand(command, this.scope) : null
+        if (!danger) {
+          this.rpc.write({
+            id: m.id,
+            result:
+              m.method === 'item/permissions/requestApproval'
+                ? { permissions: p.permissions, scope: 'turn' }
+                : { decision: 'accept' },
+          })
+          return
+        }
+        this.pending.set(id, { id: m.id })
+        this.emit({
+          kind: 'permission-request',
+          requestId: id,
+          toolName: 'Bash',
+          title: 'Allow command?',
+          detail: [danger, 'Full access still asks before this.', command].join('\n'),
+          approvalOnceOnly: true,
+        })
+        this.emit({ kind: 'state', state: 'needs-input' })
+      } else if (
+        m.method === 'item/commandExecution/requestApproval' ||
+        m.method === 'item/fileChange/requestApproval'
+      ) {
         this.pending.set(id, { id: m.id })
         this.emit({
           kind: 'permission-request',
@@ -693,6 +728,14 @@ class CodexSession implements CodexRunner {
           })),
         })
         this.emit({ kind: 'state', state: 'needs-input' })
+      } else if (
+        m.method === 'mcpServer/elicitation/request' &&
+        this.settings.access === 'full' &&
+        !this.readOnly &&
+        (p._meta?.codex_approval_kind === 'mcp_tool_call' || id.startsWith('mcp_tool_call_approval_'))
+      ) {
+        // Under the approval policy full access now uses, Codex also asks before MCP tool calls; full access allows them.
+        this.rpc.write({ id: m.id, result: { action: 'accept', content: {}, _meta: null } })
       } else if (m.method === 'mcpServer/elicitation/request') {
         try {
           const requestId = `mcp:${this.requestScope}:${id}`

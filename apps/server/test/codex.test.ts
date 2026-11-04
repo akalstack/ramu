@@ -55,6 +55,12 @@ rl.on('line', line => {
     send({id:m.id,result:{turn:{id:'turn-1'}}});
     send({method:'turn/started',params:{threadId:'thread-1',turn:{id:'turn-1'}}});
     const text = m.params.input[0].text;
+    if (text === 'full gate') {
+      send({id:910,method:'item/commandExecution/requestApproval',params:{threadId:'thread-1',command:'pnpm test'}});
+      send({id:911,method:'mcpServer/elicitation/request',params:{threadId:'thread-1',serverName:'ramu',mode:'form',message:'Allow tool?',requestedSchema:{type:'object',properties:{}},_meta:{codex_approval_kind:'mcp_tool_call'}}});
+      send({id:912,method:'item/commandExecution/requestApproval',params:{threadId:'thread-1',command:['bash','-lc','rm -rf ~/notes']}});
+      return;
+    }
     if (text === 'limit') { send({method:'turn/completed',params:{threadId:'thread-1',turn:{id:'turn-1',status:'failed',error:{message:'Limit reached',codexErrorInfo:'usageLimitExceeded'}}}}); return; }
     if (text.startsWith('compact counts')) {
       const usage = (n) => send({method:'thread/tokenUsage/updated',params:{threadId:'thread-1',turnId:'turn-1',tokenUsage:{last:{totalTokens:n},modelContextWindow:258400}}});
@@ -173,6 +179,33 @@ describe('Codex app-server wire adapter', () => {
         .filter((message) => message.method === 'thread/read')
         .every((message) => message.params.includeTurns),
     ).toBe(true)
+  })
+  it('routes Full access through approval, answering everything at once except a dangerous command', async () => {
+    const events: AgentEvent[] = []
+    const runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'full' }, (event) =>
+      events.push(event),
+    )
+    try {
+      await runner.start('full gate', null)
+      await vi.waitFor(() => expect(events.some((event) => event.kind === 'permission-request')).toBe(true))
+      expect(messages().find((message) => message.method === 'thread/start').params).toMatchObject({
+        approvalPolicy: 'untrusted',
+        sandbox: 'danger-full-access',
+      })
+      expect(messages().find((message) => message.id === 910).result).toEqual({ decision: 'accept' })
+      expect(messages().find((message) => message.id === 911).result).toMatchObject({ action: 'accept' })
+      expect(messages().some((message) => message.id === 912 && message.result)).toBe(false)
+      const asked = events.filter((event) => event.kind === 'permission-request')
+      expect(asked).toEqual([
+        expect.objectContaining({ approvalOnceOnly: true, detail: expect.stringContaining('outside this thread') }),
+      ])
+      runner.replyPermission!(asked[0]!.requestId, false)
+      await vi.waitFor(() =>
+        expect(messages().find((message) => message.id === 912)?.result).toEqual({ decision: 'decline' }),
+      )
+    } finally {
+      await runner.stop()
+    }
   })
   it('starts each streamed message from empty once the previous one with that id completed', async () => {
     const events: AgentEvent[] = []

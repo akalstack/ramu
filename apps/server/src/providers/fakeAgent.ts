@@ -3,11 +3,28 @@ import { permissionKey } from '../agent/permissionApprovals'
 // same event, permission and transcript paths as the real adapter without spending model usage.
 import { randomUUID } from 'node:crypto'
 import { elicitationRequest, elicitationContent } from '../agent/elicitation'
-import type { Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
+import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { QueryFn } from '../agent'
 import type { McpConnection, AgentElicitation, ElicitationAction } from '@ramu/shared/types'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+
+/** Runs the PreToolUse hooks for a Bash call the way Claude does under bypass: true when one asks for the person. */
+async function hookAsks(options: Options, input: Record<string, unknown>): Promise<boolean> {
+  for (const matcher of options.hooks?.PreToolUse ?? [])
+    if (!matcher.matcher || new RegExp(`^(?:${matcher.matcher})$`).test('Bash'))
+      for (const hook of matcher.hooks) {
+        const output = await hook(
+          { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: input } as never,
+          'fake-tool',
+          { signal: options.abortController?.signal ?? new AbortController().signal },
+        )
+        const decision = (output as { hookSpecificOutput?: { permissionDecision?: string } }).hookSpecificOutput
+          ?.permissionDecision
+        if (decision === 'ask') return true
+      }
+  return false
+}
 
 async function fakeTools(text: string, connection?: McpConnection): Promise<void> {
   if (
@@ -704,9 +721,11 @@ export const fakeQuery: QueryFn = ({ prompt, options }) => {
         parent_tool_use_id: null,
         message: { content: [{ type: 'tool_use', id: 'fake-tool', name: 'Bash', input }] },
       } as unknown as SDKMessage
-      // Like the real adapter, automatic mode decides without asking; other modes defer to the user.
+      // Like the real adapter, automatic mode decides without asking, and bypass asks only when a hook says to;
+      // other modes defer to the user.
       const res =
-        options.permissionMode === 'auto'
+        options.permissionMode === 'auto' ||
+        (options.permissionMode === 'bypassPermissions' && !(await hookAsks(options, input)))
           ? { behavior: 'allow' as const }
           : await options.canUseTool!('Bash', input, {
               signal: options.abortController!.signal,

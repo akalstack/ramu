@@ -18,7 +18,8 @@ import type {
   McpConnection,
 } from '@ramu/shared/types'
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from '../agent/agentRunner'
-import { openCodeConfigEnv } from './acp'
+import { providerAdapter } from './adapters'
+import { dangerousCommand } from '../agent/dangerousCommands'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { classifyLimit, limitSignal } from './limitClassifier'
 import { limitedReading } from './usageLimit'
@@ -37,13 +38,21 @@ export function openCodeServerEnv(
   existing = process.env.OPENCODE_CONFIG_CONTENT,
   repoServers: Record<string, Wire> = {},
 ): Record<string, string> {
-  const skills = connection && { ...connection, nativeSubagents: undefined }
-  const merged = openCodeConfigEnv(skills, existing).OPENCODE_CONFIG_CONTENT ?? existing
   let config: Wire = {}
   try {
-    config = merged ? JSON.parse(merged) : {}
+    config = existing ? JSON.parse(existing) : {}
   } catch {}
   if (!config || typeof config !== 'object' || Array.isArray(config)) config = {}
+  // Ramu's managed-skill export joins the `skills` folders: a list, or the older `{ paths, urls }` object.
+  const skillPaths = connection?.skillsDir
+    ? (providerAdapter('opencode').skillsLaunch?.(connection.skillsDir).configPaths ?? [])
+    : []
+  if (skillPaths.length) {
+    const legacy = config.skills && typeof config.skills === 'object' && !Array.isArray(config.skills)
+    const listed: string[] = Array.isArray(config.skills) ? config.skills : legacy ? (config.skills.paths ?? []) : []
+    const merged = [...new Set([...listed, ...skillPaths])]
+    config.skills = legacy ? { ...config.skills, paths: merged } : merged
+  }
   const mcp = config.mcp && typeof config.mcp === 'object' && !Array.isArray(config.mcp) ? config.mcp : {}
   if (connection)
     config.mcp = {
@@ -66,7 +75,8 @@ export function openCodeServerEnv(
 /**
  * Session rules for the chosen access. Allow edits is an explicit native policy, independent of permissive user
  * defaults. Full access is OpenCode's own `"*": "allow"`: rules are evaluated last match first, and session rules come
- * after the user's config, so it also overrides their ask and deny rules. Auto (and anything else) adds nothing:
+ * after the user's config, so it also overrides their ask and deny rules; commands still ask, so Ramu can stop the
+ * dangerous few. Auto (and anything else) adds nothing:
  * `permission.asked` approves what is emitted and explicit deny rules never reach it, like `opencode --auto`.
  */
 export function openCodePermissions(connection: McpConnection | undefined, access?: AgentSettings['access']) {
@@ -87,7 +97,11 @@ export function openCodePermissions(connection: McpConnection | undefined, acces
           { action: 'edit', resource: '*', effect: 'allow' },
         ]
       : access === 'full'
-        ? [{ action: '*', resource: '*', effect: 'allow' }]
+        ? [
+            { action: '*', resource: '*', effect: 'allow' },
+            // Every command comes to Ramu, which answers at once except for the few that can destroy work or the machine.
+            { action: 'bash', resource: '*', effect: 'ask' },
+          ]
         : []
   if (connection?.nativeSubagents === false) rules.push({ action: 'task', resource: '*', effect: 'deny' })
   return rules
@@ -576,12 +590,18 @@ export class OpenCodeSession implements AgentRunner {
         return this.turn?.done({ interrupted: true })
       case 'permission.asked': {
         // OpenCode --auto approves asks once; explicit denies never reach this event.
-        // Forms/questions remain interactive. Full is a compatibility alias for this provider.
+        // Forms/questions remain interactive. Full access approves too, except a dangerous command.
+        const danger =
+          this.settings.access === 'full' && !this.readOnly && ['bash', 'shell'].includes(d.action)
+            ? ((d.resources ?? []).map((command: string) => dangerousCommand(command, this.scope)).find(Boolean) ??
+              null)
+            : null
         if (
-          this.settings.access === 'full' ||
-          this.settings.access === 'auto' ||
-          this.readOnly ||
-          this.connection?.restricted
+          !danger &&
+          (this.settings.access === 'full' ||
+            this.settings.access === 'auto' ||
+            this.readOnly ||
+            this.connection?.restricted)
         ) {
           void this.client?.permission
             .reply({
@@ -598,8 +618,11 @@ export class OpenCodeSession implements AgentRunner {
           requestId: d.id,
           toolName: d.action,
           title: d.message || `Allow ${d.action}?`,
-          detail: (d.resources ?? []).join('\n'),
-          ...(d.resources?.length && !d.resources.includes('*')
+          detail: [...(danger ? [danger, 'Full access still asks before this.'] : []), ...(d.resources ?? [])].join(
+            '\n',
+          ),
+          ...(danger ? { approvalOnceOnly: true } : {}),
+          ...(!danger && d.resources?.length && !d.resources.includes('*')
             ? {
                 approvalKey: permissionKey(d.action, d.resources),
                 approvalCommand:

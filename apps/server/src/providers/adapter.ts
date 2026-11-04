@@ -104,8 +104,6 @@ export interface ProviderAdapter {
   setup(version: string | null): ProviderSetup
   /** Looks up the newest published release. */
   latestRelease(current: string | null, fetchText: (url: string) => Promise<string>): Promise<LatestRelease>
-  /** Whether a cached release belongs to the same release line as the installed version. */
-  sameReleaseLine?(installed: string | null, release: string): boolean
   /** Reads the installed version; resolves null when the output is unrecognizable. */
   probeVersion(binary: string, env: NodeJS.ProcessEnv): Promise<string | null>
   signInState(binary: string, env: NodeJS.ProcessEnv): Promise<ProviderSignIn>

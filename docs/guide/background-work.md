@@ -8,7 +8,7 @@ Enter uses your Steer or Queue choice; Cmd/Ctrl+Enter uses the other. **Steer** 
 
 ## Background commands
 
-Agents can start a development server, watcher or long test run that keeps going after their reply. It runs on the thread's host, in its checkout; outside Full access you approve each exact command first. Background terminals lists them, with their output and **Stop**.
+Agents can start a development server, watcher or long test run that keeps going after their reply. It runs on the thread's host, in its checkout; outside Full access you approve each exact command first, and Full access still asks before a command that can destroy work or the machine. Background terminals lists them, with their output and **Stop**.
 
 Instead of sleeping and checking again, an agent waits on a command: until it exits, prints text it names (such as "ready" or "error"), stops printing for a while, or a time limit passes. The thread shows what came of it, such as **Saw "ready"** or **Background command failed** with the exit code. Stopping the turn ends the wait; stopping the command ends it too, and the agent does not restart a command you stopped.
 

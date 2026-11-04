@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type AgentSettings, type AgentSessionState } from '@ramu/shared/types'
-import { createCanUseTool } from '../src/agent/permissions'
+import { claudeHooks, createCanUseTool, dangerousCommandHooks } from '../src/agent/permissions'
 import type { PendingRequest } from '../src/agent/types'
 
 function fixture(access: AgentSettings['access'], restricted = false) {
@@ -110,4 +110,34 @@ it('edits does not prompt again for computer or browser tools', async () => {
     expect(await call(`mcp__ramu__${tool}`, input)).toEqual({ behavior: 'allow', updatedInput: input })
   expect(pending.size).toBe(0)
   expect(events).toEqual([])
+})
+
+it('Full access asks once for whatever Claude still sends it, while Ramu tools stay allowed', async () => {
+  const { call, events, pending } = fixture('full')
+  expect(await call('mcp__ramu__memory_save', {})).toMatchObject({ behavior: 'allow' })
+  const result = call('Bash', { command: 'rm -rf ~/notes' })
+  expect(events).toEqual([
+    expect.objectContaining({
+      kind: 'permission-request',
+      approvalOnceOnly: true,
+      approvalPatterns: undefined,
+      detail: expect.stringContaining('Full access still asks'),
+    }),
+  ])
+  ;[...pending.values()][0]!.resolve({ behavior: 'deny', message: 'Declined' })
+  expect(await result).toMatchObject({ behavior: 'deny' })
+})
+
+it('turns a dangerous Bash call into an ask before Claude runs it, and leaves routine ones alone', async () => {
+  const hooks = claudeHooks({ PreToolUse: [] }, dangerousCommandHooks({ cwd: '/work/app' }))!
+  const hook = hooks.PreToolUse![0]!.hooks[0]!
+  const run = (command: string) =>
+    hook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } } as never, 'id', {
+      signal: new AbortController().signal,
+    })
+  expect(await run('rm -rf dist')).toEqual({})
+  expect(await run('git push --force')).toMatchObject({
+    hookSpecificOutput: { permissionDecision: 'ask', permissionDecisionReason: expect.stringContaining('remote') },
+  })
+  expect(claudeHooks(undefined, undefined)).toBeUndefined()
 })

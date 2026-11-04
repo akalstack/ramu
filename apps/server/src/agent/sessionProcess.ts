@@ -24,7 +24,7 @@ import { goalInstructions } from './goals'
 import type { QueryFn, PendingRequest } from './types'
 import { InputQueue } from './inputQueue'
 import { errorMessage } from './util'
-import { createCanUseTool } from './permissions'
+import { claudeHooks, createCanUseTool, dangerousCommandHooks } from './permissions'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
 import { usesRamuQuestionTools } from './nativeFeatures'
@@ -565,7 +565,10 @@ export class SessionProcess {
           canUseTool,
           resume,
           preferences: this.host.preferencesSource(),
-          hooks: !s.parentId && this.host.preferencesSource() ? this.host.subagentHooks(id) : undefined,
+          hooks: claudeHooks(
+            !s.parentId && this.host.preferencesSource() ? this.host.subagentHooks(id) : undefined,
+            s.settings.access === 'full' && !readOnly && !connection?.restricted ? dangerousCommandHooks(s) : undefined,
+          ),
         }),
         spawnClaudeCodeProcess: claudeSpawn(id),
         ...(readOnly ? { disallowedTools: [...READ_ONLY_DENIED, 'AskUserQuestion'] } : {}),

@@ -19,7 +19,12 @@ const accessModes = [
     description: 'Routine actions are approved for you where the provider supports it; the rest still ask.',
     Icon: Sparkles,
   },
-  { key: 'full', label: 'Full access', description: 'Commands and edits run without asking.', Icon: LockOpen },
+  {
+    key: 'full',
+    label: 'Full access',
+    description: 'Commands and edits run without asking, except commands that can destroy work.',
+    Icon: LockOpen,
+  },
 ] as const
 
 export { providerName } from '@ramu/shared/providers/providers'
@@ -87,8 +92,10 @@ export function AgentControls({
                         : key === 'auto' && settings.provider === 'opencode'
                           ? 'Approves permission requests automatically. OpenCode deny rules still apply.'
                           : key === 'full' && settings.provider === 'opencode'
-                            ? 'Commands and edits run without asking, including anything your OpenCode rules would block.'
-                            : description,
+                            ? 'Runs without asking, even past your OpenCode rules, except commands that can destroy work.'
+                            : key === 'full' && settings.provider === 'cursor'
+                              ? 'Commands and edits run without asking.'
+                              : description,
                     )}
                   </span>
                 </span>

@@ -415,9 +415,6 @@ export class ProviderService {
           }
         }
         let release = this.releases[provider]
-        // Never compare a cached release from another release line (see the adapter).
-        if (release && providerAdapter(provider).sameReleaseLine?.(version, release.version) === false)
-          release = undefined
         if (
           checkLatest &&
           (force || !release || Date.now() - Date.parse(release.checkedAt) > 24 * 60 * 60 * 1000) &&

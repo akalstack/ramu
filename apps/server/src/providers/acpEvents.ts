@@ -82,7 +82,6 @@ export class AcpEvents {
   private tools = new Map<string, Extract<AgentEvent, { kind: 'tool-use' }>>()
   private planId = randomUUID()
   private agents = new Map<string, AgentTask>()
-  private children = new Map<string, { agentId?: string; events: AcpEvents }>()
   /** Antigravity runs a separate `start_subagent` step; its outcome is the helper's real one. */
   private launches = new Map<string, { failed: boolean; report: string }>()
   /** Cursor's running todo list; it belongs to the session, so it carries across turns. */
@@ -94,26 +93,6 @@ export class AcpEvents {
     this.pendingCompaction = undefined
     this.tools.clear()
     this.planId = randomUUID()
-  }
-  /** Turns one runtime-reported child-session update into events on the matching task card. */
-  consumeChild(childId: string, title: string, update: Update): AgentEvent[] {
-    let child = this.children.get(childId)
-    if (!child) this.children.set(childId, (child = { events: new AcpEvents() }))
-    if (!child.agentId) {
-      // The child carries the task's description as its title; a lone running task is the fallback.
-      const claimed = new Set([...this.children.values()].map((entry) => entry.agentId))
-      const open = [...this.agents.values()].filter((task) => task.status === 'running' && !claimed.has(task.agentId))
-      child.agentId = (open.find((task) => task.name === title) ?? (open.length === 1 ? open[0] : undefined))?.agentId
-    }
-    const agentId = child.agentId
-    if (!agentId) return []
-    return child.events
-      .consume(update)
-      .flatMap((event): AgentEvent[] =>
-        event.kind === 'text' || event.kind === 'thinking' || event.kind === 'tool-use' || event.kind === 'tool-result'
-          ? [{ ...event, agentId }]
-          : [],
-      )
   }
   /** Cursor reports its todo list through `cursor/update_todos` rather than a standard `plan` update; `merge` patches the list instead of replacing it. */
   updateTodos(p: Update): AgentEvent[] {

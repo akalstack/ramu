@@ -1594,6 +1594,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Routine actions are approved for you where the provider supports it; the rest still ask.':
     'Aksi rutin disetujui otomatis jika didukung provider; sisanya tetap minta izin.',
   'Commands and edits run without asking.': 'Perintah dan edit berjalan tanpa bertanya.',
+  'Commands and edits run without asking, except commands that can destroy work.':
+    'Perintah dan edit berjalan tanpa bertanya, kecuali perintah yang bisa merusak pekerjaan.',
   Auto: 'Otomatis',
   'Default access': 'Akses bawaan',
   'Applied to new threads. Existing threads keep their access mode.':
@@ -3039,8 +3041,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Allowed for this user': 'Diizinkan untuk pengguna ini',
   'Allowed · project approval forgotten': 'Diizinkan · izin proyek dilupakan',
   'Allowed · user approval forgotten': 'Diizinkan · izin pengguna dilupakan',
-  'Commands and edits run without asking, including anything your OpenCode rules would block.':
-    'Perintah dan edit berjalan tanpa bertanya, termasuk yang diblokir aturan OpenCode-mu.',
+  'Runs without asking, even past your OpenCode rules, except commands that can destroy work.':
+    'Berjalan tanpa bertanya, melewati aturan OpenCode-mu, kecuali perintah yang bisa merusak pekerjaan.',
   'Approves permission requests automatically. OpenCode deny rules still apply.':
     'Menyetujui permintaan izin secara otomatis. Aturan penolakan OpenCode tetap berlaku.',
   'Auto (rules)': 'Auto (aturan)',

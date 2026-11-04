@@ -68,7 +68,12 @@ const ACCESS_MODES = [
     help: 'Routine actions are approved for you where the provider supports it; the rest still ask.',
     icon: Sparkles,
   },
-  { key: 'full', label: 'Full access', help: 'Commands and edits run without asking.', icon: LockOpen },
+  {
+    key: 'full',
+    label: 'Full access',
+    help: 'Commands and edits run without asking, except commands that can destroy work.',
+    icon: LockOpen,
+  },
 ] as const
 import { ProviderIcon } from './Logos'
 import { FileIcon } from './FileIcon'

@@ -3,14 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { isLimitMessage, isLimitReply, limitResetsAt } from '../src/providers/usageLimit'
-import {
-  acpAside,
-  openCodeConfigEnv,
-  acpModels,
-  acpSessionModels,
-  createAcpRunner,
-  AcpResumeUnavailable,
-} from '../src/providers/acp'
+import { acpAside, acpModels, acpSessionModels, createAcpRunner, AcpResumeUnavailable } from '../src/providers/acp'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type Attachment, type McpConnection } from '@ramu/shared/types'
 
 let dir: string
@@ -292,21 +285,6 @@ it('reports runtimes that cannot fork', async () => {
   )
 })
 
-it("denies OpenCode's native sub-agent tool only when Ramu routes sub-agents, keeping existing config", () => {
-  const connection = { url: 'http://127.0.0.1:1/mcp', token: 't' }
-  expect(openCodeConfigEnv(connection, undefined)).toEqual({})
-  expect(openCodeConfigEnv({ ...connection, nativeSubagents: false }, undefined)).toEqual({
-    OPENCODE_CONFIG_CONTENT: '{"permission":{"task":"deny"}}',
-  })
-  expect(
-    JSON.parse(
-      openCodeConfigEnv({ ...connection, nativeSubagents: false }, '{"model":"a/b","permission":{"bash":"ask"}}')
-        .OPENCODE_CONFIG_CONTENT!,
-    ),
-  ).toEqual({ model: 'a/b', permission: { bash: 'ask', task: 'deny' } })
-  expect(openCodeConfigEnv({ ...connection, nativeSubagents: false }, 'not json')).toEqual({})
-})
-
 it('steers by cancelling the running turn and continuing with the new message, reporting only one result', async () => {
   await start('long')
   expect(runner!.canSteer).toBe(true)
@@ -505,26 +483,23 @@ it('turns Cursor todo notifications into a plan during a turn', async () => {
   })
 })
 
-it.each(['cursor', 'antigravity', 'opencode'] as const)(
-  'negotiates and receives compaction through %s ACP',
-  async (provider) => {
-    await start('compact', provider)
-    await until(() => events.some((event) => event.kind === 'result'))
-    expect(log().find((m) => m.method === 'initialize').params.clientCapabilities.session).toEqual({ compaction: {} })
-    expect(events.find((event) => event.kind === 'compaction' && event.state === 'started')).toMatchObject({
-      beforeTokens: 212000,
-      contextWindow: 258400,
-    })
-    expect(events.findLast((event) => event.kind === 'compaction')).toMatchObject({
-      state: 'completed',
-      compactionId: 'c1',
-      beforeTokens: 212000,
-      afterTokens: 33700,
-      contextWindow: 258400,
-      summary: [{ type: 'text', text: 'Retained context' }],
-    })
-  },
-)
+it.each(['cursor', 'antigravity'] as const)('negotiates and receives compaction through %s ACP', async (provider) => {
+  await start('compact', provider)
+  await until(() => events.some((event) => event.kind === 'result'))
+  expect(log().find((m) => m.method === 'initialize').params.clientCapabilities.session).toEqual({ compaction: {} })
+  expect(events.find((event) => event.kind === 'compaction' && event.state === 'started')).toMatchObject({
+    beforeTokens: 212000,
+    contextWindow: 258400,
+  })
+  expect(events.findLast((event) => event.kind === 'compaction')).toMatchObject({
+    state: 'completed',
+    compactionId: 'c1',
+    beforeTokens: 212000,
+    afterTokens: 33700,
+    contextWindow: 258400,
+    summary: [{ type: 'text', text: 'Retained context' }],
+  })
+})
 
 it('accepts saved compaction and usage during session replay without duplicating historical messages', async () => {
   vi.stubEnv('RAMU_REPLAY_COMPACTION', '1')
@@ -646,14 +621,6 @@ it.each(['command', 'CommandLine'])('exposes the actual %s command for reusable 
   await until(() => events.some((event) => event.kind === 'result'))
 })
 
-it('uses OpenCode Auto semantics for legacy ACP command requests too', async () => {
-  vi.stubEnv('RAMU_PERMISSION_CALL', JSON.stringify({ kind: 'execute', rawInput: { command: 'git diff' } }))
-  await start('tool', 'opencode', 'auto')
-  await until(() => events.some((event) => event.kind === 'result'))
-  expect(events.some((event) => event.kind === 'permission-request')).toBe(false)
-  expect(log().find((message) => message.id === 900).result.outcome.optionId).toBe('yes')
-})
-
 it.each([false, true])('selects native Antigravity edit mode on resume (legacy: %s)', async (legacy) => {
   vi.stubEnv(
     'RAMU_EXTRA_MODES',
@@ -686,19 +653,35 @@ it('does not select native edit mode in restricted threads', async () => {
   expect(log().find((message) => message.id === 900).result.outcome.optionId).toBe('no')
 })
 
-it('makes OpenCode 1.x edits explicit without dropping inline configuration', () => {
-  const config = JSON.parse(
-    openCodeConfigEnv(
-      { ...ramuConnection, nativeSubagents: false },
-      JSON.stringify({ model: 'a/b', permission: { webfetch: 'deny' } }),
-      'edits',
-    ).OPENCODE_CONFIG_CONTENT!,
-  )
-  expect(config).toMatchObject({
-    model: 'a/b',
-    permission: { '*': 'ask', edit: 'allow', bash: 'ask', read: { '*.env': 'ask' }, webfetch: 'deny', task: 'deny' },
-  })
-})
+it.each([
+  ['pnpm test', false],
+  ['rm -rf ~/notes', true],
+] as const)(
+  'runs Antigravity Full access in auto_edit and asks only before a dangerous command: %s',
+  async (command, asks) => {
+    vi.stubEnv(
+      'RAMU_EXTRA_MODES',
+      JSON.stringify([
+        { value: 'auto_edit', name: 'Auto Edit' },
+        { value: 'yolo', name: 'YOLO' },
+      ]),
+    )
+    vi.stubEnv('RAMU_PERMISSION_CALL', JSON.stringify({ kind: 'execute', rawInput: { command } }))
+    await start('tool', 'antigravity', 'full')
+    if (asks) {
+      await until(() => events.some((event) => event.kind === 'permission-request'))
+      expect(events.find((event) => event.kind === 'permission-request')).toMatchObject({
+        approvalOnceOnly: true,
+        detail: expect.stringContaining('outside this thread'),
+      })
+      runner!.replyPermission('900', false)
+    }
+    await until(() => events.some((event) => event.kind === 'result'))
+    expect(log().find((message) => message.id === 900).result.outcome.optionId).toBe(asks ? 'no' : 'yes')
+    expect(log().some((message) => message.params?.value === 'yolo')).toBe(false)
+    expect(log().some((message) => message.params?.value === 'auto_edit')).toBe(true)
+  },
+)
 
 it('uses auto_edit for Antigravity Auto while keeping commands in the client approval flow', async () => {
   vi.stubEnv(

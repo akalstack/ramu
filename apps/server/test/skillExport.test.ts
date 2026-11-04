@@ -9,7 +9,7 @@ import { Workspace } from '../src/workspace/workspace'
 import { MemoryService } from '../src/memory/memory'
 import { LearningService } from '../src/memory/learning'
 import { claudeLaunchOptions } from '../src/agent/claudeOptions'
-import { openCodeConfigEnv } from '../src/providers/acp'
+import { openCodeServerEnv } from '../src/providers/opencode'
 import { providerAdapter } from '../src/providers/adapters'
 
 let db: Db, root: string, service: LearningService
@@ -210,8 +210,10 @@ it('loads the export as a Claude plugin only when the thread has one', () => {
 
 it('adds the export to OpenCode skills without dropping the user inline config', () => {
   const connection = { url: 'http://127.0.0.1:1/mcp', token: 't', skillsDir: '/x' }
-  const config = (existing?: string, extra = {}) =>
-    JSON.parse(openCodeConfigEnv({ ...connection, ...extra }, existing).OPENCODE_CONFIG_CONTENT!)
+  const config = (existing?: string) => {
+    const { mcp: _mcp, ...rest } = JSON.parse(openCodeServerEnv(connection, existing).OPENCODE_CONFIG_CONTENT!)
+    return rest
+  }
   expect(config(undefined)).toEqual({ skills: [join('/x', 'skills')] })
   expect(config('{"model":"a/b","skills":["/mine"]}')).toEqual({
     model: 'a/b',
@@ -219,10 +221,6 @@ it('adds the export to OpenCode skills without dropping the user inline config',
   })
   expect(config('{"skills":{"paths":["/mine"],"urls":["https://u"]}}')).toEqual({
     skills: { paths: ['/mine', join('/x', 'skills')], urls: ['https://u'] },
-  })
-  expect(config(undefined, { nativeSubagents: false })).toEqual({
-    permission: { task: 'deny' },
-    skills: [join('/x', 'skills')],
   })
 })
 

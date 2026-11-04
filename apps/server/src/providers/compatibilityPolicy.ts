@@ -7,7 +7,7 @@ import type { AgentProvider } from '@ramu/shared/types'
  * guessed to fill a matrix. Rules are exact releases until a wider range has been tested.
  */
 export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
-  revision: 6,
+  revision: 7,
   rules: [
     {
       id: 'claude-code-sdk-2.1.308',
@@ -80,6 +80,16 @@ export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
         'codex-cli 0.163.0 on macOS, 2026-10-23: `codex app-server --stdio` answered initialize, then model/list (7 models) and account/rateLimits/read, with no model call. 0.120.0 and 0.100.0 could not be probed: macOS killed their binaries on this machine (exit 137), which says nothing about the protocol.',
     },
     {
+      id: 'codex-app-server-0.165.0',
+      provider: 'codex',
+      runtime: 'app-server',
+      min: '0.165.0',
+      below: '0.165.1',
+      status: 'supported',
+      evidence:
+        'codex-cli 0.165.0 (the copy Ramu installs, @openai/codex from npm) on macOS, 2026-11-04: `codex app-server --stdio` answered initialize, then model/list (3 models) and account/rateLimits/read, with no model call.',
+    },
+    {
       id: 'codex-app-server-0.166.0',
       provider: 'codex',
       runtime: 'app-server',
@@ -93,10 +103,6 @@ export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
 }
 
 /** The runtime kind Ramu launches for each provider with an audited policy; others are not evaluated yet. */
-/**
- * OpenCode 2 runs over its HTTP API; OpenCode 1 runs over ACP and has no rule, so it reports Unverified here until its
- * own ACP handshake is probed.
- */
 export const COMPATIBILITY_RUNTIME: Partial<Record<AgentProvider, RuntimeKind>> = {
   codex: 'app-server',
   opencode: 'http',

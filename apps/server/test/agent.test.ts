@@ -61,10 +61,14 @@ function fakeQuery(calls: Options[]): QueryFn {
         }
         if (first) {
           first = false
-          const res = await options.canUseTool!('Bash', { command: 'touch x' }, {
-            signal: options.abortController!.signal,
-            toolUseID: 't1',
-          } as never)
+          // Like Claude, bypass mode runs a routine command without calling canUseTool.
+          const res =
+            options.permissionMode === 'bypassPermissions'
+              ? { behavior: 'allow' }
+              : await options.canUseTool!('Bash', { command: 'touch x' }, {
+                  signal: options.abortController!.signal,
+                  toolUseID: 't1',
+                } as never)
           yield {
             type: 'assistant',
             parent_tool_use_id: null,

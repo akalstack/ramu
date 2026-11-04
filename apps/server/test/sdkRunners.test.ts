@@ -163,12 +163,16 @@ describe('OpenCode 2 helpers', () => {
     expect(openCodeServerEnv(undefined, undefined)).toEqual({})
   })
 
-  it('maps Full access to OpenCode allow-all, and leaves Auto to approving what OpenCode asks', () => {
-    expect(openCodePermissions(undefined, 'full')).toEqual([{ action: '*', resource: '*', effect: 'allow' }])
+  it('maps Full access to OpenCode allow-all with commands still asking, and leaves Auto to approving what OpenCode asks', () => {
+    expect(openCodePermissions(undefined, 'full')).toEqual([
+      { action: '*', resource: '*', effect: 'allow' },
+      { action: 'bash', resource: '*', effect: 'ask' },
+    ])
     expect(openCodePermissions(undefined, 'auto')).toEqual([])
     // The sub-agent switch comes last, so it still wins over allow-all.
     expect(openCodePermissions({ url: '', token: '', nativeSubagents: false }, 'full')).toEqual([
       { action: '*', resource: '*', effect: 'allow' },
+      { action: 'bash', resource: '*', effect: 'ask' },
       { action: 'task', resource: '*', effect: 'deny' },
     ])
   })
@@ -205,7 +209,7 @@ describe('OpenCode 2 helpers', () => {
 })
 
 /** Native OpenCode policy decides when to emit a permission request; replay only those requests. */
-function fakeOpenCode(action: string) {
+function fakeOpenCode(action: string, resources = ['*']) {
   const replies: Record<string, unknown>[] = []
   const configurations: { method: string; input: any }[] = []
   const queue: Record<string, unknown>[] = []
@@ -240,7 +244,7 @@ function fakeOpenCode(action: string) {
         configurations.push({ method: 'update', input })
       },
       prompt: async () =>
-        push({ type: 'permission.asked', data: { id: 'p1', sessionID: 'session-1', action, resources: ['*'] } }),
+        push({ type: 'permission.asked', data: { id: 'p1', sessionID: 'session-1', action, resources } }),
     },
     permission: {
       reply: async (reply: Record<string, unknown>) => {
@@ -251,6 +255,40 @@ function fakeOpenCode(action: string) {
   }
   return { client, replies, configurations }
 }
+
+describe('OpenCode Full access', () => {
+  it.each([
+    ['pnpm test', false],
+    ['git reset --hard', true],
+  ] as const)('answers commands itself and asks only before a dangerous one: %s', async (command, asks) => {
+    const { client, replies } = fakeOpenCode('bash', [command])
+    const events: AgentEvent[] = []
+    const runner = new OpenCodeSession(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', access: 'full' },
+      (event) => events.push(event),
+      false,
+      async () => client as never,
+    )
+    try {
+      await runner.start('Run it', null)
+      if (asks) {
+        await settle(events, 'permission-request')
+        expect(events.find((event) => event.kind === 'permission-request')).toMatchObject({
+          approvalOnceOnly: true,
+          detail: expect.stringContaining('uncommitted'),
+        })
+        expect(replies).toEqual([])
+        runner.replyPermission('p1', false)
+      } else await settle(events)
+      await vi.waitFor(() =>
+        expect(replies).toEqual([{ sessionID: 'session-1', requestID: 'p1', decision: asks ? 'reject' : 'once' }]),
+      )
+    } finally {
+      await runner.stop()
+    }
+  })
+})
 
 describe('OpenCode Auto permissions', () => {
   it.each([

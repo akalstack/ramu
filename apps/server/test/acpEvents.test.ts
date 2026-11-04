@@ -214,39 +214,6 @@ it('recognises Cursor sub-agents by the tool named in their input', () => {
   ).toBe(false)
 })
 
-it('attaches child-session updates to the sub-agent card with the same description', () => {
-  const decoder = new AcpEvents(['subagent'])
-  decoder.consume({
-    sessionUpdate: 'tool_call_update',
-    toolCallId: 'call',
-    name: 'subagent',
-    status: 'in_progress',
-    rawInput: { description: 'Run ls', agent: 'general', prompt: 'x' },
-  })
-  const meta = { 'opencode/child-session': { id: 'child' } }
-  const shell = decoder.consumeChild('child', 'Run ls', {
-    sessionUpdate: 'tool_call',
-    toolCallId: 'child:1',
-    name: 'shell',
-    title: 'ls',
-    kind: 'execute',
-    status: 'pending',
-    _meta: meta,
-  })
-  expect(shell[0]).toMatchObject({ kind: 'tool-use', toolUseId: 'child:1', agentId: 'call' })
-  const first = decoder.consumeChild('child', 'Run ls', {
-    sessionUpdate: 'agent_message_chunk',
-    content: { type: 'text', text: 'h' },
-  })
-  expect(
-    decoder.consumeChild('child', 'Run ls', {
-      sessionUpdate: 'agent_message_chunk',
-      content: { type: 'text', text: 'i' },
-    })[0],
-  ).toMatchObject({ kind: 'text', text: 'hi', agentId: 'call', messageId: (first[0] as any).messageId })
-  expect(decoder.consumeChild('stranger', 'Other', { sessionUpdate: 'usage_update', used: 1, size: 2 })).toEqual([])
-})
-
 it('maps Antigravity invoke_subagent permission calls to one card and ignores its odd launcher failure', () => {
   const decoder = new AcpEvents(['invoke_subagent'])
   const started = decoder.consume({

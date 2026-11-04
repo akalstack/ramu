@@ -263,3 +263,17 @@ it.skipIf(process.platform === 'win32')(
     expect(terminals.listBackground('thread')[0]?.agentWaiting).toBeUndefined()
   },
 )
+
+it('still asks before a dangerous command in Full access, and refuses when it cannot ask', async () => {
+  const details: string[] = []
+  const { call } = await setup('full', async (detail) => {
+    details.push(detail)
+    return false
+  })
+  const declined = await call('background_terminal_launch', { command: 'rm -rf ~/notes' })
+  expect(declined.isError).toBe(true)
+  expect(details).toEqual([expect.stringContaining('outside this thread')])
+  const unasked = await (await setup('full')).call('background_terminal_launch', { command: 'sudo make install' })
+  expect(unasked.isError).toBe(true)
+  expect(unasked.content).toEqual([expect.objectContaining({ text: expect.stringContaining('administrator') })])
+})
