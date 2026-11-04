@@ -7,12 +7,24 @@ import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
 import { font, radius, space, useTheme } from '../theme'
 import { T, tap } from './ui'
+import { Shimmer } from './Motion'
 
 /**
- * The turn's live status, docked above the composer so it never scrolls away: what the agent is doing (the running
- * command or file), and how long the turn has run. Tapping it opens the turn's latest steps and Stop.
+ * The turn's live status: what the agent is doing (the running command or file), and how long the turn has run.
+ * Tapping it opens the turn's latest steps and Stop. `inline` draws it as the desktop does, a shimmering line at the end
+ * of the running turn in the transcript; otherwise it is a pill in the composer's activity row.
  */
-export function WorkingLine({ chat, sending, onPress }: { chat: Chat; sending?: boolean; onPress?(): void }) {
+export function WorkingLine({
+  chat,
+  sending,
+  inline,
+  onPress,
+}: {
+  chat: Chat
+  sending?: boolean
+  inline?: boolean
+  onPress?(): void
+}) {
   const store = useStore()
   const { c } = useTheme()
   const t = (text: string) => translate(store.language, text)
@@ -32,6 +44,46 @@ export function WorkingLine({ chat, sending, onPress }: { chat: Chat; sending?: 
     : running
       ? (chat.step ?? { label: 'Working' })
       : { label: 'Sending…' }
+  if (inline)
+    return (
+      <Pressable
+        accessibilityLiveRegion="polite"
+        accessibilityRole={onPress ? 'button' : undefined}
+        accessibilityLabel={[t(step.label), step.detail, running && since ? elapsedText(now - since) : null]
+          .filter(Boolean)
+          .join(', ')}
+        disabled={!onPress}
+        hitSlop={6}
+        onPress={() => {
+          tap()
+          onPress?.()
+        }}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          alignSelf: 'flex-start',
+          gap: space.s,
+          minHeight: 28,
+          maxWidth: '100%',
+          opacity: pressed ? 0.6 : 1,
+        })}
+      >
+        <Shimmer size={font.control} singleLine>
+          {t(step.label)}
+        </Shimmer>
+        {step.detail ? (
+          <T size={font.caption} tone="muted" mono numberOfLines={1} style={{ flexShrink: 1 }}>
+            {step.detail}
+          </T>
+        ) : null}
+        {running && since ? (
+          <T size={font.caption} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+            {elapsedText(now - since)}
+          </T>
+        ) : null}
+        {onPress ? <ChevronRight size={12} color={c.muted} /> : null}
+      </Pressable>
+    )
   return (
     <Pressable
       accessibilityLiveRegion="polite"
@@ -51,8 +103,7 @@ export function WorkingLine({ chat, sending, onPress }: { chat: Chat; sending?: 
         minHeight: 32,
         paddingHorizontal: space.s + 2,
         borderRadius: radius.full,
-        // Floating over the transcript, so it needs an opaque surface rather than the row's translucent fill.
-        backgroundColor: c.raised,
+        backgroundColor: c.fill,
         flexShrink: 0,
         maxWidth: 320,
         opacity: pressed ? 0.7 : 1,

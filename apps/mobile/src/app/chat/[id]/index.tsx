@@ -107,11 +107,6 @@ const TURN_PAGE = 15
 
 const RowSeparator = () => <View style={{ height: space.m + 2 }} />
 
-/** The band kept above the composer for the floating working pill (32 points) and its breathing room. */
-const PILL_BAND = 44
-/** The jump-to-latest button at the band's right end, with a gap: the pill keeps clear of it on both sides. */
-const JUMP_ROOM = 34 + space.l + space.s
-
 export default function ChatScreen() {
   const tr = useSay()
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -191,9 +186,7 @@ export default function ChatScreen() {
   // The keyboard handler then sets the offset itself: the end when following, else the same lines stay above the keys.
   const ios = Platform.OS === 'ios'
   const slack = Math.max(0, insets.bottom - space.s)
-  // The working pill floats in a band kept above the composer at all times, so the transcript never jumps when a turn
-  // starts or ends.
-  const coverFor = (keys: number) => composerHeight + PILL_BAND + (keys ? keys - slack : 0)
+  const coverFor = (keys: number) => composerHeight + (keys ? keys - slack : 0)
   const metrics = useRef({ offset: 0, content: 0, viewport: 0, cover: 0 })
   const settling = useRef<ReturnType<typeof setTimeout> | null>(null)
   const keyboardTarget = useRef<number | null>(null)
@@ -1214,7 +1207,7 @@ export default function ChatScreen() {
                   padding: space.l,
                   paddingBottom: ios
                     ? space.l
-                    : (floatingChrome ? composerHeight + PILL_BAND + space.l : space.l) + keyboard.height,
+                    : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height,
                 }}
                 onLayout={(event) => {
                   metrics.current.viewport = event.nativeEvent.layout.height
@@ -1263,6 +1256,13 @@ export default function ChatScreen() {
                         <PendingBubble item={o} computer={computer?.name ?? 'the host'} onEdit={editPending} />
                       </Arrive>
                     ))}
+                    {/* The running turn's status, at its end as on the desktop; it folds into "Worked for…" when done. */}
+                    <WorkingLine
+                      inline
+                      chat={chat}
+                      sending={pending.length > 0}
+                      onPress={() => activityHandle.current?.openWorking()}
+                    />
                   </View>
                 }
               />
@@ -1515,37 +1515,14 @@ export default function ChatScreen() {
                     }
                   />
                 </ComposerDock>
-                {/* The turn's status, centered in its band above the composer; the selection bar takes the band while open. */}
-                {selection ? null : (
-                  <View
-                    pointerEvents="box-none"
-                    // Inset on both sides by the jump button's room, so the centered pill never runs under it.
-                    style={{
-                      position: 'absolute',
-                      left: JUMP_ROOM,
-                      right: JUMP_ROOM,
-                      bottom: composerHeight + (PILL_BAND - 32) / 2,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <WorkingLine
-                      chat={chat}
-                      sending={pending.length > 0}
-                      onPress={() => activityHandle.current?.openWorking()}
-                    />
-                  </View>
-                )}
                 <Presence
                   visible={away}
                   fade={false}
-                  // In the pill band, at its right end over Send: in thumb reach, beside the working pill rather than on it,
-                  // and off the middle of the transcript. Above the selection bar while that holds the band.
+                  // While the agent works it turns into a spinner, so a reader scrolled up still sees the turn is running.
                   style={{
                     position: 'absolute',
-                    right: space.l,
-                    bottom: selection
-                      ? composerHeight + selectionBarHeight + space.s
-                      : composerHeight + (PILL_BAND - 34) / 2,
+                    alignSelf: 'center',
+                    bottom: composerHeight + (selection ? selectionBarHeight : 0) + space.s,
                   }}
                 >
                   <Pressable
