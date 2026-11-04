@@ -55,6 +55,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
     'pullMode',
     'autoPull',
     'autoWatchPullRequests',
+    'removeAgentCredits',
     'commitStyle',
     'commitInstructions',
     'defaultCommitAction',

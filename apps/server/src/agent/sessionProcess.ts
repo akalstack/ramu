@@ -418,6 +418,7 @@ export class SessionProcess {
         learning: this.host.learningInstructions()?.(s, { checkpoint: !carried?.built.includesCheckpoint }),
         rules: rulesText,
         browser: connection.browserInstructions,
+        noCredits: this.host.preferences()?.removeAgentCredits !== false,
       })
     }
     if (connection && this.host.nativeSubagentsOff(s)) connection.nativeSubagents = false

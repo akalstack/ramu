@@ -6,6 +6,7 @@ import { ADVISOR_PREAMBLE } from './advisor'
 import { TOOL_PRESENTATION_PREAMBLE, USER_MESSAGE_PREAMBLE } from './agentInstructions'
 import { TOOL_DISCOVERY_INSTRUCTIONS } from '../intelligence'
 import { NATIVE_SUBAGENT_PREAMBLE } from './constants'
+import { NO_AGENT_CREDITS_GUIDANCE } from '@ramu/shared/workspace/agentCredits'
 
 // Async questions off: ask_user waits for answers, so the status, wait and close guidance would be unused tokens.
 const BLOCKING_QUESTION_PREAMBLE = `Use Ramu's ask_user tool for clarification; it waits for the answer before returning. ${QUESTION_INPUT_GUIDANCE} Group related questions with grouping="together" when their answers must be used together; use "independent" only when each answer is independently useful. Set dependsOn to explain exactly which decision or work needs the answer. Native blocking questions and permission approvals still require an answer. Never assume an unanswered required decision.`
@@ -26,6 +27,8 @@ export interface GuidanceSections {
   /** User-written rules, labelled as the user's own instructions. */
   rules?: string | undefined
   browser?: string | undefined
+  /** Asks the agent to leave its co-author trailers and attribution footers out of commits and pull requests. */
+  noCredits?: boolean
 }
 
 /** The guidance appended to a chat's system prompt (or sent ahead of its first prompt) through the Ramu tool connection. */
@@ -47,6 +50,7 @@ export function sessionGuidance(sections: GuidanceSections): string {
   if (sections.toolSearch) instructions += `\n\n${TOOL_DISCOVERY_INSTRUCTIONS}`
   if (sections.learning) instructions += `\n\n${sections.learning}`
   if (sections.browser) instructions += `\n\n${sections.browser}`
+  if (sections.noCredits) instructions += `\n\n${NO_AGENT_CREDITS_GUIDANCE}`
   if (sections.rules) instructions += `\n\n${sections.rules}`
   return instructions
 }

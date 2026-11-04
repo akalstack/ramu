@@ -1,3 +1,4 @@
+import { removeAgentCredits } from '@ramu/shared/workspace/agentCredits'
 import type { HandlerContext, MethodTable } from './types'
 import {
   DEFAULT_AGENT_SETTINGS,
@@ -63,6 +64,11 @@ export const mergeMethods = (...tables: MethodTable[]): MethodTable => {
       merged[name] = method
     }
   return merged
+}
+
+/** Commit messages and pull requests as Ramu records them: without agent credits unless the person keeps them. */
+export function withoutAgentCredits(ctx: Pick<HandlerContext, 'storedPreferences'>, text: string): string {
+  return ctx.storedPreferences().removeAgentCredits === false ? text : removeAgentCredits(text)
 }
 
 /**

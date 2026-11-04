@@ -8,6 +8,7 @@ export type ToggleKey =
   | 'autoPull'
   | 'localCrashReports'
   | 'autoWatchPullRequests'
+  | 'removeAgentCredits'
   | 'includeTabContext'
   | 'warnModelChange'
   | 'autoProjectSelection'

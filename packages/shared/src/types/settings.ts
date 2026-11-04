@@ -49,6 +49,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   /** How Pull and Sync integrate incoming commits. */
   pullMode: PullMode
   autoPull: boolean
+  /** Keep agents' Co-authored-by trailers and "Generated with" footers out of commits and pull requests. */
+  removeAgentCredits: boolean
   /** Watch newly created PRs in their originating thread. Existing watches are controlled per PR. */
   autoWatchPullRequests: boolean
   localCrashReports: boolean
@@ -148,6 +150,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   previewTabs: true,
   pullMode: 'rebase',
   autoPull: true,
+  removeAgentCredits: true,
   autoWatchPullRequests: false,
   localCrashReports: false,
   commitStyle: 'conventional',

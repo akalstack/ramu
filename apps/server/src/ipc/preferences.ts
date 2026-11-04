@@ -133,6 +133,7 @@ export const appPreferences = z.object({
   pullMode: pullMode.default('rebase'),
   autoPull: z.boolean().default(true),
   autoWatchPullRequests: z.boolean().default(false),
+  removeAgentCredits: z.boolean().default(true),
   localCrashReports: z.boolean().default(false),
   commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'),
   commitInstructions: z.string().max(2000).default(''),

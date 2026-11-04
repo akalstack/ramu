@@ -829,6 +829,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Automatically watch pull requests': 'Pantau pull request secara otomatis',
   'Watch pull requests you create from a thread. New failures and requested changes return to that thread. You review and push. Existing watches are controlled in Source Control.':
     'Pantau pull request yang kamu buat dari thread. Kegagalan baru dan permintaan perubahan masuk ke thread itu. Kamu yang meninjau dan push. Kelola pemantauan yang sudah aktif di Source Control.',
+  'Remove agent credits': 'Hapus kredit agen',
+  'Keep Co-authored-by trailers and Generated with lines for AI agents out of commits and pull requests. Agents are asked not to add them, and Ramu removes any left in what it commits or opens. Credits for people stay.':
+    'Jauhkan baris Co-authored-by dan Generated with untuk agen AI dari commit dan pull request. Agen diminta tidak menambahkannya, dan Ramu menghapus sisanya di commit dan pull request yang dibuatnya. Kredit untuk orang tetap ada.',
   'Watch in thread': 'Pantau di thread',
   'Watch off': 'Pemantauan mati',
   'New failures and requested changes return to this thread, even with the window closed. You review and push.':

@@ -7,7 +7,15 @@ import { discardPreview } from '../../workspace/discardPreview'
 import * as files from '../../workspace/files'
 import * as git from '../../workspace/git'
 import { RemoteRefresh } from '../../workspace/remoteRefresh'
-import { assertNoActiveWriter, gitExclusive, lockCheckout, lockRepo, repoKey, writingSettings } from '../helpers'
+import {
+  assertNoActiveWriter,
+  gitExclusive,
+  lockCheckout,
+  lockRepo,
+  repoKey,
+  withoutAgentCredits,
+  writingSettings,
+} from '../helpers'
 import { agentSettings, fingerprintHash, gitOid, id, pullMode, relPath } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -132,7 +140,7 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
             )
           if (branchOptions?.newBranch || branchOptions?.autoBranch)
             assertNoActiveWriter(ctx, cwd, 'Stop the agent in this checkout before creating a feature branch.')
-          return git.commit(cwd, message, amendHead, branchOptions)
+          return git.commit(cwd, withoutAgentCredits(ctx, message), amendHead, branchOptions)
         }),
     },
     'git.commitBranchInfo': {

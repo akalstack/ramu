@@ -8,6 +8,7 @@ Ramu uses the [GitHub CLI](https://cli.github.com) sign-ins you already have (`g
 - **Open a pull request:** **Create pull request** in Source Control drafts the title and description from the branch's commits.
 - **Follow it:** Source Control shows checks, draft state and review decision. **Fix failing checks** and **Address review comments** send the details to a thread, which commits fixes but never pushes.
 - **Watch in a thread:** a thread can watch a pull request and receive new failures and review requests while Ramu runs in the background. **Automatically watch pull requests** (Settings → Git) does this for pull requests you create.
+- **Your name on the work:** **Remove agent credits** (Settings → Git, on by default) keeps agents' `Co-authored-by` trailers and "Generated with" lines out of commits and pull requests. Claude Code's attribution is switched off, every other agent is asked to leave them out, and Ramu removes any that remain in the commits and pull requests it makes. Trailers for people and anything inside code blocks stay.
 
 ## GitLab
 

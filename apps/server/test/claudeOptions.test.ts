@@ -1,8 +1,11 @@
 import { expect, it } from 'vitest'
-import type { AgentSessionInfo } from '@ramu/shared/types'
+import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
+import type { AgentSessionInfo, AppPreferences } from '@ramu/shared/types'
 import { claudeLaunchOptions } from '../src/agent/claudeOptions'
 
-const launch = (advisorModel: string | undefined, effort?: string) =>
+const noAttribution = { attribution: { commit: '', pr: '', sessionUrl: false } }
+
+const launch = (advisorModel: string | undefined, effort?: string, preferences?: Partial<AppPreferences>) =>
   claudeLaunchOptions({
     session: { cwd: '/tmp', additionalDirs: [], settings: { access: 'edits', effort } } as unknown as AgentSessionInfo,
     connection: undefined,
@@ -10,13 +13,18 @@ const launch = (advisorModel: string | undefined, effort?: string) =>
     abort: new AbortController(),
     canUseTool: async () => ({ behavior: 'deny', message: '' }),
     resume: null,
-    preferences: undefined,
+    preferences: preferences ? () => ({ ...DEFAULT_APP_PREFERENCES, ...preferences }) : undefined,
     hooks: undefined,
   })
 
 it('asks Claude for thinking summaries so the chat has thinking text to show', () => {
-  expect(launch(undefined).settings).toEqual({ showThinkingSummaries: true })
-  expect(launch('').settings).toEqual({ showThinkingSummaries: true, advisorModel: '' })
+  expect(launch(undefined).settings).toEqual({ showThinkingSummaries: true, ...noAttribution })
+  expect(launch('').settings).toEqual({ showThinkingSummaries: true, advisorModel: '', ...noAttribution })
+})
+
+it("leaves Claude's co-author trailer and footer out unless the person keeps agent credits", () => {
+  expect(launch(undefined, undefined, {}).settings).toMatchObject(noAttribution)
+  expect(launch(undefined, undefined, { removeAgentCredits: false }).settings).not.toHaveProperty('attribution')
 })
 
 it('requests summarized thinking on the request itself for models with effort levels', () => {

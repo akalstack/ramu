@@ -131,6 +131,12 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
         description="Watch pull requests you create from a thread. New failures and requested changes return to that thread. You review and push. Existing watches are controlled in Source Control."
       />
       <SettingsGroupTitle>{t('Generated text')}</SettingsGroupTitle>
+      <ToggleRow
+        {...toggleProps}
+        setting="removeAgentCredits"
+        title="Remove agent credits"
+        description="Keep Co-authored-by trailers and Generated with lines for AI agents out of commits and pull requests. Agents are asked not to add them, and Ramu removes any left in what it commits or opens. Credits for people stay."
+      />
       <SettingsRow setting="commitModel">
         <SettingsLabel
           title={t('Writing model')}

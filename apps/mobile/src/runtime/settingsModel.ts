@@ -196,6 +196,14 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           ],
         },
         {
+          kind: 'toggle',
+          path: 'removeAgentCredits',
+          title: 'Remove agent credits',
+          help: 'Keep Co-authored-by trailers and Generated with lines for AI agents out of commits and pull requests. Agents are asked not to add them, and Ramu removes any left in what it commits or opens. Credits for people stay.',
+          words:
+            'co-author coauthored trailer attribution generated with claude codex commit pull request ai signature',
+        },
+        {
           kind: 'model',
           path: 'commitModel',
           title: 'Writing model',

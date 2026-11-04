@@ -121,6 +121,11 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
     title: 'Automatically watch pull requests',
     words: 'pr auto checks reviews feedback thread background',
   },
+  {
+    section: 'git',
+    title: 'Remove agent credits',
+    words: 'co-author coauthored trailer attribution generated with claude codex commit pull request ai signature',
+  },
   ...(APP_AUTO_UPDATE
     ? [
         {

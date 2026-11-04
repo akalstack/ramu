@@ -14,7 +14,7 @@ import { gitlabApi, gitlabSummary } from '../../workspace/forge/gitlab'
 import { bitbucketApi, bitbucketSummary } from '../../workspace/forge/bitbucket'
 import { azureSummary, verifyAzureToken } from '../../workspace/forge/azure'
 import * as git from '../../workspace/git'
-import { gitExclusive, writingSettings } from '../helpers'
+import { gitExclusive, withoutAgentCredits, writingSettings } from '../helpers'
 import { id } from '../schemas'
 import type { HandlerContext, RegisterHandlers } from '../types'
 
@@ -117,7 +117,8 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         const prefs = ctx.storedPreferences()
         const settings = writingSettings(ctx.workspace, prefs)
         const source = settings ? await forge.pullRequestSource(cwd).catch(() => null) : null
-        if (!settings || !source) return draft
+        const clean = (out: typeof draft) => ({ ...out, body: withoutAgentCredits(ctx, out.body) })
+        if (!settings || !source) return clean(draft)
         const config = ctx.workspace.projectConfiguration(ctx.workspace.projectIdOf(taskId)).config.commit
         try {
           const written = await ctx.agents.draftPullRequest(source, settings, {
@@ -126,9 +127,9 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
           })
           const closes = issue ? `Closes #${issue.number}` : ''
           const body = closes && !written.body.includes(closes) ? `${written.body}\n\n${closes}`.trim() : written.body
-          return { ...draft, title: written.title, body }
+          return clean({ ...draft, title: written.title, body })
         } catch {
-          return draft
+          return clean(draft)
         }
       },
     },
@@ -303,7 +304,11 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
           }
           // The branch must be on the remote first; push publishes it when it has no upstream yet.
           await git.push(cwd)
-          const status = await forge.createPullRequest(cwd, input)
+          const status = await forge.createPullRequest(cwd, {
+            ...input,
+            title: withoutAgentCredits(ctx, input.title),
+            body: withoutAgentCredits(ctx, input.body),
+          })
           // PR creation succeeded even if watch setup fails; never encourage retrying the create action.
           await ctx.pullRequestWatches?.watchCreated(taskId, cwd, repoId, status.pullRequest).catch((error) => {
             console.error('Could not start pull request watch:', error)

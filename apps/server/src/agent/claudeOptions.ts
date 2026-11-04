@@ -91,8 +91,15 @@ export function claudeLaunchOptions({
     ...(plugins.length ? { plugins: plugins.map((path) => ({ type: 'local' as const, path })) } : {}),
     // Overrides the user's settings. Newer Claude models omit thinking text unless summaries are requested, which
     // would leave the chat's thinking rows empty. `advisorModel` is Claude Code's own advisor on the configured model,
-    // or off while Ramu's runs.
-    settings: { showThinkingSummaries: true, ...(advisorModel !== undefined ? { advisorModel } : {}) },
+    // or off while Ramu's runs. Empty attribution keeps Claude Code's co-author trailer and footer out of commits
+    // and pull requests.
+    settings: {
+      showThinkingSummaries: true,
+      ...(advisorModel !== undefined ? { advisorModel } : {}),
+      ...(preferences?.().removeAgentCredits !== false
+        ? { attribution: { commit: '', pr: '', sessionUrl: false } }
+        : {}),
+    },
     ...(s.additionalDirs.length ? { additionalDirectories: s.additionalDirs } : {}),
     abortController: abort,
     canUseTool,
