@@ -1,6 +1,7 @@
 import { translate } from '@ramu/shared/i18n'
 import { recentThreads } from '../../../runtime/recentThreads'
-import { groupThreads, splitDone, type ThreadGroup } from '../../../runtime/threadGroups'
+import { groupKey, groupThreads, splitDone, type ThreadGroup } from '../../../runtime/threadGroups'
+import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BackHandler, Platform, Pressable, ScrollView as HScroll, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
@@ -44,7 +45,7 @@ type HomeRow = { key: string } & Position &
   (
     | { kind: 'label'; text: string; right?: string }
     | { kind: 'outbox'; o: OutboxItem }
-    | { kind: 'chat'; chat: Chat; project?: string; divider?: boolean }
+    | { kind: 'chat'; chat: Chat; project?: string; divider?: boolean; earlierRuns?: number }
     | { kind: 'project'; group: ThreadGroup<Chat, MobileProject>; closed: boolean }
     | { kind: 'done'; count: number; closed: boolean }
     // `group` set: show the rest of one project (or fewer again); unset: more of the flat filtered list.
@@ -209,7 +210,28 @@ export default function Threads() {
       return out
     }
     // Otherwise each project is its own card, the most recently active first, so its menu and new-thread action are always one tap away.
-    const groups = groupThreads(unpinned, projectList, { limit: PER_PROJECT, expanded, collapsed })
+    // A recurring schedule shows its newest run, with older ones folded in unless they are unread or need something;
+    // opening a card fully (Show more) lists every run, as on the desktop.
+    const unread = new Set(
+      Object.values(store.inbox).flatMap((notices) =>
+        notices.flatMap((notice) => (notice.kind === 'done' && notice.sessionId ? [notice.sessionId] : [])),
+      ),
+    )
+    const runs = collapseScheduleRuns(unpinned, (chat) => !!chat.sessionId && unread.has(chat.sessionId))
+    const shownRuns = new Set(runs.visible)
+    const listed = unpinned.filter(
+      (chat) => shownRuns.has(chat) || expanded.has(groupKey(chat.computerId, chat.projectId)),
+    )
+    const folded = new Map<string, number>()
+    for (const chat of unpinned)
+      if (!shownRuns.has(chat)) {
+        const key = groupKey(chat.computerId, chat.projectId)
+        folded.set(key, (folded.get(key) ?? 0) + 1)
+      }
+    // Folded runs count toward a card's "Show more", so a card holding only folded runs can still open them.
+    const groups = groupThreads(listed, projectList, { limit: PER_PROJECT, expanded, collapsed }).map((g) =>
+      expanded.has(g.key) || collapsed.has(g.key) ? g : { ...g, hidden: g.hidden + (folded.get(g.key) ?? 0) },
+    )
     if (groups.length) out.push({ key: 'label:projects', kind: 'label', text: t.projects })
     groups.forEach((g, index) => {
       const closed = collapsed.has(g.key)
@@ -217,7 +239,16 @@ export default function Threads() {
         `group:${g.key}`,
         [
           { key: 'head', kind: 'project', group: g, closed } as HomeRow,
-          ...g.threads.map((chat) => ({ key: chat.id, kind: 'chat', chat, divider: true }) as HomeRow),
+          ...g.threads.map(
+            (chat) =>
+              ({
+                key: chat.id,
+                kind: 'chat',
+                chat,
+                divider: true,
+                earlierRuns: expanded.has(g.key) ? undefined : runs.earlierRuns[chat.id],
+              }) as HomeRow,
+          ),
           ...(!closed && (g.hidden || (expanded.has(g.key) && g.total > PER_PROJECT))
             ? [{ key: 'more', kind: 'more', group: g.key, hidden: g.hidden } as HomeRow]
             : []),
@@ -262,6 +293,7 @@ export default function Threads() {
     t,
     scoped,
     store.language,
+    store.inbox,
   ])
   const newChat = (projectId: string) => router.push({ pathname: '/new', params: { project: projectId } })
   const renderRow = (row: HomeRow) => {
@@ -315,7 +347,7 @@ export default function Threads() {
           )
         })()
       ) : row.kind === 'chat' ? (
-        <ChatRow chat={row.chat} project={row.project} divider={row.divider} selectable />
+        <ChatRow chat={row.chat} project={row.project} divider={row.divider} earlierRuns={row.earlierRuns} selectable />
       ) : row.kind === 'done' ? (
         <Pressable
           accessibilityRole="button"

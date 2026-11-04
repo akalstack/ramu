@@ -1,4 +1,5 @@
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
+import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
 import type { Task } from '@ramu/shared/types'
 
 /** Done threads gather across projects, including pinned and projectless threads. */
@@ -24,27 +25,6 @@ const NEEDS_YOU = new Set(['approval', 'input', 'blocked', 'turn-limit'])
 export function threadNeedsYou(task: Task) {
   const status = threadStatus(task, false, task.goalState)
   return !!status && NEEDS_YOU.has(status.kind)
-}
-
-/**
- * A recurring schedule reads as one row, its newest run. An older run stays in the list while it still has something to
- * show: it is open, unread or has a status of its own. Expects `tasks` newest first.
- */
-function collapseScheduleRuns(tasks: Task[], keep: (task: Task) => boolean) {
-  const newest = new Map<string, Task>()
-  const earlierRuns: Record<string, number> = {}
-  const visible = tasks.filter((task) => {
-    if (!task.scheduleId) return true
-    const lead = newest.get(task.scheduleId)
-    if (!lead) {
-      newest.set(task.scheduleId, task)
-      return true
-    }
-    if (keep(task) || threadStatus(task, false, task.goalState)) return true
-    earlierRuns[lead.id] = (earlierRuns[lead.id] ?? 0) + 1
-    return false
-  })
-  return { visible, earlierRuns }
 }
 
 /** Use the same bounded project preview for local and remote hosts. Keep the active thread visible. */

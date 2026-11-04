@@ -1,5 +1,6 @@
 import { SheetGroup, SheetOption } from './SheetOptions'
-import { titleSourceNote } from '@ramu/shared/chat/threadStatus'
+import { threadStatus, titleSourceNote } from '@ramu/shared/chat/threadStatus'
+import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
 import { runsBy } from '../runtime/groupRuns'
 import { translate } from '@ramu/shared/i18n'
 import { readRemovalCommands, removalReview, removalError } from '@ramu/shared/chat/taskRemoval'
@@ -31,6 +32,7 @@ import { useT } from '../i18n'
 import { Button, Sheet, T, type Icon } from './ui'
 import { ProjectCommandSettings } from './ProjectCommandSettings'
 import { ProjectRoutingSettings } from './ProjectRoutingSettings'
+import { useBulkThreadActions } from './BulkThreadActions'
 
 /** Presents one review for the selected host; it never retries a deletion automatically. */
 export async function confirmChatDeletion(
@@ -248,7 +250,7 @@ export function ChatActionsSheet({
     latestStore.current.isOnline(chat.computerId) &&
     latestStore.current.computers?.find((host) => host.id === chat.computerId)?.access !== 'viewer'
   const commands = useChatCommands(chat)
-  const say = (text: string) => translate(store.language, text)
+  const say = (text: string, values?: Record<string, string | number>) => translate(store.language, text, values)
   const archived = chat.status === 'archived'
   const pinned = chat.pinnedAt !== null
   const run = async (fn: () => Promise<unknown>) => {
@@ -337,6 +339,14 @@ export function ChatActionsSheet({
   const visible = items.filter(
     (item) => !viewOnly || item.icon === Copy || extras.some((extra) => extra.label === item.label),
   )
+  const status = threadStatus(chat, false, chat.goal && { ...chat.goal, verifying: !!chat.goal.claim })
+  const about = [
+    status && status.full !== status.short ? say(status.full) : null,
+    status?.next ? say(status.next) : null,
+    chat.startedFrom ? threadOriginLabel(chat.startedFrom, say) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <Sheet open={open} onClose={onClose} title={renaming ? say('Rename thread') : chat.title}>
       {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[store.language]}</T> : null}
@@ -376,22 +386,30 @@ export function ChatActionsSheet({
           </View>
         </View>
       ) : (
-        runsBy(visible, (item) => item.group ?? 'thread').map((run) => (
-          <SheetGroup key={run[0]!.label}>
-            {run.map((item) => (
-              <SheetOption
-                key={item.label}
-                icon={item.icon}
-                title={item.label}
-                danger={item.danger}
-                disabled={
-                  !item.onPress || (item.icon === Sparkles && (naming || chat.titleGenerationState === 'pending'))
-                }
-                onPress={item.onPress}
-              />
-            ))}
-          </SheetGroup>
-        ))
+        <>
+          {/* What the desktop's hover card says: where the thread stands, what lets it go on, and who started it. */}
+          {about ? (
+            <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s }}>
+              {about}
+            </T>
+          ) : null}
+          {runsBy(visible, (item) => item.group ?? 'thread').map((run) => (
+            <SheetGroup key={run[0]!.label}>
+              {run.map((item) => (
+                <SheetOption
+                  key={item.label}
+                  icon={item.icon}
+                  title={item.label}
+                  danger={item.danger}
+                  disabled={
+                    !item.onPress || (item.icon === Sparkles && (naming || chat.titleGenerationState === 'pending'))
+                  }
+                  onPress={item.onPress}
+                />
+              ))}
+            </SheetGroup>
+          ))}
+        </>
       )}
     </Sheet>
   )
@@ -421,6 +439,16 @@ export function ProjectActionsSheet({
   const router = useRouter()
   const [managingActions, setManagingActions] = useState(false)
   const [routing, setRouting] = useState(false)
+  const bulk = useBulkThreadActions()
+  // As on the desktop: the project's open threads, leaving pinned and done ones where they are. Undo is on the toast.
+  const archivable = store.chats.filter(
+    (chat) =>
+      chat.computerId === project.computerId &&
+      chat.projectId === project.id &&
+      chat.status !== 'archived' &&
+      chat.pinnedAt === null &&
+      !chat.doneAt,
+  )
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(project.name)
   useEffect(() => {
@@ -530,6 +558,21 @@ export function ProjectActionsSheet({
         if (writable()) setManagingActions(true)
       },
     },
+    ...(archivable.length
+      ? [
+          {
+            key: 'archive',
+            group: 'danger' as const,
+            icon: Archive,
+            label: say('Archive threads'),
+            onPress: () => {
+              if (!writable()) return
+              onClose()
+              void bulk.archive(archivable)
+            },
+          },
+        ]
+      : []),
     {
       key: 'remove',
       group: 'danger',

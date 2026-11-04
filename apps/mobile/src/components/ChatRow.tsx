@@ -1,12 +1,24 @@
 import { memo, useState } from 'react'
 import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Archive, ArchiveRestore, Check, Clock, GitBranch, ListChecks, Pin, RotateCcw } from 'lucide-react-native'
+import {
+  Archive,
+  ArchiveRestore,
+  Check,
+  Clock,
+  GitBranch,
+  GitFork,
+  ListChecks,
+  Pin,
+  RotateCcw,
+  Sparkles,
+} from 'lucide-react-native'
+import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
 import { TEXT_SCALE, font, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
 import { ago, useT, type Strings, useSay } from '../i18n'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
-import { Row, StatusIcon, T, tap } from './ui'
+import { Pill, Row, StatusIcon, T, tap } from './ui'
 import { ChatActionsSheet, useChatCommands } from './ChatActions'
 import { SwipeRow } from './SwipeRow'
 import { ComputerUseNotice } from './ComputerUseNotice'
@@ -36,10 +48,13 @@ export const ChatRow = memo(function ChatRow({
   project,
   divider,
   selectable,
+  earlierRuns,
 }: {
   chat: Chat
   project?: string
   divider?: boolean
+  /** A recurring schedule's older runs folded into this, its newest run. */
+  earlierRuns?: number
   /** The list offers Select: while selecting, a tap picks the row instead of opening it. */
   selectable?: boolean
 }) {
@@ -193,6 +208,19 @@ export const ChatRow = memo(function ChatRow({
               </T>
               {computerUse ? (
                 <Monitor size={13} color={c.warn} accessibilityLabel={say('Computer access active')} />
+              ) : null}
+              {/* The same marks as the desktop sidebar: folded schedule runs, who started it, a review, a title on its way. */}
+              {earlierRuns ? (
+                <T size={font.caption} tone="muted" accessibilityLabel={say('{0} earlier runs', { 0: earlierRuns })}>
+                  {`+${earlierRuns}`}
+                </T>
+              ) : null}
+              {chat.startedFrom ? (
+                <GitFork size={12} color={c.muted} accessibilityLabel={threadOriginLabel(chat.startedFrom, say)} />
+              ) : null}
+              {chat.kind === 'library-review' ? <Pill>{say('Review')}</Pill> : null}
+              {chat.titleGenerationState === 'pending' ? (
+                <Sparkles size={12} color={c.muted} accessibilityLabel={say('Naming thread')} />
               ) : null}
               {chat.pinnedAt !== null ? <Pin size={11} color={c.muted} /> : null}
               {stacked ? null : meta}

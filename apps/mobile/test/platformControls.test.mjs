@@ -239,6 +239,15 @@ function load(file, os, overrides = {}, globals = {}) {
           { get: (target, key) => (key in target ? target[key] : String(key)) },
         )
       if (id.endsWith('/theme')) return theme
+      // A thread's status line and origin read from the real rules; bulk thread actions only run when a test taps them.
+      if (id === '@ramu/shared/chat/threadStatus' || id === './threadStatus')
+        return load('../../../packages/shared/src/chat/threadStatus.ts', os, {}, globals)
+      if (id === './goalHold') return load('../../../packages/shared/src/chat/goalHold.ts', os, {}, globals)
+      if (id === '@ramu/shared/chat/scheduleRuns')
+        return load('../../../packages/shared/src/chat/scheduleRuns.ts', os, {}, globals)
+      if (id === '@ramu/shared/workspace/threadOrigin') return { threadOriginLabel: () => 'Started by another thread' }
+      if (id.endsWith('/BulkThreadActions'))
+        return { useBulkThreadActions: () => ({ archive: async () => {}, markDone: async () => {} }) }
       if (id === 'react' || id === 'react/jsx-runtime') return require(id)
       return components
     },
@@ -3848,7 +3857,7 @@ for (const os of ['ios', 'android']) {
   test(`${os} project menu opens action management for its explicit host and project without starting work`, () => {
     const hooks = hookHarness()
     let closed = 0
-    const store = { isOnline: () => true }
+    const store = { isOnline: () => true, chats: [] }
     const { ProjectActionsSheet } = load('components/ChatActions.tsx', os, {
       react: hooks.react,
       '../runtime/store': { useStore: () => store },
@@ -5764,6 +5773,7 @@ for (const os of ['ios', 'android']) {
       timers = [],
       routes = []
     let store = {
+      chats: [],
       language: 'en',
       computers: [{ id: 'a', access: 'owner' }],
       isOnline: () => true,
@@ -7329,6 +7339,7 @@ test('Threads uses native toolbar buttons and its usage action opens the shared 
         computers: [{ id: 'a', name: 'Host', status: 'online' }],
         outbox: [],
         appPreferences: {},
+        inbox: {},
         language: 'en',
       }),
     },

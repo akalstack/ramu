@@ -1,5 +1,4 @@
-import { continuedFrom } from '@ramu/shared/continuation'
-import { startedFromTerminal } from '@ramu/shared/workspace/threadOrigin'
+import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
 import { animateThreadListChange } from '../../workspace/threadListMotion'
 import { useComputers } from '../../workspace/computers'
 import { useHost } from '../../workspace/HostProvider'
@@ -429,20 +428,7 @@ export function TaskRow({
                 <GitFork
                   size={12}
                   className="flex-none text-muted-foreground"
-                  aria-label={
-                    startedFromTerminal(task.startedFrom)
-                      ? t('Started from a terminal by {0}', { '0': task.startedFrom.host ?? '' })
-                      : continuedFrom(task.startedFrom) && task.startedFrom.host
-                        ? t('Continued from {0} on {1}', {
-                            '0': task.startedFrom.title ?? '',
-                            '1': task.startedFrom.host,
-                          })
-                        : task.startedFrom.host
-                          ? t('Started by an agent on {0}', { '0': task.startedFrom.host })
-                          : task.startedFrom.title
-                            ? t('Started by the agent in {0}', { '0': task.startedFrom.title })
-                            : t('Started by another thread')
-                  }
+                  aria-label={threadOriginLabel(task.startedFrom, t)}
                 />
               )}
               {task.kind === 'library-review' && (
