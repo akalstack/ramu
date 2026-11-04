@@ -13,9 +13,8 @@ import {
   MoreHorizontal,
   Search,
   ShieldQuestion,
-  Square,
 } from 'lucide-react'
-import type { AgentSessionState, AgentTask } from '@ramu/shared/types'
+import type { AgentSessionState } from '@ramu/shared/types'
 import { formatKeys } from '../../../commands'
 import { CommitPushButton } from '../../../git/CommitPushButton'
 import { Menu } from '../../../Menu'
@@ -25,7 +24,10 @@ import { STATE_LABEL } from '../constants'
 import { ThreadOriginChip } from './StartedThreads'
 import { GHOST_TEXT_BUTTON_CLASS, ICON_BUTTON_CLASS } from '../styles'
 
-/** The toolbar above a chat: changes, checkpoint and state, then the Questions, Aside, background command and Agents chips, find and more actions. */
+/**
+ * The toolbar above a chat: thread-level actions only (changes, checkpoint, state, Questions while any wait, Aside,
+ * find and more). Live helpers and background work are in the composer tray, beside the message box.
+ */
 export function AgentHeader({
   history,
   sessionId,
@@ -36,13 +38,9 @@ export function AgentHeader({
   asideOpen,
   asideCount,
   onToggleAside,
-  commands,
-  onStopTask,
   readOnly = false,
-  tasks,
-  runningTasks,
-  agentsOpen,
-  onToggleAgents,
+  agentCount,
+  onShowAgents,
   onFind,
   taskId,
   canContinue,
@@ -60,13 +58,10 @@ export function AgentHeader({
   asideOpen: boolean
   asideCount: number
   onToggleAside: () => void
-  commands: AgentTask[]
   readOnly?: boolean
-  onStopTask: (task: AgentTask) => void
-  tasks: AgentTask[]
-  runningTasks: AgentTask[]
-  agentsOpen: boolean
-  onToggleAgents: () => void
+  /** Every helper the thread has had; the live ones are in the composer tray. */
+  agentCount: number
+  onShowAgents: () => void
   onFind: () => void
   /** The chat's checkout, for Changes and Commit & push. */
   taskId?: string
@@ -89,6 +84,36 @@ export function AgentHeader({
     connected.map((computer, index) => ({ ...computer, resources: overviews[index]?.data?.resources })),
     latestRequest ?? '',
   )
+  const continueItems = [
+    {
+      key: 'continue',
+      disabled: readOnly || continuing,
+      label: (
+        <>
+          <GitFork size={13} /> {translate('Continue in new thread')}
+        </>
+      ),
+      onSelect: onContinue,
+    },
+    ...otherHosts.map(({ host: computer, suggested, low }) => ({
+      key: `continue:${computer.id}`,
+      disabled: readOnly,
+      label: (
+        <>
+          <ArrowUpRight size={13} /> {translate('Continue on {0}', { 0: computer.name })}
+          {computer.resources?.platform && (
+            <span className="text-muted-foreground">
+              {' '}
+              · {[computer.resources.platform, ...(computer.resources.testDevices ?? [])].join(', ')}
+            </span>
+          )}
+          {suggested && <span className="text-muted-foreground"> · {translate('Suggested')}</span>}
+          {low && <span className="text-warn"> · {translate('Low memory')}</span>}
+        </>
+      ),
+      onSelect: () => onContinueOnHost(computer.id),
+    })),
+  ]
   return (
     <div className="agent-header [&_.path]:flex-1 [&:not(:has(>_:not(.grow)))]:hidden [&_.grow]:hidden [&_.state]:mr-auto [&_.small]:gap-1.5 [&_.small]:text-soft [&_>_*]:flex-none [&_>_*]:whitespace-nowrap flex items-center flex-none text-control min-w-0 justify-end h-auto min-h-[36px] p-[4px_10px_0] gap-1.5 flex-wrap gap-y-1 pb-1">
       {history}
@@ -119,66 +144,23 @@ export function AgentHeader({
       )}
       <Button
         variant="ghost"
-        size="sm"
-        className={`${GHOST_TEXT_BUTTON_CLASS} asides-chip gap-1.5 text-soft`}
+        size="icon-xs"
+        className={`${ICON_BUTTON_CLASS} asides-chip relative aria-pressed:bg-hover aria-pressed:text-foreground`}
         aria-pressed={asideOpen}
+        aria-label={asideCount > 0 ? translate('Asides · {0}', { 0: asideCount }) : translate('Aside')}
         title={`${translate('Side questions about this thread')} (${formatKeys('mod+shift+a')})`}
         onClick={onToggleAside}
       >
-        <MessageCircle size={13} />
-        {asideCount > 0 ? `${translate('Aside')} · ${asideCount}` : translate('Aside')}
+        <MessageCircle size={14} />
+        {asideCount > 0 && (
+          <span
+            aria-hidden
+            className="absolute -top-0.5 -right-0.5 grid min-w-3.5 h-3.5 place-items-center rounded-full bg-fill px-0.5 text-[10px] leading-none tabular-nums text-foreground"
+          >
+            {asideCount}
+          </span>
+        )}
       </Button>
-      {commands.length > 0 && (
-        <Menu
-          label={translate('Background commands')}
-          icon={
-            <>
-              <LoaderCircle size={13} className="spin [animation:spin_0.9s_linear_infinite]" />
-              {translate('{0} background {1}', {
-                '0': commands.length,
-                '1': commands.length === 1 ? 'command' : 'commands',
-              })}
-            </>
-          }
-          className={`${GHOST_TEXT_BUTTON_CLASS} agents-chip [&.running]:text-foreground [&.running]:bg-hover gap-1.5 text-soft running`}
-          align="end"
-          items={commands.map((task) => ({
-            key: task.agentId,
-            disabled: readOnly,
-            label: (
-              <>
-                <Square size={12} /> {translate('Stop')} · {task.name}
-              </>
-            ),
-            onSelect: () => onStopTask(task),
-          }))}
-        />
-      )}
-      {tasks.length > 0 && (
-        <Button
-          variant="secondary"
-          className={`${GHOST_TEXT_BUTTON_CLASS} agents-chip [&.running]:text-foreground [&.running]:bg-hover gap-1.5 text-soft${runningTasks.length ? ' running' : ''}`}
-          aria-pressed={agentsOpen}
-          title={
-            runningTasks.length
-              ? translate('Sub-agents still working; they can keep going after the turn ends')
-              : translate('Sub-agents in this thread')
-          }
-          onClick={onToggleAgents}
-        >
-          {runningTasks.length ? (
-            <LoaderCircle size={13} className="spin [animation:spin_0.9s_linear_infinite]" />
-          ) : (
-            <Bot size={14} />
-          )}
-          {runningTasks.length
-            ? translate('{0} {1} running', {
-                '0': runningTasks.length,
-                '1': runningTasks.length === 1 ? 'agent' : 'agents',
-              })
-            : translate('Agents · {0}', { '0': tasks.length })}
-        </Button>
-      )}
       <Button
         variant="ghost"
         size="icon-xs"
@@ -189,7 +171,7 @@ export function AgentHeader({
       >
         <Search size={14} />
       </Button>
-      {canContinue && (
+      {(canContinue || agentCount > 0) && (
         <Menu
           label={translate('More actions')}
           icon={
@@ -202,34 +184,20 @@ export function AgentHeader({
           className={ICON_BUTTON_CLASS}
           align="end"
           items={[
-            {
-              key: 'continue',
-              disabled: readOnly || continuing,
-              label: (
-                <>
-                  <GitFork size={13} /> {translate('Continue in new thread')}
-                </>
-              ),
-              onSelect: onContinue,
-            },
-            ...otherHosts.map(({ host: computer, suggested, low }) => ({
-              key: `continue:${computer.id}`,
-              disabled: readOnly,
-              label: (
-                <>
-                  <ArrowUpRight size={13} /> {translate('Continue on {0}', { 0: computer.name })}
-                  {computer.resources?.platform && (
-                    <span className="text-muted-foreground">
-                      {' '}
-                      · {[computer.resources.platform, ...(computer.resources.testDevices ?? [])].join(', ')}
-                    </span>
-                  )}
-                  {suggested && <span className="text-muted-foreground"> · {translate('Suggested')}</span>}
-                  {low && <span className="text-warn"> · {translate('Low memory')}</span>}
-                </>
-              ),
-              onSelect: () => onContinueOnHost(computer.id),
-            })),
+            ...(agentCount > 0
+              ? [
+                  {
+                    key: 'agents',
+                    label: (
+                      <>
+                        <Bot size={13} /> {translate('All agents · {0}', { 0: agentCount })}
+                      </>
+                    ),
+                    onSelect: onShowAgents,
+                  },
+                ]
+              : []),
+            ...(canContinue ? continueItems : []),
           ]}
         />
       )}

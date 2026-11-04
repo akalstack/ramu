@@ -1,23 +1,20 @@
 import { useState } from 'react'
-import { Users } from 'lucide-react'
+import { Bot, List, SquareTerminal, Users } from 'lucide-react'
 import { RowButton } from '@/components/row-button'
 import { ComposerTraySection } from '../../../composer/ComposerTraySection'
 import { ActivityText } from '../../../chat/ActivityText'
 import { ProviderIcon } from '../../../models/ProviderIcon'
 import type { AgentModel, AgentSettings, AgentTask, TeammateMode } from '@ramu/shared/types'
 import { teammateHandle } from '@ramu/shared/chat/agentTasks'
-import { helperStatusLabel } from '@ramu/shared/chat/helperPresentation'
+import { helperActive, helperStatusLabel } from '@ramu/shared/chat/helperPresentation'
 import { draftMention, joiningTeammate, modelHandle, type MentionTarget } from '@ramu/shared/chat/teammateMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import { Menu } from '../../../Menu'
 import { CHIP } from '../../../models/ProviderRoute'
 import { Button } from '@/components/desktop-button'
 import { AgentControls } from '../../../chat/AgentControls'
-import { notifyError } from '../../../chat/Notifications'
 import { t, useLanguage } from '../../../i18n'
-import { errorText } from '../../../lib/errors'
-import { useHost } from '../../../workspace/HostProvider'
-import { workSummary } from './TaskStatus'
+import { RoleTag, workSummary } from './TaskStatus'
 
 /** A model or custom agent the draft brings in: its settings start from the thread's and change in the composer. */
 export interface JoiningTeammate {
@@ -118,68 +115,89 @@ export function TeammateJoinControls({ joining, disabled }: { joining: JoiningTe
 }
 
 /**
- * The thread's teammates in the composer tray, beside its other live work: each one's model, how it works, what it
- * changed and cost, and Stop. Opening a row shows its conversation; the tooltip says how to address it.
+ * Everything working beside the main agent, in the composer tray: teammates, sub-agents still running and background
+ * commands, each with its role, status and Stop. Opening a row shows its conversation; the list button shows every
+ * agent this thread has had, finished ones included.
  */
-export function TeammatesSection({
-  sessionId,
-  teammates,
+export function AgentsSection({
+  agents,
   onOpen,
+  onOpenAll,
+  onStop,
   readOnly,
 }: {
-  sessionId: string
-  teammates: AgentTask[]
+  agents: AgentTask[]
   onOpen: (agentId: string) => void
+  onOpenAll?: () => void
+  onStop: (task: AgentTask) => void
   readOnly?: boolean
 }) {
   useLanguage()
-  const { invoke } = useHost()
-  const working = teammates.filter((task) => task.status === 'running').length
+  const working = agents.filter(helperActive).length
   return (
     <ComposerTraySection
-      aria-label={t('Teammates')}
-      title={t('Teammates')}
-      count={teammates.length}
+      aria-label={t('Agents')}
+      title={t('Agents')}
+      count={agents.length}
       icon={<Users />}
       actions={
-        working > 0 && (
-          <ActivityText active className="text-caption text-muted-foreground">
-            {t('{0} working', { 0: working })}
-          </ActivityText>
-        )
+        <>
+          {working > 0 && (
+            <ActivityText active className="text-caption text-muted-foreground">
+              {t('{0} working', { 0: working })}
+            </ActivityText>
+          )}
+          {onOpenAll && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('All agents')}
+              title={t('All agents in this thread')}
+              onClick={onOpenAll}
+            >
+              <List size={13} />
+            </Button>
+          )}
+        </>
       }
     >
       <ul className="my-0 -mx-1.5 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
-        {teammates.map((task) => (
+        {agents.map((task) => (
           <li key={task.agentId} className="flex min-h-8 items-center gap-2 text-control">
             <RowButton
               size="sm"
               stacked
               className="w-auto flex-1 min-w-0 px-1.5 py-1"
-              title={t('Start a message with @{0} to talk to it', { 0: teammateHandle(task.name) })}
+              title={
+                task.teammate
+                  ? t('Start a message with @{0} to talk to it', { 0: teammateHandle(task.name) })
+                  : undefined
+              }
               onClick={() => onOpen(task.agentId)}
             >
               <span className="flex w-full min-w-0 items-center gap-1.5">
-                {task.provider ? <ProviderIcon provider={task.provider} size={13} /> : <Users size={13} />}
+                {task.taskType === 'local_bash' ? (
+                  <SquareTerminal size={13} />
+                ) : task.provider ? (
+                  <ProviderIcon provider={task.provider} size={13} />
+                ) : (
+                  <Bot size={13} />
+                )}
                 <span className="truncate text-foreground">{task.name}</span>
-                <span className="flex-none rounded-(--radius-s) bg-fill px-1.5 text-caption text-muted-foreground">
-                  {task.teammate === 'take-over' ? t('Take over') : t('Review')}
-                </span>
+                <RoleTag task={task} />
               </span>
               <span className="w-full truncate text-caption text-muted-foreground tabular-nums">
-                <ActivityText active={task.status === 'running'}>{t(helperStatusLabel(task))}</ActivityText>
+                <ActivityText active={helperActive(task)}>{t(helperStatusLabel(task))}</ActivityText>
                 {task.work ? ` · ${workSummary(task.work)}` : ''}
               </span>
             </RowButton>
-            {task.status === 'running' && !readOnly && (
+            {helperActive(task) && !readOnly && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="min-h-6 px-2 py-0 text-caption"
                 aria-label={t('Stop {0}', { 0: task.name })}
-                onClick={() =>
-                  void invoke('agent.stopTask', sessionId, task.agentId).catch((error) => notifyError(errorText(error)))
-                }
+                onClick={() => onStop(task)}
               >
                 {t('Stop')}
               </Button>

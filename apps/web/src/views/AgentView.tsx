@@ -83,7 +83,7 @@ import { useContinueInNewChat } from './agent/hooks/useContinueInNewChat'
 import { ContinueOnHostDialog } from './agent/components/ContinueOnHostDialog'
 import {
   RecipientChip,
-  TeammatesSection,
+  AgentsSection,
   TeammateJoinControls,
   useJoiningTeammate,
 } from './agent/components/TeammateControls'
@@ -313,6 +313,10 @@ export const AgentView = memo(function AgentView({
   const prepareLimitRetry = useCallback(() => prepareRetry.current(), [])
   const limitRetry = useLimitRetry(view.sessionId, providerWait, reportError, prepareLimitRetry)
   const runningTasks = helperSelection.selected.filter(helperActive)
+  // One list of what works beside the main agent: its teammates, then running sub-agents and background commands.
+  const trayAgents = [...teammates, ...runningTasks, ...commands].filter(
+    (task, index, all) => all.findIndex((other) => other.agentId === task.agentId) === index,
+  )
   const act = async (fn: () => Promise<unknown>, propagate = false) => {
     setError(null)
     try {
@@ -740,15 +744,9 @@ export const AgentView = memo(function AgentView({
         asideOpen={openAside !== null}
         asideCount={asides.length}
         onToggleAside={toggleAside}
-        commands={commands}
-        onStopTask={stopTask}
         readOnly={viewOnly}
-        tasks={helperSelection.selected}
-        runningTasks={runningTasks}
-        agentsOpen={openAgent !== null}
-        onToggleAgents={() =>
-          setOpenAgent((current) => (current ? null : runningTasks.length === 1 ? runningTasks[0]!.agentId : '*'))
-        }
+        agentCount={helperSelection.selected.length}
+        onShowAgents={() => setOpenAgent('*')}
         onFind={() => openFind()}
         taskId={session?.taskId}
         canContinue={!!session && events.length > 0}
@@ -930,7 +928,7 @@ export const AgentView = memo(function AgentView({
                 liveGoal ||
                 queued.length > 0 ||
                 pending.length > 0 ||
-                (!!session && teammates.length > 0) ||
+                (!!session && trayAgents.length > 0) ||
                 dockQuestions.length > 0) && (
                 <ComposerTray className="chat-tray">
                   {dockQuestions.length > 0 && (
@@ -947,12 +945,13 @@ export const AgentView = memo(function AgentView({
                   {providerWait && <ProviderWaitNote retry={limitRetry} autoResume={autoResume} readOnly={viewOnly} />}
                   {/* Live work folds into a stack under its first card; what needs the person stays outside it. */}
                   <div className="composer-tray-stack">
-                    {session && teammates.length > 0 && (
-                      <TeammatesSection
-                        sessionId={session.id}
-                        teammates={teammates}
+                    {session && trayAgents.length > 0 && (
+                      <AgentsSection
+                        agents={trayAgents}
                         readOnly={viewOnly}
                         onOpen={(agentId) => setOpenAgent(agentId)}
+                        onOpenAll={helperSelection.selected.length > 0 ? () => setOpenAgent('*') : undefined}
+                        onStop={stopTask}
                       />
                     )}
                     {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}

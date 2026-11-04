@@ -316,7 +316,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Show details': 'Tampilkan detail',
   'Tell {0} what to do': 'Beri tahu {0} apa yang harus dikerjakan',
   '{0} joins this thread': '{0} bergabung ke utas ini',
-  'Teammates': 'Rekan',
   'Start a message with @{0} to talk to it': 'Mulai pesan dengan @{0} untuk berbicara dengannya',
   'Still working': 'Masih bekerja',
   'Edit from here': 'Edit dari sini',
@@ -1474,6 +1473,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   Repositories: 'Repository',
   'All repositories': 'Semua repository',
   'All agents': 'Semua agen',
+  'All agents in this thread': 'Semua agen di thread ini',
+  'All agents · {0}': 'Semua agen · {0}',
+  'Asides · {0}': 'Pertanyaan sampingan · {0}',
   'Show completed': 'Tampilkan yang selesai',
   'Hide completed': 'Sembunyikan yang selesai',
   'All sub-agents': 'Semua sub-agent',
@@ -1580,8 +1582,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Finished, not viewed yet': 'Sudah selesai, belum dilihat',
   'This agent left no transcript.': 'Agen ini belum punya transkrip.',
   'This command left no output.': 'Perintah ini tidak menghasilkan output.',
-  'Background commands': 'Perintah latar belakang',
-  '{0} background {1}': '{0} {1} di latar belakang',
   'Working… its messages and tool calls appear here.':
     'Lagi dikerjakan… Pesan dan aktivitas alatnya akan muncul di sini.',
   Allow: 'Izinkan',
@@ -2020,9 +2020,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Route Codex sub-agents before they start. Enabling adds a trusted hook to ':
     'Arahkan sub-agent Codex sebelum dimulai. Mengaktifkannya menambahkan hook tepercaya ke ',
   '. Disabling leaves the inactive entry in place.': '. Menonaktifkannya menyisakan entri yang tidak aktif.',
-  'Sub-agents in this thread': 'Sub-agent di thread ini',
-  'Sub-agents still working; they can keep going after the turn ends':
-    'Sub-agent masih bekerja dan bisa lanjut setelah giliran selesai',
   'At once per thread': 'Sekaligus per thread',
   'Sub-agents at once per thread': 'Sub-agent sekaligus per thread',
   'Additional sub-agents wait for an available slot.': 'Sub-agent tambahan menunggu slot tersedia.',
@@ -2900,7 +2897,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'AI commit message for {0}': 'Pesan commit AI untuk {0}',
   'Add {0} to favorites': 'Tambahkan {0} ke favorit',
   'Agent {0}': 'Agen {0}',
-  'Agents · {0}': 'Agen · {0}',
   'Answer: {0}': 'Jawaban: {0}',
   'Apply {0}': 'Terapkan {0}',
   'Ask a side question about this, without interrupting the thread ({0})':
@@ -3002,7 +2998,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} speed': 'Kecepatan {0}',
   '{0} sub-agents': '{0} sub-agent',
   '{0} usage': 'Pemakaian {0}',
-  '{0} {1} running': '{0} {1} berjalan',
   '{0} · Parent → commit': '{0} · Induk → commit',
   '{0} · Unavailable': '{0} · Belum tersedia',
   '{0}% left': '{0}% tersisa',
