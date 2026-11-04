@@ -80,15 +80,5 @@ export interface ComputerBackend {
   warm?(): void
 }
 
-/** What the execution host asks a runtime owner's broker to do. The owner runs it on its own backend. */
-export type BrokerCommand =
-  | { id: string; kind: 'capture'; target: ComputerTarget }
-  | { id: string; kind: 'perform'; target: ComputerTarget; action: ComputerAction }
-  | { id: string; kind: 'release'; target: ComputerTarget }
-  | { id: string; kind: 'apps' }
-  | { id: string; kind: 'localInput'; target: ComputerTarget }
-
-export type BrokerOutcome = { ok: true; value?: unknown } | { ok: false; error: string }
-
 /** A backend refused before doing anything (for example the screen is locked), so the action certainly did not run. */
 export class ComputerNotRun extends Error {}

@@ -15,8 +15,8 @@ import { SETTINGS_CARD_LINE } from './cards'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Check, ChevronDown, Copy, Globe, Link2, Plus, Radar, Settings2, Terminal } from 'lucide-react'
-import { useContext, useCallback, useEffect, useRef, useState } from 'react'
+import { Check, ChevronDown, Copy, Link2, MoreHorizontal, Plus, Radar } from 'lucide-react'
+import { useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type {
   AgentHostSummary,
   Computer,
@@ -28,7 +28,7 @@ import type {
 } from '@ramu/shared/types'
 import { DEVICE_PERMISSIONS } from '@ramu/shared/devicePermissions'
 import { RowButton } from '@/components/row-button'
-import { Dialog as ConfirmDialog, Dropdown, timeAgo } from '../Menu'
+import { Dialog as ConfirmDialog, Dropdown, Menu, timeAgo } from '../Menu'
 import { learnedRoutes } from '@ramu/shared/hostProof'
 import { hostOfUrl, networkName, VIRTUAL_INTERFACE } from '@ramu/shared/networkLabel'
 import { copyText, invoke, invokeUncachedOn, ramu } from '../ipc'
@@ -43,17 +43,19 @@ import { AgentHosts } from './AgentHosts'
 import { LinkSettings } from './ReachThisHost'
 import { AccountHosts } from './AccountHosts'
 import { HostUpdateLine, UpdateAllHosts } from './HostUpdates'
-import { DeviceScreenLine, HostScreenSharing, useScreenOffers } from './ScreenSharing'
 import { DeviceIcon } from '@/components/device-icon'
 import { osLine } from '@ramu/shared/deviceOs'
+import { isSshTarget } from '@ramu/shared/hostTarget'
+import { RamuGlyph } from '../Brand'
 import { useStagedValue } from './stagedChanges'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
   DefaultPermissions,
   DevicePermissionList,
+  HostAccess,
   HostCeiling,
+  HostPermissionList,
   PermissionRequests,
-  ThisDevicePermissions,
   type PermissionInvoke,
 } from './DevicePermissions'
 
@@ -119,23 +121,22 @@ export function RemoteAccessSettings() {
   return (
     <div className="settings-form flex flex-col gap-0">
       <Computers state={state} />
-      {here?.local === false ? (
-        <>
-          <SettingsGroupTitle>{t('Let other devices connect')}</SettingsGroupTitle>
-          <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">
-            {t('You are looking at {0}. Who can connect to a host is set on that host.', { 0: here.name })}
-          </p>
-        </>
-      ) : (
-        <ThisComputer />
-      )}
+      <Section
+        title={t('Let other devices use this host')}
+        help={
+          here?.local === false
+            ? t('You are looking at {0}. Who can connect to a host is set on that host.', { 0: here.name })
+            : t('Phones and your other computers reach it through Ramu Link or your network, after you pair them.')
+        }
+      >
+        {here?.local !== false && <ThisComputer />}
+      </Section>
     </div>
   )
 }
 
 function ThisComputer() {
   const invoke = useSettingsInvoke()
-  const { offers, allow } = useScreenOffers(invoke)
   const [status, setStatus, reload] = useNetworkStatus(2500)
   const [confirm, setConfirm] = useState(false),
     [pairing, setPairing] = useState(false),
@@ -215,7 +216,8 @@ function ThisComputer() {
   return (
     <>
       <AgentHosts />
-      <SettingsGroupTitle>{t('Let other devices connect')}</SettingsGroupTitle>
+      <LinkSettings status={status} setStatus={setStatus} />
+      <SettingsGroupTitle className="mt-5">{t('Local network or VPN')}</SettingsGroupTitle>
       <SettingsRow className="settings-toggle">
         <SettingsLabel
           title={t('Allow other devices')}
@@ -235,7 +237,7 @@ function ThisComputer() {
           }}
         />
       </SettingsRow>
-      {!managed && (
+      {!managed && config.enabled && (
         <SettingsRow>
           <SettingsLabel
             title={t('Network')}
@@ -251,7 +253,7 @@ function ThisComputer() {
           />
         </SettingsRow>
       )}
-      {status.discovery && (
+      {status.discovery && config.enabled && (
         <>
           <SettingsRow className="settings-toggle">
             <SettingsLabel
@@ -307,8 +309,6 @@ function ThisComputer() {
         </p>
       )}
 
-      <LinkSettings status={status} setStatus={setStatus} />
-
       <div>
         <SettingsRow>
           <SettingsLabel
@@ -340,18 +340,9 @@ function ThisComputer() {
           device={device}
           invoke={changePermission}
           onRevoke={() => setRevoking(device.id)}
-          screen={offers.get(device.id)}
-          onScreen={(allowed) => allow(device.id, allowed)}
           hostDays={status.deviceLifetime.days}
         />
       ))}
-      {[...offers.values()]
-        .filter((offer) => !status.devices.some((device) => device.id === offer.deviceId))
-        .map((offer) => (
-          <SettingsRow key={offer.deviceId} className="p-1.5">
-            <DeviceScreenLine name={offer.name} offer={offer} onChange={(allowed) => allow(offer.deviceId, allowed)} />
-          </SettingsRow>
-        ))}
       {!status.devices.length && (
         <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">{t('No devices paired yet.')}</p>
       )}
@@ -359,7 +350,7 @@ function ThisComputer() {
         <CollapsibleTrigger
           render={<Button variant="ghost" size="sm" className="group/options text-caption text-muted-foreground" />}
         >
-          {t('Connection options')}
+          {t('Advanced')}
           <ChevronDown size={14} className="transition-transform group-data-[panel-open]/options:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-2">
@@ -680,29 +671,39 @@ function useHostOs(computers: Computer[]): Record<string, DeviceOs | undefined> 
   return known
 }
 
+/** A part of Remote access: a title a person scans for, what it is for, and its main actions. */
+function Section({
+  title,
+  help,
+  actions,
+  children,
+}: {
+  title: string
+  help?: string
+  actions?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="mb-8" aria-label={title}>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="m-0 text-body font-semibold">{title}</h4>
+          {help && <p className="m-[2px_0_0] text-caption text-muted-foreground">{help}</p>}
+        </div>
+        {actions && <div className="flex flex-none items-center gap-1.5">{actions}</div>}
+      </div>
+      {children}
+    </section>
+  )
+}
+
 function Computers({ state }: { state: ComputerList }) {
   const hostOs = useHostOs(state.computers)
   useLanguage()
   const [busy, setBusy] = useState(false)
-  const [address, setAddress] = useState(''),
-    [code, setCode] = useState(''),
-    [name, setName] = useState('')
-  const [adding, setAdding] = useState(false),
+  const [adding, setAdding] = useState<{ link?: string; repair?: Computer } | null>(null),
     [editing, setEditing] = useState<string | null>(null)
-  // Nearby hosts come first; entering an address or using SSH stays one click away in every state.
-  const [mode, setMode] = useState<'nearby' | 'account' | 'link' | 'ssh'>('nearby'),
-    [focusCode, setFocusCode] = useState(false),
-    [link, setLink] = useState(''),
-    [linkError, setLinkError] = useState<string | null>(null)
-  const [target, setTarget] = useState(''),
-    [hosts, setHosts] = useState<string[]>([])
   const [forgetting, setForgetting] = useState<string | null>(null)
-  // Asking a nearby host to pair: the number to match once it answers.
-  const [asking, setAsking] = useState<{ name: string; code: string | null } | null>(null)
-  useEffect(
-    () => ramu.on('computers:pairCode', ({ code }) => setAsking((current) => current && { ...current, code })),
-    [],
-  )
   const others = state.computers.filter((computer) => !computer.local)
   const [agentHosts, setAgentHosts] = useState<AgentHostSummary[] | null>(null)
   const [everywhere, setEverywhere] = useState({ on: false, seq: 0 })
@@ -726,100 +727,34 @@ function Computers({ state }: { state: ComputerList }) {
       setBusy(false)
     }
   }
-  const pair = () =>
-    act(async () => {
-      await invoke('computers.pair', address, code, name.trim() || undefined)
-      reset()
-      setAdding(false)
-    })
-  const repair = (computer: Computer) => {
-    setMode('link')
-    setLink('')
-    setLinkError(null)
-    setAddress(computer.url ?? '')
-    setName(computer.name)
-    setCode('')
-    setAdding(true)
-  }
-  const reset = () => {
-    setMode('nearby')
-    setFocusCode(false)
-    setAddress('')
-    setCode('')
-    setName('')
-    setLink('')
-    setLinkError(null)
-    setTarget('')
-  }
-  const choose = (next: 'nearby' | 'account' | 'link' | 'ssh') => {
-    setFocusCode(false)
-    setMode(next)
-    if (next === 'ssh' && !hosts.length) void invoke('computers.sshHosts').then(setHosts, () => {})
-  }
-  // A pasted link or address fills the fields below; they stay editable.
-  const fromLink = (text: string) => {
-    setLink(text)
-    if (!text.trim()) {
-      setLinkError(null)
-      return
-    }
-    try {
-      const parsed = parsePairInput(text)
-      setAddress(parsed.url)
-      if (parsed.code) setCode(parsed.code)
-      if (parsed.name) setName((current) => current || parsed.name!)
-      setLinkError(null)
-    } catch (error) {
-      setLinkError(errorText(error))
-    }
-  }
   // A pairing link opened from outside the app arrives while this screen is showing, or just before it does.
   useEffect(() => {
     const show = () => {
       const incoming = takePairLink()
-      if (incoming) {
-        setAdding(true)
-        setMode('link')
-        fromLink(incoming)
-      }
+      if (incoming) setAdding({ link: incoming })
     }
     show()
     return onPairLink(show)
   }, [])
-  const connectSsh = () =>
-    act(async () => {
-      await invoke('computers.pairSsh', target.trim(), name.trim() || undefined)
-      reset()
-      setAdding(false)
-    })
+  const connected = state.computers.filter((computer) => computer.status === 'connected').length
   return (
-    <section className="computer-management mb-6" aria-label={t('Hosts')}>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <SettingsGroupTitle className="m-0">
-          {t('Connect to a host')}
-          <span className="ml-2 font-normal text-muted-foreground">
-            {t('{0} connected · {1} saved', {
-              0: state.computers.filter((computer) => computer.status === 'connected').length,
-              1: state.computers.length,
-            })}
-          </span>
-        </SettingsGroupTitle>
-        {others.length > 0 && !adding && (
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={busy}
-            onClick={() => {
-              setAdding(true)
-              reset()
-            }}
-          >
+    <Section
+      title={t('Hosts you use')}
+      help={
+        others.length
+          ? t('{0} connected · {1} saved', { 0: connected, 1: state.computers.length })
+          : t('Add your laptop, workstation or server. They stay connected together while Ramu is open.')
+      }
+      actions={
+        <>
+          <UpdateAllHosts computers={state.computers} />
+          <Button variant="secondary" size="sm" disabled={busy} onClick={() => setAdding({})}>
             <Plus size={14} />
             {t('Add a host')}
           </Button>
-        )}
-        <UpdateAllHosts computers={state.computers} />
-      </div>
+        </>
+      }
+    >
       <div className="flex flex-col gap-1.5">
         {state.computers.map((computer) => (
           <article
@@ -835,7 +770,7 @@ function Computers({ state }: { state: ComputerList }) {
                 <div className="flex min-w-0 items-center gap-2">
                   <strong className="truncate text-body font-medium">{computer.name}</strong>
                   <span className="flex-none text-caption text-muted-foreground">
-                    {computer.local ? t('Local') : computer.ssh ? t('SSH') : t('Remote')}
+                    {computer.local ? t('This computer') : computer.ssh ? t('SSH') : t('Remote')}
                   </span>
                   {computer.id === state.current && (
                     <span className="flex-none rounded-full bg-primary/10 px-2 py-0.5 text-caption text-(--accent)">
@@ -845,10 +780,10 @@ function Computers({ state }: { state: ComputerList }) {
                 </div>
                 <p
                   className="m-0 flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground"
-                  title={computer.ssh ?? computer.url ?? state.deviceName}
+                  title={computer.ssh ? `ssh ${computer.ssh}` : (computer.url ?? state.deviceName)}
                 >
                   <StatusDot status={computer.status} />
-                  <span className="flex-none">
+                  <span className="truncate">
                     {[
                       activityText(computer) || statusText(computer.status),
                       hostRoute(computer),
@@ -856,9 +791,6 @@ function Computers({ state }: { state: ComputerList }) {
                     ]
                       .filter(Boolean)
                       .join(' · ')}
-                  </span>
-                  <span className="truncate">
-                    · {computer.ssh ? `ssh ${computer.ssh}` : (computer.url ?? state.deviceName)}
                   </span>
                 </p>
               </div>
@@ -883,69 +815,61 @@ function Computers({ state }: { state: ComputerList }) {
                     {t('Retry')}
                   </Button>
                 )}
+                {!computer.local && computer.status === 'paused' && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void act(() => invoke('computers.update', computer.id, { enabled: true }))}
+                  >
+                    {t('Resume')}
+                  </Button>
+                )}
                 {!computer.local && computer.status === 'rejected' && (
-                  <Button variant="secondary" size="sm" disabled={busy} onClick={() => repair(computer)}>
+                  <Button variant="secondary" size="sm" disabled={busy} onClick={() => setAdding({ repair: computer })}>
                     {t('Pair again')}
                   </Button>
                 )}
                 {!computer.local && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
+                  <Menu
+                    label={t('More for {0}', { 0: computer.name })}
+                    icon={<MoreHorizontal size={15} />}
+                    align="end"
                     disabled={busy}
-                    aria-label={t('Manage {0}', { 0: computer.name })}
-                    title={t('Connection settings')}
-                    onClick={() => setEditing(computer.id)}
-                  >
-                    <Settings2 size={14} />
-                  </Button>
-                )}
-                {!computer.local && (
-                  <Button variant="ghost" size="sm" disabled={busy} onClick={() => setForgetting(computer.id)}>
-                    {t('Forget')}
-                  </Button>
-                )}
-                {!computer.local && computer.status !== 'rejected' && (
-                  <Switch
-                    className="ml-1 flex-none"
-                    aria-label={t('Keep {0} connected', { 0: computer.name })}
-                    title={t('Turn off to pause this connection without forgetting it.')}
-                    checked={computer.status !== 'paused'}
-                    disabled={busy}
-                    onCheckedChange={(on) => void act(() => invoke('computers.update', computer.id, { enabled: on }))}
+                    items={[
+                      { key: 'settings', label: t('Connection settings…'), onSelect: () => setEditing(computer.id) },
+                      ...(computer.status === 'paused' || computer.status === 'rejected'
+                        ? []
+                        : [
+                            {
+                              key: 'pause',
+                              label: t('Pause connection'),
+                              onSelect: () =>
+                                void act(() => invoke('computers.update', computer.id, { enabled: false })),
+                            },
+                          ]),
+                      { key: 'gap', separator: true as const },
+                      { key: 'forget', label: t('Forget…'), danger: true, onSelect: () => setForgetting(computer.id) },
+                    ]}
                   />
                 )}
               </div>
             </div>
-            <HostUpdateLine computer={computer} />
-            {computer.grantedUnreachable && (
-              <p role="status" className="m-[6px_0_0_44px] text-caption text-muted-foreground">
-                {t(
-                  'Paired, but this host has not answered yet. Ramu keeps the access and connects when it is reachable; you do not need the code again.',
-                )}
-              </p>
-            )}
-            {!computer.local && computer.status === 'connected' && (
-              <Collapsible className="mt-1 ml-[36px]">
-                <CollapsibleTrigger
-                  render={
-                    <Button variant="ghost" size="sm" className="group/perm text-caption text-muted-foreground" />
-                  }
-                >
-                  {t('Permissions')}
-                  <ChevronDown size={14} className="transition-transform group-data-[panel-open]/perm:rotate-180" />
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  {/* Both directions in one place: what this computer may do there, and what that host may do here. */}
-                  <ThisDevicePermissions computer={computer} agents={agents} />
-                  <HostScreenSharing computer={computer} />
-                </CollapsibleContent>
-              </Collapsible>
-            )}
+            <div className="ml-[44px] flex flex-col empty:hidden">
+              <HostUpdateLine computer={computer} />
+              {computer.grantedUnreachable && (
+                <p role="status" className="m-[6px_0_0] text-caption text-muted-foreground">
+                  {t(
+                    'Paired, but this host has not answered yet. Ramu keeps the access and connects when it is reachable; you do not need the code again.',
+                  )}
+                </p>
+              )}
+              {!computer.local && computer.status === 'connected' && <HostAccess computer={computer} agents={agents} />}
+            </div>
           </article>
         ))}
       </div>
-      {reachable.length > 0 && (
+      {reachable.length > 1 && (
         <div className="mt-2">
           <SettingsRow className="settings-toggle">
             <SettingsLabel
@@ -963,267 +887,7 @@ function Computers({ state }: { state: ComputerList }) {
           </SettingsRow>
         </div>
       )}
-      {(adding || !others.length) && (
-        <div className="mt-2 rounded-(--radius-m) bg-fill p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="flex flex-col">
-              <strong className="text-body font-medium">{t('Add a host')}</strong>
-              {!others.length && (
-                <span className="text-caption text-muted-foreground">
-                  {t('Add your laptop, workstation or server. They stay connected together while Ramu is open.')}
-                </span>
-              )}
-            </span>
-            {others.length > 0 && (
-              <Button variant="ghost" disabled={busy} onClick={() => setAdding(false)}>
-                {t('Cancel')}
-              </Button>
-            )}
-          </div>
-          <div
-            className="mb-3 inline-flex gap-1 rounded-(--radius-s) bg-background/40 p-0.5"
-            role="group"
-            aria-label={t('How to connect')}
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-pressed={mode === 'nearby'}
-              className={mode === 'nearby' ? 'bg-hover' : ''}
-              disabled={busy}
-              onClick={() => choose('nearby')}
-            >
-              <Radar size={14} />
-              {t('Nearby hosts')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-pressed={mode === 'account'}
-              className={mode === 'account' ? 'bg-hover' : ''}
-              disabled={busy}
-              onClick={() => choose('account')}
-            >
-              <Globe size={14} />
-              {t('Ramu Link')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-pressed={mode === 'link'}
-              className={mode === 'link' ? 'bg-hover' : ''}
-              disabled={busy}
-              onClick={() => choose('link')}
-            >
-              <Link2 size={14} />
-              {t('Link or address')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-pressed={mode === 'ssh'}
-              className={mode === 'ssh' ? 'bg-hover' : ''}
-              disabled={busy}
-              onClick={() => choose('ssh')}
-            >
-              <Terminal size={14} />
-              {t('SSH')}
-            </Button>
-          </div>
-          {mode === 'nearby' && (
-            <NearbyHosts
-              onFallback={choose}
-              onChoose={(host, url) => {
-                const typeCode = () => {
-                  setAddress(url)
-                  setName((current) => current || host.name)
-                  setLink('')
-                  setLinkError(null)
-                  setCode('')
-                  setMode('link')
-                  setFocusCode(true)
-                }
-                // Ask the host; a person there allows it when both show the same number. Older hosts need the code.
-                setAsking({ name: host.name, code: null })
-                void Promise.resolve(invoke('computers.pairByRequest', url, host.name))
-                  .then(() => {
-                    setAsking(null)
-                    reset()
-                    setAdding(false)
-                  })
-                  .catch((error) => {
-                    setAsking(null)
-                    const message = errorText(error)
-                    if (!/cancelled|aborted/i.test(message) && !/needs a pairing code/i.test(message))
-                      notifyError(message, t('Hosts'))
-                    if (!/cancelled|aborted/i.test(message)) typeCode()
-                  })
-              }}
-            />
-          )}
-          {mode === 'account' && (
-            <AccountHosts
-              onConnect={(host) => {
-                setAsking({ name: host.name, code: null })
-                void Promise.resolve(invoke('linkAccount.connect', host.hostId, host.name))
-                  .then(() => {
-                    setAsking(null)
-                    reset()
-                    setAdding(false)
-                  })
-                  .catch((error) => {
-                    setAsking(null)
-                    const message = errorText(error)
-                    if (!/cancelled|aborted/i.test(message)) notifyError(message, t('Hosts'))
-                  })
-              }}
-            />
-          )}
-          {(mode === 'nearby' || mode === 'account') && asking ? (
-            <div
-              role="status"
-              className="mt-3 flex flex-col items-start gap-2 rounded-(--radius-m) bg-fill p-[14px_16px]"
-            >
-              {asking.code ? (
-                <>
-                  <span className="text-control">
-                    {t('Allow this computer on {0} if it shows this number', { 0: asking.name })}
-                  </span>
-                  <span className="font-mono text-[28px] font-semibold tracking-[0.12em]">{asking.code}</span>
-                </>
-              ) : (
-                <span className="text-control">{t('Asking {0}…', { 0: asking.name })}</span>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setAsking(null)
-                  void Promise.resolve(invoke('computers.cancelPairRequest')).catch(() => {})
-                }}
-              >
-                {t('Cancel')}
-              </Button>
-            </div>
-          ) : null}
-          {mode === 'nearby' || mode === 'account' ? null : mode === 'link' ? (
-            <>
-              <p className="m-[0_0_12px] text-caption text-muted-foreground">
-                {t(
-                  'Open Remote access on that host, choose Pair a device, then paste its link or enter what it shows. Projects live on that host, so add them there.',
-                )}
-              </p>
-              <form
-                className="flex flex-col gap-3"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  if (!busy && address.trim() && code.trim()) void pair()
-                }}
-              >
-                <Input
-                  className="bg-background"
-                  aria-label={t('Pairing link')}
-                  placeholder={t('Paste a pairing link (ramu://pair…) or a remote link')}
-                  value={link}
-                  disabled={busy}
-                  aria-invalid={!!linkError}
-                  onChange={(event) => fromLink(event.target.value)}
-                />
-                {linkError && (
-                  <p className="m-0 text-caption text-bad" role="alert">
-                    {linkError}
-                  </p>
-                )}
-                <Input
-                  className="bg-background"
-                  aria-label={t('Address')}
-                  placeholder={t('Address, for example 100.64.0.7:7788')}
-                  value={address}
-                  disabled={busy}
-                  onChange={(event) => setAddress(event.target.value)}
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    className="bg-background"
-                    aria-label={t('Pairing code')}
-                    placeholder={t('Pairing code')}
-                    autoFocus={focusCode}
-                    autoCapitalize="characters"
-                    spellCheck={false}
-                    value={code}
-                    disabled={busy}
-                    onChange={(event) => setCode(event.target.value)}
-                  />
-                  <Input
-                    className="bg-background"
-                    aria-label={t('Name')}
-                    placeholder={t('Name (optional)')}
-                    maxLength={60}
-                    value={name}
-                    disabled={busy}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </div>
-                <div className="flex justify-end">
-                  <Button type="submit" variant="default" disabled={busy || !address.trim() || !code.trim()}>
-                    {busy ? t('Pairing…') : t('Pair')}
-                  </Button>
-                </div>
-              </form>
-            </>
-          ) : (
-            <>
-              <p className="m-[0_0_12px] text-caption text-muted-foreground">
-                {t(
-                  'Connects through SSH with your keys and ~/.ssh/config. Ramu must already be installed on that host; it is started there if it is not running, and no port is opened to the network.',
-                )}
-              </p>
-              <form
-                className="flex flex-col gap-3"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  if (!busy && target.trim()) void connectSsh()
-                }}
-              >
-                <Input
-                  className="bg-background"
-                  aria-label={t('SSH host')}
-                  placeholder={t('user@host or an alias from your SSH config')}
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  value={target}
-                  disabled={busy}
-                  onChange={(event) => setTarget(event.target.value)}
-                />
-                {hosts.length > 0 && (
-                  <Dropdown
-                    label={t('SSH config aliases')}
-                    value=""
-                    placeholder={t('Choose from your SSH config')}
-                    options={hosts.map((host) => ({ value: host, label: host }))}
-                    onChange={setTarget}
-                    disabled={busy}
-                  />
-                )}
-                <Input
-                  className="bg-background"
-                  aria-label={t('Name')}
-                  placeholder={t('Name (optional)')}
-                  maxLength={60}
-                  value={name}
-                  disabled={busy}
-                  onChange={(event) => setName(event.target.value)}
-                />
-                <div className="flex justify-end">
-                  <Button type="submit" variant="default" disabled={busy || !target.trim()}>
-                    {busy ? t('Connecting…') : t('Connect')}
-                  </Button>
-                </div>
-              </form>
-            </>
-          )}
-        </div>
-      )}
+      {adding && <AddHostDialog {...adding} onClose={() => setAdding(null)} />}
       {selected && <ComputerSettings key={selected.id} computer={selected} onClose={() => setEditing(null)} />}
       {forgetting !== null && (
         <ConfirmDialog
@@ -1244,7 +908,260 @@ function Computers({ state }: { state: ComputerList }) {
           </p>
         </ConfirmDialog>
       )}
-    </section>
+    </Section>
+  )
+}
+
+type AddMode = 'account' | 'nearby' | 'address'
+
+/**
+ * Adding a host: Ramu Link hosts on the same account, hosts nearby, or one field that takes a pairing link, an address or
+ * an SSH host and asks only for what that needs.
+ */
+function AddHostDialog({ link, repair, onClose }: { link?: string; repair?: Computer; onClose: () => void }) {
+  useLanguage()
+  const [mode, setMode] = useState<AddMode>(link || repair ? 'address' : 'account')
+  const [busy, setBusy] = useState(false)
+  const [text, setText] = useState(link ?? repair?.url ?? '')
+  const [address, setAddress] = useState(repair?.url ?? ''),
+    [code, setCode] = useState(''),
+    [name, setName] = useState(repair?.name ?? '')
+  const [focusCode, setFocusCode] = useState(!!repair)
+  const [aliases, setAliases] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
+  // Asking a host to pair: the number to match once it answers.
+  const [asking, setAsking] = useState<{ name: string; code: string | null } | null>(null)
+  useEffect(
+    () => ramu.on('computers:pairCode', ({ code }) => setAsking((current) => current && { ...current, code })),
+    [],
+  )
+  useEffect(() => {
+    void invoke('computers.sshHosts').then(setAliases, () => {})
+  }, [])
+  const ssh = isSshTarget(text, aliases)
+  // A pasted link or address fills the code and name; they stay editable.
+  const read = (value: string) => {
+    setText(value)
+    setError(null)
+    if (!value.trim() || isSshTarget(value, aliases)) return setAddress('')
+    try {
+      const parsed = parsePairInput(value)
+      setAddress(parsed.url)
+      if (parsed.code) setCode(parsed.code)
+      if (parsed.name) setName((current) => current || parsed.name!)
+    } catch (reason) {
+      setAddress('')
+      setError(errorText(reason))
+    }
+  }
+  useEffect(() => {
+    if (link) read(link)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads the link the dialog opened with, once
+  }, [])
+  const run = async (work: () => Promise<unknown>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await work()
+      onClose()
+    } catch (reason) {
+      setError(errorText(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const ask = (host: string, request: () => Promise<unknown>, fallback?: () => void) => {
+    setAsking({ name: host, code: null })
+    void request()
+      .then(onClose)
+      .catch((reason) => {
+        setAsking(null)
+        const message = errorText(reason)
+        if (/cancelled|aborted/i.test(message)) return
+        // Older hosts cannot be asked; they show a code to type instead.
+        if (fallback) fallback()
+        if (!fallback || !/needs a pairing code/i.test(message)) setError(message)
+      })
+  }
+  const submit = () => {
+    if (busy) return
+    if (ssh) void run(() => invoke('computers.pairSsh', text.trim(), name.trim() || undefined))
+    else if (address && code.trim())
+      void run(() => invoke('computers.pair', address, code.trim(), name.trim() || undefined))
+  }
+  const tabs: { mode: AddMode; label: string; icon: ReactNode }[] = [
+    { mode: 'account', label: t('Ramu Link'), icon: <RamuGlyph size={14} /> },
+    { mode: 'nearby', label: t('Nearby'), icon: <Radar size={14} /> },
+    { mode: 'address', label: t('Link, address or SSH'), icon: <Link2 size={14} /> },
+  ]
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) {
+          if (asking) void Promise.resolve(invoke('computers.cancelPairRequest')).catch(() => {})
+          onClose()
+        }
+      }}
+    >
+      <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-[540px]">
+        <DialogHeader>
+          <DialogTitle>{repair ? t('Pair {0} again', { 0: repair.name }) : t('Add a host')}</DialogTitle>
+          <DialogDescription>
+            {t('Its projects, agents and terminals stay on that host. This computer opens and controls them.')}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="inline-flex gap-1 self-start rounded-(--radius-s) bg-fill p-0.5" role="group">
+          {tabs.map((tab) => (
+            <Button
+              key={tab.mode}
+              variant="ghost"
+              size="sm"
+              aria-pressed={mode === tab.mode}
+              className={mode === tab.mode ? 'bg-hover text-foreground' : 'text-muted-foreground'}
+              disabled={busy || !!asking}
+              onClick={() => {
+                setMode(tab.mode)
+                setError(null)
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </Button>
+          ))}
+        </div>
+        {asking ? (
+          <div role="status" className="flex flex-col items-start gap-2 rounded-(--radius-m) bg-fill p-[14px_16px]">
+            {asking.code ? (
+              <>
+                <span className="text-control">
+                  {t('Allow this computer on {0} if it shows this number', { 0: asking.name })}
+                </span>
+                <span className="font-mono text-[28px] font-semibold tracking-[0.12em]">{asking.code}</span>
+              </>
+            ) : (
+              <span className="text-control">{t('Asking {0}…', { 0: asking.name })}</span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setAsking(null)
+                void Promise.resolve(invoke('computers.cancelPairRequest')).catch(() => {})
+              }}
+            >
+              {t('Cancel')}
+            </Button>
+          </div>
+        ) : mode === 'account' ? (
+          <AccountHosts
+            onConnect={(host) =>
+              ask(host.name, () => Promise.resolve(invoke('linkAccount.connect', host.hostId, host.name)))
+            }
+          />
+        ) : mode === 'nearby' ? (
+          <NearbyHosts
+            onFallback={() => setMode('address')}
+            onChoose={(host, url) =>
+              ask(
+                host.name,
+                () => Promise.resolve(invoke('computers.pairByRequest', url, host.name)),
+                () => {
+                  setMode('address')
+                  setText(url)
+                  setAddress(url)
+                  setName((current) => current || host.name)
+                  setCode('')
+                  setFocusCode(true)
+                },
+              )
+            }
+          />
+        ) : (
+          <form
+            id="add-host"
+            className="flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault()
+              submit()
+            }}
+          >
+            <Input
+              aria-label={t('Link, address or SSH host')}
+              placeholder={t('Pairing link, 100.64.0.7:7788 or user@host')}
+              autoFocus={!focusCode}
+              autoCapitalize="none"
+              spellCheck={false}
+              value={text}
+              disabled={busy}
+              aria-invalid={!!error && !ssh && !address}
+              onChange={(event) => read(event.target.value)}
+            />
+            {aliases.length > 0 && (
+              <Dropdown
+                label={t('SSH config aliases')}
+                value=""
+                placeholder={t('Choose from your SSH config')}
+                options={aliases.map((alias) => ({ value: alias, label: alias }))}
+                onChange={read}
+                disabled={busy}
+              />
+            )}
+            <p className="m-0 text-caption text-muted-foreground">
+              {ssh
+                ? t(
+                    'Connects through SSH with your keys and ~/.ssh/config. Ramu must already be installed on that host; it is started there if it is not running, and no port is opened to the network.',
+                  )
+                : t(
+                    'On that host, open Remote access and choose Pair a device. Paste its link, or type its address and code.',
+                  )}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {!ssh && (
+                <Input
+                  aria-label={t('Pairing code')}
+                  placeholder={t('Pairing code')}
+                  autoFocus={focusCode}
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  value={code}
+                  disabled={busy}
+                  onChange={(event) => setCode(event.target.value)}
+                />
+              )}
+              <Input
+                aria-label={t('Name')}
+                placeholder={t('Name (optional)')}
+                maxLength={60}
+                value={name}
+                disabled={busy}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
+          </form>
+        )}
+        {error && (
+          <p className="m-0 text-caption text-bad" role="alert">
+            {error}
+          </p>
+        )}
+        <DialogFooter className="sticky bottom-0 z-10 bg-popover">
+          <Button variant="secondary" disabled={busy} onClick={onClose}>
+            {t('Cancel')}
+          </Button>
+          {mode === 'address' && !asking && (
+            <Button
+              type="submit"
+              form="add-host"
+              variant="default"
+              disabled={busy || (ssh ? !text.trim() : !address || !code.trim())}
+            >
+              {busy ? (ssh ? t('Connecting…') : t('Pairing…')) : ssh ? t('Connect') : t('Pair')}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1392,6 +1309,12 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
               'Host announcements need a reachable LAN or VPN path. If your network blocks them, use Retry or enable five-minute checks.',
             )}
           </p>
+          {computer.status === 'connected' && (
+            <div className="flex flex-col gap-2 border-t border-border pt-4">
+              <strong className="text-body font-medium">{t('What this device may do there')}</strong>
+              <HostPermissionList computer={computer} />
+            </div>
+          )}
           {error && (
             <p role="alert" className="m-0 text-caption text-bad">
               {error}
@@ -1438,12 +1361,6 @@ function accessSummary(device: NetworkDevice): string {
   return t('Full access · {0} of {1} permissions', { 0: allowed, 1: DEVICE_PERMISSIONS.length })
 }
 
-/**
- * One paired device as a single row: name, what it may do and when it was last seen. Its permissions, dates and Revoke
- * open below it, so a long list of devices stays scannable.
- */
-/** Devices report no platform, so the name decides: a paired host, a phone or tablet, or a computer. */
-
 /** How long one device stays paired without use: its own choice, or the same as every other device here. */
 function DeviceExpiry({
   device,
@@ -1478,20 +1395,19 @@ function DeviceExpiry({
   )
 }
 
+/**
+ * One paired device as a single row: name, what it may do and when it was last seen. Its permissions, dates and Revoke
+ * open below it, so a long list of devices stays scannable.
+ */
 function PairedDeviceRow({
   device,
   invoke,
   onRevoke,
-  screen,
-  onScreen,
   hostDays,
 }: {
   device: NetworkDevice
   invoke: Parameters<typeof DevicePermissionList>[0]['invoke']
   onRevoke: () => void
-  /** The screen this device offers this host's agents, when it offers one. */
-  screen?: Parameters<typeof DeviceScreenLine>[0]['offer']
-  onScreen: (allowed: boolean) => void
   /** This host's default pairing lifetime, which a device follows unless it has its own. */
   hostDays: number | 'never'
 }) {
@@ -1535,7 +1451,6 @@ function PairedDeviceRow({
         ) : (
           <DevicePermissionList device={device} invoke={invoke} />
         )}
-        {screen && <DeviceScreenLine name={device.name} offer={screen} onChange={onScreen} />}
         {device.kind !== 'host' && <DeviceExpiry device={device} hostDays={hostDays} invoke={invoke} />}
         <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
           <span className="text-caption text-muted-foreground">

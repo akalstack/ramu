@@ -202,12 +202,6 @@ export interface ComputerLockedUse {
   blockers: string[]
 }
 
-export interface ComputerRuntimeInfo {
-  id: string
-  name: string
-  online: boolean
-}
-
 type ComputerFrameMeta = import('./computerBridge').ComputerFrameMeta
 type ComputerAction = import('./computerBridge').ComputerAction
 
@@ -249,22 +243,12 @@ export interface RamuMethods {
   /** Opens OCU doctor/onboarding on the owning Mac. Does not grant macOS permissions automatically. */
   'computer.openSetup'(): void
   'computer.resetDefaults'(): void
-  /** Computers whose screen a thread can use: this host and paired computers the owner allowed. */
-  'computer.runtimes'(): ComputerRuntimeInfo[]
-  /** Paired devices that registered as screen owners, with whether this host's owner allowed them. */
-  'computer.runtimeDevices'(): (ComputerRuntimeInfo & { deviceId: string; allowed: boolean })[]
-  'computer.allowRuntime'(deviceId: string, allow: boolean): void
-  'computerBroker.register'(name: string): void
-  'computerBroker.next'(waitMs: number): import('./computerBridge').BrokerCommand | null
-  'computerBroker.result'(id: string, outcome: { ok: true; value?: unknown } | { ok: false; error: string }): void
-  'computerBroker.unregister'(): void
-  'computer.brokerExec'(command: unknown): unknown
-  'computer.apps'(runtime?: string): string[]
+  'computer.apps'(): string[]
   'computer.setEnabled'(enabled: boolean): void
   'computer.setGlobalPointer'(enabled: boolean): void
   'computer.grant'(
     threadId: string,
-    scope: { observe: boolean; input: boolean; app?: string; runtime?: string },
+    scope: { observe: boolean; input: boolean; app?: string },
   ): ComputerSessionSummary | null
   'computer.revoke'(threadId: string): void
   /** Current per-thread computer access on this host. Owning and paired owner devices only. */
@@ -692,9 +676,6 @@ export interface RamuMethods {
   'linkAccount.hosts'(): import('./types').LinkAccountHost[]
   /** Pairs a host from the account through Ramu Link; the number to match arrives as `computers:pairCode`. */
   'linkAccount.connect'(hostId: string, name?: string): Computers
-  /** Paired computers this computer lets use its screen (opt-in per host). */
-  'computers.screenSharing'(): string[]
-  'computers.setScreenSharing'(id: string, enabled: boolean): string[]
   'computers.forget'(id: string): Computers
   'computers.retry'(id: string): Computers
   /** Moves a saved host to a new address after that address proves it is the host paired with; otherwise changes nothing. */

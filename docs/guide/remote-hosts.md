@@ -4,13 +4,18 @@ A **host** is a computer that runs Ramu's workspace server: your agents, termina
 
 ## From the desktop app
 
-**Settings → Remote access**:
+**Settings → Remote access** has two parts.
 
-- **Let other devices connect** opens the host on a network you choose (all networks, or one such as your VPN) and a port.
+**Hosts you use** lists every host this computer works on. **Add a host** offers hosts on your Ramu Link account first, then hosts nearby, then one field that takes a pairing link, an address and code, or an SSH host (`user@host` or a name from `~/.ssh/config`). Each host shows its status and route, **Open**, and under ⋯ its **Connection settings…**, **Pause connection** and **Forget…**. A paused host shows **Resume**. A host's row also has **Agents here can start threads on** that host, and names any permission this computer lacks there with one **Request** for all of it; **Connection settings…** lists each permission. On the phone, Settings → Remote access shows the same for the selected host.
+
+To have agents use another computer's screen, add that computer as a host and run the thread there; each host's agents use only its own screen.
+
+**Let other devices use this host** decides who can reach this computer:
+
 - **Ramu Link** reaches the host from anywhere without a VPN or open ports. Sign in with Google or GitHub; devices signed in to the same account list the host under **Add a host → Ramu Link** (on a phone, the pairing screen's Ramu Link tab) and pair after both screens show the same six-digit number. Streams are end-to-end encrypted, so the relay cannot read them. See [Ramu Link](#ramu-link).
+- **Local network or VPN** opens the host on a network you choose (all networks, or one such as your VPN). The network and **Discoverable** choices appear once it is on; the port is under **Advanced**.
 - **Pair a device** shows a one-time code and this host's addresses. With **Discoverable** on, a nearby device can also ask without a code: Ramu asks you to allow it (in the app, or as a notification when it is in the background or closed). Allow it only when both screens show the same six-digit number.
-- **Device permissions** decide what each device may use: computer use, the browser, terminals, settings changes and agents. Grant this time, for an hour, a day or always. Each device shows what it runs on (an iPhone, an Android tablet, a Mac, an Ubuntu server…) once it has connected, and **Keep paired** sets how long that one device stays paired without use, or leaves it like the others. A device that offers this host its screen for agents is allowed or refused in the same place. When a device asks for a permission it lacks, the request opens in Ramu on this host (or as a system notification when Ramu is in the background) with the same choices; closing it leaves the request waiting here until it lapses.
-- **Hosts** adds another host by choosing it nearby, or by address and code. Each host card has a switch that turns its connection off and on without forgetting it, and **Permissions** holds both directions: what this computer may do on that host, and whether that host may use this computer's screen. On the phone, Settings → Remote access shows the same for the selected host.
+- **Device permissions** decide what each device may use: computer use, the browser, terminals, settings changes and agents. Grant this time, for an hour, a day or always. Each device shows what it runs on (an iPhone, an Android tablet, a Mac, an Ubuntu server…) once it has connected, and **Keep paired** sets how long that one device stays paired without use, or leaves it like the others. When a device asks for a permission it lacks, the request opens in Ramu on this host (or as a system notification when Ramu is in the background) with the same choices; closing it leaves the request waiting here until it lapses.
 
 With a second host, a switcher appears at the top of the sidebar. Each host keeps its own threads, browser and settings, and notifications open the right host. **Apply settings to** in Settings edits one host or all of them. Beside each setting, the layers icon (shown on hover) lists its value on every selected host and whether that is the default. A setting whose hosts disagree says **Mixed** and offers to use one host's value everywhere; one a host does not know says **Not on** that host, because it runs an older Ramu, and offers **Restart service** when that host is this computer's background service.
 

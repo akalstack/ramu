@@ -1,12 +1,5 @@
 import { z } from 'zod'
-import {
-  MAX_COMPUTER_TEXT,
-  type BrokerCommand,
-  type BrokerOutcome,
-  type ComputerAction,
-  type ComputerBackend,
-  type ComputerRuntimeStatus,
-} from '@ramu/shared/computerBridge'
+import { MAX_COMPUTER_TEXT, type ComputerAction } from '@ramu/shared/computerBridge'
 import { MAIN_DISPLAY } from '../../computer/macos'
 import { ComputerRouter } from '../../computer/router'
 import { installOcu, ocuUpdateStatus, ocuPermissions, setupOcu } from '../../computer/ocu'
@@ -51,7 +44,6 @@ const lockedUse = new LockedUse()
 export const registerComputerHandlers: RegisterHandlers = ({
   testDevices,
   computer,
-  computerBroker: broker,
   computerVideo: video,
   awake,
   host,
@@ -75,16 +67,6 @@ export const registerComputerHandlers: RegisterHandlers = ({
       if (!id || !host.browserGrantEligible?.(id)) throw new Error('Pair an owner device to use this computer.')
     }
     return ready()
-  }
-  const allowedRuntimes = () => workspace.getAppState<string[]>('computer:runtimes', [])
-  /** A broker is a paired owner device the host's owner explicitly allowed; the local device never brokers. */
-  const brokerDevice = () => {
-    const deviceId = host.browserDevice?.()
-    if (!broker) throw new Error('Update this host to use another computer.')
-    if (!deviceId || deviceId === 'local') throw new Error('Only a paired computer can share its screen.')
-    if (!allowedRuntimes().includes(deviceId))
-      throw new Error('This computer is not allowed to share its screen with this host.')
-    return deviceId
   }
   const device = () => host.browserDevice?.() ?? 'local'
   const thread = (threadId: string) => {
@@ -113,10 +95,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
       generation,
       paused,
       runtime: session.runtime,
-      // Only the host knows its own system; a remote runtime's is not reported.
-      ...(session.runtime.id === 'local'
-        ? { os: process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux' }
-        : {}),
+      os: process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux',
       interruption: session.interruption,
       handoffRequest: session.handoffRequest,
       detectsLocalInput: session.detectsLocalInput,
@@ -210,21 +189,15 @@ export const registerComputerHandlers: RegisterHandlers = ({
         const service = admin()
         workspace.setAppState('computer:enabled', false)
         workspace.setAppState('computer:globalPointer', false)
-        workspace.setAppState('computer:runtimes', [])
         for (const task of workspace.listTasks()) service.revoke(task.id)
         const locked = await lockedUse.status()
         if (locked.enabled) await lockedUse.disable()
       },
     },
     'computer.apps': {
-      args: z.union([z.tuple([]), z.tuple([id])]),
-      run: async (runtime?: string) => {
+      args: z.tuple([]),
+      run: async () => {
         const service = owner()
-        if (runtime && runtime !== 'local') {
-          if (!allowedRuntimes().includes(runtime) || !broker)
-            throw new Error('That computer is not allowed to share its screen.')
-          return broker.backendFor(runtime).apps()
-        }
         return service.backend instanceof ComputerRouter ? service.backend.listApps() : []
       },
     },
@@ -235,142 +208,30 @@ export const registerComputerHandlers: RegisterHandlers = ({
           observe: z.boolean(),
           input: z.boolean(),
           app: z.string().min(1).max(200).optional(),
-          runtime: id.optional(),
         }),
       ]),
-      run: async (threadId: string, scope: { observe: boolean; input: boolean; app?: string; runtime?: string }) => {
+      run: async (threadId: string, scope: { observe: boolean; input: boolean; app?: string }) => {
         const service = owner()
         if (installingApps) throw new Error('Wait for the Open Computer Use update to finish.')
         if (!enabled()) throw new Error('Turn on computer use in Settings first.')
-        const remoteId = scope.runtime && scope.runtime !== 'local' ? scope.runtime : null
-        let backend: ComputerBackend = service.backend
-        let runtime: { id: string; name: string; backend: ComputerBackend } | undefined
-        let appsFrom: { listApps(): Promise<string[]>; appStatus(): ComputerRuntimeStatus } | null =
-          service.backend instanceof ComputerRouter ? service.backend : null
-        if (remoteId) {
-          if (!allowedRuntimes().includes(remoteId))
-            throw new Error('That computer is not allowed to share its screen.')
-          if (!broker) throw new Error('Update this host to use another computer.')
-          const remote = broker.backendFor(remoteId)
-          const status = remote.status()
-          if (!status.available) throw new Error(status.detail ?? 'That computer is offline.')
-          backend = remote
-          runtime = { id: remoteId, name: status.computer.name, backend: remote }
-          appsFrom = { listApps: () => remote.apps(), appStatus: () => status }
-        }
+        const backend = service.backend
         let target = MAIN_DISPLAY
         if (scope.app !== undefined) {
-          if (!appsFrom) throw new Error('This host cannot limit access to one app.')
-          const status = appsFrom.appStatus()
-          if (!status.available) throw new Error(status.detail ?? 'App control is not available on that computer.')
+          if (!(backend instanceof ComputerRouter)) throw new Error('This host cannot limit access to one app.')
+          const status = backend.appStatus()
+          if (!status.available) throw new Error(status.detail ?? 'App control is not available on this computer.')
           // Only an app that is running or recently used can be granted, never an arbitrary string.
-          const known = await appsFrom.listApps()
+          const known = await backend.listApps()
           if (!known.includes(scope.app)) throw new Error(`${scope.app} is not a running or recently used app.`)
           target = { id: `app:${scope.app}`, kind: 'app', name: scope.app }
         } else {
           const status = backend.status()
-          if (!status.available) throw new Error(status.detail ?? 'Computer use is not available on that computer.')
+          if (!status.available) throw new Error(status.detail ?? 'Computer use is not available on this computer.')
         }
         owner()
         if (!enabled() || installingApps) throw new Error('Computer access changed. Choose the target again.')
-        service.grant(
-          thread(threadId),
-          { target, observe: scope.observe, input: scope.input && scope.observe },
-          runtime,
-        )
+        service.grant(thread(threadId), { target, observe: scope.observe, input: scope.input && scope.observe })
         return summary(threadId)
-      },
-    },
-    'computer.runtimes': {
-      args: z.tuple([]),
-      run: () => {
-        owner()
-        const local = ready().status()
-        const allowed = allowedRuntimes()
-        return [
-          { id: 'local', name: local.available ? local.computer.name : 'This computer', online: local.available },
-          ...(broker?.list() ?? [])
-            .filter((entry) => allowed.includes(entry.deviceId))
-            .map((entry) => ({ id: entry.deviceId, name: entry.name, online: entry.online })),
-        ]
-      },
-    },
-    'computer.runtimeDevices': {
-      args: z.tuple([]),
-      run: () => {
-        admin()
-        const allowed = allowedRuntimes()
-        const seen = new Map((broker?.list() ?? []).map((entry) => [entry.deviceId, entry]))
-        return [...new Set([...allowed, ...seen.keys()])].map((deviceId) => ({
-          deviceId,
-          name: seen.get(deviceId)?.name ?? deviceId,
-          online: seen.get(deviceId)?.online ?? false,
-          allowed: allowed.includes(deviceId),
-        }))
-      },
-    },
-    'computer.allowRuntime': {
-      args: z.tuple([id, z.boolean()]),
-      run: (deviceId: string, allow: boolean) => {
-        const service = admin()
-        if (allow && !host.browserGrantEligible?.(deviceId))
-          throw new Error('Choose a paired owner device. Viewer pairing grants no computer access.')
-        const next = allow
-          ? [...new Set([...allowedRuntimes(), deviceId])]
-          : allowedRuntimes().filter((entry) => entry !== deviceId)
-        workspace.setAppState('computer:runtimes', next)
-        if (!allow) {
-          broker?.unregister(deviceId)
-          for (const task of workspace.listTasks()) {
-            const session = service.session(task.id)
-            if (session?.runtime.id === deviceId) service.revoke(task.id)
-          }
-        }
-      },
-    },
-    // The owner's desktop calls these over its authenticated connection; ordinary client calls cannot reach a screen.
-    'computerBroker.register': {
-      args: z.tuple([z.string().min(1).max(120)]),
-      run: (name: string) => {
-        const deviceId = brokerDevice()
-        broker!.register(deviceId, name)
-      },
-    },
-    'computerBroker.next': {
-      args: z.tuple([z.number().int().min(0).max(30_000)]),
-      run: (waitMs: number) => broker!.next(brokerDevice(), waitMs),
-    },
-    'computerBroker.result': {
-      args: z.tuple([
-        z.string().uuid(),
-        z.union([
-          z.object({ ok: z.literal(true), value: z.unknown().optional() }),
-          z.object({ ok: z.literal(false), error: z.string().max(2000) }),
-        ]),
-      ]),
-      run: (commandId: string, outcome: BrokerOutcome) => broker!.result(brokerDevice(), commandId, outcome),
-    },
-    'computerBroker.unregister': { args: z.tuple([]), run: () => broker!.unregister(brokerDevice()) },
-    // Runs one command from the execution host on this computer's own backend. Local only, and only while enabled here.
-    'computer.brokerExec': {
-      args: z.tuple([z.custom<BrokerCommand>((value) => typeof value === 'object' && value !== null)]),
-      run: async (command: BrokerCommand) => {
-        const service = admin()
-        if (installingApps) throw new Error('Wait for the Open Computer Use update to finish.')
-        if (!enabled()) throw new Error('Computer use is off on this computer.')
-        const local = service.backend
-        switch (command.kind) {
-          case 'capture':
-            return local.capture(command.target)
-          case 'perform':
-            return local.perform(command.target, command.action)
-          case 'release':
-            return local.releaseInput(command.target)
-          case 'apps':
-            return local instanceof ComputerRouter ? local.listApps() : []
-          case 'localInput':
-            return (await local.localInputActive?.(command.target)) === true
-        }
       },
     },
     'computer.revoke': { args: z.tuple([id]), run: (threadId: string) => owner().revoke(thread(threadId)) },

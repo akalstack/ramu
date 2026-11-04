@@ -211,13 +211,6 @@ export function ComputerSettings({
             setError('')
             try {
               await invokeOn(hostId, 'computer.resetDefaults')
-              if (hostId === ownHostId()) {
-                const shared = await ramu.invoke('computers.screenSharing')
-                for (const id of shared) {
-                  if (!canWrite()) return
-                  await ramu.invoke('computers.setScreenSharing', id, false)
-                }
-              }
               await refresh()
               setRevision((value) => value + 1)
             } catch (reason) {

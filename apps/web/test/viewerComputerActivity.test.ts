@@ -96,7 +96,6 @@ beforeEach(() => {
   state.invoke.mockReset().mockImplementation(async (method) => {
     if (method === 'computer.session') return session
     if (method === 'computer.status') return { enabled: true, runtime: { available: true } }
-    if (method === 'computer.runtimes') return []
     if (method === 'computer.frame')
       return { data: 'AA', mimeType: 'image/png', width: 10, height: 10, capturedAt: Date.now(), generation: 1 }
   })
@@ -160,7 +159,6 @@ it('stays out of the tray while the thread has no computer, and opens the grant 
   state.invoke.mockImplementation(async (method) => {
     if (method === 'computer.session') return null
     if (method === 'computer.status') return { enabled: true, runtime: { available: true }, apps: { available: false } }
-    if (method === 'computer.runtimes') return []
   })
   Render()
   await flush()
@@ -175,7 +173,7 @@ it('stays out of the tray while the thread has no computer, and opens the grant 
   const allow = asked.find((node) => node.props.children === 'Allow main display')!
   allow.props.onClick()
   await flush()
-  expect(state.invoke).toHaveBeenCalledWith('computer.grant', 'task', { observe: true, input: true, runtime: 'local' })
+  expect(state.invoke).toHaveBeenCalledWith('computer.grant', 'task', { observe: true, input: true })
 })
 it('does not offer a grant to a view-only device', async () => {
   state.invoke.mockImplementation(async (method) => (method === 'computer.session' ? null : undefined))

@@ -675,8 +675,6 @@ export function ComputerGrantDialog({ state }: { state: ComputerActivityState })
   const [apps, setApps] = useState<string[]>([])
   const [appHint, setAppHint] = useState('')
   const [app, setApp] = useState('')
-  const [runtimes, setRuntimes] = useState<{ id: string; name: string; online: boolean }[]>([])
-  const [runtime, setRuntime] = useState('local')
   const { run, error, needed } = useComputerRun(reload)
   useEffect(() => {
     const show = (event: Event) => {
@@ -694,28 +692,20 @@ export function ComputerGrantDialog({ state }: { state: ComputerActivityState })
       const status = await invoke('computer.status').catch(() => null)
       if (!active || !canWrite()) return
       const appsReady = !!status?.apps?.available
-      const [apps, runtimes] = status?.enabled
-        ? await Promise.all([
-            appsReady || runtime !== 'local'
-              ? invoke('computer.apps', ...(runtime === 'local' ? [] : [runtime])).catch(() => [])
-              : Promise.resolve([]),
-            invoke('computer.runtimes').catch(() => []),
-          ])
-        : [[], []]
+      const apps = status?.enabled && appsReady ? await invoke('computer.apps').catch(() => []) : []
       if (!active) return
-      setReady(!!status?.enabled && (status.runtime.available || appsReady || runtime !== 'local'))
+      setReady(!!status?.enabled && (status.runtime.available || appsReady))
       setAppHint(status?.apps && !status.apps.available ? (status.apps.detail ?? '') : '')
       setApps(apps)
-      setRuntimes(runtimes)
       setLoaded(true)
     })()
     return () => {
       active = false
     }
-  }, [open, taskId, runtime, invoke, canWrite])
+  }, [open, taskId, invoke, canWrite])
   if (!taskId) return null
   const grant = (options: { app?: string }) =>
-    void run(() => invoke('computer.grant', taskId, { observe: true, input: true, ...options, runtime })).then(
+    void run(() => invoke('computer.grant', taskId, { observe: true, input: true, ...options })).then(
       (done) => done && setOpen(false),
     )
   return (
@@ -732,17 +722,6 @@ export function ComputerGrantDialog({ state }: { state: ComputerActivityState })
         </DialogHeader>
         {loaded && (
           <div className="flex flex-col gap-2 text-control">
-            {runtimes.length > 1 && (
-              <Dropdown
-                label={t('Computer')}
-                value={runtime}
-                options={runtimes.map((entry) => ({
-                  value: entry.id,
-                  label: entry.online ? entry.name : `${entry.name} · ${t('Offline')}`,
-                }))}
-                onChange={setRuntime}
-              />
-            )}
             {ready ? (
               <div className="flex flex-wrap items-center gap-2">
                 {apps.length > 0 && (

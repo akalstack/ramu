@@ -594,8 +594,6 @@ export function ComputerActivity({ chat, open, onClose }: { chat: Chat; open: bo
     null,
   )
   const [apps, setApps] = useState<string[]>([])
-  const [runtimes, setRuntimes] = useState<import('@ramu/shared/api').ComputerRuntimeInfo[]>([])
-  const [selected, setSelected] = useState('local')
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
   const [revision, refresh] = useState(0)
@@ -631,13 +629,11 @@ export function ComputerActivity({ chat, open, onClose }: { chat: Chat; open: bo
     void Promise.all([
       io.current.invoke(chat.computerId, 'computer.status'),
       io.current.invoke(chat.computerId, 'computer.session', chat.taskId),
-      io.current.invoke(chat.computerId, 'computer.runtimes'),
     ])
-      .then(([runtime, session, runtimes]) => {
+      .then(([runtime, session]) => {
         if (!active) return
         setRuntime(runtime)
         setSession(session)
-        setRuntimes(runtimes)
       })
       .catch((reason) => {
         if (active) setStatus(reason instanceof Error ? reason.message : String(reason))
@@ -650,7 +646,7 @@ export function ComputerActivity({ chat, open, onClose }: { chat: Chat; open: bo
     if (!open || !online || viewOnly) return
     let active = true
     setApps([])
-    void io.current.invoke(chat.computerId, 'computer.apps', selected).then(
+    void io.current.invoke(chat.computerId, 'computer.apps').then(
       (apps) => {
         if (active) setApps(apps)
       },
@@ -659,7 +655,7 @@ export function ComputerActivity({ chat, open, onClose }: { chat: Chat; open: bo
     return () => {
       active = false
     }
-  }, [open, chat.computerId, online, viewOnly, selected, revision])
+  }, [open, chat.computerId, online, viewOnly, revision])
   if (!chat.taskId) return null
   const host = store.computers.find((computer) => computer.id === chat.computerId)?.name ?? chat.computerId
   const grant = async (app?: string) => {
@@ -672,7 +668,6 @@ export function ComputerActivity({ chat, open, onClose }: { chat: Chat; open: bo
       const granted = await store.invoke(chat.computerId, 'computer.grant', chat.taskId!, {
         observe: true,
         input: true,
-        runtime: selected,
         ...(app ? { app } : {}),
       })
       setSession(granted)
@@ -713,22 +708,9 @@ export function ComputerActivity({ chat, open, onClose }: { chat: Chat; open: bo
               <T tone="muted">{t('Reconnect to use this computer.')}</T>
             ) : (
               <>
-                {runtimes.length > 1 && (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-                    {runtimes.map((entry) => (
-                      <Button
-                        key={entry.id}
-                        title={entry.name}
-                        kind={selected === entry.id ? 'secondary' : 'ghost'}
-                        disabled={!entry.online || busy}
-                        onPress={() => setSelected(entry.id)}
-                      />
-                    ))}
-                  </View>
-                )}
                 <Button
                   title={t('Use main display')}
-                  disabled={busy || !runtime || (selected === 'local' && !runtime.runtime.available)}
+                  disabled={busy || !runtime || !runtime.runtime.available}
                   onPress={() => void grant()}
                 />
                 {apps.length ? <T weight="600">{t('Or limit access to one app')}</T> : null}

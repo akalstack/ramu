@@ -101,7 +101,6 @@ import { HostBrowser } from './browser/hostBrowser'
 import { MacosComputerBackend } from './computer/macos'
 import { OcuBackend } from './computer/ocu'
 import { SckDisplayBackend } from './computer/sck'
-import { BrokerHub } from './computer/broker'
 import { RtcViewers } from './computer/rtc'
 import { VideoFeed } from './computer/video'
 import { ComputerRouter } from './computer/router'
@@ -306,7 +305,6 @@ const mobilePush = new MobilePush(
   fetch,
   (sessionId) => schedules.hasSession(sessionId),
 )
-const computerBroker = new BrokerHub()
 // Video goes to the host itself, or to a paired owner device holding Computer use, as every other computer call does.
 const computerVideo = new RtcViewers(
   new VideoFeed(),
@@ -669,7 +667,6 @@ const dispatcher = createDispatcher(
     browser: browserBroker,
     hostBrowser,
     computer,
-    computerBroker,
     computerVideo,
     terminals,
     resources,

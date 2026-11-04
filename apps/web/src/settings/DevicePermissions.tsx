@@ -224,11 +224,94 @@ export interface AgentHostsControl {
   everywhere: { on: boolean; seq: number }
 }
 
+/** What this device holds on another host, followed while a request waits for that host's answer. */
+function useHostPermissions(host: string) {
+  const [view, setView] = useState<DevicePermissionsView | null>(null)
+  const [error, setError] = useState('')
+  const load = useCallback(
+    () =>
+      invokeOn(host, 'device.permissions').then(
+        (next) => {
+          setView(next)
+          setError('')
+        },
+        (reason) => {
+          setView(null)
+          setError(errorText(reason))
+        },
+      ),
+    [host],
+  )
+  useEffect(() => {
+    void load()
+  }, [load])
+  const waiting = !!view?.pending.length
+  useEffect(() => {
+    if (!waiting) return
+    const timer = window.setInterval(() => void load(), 4000)
+    return () => window.clearInterval(timer)
+  }, [waiting, load])
+  const request = (permissions: DevicePermission[]) =>
+    Promise.all(permissions.map((permission) => invokeOn(host, 'device.requestPermission', permission))).then(
+      load,
+      (reason) => setError(errorText(reason)),
+    )
+  return { view, error, request }
+}
+
+const HOST_PERMISSIONS = DEVICE_PERMISSIONS.filter((permission) => permission !== 'agents')
+const labels = (permissions: DevicePermission[]) =>
+  permissions.map((permission) => t(PERMISSION_LABEL[permission])).join(', ')
+
+/**
+ * On a host's row: whether agents here may start threads there, and what this device still lacks there with one tap to
+ * ask for all of it. A device holding everything sees no permission line at all.
+ */
+export function HostAccess({ computer, agents }: { computer: Computer; agents: AgentHostsControl }) {
+  const { view, error, request } = useHostPermissions(computer.id)
+  if (!view) return error ? <p className="m-0 text-caption text-muted-foreground">{error}</p> : null
+  const now = Date.now()
+  const missing = HOST_PERMISSIONS.filter((permission) => !grantActive(view.permissions[permission] ?? undefined, now))
+  const declined = missing.filter((permission) => view.blocked?.includes(permission))
+  const asked = missing.filter((permission) => view.pending.includes(permission) && !declined.includes(permission))
+  const askable = missing.filter((permission) => !declined.includes(permission) && !asked.includes(permission))
+  const notes = [
+    askable.length ? t('Not allowed: {0}', { 0: labels(askable) }) : '',
+    asked.length ? t('Waiting for {0} to allow {1}', { 0: computer.name, 1: labels(asked) }) : '',
+    declined.length ? t('Declined by the host: {0}', { 0: labels(declined) }) : '',
+  ].filter(Boolean)
+  return (
+    <>
+      {computer.url && !computer.ssh && (
+        <AgentsSwitch
+          computer={{ ...computer, url: computer.url }}
+          agents={agents}
+          held={!!view.permissions.agents}
+          asked={view.pending.includes('agents')}
+          declined={!view.permissions.agents && !!view.blocked?.includes('agents')}
+          onRequest={() => void request(['agents'])}
+        />
+      )}
+      {notes.length > 0 && (
+        <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-muted-foreground">
+          <span className="min-w-0 flex-1">{notes.join(' · ')}</span>
+          {askable.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => void request(askable)}>
+              {t('Request')}
+            </Button>
+          )}
+        </div>
+      )}
+      {error && <p className="m-0 text-caption text-bad">{error}</p>}
+    </>
+  )
+}
+
 /**
  * Agents on this computer using that host. The host grants the permission; this computer then pairs its own server with
  * a code the grant allows, so no code passes through a person. Asking and being granted connects without a second step.
  */
-function AgentsPermission({
+function AgentsSwitch({
   computer,
   agents,
   held,
@@ -263,16 +346,22 @@ function AgentsPermission({
       const { code } = await invokeOn(computer.id, 'device.agentPairing')
       return invoke('network.addAgentHost', computer.url, code, computer.name)
     })
+  const turnOn = () => {
+    if (held) void connect()
+    else {
+      setWanted(true)
+      if (!asked) onRequest()
+    }
+  }
   // The switch for every host acts through each row, so a host still gets asked or connected the one way.
   useEffect(() => {
     if (!everywhere.seq || !hosts) return
     if (!everywhere.on) {
+      setWanted(false)
       if (linked) void run(() => invoke('network.forgetAgentHost', linked.id))
       return
     }
-    if (linked || declined) return
-    setWanted(true)
-    if (!held && !asked) onRequest()
+    if (!linked && !declined) turnOn()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per use of the switch
   }, [everywhere.seq])
   useEffect(() => {
@@ -281,84 +370,40 @@ function AgentsPermission({
     if (!linked) void connect()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the grant arrives; `connect` reads the current render
   }, [wanted, held, hosts])
-  const state = linked ? t('On') : declined ? t('Declined by the host') : held ? t('Allowed') : t('Off')
+  const label = t('Agents here can start threads on {0}', { 0: computer.name })
   return (
-    <div className={SETTINGS_CARD_LINE}>
-      <span className="min-w-0 flex-1 truncate text-control">{t(PERMISSION_LABEL.agents)}</span>
-      <span className="flex-none text-caption text-muted-foreground">{state}</span>
-      {held || linked ? (
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={busy || !hosts}
-          onClick={() => void (linked ? run(() => invoke('network.forgetAgentHost', linked.id)) : connect())}
-        >
-          {linked ? t('Turn off') : t('Turn on')}
-        </Button>
-      ) : (
-        !declined && (
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={asked}
-            onClick={() => {
-              setWanted(true)
-              onRequest()
-            }}
-          >
-            {asked ? t('Asked') : t('Request')}
-          </Button>
-        )
-      )}
+    <div className="flex min-h-7 items-center gap-3">
+      <SettingsLabel
+        title={label}
+        help={
+          declined
+            ? t('Declined by the host')
+            : !linked && (asked || wanted)
+              ? t('Waiting for {0} to allow it', { 0: computer.name })
+              : undefined
+        }
+      />
+      <Switch
+        aria-label={label}
+        checked={!!linked || (wanted && !declined)}
+        disabled={busy || !hosts || (declined && !linked)}
+        onCheckedChange={(on) => {
+          if (on) turnOn()
+          else if (linked) void run(() => invoke('network.forgetAgentHost', linked.id))
+          else setWanted(false)
+        }}
+      />
     </div>
   )
 }
 
-/** What this computer may do on another host, with a request for anything missing. The other host decides. */
-export function ThisDevicePermissions({ computer, agents }: { computer: Computer; agents: AgentHostsControl }) {
-  const host = computer.id
-  const [view, setView] = useState<DevicePermissionsView | null>(null)
-  const [error, setError] = useState('')
-  const load = useCallback(
-    () =>
-      invokeOn(host, 'device.permissions').then(setView, (reason) => {
-        setView(null)
-        setError(errorText(reason))
-      }),
-    [host],
-  )
-  useEffect(() => {
-    void load()
-  }, [load])
-  // That host's answer arrives there, so follow it while a request is open.
-  const waiting = !!view?.pending.length
-  useEffect(() => {
-    if (!waiting) return
-    const timer = window.setInterval(() => void load(), 4000)
-    return () => window.clearInterval(timer)
-  }, [waiting, load])
+/** In a host's connection settings: each thing this device may do there, with a request for anything missing. */
+export function HostPermissionList({ computer }: { computer: Computer }) {
+  const { view, error, request } = useHostPermissions(computer.id)
   if (!view) return error ? <p className="m-0 text-caption text-muted-foreground">{error}</p> : null
-  const request = (permission: DevicePermission) =>
-    void invokeOn(host, 'device.requestPermission', permission).then(load, (reason) => setError(errorText(reason)))
-  const url = computer.url
   return (
-    <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-      {DEVICE_PERMISSIONS.map((permission) => {
-        // An SSH address is a tunnel only this window can reach.
-        if (permission === 'agents') {
-          if (computer.ssh || !url) return null
-          return (
-            <AgentsPermission
-              key={permission}
-              computer={{ ...computer, url }}
-              agents={agents}
-              held={!!view.permissions.agents}
-              asked={view.pending.includes('agents')}
-              declined={!view.permissions.agents && !!view.blocked?.includes('agents')}
-              onRequest={() => request('agents')}
-            />
-          )
-        }
+    <div className="flex flex-col gap-2">
+      {HOST_PERMISSIONS.map((permission) => {
         const grant = view.permissions[permission]
         const asked = view.pending.includes(permission)
         const declined = !grant && !!view.blocked?.includes(permission)
@@ -369,7 +414,7 @@ export function ThisDevicePermissions({ computer, agents }: { computer: Computer
               {declined ? t('Declined by the host') : grantText(grant)}
             </span>
             {!grant && !declined && (
-              <Button size="sm" variant="secondary" disabled={asked} onClick={() => request(permission)}>
+              <Button size="sm" variant="secondary" disabled={asked} onClick={() => void request([permission])}>
                 {asked ? t('Asked') : t('Request')}
               </Button>
             )}

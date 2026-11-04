@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ExternalLink, LogIn } from 'lucide-react'
 import { DEFAULT_LINK_SERVICE } from '@ramu/shared/link/protocol'
 import type { NetworkStatus } from '@ramu/shared/types'
+import { RamuGlyph } from '../Brand'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
@@ -58,7 +59,10 @@ export function LinkSettings({ status, setStatus }: { status: NetworkStatus; set
   const open = (url: string) => void ramu.invoke('app.openExternal', url).catch(() => {})
   return (
     <>
-      <SettingsGroupTitle className="mt-5">{t('Ramu Link')}</SettingsGroupTitle>
+      <SettingsGroupTitle className="flex items-center gap-1.5">
+        <RamuGlyph size={12} />
+        {t('Ramu Link')}
+      </SettingsGroupTitle>
       {!link.account && !link.serviceFixed && !showService && (
         <Button variant="ghost" size="sm" className="self-start" onClick={() => setShowService(true)}>
           {t('Use my own service…')}

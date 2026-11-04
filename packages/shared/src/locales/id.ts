@@ -2219,7 +2219,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Edit selanjutnya dipertahankan jika dapat digabung dengan bersih. Berkas yang konflik tidak disentuh. Berkas diperiksa lagi sebelum dipulihkan; cadangan lokal disimpan.',
   'Let agents use this computer': 'Izinkan agen memakai komputer ini',
   'Let app drags use your real pointer': 'Izinkan seret aplikasi memakai penunjuk asli Anda',
-  'Let {0} use this computer’s screen': 'Izinkan {0} memakai layar komputer ini',
   Live: 'Langsung',
   'Live video': 'Video langsung',
   'Loading conversation': 'Memuat percakapan',
@@ -2243,8 +2242,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'No target': 'Tanpa target',
   'Notes Ramu saved, merged or archived.': 'Catatan yang disimpan, digabung, atau diarsipkan Ramu.',
   'Nothing is staged, so every change is committed': 'Tidak ada yang di-stage, jadi semua perubahan di-commit',
-  'Off by default. That host’s owner must also allow this computer, and can revoke it at any time.':
-    'Mati secara default. Pemilik host itu juga harus mengizinkan komputer ini, dan dapat mencabutnya kapan saja.',
   'Off. The agent stops at the lock screen.': 'Mati. Agen berhenti di layar kunci.',
   'On, but not ready: {0}': 'Hidup, tetapi belum siap: {0}',
   'On. The agent can keep working while this Mac is locked.': 'Hidup. Agen dapat terus bekerja saat Mac ini terkunci.',
@@ -2420,7 +2417,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} of {1} eligible files selected': '{0} dari {1} berkas yang memenuhi syarat dipilih',
   '{0} of {1} files': '{0} dari {1} berkas',
   '{0} selected': '{0} dipilih',
-  '{0} shares its screen with this host': '{0} membagikan layarnya ke host ini',
   '{0} when nothing needs changing. A review thread can edit memories and skills; everything stays restorable.':
     '{0} saat tidak ada yang perlu diubah. Thread tinjauan dapat mengedit memori dan skill; semuanya tetap dapat dipulihkan.',
   '· refreshes when this provider next runs': '· diperbarui saat penyedia ini berjalan berikutnya',
@@ -2489,7 +2485,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Agents can start threads in this project, other projects and hosts added for agents, and a paired host's agents can start threads here. Sub-agents are not affected. Turn off to start threads only yourself.":
     'Agen bisa memulai thread di proyek ini, proyek lain, dan host yang ditambahkan untuk agen, dan agen host terpasang bisa memulai thread di sini. Sub-agen tidak terpengaruh. Matikan agar hanya Anda yang memulai thread.',
   '{0} · shown there as device {1}': '{0} · tampil di sana sebagai perangkat {1}',
-  'Connection options': 'Opsi koneksi',
   'Agents here stop using it. Threads already started there keep running. Revoke device {0} on that host to end the pairing there too.':
     'Agen di sini berhenti memakainya. Thread yang sudah dimulai di sana tetap berjalan. Cabut perangkat {0} di host itu untuk mengakhiri pemasangan di sana juga.',
   'Another host’s agents: start and follow threads only': 'Agen host lain: hanya memulai dan mengikuti thread',
@@ -3623,7 +3618,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Exit code {0}': 'Kode keluar {0}',
   'Add a host': 'Tambah host',
   Address: 'Alamat',
-  'Address, for example 100.64.0.7:7788': 'Alamat, misalnya 100.64.0.7:7788',
   'Addresses this host has': 'Alamat yang dimiliki host ini',
   'All networks': 'Semua jaringan',
   'Allow other devices': 'Izinkan perangkat lain',
@@ -3646,13 +3640,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Pairing link': 'Tautan pemasangan',
   'Open it on a device that has Ramu': 'Buka di perangkat yang memiliki Ramu',
   'Copy pairing link': 'Salin tautan pemasangan',
-  'How to connect': 'Cara menyambung',
-  'Link or address': 'Tautan atau alamat',
   SSH: 'SSH',
-  'Open Remote access on that host, choose Pair a device, then paste its link or enter what it shows. Projects live on that host, so add them there.':
-    'Buka Akses jarak jauh di host itu, pilih Pasangkan perangkat, lalu tempel tautannya atau masukkan yang ditampilkan. Proyek ada di host itu, jadi tambahkan di sana.',
-  'Paste a pairing link (ramu://pair…) or a remote link':
-    'Tempel tautan pemasangan (ramu://pair…) atau tautan jarak jauh',
   'Connects through SSH with your keys and ~/.ssh/config. Ramu must already be installed on that host; it is started there if it is not running, and no port is opened to the network.':
     'Tersambung lewat SSH dengan kunci dan ~/.ssh/config kamu. Ramu harus sudah terpasang di host itu; Ramu dijalankan di sana jika belum berjalan, dan tidak ada port yang dibuka ke jaringan.',
   'SSH host': 'Host SSH',
@@ -3733,7 +3721,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Retry: 'Coba lagi',
   Showing: 'Ditampilkan',
   Local: 'Lokal',
-  'Manage {0}': 'Kelola {0}',
   'Connection settings': 'Pengaturan koneksi',
   '{0} connected · {1} saved': '{0} tersambung · {1} tersimpan',
   'Add your laptop, workstation or server. They stay connected together while Ramu is open.':
@@ -5272,4 +5259,25 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Ramu can create the webhook on GitHub for you.': 'Ramu bisa membuatkan webhook di GitHub untuk Anda.',
   'Create again': 'Buat ulang',
   'Create on {0}': 'Buat di {0}',
+  'Agents here can start threads on {0}': 'Agen di sini bisa memulai thread di {0}',
+  'Connection settings…': 'Pengaturan koneksi…',
+  'Declined by the host: {0}': 'Ditolak oleh host: {0}',
+  'Forget…': 'Lupakan…',
+  'Hosts you use': 'Host yang kamu pakai',
+  'Its projects, agents and terminals stay on that host. This computer opens and controls them.': 'Proyek, agen, dan terminalnya tetap di host itu. Komputer ini membuka dan mengendalikannya.',
+  'Let other devices use this host': 'Biarkan perangkat lain memakai host ini',
+  'Link, address or SSH': 'Tautan, alamat, atau SSH',
+  'Link, address or SSH host': 'Tautan, alamat, atau host SSH',
+  'Local network or VPN': 'Jaringan lokal atau VPN',
+  'More for {0}': 'Lainnya untuk {0}',
+  'Nearby': 'Terdekat',
+  'Not allowed: {0}': 'Belum diizinkan: {0}',
+  'On that host, open Remote access and choose Pair a device. Paste its link, or type its address and code.': 'Di host itu, buka Akses jarak jauh lalu pilih Pasangkan perangkat. Tempel tautannya, atau ketik alamat dan kodenya.',
+  'Pair {0} again': 'Pasangkan {0} lagi',
+  'Pairing link, 100.64.0.7:7788 or user@host': 'Tautan pemasangan, 100.64.0.7:7788, atau user@host',
+  'Pause connection': 'Jeda koneksi',
+  'Phones and your other computers reach it through Ramu Link or your network, after you pair them.': 'Ponsel dan komputermu yang lain menjangkaunya lewat Ramu Link atau jaringanmu, setelah kamu memasangkannya.',
+  'Waiting for {0} to allow it': 'Menunggu {0} mengizinkannya',
+  'Waiting for {0} to allow {1}': 'Menunggu {0} mengizinkan {1}',
+  'What this device may do there': 'Yang boleh dilakukan perangkat ini di sana',
 }
