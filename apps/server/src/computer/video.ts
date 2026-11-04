@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { RtpHeader, RtpPacket } from 'werift'
-import { ensureHelper, FrameParser } from './sck'
+import { ensureCaptureHelper, FrameParser } from './sck'
 
 /** Splits an Annex-B byte stream into NAL units without their start codes. */
 export function splitNalus(data: Buffer): Buffer[] {
@@ -105,7 +105,7 @@ export class VideoFeed {
   constructor(
     source: VideoSource = { kind: 'display' },
     private readonly launch: () => Promise<ChildProcess> = async () =>
-      spawn(await ensureHelper(), helperArgs(source), { stdio: ['pipe', 'pipe', 'pipe'] }),
+      spawn(await ensureCaptureHelper(), helperArgs(source), { stdio: ['pipe', 'pipe', 'pipe'] }),
     private readonly idleMs = 4000,
   ) {}
 

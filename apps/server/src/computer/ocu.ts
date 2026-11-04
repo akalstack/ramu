@@ -426,6 +426,9 @@ export class OcuBackend implements ComputerBackend {
         }
       case 'key':
         return this.call('press_key', { app, key: ocuKey(action.key, action.modifiers) })
+      // Open Computer Use posts into the app without moving the person's pointer, so there is nothing to follow.
+      case 'move':
+        return undefined
       case 'drag':
         return this.call('drag', {
           app,

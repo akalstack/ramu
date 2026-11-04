@@ -421,7 +421,7 @@ function validateAction(action: ComputerAction, width: number, height: number) {
   if (action.kind === 'type' && (!action.text || action.text.length > MAX_COMPUTER_TEXT))
     refuse(`Text must be 1–${MAX_COMPUTER_TEXT} characters.`)
   if (action.kind === 'key' && !action.key) refuse('A key is required.')
-  if ((action.kind === 'click' || action.kind === 'scroll') && !inside(action.x, action.y))
+  if ((action.kind === 'click' || action.kind === 'scroll' || action.kind === 'move') && !inside(action.x, action.y))
     refuse('That point is outside the observed screen.')
   if (action.kind === 'drag' && !(inside(action.fromX, action.fromY) && inside(action.toX, action.toY)))
     refuse('That drag leaves the observed screen.')

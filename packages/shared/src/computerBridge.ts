@@ -30,6 +30,8 @@ export type ComputerAction =
   | { kind: 'key'; key: string; modifiers?: ComputerModifier[] }
   | { kind: 'scroll'; x: number; y: number; dx: number; dy: number }
   | { kind: 'drag'; fromX: number; fromY: number; toX: number; toY: number }
+  /** The person's pointer moving over the viewer, so the computer's pointer follows it. Clicks still carry a point. */
+  | { kind: 'move'; x: number; y: number }
 
 export interface ComputerCapture {
   mimeType: 'image/png' | 'image/jpeg' | 'image/webp'

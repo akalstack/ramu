@@ -621,6 +621,29 @@ describe('locked screen', () => {
     expect(locked.status()).toMatchObject({ available: false, reason: 'locked' })
   })
 
+  it('moves the pointer through one long-lived helper instead of a script per move', async () => {
+    const { MacosComputerBackend } = await import('../src/computer/macos')
+    const { EventEmitter } = await import('node:events')
+    const written: string[] = []
+    const ran: string[] = []
+    let started = 0
+    const helper = Object.assign(new EventEmitter(), {
+      stdin: Object.assign(new EventEmitter(), { writable: true, write: (line: string) => written.push(line) }),
+    })
+    const backend = new MacosComputerBackend(
+      async (file) => (ran.push(file), ''),
+      'darwin',
+      () => 'Mac',
+      async () => (started++, helper as never),
+    )
+    const display = { id: 'display:main', kind: 'display' as const, name: 'Main' }
+    await backend.perform(display, { kind: 'move', x: 100, y: 50 })
+    await backend.perform(display, { kind: 'move', x: 120, y: 60 })
+    expect(started).toBe(1)
+    expect(written).toHaveLength(2)
+    expect(ran).not.toContain('/usr/bin/osascript')
+  })
+
   it('lets the person in control reach the lock screen to unlock it, but never an agent', async () => {
     const { MacosComputerBackend } = await import('../src/computer/macos')
     const ran: string[] = []

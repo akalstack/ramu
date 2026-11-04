@@ -1,5 +1,7 @@
 import type { BrowserFieldFocus } from '@ramu/shared/browserBridge'
-import { execFile } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import POINTER_SOURCE from '../../native/ramu-pointer.swift?raw'
+import { ensureHelper } from './nativeHelper'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -130,6 +132,8 @@ export function actionScript(action: ComputerAction, scale: number): string {
       }
       return head + body + mouse('kCGEventLeftMouseUp', action.toX, action.toY, 0)
     }
+    case 'move':
+      return head + mouse('kCGEventMouseMoved', action.x, action.y, 0)
     case 'scroll':
       return (
         head +
@@ -219,7 +223,32 @@ export class MacosComputerBackend implements ComputerBackend {
     private readonly exec: Run = run,
     private readonly platform: NodeJS.Platform = process.platform,
     private readonly name: () => string = hostname,
+    /** A process that moves the pointer as fast as it is told; null falls back to a script per move. */
+    private readonly pointerHelper: () => Promise<ChildProcess | null> = async () =>
+      spawn(await ensureHelper(POINTER_SOURCE, 'ramu-pointer'), [], { stdio: ['pipe', 'ignore', 'ignore'] }),
   ) {}
+
+  private pointer: Promise<ChildProcess | null> | null = null
+
+  /** Moves are many and tiny: they go to one long-lived helper instead of starting a script for each. */
+  private async move(x: number, y: number): Promise<boolean> {
+    this.pointer ??= this.pointerHelper().then(
+      (child) => {
+        child?.once('exit', () => (this.pointer = null))
+        child?.once('error', () => (this.pointer = null))
+        child?.stdin?.on('error', () => (this.pointer = null))
+        return child
+      },
+      () => null,
+    )
+    const child = await this.pointer
+    if (!child?.stdin?.writable) {
+      this.pointer = null
+      return false
+    }
+    child.stdin.write(`${x} ${y}\n`)
+    return true
+  }
 
   private lock: { locked: boolean; at: number } = { locked: false, at: 0 }
 
@@ -341,6 +370,10 @@ export class MacosComputerBackend implements ComputerBackend {
     if (!options?.byPerson && (await this.locked())) throw new ComputerNotRun(LOCKED_MESSAGE)
     void target
     const scale = this.lastScale
+    if (action.kind === 'move' && (await this.move(action.x / scale, action.y / scale))) {
+      this.lastInjectionEnd = Date.now()
+      return
+    }
     this.injecting++
     try {
       await this.exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', actionScript(action, scale)])

@@ -438,6 +438,8 @@ export class TestDevices {
       },
       perform: async (_target: ComputerTarget, action: ComputerAction) => {
         const entry = device()
+        // A touch screen has no pointer to follow.
+        if (action.kind === 'move') return
         if (entry.platform === 'android') {
           const adb = androidTool('platform-tools/adb')!
           const input = (...args: string[]) => run(adb, ['-s', entry.handle, 'shell', 'input', ...args], OPTIONS)

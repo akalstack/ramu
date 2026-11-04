@@ -117,9 +117,7 @@ function Viewer({
   const [frame, setFrame] = useState<Frame | null>(null)
   const [now, setNow] = useState(Date.now())
   const [error, setError] = useState('')
-  const [capturing, setCapturing] = useState(false)
-  const capturingNow = useRef(capturing)
-  capturingNow.current = capturing
+  const [focused, setFocused] = useState(false)
   // The main display and an app's window both stream from this computer; an app falls back to snapshots when locked.
   const video = useComputerVideo(taskId, session.runtime.id === 'local')
   const live = video.status === 'live'
@@ -127,6 +125,10 @@ function Viewer({
   const current = live ? liveSession : session
   // Control on another of the person's devices shows that device has it; Take control moves it here.
   const human = !viewOnly && current.controller.kind === 'human' && current.controlledHere !== false
+  // Keys go to the computer while the screen has focus and this device is in control, whichever of the two came first.
+  const capturing = focused && human
+  const capturingNow = useRef(capturing)
+  capturingNow.current = capturing
   // With video there is no image to carry the control generation, so read it from the session once a second.
   useEffect(() => {
     if (!live) return
@@ -220,6 +222,22 @@ function Viewer({
     typing.current = null
     queue.current = queue.current.then(() => deliver(action))
   }
+  // The pointer follows the person's as they move it. Only the latest point waits, so a fast hand never builds a backlog,
+  // and moves share the queue, so a click never overtakes the move before it. A lost move is not worth an error.
+  const moving = useRef<{ x: number; y: number } | null>(null)
+  const follow = (at: { x: number; y: number }) => {
+    if (!canWrite() || !human || (!live && !frame)) return
+    const waiting = moving.current !== null
+    moving.current = at
+    if (waiting) return
+    const generation = live ? liveSession.generation : frame!.generation
+    queue.current = queue.current.then(async () => {
+      const next = moving.current
+      moving.current = null
+      if (next && open.current)
+        await invoke('computer.input', taskId, generation, Date.now(), { kind: 'move', ...next }).catch(() => {})
+    })
+  }
   const videoElement = useRef<HTMLVideoElement>(null)
   useEffect(() => {
     if (videoElement.current) videoElement.current.srcObject = live ? video.stream : null
@@ -257,8 +275,11 @@ function Viewer({
   const shortcuts = computerShortcuts(current.os)
   const takeControl = () =>
     void run(async () => {
-      if ((await takeOrRequest(invoke, taskId)) === 'asked') onAsked()
-      else screen.current?.focus()
+      if ((await takeOrRequest(invoke, taskId)) === 'asked') return onAsked()
+      // With video the session is otherwise read once a second; read it now so the first click after this counts.
+      const next = await invoke('computer.session', taskId)
+      if (next) setLiveSession(next)
+      screen.current?.focus()
     })
   return (
     <Dialog
@@ -329,8 +350,13 @@ function Viewer({
             human && 'cursor-default',
             capturing && 'ring-2 ring-primary',
           )}
-          onFocus={() => setCapturing(human)}
-          onBlur={() => setCapturing(false)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onPointerMove={(event) => {
+            if (!human || press.current) return
+            const at = point(event)
+            if (at) follow(at)
+          }}
           onContextMenu={(event) => event.preventDefault()}
           onPointerDown={(event) => {
             if (!human) return

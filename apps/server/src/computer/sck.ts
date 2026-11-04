@@ -1,7 +1,4 @@
-import { spawn, execFile, type ChildProcess } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { spawn, type ChildProcess } from 'node:child_process'
 import {
   ComputerNotRun,
   type ComputerAction,
@@ -12,7 +9,7 @@ import {
 } from '@ramu/shared/computerBridge'
 import SOURCE from '../../native/ramu-capture.swift?raw'
 import { LOCKED_MESSAGE } from './macos'
-import { ocuToolsDir } from './ocu'
+import { ensureHelper } from './nativeHelper'
 
 export type CaptureMessage =
   { kind: 1; json: Record<string, unknown> } | { kind: 2; jpeg: Buffer } | { kind: 3; key: boolean; annexB: Buffer }
@@ -42,36 +39,8 @@ export class FrameParser {
   }
 }
 
-/** Where the compiled helper lives: named by its source hash, so an update recompiles and an old build is never reused. */
-export function helperPath(source = SOURCE): string {
-  return join(ocuToolsDir(), `ramu-capture-${createHash('sha256').update(source).digest('hex').slice(0, 12)}`)
-}
-
-type Run = (file: string, args: string[]) => Promise<string>
-const run: Run = (file, args) =>
-  new Promise((resolve, reject) =>
-    execFile(file, args, { timeout: 240_000, maxBuffer: 8 * 1024 * 1024, encoding: 'utf8' }, (error, stdout, stderr) =>
-      error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout),
-    ),
-  )
-
-let compiling: Promise<string> | null = null
-/** Compiles the helper once with the Xcode toolchain. Rejects when it is missing so the caller can fall back. */
-export function ensureHelper(exec: Run = run, source = SOURCE): Promise<string> {
-  const target = helperPath(source)
-  if (existsSync(target)) return Promise.resolve(target)
-  compiling ??= (async () => {
-    const dir = ocuToolsDir()
-    mkdirSync(dir, { recursive: true })
-    const file = `${target}.swift`
-    writeFileSync(file, source)
-    await exec('/usr/bin/xcrun', ['swiftc', '-O', '-swift-version', '5', file, '-o', target])
-    return target
-  })().finally(() => {
-    compiling = null
-  })
-  return compiling
-}
+/** The display and window capture helper, compiled on first use. */
+export const ensureCaptureHelper = () => ensureHelper(SOURCE, 'ramu-capture')
 
 export interface StreamFrame {
   data: string
@@ -196,7 +165,7 @@ export class SckDisplayBackend implements ComputerBackend {
   private broken = false
   constructor(
     private readonly inner: ComputerBackend & { useScale?(scale: number): void },
-    private readonly build: () => Promise<string> = () => ensureHelper(),
+    private readonly build: () => Promise<string> = ensureCaptureHelper,
     private readonly launch: (path: string) => ChildProcess = (path) =>
       spawn(path, ['--max-edge', '1600', '--fps', '15', '--quality', '0.6'], { stdio: ['pipe', 'pipe', 'pipe'] }),
     private readonly platform: NodeJS.Platform = process.platform,

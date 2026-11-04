@@ -37,6 +37,7 @@ const action = z.discriminatedUnion('kind', [
     dy: z.number().int().min(-10000).max(10000),
   }),
   z.object({ kind: z.literal('drag'), fromX: coord, fromY: coord, toX: coord, toY: coord }),
+  z.object({ kind: z.literal('move'), x: coord, y: coord }),
 ])
 
 /** Computer use on this host. Setup and grants stay on the owning host; viewing devices need an explicit viewer grant. */
