@@ -1,7 +1,8 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
-import { resolveInRoot } from './files'
+import { listFolderFiles, resolveInRoot } from './files'
+import { listFiles } from './git'
 import type { Workspace } from './workspace'
 
 export async function resolveFileLink(
@@ -41,5 +42,50 @@ export async function resolveFileLink(
         /* Missing files and references outside this chat's folders are not editor targets. */
       }
     }
-  return matches.size === 1 ? [...matches.values()][0]! : null
+  if (matches.size) return matches.size === 1 ? [...matches.values()][0]! : null
+  return isAbsolute(target.path) || /^\.{1,2}[\\/]/.test(target.path)
+    ? null
+    : endingWith(bindings, target, options.folders === true)
+}
+
+/**
+ * Agents often write a path from somewhere inside the project rather than its root (`mobile/README.md` for
+ * `apps/mobile/README.md`, `releases/x.md` under `docs/`). When the path is not found as written, the one file (or
+ * folder) in this thread's checkouts whose path ends with it is the one meant; more than one is left unresolved.
+ */
+async function endingWith(
+  bindings: ReturnType<Workspace['fileBindings']>,
+  target: { path: string; line?: number; column?: number },
+  folders: boolean,
+) {
+  const wanted = target.path.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (!wanted.includes('/') && !folders) return null
+  const found = new Map<string, { repoId: string; path: string; line?: number; column?: number; kind?: 'folder' }>()
+  for (const binding of bindings) {
+    if (binding.setupState !== 'ready') continue
+    let paths: string[]
+    try {
+      paths = await (binding.folderOnly ? listFolderFiles(binding.cwd) : listFiles(binding.cwd))
+    } catch {
+      continue
+    }
+    for (const path of paths) {
+      if (path === wanted || path.endsWith(`/${wanted}`))
+        found.set(`${binding.repoId}:${path}`, {
+          repoId: binding.repoId,
+          path,
+          line: target.line,
+          column: target.column,
+        })
+      else if (folders) {
+        const at = `/${path}`.indexOf(`/${wanted}/`)
+        if (at >= 0) {
+          const folder = path.slice(0, at + wanted.length)
+          found.set(`${binding.repoId}:${folder}/`, { repoId: binding.repoId, path: folder, kind: 'folder' })
+        }
+      }
+      if (found.size > 1) return null
+    }
+  }
+  return found.size === 1 ? [...found.values()][0]! : null
 }

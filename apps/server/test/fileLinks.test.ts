@@ -44,6 +44,24 @@ describe('local file links', () => {
     expect(localFileLink('README:12:3')).toEqual({ path: 'README', line: 12, column: 3 })
     expect(localFileLink('notes.md#details')).toEqual({ path: 'notes.md' })
   })
+  it('finds a path written from inside the project, but only when one file matches', async () => {
+    const cwd = ws.agentScope(taskId).cwd
+    mkdirSync(join(cwd, 'apps', 'mobile'), { recursive: true })
+    writeFileSync(join(cwd, 'apps', 'mobile', 'README.md'), '# Mobile')
+    expect(await resolveFileLink(ws, taskId, 'mobile/README.md:3')).toEqual({
+      repoId: 'general',
+      path: 'apps/mobile/README.md',
+      line: 3,
+      column: 1,
+    })
+    expect(await resolveFileLink(ws, taskId, 'mobile/', { folders: true })).toMatchObject({
+      path: 'apps/mobile',
+      kind: 'folder',
+    })
+    mkdirSync(join(cwd, 'docs', 'mobile'), { recursive: true })
+    writeFileSync(join(cwd, 'docs', 'mobile', 'README.md'), '# Docs')
+    expect(await resolveFileLink(ws, taskId, 'mobile/README.md')).toBeNull()
+  })
   it('leaves external URLs and anchors out of file resolution', () => {
     for (const href of [
       'https://example.com/file.ts',
