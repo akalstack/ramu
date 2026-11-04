@@ -6,7 +6,7 @@ import { memo, useMemo, useRef } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { AgentEvent } from '@ramu/shared/types'
-import { localFileLink } from '@ramu/shared/workspace/fileLinks'
+import { inlineCodeFileLink, localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { MessageTime } from './MessageTime'
 import { CopyButton } from './CopyButton'
 import { MessageQuoteActions } from './MessageQuoteActions'
@@ -48,6 +48,19 @@ export const AssistantText = memo(function AssistantText({
           {children}
         </ChatLink>
       ),
+      // Agents name files in backticks far more often than as links; a path there opens like a linked one. Code
+      // blocks go through pre, which reads its source itself, so only inline code reaches here.
+      code: ({ node, className, children }) => {
+        const text = node?.children.map((child) => (child.type === 'text' ? child.value : '')).join('') ?? ''
+        const path = !className ? inlineCodeFileLink(text) : null
+        return path ? (
+          <ChatLink href={path} taskId={taskId}>
+            {path}
+          </ChatLink>
+        ) : (
+          <code className={className}>{children}</code>
+        )
+      },
     }),
     [taskId],
   )

@@ -65,3 +65,19 @@ export function markdownLinkTarget(documentPath: string, href: string): Markdown
     }
   return location && !/^https?:/i.test(href) ? { kind: 'local', href } : null
 }
+
+/**
+ * A file path the way agents write one in inline code: relative (`src/app.ts`, `./x`), absolute under a home or system
+ * folder, or a file name with a line (`app.ts:12`). URLs and plain words are not paths.
+ */
+const INLINE_FILE_PATH =
+  /^(?!\S*:\/\/)(?:(?:\.{1,2}[\\/]|~[\\/]|\/(?:Users|home|tmp|var|etc|opt|mnt|Volumes|private|root|usr|srv|workspace|workspaces)\/|[A-Za-z]:[\\/])[^\s`]+|(?:[A-Za-z0-9._-]+[\\/])+[A-Za-z0-9._-]+\.[A-Za-z0-9_-]+(?::\d+){0,2}|[A-Za-z0-9._-]+\.[A-Za-z0-9_-]+:\d+(?::\d+)?)$/
+
+/**
+ * Inline code that names a file, as a link to open it, or null. Agents mention files in backticks far more often than
+ * as Markdown links, so this is what makes most file mentions in a reply open the file.
+ */
+export function inlineCodeFileLink(code: string): string | null {
+  const text = code.trim()
+  return INLINE_FILE_PATH.test(text) && localFileLink(text) ? text : null
+}

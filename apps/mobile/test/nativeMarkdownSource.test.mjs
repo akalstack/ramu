@@ -14,3 +14,10 @@ test('a workspace image stays with the renderer that can fetch it from the host'
   assert.equal(nativeMarkdownSource('![shot](screens/a.png)'), null)
   assert.equal(nativeMarkdownSource('![shot](https://example.com/a.png)'), '![shot](https://example.com/a.png)')
 })
+
+test('a file named in backticks becomes a link, but not inside a code block', () => {
+  assert.equal(nativeMarkdownSource('Edit `src/app.ts` now'), 'Edit [src/app.ts](ramu-file:src%2Fapp.ts) now')
+  assert.equal(nativeMarkdownSource('Run `npm test`'), 'Run `npm test`')
+  const fenced = '```\nsee `src/app.ts`\n```'
+  assert.equal(nativeMarkdownSource(fenced), fenced)
+})

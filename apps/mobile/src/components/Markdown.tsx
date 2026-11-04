@@ -7,7 +7,7 @@ import { Arrive } from './Motion'
 import { parseBlocks, splitLongParagraph, type Block } from '../runtime/markdown'
 import { chatReferences } from '@ramu/shared/chat/chatReferences'
 import { draftChip, skillChip } from '@ramu/shared/chat/referenceChip'
-import { localFileLink } from '@ramu/shared/workspace/fileLinks'
+import { inlineCodeFileLink, localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { font, radius, space, useTheme } from '../theme'
 import { UITextView } from '@bsky.app/react-native-uitextview'
 import { selectedText, type TextRun } from '../runtime/selectedText'
@@ -123,8 +123,19 @@ function inline(
     .filter(Boolean)
     .map((p, i) => {
       const k = `${key}-${i}`
-      if (p.startsWith('`') && p.endsWith('`') && p.length > 1)
+      if (p.startsWith('`') && p.endsWith('`') && p.length > 1) {
+        // Agents name files in backticks more often than as links; a path there opens like a linked file.
+        const path = inlineCodeFileLink(p.slice(1, -1))
+        if (path)
+          return (
+            <ReferenceBadge
+              key={k}
+              chip={draftChip({ kind: 'file', label: path, target: path })}
+              onPress={() => actions.openFile(path)}
+            />
+          )
         return <InlineCode key={k} code={p.slice(1, -1)} c={c} />
+      }
       if (((p.startsWith('**') && p.endsWith('**')) || (p.startsWith('__') && p.endsWith('__'))) && p.length > 4)
         return (
           <Span key={k} style={{ fontWeight: '600', color: c.text }}>
