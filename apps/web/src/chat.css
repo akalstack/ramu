@@ -218,9 +218,15 @@
   min-width: 0;
   padding: 4px 8px 6px;
 }
+/* The same height, inset and gap as a section header, so a waiting row lines up with the sections stacked under it. */
 .composer-tray .provider-wait {
-  min-height: 36px;
-  padding-inline: 8px;
+  min-height: 28px;
+  gap: 6px;
+  padding: 2px 8px;
+}
+.composer-tray .provider-wait > svg {
+  width: var(--icon-compact);
+  height: var(--icon-compact);
 }
 .composer-stack-activity {
   width: calc(100% - 2 * var(--composer-tray-inset));
