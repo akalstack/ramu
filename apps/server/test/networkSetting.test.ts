@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   DEFAULT_NETWORK_SETTING,
   localAddresses,
+  parsePublicUrl,
   readNetworkSetting,
   validateNetworkSetting,
   writeNetworkSetting,
@@ -24,7 +25,14 @@ const addresses = [
   { name: 'en0', address: '192.168.1.5' },
   { name: 'wt0', address: '100.64.0.7' },
 ]
-const on = { enabled: true, host: '100.64.0.7', port: 7788, acceptUnencrypted: true, discoverable: false }
+const on = {
+  enabled: true,
+  host: '100.64.0.7',
+  port: 7788,
+  acceptUnencrypted: true,
+  discoverable: false,
+  publicUrl: null,
+}
 
 it('accepts every network or one of this host’s addresses', () => {
   expect(validateNetworkSetting(on, false, addresses)).toEqual(on)
@@ -72,6 +80,28 @@ it('keeps discovery off unless it is saved on, including for settings written be
   expect(readNetworkSetting(path, false).discoverable).toBe(false)
   expect(validateNetworkSetting({ ...on, discoverable: true }, false, addresses).discoverable).toBe(true)
   expect(() => validateNetworkSetting({ ...on, discoverable: 'yes' }, false, addresses)).toThrow(/Invalid/)
+})
+
+it('keeps a tunnel’s address as an https origin, and none for settings written before it existed', () => {
+  const path = file()
+  writeFileSync(path, JSON.stringify({ enabled: true, host: '127.0.0.1', port: 7788, acceptUnencrypted: false }))
+  expect(readNetworkSetting(path, false).publicUrl).toBeNull()
+  expect(parsePublicUrl(' https://Ramu.Example.com/ ')).toBe('https://ramu.example.com')
+  expect(parsePublicUrl('https://ramu.example.com:8443')).toBe('https://ramu.example.com:8443')
+  expect(parsePublicUrl('')).toBeNull()
+  expect(parsePublicUrl(null)).toBeNull()
+  // Device tokens would cross the internet unencrypted over plain HTTP.
+  expect(() => parsePublicUrl('http://ramu.example.com')).toThrow(/https/)
+  for (const extra of [
+    'https://ramu.example.com/ramu',
+    'https://a:b@ramu.example.com',
+    'https://ramu.example.com/?x=1',
+  ])
+    expect(() => parsePublicUrl(extra)).toThrow(/only the address/)
+  expect(() => parsePublicUrl('ramu.example.com')).toThrow(/https/)
+  expect(validateNetworkSetting({ ...on, publicUrl: 'https://ramu.example.com/' }, false, addresses).publicUrl).toBe(
+    'https://ramu.example.com',
+  )
 })
 
 it('lists this host’s addresses without loopback or link-local', () => {

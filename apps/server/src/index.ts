@@ -81,10 +81,12 @@ import {
 } from '@ramu/shared/devicePermissions'
 import { PairingRequests } from './remote/pairingRequests'
 import { createPairingNotice } from './remote/pairingNotice'
+import { clientAddress } from './remote/clientAddress'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
   candidateUrls,
   localAddresses,
+  parsePublicUrl,
   readNetworkSetting,
   validateNetworkSetting,
   writeNetworkSetting,
@@ -153,8 +155,10 @@ const remoteAccess = new RemoteAccess({
   hostId,
   pairing: pairingRequests,
   paired: () => syncDiscovery(),
+  peer: (req) => clientAddress(req, publicUrl() !== null).address,
   // The addresses the listener really serves, for a paired device to try when its saved one stops answering.
   routes: () => [
+    ...publicCandidates().map((candidate) => candidate.url),
     ...(network.enabled
       ? advertisedInterfaces(network.host).flatMap((entry) =>
           entry.addresses.map(
@@ -182,8 +186,14 @@ let network: NetworkSetting = config.listen
       port: config.listen.port,
       acceptUnencrypted: true,
       discoverable: config.discoverable,
+      publicUrl: null,
     }
   : readNetworkSetting(config.networkPath, Boolean(config.tls))
+/** A tunnel's address from the command line wins over the one saved in Settings. */
+const publicUrl = () => config.publicUrl ?? network.publicUrl
+/** The tunnel's address, first: it answers from anywhere, while the listener's own addresses answer only nearby. */
+const publicCandidates = () =>
+  network.enabled && publicUrl() ? [{ url: publicUrl()!, interface: 'public address' }] : []
 // A launchd instance can supervise a daemon that was started by the UI without interrupting it.
 // Intentional stops exit successfully; crashes let launchd restart or take over execution.
 const stoppedPath = join(userData, 'background.stopped')
@@ -452,10 +462,10 @@ const schedules = new ScheduleService(
 const webhooks = new WebhookReceiver(schedules)
 // Where a sender can reach this host: every address the listener serves.
 schedules.webhookBases = () =>
-  (network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []).map((candidate) => ({
-    url: candidate.url,
-    via: candidate.interface,
-  }))
+  [
+    ...publicCandidates(),
+    ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []),
+  ].map((candidate) => ({ url: candidate.url, via: candidate.interface }))
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
 schedules.recover()
 // eslint-disable-next-line prefer-const -- declared earlier because closures built before this point reference it
@@ -1482,8 +1492,10 @@ const socketHost: SocketHost = {
   },
   epoch: runEpoch,
   attach: (sink, req, device) => {
-    if (device && req.socket.remoteAddress)
-      presence.register(device.id, req.socket.remoteAddress, Number(req.headers['x-ramu-presence-port']))
+    // A device reached through a tunnel is not on this network, so a reconnect announcement could not reach it.
+    const from = clientAddress(req, publicUrl() !== null)
+    if (device && req.socket.remoteAddress && !from.tunneled)
+      presence.register(device.id, from.address, Number(req.headers['x-ramu-presence-port']))
     clients.add(sink)
     remoteStreams.set(sink, req.headers.authorization)
     if (device) streamDevices.set(sink, device.id)
@@ -1607,6 +1619,7 @@ function networkStatus() {
     defaultPermissions: devices.defaultPermissions(),
     permissionRequests: permissionRequests.list(),
     reachable: reachable(),
+    publicAddress: { url: publicUrl(), source: config.publicUrl ? ('command-line' as const) : ('settings' as const) },
   }
 }
 async function networkMethod(method: string, args: unknown[]) {
@@ -1664,11 +1677,15 @@ async function networkMethod(method: string, args: unknown[]) {
   }
   if (method === 'network.configure') {
     if (config.listen) throw new Error('Network access was set with --listen; change it there')
-    const input = args[0] as { discoverable?: unknown } | null
-    // A request that leaves the choice out keeps the saved one rather than switching it off.
+    const input = args[0] as { discoverable?: unknown; publicUrl?: unknown } | null
+    // A request that leaves a choice out keeps the saved one rather than clearing it.
     const next = validateNetworkSetting(
-      input && typeof input === 'object' && input.discoverable === undefined
-        ? { ...input, discoverable: network.discoverable }
+      input && typeof input === 'object'
+        ? {
+            ...input,
+            discoverable: input.discoverable ?? network.discoverable,
+            publicUrl: input.publicUrl === undefined ? network.publicUrl : input.publicUrl,
+          }
         : args[0],
       Boolean(config.tls),
     )
@@ -1682,6 +1699,13 @@ async function networkMethod(method: string, args: unknown[]) {
     // Turning access off also drops every connected device: their tokens stay valid but nothing is listening for them.
     return networkStatus()
   }
+  if (method === 'network.setPublicUrl') {
+    if (config.publicUrl) throw new Error('The public address was set with --public-url; change it there')
+    if (config.listen) throw new Error('Network access was set with --listen; pass --public-url there')
+    network = { ...network, publicUrl: parsePublicUrl(args[0]) }
+    writeNetworkSetting(config.networkPath, network)
+    return networkStatus()
+  }
   if (method === 'network.pair') {
     if (!reachable()) throw new Error('Turn on network access first')
     const role = args[0] ?? 'owner'
@@ -1691,7 +1715,10 @@ async function networkMethod(method: string, args: unknown[]) {
     // Advertise for as long as the offer lasts; closing or using it stops that.
     syncDiscovery()
     setTimeout(syncDiscovery, expiresAt - Date.now() + 1000).unref()
-    const direct = network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []
+    const direct = [
+      ...publicCandidates(),
+      ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []),
+    ]
     return {
       offerId,
       code,

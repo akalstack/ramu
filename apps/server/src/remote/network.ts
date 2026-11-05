@@ -43,6 +43,8 @@ export interface NetworkSetting {
   acceptUnencrypted: boolean
   /** Advertise this host to nearby devices. Only effective while `enabled`; off by default. */
   discoverable: boolean
+  /** The HTTPS address of a tunnel the person runs to this listener (cloudflared, Tailscale Funnel, ngrok), if any. */
+  publicUrl: string | null
 }
 export const DEFAULT_NETWORK_PORT = 7788
 export const DEFAULT_NETWORK_SETTING: NetworkSetting = {
@@ -51,6 +53,7 @@ export const DEFAULT_NETWORK_SETTING: NetworkSetting = {
   port: DEFAULT_NETWORK_PORT,
   acceptUnencrypted: false,
   discoverable: false,
+  publicUrl: null,
 }
 
 /** Every address another device could reach this computer on, for choosing which network to listen on. */
@@ -63,6 +66,25 @@ export function localAddresses(interfaces: Interfaces = networkInterfaces()): { 
   return found
 }
 
+/**
+ * A tunnel's public address: HTTPS, an origin only (no path, query or credentials), returned in its normal form. Empty
+ * means none. Plain HTTP is refused because device tokens would cross the internet unencrypted.
+ */
+export function parsePublicUrl(input: unknown): string | null {
+  if (input === null || input === undefined || input === '') return null
+  if (typeof input !== 'string' || input.length > 200) throw new Error('Enter the tunnel’s https:// address')
+  let url: URL
+  try {
+    url = new URL(input.trim())
+  } catch {
+    throw new Error('Enter the tunnel’s https:// address')
+  }
+  if (url.protocol !== 'https:') throw new Error('The public address must start with https://')
+  if (url.username || url.password || url.search || url.hash || url.pathname !== '/')
+    throw new Error('Enter only the address, such as https://ramu.example.com')
+  return url.origin
+}
+
 /** Checks what a client sent before it is saved or bound. */
 export function validateNetworkSetting(input: unknown, tls: boolean, addresses = localAddresses()): NetworkSetting {
   const value = input as Partial<NetworkSetting> | null
@@ -70,6 +92,7 @@ export function validateNetworkSetting(input: unknown, tls: boolean, addresses =
   const { enabled, host, port, acceptUnencrypted } = value
   // Settings saved before discovery existed have no such field: it stays off until the person turns it on.
   const discoverable = value.discoverable ?? false
+  const publicUrl = parsePublicUrl(value.publicUrl)
   if (
     typeof enabled !== 'boolean' ||
     typeof host !== 'string' ||
@@ -83,7 +106,7 @@ export function validateNetworkSetting(input: unknown, tls: boolean, addresses =
   if (!isIP(host) || !known) throw new Error('Choose one of this host’s addresses, or all networks')
   if (enabled && !isLoopback(host) && !tls && !acceptUnencrypted)
     throw new Error('Confirm that you trust the network: Ramu does not encrypt this connection')
-  return { enabled, host, port, acceptUnencrypted, discoverable }
+  return { enabled, host, port, acceptUnencrypted, discoverable, publicUrl }
 }
 
 const isLoopback = (host: string) => host === '::1' || /^127\./.test(host)

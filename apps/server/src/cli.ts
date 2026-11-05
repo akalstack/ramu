@@ -13,7 +13,7 @@ import {
 import { loadConfig, parseListen } from './config'
 import { runtimeVersion } from './build'
 import { DeviceStore, isHostAccess, PAIRING_TTL_MS } from './remote/devices'
-import { candidateUrls, DEFAULT_NETWORK_PORT } from './remote/network'
+import { candidateUrls, DEFAULT_NETWORK_PORT, parsePublicUrl } from './remote/network'
 import { installUserService } from './userService'
 import { encodePairLink, parseRemoteUrl } from '@ramu/contracts'
 
@@ -72,12 +72,15 @@ Options:
                                  (off by default; Settings controls it otherwise). Nothing is advertised on loopback.
   --tls-cert <file> --tls-key <file>
                                  Serve the network listener over HTTPS (for example a certificate from your VPN or a proxy)
+  --public-url <https://…>       The address of your own tunnel to this host (cloudflared, Tailscale Funnel, ngrok). Paired
+                                 devices and webhook senders try it first; Settings controls it otherwise.
   --url <address>                With "pair": the address the other device should use, such as a VPN hostname
   --worktrees <dir>              Where isolated workspaces are created (default: ~/.ramu/worktrees)
   -h, --help   -v, --version
 
 Environment: RAMU_USER_DATA, RAMU_SOCKET, RAMU_LISTEN, RAMU_DEVICES_FILE, RAMU_WORKTREES,
-             RAMU_ALLOW_PLAINTEXT_REMOTE, RAMU_DISCOVERABLE, RAMU_TLS_CERT, RAMU_TLS_KEY, RAMU_DEVICE_TOKEN_DAYS (90 or never),
+             RAMU_ALLOW_PLAINTEXT_REMOTE, RAMU_DISCOVERABLE, RAMU_TLS_CERT, RAMU_TLS_KEY, RAMU_PUBLIC_URL,
+             RAMU_DEVICE_TOKEN_DAYS (90 or never),
              RAMU_BROWSER_ORIGINS (comma-separated exact origins),
              RAMU_BROWSER_EXECUTABLE (optional host Chromium executable; Setup checks its sandbox).
 A paired device has the same control as the desktop app, including shell access. Pair only devices you own.`
@@ -185,6 +188,15 @@ if (flags.has('allow-plaintext-remote') || flags.has('private-network')) process
 if (flags.has('discoverable')) process.env.RAMU_DISCOVERABLE = '1'
 if (text('tls-cert')) process.env.RAMU_TLS_CERT = text('tls-cert')
 if (text('tls-key')) process.env.RAMU_TLS_KEY = text('tls-key')
+const publicUrlFlag = text('public-url')
+if (publicUrlFlag) {
+  try {
+    parsePublicUrl(publicUrlFlag)
+  } catch (error) {
+    fail((error as Error).message)
+  }
+  process.env.RAMU_PUBLIC_URL = publicUrlFlag
+}
 
 const command = positional[0] === 'serve' ? 'start' : (positional[0] ?? 'start')
 let config: ReturnType<typeof loadConfig>
@@ -267,6 +279,8 @@ if (command === 'start') {
       ]
       urls = candidateUrls(host, port, Boolean(status.tls)).map((c) => ({ url: c.url, note: `  (${c.interface})` }))
     }
+    const tunnel = network?.publicAddress?.url
+    if (tunnel) urls = [{ url: tunnel, note: '  (public address)' }, ...urls]
     if (!urls.length) fail('No network address found for this host. Pass --url <address>.')
   }
   const role = text('role') ?? 'owner'

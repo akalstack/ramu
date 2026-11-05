@@ -1759,6 +1759,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   Terminal: 'Terminal',
   'Replacement preview unavailable for this expression or truncated match':
     'Pratinjau pengganti tidak tersedia untuk ekspresi atau kecocokan yang terpotong ini',
+  'Public address': 'Alamat publik',
+  'Set with --public-url when Ramu was started from the command line. Change it there.':
+    'Diatur dengan --public-url saat Ramu dijalankan dari baris perintah. Ubah di sana.',
+  'The https:// address of your own tunnel to this host (Cloudflare Tunnel, Tailscale Funnel, ngrok), pointed at port {0} on this computer. Paired devices and webhook senders try it first. The tunnel’s provider can read what passes through it.':
+    'Alamat https:// tunnel milik Anda sendiri ke host ini (Cloudflare Tunnel, Tailscale Funnel, ngrok), yang diarahkan ke port {0} di komputer ini. Perangkat yang dipasangkan dan pengirim webhook mencobanya lebih dulu. Penyedia tunnel dapat membaca apa yang melewatinya.',
   'Keep devices paired': 'Pertahankan perangkat tetap terhubung',
   'A device that is not used for this long must be paired again. Using it renews the time. Changes apply the next time each device connects.':
     'Perangkat yang tidak dipakai selama ini harus dipasangkan lagi. Memakainya memperpanjang waktunya. Perubahan berlaku saat setiap perangkat terhubung berikutnya.',

@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { runtimeSocket } from '@ramu/client-runtime'
 import { isLoopbackHost } from '@ramu/contracts'
+import { parsePublicUrl } from './remote/network'
 
 export interface ListenAddress {
   host: string
@@ -20,6 +21,8 @@ export interface ServerConfig {
   devicesPath: string
   /** `--discoverable` / RAMU_DISCOVERABLE=1: advertise a command-line `--listen` to nearby devices. */
   discoverable: boolean
+  /** `--public-url` / RAMU_PUBLIC_URL: a tunnel's address, which replaces the one saved in Settings. */
+  publicUrl: string | null
   /** Network access chosen in Settings; ignored when `listen` comes from the command line. */
   networkPath: string
   /** Certificate and key for serving the network listener over HTTPS. */
@@ -76,5 +79,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     devicesPath: env.RAMU_DEVICES_FILE || join(userData, 'remote-devices.json'),
     networkPath: join(userData, 'network.json'),
     discoverable: env.RAMU_DISCOVERABLE === '1',
+    publicUrl: parsePublicUrl(env.RAMU_PUBLIC_URL),
   }
 }

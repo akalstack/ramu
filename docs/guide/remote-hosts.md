@@ -14,13 +14,13 @@ To have agents use another computer's screen, add that computer as a host and ru
 
 **Let other devices use this host** decides who can reach this computer:
 
-- **Local network or VPN** opens the host on a network you choose (all networks, or one such as your VPN). The network and **Discoverable** choices appear once it is on; the port is under **Advanced**.
+- **Local network or VPN** opens the host on a network you choose (all networks, or one such as your VPN). The network and **Discoverable** choices appear once it is on; the port and **Public address** are under **Advanced** (see [Your own tunnel](#your-own-tunnel)).
 - **Pair a device** shows a one-time code and this host's addresses. With **Discoverable** on, a nearby device can also ask without a code: Ramu asks you to allow it (in the app, or as a notification when it is in the background or closed). Allow it only when both screens show the same six-digit number.
 - **Device permissions** decide what each device may use: computer use, the browser, terminals, settings changes and agents. Grant this time, for an hour, a day or always. Each device shows what it runs on (an iPhone, an Android tablet, a Mac, an Ubuntu server…) once it has connected, and **Keep paired** sets how long that one device stays paired without use, or leaves it like the others. When a device asks for a permission it lacks, the request opens in Ramu on this host (or as a system notification when Ramu is in the background) with the same choices; closing it leaves the request waiting here until it lapses.
 
 With a second host, a switcher appears at the top of the sidebar. Each host keeps its own threads, browser and settings, and notifications open the right host. **Apply settings to** in Settings edits one host or all of them. Beside each setting, the layers icon (shown on hover) lists its value on every selected host and whether that is the default. A setting whose hosts disagree says **Mixed** and offers to use one host's value everywhere; one a host does not know says **Not on** that host, because it runs an older Ramu, and offers **Restart service** when that host is this computer's background service.
 
-A device pairs once and keeps one token, role and set of permissions on every route. It learns the host's other addresses (LAN, VPN) and tries them when the saved one stops answering; each must prove it is the same host first.
+A device pairs once and keeps one token, role and set of permissions on every route. It learns the host's other addresses (its public address, VPN, LAN) and tries them when the saved one stops answering; each must prove it is the same host first.
 
 ## Headless server
 
@@ -32,7 +32,7 @@ ramu pair
 
 | Command | What it does |
 | --- | --- |
-| `ramu [serve]` | Run the server in the foreground |
+| `ramu [serve]` | Run the server in the foreground; `--public-url` names [your own tunnel](#your-own-tunnel) |
 | `ramu status`, `stop`, `restart` | Check, stop or restart it |
 | `ramu up` | Let devices on your private network reach this host, keep it running as a service and pair a device; `--private-network`, `--no-private-network` and `--yes` make it scriptable |
 | `ramu pair [--role viewer]` | Print a one-time pairing code and this host's addresses |
@@ -51,7 +51,28 @@ A bare port (`--listen 7788`) listens on this computer only. Any other address n
 | Tailscale, NetBird, ZeroTier, WireGuard | Listen on the VPN address, then `ramu pair` |
 | LAN | The same, if you trust everyone on it |
 | SSH tunnel | Keep the loopback listener and `ssh -L 7788:127.0.0.1:7788 host` |
-| Public name | Put HTTPS in front, or give Ramu a certificate |
+| Anywhere | [Your own tunnel](#your-own-tunnel), or HTTPS in front, or a certificate for Ramu |
+
+A private network (Tailscale, NetBird, ZeroTier or WireGuard) is the simplest choice: it is free for personal use, encrypted end to end, and needs no domain. Tailscale has the most polish and offers Funnel; NetBird is open source down to its coordination server, so you can run all of it yourself.
+
+### Your own tunnel
+
+A tunnel gives the host an `https://` address that works from any network, including devices that are not on your VPN. You run the tunnel; Ramu only needs its address.
+
+1. Keep Ramu listening on this computer: `ramu serve --listen 7788`, or turn on **Allow other devices** in Settings.
+2. Point a tunnel at `http://localhost:7788`:
+
+   | Tunnel | How | Notes |
+   | --- | --- | --- |
+   | Cloudflare Tunnel | `cloudflared tunnel create ramu`, route a hostname such as `ramu.example.com` to it, then `cloudflared tunnel run --url http://localhost:7788 ramu` | Free; needs a domain on Cloudflare |
+   | Tailscale Funnel | `tailscale funnel 7788` | Free; no domain, the address ends in `.ts.net` |
+   | ngrok | `ngrok http 7788 --url <your free static domain>` | Free static domain |
+
+   A Cloudflare quick tunnel (`trycloudflare.com`) gets a new address on every restart, so paired devices lose the host; use a named tunnel.
+3. Give Ramu the address: **Settings → Remote access → Advanced → Public address**, or `ramu serve --public-url https://ramu.example.com`.
+4. Pair a device. The pairing link, the address list paired devices learn and webhook schedules all put the public address first.
+
+Every call through the tunnel still needs a paired device's token, and failed attempts are limited per visitor using the address the tunnel reports. The tunnel's provider decrypts HTTPS at its edge, so it can read what passes through; use a private network when that matters.
 
 A full-access device can do anything the desktop can, including run terminals and agents with your provider accounts. Treat each one like an SSH key.
 

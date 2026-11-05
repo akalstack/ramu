@@ -118,6 +118,11 @@ export interface NetworkStatus {
   }
   /** The network listener is up, so devices beyond this computer can reach it. */
   reachable: boolean
+  /**
+   * The https:// address of a tunnel the person runs to this host, offered to paired devices and webhook senders first.
+   * `command-line` means --public-url set it. Absent from hosts without the setting.
+   */
+  publicAddress?: { url: string | null; source: 'settings' | 'command-line' }
 }
 /** What became of one pairing offer. */
 export type PairingOfferStatus =
@@ -133,6 +138,8 @@ export interface NetworkSettingsInput {
   acceptUnencrypted: boolean
   /** Let nearby devices see this host's name. Leave out to keep the saved choice. */
   discoverable?: boolean
+  /** A tunnel's https:// address, or null for none. Leave out to keep the saved one. */
+  publicUrl?: string | null
 }
 /**
  * A paired computer inviting this host to connect back to it: the person there chose it, and the person here accepts by

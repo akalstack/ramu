@@ -9,6 +9,12 @@ it('keeps a mesh route even when VM interfaces exhaust the route budget', () => 
   expect(result).toContain(bridges[0])
 })
 
+it('keeps a tunnel’s https address first, ahead of mesh and local routes', () => {
+  const bridges = Array.from({ length: 12 }, (_, i) => `http://192.168.${i}.1:7788`)
+  const result = learnedRoutes([...bridges, 'http://100.99.224.30:7788', 'https://ramu.example.com'])
+  expect(result.slice(0, 2)).toEqual(['https://ramu.example.com', 'http://100.99.224.30:7788'])
+})
+
 it('stores only canonical HTTP origins without credentials, paths, queries or fragments', () => {
   expect(
     learnedRoutes([

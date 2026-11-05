@@ -100,7 +100,12 @@ export function learnedRoutes(value: unknown): string[] {
       return []
     }
   })
-  // Keep mesh VPNs even on machines with many VM/container bridges before bounding persisted routes.
-  const rank = (origin: string) => (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(new URL(origin).hostname) ? 1 : 0)
+  // A tunnel's https name answers from anywhere and mesh VPNs from any network, so both outlast VM/container bridges
+  // when the persisted routes are bounded.
+  const rank = (origin: string) => {
+    const url = new URL(origin)
+    if (url.protocol === 'https:' && !/^[\d.]+$|^\[/.test(url.hostname)) return 2
+    return /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(url.hostname) ? 1 : 0
+  }
   return [...new Set(origins)].sort((a, b) => rank(b) - rank(a)).slice(0, MAX_LEARNED_ROUTES)
 }

@@ -1,17 +1,18 @@
 import { afterEach, expect, it } from 'vitest'
-import { createServer, type Server } from 'node:http'
+import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DeviceStore, PAIRING_TTL_MS } from '../src/remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from '../src/remote/access'
+import { clientAddress } from '../src/remote/clientAddress'
 import { verifyHost } from '@ramu/shared/hostProof'
 
 const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => {
   for (const close of cleanup.splice(0)) await close()
 })
-async function fixture(hostId?: string, routes?: () => string[]) {
+async function fixture(hostId?: string, routes?: () => string[], behindTunnel = false) {
   let now = Date.now()
   const dir = mkdtempSync(join(tmpdir(), 'ramu-access-'))
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }))
@@ -21,6 +22,7 @@ async function fixture(hostId?: string, routes?: () => string[]) {
     browserOrigins: ['https://companion.example'],
     ...(hostId ? { hostId } : {}),
     ...(routes ? { routes } : {}),
+    ...(behindTunnel ? { peer: (req: IncomingMessage) => clientAddress(req, true).address } : {}),
     now: () => now,
   })
   const server: Server = createServer(async (req, res) => {
@@ -42,8 +44,8 @@ async function fixture(hostId?: string, routes?: () => string[]) {
   )
   const address = server.address() as { port: number }
   const request = (path: string, init?: RequestInit) => fetch(`http://127.0.0.1:${address.port}${path}`, init)
-  const pair = (code: string, extra = {}) =>
-    request('/pair', { method: 'POST', body: JSON.stringify({ code, ...extra }) })
+  const pair = (code: string, extra = {}, init: RequestInit = {}) =>
+    request('/pair', { ...init, method: 'POST', body: JSON.stringify({ code, ...extra }) })
   return {
     devices,
     request,
@@ -84,6 +86,14 @@ it('returns 429 with retry timing after repeated failures and recovers after bac
   expect(blocked.headers.get('retry-after')).toBe('1')
   f.advance(1001)
   expect((await f.pair(f.devices.createCode(f.now()).code)).status).toBe(200)
+})
+
+it('behind a tunnel, limits each visitor on its own so one stranger cannot lock out the owner', async () => {
+  const f = await fixture(undefined, undefined, true)
+  const from = (ip: string) => ({ headers: { 'CF-Connecting-IP': ip } })
+  for (let i = 0; i < 5; i++) expect((await f.pair('wrong', {}, from('203.0.113.9'))).status).toBe(401)
+  expect((await f.pair('wrong', {}, from('203.0.113.9'))).status).toBe(429)
+  expect((await f.pair(f.devices.createCode(f.now()).code, {}, from('198.51.100.4'))).status).toBe(200)
 })
 
 it('binds the role to the host-issued code and denies viewer execution', async () => {
@@ -240,7 +250,7 @@ it('names the host’s own addresses in the proven answer, and keeps only well-f
   expect(await check(data.token, data.hostId)).toEqual({
     state: 'verified',
     hostId: HOST,
-    routes: ['http://10.0.0.9:7788', 'https://studio.example'],
+    routes: ['https://studio.example', 'http://10.0.0.9:7788'],
   })
   // A token the host does not hold learns nothing: the answer is only believed once its proof checks out.
   expect((await check('someone-elses-token', data.hostId)).state).toBe('mismatch')

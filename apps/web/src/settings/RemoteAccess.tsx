@@ -182,8 +182,20 @@ function ThisComputer() {
       }
     },
   )
+  const [publicUrl, stagePublicUrl] = useStagedValue(
+    'network.publicUrl',
+    status?.publicAddress?.url ?? '',
+    async (value) => {
+      try {
+        setStatus(await invoke('network.setPublicUrl', value.trim() || null))
+      } catch (error) {
+        notifyError(errorText(error), t('Remote access'))
+      }
+    },
+  )
   if (!status) return null
   const managed = status.source === 'command-line'
+  const publicUrlFixed = managed || status.publicAddress?.source === 'command-line'
   const portValid = validPort(Number(port))
   const options = [
     { value: ALL_NETWORKS, label: t('All networks') },
@@ -363,6 +375,31 @@ function ThisComputer() {
                 onChange={(event) =>
                   stageConfig({ ...config, port: event.target.value.replace(/\D/g, '').slice(0, 5) })
                 }
+              />
+            </SettingsRow>
+          )}
+          {status.publicAddress && (
+            <SettingsRow>
+              <SettingsLabel
+                title={t('Public address')}
+                help={
+                  publicUrlFixed
+                    ? t('Set with --public-url when Ramu was started from the command line. Change it there.')
+                    : t(
+                        'The https:// address of your own tunnel to this host (Cloudflare Tunnel, Tailscale Funnel, ngrok), pointed at port {0} on this computer. Paired devices and webhook senders try it first. The tunnel’s provider can read what passes through it.',
+                        { 0: status.port },
+                      )
+                }
+              />
+              <Input
+                aria-label={t('Public address')}
+                type="url"
+                inputMode="url"
+                spellCheck={false}
+                placeholder="https://ramu.example.com"
+                value={publicUrl}
+                disabled={publicUrlFixed}
+                onChange={(event) => stagePublicUrl(event.target.value)}
               />
             </SettingsRow>
           )}

@@ -234,7 +234,9 @@ describe('setting up a GitHub webhook for the person', () => {
     project()
     service.webhookBases = () => [{ url: 'http://192.168.1.4:7788', via: 'en0' }]
     const schedule = service.save({ ...input(), projectId: 'p1' })
-    await expect(new WebhookSetup(service, ws, github).connectGithub(schedule.id, 'r1')).rejects.toThrow('HTTPS')
+    await expect(new WebhookSetup(service, ws, github).connectGithub(schedule.id, 'r1')).rejects.toThrow(
+      'Public address',
+    )
   })
 
   it('creates the webhook with the HTTPS address, secret and the events its filters name, and keeps it current', async () => {
