@@ -193,7 +193,7 @@ let network: NetworkSetting = config.listen
 const publicUrl = () => config.publicUrl ?? network.publicUrl
 /** The tunnel's address, first: it answers from anywhere, while the listener's own addresses answer only nearby. */
 const publicCandidates = () =>
-  network.enabled && publicUrl() ? [{ url: publicUrl()!, interface: 'public address' }] : []
+  network.enabled && publicUrl() ? [{ url: publicUrl()!, interface: 'tunnel' }] : []
 // A launchd instance can supervise a daemon that was started by the UI without interrupting it.
 // Intentional stops exit successfully; crashes let launchd restart or take over execution.
 const stoppedPath = join(userData, 'background.stopped')
@@ -1700,7 +1700,7 @@ async function networkMethod(method: string, args: unknown[]) {
     return networkStatus()
   }
   if (method === 'network.setPublicUrl') {
-    if (config.publicUrl) throw new Error('The public address was set with --public-url; change it there')
+    if (config.publicUrl) throw new Error('The tunnel address was set with --public-url; change it there')
     if (config.listen) throw new Error('Network access was set with --listen; pass --public-url there')
     network = { ...network, publicUrl: parsePublicUrl(args[0]) }
     writeNetworkSetting(config.networkPath, network)

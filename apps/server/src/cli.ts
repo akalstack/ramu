@@ -280,7 +280,7 @@ if (command === 'start') {
       urls = candidateUrls(host, port, Boolean(status.tls)).map((c) => ({ url: c.url, note: `  (${c.interface})` }))
     }
     const tunnel = network?.publicAddress?.url
-    if (tunnel) urls = [{ url: tunnel, note: '  (public address)' }, ...urls]
+    if (tunnel) urls = [{ url: tunnel, note: '  (tunnel)' }, ...urls]
     if (!urls.length) fail('No network address found for this host. Pass --url <address>.')
   }
   const role = text('role') ?? 'owner'
