@@ -33,7 +33,7 @@ Opt in under **Settings → Notifications**, with a switch per kind: needs you, 
 
 On iOS, **Settings → Live Activity** shows running and waiting counts on the Lock Screen and in the Dynamic Island.
 
-Official builds use the `@akalstack/ramu` Expo project, whose APNs/FCM credentials live in EAS. A fork builds against its own project with `EXPO_PUBLIC_EAS_PROJECT_ID=<id>`. Background Live Activity updates need an APNs key on each host (`RAMU_APNS_KEY_PATH`, `RAMU_APNS_KEY_ID`, `RAMU_APNS_TEAM_ID`). Delivery needs a physical phone and a signed build. See [Expo push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/).
+Official builds (`com.akalstack.ramu`) use the `@akalstack/ramu` Expo project and the `akalstack-ramu` Firebase project; the FCM v1 key lives in EAS and `google-services.json` is committed. A fork builds against its own projects with `EXPO_PUBLIC_EAS_PROJECT_ID=<id>` and `RAMU_GOOGLE_SERVICES_FILE=<path>`. Background Live Activity updates need an APNs key on each host (`RAMU_APNS_KEY_PATH`, `RAMU_APNS_KEY_ID`, `RAMU_APNS_TEAM_ID`). Delivery needs a physical phone and a signed build. See [Expo push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/).
 
 ## Development
 

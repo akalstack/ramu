@@ -8,7 +8,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 - macOS signing and notarization in CI, and signed auto-update (`APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` stays `false` until builds are signed). See [Releasing](contributing/releasing.md).
 - Windows: the port is under way on the `windows-port` branch (CI on Windows, the local service over a named pipe). Next are the server's shell, terminal and path handling, packaging, and a hands-on run in a Windows 11 VM.
-- Mobile distribution: Apple and Google accounts, APNs/FCM credentials, TestFlight and Android internal builds.
+- Mobile distribution: the Expo project, app ID `com.akalstack.ramu` and Android push (FCM) are set up. Remaining: the Apple Developer account with APNs key and TestFlight, and a Google Play Console account with the first internal-track upload (manual once, then `eas:release:android` with a Play service-account key in EAS).
 
 ## Implementation
 

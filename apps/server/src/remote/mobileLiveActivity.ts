@@ -13,7 +13,7 @@ export function liveActivityApnsConfig(): ApnsConfig | null {
   const keyPath = process.env.RAMU_APNS_KEY_PATH,
     keyId = process.env.RAMU_APNS_KEY_ID,
     teamId = process.env.RAMU_APNS_TEAM_ID
-  const bundleId = process.env.RAMU_APNS_BUNDLE_ID ?? 'dev.ramu.mobile'
+  const bundleId = process.env.RAMU_APNS_BUNDLE_ID ?? 'com.akalstack.ramu'
   return keyPath &&
     existsSync(keyPath) &&
     keyId &&

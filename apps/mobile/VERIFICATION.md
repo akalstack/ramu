@@ -4,7 +4,7 @@ Only checks that still need a physical phone, an account or a live provider. Tes
 
 ## Builds and distribution
 
-- [ ] Own the Expo project ID, bundle identifiers and signing accounts; configure APNs/FCM; publish TestFlight and Android internal builds.
+- [ ] Configure APNs; publish TestFlight and Android internal builds.
 - [ ] Rebuild the development clients (SDK 58, React Native 0.88, now with `expo-crypto`) on both platforms. Check startup, native tabs, the scroll header, camera, sharing, notifications, widgets, WebViews, computer-use WebRTC, discovery and dictation. The larger splash mark appears only in a rebuilt app.
 
 ## Pairing and hosts

@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#131315",
     "ios": {
-      "bundleIdentifier": "dev.ramu.mobile",
+      "bundleIdentifier": "com.akalstack.ramu",
       "supportsTablet": true,
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Find Ramu hosts on your network and connect to the workspace on your paired host.",
@@ -24,7 +24,8 @@
       "icon": "../../assets/Ramu.icon"
     },
     "android": {
-      "package": "dev.ramu.mobile",
+      "package": "com.akalstack.ramu",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon-foreground.png",
         "monochromeImage": "./assets/icon-monochrome.png",
@@ -83,8 +84,8 @@
         "expo-widgets",
         {
           "enablePushNotifications": true,
-          "groupIdentifier": "group.dev.ramu.mobile",
-          "bundleIdentifier": "dev.ramu.mobile.activities",
+          "groupIdentifier": "group.com.akalstack.ramu",
+          "bundleIdentifier": "com.akalstack.ramu.activities",
           "widgets": []
         }
       ],

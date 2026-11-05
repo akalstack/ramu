@@ -46,7 +46,7 @@ it('signs an Apple ES256 JWT with a raw 64-byte signature and correct claims', (
   const keyPath = join(directory, 'key.p8')
   writeFileSync(keyPath, privateKey.export({ format: 'pem', type: 'pkcs8' }))
   const jwt = apnsAuthorization(
-    { keyPath, keyId: 'ABCDEFGHIJ', teamId: '0123456789', bundleId: 'dev.ramu.mobile' },
+    { keyPath, keyId: 'ABCDEFGHIJ', teamId: '0123456789', bundleId: 'com.akalstack.ramu' },
     1_000_000,
   )
   const [header, claims, signature] = jwt.split('.') as [string, string, string]

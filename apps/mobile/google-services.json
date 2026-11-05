@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "848469284690",
+    "project_id": "akalstack-ramu",
+    "storage_bucket": "akalstack-ramu.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:848469284690:android:b240783f1642529a3f8c8b",
+        "android_client_info": {
+          "package_name": "com.akalstack.ramu"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsOjggRtQdwLK0ElaZVfHzNFTUG3XH9Aw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
