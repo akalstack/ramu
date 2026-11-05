@@ -105,7 +105,6 @@ describe('computer session', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     session.takeControl('phone')
     // The agent's last action has not settled, so human input is held back.
-    const view = { capturedAt: 1000 }
     await expect(session.humanInput('phone', session.state.generation, { kind: 'key', key: 'x' })).rejects.toThrow(
       /finishing/,
     )
@@ -134,7 +133,6 @@ describe('computer session', () => {
     const { session, tick } = setup()
     session.takeControl('phone')
     const generation = session.state.generation
-    const frame = { capturedAt: 1000 }
     const action: ComputerAction = { kind: 'click', x: 5, y: 5 }
     await expect(session.humanInput('tablet', generation, action)).rejects.toThrow(/does not control/)
     await expect(session.humanInput('phone', generation - 1, action)).rejects.toThrow(/Control changed/)

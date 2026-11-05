@@ -15,8 +15,6 @@ import {
 } from 'react'
 import {
   Animated,
-  FlatList,
-  type FlatListProps,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Dimensions,
@@ -39,17 +37,7 @@ import {
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import * as Clipboard from 'expo-clipboard'
-import {
-  ChevronDown,
-  CircleAlert,
-  CircleCheck,
-  CircleDot,
-  CircleHelp,
-  Loader,
-  X,
-  type LucideProps,
-} from 'lucide-react-native'
-import type { TaskStatus } from '@ramu/shared/types'
+import { ChevronDown, X, type LucideProps } from 'lucide-react-native'
 import { font, radius, space, TEXT_SCALE, useTheme } from '../theme'
 import type { ComputerStatus } from '../runtime/types'
 import { MaterialSheet } from './MaterialSheet'
@@ -409,22 +397,6 @@ export function Pill({ children, tone = 'muted', wash }: { children: ReactNode; 
   )
 }
 
-export function StatusIcon({ status, size = 16 }: { status: TaskStatus; size?: number }) {
-  const { c } = useTheme()
-  switch (status) {
-    case 'running':
-      return <Loader size={size} color={c.accent} strokeWidth={2} />
-    case 'needs-input':
-      return <CircleHelp size={size} color={c.warn} strokeWidth={2} />
-    case 'ready-for-review':
-      return <CircleCheck size={size} color={c.ok} strokeWidth={2} />
-    case 'failed':
-      return <CircleAlert size={size} color={c.bad} strokeWidth={2} />
-    default:
-      return <CircleDot size={size} color={c.placeholder} strokeWidth={1.6} />
-  }
-}
-
 export function ConnectionDot({ status, size = 8 }: { status: ComputerStatus; size?: number }) {
   const { c } = useTheme()
   const color = { online: c.ok, connecting: c.warn, offline: c.placeholder, revoked: c.bad, paused: c.placeholder }[
@@ -455,21 +427,6 @@ export function SheetScrollView({
     />
   )
 }
-export function SheetFlatList<T>({ ref, onScroll, ...props }: FlatListProps<T> & { ref?: Ref<FlatList<T>> }) {
-  const report = useContext(SheetScroll)
-  return (
-    <FlatList
-      {...props}
-      ref={ref}
-      scrollEventThrottle={16}
-      onScroll={(event) => {
-        report?.(event)
-        onScroll?.(event)
-      }}
-    />
-  )
-}
-
 type SheetProps = {
   open: boolean
   onClose: () => void
