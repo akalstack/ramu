@@ -85,6 +85,7 @@ import {
   visibleText,
 } from './transcript'
 import type { Language } from './settingsModel'
+import { replyPreview } from '@ramu/shared/chat/replyPreview'
 import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } from './pushCategories'
 import { GOAL_VERIFY_METHOD } from './goalVerify'
 import { mergeTranscript, transcriptRows, updateThreadMetadata, readTranscriptBundle } from './transcriptChanges'
@@ -496,6 +497,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                     step: currentStep(chat.executionState, events),
                     steps: turnSteps(events),
                     preview: preview?.kind === 'text' ? preview.text.slice(-140) : chat.preview,
+                    lastReply: preview?.kind === 'text' ? replyPreview(preview.text) : chat.lastReply,
                     inputSummary: ['stopped', 'failed'].includes(chat.executionState ?? '')
                       ? null
                       : inputSummary(events, sessionId),
@@ -681,6 +683,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                     effort: known.effort,
                     settings: known.settings,
                     preview: known.preview,
+                    lastReply: known.lastReply,
                     items: known.items,
                     queue: known.queue,
                     goal: known.goal,
@@ -734,6 +737,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               const events = snapshot.events.map((x) => x.event)
               const queue = [...events].reverse().find((e) => e.kind === 'queue')
               const text = [...events].reverse().find((e) => e.kind === 'text' || e.kind === 'user')
+              const reply = events.findLast((e) => e.kind === 'text' && !e.agentId)
               // The host's own reading, as the desktop uses it: the main session's state and the task's status. Rebuilding
               // them from events disagreed with it, since hosts do not record a state event for every run and finish.
               const sessionState = task.executionState ?? session?.state
@@ -750,6 +754,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 effort: session?.settings.effort ?? '',
                 settings: session?.settings,
                 preview: text && 'text' in text ? visibleText(text.text).slice(-140) : '',
+                lastReply: reply?.kind === 'text' ? replyPreview(reply.text) : '',
                 status: task.status,
                 inputSummary: ['stopped', 'failed'].includes(sessionState ?? '')
                   ? null

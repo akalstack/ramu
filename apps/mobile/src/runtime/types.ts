@@ -167,6 +167,8 @@ export interface Chat extends Task {
   effort: string
   settings?: import('@ramu/shared/types').AgentSettings
   preview: string
+  /** The opening of the main agent's latest reply as one plain line, for the thread's row. */
+  lastReply?: string
   items: TranscriptItem[]
   queue: QueuedMessage[]
   /** The host holds queued messages until resumed (after a stop or an error), as on the desktop. */

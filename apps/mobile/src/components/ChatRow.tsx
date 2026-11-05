@@ -55,8 +55,9 @@ const SHORT = {
 } as const satisfies Record<string, readonly [keyof Strings, keyof Strings]>
 
 /**
- * A chat in a full-width list: its agent's mark, the title with its age, then one detail line saying what it is doing
- * and where its work lands. `divider` draws the inset hairline above it.
+ * A chat in a full-width list, at most three lines: the title with its age or state mark; what it is doing when that
+ * matters, otherwise the opening of its latest reply; then where its work lands (branch, project, helpers, offline)
+ * with its agents' marks. `divider` draws the inset hairline above it.
  */
 export const ChatRow = memo(function ChatRow({
   chat,
@@ -127,7 +128,10 @@ export const ChatRow = memo(function ChatRow({
   // Then where the work lands: its branch (a worktree's own, or the one its checkout has out), the project in lists
   // that mix projects, helpers still working, and an unreachable host.
   const branch = chat.branch || (chat.mode === 'worktree' ? say('Worktree') : '')
-  const detail = Boolean(state || branch || project || helpers || !online)
+  const facts = Boolean(branch || project || helpers || !online)
+  // Without a state to report, the reply says what the thread came to, which is what a person scans the list for.
+  const reply = state ? '' : (chat.lastReply ?? '')
+  const detail = Boolean(state || reply || facts)
   // Every agent that has worked here, as T3's rows show them: earlier ones (a handoff, a teammate) small and grey
   // before the one leading now. An older host reports only the leading one.
   const agents = providerStack(chat.providers?.length ? chat.providers : chat.provider ? [chat.provider] : [])
@@ -174,6 +178,7 @@ export const ChatRow = memo(function ChatRow({
           accessibilityLabel={[
             chat.title,
             fullKey ? strings[fullKey] : chat.pending ? state?.text : null,
+            reply || null,
             !online ? strings.threadOffline : null,
             branch ? `${say('Branch')} ${branch}` : null,
             project,
@@ -235,7 +240,26 @@ export const ChatRow = memo(function ChatRow({
                 </T>
               )}
             </View>
-            {detail ? (
+            {state || reply ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
+                {state ? (
+                  <Fact tone={state.tone} grow>
+                    {state.text}
+                  </Fact>
+                ) : (
+                  <T size={font.control} tone="muted" numberOfLines={stacked ? 2 : 1} style={{ flex: 1 }}>
+                    {reply}
+                  </T>
+                )}
+                {facts ? null : (
+                  <>
+                    <View style={{ flex: 1, minWidth: space.s }} />
+                    <AgentStack agents={agents} />
+                  </>
+                )}
+              </View>
+            ) : null}
+            {facts ? (
               <View
                 style={{
                   flexDirection: 'row',
@@ -246,18 +270,13 @@ export const ChatRow = memo(function ChatRow({
                   overflow: 'hidden',
                 }}
               >
-                {state ? (
-                  <Fact tone={state.tone} grow>
-                    {state.text}
-                  </Fact>
-                ) : null}
                 {branch ? (
-                  <Fact icon={<GitBranch size={11} color={c.muted} />} grow={!state}>
+                  <Fact icon={<GitBranch size={11} color={c.muted} />} grow>
                     {branch}
                   </Fact>
                 ) : null}
                 {project ? (
-                  <Fact icon={<Folder size={11} color={c.muted} />} grow={!state && !branch}>
+                  <Fact icon={<Folder size={11} color={c.muted} />} grow={!branch}>
                     {project}
                   </Fact>
                 ) : null}

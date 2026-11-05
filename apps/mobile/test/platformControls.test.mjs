@@ -43,6 +43,7 @@ import * as explorerDrafts from '../src/runtime/composerDrafts.ts'
 import * as routingChoices from '../src/runtime/routingChoices.ts'
 import * as localCommitStorage from '../src/storage/localCommit.ts'
 import * as fileContextKeys from '../../../packages/shared/src/chat/fileContext.ts'
+import * as replyPreviews from '../../../packages/shared/src/chat/replyPreview.ts'
 import * as composerTriggers from '../../../packages/shared/src/chat/composerTrigger.ts'
 import * as agentDraftModel from '../../../packages/shared/src/workspace/agentDefaults.ts'
 
@@ -234,6 +235,7 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id.endsWith('/otherHostTargets')) return otherHostTargets
       if (id.endsWith('/correlationId')) return correlation
       if (id === '@ramu/shared/chat/fileContext') return fileContextKeys
+      if (id === '@ramu/shared/chat/replyPreview') return replyPreviews
       if (id === '@ramu/shared/chat/composerTrigger') return composerTriggers
       if (id.endsWith('/Screen'))
         return new Proxy(
@@ -4860,6 +4862,14 @@ for (const os of ['ios', 'android']) {
     assert.ok(nodes(tree).some((node) => node.props?.tone === 'warn' && node.props.children === 'Approval'))
     find(tree, 'Row').props.onPress()
     assert.deepEqual(JSON.parse(JSON.stringify(destination)), { pathname: '/chat/[id]', params: { id: 'a:t' } })
+    // A finished thread with nothing to report shows how its latest reply began, not a lone title.
+    const reply = 'Fixed the login bug and added a test.'
+    tree = ChatRow({ chat: { ...chat, inputSummary: undefined, lastReply: reply } })
+    assert.ok(nodes(tree).some((node) => node.type === 'T' && node.props.children === reply))
+    assert.match(find(tree, 'Row').props.accessibilityLabel, /Fixed the login bug/)
+    // What the thread needs from the person comes first; its reply waits.
+    tree = ChatRow({ chat: { ...chat, lastReply: reply } })
+    assert.ok(!nodes(tree).some((node) => node.props?.children === reply))
     online = false
     tree = ChatRow({ chat })
     assert.match(find(tree, 'Row').props.accessibilityLabel, /Offline · last-known activity/)
