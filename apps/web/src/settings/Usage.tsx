@@ -685,8 +685,8 @@ const toneBar: Record<UsageTone, string> = { ok: 'bg-brand', warn: 'bg-warn', ba
 
 /**
  * Plan usage pinned to the foot of the sidebar, for the login in use: one cell per provider, two to a row, in the
- * app's provider order. Each shows the provider's fullest window as a bar and a whole percentage; a provider at its limit shows when
- * it comes back instead. A click opens every login in Plan usage.
+ * app's provider order. Each shows the provider's fullest window as a bar and a whole percentage; a provider at its
+ * limit shows when it comes back instead. A click opens every login in Plan usage.
  */
 export function UsageFooter() {
   useLanguage()
