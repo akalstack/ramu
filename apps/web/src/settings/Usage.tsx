@@ -684,17 +684,16 @@ function backIn(at: number | undefined, now = Date.now()): string | null {
 const toneBar: Record<UsageTone, string> = { ok: 'bg-brand', warn: 'bg-warn', bad: 'bg-bad' }
 
 /**
- * Plan usage pinned to the foot of the sidebar, for the login in use: one cell per provider, two to a row, fullest
- * first. Each shows the provider's fullest window as a bar and a whole percentage; a provider at its limit shows when
+ * Plan usage pinned to the foot of the sidebar, for the login in use: one cell per provider, two to a row, in the
+ * app's provider order. Each shows the provider's fullest window as a bar and a whole percentage; a provider at its limit shows when
  * it comes back instead. A click opens every login in Plan usage.
  */
 export function UsageFooter() {
   useLanguage()
   const { preferences } = useAppSettings()
   const all = useVisibleUsage()
-  const groups = byProvider(all)
-    .map((group) => ({ ...group, peak: peakUsage(all, group.provider)! }))
-    .sort((a, b) => b.peak.usedPercent - a.peak.usedPercent)
+  // In the same provider order everywhere (Claude, Codex, …), so each one stays in its place as usage changes.
+  const groups = byProvider(all).map((group) => ({ ...group, peak: peakUsage(all, group.provider)! }))
   const [open, setOpen] = useState(false)
   if (!preferences.showUsageLimits || !groups.length) return null
   const label = groups
