@@ -454,9 +454,10 @@
   background: var(--pressed);
   color: var(--text);
 }
+/* Sized to its model name: a short one such as "Auto" must not sit centred in a wide empty button. */
 .composer-bar .model-bar-trigger {
   flex: 0 1 auto;
-  min-width: min(160px, 100%);
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
 }
