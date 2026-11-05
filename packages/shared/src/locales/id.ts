@@ -6,6 +6,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Sign-in needed': 'Perlu masuk',
   'This account needs a paid plan': 'Akun ini memerlukan paket berbayar',
   'Sign-in expired': 'Sesi masuk kedaluwarsa',
+  'Offline · last known schedules. They run on {0} once it is back.':
+    'Offline · jadwal terakhir yang diketahui. Jadwal berjalan di {0} setelah kembali online.',
   'API key rejected': 'Kunci API ditolak',
   'This Cursor login is signed out or expired. Sign in again in Settings → Providers.':
     'Login Cursor ini keluar atau kedaluwarsa. Masuk lagi di Pengaturan → Provider.',

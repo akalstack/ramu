@@ -33,6 +33,7 @@ import { useHostRuntime, useWorkspace, useWorkspacesOf } from './workspace/works
 import { HostProvider, useHost } from './workspace/HostProvider'
 import { useComputers } from './workspace/computers'
 import { invokerFor } from './ipc'
+import { storeForHost } from './hostStorage'
 import { usePaged } from './settings/cards'
 import { useViewOnly } from './composer/useViewOnly'
 import { VIEW_ONLY_WRITE_NOTICE } from './composer/viewerAccess'
@@ -96,8 +97,9 @@ export function SchedulesPage({
   const computers = useComputers()
   const scope = computers?.scope ?? null
   const showOwn = !scope || scope === own
+  // An offline host still lists its schedules as last seen, as the phone does; acting on them waits for it.
   const others = (computers?.computers ?? []).filter(
-    (computer) => computer.id !== own && computer.status === 'connected' && (!scope || computer.id === scope),
+    (computer) => computer.id !== own && computer.status !== 'rejected' && (!scope || computer.id === scope),
   )
   const ownName = computers?.computers.find((computer) => computer.id === own)?.name
   // Bumped after the page's editor saves, so another host's list reads its schedules again at once.
@@ -227,6 +229,7 @@ export function SchedulesPage({
             <HostProvider key={computer.id} hostId={computer.id}>
               <HostScheduleList
                 name={computer.name}
+                offline={computer.status !== 'connected'}
                 heading={showOwn || others.length > 1}
                 version={version}
                 onCreate={() => setEditing('new')}
@@ -238,21 +241,38 @@ export function SchedulesPage({
   )
 }
 
-/** Another connected host's schedules, read from that host; `heading` names it when the page lists several hosts. */
+/** What this device last read of a host's schedules, so they still list while it is offline. */
+const LAST_SCHEDULES = 'last-schedules'
+function lastSchedules(host: string): { schedules: Schedule[]; runs: ScheduleRun[] } | null {
+  try {
+    const saved = JSON.parse(storeForHost(host)?.getItem(LAST_SCHEDULES) ?? 'null')
+    return saved && Array.isArray(saved.schedules) && Array.isArray(saved.runs) ? saved : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Another host's schedules, read from that host; `heading` names it when the page lists several hosts. While the host
+ * is offline it shows what was last read, and nothing on it can be run or changed until it is back.
+ */
 function HostScheduleList({
   name,
+  offline,
   heading,
   version,
   onCreate,
 }: {
   name: string
+  offline: boolean
   heading: boolean
   version: number
   onCreate: () => void
 }) {
-  const { invoke } = useHost()
-  const [schedules, setSchedules] = useState<Schedule[]>([])
-  const [runs, setRuns] = useState<ScheduleRun[]>([])
+  const { invoke, id: host } = useHost()
+  const [saved] = useState(() => lastSchedules(host))
+  const [schedules, setSchedules] = useState<Schedule[]>(saved?.schedules ?? [])
+  const [runs, setRuns] = useState<ScheduleRun[]>(saved?.runs ?? [])
   const [loaded, setLoaded] = useState(false)
   const reload = useCallback(
     () =>
@@ -260,20 +280,26 @@ function HostScheduleList({
         setSchedules(list)
         setRuns(history)
         setLoaded(true)
+        try {
+          storeForHost(host)?.setItem(LAST_SCHEDULES, JSON.stringify({ schedules: list, runs: history.slice(0, 200) }))
+        } catch {
+          // Storage full: the list still shows for this session.
+        }
       }),
-    [invoke],
+    [invoke, host],
   )
   useEffect(() => {
+    if (offline) return
     void reload().catch(() => {})
     const timer = setInterval(() => void reload().catch(() => {}), 30_000)
     return () => clearInterval(timer)
-  }, [reload, version])
+  }, [reload, version, offline])
   const viewOnly = useViewOnly()
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState<Schedule | null>(null)
   // Shown alone (the sidebar filters to this host), an empty host says so and offers to create, as the page's own does.
   if (!schedules.length)
-    return heading || !loaded ? null : (
+    return heading || !loaded || offline ? null : (
       <Empty className="automation-empty">
         <EmptyHeader>
           <EmptyMedia variant="icon">
@@ -305,6 +331,11 @@ function HostScheduleList({
       {heading && (
         <h2 className="m-0 mt-4 text-control font-medium text-muted-foreground">{t('On {0}', { 0: name })}</h2>
       )}
+      {offline && (
+        <p role="status" className="m-0 text-caption text-muted-foreground">
+          {t('Offline · last known schedules. They run on {0} once it is back.', { 0: name })}
+        </p>
+      )}
       {editing && (
         <ScheduleEditor
           key={editing.id}
@@ -322,7 +353,7 @@ function HostScheduleList({
           schedule={s}
           runs={runs.filter((r) => r.scheduleId === s.id)}
           selected={false}
-          busy={busy || viewOnly}
+          busy={busy || viewOnly || offline}
           onEdit={() => setEditing(s)}
           onAct={act}
           onOpenRun={() => {}}
