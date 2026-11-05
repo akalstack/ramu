@@ -10,6 +10,12 @@ const title = 'Ramu — Keep your agents moving'
 const description =
   'One open-source workspace for your coding agents, editor, terminals, and Git. Keep working across provider limits, share memory between models, and continue on iOS or Android.'
 const canonical = new URL('/', Astro.site)
+// Shorter copy for link previews (WhatsApp, Slack, X...), which cut the description after a line or two.
+const shareTitle = 'Ramu: Keep your agents moving'
+const shareDescription =
+  'One open-source workspace for Claude Code, Codex, Cursor and more. Keep working through usage limits and continue from your phone.'
+const ogImage = new URL('/og.png', Astro.site).href
+const ogImageAlt = 'Ramu: Keep your agents moving. One open-source workspace for your coding agents, editor, terminals and Git.'
 
 const structuredData = {
   '@context': 'https://schema.org',
@@ -17,6 +23,7 @@ const structuredData = {
   name: 'Ramu',
   description,
   url: canonical.href,
+  image: ogImage,
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'macOS, Linux, iOS, Android',
   license: 'https://opensource.org/licenses/MIT',
@@ -67,11 +74,21 @@ const WORK = [
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Ramu" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:url" content={canonical} />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
-    <meta property="og:image" content={new URL('/og.png', Astro.site)} />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:title" content={shareTitle} />
+    <meta property="og:description" content={shareDescription} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:secure_url" content={ogImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={ogImageAlt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={shareTitle} />
+    <meta name="twitter:description" content={shareDescription} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={ogImageAlt} />
     <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
   </head>
   <body>
