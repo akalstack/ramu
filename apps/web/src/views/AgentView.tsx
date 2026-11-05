@@ -92,7 +92,7 @@ import {
 } from './agent/components/TeammateControls'
 import { useModelChange } from './agent/hooks/useModelChange'
 import { useJsonDraft } from '../composer/useJsonDraft'
-import { settingsMatch } from './agent/settingsMatch'
+import { sameAgentSettings } from '@ramu/shared/chat/settingsChanges'
 import { useElapsed } from './agent/hooks/useElapsed'
 import { toBlocks } from './agent/lib/blocks'
 import { toTurns } from './agent/lib/turns'
@@ -883,7 +883,7 @@ export const AgentView = memo(function AgentView({
                         {pendingSettings &&
                           session &&
                           !busyAgent &&
-                          !settingsMatch(pendingSettings, session.settings) && (
+                          !sameAgentSettings(pendingSettings, session.settings) && (
                             <MessageScrollerItem messageId="pending-settings">
                               <PendingSettingsChange
                                 next={pendingSettings}

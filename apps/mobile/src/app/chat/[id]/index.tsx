@@ -83,7 +83,8 @@ import {
   resolveMention,
 } from '@ramu/shared/chat/teammateMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
-import type { TranscriptItem } from '../../../runtime/types'
+import type { Chat, TranscriptItem } from '../../../runtime/types'
+import { sameAgentSettings } from '@ramu/shared/chat/settingsChanges'
 import type { AgentSettings, TeammateMode } from '@ramu/shared/types'
 import {
   CancelPendingSettings,
@@ -112,6 +113,22 @@ const RowSeparator = () => <View style={{ height: space.m + 2 }} />
 
 /** A transcript row, or a message from this phone on its way to the host. */
 type ListRow = TranscriptItem | { kind: 'pending'; id: string; outbox: OutboxItem }
+
+/**
+ * A choice that changes nothing the thread runs with, every field included: the login too, so switching accounts is
+ * staged and shown for the next message like a model change rather than dropped.
+ */
+function keepsSettings(chat: Chat, m: import('../../../components/Composer').ModelChoice): boolean {
+  if (!chat.settings)
+    return m.provider === chat.provider && m.model === chat.model && (m.effort || '') === (chat.effort || '')
+  return sameAgentSettings(chat.settings, {
+    ...chat.settings,
+    ...m.settings,
+    provider: m.provider,
+    model: m.model,
+    effort: (m.effort || null) as AgentSettings['effort'],
+  })
+}
 
 export default function ChatScreen() {
   const tr = useSay()
@@ -408,14 +425,9 @@ export default function ChatScreen() {
     if (!chat || !storedModel) return null
     try {
       const model = JSON.parse(storedModel) as import('../../../components/Composer').ModelChoice
-      const same =
-        model.provider === chat.provider &&
-        model.model === chat.model &&
-        (model.effort || '') === (chat.effort || '') &&
-        (model.settings?.access ?? chat.settings?.access) === chat.settings?.access &&
-        (model.settings?.autoFallback ?? chat.settings?.autoFallback) === chat.settings?.autoFallback &&
-        (model.settings?.serviceTier ?? chat.settings?.serviceTier) === chat.settings?.serviceTier
-      return model && typeof model.provider === 'string' && !same ? { chatId: chat.id, model } : null
+      return model && typeof model.provider === 'string' && !keepsSettings(chat, model)
+        ? { chatId: chat.id, model }
+        : null
     } catch {
       return null
     }
@@ -641,18 +653,7 @@ export default function ChatScreen() {
     if (running || limitWait || !chat.sessionId) {
       setStaged(null)
       void store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
-    } else
-      setStaged(
-        m.provider === chat.provider &&
-          m.model === chat.model &&
-          (m.effort || '') === (chat.effort || '') &&
-          (m.settings?.access ?? chat.settings?.access) === chat.settings?.access &&
-          (m.settings?.autoFallback ?? chat.settings?.autoFallback) === chat.settings?.autoFallback &&
-          (m.settings?.serviceTier ?? chat.settings?.serviceTier) === chat.settings?.serviceTier &&
-          (m.settings?.accountId ?? chat.settings?.accountId) === chat.settings?.accountId
-          ? null
-          : { chatId: chat.id, model: m },
-      )
+    } else setStaged(keepsSettings(chat, m) ? null : { chatId: chat.id, model: m })
   }
   // Another model has no cached copy of this conversation, so the first message after a switch is billed in full.
   const changeModel = (m: import('../../../components/Composer').ModelChoice) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { foldSettingsChanges } from '../src/chat/settingsChanges'
+import { foldSettingsChanges, sameAgentSettings } from '../src/chat/settingsChanges'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '../src/types'
 
 type Row = { kind: 'text'; text: string } | { kind: 'change'; settings: AgentSettings; previous?: AgentSettings }
@@ -37,5 +37,22 @@ describe('settings changes in a conversation', () => {
       { kind: 'text', text: 'go' },
       { kind: 'change', previous: sonnet, settings: opus },
     ])
+  })
+})
+
+describe('a pending settings choice', () => {
+  it('is no change when every chosen field matches once defaults are filled in', () => {
+    expect(sameAgentSettings(opus, { ...opus })).toBe(true)
+    expect(sameAgentSettings(opus, { ...opus, accountId: 'default' })).toBe(true)
+  })
+
+  it('is a change for the model, provider, effort, access, tier, fallback or login', () => {
+    expect(sameAgentSettings(opus, { ...opus, model: 'sonnet' })).toBe(false)
+    expect(sameAgentSettings(opus, { ...opus, provider: 'codex' })).toBe(false)
+    expect(sameAgentSettings(opus, { ...opus, effort: 'high' })).toBe(false)
+    expect(sameAgentSettings(opus, { ...opus, access: 'edits' })).toBe(false)
+    expect(sameAgentSettings(opus, { ...opus, serviceTier: 'fast' })).toBe(false)
+    expect(sameAgentSettings(opus, { ...opus, autoFallback: !opus.autoFallback })).toBe(false)
+    expect(sameAgentSettings(opus, work)).toBe(false)
   })
 })
