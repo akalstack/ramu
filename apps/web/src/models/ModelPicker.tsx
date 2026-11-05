@@ -512,7 +512,8 @@ export function ModelPicker({
                       </span>
                     )}
                     {/* One spot at the end: the check marks the chosen model and gives way to the star on hover; a
-                    favorite's filled star takes the spot and the row's highlight still shows it is chosen. */}
+                    favorite's filled star takes the spot and the row's highlight still shows it is chosen. The star
+                    appears at once, as the shortcut beside it does, rather than fading in after it. */}
                     <span className="relative flex size-[26px] flex-none items-center justify-center">
                       {selected(model) && !favorites.includes(keyOf(model)) && (
                         <Check
@@ -528,7 +529,7 @@ export function ModelPicker({
                           className={
                             favorites.includes(keyOf(model))
                               ? 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none on'
-                              : 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none opacity-0 group-hover:opacity-100 group-focus:opacity-100 focus-visible:opacity-100'
+                              : 'mp-star [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:text-foreground [&.on]:[color:#f0a63c] w-[26px] h-[26px] min-h-[26px] p-0 justify-center bg-transparent [border:0] text-muted-foreground rounded-(--radius-s) flex-none opacity-0 group-hover:opacity-100 group-focus:opacity-100 focus-visible:opacity-100 transition-none'
                           }
                           aria-label={
                             favorites.includes(keyOf(model))
