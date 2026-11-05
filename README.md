@@ -8,16 +8,15 @@
 <p align="center">A free, open-source workspace for coding with agents, on desktop and mobile.</p>
 
 <p align="center">
-  <a href="https://github.com/akalstack/ramu/actions/workflows/ci.yml"><img src="https://github.com/akalstack/ramu/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6" alt="License: MIT" /></a>
-  <a href="https://github.com/sponsors/akalstack"><img src="https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub" /></a>
-  <a href="https://trakteer.id/akalstack"><img src="https://img.shields.io/badge/Traktir-Trakteer-be1e2d" alt="Traktir di Trakteer" /></a>
+  <a href="https://github.com/akalstack/ramu/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6" alt="License: MIT" /></a>
+  <a href="https://github.com/sponsors/akalstack"><img src="https://img.shields.io/badge/sponsor-GitHub-ea4aaa?logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub" /></a>
+  <a href="https://trakteer.id/akalstack"><img src="https://img.shields.io/badge/traktir-Trakteer-be1e2d" alt="Traktir di Trakteer" /></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/akalstack/ramu/releases">Download</a> ·
-  <a href="docs/README.md#guide">Guide</a> ·
-  <a href="CONTRIBUTING.md">Contributing</a>
+  <a href="https://github.com/akalstack/ramu/releases"><b>Download</b></a> ·
+  <a href="https://github.com/akalstack/ramu/blob/main/docs/README.md#guide"><b>Guide</b></a> ·
+  <a href="https://github.com/akalstack/ramu/blob/main/CONTRIBUTING.md"><b>Contributing</b></a>
 </p>
 
 Ramu is an **Agent Development Environment**: your coding agents, editor, terminals, Git and review in one window. Use Claude Code, Codex, OpenCode, Cursor or Antigravity with the accounts you already have. No Ramu account, no subscription, nothing to host: agents run on your own computer.
