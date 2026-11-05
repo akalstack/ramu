@@ -43,17 +43,24 @@ export function StatusMark({ task, status }: { task: Task; status: ThreadStatus 
   return <StateDot kind="dot unread" label={t(status.full)} />
 }
 
-/** The trailing status of a chat row: working, needs input, waiting, failed, unread, or its age. */
+/**
+ * The trailing status of a chat row: working, needs input, waiting, failed, unread, or its age. Mark and age share one
+ * fixed slot, so the agent marks before it line up down the list whichever a row shows.
+ */
 export function TaskStateIcon({ task, unread }: { task: Task; unread: boolean }) {
   useLanguage()
   const status = threadStatus(task, unread, task.goalState)
   // Anything that needs the person shows at once; only a plain stop waits to see whether the turn carries on.
   const held = useHeld(isWorking(status))
-  if (held && (!status || status.kind === 'finished')) return <Spinner label={t('Agent working')} />
-  if (status) return <StatusMark task={task} status={status} />
   return (
-    <span className="task-time text-caption text-muted-foreground flex-none tabular-nums min-w-6 text-right">
-      {timeAgo(task.lastActiveAt)}
+    <span className="inline-flex min-w-7 flex-none items-center justify-end [&>.task-state]:mr-0">
+      {held && (!status || status.kind === 'finished') ? (
+        <Spinner label={t('Agent working')} />
+      ) : status ? (
+        <StatusMark task={task} status={status} />
+      ) : (
+        <span className="task-time text-caption text-muted-foreground tabular-nums">{timeAgo(task.lastActiveAt)}</span>
+      )}
     </span>
   )
 }
