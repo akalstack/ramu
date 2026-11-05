@@ -10,8 +10,10 @@ import {
   codexModels,
   codexReadings,
   codexHelperHistory,
+  codexAside,
   toolOfOtherItem,
 } from '../src/providers/codex'
+import { SessionInUse } from '../src/agent/agentRunner'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
 
 let tmp: string
@@ -45,6 +47,10 @@ rl.on('line', line => {
   if (m.method === 'mcpServerStatus/list') send({id:m.id,result:{data:m.params.cursor ? [{name:'needs-login',runtimeStatus:'authenticationRequired',authStatus:'notLoggedIn',tools:{}}] : [{name:'connected',runtimeStatus:'connected',authStatus:'oAuth',tools:{jira:{name:'jira'}}},{name:'cached',runtimeStatus:null,authStatus:'oAuth',tools:{cachedTool:{name:'cached'}}}],nextCursor:m.params.cursor ? null : 'second-page'}});
   if (m.method === 'config/mcpServer/reload') send({id:m.id,result:{}});
   if (m.method === 'model/list') send({id:m.id,result:{data:[{model:'codex-wire',displayName:'Codex wire',hidden:false,isLegacy:true,supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'high'}],defaultReasoningEffort:'low',isDefault:true}],nextCursor:null}});
+  if (m.method === 'thread/resume' && m.params.threadId === 'busy-thread') { send({id:m.id,error:{code:-32600,message:'thread busy-thread already has an active writer'}}); return; }
+  if (m.method === 'thread/fork' && m.params.threadId === 'archived-thread' && !globalThis.unarchived) { send({id:m.id,error:{code:-32600,message:'session archived-thread is archived. Run \\\`codex unarchive archived-thread\\\` to unarchive it first.'}}); return; }
+  if (m.method === 'thread/unarchive') { globalThis.unarchived = true; send({id:m.id,result:{}}); return; }
+  if (m.method === 'thread/fork') send({id:m.id,result:{thread:{id:'fork-1'}}});
   if (m.method === 'thread/start' || m.method === 'thread/resume') send({id:m.id,result:{thread:{id:'thread-1'},model:'codex-wire'}});
   if (m.method === 'thread/read') {
     const id = m.params.threadId;
@@ -179,6 +185,23 @@ describe('Codex app-server wire adapter', () => {
         .filter((message) => message.method === 'thread/read')
         .every((message) => message.params.includeTurns),
     ).toBe(true)
+  })
+  it('says a thread open in another Codex client is in use, rather than starting a new one', async () => {
+    const runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, () => {})
+    try {
+      const started = runner.start('hello', 'busy-thread')
+      await expect(started).rejects.toBeInstanceOf(SessionInUse)
+      await expect(started).rejects.toThrow('open in another Codex client')
+    } finally {
+      await runner.stop()
+    }
+  })
+  it('unarchives a thread archived in another Codex client before asking a side question on it', async () => {
+    await codexAside({ threadId: 'archived-thread', cwd: '/workspace', prompt: 'why?', timeoutMs: 300 }).catch(() => {})
+    const methods = messages()
+      .map((message) => message.method)
+      .filter((method) => method === 'thread/fork' || method === 'thread/unarchive')
+    expect(methods).toEqual(['thread/fork', 'thread/unarchive', 'thread/fork'])
   })
   it('routes Full access through approval, answering everything at once except a dangerous command', async () => {
     const events: AgentEvent[] = []

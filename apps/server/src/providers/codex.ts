@@ -184,6 +184,7 @@ export async function codexUsage(accountId?: string): Promise<UsageReading[]> {
 // Compatibility aliases for existing Codex factories.
 export type { AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
 import type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
+import { SessionInUse } from '../agent/agentRunner'
 
 export const createCodexRunner: CodexFactory = (scope, settings, emit, readOnly, onTitle) =>
   new CodexSession(scope, settings, emit, readOnly, onTitle)
@@ -317,17 +318,26 @@ class CodexSession implements CodexRunner {
       () => {},
     )
     const full = this.settings.access === 'full'
-    const result = await this.rpc.request(resume ? 'thread/resume' : 'thread/start', {
-      ...(resume ? { threadId: resume } : {}),
-      cwd: this.scope.cwd,
-      ...(!resume && this.readOnly ? { ephemeral: true } : {}),
-      ...(this.settings.model ? { model: this.settings.model } : {}),
-      ...(this.connection?.instructions ? { developerInstructions: this.connection.instructions } : {}),
-      serviceTier: this.settings.serviceTier === 'fast' ? 'fast' : 'default',
-      ...(this.settings.serviceTier === 'fast' ? { config: { 'features.fast_mode': true } } : {}),
-      approvalPolicy: this.policies().approvalPolicy,
-      sandbox: this.readOnly ? 'read-only' : full ? 'danger-full-access' : 'workspace-write',
-    })
+    const result = await this.rpc
+      .request(resume ? 'thread/resume' : 'thread/start', {
+        ...(resume ? { threadId: resume } : {}),
+        cwd: this.scope.cwd,
+        ...(!resume && this.readOnly ? { ephemeral: true } : {}),
+        ...(this.settings.model ? { model: this.settings.model } : {}),
+        ...(this.connection?.instructions ? { developerInstructions: this.connection.instructions } : {}),
+        serviceTier: this.settings.serviceTier === 'fast' ? 'fast' : 'default',
+        ...(this.settings.serviceTier === 'fast' ? { config: { 'features.fast_mode': true } } : {}),
+        approvalPolicy: this.policies().approvalPolicy,
+        sandbox: this.readOnly ? 'read-only' : full ? 'danger-full-access' : 'workspace-write',
+      })
+      .catch((e: Error) => {
+        // Codex lets one client write to a conversation at a time; the Codex app or CLI may have it open.
+        if (resume && /already has an active writer/i.test(e.message))
+          throw new SessionInUse(
+            'This conversation is open in another Codex client, such as the Codex app, the Codex CLI or an editor extension. Codex lets one client write to it at a time. Quit that client, then send your message again.',
+          )
+        throw e
+      })
     this.threadId = result.thread.id
     this.emit({
       kind: 'init',
@@ -1062,14 +1072,21 @@ export async function codexAside(options: {
         )
     }
     await rpc.initialize()
-    const forked = await rpc.request('thread/fork', {
-      threadId: options.threadId,
-      ephemeral: true,
-      excludeTurns: true,
-      cwd: options.cwd,
-      approvalPolicy: 'never',
-      sandbox: 'read-only',
-      ...(options.model ? { model: options.model } : {}),
+    const forkThread = () =>
+      rpc.request('thread/fork', {
+        threadId: options.threadId,
+        ephemeral: true,
+        excludeTurns: true,
+        cwd: options.cwd,
+        approvalPolicy: 'never',
+        sandbox: 'read-only',
+        ...(options.model ? { model: options.model } : {}),
+      })
+    // A thread archived in the Codex app or CLI cannot be forked until it is unarchived.
+    const forked = await forkThread().catch(async (e: Error) => {
+      if (!/is archived|codex unarchive/i.test(e.message)) throw e
+      await rpc.request('thread/unarchive', { threadId: options.threadId })
+      return forkThread()
     })
     fork = forked.thread.id
     await rpc.request('turn/start', {

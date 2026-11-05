@@ -13,6 +13,12 @@ import type { SelectionTransition } from '../providers/selectionTransition'
 /** The provider cannot continue the saved session (no resume support, or it no longer has it). The chat goes on from its transcript. */
 export class ResumeUnavailable extends Error {}
 
+/**
+ * Another client holds the saved session (the Codex app or CLI has the same conversation open). Starting a new one
+ * would quietly split the conversation, so the thread says so and waits for the person instead.
+ */
+export class SessionInUse extends Error {}
+
 export interface AgentRunner {
   /** Read-only preflight before stopping the process or changing the thread's saved settings. */
   planSettingsTransition?(settings: AgentSettings): SelectionTransition

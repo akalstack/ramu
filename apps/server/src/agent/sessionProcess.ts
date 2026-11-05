@@ -6,7 +6,7 @@ import { ruleDelivery } from '@ramu/shared/rules'
 import { UPDATE_EVENT_SQL } from './eventRevision'
 import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import { requestOutcomes } from '@ramu/shared/chat/questions'
-import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from './agentRunner'
+import { ResumeUnavailable, SessionInUse, type AgentRunner, type AgentRunnerFactory } from './agentRunner'
 import type {
   AppPreferences,
   GoalPreferences,
@@ -519,6 +519,7 @@ export class SessionProcess {
           // A blocked launch never retries as a lost session: it would only fail the same way.
           if (
             !(e instanceof ProviderIncompatibleError) &&
+            !(e instanceof SessionInUse) &&
             (e instanceof ResumeUnavailable || deltaResume) &&
             resume &&
             !this.host.shutdown()
