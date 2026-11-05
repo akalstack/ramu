@@ -1,4 +1,5 @@
 export const REPO = 'https://github.com/akalstack/ramu'
+export const AKALSTACK = 'https://akalstack.com'
 export const RELEASES = `${REPO}/releases`
 export const MOBILE_SETUP = `${REPO}/blob/main/apps/mobile/README.md`
 

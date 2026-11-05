@@ -4,7 +4,7 @@ import { Backdrop } from '@/components/backdrop'
 import { Demo } from '@/components/demo'
 import { ProviderLogo } from '@/components/provider-logo'
 import { LinkButton } from '@/components/site-button'
-import { MOBILE_SETUP, PROVIDERS, RELEASES, REPO } from '@/lib/site'
+import { AKALSTACK, MOBILE_SETUP, PROVIDERS, RELEASES, REPO } from '@/lib/site'
 
 const title = 'Ramu — Keep your agents moving'
 const description =
@@ -23,7 +23,7 @@ const structuredData = {
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   downloadUrl: RELEASES,
   sameAs: [REPO],
-  publisher: { '@type': 'Organization', name: 'Akalstack', url: 'https://github.com/akalstack' },
+  publisher: { '@type': 'Organization', name: 'Akalstack', url: AKALSTACK, sameAs: ['https://github.com/akalstack'] },
 }
 
 const WORK = [
@@ -238,7 +238,9 @@ const WORK = [
 
     <footer class="footer">
       <img src="/ramu-logo.svg" alt="Ramu" height="22" />
-      <span>MIT licensed. Provider names and logos belong to their owners.</span>
+      <span>
+        Made by <a href={AKALSTACK}>Akalstack</a>. MIT licensed. Provider names and logos belong to their owners.
+      </span>
       <nav aria-label="Footer">
         <a href={REPO}>GitHub</a>
         <a href={RELEASES}>Releases</a>
