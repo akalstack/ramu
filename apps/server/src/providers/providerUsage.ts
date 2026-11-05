@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { UsageReading } from '@ramu/shared/types'
 import { storedCursorKey } from './cursorAuth'
+import { antigravityScopeOf } from '@ramu/shared/providers/usageScope'
 
 type Json = Record<string, any>
 const DEFAULT_CURSOR_ENDPOINT = 'https://api2.cursor.sh'
@@ -91,33 +92,38 @@ export async function readCursorUsage(env: NodeJS.ProcessEnv = process.env): Pro
 
 const AGY_ENDPOINTS = ['https://daily-cloudcode-pa.googleapis.com', 'https://cloudcode-pa.googleapis.com']
 type Bucket = { bucketId?: string; window?: string; disabled?: boolean; remainingFraction?: number; resetTime?: string }
-/** Antigravity quota buckets: Gemini and the shared Claude/GPT allowance, each with a 5-hour and a weekly window. */
+const usedOf = (remainingFraction: number) =>
+  Math.round(clamp((1 - Math.max(0, Math.min(1, remainingFraction))) * 100) * 10) / 10
+/**
+ * Antigravity's quota summary: one reading per group and window (Gemini, Gemini 4 Argon, and Claude & GPT, which share
+ * one allowance). A bucket is placed by its id, else by its group's name. The fullest bucket per group and window wins.
+ */
 export function antigravityUsageReadings(summary: Json, now = Date.now()): UsageReading[] {
-  const groups: { buckets?: Bucket[] }[] = summary?.groups?.some((group: Json) => group?.buckets?.length)
+  const groups: { displayName?: string; buckets?: Bucket[] }[] = summary?.groups?.some(
+    (group: Json) => group?.buckets?.length,
+  )
     ? summary.groups
     : [{ buckets: summary?.buckets }]
   const readings = new Map<string, UsageReading>()
-  for (const bucket of groups.flatMap((group) => group?.buckets ?? [])) {
-    if (
-      bucket.disabled ||
-      typeof bucket.bucketId !== 'string' ||
-      typeof bucket.remainingFraction !== 'number' ||
-      !Number.isFinite(bucket.remainingFraction)
-    )
-      continue
-    const window = bucket.window === 'weekly' ? 'weekly' : bucket.window === '5h' ? 'five_hour' : undefined
-    if (!window) continue
-    // The scope is matched against model IDs, so it names the model family.
-    // Claude and GPT draw on one shared allowance, so it counts against both.
-    const scopes = bucket.bucketId.startsWith('gemini-')
-      ? ['Gemini']
-      : bucket.bucketId.startsWith('3p-')
-        ? ['Claude', 'GPT']
-        : []
-    const usedPercent = Math.round(clamp((1 - Math.max(0, Math.min(1, bucket.remainingFraction))) * 100) * 10) / 10
-    const resetsAt = bucket.resetTime ? Date.parse(bucket.resetTime) : NaN
-    for (const scope of scopes) {
-      const reading: UsageReading = {
+  for (const group of groups)
+    for (const bucket of group?.buckets ?? []) {
+      if (
+        bucket.disabled ||
+        typeof bucket.bucketId !== 'string' ||
+        typeof bucket.remainingFraction !== 'number' ||
+        !Number.isFinite(bucket.remainingFraction)
+      )
+        continue
+      const window = bucket.window === 'weekly' ? 'weekly' : bucket.window === '5h' ? 'five_hour' : undefined
+      const scope =
+        antigravityScopeOf(bucket.bucketId) ??
+        (typeof group.displayName === 'string' ? antigravityScopeOf(group.displayName) : undefined)
+      if (!window || !scope) continue
+      const usedPercent = usedOf(bucket.remainingFraction)
+      const resetsAt = bucket.resetTime ? Date.parse(bucket.resetTime) : NaN
+      const key = `${scope}:${window}`
+      if ((readings.get(key)?.usedPercent ?? -1) >= usedPercent) continue
+      readings.set(key, {
         provider: 'antigravity',
         window,
         scope,
@@ -125,44 +131,37 @@ export function antigravityUsageReadings(summary: Json, now = Date.now()): Usage
         status: statusOf(usedPercent),
         ...(Number.isFinite(resetsAt) ? { resetsAt } : {}),
         updatedAt: now,
-      }
-      const key = `${scope}:${window}`
-      if ((readings.get(key)?.usedPercent ?? -1) < usedPercent) readings.set(key, reading)
+      })
     }
-  }
   return [...readings.values()]
 }
 
 type Quota = { remainingFraction?: number; resetTime?: string }
 /**
- * Older accounts have no quota summary; their model list reports a quota per model instead. A quota with no stated
- * window is a `quota` reading (no invented reset cadence); a weekly one is weekly. The fullest model per family wins.
+ * The model list reports a quota per model, grouped the same way as the summary. A quota with no stated window is a
+ * `quota` reading (no invented reset cadence); a weekly one is weekly. The fullest model per group wins. Models that
+ * belong to no group (tab completion, internal chat models) are left out.
  */
 export function antigravityModelReadings(models: Json, now = Date.now()): UsageReading[] {
   const readings = new Map<string, UsageReading>()
   for (const [id, model] of Object.entries<Json>(models?.models ?? {})) {
-    const family =
-      model?.modelProvider === 'MODEL_PROVIDER_GOOGLE' || id.startsWith('gemini-')
-        ? 'Gemini'
-        : model?.modelProvider === 'MODEL_PROVIDER_ANTHROPIC' || id.startsWith('claude-')
-          ? 'Claude'
-          : model?.modelProvider === 'MODEL_PROVIDER_OPENAI' || id.startsWith('gpt-')
-            ? 'GPT'
-            : undefined
-    if (!family) continue
+    const scope =
+      antigravityScopeOf(id) ??
+      (typeof model?.displayName === 'string' ? antigravityScopeOf(model.displayName) : undefined)
+    if (!scope) continue
     for (const [window, quota] of [
       ['quota', model.quotaInfo as Quota | undefined],
       ['weekly', model.weeklyQuotaInfo as Quota | undefined],
     ] as const) {
       if (typeof quota?.remainingFraction !== 'number' || !Number.isFinite(quota.remainingFraction)) continue
-      const usedPercent = Math.round(clamp((1 - Math.max(0, Math.min(1, quota.remainingFraction))) * 100) * 10) / 10
+      const usedPercent = usedOf(quota.remainingFraction)
       const resetsAt = quota.resetTime ? Date.parse(quota.resetTime) : NaN
-      const key = `${family}:${window}`
+      const key = `${scope}:${window}`
       if ((readings.get(key)?.usedPercent ?? -1) >= usedPercent) continue
       readings.set(key, {
         provider: 'antigravity',
         window,
-        scope: family,
+        scope,
         usedPercent,
         status: statusOf(usedPercent),
         ...(Number.isFinite(resetsAt) ? { resetsAt } : {}),
@@ -171,6 +170,12 @@ export function antigravityModelReadings(models: Json, now = Date.now()): UsageR
     }
   }
   return [...readings.values()]
+}
+
+/** The summary's groups first; the model list fills any group the summary leaves out (often Gemini). */
+export function mergeAntigravityReadings(summary: UsageReading[], models: UsageReading[]): UsageReading[] {
+  const covered = new Set(summary.map((reading) => reading.scope))
+  return [...summary, ...models.filter((reading) => !covered.has(reading.scope))]
 }
 /** The runtime's login file. Ramu runs it with file storage, so the macOS Keychain is never read. */
 async function antigravityToken(env: NodeJS.ProcessEnv): Promise<Json | undefined> {
@@ -219,8 +224,11 @@ export async function readAntigravityUsage(env: NodeJS.ProcessEnv = process.env)
     }
     return []
   }
-  const summary = await ask('retrieveUserQuotaSummary', (response) => antigravityUsageReadings(response))
-  return summary.length ? summary : await ask('fetchAvailableModels', (response) => antigravityModelReadings(response))
+  const [summary, models] = await Promise.all([
+    ask('retrieveUserQuotaSummary', (response) => antigravityUsageReadings(response)),
+    ask('fetchAvailableModels', (response) => antigravityModelReadings(response)),
+  ])
+  return mergeAntigravityReadings(summary, models)
 }
 
 /** Reads Cursor's default login at most every five minutes when enabled. */

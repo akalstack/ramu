@@ -1,5 +1,5 @@
 import type { AgentProvider, UsageReading } from '../types'
-import { usageAppliesTo } from '@ramu/shared/providers/usageScope'
+import { ANTIGRAVITY_SCOPES, usageAppliesTo } from '@ramu/shared/providers/usageScope'
 
 export const USAGE_STALE_MS = 10 * 60_000
 export const usagePercent = (reading: UsageReading): number | null =>
@@ -40,8 +40,14 @@ export function usageScopeHint(reading: UsageReading, language: 'en' | 'id' = 'e
         ? 'Claude, GPT, dan Gemini memakai jatah ini. Grok dan Composer beralih ke sini bila habis.'
         : 'Claude, GPT, and Gemini use this pool. Grok and Composer fall back here.'
   }
-  if (reading.provider === 'antigravity' && (reading.scope === 'Claude' || reading.scope === 'GPT'))
-    return language === 'id' ? 'Claude dan GPT berbagi satu jatah.' : 'Claude and GPT share one allowance.'
+  if (reading.provider === 'antigravity') {
+    if (reading.scope === ANTIGRAVITY_SCOPES.partner || reading.scope === 'Claude' || reading.scope === 'GPT')
+      return language === 'id' ? 'Claude dan GPT berbagi satu jatah.' : 'Claude and GPT share one allowance.'
+    if (reading.scope === ANTIGRAVITY_SCOPES.argon)
+      return language === 'id'
+        ? 'Jatah mingguan sendiri, terpisah dari model Gemini lain.'
+        : 'Its own weekly allowance, separate from the other Gemini models.'
+  }
   return undefined
 }
 /** Unknown account identity is safe only when the host reported one unambiguous account. */

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import {
   antigravityModelReadings,
   antigravityUsageReadings,
+  mergeAntigravityReadings,
   cursorUsageReadings,
   readAntigravityUsage,
   readCursorUsage,
@@ -72,15 +73,50 @@ it('maps Antigravity quota buckets to scoped windows and keeps the fullest bucke
     },
     1,
   )
-  expect(readings).toHaveLength(4)
+  expect(readings).toHaveLength(3)
   expect(readings.find((r) => r.scope === 'Gemini' && r.window === 'five_hour')).toMatchObject({ usedPercent: 75 })
-  // Claude and GPT share one allowance, so it counts against both.
-  for (const scope of ['Claude', 'GPT'])
-    expect(readings.find((r) => r.scope === scope)).toMatchObject({
-      window: 'weekly',
-      usedPercent: 100,
-      status: 'limited',
-    })
+  // Claude and GPT share one allowance: one reading, not one per family.
+  expect(readings.filter((r) => r.scope === 'Claude & GPT')).toEqual([
+    expect.objectContaining({ window: 'weekly', usedPercent: 100, status: 'limited' }),
+  ])
+})
+
+it('places Gemini 4 Argon in its own weekly group, by bucket id or group name', () => {
+  const readings = antigravityUsageReadings({
+    groups: [
+      {
+        displayName: 'Gemini 4 Argon',
+        buckets: [{ bucketId: 'pro-weekly', window: 'weekly', remainingFraction: 0.4 }],
+      },
+      {
+        displayName: 'Claude and GPT models',
+        buckets: [{ bucketId: '3p-weekly', window: 'weekly', remainingFraction: 1 }],
+      },
+      { buckets: [{ bucketId: 'gemini-argon', window: 'weekly', remainingFraction: 0.9 }] },
+    ],
+  })
+  expect(readings.map((r) => [r.scope, r.window, r.usedPercent])).toEqual([
+    ['Gemini 4 Argon', 'weekly', 60],
+    ['Claude & GPT', 'weekly', 0],
+  ])
+})
+
+it('fills the groups a quota summary leaves out from the model list', () => {
+  // The summary often names only the shared Claude & GPT allowance; Gemini's quota is on each Gemini model.
+  const summary = antigravityUsageReadings({
+    groups: [{ buckets: [{ bucketId: '3p-weekly', window: 'weekly', remainingFraction: 1 }] }],
+  })
+  const models = antigravityModelReadings({
+    models: {
+      'gemini-3-flash': { modelProvider: 'MODEL_PROVIDER_GOOGLE', quotaInfo: { remainingFraction: 0.34 } },
+      'claude-sonnet-4-6': { modelProvider: 'MODEL_PROVIDER_ANTHROPIC', quotaInfo: { remainingFraction: 1 } },
+      tab_flash_lite_preview: { modelProvider: 'MODEL_PROVIDER_GOOGLE', quotaInfo: { remainingFraction: 0 } },
+    },
+  })
+  expect(mergeAntigravityReadings(summary, models).map((r) => [r.scope, r.window, r.usedPercent])).toEqual([
+    ['Claude & GPT', 'weekly', 0],
+    ['Gemini', 'quota', 66],
+  ])
 })
 it('falls back to per-model quotas for accounts without a quota summary', () => {
   const readings = antigravityModelReadings(
@@ -106,8 +142,7 @@ it('falls back to per-model quotas for accounts without a quota summary', () => 
     resetsAt: Date.parse('2026-10-14T20:00:00Z'),
   })
   expect(pick('Gemini', 'weekly')).toMatchObject({ usedPercent: 80, status: 'warning' })
-  expect(pick('Claude', 'quota')).toMatchObject({ usedPercent: 100, status: 'limited' })
-  expect(pick('GPT', 'quota')).toMatchObject({ usedPercent: 0 })
+  expect(pick('Claude & GPT', 'quota')).toMatchObject({ usedPercent: 100, status: 'limited' })
   expect(readings.some((r) => r.scope === undefined)).toBe(false)
   expect(antigravityModelReadings({})).toEqual([])
 })

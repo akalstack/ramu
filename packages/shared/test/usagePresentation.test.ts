@@ -79,6 +79,15 @@ it('uses the routing model-scope rules for versioned model IDs while rejecting a
       model: 'gemini-3-pro',
     })?.usedPercent,
   ).toBe(42)
+  const agy = [
+    reading({ provider: 'antigravity', scope: 'Gemini', usedPercent: 10 }),
+    reading({ provider: 'antigravity', scope: 'Gemini 4 Argon', usedPercent: 80 }),
+    reading({ provider: 'antigravity', scope: 'Claude & GPT', usedPercent: 50 }),
+  ]
+  expect(relevantUsage(agy, { provider: 'antigravity', model: 'gemini-4-argon' })?.usedPercent).toBe(80)
+  expect(relevantUsage(agy, { provider: 'antigravity', model: 'gemini-3-flash' })?.usedPercent).toBe(10)
+  expect(relevantUsage(agy, { provider: 'antigravity', model: 'gpt-oss-120b-medium' })?.usedPercent).toBe(50)
+  expect(relevantUsage(agy, { provider: 'antigravity', model: 'claude-sonnet-4-6' })?.usedPercent).toBe(50)
 })
 
 it('localizes allowance windows without translating provider model identities', () => {
@@ -97,7 +106,8 @@ it('explains reported provider pools consistently and keeps unknown scopes unexp
   expect(usageScopeHint(reading({ provider: 'cursor', scope: 'Other models' }), 'id')).toContain(
     'Claude, GPT, dan Gemini',
   )
-  for (const scope of ['Claude', 'GPT']) {
+  expect(usageScopeHint(reading({ provider: 'antigravity', scope: 'Gemini 4 Argon' }))).toContain('separate')
+  for (const scope of ['Claude & GPT', 'Claude', 'GPT']) {
     expect(usageScopeHint(reading({ provider: 'antigravity', scope }))).toBe('Claude and GPT share one allowance.')
     expect(usageScopeHint(reading({ provider: 'antigravity', scope }), 'id')).toBe('Claude dan GPT berbagi satu jatah.')
   }
