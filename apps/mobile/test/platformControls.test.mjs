@@ -4836,7 +4836,7 @@ for (const os of ['ios', 'android']) {
       },
       './ChatActions': { useChatCommands: () => ({}), ChatActionsSheet: 'ChatActionsSheet' },
       './SwipeRow': { SwipeRow: 'SwipeRow' },
-      './ui': { Row: 'Row', T: 'T', StatusIcon: 'StatusIcon' },
+      './ui': { Row: 'Row', T: 'T', Divider: 'Divider', Pill: 'Pill', ROW_INSET: 44 },
     })
     const chat = {
       id: 'a:t',
@@ -4851,18 +4851,21 @@ for (const os of ['ios', 'android']) {
     }
     let tree = ChatRow({ chat })
     assert.equal(find(tree, 'Row').props.accessibilityLabel, 'Build, Approval needed')
-    assert.equal(find(tree, 'StatusIcon').props.status, 'needs-input')
-    assert.ok(nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Approval'))
+    // The desktop sidebar's trailing mark, named in full; the detail line says what the approval is for.
+    assert.ok(
+      nodes(tree).some((node) => node.props?.label === 'Approval needed' && node.props.status?.kind === 'approval'),
+    )
+    assert.ok(nodes(tree).some((node) => node.props?.tone === 'warn' && node.props.children === 'Approval'))
     find(tree, 'Row').props.onPress()
     assert.deepEqual(JSON.parse(JSON.stringify(destination)), { pathname: '/chat/[id]', params: { id: 'a:t' } })
     online = false
     tree = ChatRow({ chat })
     assert.match(find(tree, 'Row').props.accessibilityLabel, /Offline · last-known activity/)
-    // Offline shows as the app's status dot, still named for VoiceOver.
-    assert.ok(nodes(tree).some((node) => node.props?.accessibilityLabel === 'Offline'))
+    // Offline is a named fact on the detail line, so the host's state is not mistaken for the thread's.
+    assert.ok(nodes(tree).some((node) => node.props?.label === 'Offline'))
     tree = ChatRow({ chat: { ...chat, status: 'needs-input', inputSummary: undefined } })
     assert.match(find(tree, 'Row').props.accessibilityLabel, /Waiting for your input/)
-    assert.ok(!nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Approval'))
+    assert.ok(!nodes(tree).some((node) => node.props?.tone === 'warn' && node.props.children === 'Approval'))
   })
 }
 

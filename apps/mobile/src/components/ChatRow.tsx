@@ -7,28 +7,35 @@ import {
   Bot,
   Check,
   Clock,
+  CloudOff,
   Folder,
   GitBranch,
   GitFork,
   ListChecks,
+  Loader,
   Pin,
   RotateCcw,
   Sparkles,
 } from 'lucide-react-native'
 import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
 import { TEXT_SCALE, font, space, useTheme } from '../theme'
-import { providerNames, type Chat } from '../runtime/types'
+import type { Chat } from '../runtime/types'
 import { ago, useT, type Strings, useSay } from '../i18n'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
-import { ConnectionDot, Divider, Pill, ROW_INSET, Row, StatusIcon, T, tap } from './ui'
+import { inboxBlocker } from '@ramu/shared/hostInbox'
+import { inboxBlockerText } from '../runtime/inboxBlockerText'
+import { Divider, Pill, ROW_INSET, Row, T, tap } from './ui'
 import { ChatActionsSheet, useChatCommands } from './ChatActions'
 import { SwipeRow } from './SwipeRow'
-import { ProviderIcon } from './Logos'
 import { useComputerUse } from '../runtime/computerUse'
 import { Monitor } from 'lucide-react-native'
 import { useStore } from '../runtime/store'
 import { threadSelection, useThreadSelection } from '../runtime/threadSelection'
 
+/** Statuses where the thread waits on the person. */
+const WAITING = new Set(['approval', 'input', 'blocked', 'turn-limit'])
+
+/** Each status's word on the detail line, and the full phrase VoiceOver reads. */
 const SHORT = {
   working: ['threadWorking', 'threadWorkingFull'],
   goal: ['threadGoal', 'threadGoalFull'],
@@ -44,7 +51,10 @@ const SHORT = {
   finished: ['threadFinished', 'threadFinishedFull'],
 } as const satisfies Record<string, readonly [keyof Strings, keyof Strings]>
 
-/** A chat in a full-width list; `divider` draws the inset hairline above it. */
+/**
+ * A chat in a full-width list: its agent's mark, the title with its age, then one detail line saying what it is doing
+ * and where its work lands. `divider` draws the inset hairline above it.
+ */
 export const ChatRow = memo(function ChatRow({
   chat,
   project,
@@ -62,7 +72,7 @@ export const ChatRow = memo(function ChatRow({
 }) {
   const say = useSay()
   const { c, textSize } = useTheme()
-  // At large text, a title squeezed beside the status and age is unreadable: metadata drops to its own wrapping line.
+  // At large text a long title takes two lines and the detail line wraps instead of cutting its facts off.
   const stacked = useWindowDimensions().fontScale * TEXT_SCALE[textSize] >= 1.3
   const router = useRouter()
   const [menu, setMenu] = useState(false)
@@ -86,12 +96,35 @@ export const ChatRow = memo(function ChatRow({
   const selecting = !!selectable && selection.on && !chat.pending
   const picked = selecting && selection.ids.has(chat.id)
   const [shortKey, fullKey] = status ? SHORT[status.kind] : []
-  // A phone has room for where the work happens: the project in mixed lists, a worktree's branch, which agent, helpers.
-  // The current checkout is the default, so it is left unsaid; the exact model is in the thread's composer.
   const helpers = chat.helperSummary?.active ?? 0
-  const facts = Boolean(project || chat.mode === 'worktree' || helpers)
-  // A thread with nothing to preview or describe is one line; its row is centered instead of leaving a blank line.
-  const hasDetail = Boolean(chat.preview || facts)
+  const blocker = status && WAITING.has(status.kind) ? inboxBlocker(chat) : null
+  // What the thread is doing, first on its detail line: the agent's step while it works, what it needs from you, or how
+  // its last run ended. A thread that finished and was seen has nothing to report; unread shows in its trailing mark.
+  const state: { text: string; tone: 'accent' | 'warn' | 'bad' | 'muted' } | null = chat.pending
+    ? { text: say('Waiting to send'), tone: 'muted' }
+    : !status || status.kind === 'finished'
+      ? null
+      : status.kind === 'working' || status.kind === 'goal' || status.kind === 'verifying'
+        ? { text: chat.activityLabel || strings[shortKey!], tone: 'accent' }
+        : WAITING.has(status.kind)
+          ? {
+              text:
+                chat.inputSummary?.requests[0]?.title ||
+                (blocker ? inboxBlockerText(blocker, store.language === 'id' ? 'id' : 'en') : strings[shortKey!]),
+              tone: 'warn',
+            }
+          : status.kind === 'failed'
+            ? { text: strings[shortKey!], tone: 'bad' }
+            : status.kind === 'limit' && chat.waitingUntil
+              ? {
+                  text: `${strings[shortKey!]} · ${say('retries in {0}', { 0: until(chat.waitingUntil) })}`,
+                  tone: 'warn',
+                }
+              : { text: strings[shortKey!], tone: status.kind === 'limit' ? 'warn' : 'muted' }
+  // Then where the work lands: its branch (a worktree's own, or the one its checkout has out), the project in lists
+  // that mix projects, helpers still working, and an unreachable host.
+  const branch = chat.branch || (chat.mode === 'worktree' ? say('Worktree') : '')
+  const detail = Boolean(state || branch || project || helpers || !online)
   const actions =
     chat.pending || commands.viewOnly || selecting
       ? []
@@ -111,37 +144,9 @@ export const ChatRow = memo(function ChatRow({
             removes: true,
           },
         ]
-  const meta = (
-    <>
-      {/* The app's status dot, as on the host list, rather than a word competing with the thread's own status. */}
-      {!online ? (
-        <View accessible accessibilityLabel={strings.offline}>
-          <ConnectionDot status="offline" size={7} />
-        </View>
-      ) : null}
-      {shortKey ? (
-        <T
-          size={font.caption}
-          weight="500"
-          tone={
-            status?.kind === 'input' || status?.kind === 'approval'
-              ? 'warn'
-              : status?.kind === 'failed'
-                ? 'bad'
-                : 'soft'
-          }
-        >
-          {strings[shortKey]}
-        </T>
-      ) : null}
-      <T size={font.caption} tone="muted">
-        {ago(chat.lastActiveAt)}
-      </T>
-    </>
-  )
   return (
     <>
-      {divider ? <Divider inset={ROW_INSET} /> : null}
+      {divider ? <Divider inset={selecting ? ROW_INSET : space.l} /> : null}
       <SwipeRow actions={actions} background={c.window} fullSwipe>
         <Row
           onLongPress={
@@ -159,16 +164,19 @@ export const ChatRow = memo(function ChatRow({
             threadSelection.toggle(chat.id)
           }}
           accessibilityState={selecting ? { selected: picked } : undefined}
-          style={{
-            alignItems: hasDetail ? 'flex-start' : 'center',
-            paddingVertical: 10,
-          }}
-          accessibilityLabel={[chat.title, fullKey ? strings[fullKey] : null, !online ? strings.threadOffline : null]
+          style={{ alignItems: detail ? 'flex-start' : 'center', paddingVertical: 10 }}
+          accessibilityLabel={[
+            chat.title,
+            fullKey ? strings[fullKey] : chat.pending ? state?.text : null,
+            !online ? strings.threadOffline : null,
+            branch ? `${say('Branch')} ${branch}` : null,
+            project,
+          ]
             .filter(Boolean)
             .join(', ')}
         >
-          <View style={{ paddingTop: hasDetail ? 2 : 0 }}>
-            {selecting ? (
+          {selecting ? (
+            <View style={{ paddingTop: detail ? 1 : 0 }}>
               <View
                 style={{
                   width: 18,
@@ -183,35 +191,11 @@ export const ChatRow = memo(function ChatRow({
               >
                 {picked ? <Check size={12} color={c.primaryInk} strokeWidth={3} /> : null}
               </View>
-            ) : chat.pending ? (
-              <Clock size={16} color={c.muted} />
-            ) : status?.kind === 'finished' ? (
-              <View
-                accessibilityLabel={say('Unread')}
-                style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.accent }} />
-              </View>
-            ) : (
-              <StatusIcon
-                status={
-                  status?.kind === 'approval' ||
-                  status?.kind === 'input' ||
-                  status?.kind === 'blocked' ||
-                  status?.kind === 'turn-limit'
-                    ? 'needs-input'
-                    : status?.kind === 'goal' || status?.kind === 'verifying' || status?.kind === 'working'
-                      ? 'running'
-                      : status?.kind === 'paused' || status?.kind === 'stopped' || status?.kind === 'limit'
-                        ? 'idle'
-                        : chat.status
-                }
-              />
-            )}
-          </View>
-          <View style={{ flex: 1, gap: 2 }}>
+            </View>
+          ) : null}
+          <View style={{ flex: 1, gap: 3 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <T size={font.body} weight="500" numberOfLines={stacked ? 2 : 1} style={{ flex: 1 }}>
+              <T size={font.body} weight={unread ? '600' : '500'} numberOfLines={stacked ? 2 : 1} style={{ flex: 1 }}>
                 {chat.title}
               </T>
               {/* The mark alone: the thread opens on its notice, with Stop and the screen, when it matters. */}
@@ -232,56 +216,51 @@ export const ChatRow = memo(function ChatRow({
                 <Sparkles size={12} color={c.muted} accessibilityLabel={say('Naming thread')} />
               ) : null}
               {chat.pinnedAt !== null ? <Pin size={11} color={c.muted} /> : null}
-              {stacked ? null : meta}
-            </View>
-            {stacked ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 2 }}>
-                {meta}
-              </View>
-            ) : null}
-            {chat.preview ? (
-              // The preview is the agent's last word, so its mark leads it: Claude or Codex at a glance.
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View accessible accessibilityLabel={providerNames[chat.provider]}>
-                  <ProviderIcon provider={chat.provider} size={11} />
-                </View>
-                <T
-                  size={font.control}
-                  tone={chat.status === 'needs-input' ? 'warn' : chat.status === 'failed' ? 'bad' : 'muted'}
-                  numberOfLines={stacked ? 3 : 1}
-                  style={{ flex: 1 }}
-                >
-                  {chat.preview}
+              {/* As in the desktop sidebar: the thread's mark when it has something to report, otherwise its age. */}
+              {chat.pending ? (
+                <Clock size={13} color={c.muted} />
+              ) : status ? (
+                <StateMark status={status} retrying={!!chat.waitingUntil} label={strings[fullKey!]} />
+              ) : (
+                <T size={font.caption} tone="muted">
+                  {ago(chat.lastActiveAt)}
                 </T>
-              </View>
-            ) : null}
-            {facts ? (
+              )}
+            </View>
+            {detail ? (
               <View
                 style={{
                   flexDirection: 'row',
                   flexWrap: stacked ? 'wrap' : 'nowrap',
                   alignItems: 'center',
-                  columnGap: space.s,
+                  columnGap: space.m,
                   rowGap: 2,
                   overflow: 'hidden',
                 }}
               >
+                {state ? (
+                  <Fact tone={state.tone} grow>
+                    {state.text}
+                  </Fact>
+                ) : null}
+                {branch ? (
+                  <Fact icon={<GitBranch size={11} color={c.muted} />} grow={!state}>
+                    {branch}
+                  </Fact>
+                ) : null}
                 {project ? (
-                  <Fact icon={<Folder size={11} color={c.muted} />} grow={!stacked}>
+                  <Fact icon={<Folder size={11} color={c.muted} />} grow={!state && !branch}>
                     {project}
                   </Fact>
                 ) : null}
-                {chat.mode === 'worktree' ? (
-                  <Fact icon={<GitBranch size={11} color={c.muted} />} label={say('Isolated worktree')} grow={!stacked}>
-                    {chat.branch || say('Worktree')}
+                {helpers ? (
+                  <Fact icon={<Bot size={11} color={chat.helperSummary?.waiting ? c.warn : c.muted} />}>
+                    {String(helpers)}
                   </Fact>
                 ) : null}
-                {helpers ? (
-                  <Fact
-                    icon={<Bot size={11} color={chat.helperSummary?.waiting ? c.warn : c.muted} />}
-                    label={say('{0} helpers', { 0: helpers })}
-                  >
-                    {String(helpers)}
+                {!online ? (
+                  <Fact icon={<CloudOff size={11} color={c.muted} />} label={strings.offline}>
+                    {strings.offline}
                   </Fact>
                 ) : null}
               </View>
@@ -305,18 +284,79 @@ export const ChatRow = memo(function ChatRow({
   )
 })
 
-/** One fact on a thread's detail line: a small mark and a word or two. `grow` lets a long name take the spare width. */
-function Fact({ icon, label, grow, children }: { icon: ReactNode; label?: string; grow?: boolean; children: string }) {
+/** One fact on a thread's detail line: an optional small mark and a word or two. `grow` lets a long one take the spare width. */
+function Fact({
+  icon,
+  label,
+  tone = 'muted',
+  grow,
+  children,
+}: {
+  icon?: ReactNode
+  label?: string
+  tone?: 'accent' | 'warn' | 'bad' | 'muted'
+  grow?: boolean
+  children: string
+}) {
   return (
     <View
-      accessible
-      accessibilityLabel={label ? `${label}: ${children}` : children}
+      accessible={!!label}
+      accessibilityLabel={label}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: grow ? 1 : 0, minWidth: 0 }}
     >
       {icon}
-      <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+      <T size={font.control} tone={tone} numberOfLines={1} style={{ flexShrink: 1 }}>
         {children}
       </T>
     </View>
   )
+}
+
+/**
+ * The thread's trailing mark, the desktop sidebar's: a spinner while it works, amber when it needs you, red when it
+ * failed, grey when it stopped or paused, a clock at a usage limit, violet while a finished run is unread.
+ */
+function StateMark({
+  status,
+  retrying,
+  label,
+}: {
+  status: NonNullable<ReturnType<typeof threadStatus>>
+  retrying: boolean
+  label: string
+}) {
+  const { c } = useTheme()
+  const kind = status.kind
+  return (
+    <View accessible accessibilityLabel={label} style={{ width: 14, alignItems: 'center' }}>
+      {kind === 'working' || kind === 'goal' || kind === 'verifying' ? (
+        <Loader size={13} color={c.accent} />
+      ) : kind === 'limit' && retrying ? (
+        <Clock size={13} color={c.warn} />
+      ) : (
+        <Dot
+          color={
+            WAITING.has(kind) || kind === 'limit'
+              ? c.warn
+              : kind === 'failed'
+                ? c.bad
+                : kind === 'finished'
+                  ? c.accent
+                  : c.placeholder
+          }
+        />
+      )}
+    </View>
+  )
+}
+
+/** The app's small status dot, as the desktop sidebar draws it. */
+function Dot({ color }: { color: string }) {
+  return <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+}
+
+/** How long until `at`, as the list's ages read: `4m`, `2h`. */
+function until(at: number): string {
+  const minutes = Math.max(1, Math.round((at - Date.now()) / 60_000))
+  return minutes < 60 ? `${minutes}m` : `${Math.round(minutes / 60)}h`
 }

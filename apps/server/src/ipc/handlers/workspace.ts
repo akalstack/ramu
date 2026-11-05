@@ -1,5 +1,6 @@
 import { mergeInputSummaries } from '@ramu/shared/chat/inputSummary'
 import { generateBranchName } from '../../workspace/branchNaming'
+import { currentBranch } from '../../workspace/git'
 import { projectActionSchema } from '../../workspace/projectConfig'
 import { ProjectActions } from '../../workspace/projectActions'
 import { projectAgentDefaults } from '../../workspace/projectAgentDefaults'
@@ -603,10 +604,15 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     },
     'tasks.bindings': {
       args: z.tuple([id]),
-      run: (taskId: string) => {
+      run: async (taskId: string) => {
         const bindings = workspace.fileBindings(taskId)
         for (const b of bindings) if (b.setupState === 'ready') watchers.ensure(b.cwd, taskId)
-        return bindings
+        // A current-checkout thread has no branch of its own; the one checked out is where its work lands.
+        return Promise.all(
+          bindings.map(async (b) =>
+            b.mode === 'current' && !b.folderOnly ? { ...b, checkedOut: await currentBranch(b.cwd) } : b,
+          ),
+        )
       },
     },
   }

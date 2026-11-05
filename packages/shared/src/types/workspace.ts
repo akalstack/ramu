@@ -168,6 +168,11 @@ export interface RepositoryBinding {
   cwd: string
   /** Task branch for worktree bindings; null for current-checkout bindings. */
   taskBranch: string | null
+  /**
+   * The branch a current-checkout binding has checked out now, so lists can say where a thread's work lands; null when
+   * detached. Only the task's bindings list sets it, and older hosts omit it.
+   */
+  checkedOut?: string | null
   baseRef: string | null
   setupState: BindingSetupState
   setupError: string | null

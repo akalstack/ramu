@@ -906,3 +906,26 @@ describe('generated and explicit worktree branches', () => {
     expect(ws.listTasks(project.id).find((t) => t.id === task.id)?.branchNamingFallback).toBeTruthy()
   })
 })
+
+describe('thread bindings for lists', () => {
+  it('name the branch a current checkout has out, which a worktree names as its task branch instead', async () => {
+    const { project } = await ws.addProjectFromFolder(api)
+    const task = await ws.createTask({ projectId: project.id, title: 'Fix', mode: 'current' })
+    const dispatcher = createDispatcher({ userData: join(tmp, 'profile'), send() {}, native: async () => {} }, {
+      workspace: ws,
+    } as Services)
+    try {
+      const [binding] = (await dispatcher.invoke('tasks.bindings', [task.id])) as Awaited<
+        ReturnType<typeof ws.fileBindings>
+      >
+      expect(binding).toMatchObject({ mode: 'current', taskBranch: null, checkedOut: 'develop' })
+      sh(api, 'checkout', '-q', '--detach')
+      const [detached] = (await dispatcher.invoke('tasks.bindings', [task.id])) as Awaited<
+        ReturnType<typeof ws.fileBindings>
+      >
+      expect(detached!.checkedOut).toBeNull()
+    } finally {
+      dispatcher.close()
+    }
+  })
+})

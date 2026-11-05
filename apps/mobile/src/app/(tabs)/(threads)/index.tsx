@@ -559,7 +559,9 @@ export default function Threads() {
           scrollEdge
           collapsed={edge.scrolled}
           title={t.chats}
-          right={
+          // Usage and Resources lead the bar: with Search and Settings on the right there is room for the centred
+          // title once the large one scrolls away, which iOS hides when the buttons crowd it.
+          left={
             <>
               {computers.some(
                 (host) =>
@@ -583,9 +585,9 @@ export default function Threads() {
                   onPress={() => setResourcesOpen(true)}
                 />
               ) : null}
-              {actions}
             </>
           }
+          right={<>{actions}</>}
         />
       )}
       <PageFlatList

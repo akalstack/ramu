@@ -48,9 +48,10 @@ function useThreadPlaces(task: Task, enabled: boolean) {
       const status = statuses[index]?.data
       return {
         binding,
-        branch: status ? status.branch : binding.taskBranch,
+        // The host names the checked-out branch with the bindings, so the card has it before Git status answers.
+        branch: status ? status.branch : (binding.taskBranch ?? binding.checkedOut ?? null),
         detached: !!status?.detached,
-        loading: statuses[index]?.isLoading ?? false,
+        loading: (statuses[index]?.isLoading ?? false) && !binding.checkedOut,
       }
     }),
   }
@@ -150,6 +151,18 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
             </div>
           ))}
         </div>
+      )}
+      {!!task.helperSummary?.active && (
+        <span className="text-caption text-muted-foreground">
+          {[
+            t(task.helperSummary.active === 1 ? '1 helper working' : '{0} helpers working', {
+              0: task.helperSummary.active,
+            }),
+            task.helperSummary.waiting ? t('{0} waiting', { 0: task.helperSummary.waiting }) : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
       )}
       {!!task.unreadAdvice && (
         <span className="text-caption text-muted-foreground">
