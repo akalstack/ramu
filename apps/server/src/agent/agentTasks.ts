@@ -17,6 +17,7 @@ import type { SessionStore } from './sessionStore'
 import type { SubagentRunner } from './subagentRunner'
 import type { ProviderWaits } from './providerWait'
 import type { Db } from '../db'
+import { clipTextEnd } from '@ramu/shared/text'
 
 /** Without a cursor (after a restart), how much of the lead's thread a teammate's catch-up covers. */
 const CATCH_UP_EVENTS = 40
@@ -209,7 +210,7 @@ export class AgentTasks {
     const missed = events
       .slice(since)
       .filter((event) => !(event.kind === 'user' && own.some((prefix) => event.text.startsWith(prefix))))
-    const transcript = redactSecrets(transcriptOf(missed)).slice(-CATCH_UP_CHARS)
+    const transcript = clipTextEnd(redactSecrets(transcriptOf(missed)), CATCH_UP_CHARS)
     return teammateCatchUp(transcript, helperWork(missed).paths)
   }
 

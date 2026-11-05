@@ -102,3 +102,9 @@ describe('file names', () => {
     await expect(createEntry(root, '👨‍👩‍👧‍👦 漢字.txt', 'file')).resolves.toBeUndefined()
   })
 })
+
+it('cuts long prompt context on a whole character, so the request stays valid JSON text', async () => {
+  const { limitSection } = await import('../src/agent/text')
+  const cut = limitSection(`${'a'.repeat(9)}😀tail`, 10)
+  expect(cut).toBe(`${'a'.repeat(9)}\n\n[truncated]`)
+})

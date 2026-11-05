@@ -16,7 +16,7 @@ export function excerpt(text: string, needle: string): string {
 
 /** Cuts long prompt context, marking the cut so the model knows it saw part of it. */
 export const limitSection = (value: string, max: number) =>
-  value.length <= max ? value : `${value.slice(0, max)}\n\n[truncated]`
+  value.length <= max ? value : `${clipText(value, max)}\n\n[truncated]`
 
 export function truncate(s: string, n = 400): string {
   return s.length > n ? `${clipText(s, n)}…` : s

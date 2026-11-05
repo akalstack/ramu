@@ -5,7 +5,7 @@ import { selectSubagentSettings } from './subagentSelection'
 import type { BackgroundAnalysis } from './backgroundAnalysis'
 import { capSubagentEffort } from '@ramu/shared/providers/routing'
 import { forwardedRequestId } from './childRequests'
-import { clipText } from '@ramu/shared/text'
+import { clipText, clipTextEnd } from '@ramu/shared/text'
 import { providerName } from '@ramu/shared/providers/providers'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -455,9 +455,9 @@ export class SubagentRunner {
     })
     const prefs = this.host.preferences()
     const context = input.teammate
-      ? `<chat-context>\nThe conversation so far:\n${redactSecrets(transcriptOf(this.host.events(parentId)).slice(-60_000))}\n</chat-context>\n\n`
+      ? `<chat-context>\nThe conversation so far:\n${clipTextEnd(redactSecrets(transcriptOf(this.host.events(parentId))), 60_000)}\n</chat-context>\n\n`
       : prefs?.subagents.shareContext
-        ? `<chat-context>\nThe conversation so far, for background only:\n${transcriptOf(this.host.events(parentId)).slice(-20_000)}\n</chat-context>\n\n`
+        ? `<chat-context>\nThe conversation so far, for background only:\n${clipTextEnd(transcriptOf(this.host.events(parentId)), 20_000)}\n</chat-context>\n\n`
         : ''
     this.host.launch(
       child.id,
@@ -800,7 +800,7 @@ export class SubagentRunner {
         )
         .filter(Boolean)
         .join('\n')
-      const prompt = `${task.prompt ?? task.name}\n\n<previous-attempt>\nA ${providerName(parent.provider)} sub-agent started this task and stopped when its usage limit was reached. What it had done so far:\n${lines.slice(-30_000) || '(nothing recorded)'}\n</previous-attempt>\nContinue from where it stopped. Do not repeat finished work.`
+      const prompt = `${task.prompt ?? task.name}\n\n<previous-attempt>\nA ${providerName(parent.provider)} sub-agent started this task and stopped when its usage limit was reached. What it had done so far:\n${clipTextEnd(lines, 30_000) || '(nothing recorded)'}\n</previous-attempt>\nContinue from where it stopped. Do not repeat finished work.`
       this.host.updateTask(id, task.agentId, {
         status: 'stopped',
         summary: `Stopped: ${providerName(parent.provider)} limit reached. Continuing on ${providerName(step.provider)}.`,

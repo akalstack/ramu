@@ -15,6 +15,18 @@ export function clipText(text: string, max: number): string {
   return clipped
 }
 
+/** The last `max` UTF-16 units of `text`, starting on a whole character, for keeping the end of a long transcript. */
+export function clipTextEnd(text: string, max: number): string {
+  if (text.length <= max) return text
+  const parts = [...graphemes.segment(text.slice(-(max * 2 + 64)))].map(({ segment }) => segment)
+  let clipped = ''
+  for (let index = parts.length - 1; index >= 0; index--) {
+    if (clipped.length + parts[index]!.length > max) break
+    clipped = parts[index]! + clipped
+  }
+  return clipped
+}
+
 // Control characters, and the characters that reorder text (U+202A–202E, U+2066–2069, marks U+200E/F): they make a
 // label read differently from what it is, e.g. "report‮gnp.txt" displays as "reporttxt.png".
 // eslint-disable-next-line no-control-regex -- matches control characters on purpose
