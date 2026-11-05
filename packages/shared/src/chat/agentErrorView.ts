@@ -6,6 +6,11 @@ export interface AgentErrorView {
 }
 
 const KINDS: [RegExp, AgentErrorView][] = [
+  // Cursor refuses SDK agents for free accounts, even ones running on this computer ("Cloud Agent" is its wording).
+  [
+    /\bplan_required\b|\bnot available for free (users|plans?)\b|\bupgrade to (pro|a paid plan)\b/i,
+    { title: 'This account needs a paid plan', action: 'providers' },
+  ],
   [
     /\bmodel\b.*\b(not supported|unsupported|not available|unavailable|does not exist|not found|invalid)\b|\b(unknown|invalid|unsupported) model\b/i,
     { title: 'This model isn’t available', action: 'model' },

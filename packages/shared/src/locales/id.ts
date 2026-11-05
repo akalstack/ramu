@@ -4,6 +4,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'That didn’t work': 'Itu tidak berhasil',
   'This model isn’t available': 'Model ini tidak tersedia',
   'Sign-in needed': 'Perlu masuk',
+  'This account needs a paid plan': 'Akun ini memerlukan paket berbayar',
   'The provider is limiting requests': 'Provider sedang membatasi permintaan',
   'Connection problem': 'Masalah koneksi',
   'The agent stopped with an error': 'Agent berhenti karena kesalahan',
