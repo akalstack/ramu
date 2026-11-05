@@ -63,7 +63,7 @@ export const SELECTION_ACTION_CLASS =
 
 /** Quote line inside an aside row. */
 export const ASIDE_ROW_QUOTE_CLASS =
-  'aside-row-quote [.aside-new_&]:flex [.aside-new_&]:items-center [.aside-new_&]:gap-1.5 font-semibold overflow-hidden text-ellipsis whitespace-nowrap max-w-full'
+  'aside-row-quote font-semibold overflow-hidden text-ellipsis whitespace-nowrap max-w-full'
 
 /** A quiet line at the end of a turn; add `error text-bad` for a failure. */
 export const TURN_END_CLASS =

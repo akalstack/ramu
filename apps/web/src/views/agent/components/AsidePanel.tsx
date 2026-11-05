@@ -1,7 +1,7 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../composer/viewerAccess'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { ArrowLeft, Plus, MessageCircle, Quote, X, Trash2 } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Quote, X, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Aside } from '@ramu/shared/types'
 import { PanelComposer } from '@/components/panel-composer'
@@ -23,7 +23,11 @@ import {
 import { Message, MessageContent } from '@/components/ui/message'
 import { UserBubble } from './UserMessage'
 
-/** Side questions about the chat. Answers come from the chat's model, read-only, and never join the conversation. */
+/**
+ * Side questions about the chat. Answers come from the chat's model, read-only, and never join the conversation. An
+ * aside starts from the thread (Ask aside on a passage, or the toolbar's first one on the whole thread); here one is
+ * only continued or deleted, so the side chat stays one place to clean up, as on the phone.
+ */
 export function AsidePanel({
   sessionId,
   asides,
@@ -135,19 +139,6 @@ export function AsidePanel({
             variant="ghost"
             size="icon-xs"
             className={ICON_BUTTON_CLASS}
-            aria-label={translate('New aside')}
-            title={translate('New aside')}
-            disabled={readOnly}
-            onClick={() => onOpen({ id: null, quote: '', from: 'assistant' })}
-          >
-            <Plus size={14} />
-          </Button>
-        )}
-        {aside && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={ICON_BUTTON_CLASS}
             disabled={readOnly}
             aria-label={translate('Delete aside')}
             title={translate('Delete aside')}
@@ -169,21 +160,6 @@ export function AsidePanel({
       </header>
       {open === '*' ? (
         <div className={`${PANEL_BODY_CLASS} agent-panel-list gap-2 pt-3`}>
-          <Button
-            variant="secondary"
-            type="button"
-            className="bg-fill hover:bg-fill-hover aside-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border-color:var(--line)] flex flex-col items-start justify-start gap-0.5 h-auto p-[8px_10px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised text-left whitespace-normal aside-new"
-            disabled={readOnly}
-            onClick={() => onOpen({ id: null, quote: '', from: 'assistant' })}
-          >
-            <span className={ASIDE_ROW_QUOTE_CLASS}>
-              <Plus size={13} />
-              {translate('New aside')}
-            </span>
-            <span className="muted text-muted-foreground small text-caption">
-              {translate('Ask about the whole thread without interrupting it.')}
-            </span>
-          </Button>
           {asides.map((entry) => (
             <Button
               variant="secondary"
