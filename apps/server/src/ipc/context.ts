@@ -224,7 +224,10 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
       () => loadPreferences().newModelNotices !== false,
       (notices) => host.send('models:news', notices),
     )
-    agents.refreshAccountUsage = (provider) => accountUsage.refresh(provider)
+    // Which logins run on an API key is read with their usage, so a fallback decides on current sign-ins.
+    agents.refreshAccountUsage = (provider) =>
+      Promise.all([accountUsage.refresh(provider), providers.accountLogins().catch(() => undefined)]).then(() => {})
+    agents.apiKeyLogins = () => providers.apiKeyLogins()
     // An upgrade or downgrade changes which models a login offers and how its usage is counted: read both again now.
     const planChanged = (provider: AgentProvider, accountId: string) => {
       agents.invalidateCatalog()

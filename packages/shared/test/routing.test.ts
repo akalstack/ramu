@@ -303,21 +303,28 @@ describe('account rotation', () => {
     expect(accountDisplayName(config, 'codex', 'default', 'me@x.io').name).toBe('me@x.io')
     expect(accountDisplayName(config, 'codex', 'default')).toMatchObject({ fallback: 'default' })
   })
+  const apiKeyLogins = new Set([accountKey('codex', 'default'), accountKey('codex', 'b')])
   it('skips accounts that are limited or already tried', () => {
     const accounts = ['a', 'default', 'b']
-    expect(nextAccount(chat, accounts, { usage: [limited('default')], catalogs, switchAt: null })).toBe('b')
-    expect(nextAccount(chat, accounts, { usage: [], catalogs, switchAt: null })).toBe('default')
+    const base = { catalogs, switchAt: null, apiKeyLogins }
+    expect(nextAccount(chat, accounts, { ...base, usage: [limited('default')] })).toBe('b')
+    expect(nextAccount(chat, accounts, { ...base, usage: [] })).toBe('default')
+    expect(
+      nextAccount(chat, accounts, { ...base, usage: [], attempted: new Set([accountKey('codex', 'default')]) }),
+    ).toBe('b')
+    expect(nextAccount(chat, accounts, { ...base, usage: [limited(undefined), limited('b')] })).toBeNull()
+  })
+  it('moves on only to logins billed per use, never to another subscription', () => {
+    const accounts = ['a', 'default', 'b']
+    expect(nextAccount(chat, accounts, { usage: [], catalogs, switchAt: null })).toBeNull()
     expect(
       nextAccount(chat, accounts, {
         usage: [],
         catalogs,
         switchAt: null,
-        attempted: new Set([accountKey('codex', 'default')]),
+        apiKeyLogins: new Set([accountKey('codex', 'b')]),
       }),
     ).toBe('b')
-    expect(
-      nextAccount(chat, accounts, { usage: [limited(undefined), limited('b')], catalogs, switchAt: null }),
-    ).toBeNull()
   })
 })
 
@@ -357,6 +364,7 @@ describe('account-aware routing across providers', () => {
       const route = planRoute(settings(provider), [], {
         usage: [],
         accounts: { configuration, usage: windows(provider) },
+        apiKeyLogins: new Set([`${provider}:b`]),
         catalogs: allCatalogs,
         switchAt: null,
         now: NOW,

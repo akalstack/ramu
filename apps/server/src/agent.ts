@@ -128,6 +128,8 @@ export class AgentService {
   isolationRoot: string | undefined
   /** Called before choosing another login, so its usage is current. */
   refreshAccountUsage: ((provider: AgentProvider) => Promise<void>) | undefined
+  /** Logins known to run on an API key, as `provider:account`; set by the host, absent in tests. */
+  apiKeyLogins: (() => ReadonlySet<string>) | undefined
 
   /** A bare factory serves every provider except Claude Code, which keeps the SDK loop. */
   private readonly runners: ProviderRunners
@@ -252,6 +254,7 @@ export class AgentService {
       queued: (...a) => parts.store.queued(...a),
       record: (...a) => parts.recorder.record(...a),
       refreshAccountUsage: () => this.refreshAccountUsage,
+      apiKeyLogins: () => this.apiKeyLogins?.() ?? new Set<string>(),
       refreshContext: (...a) => parts.contexts.refreshContext(...a),
       rememberSession: (...a) => parts.process.rememberSession(...a),
       refreshProviderTools: (...a) => parts.process.refreshProviderTools(...a),

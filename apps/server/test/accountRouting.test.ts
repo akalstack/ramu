@@ -31,6 +31,8 @@ const prefs = {
     ]),
   ),
 }
+/** The spare logins run on API keys: a limit moves a thread only to a login billed per use. */
+const apiKeyLogins = () => new Set(AGENT_PROVIDERS.flatMap((provider) => ['b', 'c'].map((id) => `${provider}:${id}`)))
 const settings = (provider: AgentProvider): AgentSettings => ({
   ...DEFAULT_AGENT_SETTINGS,
   provider,
@@ -80,6 +82,7 @@ it.each(AGENT_PROVIDERS)(
       preferences: () => prefs,
       usage: () => usage,
       catalog: async () => catalogs,
+      apiKeyLogins,
       refreshAccountUsage: () => refresh,
     } as unknown as FallbackRouterHost
     const router = new FallbackRouter(host, db)
@@ -92,6 +95,30 @@ it.each(AGENT_PROVIDERS)(
       accountId: 'b',
       effort: 'high',
     })
+  },
+)
+
+it.each(AGENT_PROVIDERS)(
+  '%s never moves a thread onto another subscription login on its own, only onto one billed per use',
+  async (provider) => {
+    const usage = new UsageService(
+      () => [reading(provider), reading(provider, 'b', 3)],
+      () => {},
+      () => {},
+    )
+    const keys = new Set<string>()
+    const host = {
+      preferencesSource: () => () => prefs,
+      preferences: () => prefs,
+      usage: () => usage,
+      catalog: async () => catalogs,
+      apiKeyLogins: () => keys,
+      refreshAccountUsage: () => async () => {},
+    } as unknown as FallbackRouterHost
+    const router = new FallbackRouter(host, db)
+    expect((await router.route(settings(provider)))?.step.accountId).not.toBe('b')
+    keys.add(`${provider}:b`)
+    expect((await router.route(settings(provider)))?.step).toMatchObject({ provider, accountId: 'b' })
   },
 )
 
@@ -119,6 +146,7 @@ it('background analysis rotates accounts after a runtime limit before switching 
   }
   service = new AgentService(db, () => {}, noQuery, { cursor: factory } satisfies ProviderRunners)
   vi.spyOn(service, 'catalog').mockResolvedValue(catalogs)
+  service.apiKeyLogins = apiKeyLogins
   service.preferences = () => prefs
   service.usage = new UsageService(
     () => [reading('cursor', 'b', 3)],
@@ -161,6 +189,7 @@ it('switches an existing thread account before sending and preserves the convers
     { cursor: factory },
   )
   vi.spyOn(service, 'catalog').mockResolvedValue(catalogs)
+  service.apiKeyLogins = apiKeyLogins
   service.preferences = () => prefs
   const usage = new UsageService(
     () => [],
@@ -208,6 +237,7 @@ it('routes helpers through another parent-provider account before moving to anot
     preferences: () => prefs,
     usage: () => usage,
     catalog: async () => catalogs,
+    apiKeyLogins,
   } as unknown as FallbackRouterHost
   const result = await new FallbackRouter(host, db).subagentSettings('parent')
   expect(result.settings).toMatchObject({ provider: 'claude-code', model: 'main', accountId: 'b', effort: 'high' })
@@ -242,6 +272,7 @@ it('retries a held thread when another account gains capacity, while its current
     { cursor: factory },
   )
   vi.spyOn(service, 'catalog').mockResolvedValue(catalogs)
+  service.apiKeyLogins = apiKeyLogins
   service.preferences = () => ({ ...prefs, fallback: { ...prefs.fallback, order: [] } })
   const usage = new UsageService(
     () => [reading('cursor'), reading('cursor', 'b')],
@@ -282,6 +313,7 @@ it('previews the next message route without switching, fetching or clearing a ho
     { cursor: factory },
   )
   vi.spyOn(service, 'catalog').mockResolvedValue(catalogs)
+  service.apiKeyLogins = apiKeyLogins
   const s = await service.startReviewed('t', { cwd, additionalDirs: [], covers: [cwd] }, 'Start', settings('cursor'))
   // Before preferences exist the host cannot say where the message would run.
   expect(await service.nextRoute(s.id)).toEqual({ state: 'unknown' })
@@ -340,6 +372,7 @@ it('prefers a login that already has the thread’s Shared MCP access, and falls
     preferences: () => withAccounts,
     usage: () => usage,
     catalog: async () => catalogs,
+    apiKeyLogins,
     refreshAccountUsage: () => async () => {},
     mcpDestination: () => async (_session: unknown, next: AgentSettings) => {
       checked.push(next.accountId)
@@ -385,6 +418,7 @@ it('pauses a limit fallback instead of moving a thread onto a login that would l
     preferences: () => prefs,
     usage: () => usage,
     catalog: async () => catalogs,
+    apiKeyLogins,
     refreshAccountUsage: () => async () => {},
     mcpDestination: () => async () => attention,
     get: () => ({ id: 's', provider, settings: settings(provider), state: 'running' }),

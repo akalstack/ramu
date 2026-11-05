@@ -213,6 +213,15 @@ export class ProviderService {
     )
     return result
   }
+  /** Logins known to run on an API key, as `provider:account`: keys saved in Ramu, and logins last read as using one. */
+  apiKeyLogins(): Set<string> {
+    const config = this.preferences().providerBinaries ?? {}
+    const keys = new Set([...this.logins].flatMap(([key, login]) => (login.apiKey ? [key] : [])))
+    for (const provider of AGENT_PROVIDERS)
+      for (const id of ['default', ...(config[provider]?.accounts ?? []).map((account) => account.id)])
+        if (providerApiKey(provider, id)) keys.add(`${provider}:${id}`)
+    return keys
+  }
   /**
    * Reads every login again, as when a person refreshes Providers after signing one in from a terminal: a login now on
    * another account is reported like a sign-in through Ramu.

@@ -99,6 +99,8 @@ export interface RouteContext {
   /** All enabled logins and their readings, before considering a different model. */
   accounts?: { configuration: ProviderConfiguration; usage: UsageReading[] }
   attemptedAccounts?: ReadonlySet<string>
+  /** Logins that run on an API key, as `provider:account`; see `nextAccount`. */
+  apiKeyLogins?: ReadonlySet<string>
   /** Providers whose runtime is proven incompatible on this host: never an automatic destination, and not a usage limit. */
   blocked?: ReadonlySet<AgentProvider>
 }
@@ -236,8 +238,8 @@ export const accountKey = (provider: AgentProvider, accountId: string | undefine
   `${provider}:${accountId || 'default'}`
 
 /**
- * The next login of the same provider to continue on: the first of `accounts` that is not the chat's own, not tried yet
- * and under the threshold. `usage` holds readings for every account; an account with no reading is assumed to have room.
+ * The next login of the same provider to continue on: the first of `accounts` that runs on an API key, is not the
+ * chat's own, not tried yet and under the threshold. `usage` holds readings for every account; an account with no reading is assumed to have room.
  */
 export function nextAccount(
   settings: Pick<AgentSettings, 'provider' | 'model' | 'accountId'>,
@@ -249,6 +251,7 @@ export function nextAccount(
     now?: number
     attempted?: ReadonlySet<string>
     blocked?: ReadonlySet<AgentProvider>
+    apiKeyLogins?: ReadonlySet<string>
   },
 ): string | null {
   if (context.blocked?.has(settings.provider)) return null
@@ -258,6 +261,10 @@ export function nextAccount(
   const current = settings.accountId || 'default'
   for (const account of accounts) {
     if (account === current || context.attempted?.has(accountKey(settings.provider, account))) continue
+    // Moving on to another subscription when one runs out works around the plan's limit, which provider terms forbid
+    // (Anthropic's limits assume ordinary individual use; OpenAI's terms bar circumventing rate limits). A login billed
+    // per use through an API key may take over; the person can still pick any login themselves.
+    if (!context.apiKeyLogins?.has(accountKey(settings.provider, account))) continue
     const readings = context.usage.filter((reading) => (reading.accountId ?? 'default') === account)
     if (isOver(peakFor(readings, settings.provider, model, context.now), context.switchAt)) continue
     return account

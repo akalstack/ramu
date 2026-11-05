@@ -66,6 +66,8 @@ export interface FallbackRouterHost
   preferences(): AppPreferences | undefined
   preferencesSource(): (() => AppPreferences) | undefined
   refreshAccountUsage(): AgentService['refreshAccountUsage']
+  /** Logins known to run on an API key, as `provider:account`: the only ones a limit moves a thread to on its own. */
+  apiKeyLogins(): ReadonlySet<string>
   shutdown(): AgentService['shutdown']
   usage(): AgentService['usage']
   setupOmissions(): AgentService['setupOmissions']
@@ -275,6 +277,7 @@ export class FallbackRouter {
     const decision = planRoute(s.settings, policy.order, {
       usage: routing.usage,
       accounts: routing.accounts,
+      apiKeyLogins: this.host.apiKeyLogins(),
       catalogs,
       switchAt: policy.switchAt,
       now: Date.now(),
@@ -315,7 +318,7 @@ export class FallbackRouter {
     }
   }
 
-  /** Another login of the same provider with room, when the user turned account rotation on for it; null otherwise. */
+  /** Another login of the same provider that runs on an API key and has room, when automatic fallback is on; null otherwise. */
   otherAccount(
     settings: AgentSettings,
     routing: { prefs: AppPreferences },
@@ -332,6 +335,7 @@ export class FallbackRouter {
       catalogs,
       switchAt,
       attempted: tried,
+      apiKeyLogins: this.host.apiKeyLogins(),
     })
   }
 
@@ -405,6 +409,7 @@ export class FallbackRouter {
     return planRoute(settings, this.orderOf(catalogs, routing.prefs), {
       usage: routing.usage,
       accounts: routing.accounts,
+      apiKeyLogins: this.host.apiKeyLogins(),
       catalogs,
       switchAt: routing.prefs.fallback.switchAt,
       blocked: await this.blockedProviders(),
@@ -446,6 +451,7 @@ export class FallbackRouter {
     const decision = planRoute(s.settings, policy.order, {
       usage: routing.usage,
       accounts: routing.accounts,
+      apiKeyLogins: this.host.apiKeyLogins(),
       catalogs,
       switchAt: policy.switchAt,
       now: Date.now(),
@@ -711,6 +717,7 @@ export class FallbackRouter {
       const decision = planRoute(settings, policy.order, {
         usage: routing.usage,
         accounts: routing.accounts,
+        apiKeyLogins: this.host.apiKeyLogins(),
         catalogs,
         switchAt: policy.switchAt,
         blocked: await this.blockedProviders(),
