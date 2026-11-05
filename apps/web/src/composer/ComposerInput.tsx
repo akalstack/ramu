@@ -96,8 +96,9 @@ function chipDetail(chip: DraftChip) {
 }
 
 /**
- * One reference in the draft. A press opens a popover with what it stands for in full and what can be done with it:
- * open a file, find a quote's source in the conversation, copy a path, or remove the reference.
+ * One reference in the draft. A file or folder opens at once on a press, with its path in the tooltip; Backspace removes
+ * it like any other atom. Other references open a popover with what they stand for in full and what can be done with
+ * them: find a quote's source in the conversation, or remove the reference.
  */
 export function InlineChip({
   chip,
@@ -120,6 +121,43 @@ export function InlineChip({
     setOpen(false)
     run()
   }
+  const content = (
+    <>
+      {folder ? (
+        <Folder data-icon="inline-start" aria-hidden="true" />
+      ) : chip.kind === 'skill' ? (
+        <WandSparkles data-icon="inline-start" className="text-brand" aria-hidden="true" />
+      ) : chip.kind === 'file' ? (
+        <FileIcon path={path!} />
+      ) : chip.kind === 'quote' ? (
+        <Quote data-icon="inline-start" aria-hidden="true" />
+      ) : chip.kind === 'mention' ? (
+        chip.provider ? (
+          <ProviderIcon provider={chip.provider} size={14} />
+        ) : (
+          <Users data-icon="inline-start" aria-hidden="true" />
+        )
+      ) : (
+        <SquareTerminal data-icon="inline-start" aria-hidden="true" />
+      )}
+      <span className="truncate">{chip.label.replace(/\n/g, ' ')}</span>
+    </>
+  )
+  // The chip is one atom in the draft: a press acts on it instead of moving the caret.
+  const keepCaret = (event: React.MouseEvent) => event.preventDefault()
+  if (target !== undefined && onOpen)
+    return (
+      <Badge
+        variant="secondary"
+        {...REFERENCE_CHIP}
+        role="button"
+        title={detail}
+        onMouseDown={keepCaret}
+        onClick={() => onOpen(target)}
+      >
+        {content}
+      </Badge>
+    )
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -129,29 +167,11 @@ export function InlineChip({
             variant="secondary"
             {...REFERENCE_CHIP}
             title={chip.kind === 'mention' ? `@${chip.target}` : detail}
-            // The chip is one atom in the draft: a press opens its popover instead of moving the caret.
-            onMouseDown={(event: React.MouseEvent) => event.preventDefault()}
+            onMouseDown={keepCaret}
           />
         }
       >
-        {folder ? (
-          <Folder data-icon="inline-start" aria-hidden="true" />
-        ) : chip.kind === 'skill' ? (
-          <WandSparkles data-icon="inline-start" className="text-brand" aria-hidden="true" />
-        ) : chip.kind === 'file' ? (
-          <FileIcon path={path!} />
-        ) : chip.kind === 'quote' ? (
-          <Quote data-icon="inline-start" aria-hidden="true" />
-        ) : chip.kind === 'mention' ? (
-          chip.provider ? (
-            <ProviderIcon provider={chip.provider} size={14} />
-          ) : (
-            <Users data-icon="inline-start" aria-hidden="true" />
-          )
-        ) : (
-          <SquareTerminal data-icon="inline-start" aria-hidden="true" />
-        )}
-        <span className="truncate">{chip.label.replace(/\n/g, ' ')}</span>
+        {content}
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={6} className="w-[min(360px,calc(100vw-16px))] gap-2 p-3">
         <p
@@ -160,11 +180,6 @@ export function InlineChip({
           {detail}
         </p>
         <div className="flex flex-wrap items-center justify-end gap-1">
-          {target && onOpen && (
-            <Button size="sm" variant="secondary" onClick={act(() => onOpen(target))}>
-              {folder ? t('Show in Explorer') : t('Open')}
-            </Button>
-          )}
           {chip.kind === 'quote' && onFind && (
             <Button size="sm" variant="secondary" onClick={act(() => onFind(chip.label))}>
               {t('Show in conversation')}
