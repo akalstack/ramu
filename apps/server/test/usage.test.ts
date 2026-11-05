@@ -126,6 +126,38 @@ describe('Claude on-demand usage', () => {
   })
 })
 
+it('a fresh Antigravity read replaces groups it no longer reports, keeping limit notices and other logins', () => {
+  const reading = (scope: string, extra: Partial<UsageReading> = {}): UsageReading => ({
+    provider: 'antigravity',
+    window: 'weekly',
+    scope,
+    usedPercent: 0,
+    status: 'ok',
+    updatedAt: 1,
+    ...extra,
+  })
+  // Saved before Claude and GPT became one reading.
+  const service = new UsageService(
+    () => [
+      reading('Claude'),
+      reading('GPT'),
+      reading('Gemini', { source: 'notice', status: 'limited' }),
+      reading('Claude', { accountId: 'work' }),
+      { provider: 'codex', window: 'weekly', usedPercent: 5, status: 'ok', updatedAt: 1 },
+    ],
+    () => {},
+    () => {},
+  )
+  service.update([reading('Claude & GPT'), reading('Gemini', { window: 'quota', usedPercent: 66 })])
+  expect(service.all().map((r) => `${r.provider}:${r.accountId ?? 'default'}:${r.scope ?? ''}:${r.window}`)).toEqual([
+    'antigravity:default:Gemini:weekly',
+    'antigravity:work:Claude:weekly',
+    'codex:default::weekly',
+    'antigravity:default:Claude & GPT:weekly',
+    'antigravity:default:Gemini:quota',
+  ])
+})
+
 it('keeps account windows separate and only exposes the selected account', async () => {
   const { configureProviderBinaries } = await import('../src/providers/providerBinaries')
   const stored: UsageReading[][] = []
