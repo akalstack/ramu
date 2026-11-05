@@ -2549,6 +2549,36 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
+  it('adds a teammate to a thread that is not running, and its report revives the lead unless stopped since', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc)
+    // As after a host restart: no process survives, and the thread is only its transcript.
+    db.prepare("UPDATE agent_sessions SET state = 'restored' WHERE id = ?").run(parent.id)
+    expect(svc.get(parent.id).state).toBe('restored')
+    const settings = { ...full, provider: 'codex' as const, model: 'codex-test', effort: 'high' as const }
+    // The agent's own helpers still need its live turn; a teammate the person brings in does not.
+    await expect(svc.spawnSubagent(parent.id, { description: 'Look', prompt: 'Look around' })).rejects.toThrow(
+      /not running/,
+    )
+    const reports = () =>
+      svc.events(parent.id).filter((event) => event.kind === 'user' && /\[Sub-agent "Codex test/.test(event.text))
+    await svc.addTeammate(parent.id, settings, 'review', '')
+    // Review never writes, so the fake runtime holds it on an approval, answered from the thread as usual.
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
+    const request = svc.events(parent.id).find((e) => e.kind === 'permission-request') as { requestId: string }
+    svc.replyPermission(parent.id, request.requestId, true)
+    await until(() => reports().length === 1)
+    await until(() => svc.get(parent.id).state === 'idle')
+    // Stopped after the next teammate joined: its report no longer wakes the thread.
+    db.prepare("UPDATE agent_sessions SET state = 'restored' WHERE id = ?").run(parent.id)
+    await svc.addTeammate(parent.id, settings, 'review', '')
+    await until(() => svc.events(parent.id).filter((e) => e.kind === 'permission-request').length === 2)
+    await svc.stopAndWait(parent.id)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(reports()).toHaveLength(1)
+    svc.stopAll()
+  })
+
   it('refuses to start or resume a thread on a provider or login turned off in Settings', async () => {
     const svc = routed()
     const parent = await parentOf(svc)

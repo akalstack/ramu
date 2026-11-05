@@ -26,6 +26,11 @@ export interface ChildRun {
   teammate?: import('@ramu/shared/types').TeammateMode
   /** How many of the lead's events a teammate has seen; its next message carries what came after. */
   seenParent?: number
+  /**
+   * For a teammate the person brought in or messaged: the lead's revision at that moment. Its reports reach the lead and
+   * revive it (after a restart, a stop or a failure) unless the thread has been stopped since.
+   */
+  leadRevision?: number
 }
 export interface SubagentInput {
   description: string

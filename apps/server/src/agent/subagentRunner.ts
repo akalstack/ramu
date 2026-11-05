@@ -156,7 +156,7 @@ export class SubagentRunner {
         })
         return
       }
-      if (run.report) void this.reportToParent(run.parentId, taskReportPrompt(run.name, status, result.report))
+      if (run.report) void this.reportToParent(run, taskReportPrompt(run.name, status, result.report))
     }
     // The task stays "running" in its chat until the work is back in the checkout, so the checkout stays reserved and the change capture waits.
     if (run.isolation)
@@ -240,7 +240,7 @@ export class SubagentRunner {
     if (!run?.teammate || run.settled) throw new Error('Only a working teammate can message the lead.')
     if (to.trim().replace(/^@/, '').toLowerCase() !== 'lead') throw new Error('A teammate messages only "lead".')
     if (!this.teammateRound(run.parentId)) throw new Error(TEAMMATE_PAUSED)
-    await this.reportToParent(run.parentId, teammateNotePrompt(run.name, text))
+    await this.reportToParent(run, teammateNotePrompt(run.name, text))
   }
 
   /** A teammate keeps its session across turns: a message wakes it, and its next report comes back again. */
@@ -266,6 +266,8 @@ export class SubagentRunner {
     if (!run?.teammate || run.parentId !== parentId) return false
     run.settled = false
     run.report = true
+    // Messaged now, so its next report may revive a lead that is not running, until the thread is stopped again.
+    run.leadRevision = this.host.revisions.get(parentId) ?? 0
     // A finished card only goes back to running with a resume time; without one the update reads as stale progress.
     this.host.updateTask(parentId, childId, { status: 'running', resumedAt: Date.now() })
     return true
@@ -312,8 +314,10 @@ export class SubagentRunner {
     // Stopping the parent bumps this, even when it was idle and so stays idle: a start that began earlier is then stale.
     const parentRevision = this.host.revisions.get(parentId) ?? 0
     if (parent.parentId) throw new Error('A sub-agent cannot start sub-agents through Ramu. Use your own tools.')
-    if (this.host.shutdown() || !['running', 'starting', 'idle', 'needs-input'].includes(parent.state))
-      throw new Error('This thread is not running.')
+    // A helper the agent starts needs its live turn. A teammate the person adds does not: after a host restart (when
+    // every session is only a transcript), a stop or a failure, its report revives the lead instead.
+    const live = ['running', 'starting', 'idle', 'needs-input'].includes(parent.state)
+    if (this.host.shutdown() || (!live && !input.teammate)) throw new Error('This thread is not running.')
     const cap = this.host.preferences()?.subagents.maxConcurrent ?? 3
     if ([...this.children.values()].filter((run) => run.parentId === parentId && !run.settled).length >= cap)
       throw new Error(`${cap} sub-agents are already running. Wait for one to finish, then try again.`)
@@ -353,7 +357,7 @@ export class SubagentRunner {
       signal?.aborted ||
       this.cancelledStarts.has(reservation) ||
       this.host.shutdown() ||
-      this.host.get(parentId).state === 'stopped' ||
+      (this.host.get(parentId).state === 'stopped' && !input.teammate) ||
       parentRevision !== (this.host.revisions.get(parentId) ?? 0)
     )
       throw new Error('Sub-agent start was cancelled.')
@@ -405,7 +409,9 @@ export class SubagentRunner {
     const run: ChildRun = {
       parentId,
       name,
-      ...(input.teammate ? { teammate: input.teammate, seenParent: this.host.events(parentId).length } : {}),
+      ...(input.teammate
+        ? { teammate: input.teammate, seenParent: this.host.events(parentId).length, leadRevision: parentRevision }
+        : {}),
       ...(isolation ? { isolation } : {}),
       ...(input.type ? { type: input.type } : {}),
       prompt: input.prompt,
@@ -506,7 +512,7 @@ export class SubagentRunner {
   async messageParent(childId: string, text: string): Promise<void> {
     const run = this.children.get(childId)
     if (!run || run.settled) throw new Error('Only a running sub-agent that Ramu started can message its parent.')
-    await this.reportToParent(run.parentId, subagentNotePrompt(run.name, 'says', childId, text))
+    await this.reportToParent(run, subagentNotePrompt(run.name, 'says', childId, text))
   }
 
   /** A question from a running sub-agent to its chat; resolves with the answer, or a note to carry on if none comes. */
@@ -543,7 +549,7 @@ export class SubagentRunner {
         provider: child.provider,
         model: child.settings.model,
       })
-    } else void this.reportToParent(run.parentId, text)
+    } else void this.reportToParent(run, text)
     try {
       return await answered
     } finally {
@@ -590,7 +596,12 @@ export class SubagentRunner {
   }
 
   /** Delivers a background sub-agent's report as a message, once its chat can take one. */
-  private async reportToParent(parentId: string, text: string, attempts = 6): Promise<void> {
+  private async reportToParent(
+    run: Pick<ChildRun, 'parentId' | 'leadRevision'>,
+    text: string,
+    attempts = 6,
+  ): Promise<void> {
+    const parentId = run.parentId
     for (let attempt = 0; attempt < attempts && !this.host.shutdown(); attempt++) {
       let state: AgentSessionState
       try {
@@ -598,8 +609,10 @@ export class SubagentRunner {
       } catch {
         return
       }
-      // A chat that was stopped or closed is not woken up by a helper finishing.
-      if (state === 'stopped' || state === 'failed' || state === 'restored') return
+      // A chat that was stopped or closed is not woken up by a helper finishing, only by a teammate the person brought
+      // in after that and the thread was not stopped since.
+      const revives = run.leadRevision !== undefined && run.leadRevision === (this.host.revisions.get(parentId) ?? 0)
+      if (!revives && (state === 'stopped' || state === 'failed' || state === 'restored')) return
       try {
         await this.host.submit(parentId, text, 'steer')
         return

@@ -642,9 +642,10 @@ export class SessionProcess {
       this.host.setState(id, 'stopped')
     }
     this.host.cancelPendingStarts(id)
+    // Bumped before its helpers stop: a teammate stopped with the thread must not report back and revive it.
+    this.host.revisions.set(id, (this.host.revisions.get(id) ?? 0) + 1)
     for (const [childId, run] of this.host.children) if (run.parentId === id) this.stop(childId)
     this.host.pauseQueue(id)
-    this.host.revisions.set(id, (this.host.revisions.get(id) ?? 0) + 1)
     this.halt(id)
     if (interrupted && !['failed', 'stopped'].includes(this.host.get(id).state)) this.host.setState(id, 'stopped')
   }
