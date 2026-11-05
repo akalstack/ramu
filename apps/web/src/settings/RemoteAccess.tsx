@@ -342,6 +342,32 @@ function ThisComputer() {
           </Button>
         </SettingsRow>
       </div>
+      <SettingsGroupTitle className="mt-5">{t('From anywhere')}</SettingsGroupTitle>
+      <SettingsRow>
+        <SettingsLabel
+          title={t('Public address')}
+          help={
+            !status.publicAddress
+              ? t('Update Ramu on this host to set a public address.')
+              : publicUrlFixed
+                ? t('Set with --public-url when Ramu was started from the command line. Change it there.')
+                : t(
+                    'The https:// address of your own tunnel to this host (Cloudflare Tunnel, Tailscale Funnel, ngrok), pointed at port {0} on this computer. Paired devices and webhook senders try it first. The tunnel’s provider can read what passes through it.',
+                    { 0: status.port },
+                  )
+          }
+        />
+        <Input
+          aria-label={t('Public address')}
+          type="url"
+          inputMode="url"
+          spellCheck={false}
+          placeholder="https://ramu.example.com"
+          value={publicUrl}
+          disabled={publicUrlFixed || !status.publicAddress}
+          onChange={(event) => stagePublicUrl(event.target.value)}
+        />
+      </SettingsRow>
       <SettingsGroupTitle className="mt-5">{t('Devices that can use this host')}</SettingsGroupTitle>
       <PermissionRequests status={status} invoke={changePermission} />
       {status.devices.map((device) => (
@@ -375,31 +401,6 @@ function ThisComputer() {
                 onChange={(event) =>
                   stageConfig({ ...config, port: event.target.value.replace(/\D/g, '').slice(0, 5) })
                 }
-              />
-            </SettingsRow>
-          )}
-          {status.publicAddress && (
-            <SettingsRow>
-              <SettingsLabel
-                title={t('Public address')}
-                help={
-                  publicUrlFixed
-                    ? t('Set with --public-url when Ramu was started from the command line. Change it there.')
-                    : t(
-                        'The https:// address of your own tunnel to this host (Cloudflare Tunnel, Tailscale Funnel, ngrok), pointed at port {0} on this computer. Paired devices and webhook senders try it first. The tunnel’s provider can read what passes through it.',
-                        { 0: status.port },
-                      )
-                }
-              />
-              <Input
-                aria-label={t('Public address')}
-                type="url"
-                inputMode="url"
-                spellCheck={false}
-                placeholder="https://ramu.example.com"
-                value={publicUrl}
-                disabled={publicUrlFixed}
-                onChange={(event) => stagePublicUrl(event.target.value)}
               />
             </SettingsRow>
           )}

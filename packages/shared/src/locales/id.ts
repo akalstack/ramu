@@ -1760,6 +1760,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Replacement preview unavailable for this expression or truncated match':
     'Pratinjau pengganti tidak tersedia untuk ekspresi atau kecocokan yang terpotong ini',
   'Public address': 'Alamat publik',
+  'From anywhere': 'Dari mana saja',
+  'Update Ramu on this host to set a public address.': 'Perbarui Ramu di host ini untuk mengatur alamat publik.',
   'Set with --public-url when Ramu was started from the command line. Change it there.':
     'Diatur dengan --public-url saat Ramu dijalankan dari baris perintah. Ubah di sana.',
   'The https:// address of your own tunnel to this host (Cloudflare Tunnel, Tailscale Funnel, ngrok), pointed at port {0} on this computer. Paired devices and webhook senders try it first. The tunnel’s provider can read what passes through it.':

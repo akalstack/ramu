@@ -13,7 +13,10 @@ const controls = vi.hoisted(
     >(),
 )
 vi.mock('../src/i18n', () => ({ t: (value: string) => value }))
-vi.mock('../src/settings/SettingsScope', () => ({ SettingsField: ({ children }: { children: ReactNode }) => children }))
+vi.mock('../src/settings/SettingsScope', () => ({
+  SettingsField: ({ children }: { children: ReactNode }) => children,
+  SettingTitleHosts: () => null,
+}))
 vi.mock('../src/settings/ModelStepCard', () => ({ ModelStepCard: () => null }))
 vi.mock('../src/models/ModelSets', () => ({ modelStepName: (step: { name: string }) => step.name }))
 vi.mock('../src/Menu', () => ({

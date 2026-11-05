@@ -1,6 +1,6 @@
 import { DragHandle } from '@/components/drag-handle'
 import { SubagentSelectionSettings } from './SubagentSelectionSettings'
-import { SettingsField, useSettingsInvoke } from './SettingsScope'
+import { SettingsField, SettingTitleHosts, useSettingsInvoke } from './SettingsScope'
 import { SettingsGroupTitle, SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
 import { limitChoiceOf, limitChoiceSwitches } from '@ramu/shared/chat/limitPolicy'
@@ -204,12 +204,15 @@ function SortableRow({
 /** Models ranked best first: chats use the highest one with room. */
 function OrderEditor({
   title,
+  setting,
   chain,
   onChange,
   onCopy,
   disabled,
 }: {
   title: string
+  /** The setting this order is, so its title shows where it stands on each host. */
+  setting: string
   chain: FallbackStep[]
   onChange: (chain: FallbackStep[]) => void
   onCopy?: () => void
@@ -244,6 +247,7 @@ function OrderEditor({
     <section className="fallback-chain [&_+_.fallback-chain]:mt-2 mb-6 flex flex-col gap-1.5 p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-fill">
       <header className="fallback-chain-heading [&_strong]:text-foreground flex items-center gap-[7px] min-h-[26px] text-soft text-control">
         <strong>{title}</strong>
+        <SettingTitleHosts path={setting} />
         <span className="grow flex-1 min-w-0 text-left" />
         {onCopy && (
           <Button
@@ -398,6 +402,7 @@ export function FallbackSettings({
       <SettingsField path="fallback.order">
         <OrderEditor
           title={t('Best first')}
+          setting="fallback.order"
           disabled={busy || off}
           chain={fallback.order ?? defaultOrder(catalogs)}
           onChange={(order) => set({ order })}
@@ -681,6 +686,7 @@ export function SubagentSettings({
         <SettingsField path="subagents.order">
           <OrderEditor
             title={t('Sub-agents, best first')}
+            setting="subagents.order"
             disabled={busy}
             chain={sub.order ?? mainOrder()}
             onChange={(order) => set({ order })}

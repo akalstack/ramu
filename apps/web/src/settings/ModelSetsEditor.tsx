@@ -1,6 +1,6 @@
 import { isGeneratedModelSet } from '@ramu/shared/providers/modelDefaults'
 import { providerName } from '@ramu/shared/providers/providers'
-import { SettingsField } from './SettingsScope'
+import { SettingsField, SettingTitleHosts } from './SettingsScope'
 import type { useSettingsScope } from './SettingsScope'
 import { Button } from '@/components/desktop-button'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
@@ -76,7 +76,10 @@ export function ModelSetsEditor({
     <SettingsField path="$models">
       <div className="model-settings mt-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-[5px] [&_label]:text-muted-foreground [&_label]:text-caption [&_label]:min-w-0 [&_.dropdown-trigger]:w-full [&_.dropdown-trigger]:text-foreground flex flex-col gap-4">
         <div>
-          <SettingsGroupTitle>{t('Thread selection bar')}</SettingsGroupTitle>
+          <SettingsGroupTitle>
+            {t('Thread selection bar')}
+            <SettingTitleHosts path="$models" />
+          </SettingsGroupTitle>
           <SettingsRow>
             <SettingsLabel
               title={t('Model selection')}

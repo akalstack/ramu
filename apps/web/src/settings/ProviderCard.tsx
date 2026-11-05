@@ -26,7 +26,7 @@ import { useState, type ReactNode } from 'react'
 import type { SharedMcpAccountReadiness } from '@ramu/shared/mcp'
 import { t } from '../i18n'
 import { ProviderIcon } from '../models/ProviderIcon'
-import { SettingsField } from './SettingsScope'
+import { SettingsField, SettingTitleHosts } from './SettingsScope'
 import type { useAccountUsage } from './Usage'
 import { SECONDARY_BUTTON_CLASS } from './constants'
 import { ProviderAddAccount, type ProviderPrefs } from './ProviderAccountControls'
@@ -146,6 +146,7 @@ export function ProviderCard({
               {enabled && status?.version && (
                 <span className="text-caption text-muted-foreground">{status.version}</span>
               )}
+              <SettingTitleHosts path={`providerBinaries.${provider}.enabled`} />
             </span>
             <span
               className={`block text-caption ${enabled && status?.updateAvailable ? 'provider-update-label text-brand' : 'text-muted-foreground'}`}
@@ -232,6 +233,7 @@ export function ProviderCard({
                 {t(
                   'New threads use the top login. When it reaches its limit, a thread moves to the next one before switching models.',
                 )}
+                <SettingTitleHosts path={`providerBinaries.${provider}.accountOrder`} />
               </span>
             </div>
           )}
@@ -349,6 +351,7 @@ export function ProviderCard({
           <CollapsibleContent className="grid gap-2 pt-3">
             <label className="provider-binary-label block text-caption" htmlFor={`provider-${provider}`}>
               {t(provider === 'antigravity' ? 'Runtime path' : 'Binary path')}
+              <SettingTitleHosts path={`providerBinaries.${provider}.binary`} />
             </label>
             <div className="provider-binary-input">
               <SettingsField path={`providerBinaries.${provider}.binary`}>
@@ -380,7 +383,10 @@ export function ProviderCard({
             )}
             {provider === 'antigravity' && (
               <>
-                <label htmlFor="provider-harness">{t('Harness helper path')}</label>
+                <label htmlFor="provider-harness">
+                  {t('Harness helper path')}
+                  <SettingTitleHosts path={`providerBinaries.${provider}.harness`} />
+                </label>
                 <div className="provider-binary-input">
                   <SettingsField path={`providerBinaries.${provider}.harness`}>
                     {' '}

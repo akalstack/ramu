@@ -318,6 +318,10 @@ export function useSettingsScope(section: string) {
   }
 }
 
+/**
+ * A setting's control: it marks the setting edited, and outside a compact row disables the control and says so when
+ * this device may only view. Where the setting stands on each host goes beside its title (`SettingTitleHosts`).
+ */
 export function SettingsField({
   path,
   children,
@@ -332,7 +336,6 @@ export function SettingsField({
   const state = scope.field(path)
   return (
     <SettingsFieldContext.Provider value={{ path, ...state, mark: () => scope.mark(path) }}>
-      {!compact && <SettingHosts path={path} scope={scope} />}
       {!compact && state.disabled && scope.readOnlyHosts.length > 0 && (
         <span className="text-caption text-muted-foreground">{t(VIEW_ONLY_WRITE_NOTICE)}</span>
       )}

@@ -14,7 +14,8 @@ To have agents use another computer's screen, add that computer as a host and ru
 
 **Let other devices use this host** decides who can reach this computer:
 
-- **Local network or VPN** opens the host on a network you choose (all networks, or one such as your VPN). The network and **Discoverable** choices appear once it is on; the port and **Public address** are under **Advanced** (see [Your own tunnel](#your-own-tunnel)).
+- **Local network or VPN** opens the host on a network you choose (all networks, or one such as your VPN). The network and **Discoverable** choices appear once it is on; the port is under **Advanced**.
+- **From anywhere → Public address** names [your own tunnel](#your-own-tunnel) to this host.
 - **Pair a device** shows a one-time code and this host's addresses. With **Discoverable** on, a nearby device can also ask without a code: Ramu asks you to allow it (in the app, or as a notification when it is in the background or closed). Allow it only when both screens show the same six-digit number.
 - **Device permissions** decide what each device may use: computer use, the browser, terminals, settings changes and agents. Grant this time, for an hour, a day or always. Each device shows what it runs on (an iPhone, an Android tablet, a Mac, an Ubuntu server…) once it has connected, and **Keep paired** sets how long that one device stays paired without use, or leaves it like the others. When a device asks for a permission it lacks, the request opens in Ramu on this host (or as a system notification when Ramu is in the background) with the same choices; closing it leaves the request waiting here until it lapses.
 
@@ -69,7 +70,7 @@ A tunnel gives the host an `https://` address that works from any network, inclu
    | ngrok | `ngrok http 7788 --url <your free static domain>` | Free static domain |
 
    A Cloudflare quick tunnel (`trycloudflare.com`) gets a new address on every restart, so paired devices lose the host; use a named tunnel.
-3. Give Ramu the address: **Settings → Remote access → Advanced → Public address**, or `ramu serve --public-url https://ramu.example.com`.
+3. Give Ramu the address: **Settings → Remote access → From anywhere → Public address**, or `ramu serve --public-url https://ramu.example.com`.
 4. Pair a device. The pairing link, the address list paired devices learn and webhook schedules all put the public address first.
 
 Every call through the tunnel still needs a paired device's token, and failed attempts are limited per visitor using the address the tunnel reports. The tunnel's provider decrypts HTTPS at its edge, so it can read what passes through; use a private network when that matters.
