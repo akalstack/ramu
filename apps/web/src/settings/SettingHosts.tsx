@@ -32,7 +32,16 @@ const valueKey = (host: SettingHost) => (host.state === 'ready' || host.state ==
  * it is the default, and why a host cannot take it. Mixed values and hosts that do not know the setting say so in the
  * row itself, so nothing about them is hidden behind the icon.
  */
-export function SettingHosts({ path, scope }: { path: string; scope: SettingsScope }) {
+export function SettingHosts({
+  path,
+  scope,
+  inline = false,
+}: {
+  path: string
+  scope: SettingsScope
+  /** Right after the setting's title, on its line, instead of on a line of its own. */
+  inline?: boolean
+}) {
   useLanguage()
   const [open, setOpen] = useState(false)
   const [restarting, setRestarting] = useState(false)
@@ -68,7 +77,9 @@ export function SettingHosts({ path, scope }: { path: string; scope: SettingsSco
         ? t('Mixed')
         : null
   return (
-    <span className="mt-1 flex items-center gap-1.5 text-caption">
+    <span
+      className={`items-center gap-1.5 text-caption font-normal ${inline ? 'ml-1.5 inline-flex align-middle' : 'mt-1 flex'}`}
+    >
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           render={
@@ -77,7 +88,7 @@ export function SettingHosts({ path, scope }: { path: string; scope: SettingsSco
               size="icon-xs"
               aria-label={t('This setting on each host')}
               title={t('This setting on each host')}
-              className={`-ml-1 size-5 min-h-0 p-0 text-muted-foreground transition-opacity ${
+              className={`${inline ? '' : '-ml-1'} size-5 min-h-0 p-0 text-muted-foreground transition-opacity ${
                 status ? 'opacity-100' : 'opacity-0 [.settings-row:hover_&]:opacity-100 focus-visible:opacity-100'
               } ${unknown.length ? 'text-warn' : mixed ? 'text-brand' : ''}`}
             />

@@ -1,5 +1,5 @@
 import type { ReasoningEffort, SubagentPreferences } from '@ramu/shared/types'
-import { SettingsRow } from '@/components/settings-row'
+import { SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { Dropdown } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { effortDisplayName, modelDisplayName, useModelSets } from '../models/ModelSets'
@@ -25,7 +25,7 @@ export function SubagentSelectionSettings({
     <>
       <SettingsRow setting="subagents.autoSelect">
         <span>
-          <strong>{t('Automatic selection')}</strong>
+          <SettingsTitle>{t('Automatic selection')}</SettingsTitle>
           <span className="muted text-muted-foreground block small text-caption">
             {t(
               'For cross-provider tasks, ask the destination provider to choose. Adds a short selection request; unavailable selection uses the configured model and effort.',
@@ -46,7 +46,7 @@ export function SubagentSelectionSettings({
       </SettingsRow>
       <SettingsRow setting="subagents.maxEffort">
         <span>
-          <strong>{t('Maximum sub-agent effort')}</strong>
+          <SettingsTitle>{t('Maximum sub-agent effort')}</SettingsTitle>
           <span className="muted text-muted-foreground block small text-caption">
             {t(
               'Caps Ramu-managed sub-agents, including fallbacks. Native sub-agents keep their provider settings. The lower of the global and model caps applies.',
@@ -62,7 +62,7 @@ export function SubagentSelectionSettings({
         />
       </SettingsRow>
       <SettingsRow setting="subagents.modelMaxEffort" className="settings-stack">
-        <strong>{t('Per-model effort caps')}</strong>
+        <SettingsTitle>{t('Per-model effort caps')}</SettingsTitle>
         <details>
           <summary>{t('Configure model caps')}</summary>
           {catalogs

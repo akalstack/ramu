@@ -347,18 +347,17 @@ export function SettingsField({
   )
 }
 
-/** Under a setting's title: where it stands on each selected host, and a view-only notice when saving is refused. */
+/** Beside a setting's title: where it stands on each selected host. */
+export function SettingTitleHosts({ path }: { path: string }) {
+  const scope = useContext(SettingsScopeContext)
+  return scope ? <SettingHosts path={path} scope={scope} inline /> : null
+}
+
+/** Under a setting's description: a view-only notice when saving is refused. */
 export function SettingsFieldNotice({ path }: { path: string }) {
   const scope = useContext(SettingsScopeContext)
-  if (!scope) return null
-  return (
-    <>
-      <SettingHosts path={path} scope={scope} />
-      {scope.field(path).disabled && scope.readOnlyHosts.length > 0 && (
-        <span className="block mt-1 text-caption text-muted-foreground">{t(VIEW_ONLY_WRITE_NOTICE)}</span>
-      )}
-    </>
-  )
+  if (!scope?.field(path).disabled || !scope.readOnlyHosts.length) return null
+  return <span className="block mt-1 text-caption text-muted-foreground">{t(VIEW_ONLY_WRITE_NOTICE)}</span>
 }
 
 // Only the settings reads allowed by the host's viewer boundary. A method's suffix is not access evidence.

@@ -1,7 +1,7 @@
 import { DragHandle } from '@/components/drag-handle'
 import { SubagentSelectionSettings } from './SubagentSelectionSettings'
 import { SettingsField, useSettingsInvoke } from './SettingsScope'
-import { SettingsGroupTitle, SettingsRow } from '@/components/settings-row'
+import { SettingsGroupTitle, SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
 import { limitChoiceOf, limitChoiceSwitches } from '@ramu/shared/chat/limitPolicy'
 import { isModelListed } from '@ramu/shared/providers/modelVisibility'
@@ -374,7 +374,7 @@ export function FallbackSettings({
     <>
       <SettingsRow setting="fallback.switchAt" className="">
         <span>
-          <strong>{t('When to switch')}</strong>
+          <SettingsTitle>{t('When to switch')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
             {t('Switch at a usage limit, or earlier at the selected percentage.')}
           </span>
@@ -443,7 +443,7 @@ function CodexHookRow({
   return (
     <SettingsRow setting="subagents.codexHook" className="settings-toggle">
       <span>
-        <strong>{t('Decide before Codex starts its own sub-agents')}</strong>
+        <SettingsTitle>{t('Decide before Codex starts its own sub-agents')}</SettingsTitle>
         <span className="muted text-muted-foreground block block small text-caption">
           {t('Route Codex sub-agents before they start. Enabling adds a trusted hook to ')}
           <code>~/.codex/config.toml</code>
@@ -494,7 +494,7 @@ export function SubagentSettings({
   const toggle = (key: 'continueNative' | 'isolate' | 'shareContext', title: string, description: string) => (
     <SettingsRow setting={`subagents.${key}`} className="settings-toggle">
       <span>
-        <strong>{title}</strong>
+        <SettingsTitle>{title}</SettingsTitle>
         <span className="muted text-muted-foreground block block small text-caption">{description}</span>
       </span>
       <Switch
@@ -513,7 +513,7 @@ export function SubagentSettings({
       </p>
       <SettingsRow setting="subagents.mode" className="">
         <span>
-          <strong>{t('Where sub-agents run')}</strong>
+          <SettingsTitle>{t('Where sub-agents run')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
             {t('Use native sub-agents or route tasks to a selected model.')}
           </span>
@@ -646,7 +646,7 @@ export function SubagentSettings({
       </div>
       <SettingsRow setting="subagents.fallback" className="">
         <span>
-          <strong>{t('Fallback order')}</strong>
+          <SettingsTitle>{t('Fallback order')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
             {t('Use the main order or a separate one for sub-agents. Sub-agents only move down when they run out.')}
           </span>
@@ -664,7 +664,7 @@ export function SubagentSettings({
       </SettingsRow>
       <SettingsRow setting="subagents.switchAt" className="">
         <span>
-          <strong>{t('Switch sub-agents')}</strong>
+          <SettingsTitle>{t('Switch sub-agents')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
             {t('Choose when sub-agents switch to their fallback model.')}
           </span>
@@ -710,7 +710,7 @@ export function SubagentSettings({
       )}
       <SettingsRow setting="subagents.maxConcurrent" className="">
         <span>
-          <strong>{t('At once per thread')}</strong>
+          <SettingsTitle>{t('At once per thread')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
             {t('Additional sub-agents wait for an available slot.')}
           </span>
@@ -775,7 +775,7 @@ export function AdvisorSettings({
       </p>
       <SettingsRow setting="advisor.enabled" className="settings-toggle">
         <span>
-          <strong>{t('Advisor')}</strong>
+          <SettingsTitle>{t('Advisor')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
             {t(
               'Send the thread transcript to the advisor model. Uses model tokens. Applies when a thread starts or restarts.',
@@ -803,7 +803,7 @@ export function AdvisorSettings({
       </SettingsRow>
       <SettingsRow setting="advisor.wait" className="settings-toggle">
         <span>
-          <strong>{t('Always wait for advice')}</strong>
+          <SettingsTitle>{t('Always wait for advice')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
             {t('Pause until advice arrives. When off, the agent can continue independent work.')}
           </span>

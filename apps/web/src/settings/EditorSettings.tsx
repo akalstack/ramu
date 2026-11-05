@@ -1,4 +1,4 @@
-import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { SettingsGroupTitle, SettingsLabel, SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
 import { SETTINGS_FORM_CLASS, sizeOptions } from './constants'
@@ -17,7 +17,7 @@ export function EditorSettings({ draft, onChange, busy }: DraftProps) {
         description="Single-click previews a file. Double-click or edit to keep it open."
       />
       <SettingsRow setting="editorFontSize">
-        <strong>{t('Editor font size')}</strong>
+        <SettingsTitle>{t('Editor font size')}</SettingsTitle>
         <Dropdown
           label={t('Editor font size')}
           value={String(draft.editorFontSize)}
@@ -47,7 +47,7 @@ export function EditorSettings({ draft, onChange, busy }: DraftProps) {
       </SettingsRow>
       <SettingsGroupTitle>{t('Terminal')}</SettingsGroupTitle>
       <SettingsRow setting="terminalFontSize">
-        <strong>{t('Terminal font size')}</strong>
+        <SettingsTitle>{t('Terminal font size')}</SettingsTitle>
         <Dropdown
           label={t('Terminal font size')}
           value={String(draft.terminalFontSize)}

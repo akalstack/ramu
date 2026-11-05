@@ -46,7 +46,12 @@ vi.mock('../src/deviceStorage', () => ({ deviceStorage: { getItem: () => null, s
 vi.mock('../src/ipc', () => ({ invokeOn: state.invoke, ramu: { invoke: state.invoke }, bridge: {} }))
 vi.mock('../src/i18n', () => ({ t: (text: string) => text, useLanguage() {} }))
 vi.mock('../src/Menu', () => ({ Dropdown: 'Dropdown' }))
-vi.mock('@/components/settings-row', () => ({ SettingsGroupTitle: 'h4', SettingsRow: 'div', SettingsLabel: 'label' }))
+vi.mock('@/components/settings-row', () => ({
+  SettingsGroupTitle: 'h4',
+  SettingsRow: 'div',
+  SettingsLabel: 'label',
+  SettingsTitle: 'strong',
+}))
 vi.mock('@/components/desktop-button', () => ({ Button: 'Button' }))
 vi.mock('@/components/desktop-input', () => ({ Input: 'Input' }))
 vi.mock('@/components/ui/switch', () => ({ Switch: 'Switch' }))

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, Copy, Smartphone } from 'lucide-react'
 import type { PlatformReadiness, TestDeviceStatus } from '@ramu/shared/testDevices'
-import { SettingsGroupTitle, SettingsRow } from '@/components/settings-row'
+import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import { t, useLanguage } from '../i18n'
@@ -88,14 +88,12 @@ export function TestDeviceSettings({ hostId, readOnly }: { hostId: string; readO
     <section className="flex flex-col" aria-label={t('Test devices')}>
       <SettingsGroupTitle>{t('Test devices')}</SettingsGroupTitle>
       <SettingsRow setting="testDevices" className="settings-toggle">
-        <div className="min-w-0 flex-1">
-          <p className="m-0 text-control">{t('Let agents use test devices')}</p>
-          <p className="m-0 text-caption text-muted-foreground">
-            {t(
-              'Agents boot iOS Simulators and Android emulators on this host, install the app they built and check it like computer use. Xcode and the Android SDK stay your install.',
-            )}
-          </p>
-        </div>
+        <SettingsLabel
+          title={t('Let agents use test devices')}
+          help={t(
+            'Agents boot iOS Simulators and Android emulators on this host, install the app they built and check it like computer use. Xcode and the Android SDK stay your install.',
+          )}
+        />
         <Switch
           checked={!!status?.enabled}
           disabled={readOnly || !status}

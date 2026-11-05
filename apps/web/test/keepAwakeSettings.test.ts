@@ -6,6 +6,7 @@ import { KeepAwakeSettings } from '../src/settings/KeepAwakeSettings'
 import { ToggleRow } from '../src/settings/ToggleRow'
 vi.mock('../src/settings/SettingsScope', async () => ({
   SettingsFieldNotice: () => null,
+  SettingTitleHosts: () => null,
   SettingsField: ({ children }: { children: ReactNode }) => children,
   SettingsScopeContext: (await import('react')).createContext(null),
 }))

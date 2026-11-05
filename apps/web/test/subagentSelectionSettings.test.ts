@@ -22,6 +22,7 @@ vi.mock('../src/i18n', () => ({
 }))
 vi.mock('../src/components/settings-row', () => ({
   SettingsRow: ({ children }: { children: ReactNode }) => createElement('div', null, children),
+  SettingsTitle: ({ children }: { children: ReactNode }) => createElement('strong', null, children),
 }))
 vi.mock('../src/Menu', () => ({
   Dropdown: (props: {

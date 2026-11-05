@@ -2,7 +2,7 @@ import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useStaging } from './stagedChanges'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { errorText } from '../lib/errors'
-import { SettingsRow } from '@/components/settings-row'
+import { SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { t, useLanguage } from '../i18n'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -241,7 +241,7 @@ export function ProviderSettings({
       <fieldset disabled={viewOnly} className="contents">
         <SettingsRow setting="providerUpdateChecks" className="settings-toggle [&:not(:has(+_.settings-row))]:mb-0">
           <span>
-            <strong>{t('Check provider updates')}</strong>
+            <SettingsTitle>{t('Check provider updates')}</SettingsTitle>
             <span className="muted text-muted-foreground block small text-caption">
               {t('Runs in the background, even while Ramu is closed.')}
             </span>

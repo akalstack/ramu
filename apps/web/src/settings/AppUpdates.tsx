@@ -1,5 +1,5 @@
 import { useSettingsEvents, useSettingsInvoke } from './SettingsScope'
-import { SettingsRow } from '@/components/settings-row'
+import { SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
 import { useEffect, useState } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
@@ -70,7 +70,7 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
       </SettingsRow>
       <SettingsRow setting="appUpdateChecks" className="settings-toggle">
         <span>
-          <strong>{t('Check app updates')}</strong>
+          <SettingsTitle>{t('Check app updates')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
             {t('The background service checks while Ramu is closed.')}
           </span>
@@ -84,7 +84,7 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
       {APP_AUTO_UPDATE && (
         <SettingsRow setting="appAutoUpdate" className="settings-toggle">
           <span>
-            <strong>{t('Auto-update Ramu')}</strong>
+            <SettingsTitle>{t('Auto-update Ramu')}</SettingsTitle>
             <span className="muted text-muted-foreground block block small text-caption">
               {t('Download updates automatically. Restart when ready; threads keep running.')}
             </span>

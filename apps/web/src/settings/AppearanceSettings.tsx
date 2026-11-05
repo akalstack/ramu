@@ -1,4 +1,4 @@
-import { SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { SettingsLabel, SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import type { AppPreferences } from '@ramu/shared/types'
 import { t } from '../i18n'
@@ -137,7 +137,7 @@ export function AppearanceSettings({
         />
       </SettingsRow>
       <SettingsRow setting="fontSize">
-        <strong>{t('Interface font size')}</strong>
+        <SettingsTitle>{t('Interface font size')}</SettingsTitle>
         <Dropdown
           label={t('Interface font size')}
           value={String(draft.fontSize)}

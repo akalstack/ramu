@@ -1,7 +1,10 @@
-import { SettingsField, SettingsFieldNotice } from '../settings/SettingsScope'
-import { Children, type ComponentProps } from 'react'
+import { SettingsField, SettingsFieldNotice, SettingTitleHosts } from '../settings/SettingsScope'
+import { Children, createContext, useContext, type ComponentProps, type ReactNode } from 'react'
 import { cn } from 'cn'
 import { Field } from '@/components/ui/field'
+
+/** The setting a row edits, so its title can show where that setting stands on each host. */
+const RowSetting = createContext<string | undefined>(undefined)
 
 /** A native Field with the compact row layout shared by desktop Settings. */
 export function SettingsRow({
@@ -40,19 +43,32 @@ export function SettingsRow({
     </Field>
   )
   return setting ? (
-    <SettingsField path={setting} compact>
-      {row}
-    </SettingsField>
+    <RowSetting.Provider value={setting}>
+      <SettingsField path={setting} compact>
+        {row}
+      </SettingsField>
+    </RowSetting.Provider>
   ) : (
     row
   )
 }
 
 /** Title plus optional one-line help; the first cell of a SettingsRow. */
+/** A row's title; in a row with a `setting`, followed on its line by where that setting stands on each host. */
+export function SettingsTitle({ children }: { children: ReactNode }) {
+  const setting = useContext(RowSetting)
+  return (
+    <>
+      <strong>{children}</strong>
+      {setting && <SettingTitleHosts path={setting} />}
+    </>
+  )
+}
+
 export function SettingsLabel({ title, help }: { title: string; help?: string }) {
   return (
     <span>
-      <strong>{title}</strong>
+      <SettingsTitle>{title}</SettingsTitle>
       {help && <span className="muted text-muted-foreground block small text-caption">{help}</span>}
     </span>
   )
