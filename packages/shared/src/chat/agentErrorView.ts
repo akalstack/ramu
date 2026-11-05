@@ -12,7 +12,7 @@ const KINDS: [RegExp, AgentErrorView][] = [
     { title: 'This account needs a paid plan', action: 'providers' },
   ],
   [
-    /\bmodel\b.*\b(not supported|unsupported|not available|unavailable|does not exist|not found|invalid)\b|\b(unknown|invalid|unsupported) model\b/i,
+    /\bmodel\b.*\b(not supported|unsupported|not available|unavailable|does not exist|not found|invalid)\b|\b(unknown|invalid|unsupported) model\b|\bcannot use this model\b/i,
     { title: 'This model isn’t available', action: 'model' },
   ],
   [

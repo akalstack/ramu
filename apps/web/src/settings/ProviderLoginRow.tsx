@@ -148,7 +148,8 @@ export function ProviderLoginRow({
               ? state.apiKey
                 ? `${t('Signed in')} · ${t('API key')}`
                 : `${t('Signed in')}${state.detail && state.detail !== row.name && provider !== 'opencode' ? ` · ${state.detail}` : ''}${state.plan ? ` · ${planName(state.plan)}` : ''}`
-              : t('Not signed in')}
+              : // Why it is signed out, when the provider says (an expired or rejected key).
+                t(state.detail ?? 'Not signed in')}
           {state?.signedIn && state.upgradeUrl && (
             <>
               {' · '}

@@ -4,15 +4,19 @@ import { loadCursorSdk } from '../cursor'
 import { storedCursorKey } from '../cursorAuth'
 
 /**
- * Cursor runs SDK agents only for paid plans, even locally, and refuses a free one with `plan_required`. Asking who the
- * key belongs to shows that before a thread fails; any other answer, or none, leaves the login as it is.
+ * What Cursor says about a key when asked who it belongs to. It runs SDK agents only for paid plans, even locally, and
+ * refuses a free one with `plan_required`; an expired or revoked key is rejected. Any other failure (offline, a team
+ * key without a user) says nothing about the login, so it is left as it is.
  */
-export async function cursorPlanRequired(me: () => Promise<unknown>): Promise<boolean> {
+export async function cursorKeyState(me: () => Promise<unknown>): Promise<'ok' | 'free' | 'rejected' | 'unknown'> {
   try {
     await me()
-    return false
+    return 'ok'
   } catch (error) {
-    return (error as { code?: unknown }).code === 'plan_required'
+    const { code, name, status } = error as { code?: unknown; name?: unknown; status?: unknown }
+    if (code === 'plan_required') return 'free'
+    if (name === 'AuthenticationError' || status === 401) return 'rejected'
+    return 'unknown'
   }
 }
 const CURSOR_PRICING = 'https://cursor.com/pricing'
@@ -53,24 +57,25 @@ export const cursorAdapter = defineAdapter({
   async signInState(_binary, env) {
     try {
       const { Cursor, FileCredentialStore } = await loadCursorSdk()
-      const free = (apiKey: string | undefined) =>
-        apiKey ? cursorPlanRequired(() => Cursor.me({ apiKey })) : Promise.resolve(false)
+      const check = (apiKey: string) => cursorKeyState(() => Cursor.me({ apiKey }))
       const unpaid = { plan: 'free', upgradeUrl: CURSOR_PRICING }
-      if (env.CURSOR_API_KEY)
-        return {
-          signedIn: true,
-          detail: 'API key',
-          apiKey: true,
-          ...((await free(env.CURSOR_API_KEY)) ? unpaid : {}),
-        }
+      if (env.CURSOR_API_KEY) {
+        const state = await check(env.CURSOR_API_KEY)
+        if (state === 'rejected') return { signedIn: false, detail: 'API key rejected' }
+        return { signedIn: true, detail: 'API key', apiKey: true, ...(state === 'free' ? unpaid : {}) }
+      }
       const status = await Cursor.auth.status(
         env.RAMU_CURSOR_SDK_DIR ? { store: new FileCredentialStore(join(env.RAMU_CURSOR_SDK_DIR, 'auth.json')) } : {},
       )
       if (status.status !== 'logged-in') return { signedIn: false }
+      // The saved key lasts about 90 days; past that, or once Cursor rejects it, the login has to be done again.
+      const key = storedCursorKey(env)
+      const state = key ? await check(key) : 'rejected'
+      if (state === 'rejected') return { signedIn: false, detail: 'Sign-in expired' }
       return {
         signedIn: true,
         ...(status.email ? { detail: status.email, email: String(status.email) } : {}),
-        ...((await free(storedCursorKey(env))) ? unpaid : {}),
+        ...(state === 'free' ? unpaid : {}),
       }
     } catch {
       return env.CURSOR_API_KEY ? { signedIn: true, detail: 'API key', apiKey: true } : { signedIn: false }

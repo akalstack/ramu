@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type AgentScope } from '@ramu/shared/types'
-import { CursorSession, cursorModel } from '../src/providers/cursor'
+import { CursorSession, cursorModel, cursorModels } from '../src/providers/cursor'
 import {
   formAnswer,
   formQuestions,
@@ -44,7 +44,8 @@ function fakeCursor(messages: unknown[], result: Record<string, unknown> = { sta
         calls.resume = id
         calls.resumeOptions = options
         if (id === 'agent-resume') return agent
-        throw new Error('not found')
+        if (id === 'agent-offline') throw Object.assign(new Error('fetch failed'), { name: 'NetworkError' })
+        throw Object.assign(new Error('not found'), { name: 'AgentNotFoundError', code: 'agent_not_found' })
       },
     },
     Cursor: {},
@@ -139,10 +140,186 @@ describe('Cursor SDK runner', () => {
     expect(events.find((e) => e.kind === 'result')).toMatchObject({ isError: true })
   })
 
-  it('turns a lost agent into ResumeUnavailable', async () => {
+  it('offers each Cursor model its effort levels and Fast, and sends them only where offered', async () => {
+    const sdk = {
+      Cursor: {
+        models: {
+          list: async () => [
+            {
+              id: 'gpt-6.1',
+              displayName: 'GPT-6.1',
+              parameters: [
+                {
+                  id: 'reasoning',
+                  values: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }, { value: 'turbo' }],
+                },
+                { id: 'fast', values: [{ value: 'true' }, { value: 'false' }] },
+              ],
+              variants: [{ displayName: 'Default', isDefault: true, params: [{ id: 'reasoning', value: 'medium' }] }],
+            },
+            { id: 'composer-2.5', displayName: 'Composer 2.5' },
+          ],
+        },
+      },
+    } as any
+    const [gpt, composer] = await cursorModels(undefined, sdk)
+    expect(gpt).toMatchObject({
+      efforts: ['low', 'medium', 'high'],
+      defaultEffort: 'medium',
+      serviceTiers: ['standard', 'fast'],
+    })
+    expect(composer).toMatchObject({ efforts: [], defaultEffort: null })
+    expect(composer!.serviceTiers).toBeUndefined()
+    expect(cursorModel('gpt-6.1', 'high', true)).toEqual({
+      id: 'gpt-6.1',
+      params: [
+        { id: 'reasoning', value: 'high' },
+        { id: 'fast', value: 'true' },
+      ],
+    })
+    expect(cursorModel('composer-2.5', 'high', true)).toEqual({ id: 'composer-2.5' })
+  })
+
+  it('shows Cursor todo lists, plans and sub-agents as their own cards, not tool rows', async () => {
+    const base = { type: 'tool_call', agent_id: 'agent-1', run_id: 'run-1' }
+    const { sdk } = fakeCursor([
+      {
+        ...base,
+        call_id: 't1',
+        name: 'updateTodos',
+        status: 'completed',
+        args: {
+          todos: [
+            { content: 'Read the code', status: 'completed' },
+            { content: 'Fix the bug', status: 'inProgress' },
+            { content: 'Old idea', status: 'cancelled' },
+          ],
+        },
+      },
+      { ...base, call_id: 'p1', name: 'createPlan', status: 'completed', args: { plan: '# Plan\n1. Fix it' } },
+      {
+        ...base,
+        call_id: 'h1',
+        name: 'task',
+        status: 'completed',
+        args: { description: 'Explore auth', prompt: 'Find the login code', subagentType: { kind: 'explore' } },
+        result: {
+          status: 'success',
+          value: { conversationSteps: [{ assistantMessage: { text: 'It is in auth.ts.' } }] },
+        },
+      },
+    ])
+    const events: AgentEvent[] = []
+    const runner = new CursorSession(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor' },
+      (e) => events.push(e),
+      false,
+      sdk,
+    )
+    await runner.start('hi', null)
+    await settle(events)
+    expect(events.find((e) => e.kind === 'plan')).toMatchObject({
+      entries: [
+        { content: 'Read the code', status: 'completed' },
+        { content: 'Fix the bug', status: 'in_progress' },
+      ],
+    })
+    expect(events.find((e) => e.kind === 'text' && e.text.startsWith('# Plan'))).toBeTruthy()
+    expect(events.find((e) => e.kind === 'agent')).toMatchObject({
+      agentId: 'h1',
+      name: 'Explore auth',
+      agentType: 'explore',
+      status: 'completed',
+      summary: 'It is in auth.ts.',
+    })
+    expect(events.some((e) => e.kind === 'tool-use' || e.kind === 'tool-result')).toBe(false)
+  })
+
+  it('turns a lost agent into ResumeUnavailable, and keeps the agent through any other resume failure', async () => {
     const { sdk } = fakeCursor([])
     const runner = new CursorSession(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor' }, () => {}, false, sdk)
     await expect(runner.start('hi', 'agent-old')).rejects.toBeInstanceOf(ResumeUnavailable)
+    // Offline or signed out: the thread's Cursor history must not be dropped for a new agent.
+    const offline = runner.start('hi', 'agent-offline')
+    await expect(offline).rejects.toThrow('fetch failed')
+    await expect(offline).rejects.not.toBeInstanceOf(ResumeUnavailable)
+  })
+
+  it('sends attached images to the model as images', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ramu-cursor-'))
+    try {
+      const path = join(dir, 'shot.png')
+      writeFileSync(path, Buffer.from([1, 2, 3]))
+      const { sdk, calls } = fakeCursor([])
+      const events: AgentEvent[] = []
+      const runner = new CursorSession(
+        scope,
+        { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor' },
+        (e) => events.push(e),
+        false,
+        sdk,
+      )
+      await runner.start('What is wrong here?', null, [
+        { id: 'a', name: 'shot.png', mimeType: 'image/png', size: 3, path } as any,
+      ])
+      await settle(events)
+      expect(calls.sends[0]!.text).toEqual({
+        text: 'What is wrong here?',
+        images: [{ data: Buffer.from([1, 2, 3]).toString('base64'), mimeType: 'image/png' }],
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reports a usage limit from its code even when the message does not say so', async () => {
+    const { sdk } = fakeCursor([], {
+      status: 'error',
+      error: { message: 'Request failed', code: 'PRO_USER_USAGE_LIMIT' },
+    })
+    const events: AgentEvent[] = []
+    const runner = new CursorSession(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor' },
+      (e) => events.push(e),
+      false,
+      sdk,
+    )
+    await runner.start('hi', null)
+    await settle(events)
+    expect(events.some((e) => e.kind === 'usage')).toBe(true)
+  })
+
+  it('ends a run left by an earlier process, then starts the turn', async () => {
+    const { sdk, calls } = fakeCursor([])
+    const agent = await sdk.Agent.create({})
+    const send = agent.send
+    let busy = true
+    agent.send = async (text: string, options: any) => {
+      if (busy) {
+        busy = false
+        throw Object.assign(new Error('Agent already has active run'), { name: 'AgentBusyError' })
+      }
+      return send(text, options)
+    }
+    const cancelled: string[] = []
+    sdk.Agent.create = async () => agent
+    sdk.Agent.listRuns = async () => ({ items: [{ id: 'run-old', status: 'running' }] })
+    sdk.Agent.cancelRun = async (id: string) => void cancelled.push(id)
+    const events: AgentEvent[] = []
+    const runner = new CursorSession(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor' },
+      (e) => events.push(e),
+      false,
+      sdk,
+    )
+    await runner.start('hi', null)
+    await settle(events)
+    expect(cancelled).toEqual(['run-old'])
+    expect(calls.sends).toHaveLength(1)
+    expect(events.find((e) => e.kind === 'result')).toMatchObject({ isError: false })
   })
 })
 

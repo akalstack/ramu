@@ -5,6 +5,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'This model isn’t available': 'Model ini tidak tersedia',
   'Sign-in needed': 'Perlu masuk',
   'This account needs a paid plan': 'Akun ini memerlukan paket berbayar',
+  'Sign-in expired': 'Sesi masuk kedaluwarsa',
+  'API key rejected': 'Kunci API ditolak',
+  'This Cursor login is signed out or expired. Sign in again in Settings → Providers.':
+    'Login Cursor ini keluar atau kedaluwarsa. Masuk lagi di Pengaturan → Provider.',
   'The provider is limiting requests': 'Provider sedang membatasi permintaan',
   'Connection problem': 'Masalah koneksi',
   'The agent stopped with an error': 'Agent berhenti karena kesalahan',

@@ -1,9 +1,10 @@
+import { readFileSync } from 'node:fs'
 import { modelLegacyMetadata } from './modelLifecycle'
 import { modelContextWindow } from './modelContext'
 // Cursor chats through the official TypeScript SDK (`@cursor/sdk`), running the agent loop locally in this process.
 // The SDK has no approval callback: full access runs unsandboxed, other access levels run in Cursor's sandbox.
 import { cursorMcpServers, sessionMcpServers, configuredMcpStatus } from './discoveredMcp'
-import type { AgentOptions, ModelSelection, Run, RunResult, SDKAgent, SDKMessage } from '@cursor/sdk'
+import type { AgentOptions, ModelSelection, Run, RunResult, SDKAgent, SDKMessage, SDKUserMessage } from '@cursor/sdk'
 import type {
   AgentEvent,
   AgentModel,
@@ -12,6 +13,7 @@ import type {
   AgentToolKind,
   Attachment,
   McpConnection,
+  ReasoningEffort,
 } from '@ramu/shared/types'
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from '../agent/agentRunner'
 import { attachmentPrompt } from '../attachments'
@@ -28,35 +30,88 @@ export const loadCursorSdk = (): Promise<Sdk> => import('@cursor/sdk')
 
 /**
  * The API key for an account: one set in its environment, else the login saved in its own folder. The default account
- * returns none and lets the SDK use its stored login (`Cursor.auth.login`).
+ * returns none and lets the SDK use its stored login (`Cursor.auth.login`). A login added in Ramu whose key is missing
+ * or expired is refused: the SDK would otherwise fall back to the default login and run (and bill) the wrong account.
  */
 export const cursorApiKey = (accountId?: string): string | undefined => {
   const env = providerEnvironment('cursor', undefined, accountId ?? 'default')
-  return env.CURSOR_API_KEY || (env.RAMU_CURSOR_SDK_DIR ? storedCursorKey(env) : undefined) || undefined
+  const key = env.CURSOR_API_KEY || (env.RAMU_CURSOR_SDK_DIR ? storedCursorKey(env) : undefined) || undefined
+  if (!key && env.RAMU_CURSOR_SDK_DIR)
+    throw new Error('This Cursor login is signed out or expired. Sign in again in Settings → Providers.')
+  return key
 }
 
-/** Ramu's model id as the SDK's selection. Cursor's router needs `optimize_for`, so "auto" asks for a balanced pick. */
-export function cursorModel(id: string | undefined): ModelSelection {
-  return !id || id === 'auto' || id === 'auto-smart'
-    ? { id: 'auto-smart', params: [{ id: 'optimize_for', value: 'balanced' }] }
-    : { id }
+/** Cursor's own codes for a usage or rate limit, which carry no status: `PRO_USER_USAGE_LIMIT`, `RATE_LIMITED`, … */
+const USAGE_LIMIT_CODE =
+  /^(?:resource_exhausted|rate_limited(?:_changeable)?|\w*_usage_limit|\w*_rate_limit(?:_exceeded)?)$/i
+
+/** Whether an SDK error is a usage or rate limit by its type, status or code, whatever its message says. */
+export function cursorUsageLimit(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const { name, status, code } = error as { name?: unknown; status?: unknown; code?: unknown }
+  return name === 'RateLimitError' || status === 429 || (typeof code === 'string' && USAGE_LIMIT_CODE.test(code))
 }
 
-/** The account's model catalog from Cursor's API. */
+/** The agent is gone from Cursor's store, so resuming cannot work and the thread starts a new one. */
+const agentMissing = (error: unknown) =>
+  (error as { name?: unknown })?.name === 'AgentNotFoundError' ||
+  (error as { code?: unknown })?.code === 'agent_not_found'
+
+/** A run from an earlier process (a crash or restart) still holds the agent. */
+const runConflict = (error: unknown) =>
+  (error as { name?: unknown })?.name === 'AgentBusyError' ||
+  (error instanceof Error && /already has active run/i.test(error.message))
+
+/** How long Stop waits for Cursor to end the turn before letting go of it. */
+const INTERRUPT_WAIT_MS = 10_000
+
+const EFFORTS: readonly ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+const isEffort = (value: string): value is ReasoningEffort => (EFFORTS as readonly string[]).includes(value)
+
+/** Which of a model's parameters carry effort and Fast, as its catalog names them, kept for building selections. */
+const modelParameters = new Map<string, { effort?: string; fast: boolean }>()
+
+/**
+ * Ramu's model and its effort and Fast choice as the SDK's selection. Cursor's router needs `optimize_for`, so "auto"
+ * asks for a balanced pick. Effort and Fast go only to a model whose catalog offers them.
+ */
+export function cursorModel(id: string | undefined, effort?: ReasoningEffort | null, fast = false): ModelSelection {
+  if (!id || id === 'auto' || id === 'auto-smart')
+    return { id: 'auto-smart', params: [{ id: 'optimize_for', value: 'balanced' }] }
+  const known = modelParameters.get(id)
+  const params = [
+    ...(effort && known?.effort ? [{ id: known.effort, value: effort }] : []),
+    ...(fast && known?.fast ? [{ id: 'fast', value: 'true' }] : []),
+  ]
+  return params.length ? { id, params } : { id }
+}
+
+/** The account's model catalog from Cursor's API, with each model's effort levels and whether it has Fast. */
 export async function cursorModels(accountId?: string, sdk?: Sdk): Promise<AgentModel[]> {
   const { Cursor } = sdk ?? (await loadCursorSdk())
   const apiKey = cursorApiKey(accountId)
   const models = await Cursor.models.list(apiKey ? { apiKey } : {})
-  return models.map((m, index) => ({
-    provider: 'cursor',
-    id: m.id,
-    name: m.displayName || m.id,
-    ...modelLegacyMetadata(m),
-    ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
-    efforts: [],
-    defaultEffort: null,
-    isDefault: m.id === 'auto-smart' || (index === 0 && !models.some((x) => x.id === 'auto-smart')),
-  }))
+  return models.map((m, index) => {
+    const effortParameter = m.parameters?.find((p) => p.id === 'effort' || p.id === 'reasoning')
+    const efforts = (effortParameter?.values ?? []).map((v) => v.value.trim().toLowerCase()).filter(isEffort)
+    const preset = m.variants
+      ?.find((variant) => variant.isDefault)
+      ?.params.find((p) => p.id === effortParameter?.id)
+      ?.value.toLowerCase()
+    const fast = m.parameters?.some((p) => p.id === 'fast') ?? false
+    modelParameters.set(m.id, { ...(efforts.length ? { effort: effortParameter!.id } : {}), fast })
+    return {
+      provider: 'cursor',
+      id: m.id,
+      name: m.displayName || m.id,
+      ...modelLegacyMetadata(m),
+      ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
+      efforts,
+      defaultEffort: preset && isEffort(preset) && efforts.includes(preset) ? preset : null,
+      ...(fast ? { serviceTiers: ['standard', 'fast'] } : {}),
+      isDefault: m.id === 'auto-smart' || (index === 0 && !models.some((x) => x.id === 'auto-smart')),
+    }
+  })
 }
 
 const KINDS: Record<string, AgentToolKind> = {
@@ -82,6 +137,15 @@ const json = (value: unknown, max: number): string => {
   } catch {
     return ''
   }
+}
+
+/** The turn's message: images go to the model as images, other files as text and paths (`attachmentPrompt`). */
+export function cursorMessage(prompt: string, attachments: Attachment[] = []): string | SDKUserMessage {
+  const images = attachments
+    .filter((file) => file.mimeType.startsWith('image/'))
+    .map((file) => ({ data: readFileSync(file.path).toString('base64'), mimeType: file.mimeType }))
+  const text = attachmentPrompt(prompt, attachments)
+  return images.length ? { text, images } : text
 }
 
 export const createCursorRunner: AgentRunnerFactory = (scope, settings, emit, readOnly) =>
@@ -144,12 +208,13 @@ export class CursorSession implements AgentRunner {
     const apiKey = cursorApiKey(this.settings.accountId)
     return {
       ...(apiKey ? { apiKey } : {}),
-      model: cursorModel(this.settings.model),
+      model: cursorModel(this.settings.model, this.settings.effort, this.settings.serviceTier === 'fast'),
       local: {
         cwd: this.scope.cwd,
         autoReview: this.settings.access === 'auto' && !this.readOnly && !this.connection?.restricted,
         ...(this.scope.additionalDirs.length ? { dirs: this.scope.additionalDirs } : {}),
-        settingSources: ['project', 'user'],
+        // Team rules, managed policy and plugins apply as in Cursor itself.
+        settingSources: ['project', 'user', 'team', 'mdm', 'plugins'],
         // Without approvals, only full access may write outside the workspace or use the network.
         ...(this.settings.access !== 'full' || this.readOnly ? { sandboxOptions: { enabled: true } } : {}),
       },
@@ -166,7 +231,9 @@ export class CursorSession implements AgentRunner {
       try {
         this.agent = await Agent.resume(resume, this.options())
       } catch (e) {
-        throw new ResumeUnavailable(`Cursor no longer has this agent: ${(e as Error).message}`)
+        // Only a missing agent starts over; a network or sign-in failure keeps the thread's Cursor history.
+        if (agentMissing(e)) throw new ResumeUnavailable(`Cursor no longer has this agent: ${(e as Error).message}`)
+        throw e
       }
     } else this.agent = await Agent.create(this.options())
     this.emit({
@@ -192,11 +259,24 @@ export class CursorSession implements AgentRunner {
     this.cancelled = false
     this.emit({ kind: 'state', state: 'running' })
     const mcpServers = this.mcpServers()
+    const message = cursorMessage(prompt, attachments)
+    const start = () => this.agent!.send(message, mcpServers ? { mcpServers } : undefined)
     let run: Run
     try {
-      run = await this.agent.send(attachmentPrompt(prompt, attachments), mcpServers ? { mcpServers } : undefined)
+      run = await start().catch(async (e) => {
+        if (!runConflict(e)) throw e
+        // A run left by an earlier process still holds the agent: end it, then start this turn.
+        const { Agent } = this.sdk ?? (await loadCursorSdk())
+        const local = { runtime: 'local' as const, cwd: this.scope.cwd }
+        const held = (await Agent.listRuns(this.agent!.agentId, { ...local, limit: 1 })).items.find(
+          (candidate) => candidate.status === 'running',
+        )
+        if (!held) throw e
+        await Agent.cancelRun(held.id, local)
+        return start()
+      })
     } catch (e) {
-      this.finish(undefined, (e as Error).message)
+      this.finish(undefined, e)
       return
     }
     this.run = run
@@ -204,21 +284,23 @@ export class CursorSession implements AgentRunner {
   }
 
   private async consume(run: Run): Promise<void> {
-    let error: string | undefined
+    let error: unknown
     let result: RunResult | undefined
     try {
       for await (const message of run.stream()) if (!this.stopped) this.handle(message)
       result = await run.wait()
     } catch (e) {
-      error = (e as Error).message
+      error = e
     }
     this.active = undefined
     this.run = undefined
     this.finish(result, error)
   }
 
-  private finish(result: RunResult | undefined, thrown?: string): void {
+  private finish(result: RunResult | undefined, thrownError?: unknown): void {
     if (this.stopped) return
+    const thrown =
+      thrownError === undefined ? undefined : thrownError instanceof Error ? thrownError.message : String(thrownError)
     const reply = [...this.text.entries()]
       .filter(([key]) => key.startsWith('text:'))
       .map(([, text]) => text)
@@ -227,7 +309,9 @@ export class CursorSession implements AgentRunner {
     const failed = thrown ?? (result?.status === 'error' ? result.error?.message || 'Cursor failed' : undefined)
     const cancelled = this.cancelled || result?.status === 'cancelled'
     const match = failed
-      ? classifyLimit(failed, { provider: 'cursor', channel: 'error' })
+      ? cursorUsageLimit(thrownError) || cursorUsageLimit(result?.error)
+        ? ({ confidence: 'high', source: 'structured' } as const)
+        : classifyLimit(failed, { provider: 'cursor', channel: 'error' })
       : cancelled
         ? null
         : classifyLimit(reply, { provider: 'cursor', channel: 'reply', toolCalls: this.tools })
@@ -262,6 +346,7 @@ export class CursorSession implements AgentRunner {
       if (message.text) this.grow('thinking', message.text)
     } else if (message.type === 'tool_call') {
       this.lastKind = 'tool'
+      if (this.special(message)) return
       if (message.status === 'running') {
         this.tools++
         this.emit({
@@ -285,10 +370,76 @@ export class CursorSession implements AgentRunner {
       this.emit({ kind: 'error', message: message.message })
   }
 
+  /**
+   * Cursor's todo list, plans and sub-agents, which have their own cards rather than a generic tool row, as T3 Code
+   * shows them. True when the call was one of them.
+   */
+  private special(message: Extract<SDKMessage, { type: 'tool_call' }>): boolean {
+    const args = (message.args ?? {}) as Wire
+    const result = (message.result ?? {}) as Wire
+    if (message.name === 'updateTodos') {
+      if (message.status === 'running') this.tools++
+      const todos: Wire[] = Array.isArray(result.value?.todos)
+        ? result.value.todos
+        : Array.isArray(args.todos)
+          ? args.todos
+          : []
+      const entries = todos
+        .filter((todo) => todo?.status !== 'cancelled' && typeof todo?.content === 'string' && todo.content.trim())
+        .map((todo) => ({
+          content: String(todo.content).trim(),
+          status:
+            todo.status === 'inProgress'
+              ? ('in_progress' as const)
+              : todo.status === 'completed'
+                ? ('completed' as const)
+                : ('pending' as const),
+          priority: 'medium' as const,
+        }))
+      if (entries.length) this.emit({ kind: 'plan', messageId: `${this.agent?.agentId ?? ''}:todos`, entries })
+      return true
+    }
+    if (message.name === 'createPlan') {
+      if (message.status === 'running') this.tools++
+      if (typeof args.plan === 'string' && args.plan.trim())
+        this.emit({ kind: 'text', text: args.plan, messageId: `${this.run?.id ?? ''}:plan:${message.call_id}` })
+      return true
+    }
+    if (message.name === 'task') {
+      if (message.status === 'running') this.tools++
+      const prompt = typeof args.prompt === 'string' ? args.prompt : ''
+      const type = args.subagentType as Wire | undefined
+      // The report is the helper's last reply among the steps it took.
+      const steps: Wire[] = Array.isArray(result.value?.conversationSteps) ? result.value.conversationSteps : []
+      const report = steps
+        .map(
+          (step) =>
+            step?.assistantMessage?.text ?? (step?.type === 'assistantMessage' ? step.message?.text : undefined),
+        )
+        .filter((text): text is string => typeof text === 'string' && !!text.trim())
+        .at(-1)
+      this.emit({
+        kind: 'agent',
+        agentId: message.call_id,
+        toolUseId: message.call_id,
+        name: String(args.description || prompt.split('\n')[0]!.slice(0, 80) || 'Sub-agent'),
+        ...(type && type.kind && type.kind !== 'unspecified' ? { agentType: String(type.name ?? type.kind) } : {}),
+        ...(prompt ? { prompt } : {}),
+        status: message.status === 'running' ? 'running' : message.status === 'error' ? 'failed' : 'completed',
+        ...(report ? { summary: report } : {}),
+      })
+      return true
+    }
+    return false
+  }
+
   async steer(prompt: string, attachments: Attachment[] = []): Promise<void> {
     const run = this.run
     if (!run || this.stopped) throw new Error('There is no running turn to steer')
-    const outcome = run.steer && run.supports('stream') ? await run.steer(attachmentPrompt(prompt, attachments)) : null
+    // Steering carries text only, so a message with images waits for the turn and goes with them.
+    const images = attachments.some((file) => file.mimeType.startsWith('image/'))
+    const outcome =
+      !images && run.steer && run.supports('stream') ? await run.steer(attachmentPrompt(prompt, attachments)) : null
     if (outcome === 'complete_delivered') return
     // Not taken into the running turn: it becomes the next one.
     await this.active
@@ -299,7 +450,8 @@ export class CursorSession implements AgentRunner {
     if (!this.run) return
     this.cancelled = true
     await this.run.cancel().catch(() => {})
-    await this.active
+    // A turn that does not end after Stop is let go, so the thread is never stuck waiting on it.
+    await Promise.race([this.active, new Promise((resolve) => setTimeout(resolve, INTERRUPT_WAIT_MS))])
   }
 
   async stop(): Promise<void> {

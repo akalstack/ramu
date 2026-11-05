@@ -1,8 +1,15 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { signInState } from '../src/providers/providers'
+
+// Cursor is asked who a key belongs to; answer here instead of over the network.
+const cursorMe = vi.hoisted(() => ({ answer: async (): Promise<unknown> => ({ userEmail: 'me@example.com' }) }))
+vi.mock('@cursor/sdk', () => ({
+  Cursor: { me: () => cursorMe.answer(), auth: { status: async () => ({ status: 'logged-out' }) } },
+  FileCredentialStore: class {},
+}))
 
 const dirs: string[] = []
 afterEach(() => {
@@ -63,6 +70,22 @@ it('reads Claude, Cursor and OpenCode login state', async () => {
     signedIn: true,
     detail: 'API key',
     apiKey: true,
+  })
+  // A key on a free plan still signs in, marked Free with the way to upgrade; a revoked one reads as signed out.
+  cursorMe.answer = async () => {
+    throw Object.assign(new Error('[plan_required] Not available for free users.'), { code: 'plan_required' })
+  }
+  expect(await signInState('cursor', cli('exit 1'), { ...process.env, CURSOR_API_KEY: 'key' })).toMatchObject({
+    signedIn: true,
+    plan: 'free',
+    upgradeUrl: 'https://cursor.com/pricing',
+  })
+  cursorMe.answer = async () => {
+    throw Object.assign(new Error('Unauthorized'), { name: 'AuthenticationError', status: 401 })
+  }
+  expect(await signInState('cursor', cli('exit 1'), { ...process.env, CURSOR_API_KEY: 'key' })).toEqual({
+    signedIn: false,
+    detail: 'API key rejected',
   })
   expect(
     await signInState(
