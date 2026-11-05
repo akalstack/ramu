@@ -33,7 +33,7 @@ Opt in under **Settings → Notifications**, with a switch per kind: needs you, 
 
 On iOS, **Settings → Live Activity** shows running and waiting counts on the Lock Screen and in the Dynamic Island.
 
-A build owner supplies an Expo project ID and APNs/FCM credentials (`EXPO_PUBLIC_EAS_PROJECT_ID=<id> pnpm --filter @ramu/mobile build:ios`). Background Live Activity updates need an APNs key on each host (`RAMU_APNS_KEY_PATH`, `RAMU_APNS_KEY_ID`, `RAMU_APNS_TEAM_ID`). Delivery needs a physical phone and a signed build. See [Expo push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/).
+Official builds use the `@akalstack/ramu` Expo project, whose APNs/FCM credentials live in EAS. A fork builds against its own project with `EXPO_PUBLIC_EAS_PROJECT_ID=<id>`. Background Live Activity updates need an APNs key on each host (`RAMU_APNS_KEY_PATH`, `RAMU_APNS_KEY_ID`, `RAMU_APNS_TEAM_ID`). Delivery needs a physical phone and a signed build. See [Expo push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/).
 
 ## Development
 
