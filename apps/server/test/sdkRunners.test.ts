@@ -467,6 +467,69 @@ describe('OpenCode Full access', () => {
   })
 })
 
+describe('OpenCode tool results', () => {
+  it('marks a command that exits non-zero as failed, and shows images a tool returned', async () => {
+    const { client } = fakeOpenCode('bash')
+    const push = (client as any).event.subscribe
+    const queued: Record<string, unknown>[] = [
+      { type: 'session.tool.input.started', data: { sessionID: 'session-1', id: 'c1', name: 'bash' } },
+      {
+        type: 'session.tool.success',
+        data: {
+          sessionID: 'session-1',
+          id: 'c1',
+          content: [{ type: 'text', text: '1 failed\n' }],
+          metadata: { exit: 1 },
+        },
+      },
+      { type: 'session.tool.input.started', data: { sessionID: 'session-1', id: 's1', name: 'screenshot' } },
+      {
+        type: 'session.tool.success',
+        data: {
+          sessionID: 'session-1',
+          id: 's1',
+          content: [
+            { type: 'file', mime: 'image/png', url: 'data:image/png;base64,iVBORw0KGgo=' },
+            { type: 'file', mime: 'image/png', url: 'file:///tmp/secret.png' },
+          ],
+        },
+      },
+      { type: 'session.execution.succeeded', data: { sessionID: 'session-1' } },
+    ]
+    ;(client as any).event.subscribe = async function* (options: { signal: AbortSignal }) {
+      const inner = push(options)
+      yield (await inner.next()).value
+      while (!(await promptSent)) yield* []
+      for (const event of queued) yield event
+      yield* inner
+    }
+    let sent!: (value: boolean) => void
+    const promptSent = new Promise<boolean>((resolve) => (sent = resolve))
+    ;(client as any).session.prompt = async () => sent(true)
+    const events: AgentEvent[] = []
+    const runner = new OpenCodeSession(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode' },
+      (event) => events.push(event),
+      false,
+      async () => client as never,
+    )
+    try {
+      await runner.start('Run the tests', null)
+      await settle(events)
+      const results = events.filter((event) => event.kind === 'tool-result')
+      expect(results[0]).toMatchObject({ toolUseId: 'c1', isError: true, status: 'failed' })
+      expect(results[1]).toMatchObject({
+        toolUseId: 's1',
+        isError: false,
+        content: [{ type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgo=' }],
+      })
+    } finally {
+      await runner.stop()
+    }
+  })
+})
+
 describe('OpenCode Auto permissions', () => {
   it.each([
     ['bash', null],

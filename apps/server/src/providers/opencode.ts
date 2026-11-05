@@ -8,7 +8,9 @@ import { createServer } from 'node:net'
 import { createInterface } from 'node:readline'
 import { pathToFileURL } from 'node:url'
 import { OpenCode } from '@opencode/client'
+import { agentContent } from '@ramu/shared/chat/agentContent'
 import type {
+  AgentContent,
   AgentEvent,
   AgentQuestion,
   AgentScope,
@@ -136,6 +138,29 @@ const KINDS: Record<string, AgentToolKind> = {
 }
 const toolSummary = (input: Wire | undefined): string =>
   String(input?.command ?? input?.filePath ?? input?.path ?? input?.pattern ?? input?.url ?? input?.description ?? '')
+/**
+ * Screenshots and other raster images a tool returned inline (OpenCode sends them as `file` parts with a data URL), for
+ * the tool's card. Remote or local file URLs and SVG are not shown.
+ */
+const toolImages = (content: unknown): AgentContent[] =>
+  Array.isArray(content)
+    ? content.flatMap((part: Wire) => {
+        const url = typeof part?.url === 'string' ? part.url : typeof part?.uri === 'string' ? part.uri : ''
+        const mime = typeof part?.mime === 'string' ? part.mime : ''
+        return part?.type === 'file' &&
+          /^image\/(png|jpe?g|gif|webp)$/i.test(mime) &&
+          url.startsWith(`data:${mime};base64,`)
+          ? agentContent({ type: 'image', uri: url })
+          : []
+      })
+    : []
+/** OpenCode reports a shell command that exits non-zero as a successful tool call; its exit code says otherwise. */
+const commandFailed = (tool: string | undefined, metadata: Wire | undefined) => {
+  const exit = metadata?.exit ?? metadata?.exitCode
+  return (tool === 'bash' || tool === 'shell') && typeof exit === 'number' && exit !== 0
+}
+/** How long OpenCode's event stream may take to connect before the thread says so instead of waiting forever. */
+const SUBSCRIBE_TIMEOUT_MS = 10_000
 const toolText = (content: unknown): string =>
   Array.isArray(content)
     ? content
@@ -397,12 +422,17 @@ export class OpenCodeSession implements AgentRunner {
           }
         }
       })()
+      // A stream that never connects would leave every turn waiting on events that cannot arrive.
       setTimeout(() => {
-        if (!connected) {
-          connected = true
-          ready()
-        }
-      }, 5000)
+        if (connected) return
+        connected = true
+        this.events.abort()
+        failed(
+          new Error(
+            `OpenCode's event stream did not connect within ${SUBSCRIBE_TIMEOUT_MS / 1000} seconds. Try again.`,
+          ),
+        )
+      }, SUBSCRIBE_TIMEOUT_MS).unref?.()
     })
   }
 
@@ -563,22 +593,29 @@ export class OpenCodeSession implements AgentRunner {
           input: JSON.stringify(d.input ?? {}, null, 2).slice(0, 256_000),
           status: 'in_progress',
         })
-      case 'session.tool.success':
+      case 'session.tool.success': {
+        const failed = commandFailed(this.toolNames.get(d.id), d.metadata)
+        const images = toolImages(d.content)
         return this.emit({
           kind: 'tool-result',
           toolUseId: d.id,
-          isError: false,
+          isError: failed,
           summary: toolText(d.content),
-          status: 'completed',
+          status: failed ? 'failed' : 'completed',
+          ...(images.length ? { content: images } : {}),
         })
-      case 'session.tool.failed':
+      }
+      case 'session.tool.failed': {
+        const images = toolImages(d.content)
         return this.emit({
           kind: 'tool-result',
           toolUseId: d.id,
           isError: true,
           summary: d.error?.message || toolText(d.content) || 'Tool failed',
           status: 'failed',
+          ...(images.length ? { content: images } : {}),
         })
+      }
       case 'session.step.ended':
         this.cost += Number(d.cost) || 0
         return
