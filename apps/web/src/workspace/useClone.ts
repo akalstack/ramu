@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CloneStep } from '@ramu/shared/workspace/hostFolders'
 import { invokerFor } from '../ipc'
-
-export interface CloneProgress {
-  phase: string
-  percent: number | null
-}
 
 const newCloneId = () => `clone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 
@@ -12,7 +8,7 @@ const newCloneId = () => `clone-${Date.now().toString(36)}-${Math.random().toStr
  * One clone at a time on a host, with its progress and a way to stop it.
  */
 export function useClone(host: string) {
-  const [progress, setProgress] = useState<CloneProgress | null>(null)
+  const [progress, setProgress] = useState<CloneStep | null>(null)
   const [running, setRunning] = useState(false)
   const active = useRef<{ id: string; host: string } | null>(null)
   useEffect(() => () => void (active.current = null), [])
@@ -54,7 +50,3 @@ export function useClone(host: string) {
   }, [])
   return { run, cancel, progress, running, canCancel: running && !!active.current }
 }
-
-/** `Receiving objects 60%`, or just the phase while Git has not reported a percentage. */
-export const cloneProgressText = (progress: CloneProgress | null, t: (key: string) => string): string =>
-  progress ? `${t(progress.phase)}${progress.percent === null ? '' : ` ${progress.percent}%`}` : t('Cloning…')

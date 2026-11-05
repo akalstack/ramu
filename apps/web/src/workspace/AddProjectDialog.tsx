@@ -3,17 +3,22 @@ import { t, useLanguage } from '../i18n'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useEffect, useRef, useState } from 'react'
 import { Dialog } from '../Menu'
-import { Folder, ChevronLeft, Lock } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Folder, FolderGit2, FolderPlus, HardDrive, Lock, X } from 'lucide-react'
 import type { ForgeRepositorySummary } from '@ramu/shared/types'
+import {
+  cloneFolderName,
+  cloneProgressText,
+  folderCrumbs,
+  folderName as name,
+  type HostFolderListing,
+} from '@ramu/shared/workspace/hostFolders'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { invokerFor } from '../ipc'
 import { ownHostId } from '../hosts'
 import { errorText } from './TaskPane'
-import { cloneProgressText, useClone } from './useClone'
+import { useClone } from './useClone'
 import { onFolderPick, onRepoChoice, type FolderPick, type RepoChoice } from './addProject'
-
-const name = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 
 /** Shown when a folder holds several repositories: every one starts ticked, and the user unticks any to leave out. */
 export function AddProjectDialog() {
@@ -153,12 +158,7 @@ function CloneFromGitHub({
       setCloning(null)
     }
   }
-  const folderOf = (value: string) =>
-    value
-      .replace(/\/+$/, '')
-      .replace(/\.git$/, '')
-      .split(/[/:]/)
-      .pop() ?? ''
+  const folderOf = cloneFolderName
   return (
     <div className="flex flex-col gap-2">
       <Button variant="ghost" size="sm" className="self-start" onClick={onBack}>
@@ -220,7 +220,7 @@ function CloneFromGitHub({
           onChange={(event) => setUrl(event.target.value)}
         />
         <Button type="submit" variant="secondary" size="sm" disabled={!!cloning || !folderOf(url.trim())}>
-          {cloning ? cloneProgressText(cloneRun.progress, t) : t('Clone')}
+          {cloning ? cloneProgressText(cloneRun.progress, (text) => t(text)) : t('Clone')}
         </Button>
         {cloning && cloneRun.canCancel && (
           <Button type="button" variant="ghost" size="sm" onClick={cloneRun.cancel}>
@@ -232,20 +232,24 @@ function CloneFromGitHub({
   )
 }
 
-type Listing = { path: string; parent: string | null; folders: { name: string; path: string }[] }
-
-/** Browses folders on the host this window is connected to, since a native picker would open on that machine instead. */
+/**
+ * Browses folders on the host the project is added to, since a native picker would open on this machine instead: a
+ * path to step back along, Git repositories marked, a new folder named in place, or a repository cloned here.
+ */
 function HostFolderDialog() {
   useLanguage()
   const [request, setRequest] = useState<FolderPick | null>(null)
   const [roots, setRoots] = useState<string[]>([])
-  const [listing, setListing] = useState<Listing | null>(null)
+  const [listing, setListing] = useState<HostFolderListing | null>(null)
   const [error, setError] = useState('')
   const [cloning, setCloning] = useState(false)
+  // The new folder's name while its row is open; null while it is closed.
+  const [naming, setNaming] = useState<string | null>(null)
   const browse = (path: string, host = request?.host) =>
     invokerFor(host ?? ownHostId())('folders.list', path)
       .then((next) => {
         setListing(next)
+        setNaming(null)
         setError('')
       })
       .catch((e) => setError(errorText(e)))
@@ -255,6 +259,7 @@ function HostFolderDialog() {
         setRequest(next)
         setListing(null)
         setCloning(false)
+        setNaming(null)
         setError('')
         // The folders are on the host the project is added to, which may not be the one on screen.
         invokerFor(next.host)('folders.roots')
@@ -273,17 +278,28 @@ function HostFolderDialog() {
     setRequest(null)
     resolve(dir)
   }
-  const rows = listing ? listing.folders : roots.map((path) => ({ name: path, path }))
+  const create = () => {
+    if (!listing || !naming?.trim()) return
+    invokerFor(request.host)('folders.create', listing.path, naming.trim())
+      .then((path) => browse(path))
+      .catch((e) => setError(errorText(e)))
+  }
+  const crumbs = listing ? folderCrumbs(listing.path, roots) : []
   return (
     <Dialog
       title={t('Choose a folder on the host')}
-      confirmLabel={t('Add this folder')}
+      confirmLabel={listing ? t('Add {0}', { '0': name(listing.path) }) : t('Add this folder')}
       confirmDisabled={!listing || cloning}
       footerLeading={
         listing && !cloning ? (
-          <Button variant="ghost" size="sm" className="mr-auto" onClick={() => setCloning(true)}>
-            {t('Clone from GitHub')}
-          </Button>
+          <div className="mr-auto flex gap-1">
+            <Button variant="ghost" size="sm" onClick={() => setNaming('')}>
+              <FolderPlus size={14} /> {t('New folder')}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setCloning(true)}>
+              {t('Clone from GitHub')}
+            </Button>
+          </div>
         ) : undefined
       }
       onCancel={() => close(null)}
@@ -297,32 +313,109 @@ function HostFolderDialog() {
           onBack={() => setCloning(false)}
         />
       ) : null}
-      <p
-        className="muted text-muted-foreground small text-caption m-[0_0_8px] truncate"
-        title={listing?.path}
-        hidden={cloning}
-      >
-        {listing?.path ?? t('Choose where to start browsing')}
-      </p>
-      {error && <p className="m-[0_0_8px] text-caption text-bad">{error}</p>}
-      <div
-        className={`flex flex-col gap-0.5 max-h-[min(50vh,420px)] overflow-y-auto overscroll-contain${cloning ? ' hidden' : ''}`}
-      >
-        {listing && (
-          <RowButton size="sm" onClick={() => (listing.parent ? void browse(listing.parent) : setListing(null))}>
-            <ChevronLeft size={15} className="flex-none text-muted-foreground" />
-            <span>{t('Parent folder')}</span>
-          </RowButton>
-        )}
-        {rows.map((folder) => (
-          <RowButton key={folder.path} size="sm" onClick={() => void browse(folder.path)}>
-            <Folder size={15} className="flex-none text-muted-foreground" />
-            <span className="overflow-hidden text-ellipsis whitespace-nowrap">{folder.name}</span>
-          </RowButton>
-        ))}
-        {listing && !rows.length && (
-          <p className="muted text-muted-foreground small text-caption m-0 p-[2px_6px]">{t('No folders here')}</p>
-        )}
+      <div hidden={cloning}>
+        {/* Where you are, one click per step back up; Locations returns to the host's starting places. */}
+        <nav aria-label={t('Folder path')} className="mb-2 flex min-w-0 flex-wrap items-center gap-0.5 text-caption">
+          {roots.length > 1 || !listing ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-1.5 text-muted-foreground"
+                aria-current={listing ? undefined : 'page'}
+                onClick={() => setListing(null)}
+              >
+                <HardDrive size={12} /> {t('Locations')}
+              </Button>
+              {listing && <ChevronRight size={12} className="flex-none text-muted-foreground opacity-60" />}
+            </>
+          ) : null}
+          {crumbs.map((crumb, index) => {
+            const last = index === crumbs.length - 1
+            return (
+              <span key={crumb.path} className="flex min-w-0 items-center gap-0.5">
+                {index > 0 && <ChevronRight size={12} className="flex-none text-muted-foreground opacity-60" />}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  title={crumb.path}
+                  aria-current={last ? 'page' : undefined}
+                  className={`h-6 max-w-[180px] px-1.5 ${last ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+                  onClick={() => !last && void browse(crumb.path)}
+                >
+                  <span className="truncate">{crumb.name}</span>
+                </Button>
+              </span>
+            )
+          })}
+        </nav>
+        {error && <p className="m-[0_0_8px] text-caption text-bad">{error}</p>}
+        <div className="flex flex-col gap-0.5 max-h-[min(50vh,420px)] overflow-y-auto overscroll-contain">
+          {naming !== null && listing && (
+            <form
+              className="flex items-center gap-1.5 px-1.5"
+              onSubmit={(event) => {
+                event.preventDefault()
+                create()
+              }}
+            >
+              <FolderPlus size={15} className="flex-none text-muted-foreground" />
+              <Input
+                autoFocus
+                value={naming}
+                placeholder={t('Folder name')}
+                aria-label={t('Folder name')}
+                spellCheck={false}
+                onChange={(event) => setNaming(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.stopPropagation()
+                    setNaming(null)
+                  }
+                }}
+              />
+              <Button
+                type="submit"
+                variant="secondary"
+                size="sm"
+                disabled={!naming.trim()}
+                aria-label={t('Create folder')}
+              >
+                <Check size={14} />
+              </Button>
+              <Button type="button" variant="ghost" size="sm" aria-label={t('Cancel')} onClick={() => setNaming(null)}>
+                <X size={14} />
+              </Button>
+            </form>
+          )}
+          {listing
+            ? listing.folders.map((folder) => (
+                <RowButton
+                  key={folder.path}
+                  size="sm"
+                  title={folder.path}
+                  aria-label={folder.repo ? `${folder.name}, ${t('Git repository')}` : folder.name}
+                  onClick={() => void browse(folder.path)}
+                >
+                  {folder.repo ? (
+                    <FolderGit2 size={15} className="flex-none text-brand" />
+                  ) : (
+                    <Folder size={15} className="flex-none text-muted-foreground" />
+                  )}
+                  <span className="overflow-hidden text-ellipsis whitespace-nowrap">{folder.name}</span>
+                </RowButton>
+              ))
+            : roots.map((root) => (
+                <RowButton key={root} size="sm" title={root} onClick={() => void browse(root)}>
+                  <HardDrive size={15} className="flex-none text-muted-foreground" />
+                  <span className="overflow-hidden text-ellipsis whitespace-nowrap">{name(root)}</span>
+                  <span className="ml-auto truncate text-caption text-muted-foreground">{root}</span>
+                </RowButton>
+              ))}
+          {listing && !listing.folders.length && (
+            <p className="muted text-muted-foreground small text-caption m-0 p-[2px_6px]">{t('No folders here')}</p>
+          )}
+        </div>
       </div>
     </Dialog>
   )

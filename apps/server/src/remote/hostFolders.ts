@@ -1,7 +1,15 @@
 import { mkdir, readdir, realpath, rm, stat } from 'node:fs/promises'
 import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { homedir } from 'node:os'
+import type { HostFolder, HostFolderListing } from '@ramu/shared/workspace/hostFolders'
 import { spawn, type ChildProcess } from 'node:child_process'
+
+/** A Git checkout keeps `.git` as a folder, or as a file in a linked worktree or submodule. */
+const isRepository = (path: string) =>
+  stat(join(path, '.git')).then(
+    () => true,
+    () => false,
+  )
 
 const within = (root: string, path: string) => {
   const rel = relative(root, path)
@@ -57,17 +65,18 @@ export class HostFolders {
     if (!(await stat(actual)).isDirectory()) throw new Error('Not a host folder')
     return actual
   }
-  async list(path: string) {
+  async list(path: string): Promise<HostFolderListing> {
     const actual = await this.check(path)
     const roots = await this.roots()
     const entries = await readdir(actual, { withFileTypes: true })
-    const folders: { name: string; path: string }[] = []
+    const folders: HostFolder[] = []
     for (const entry of entries.slice(0, 2000)) {
-      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+      // Hidden folders (.git, .cache, .config) are never where a project starts, and they crowd the list.
+      if ((!entry.isDirectory() && !entry.isSymbolicLink()) || entry.name.startsWith('.')) continue
       const candidate = join(actual, entry.name)
       try {
         await this.check(candidate)
-        folders.push({ name: entry.name, path: candidate })
+        folders.push({ name: entry.name, path: candidate, repo: await isRepository(candidate) })
       } catch {
         /* inaccessible folders and symlink escapes are not offered */
       }
@@ -75,6 +84,7 @@ export class HostFolders {
     return {
       path: actual,
       parent: roots.some((root) => within(root, dirname(actual))) ? dirname(actual) : null,
+      repo: await isRepository(actual),
       folders: folders.sort((a, b) => a.name.localeCompare(b.name)),
     }
   }

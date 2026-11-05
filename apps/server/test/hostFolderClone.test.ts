@@ -83,3 +83,21 @@ it('still refuses unsafe addresses before starting Git', async () => {
   await expect(folders.clone(root, 'r', 'https://u:p@github.com/o/r.git')).rejects.toThrow('credentials')
   expect(spawn).not.toHaveBeenCalled()
 })
+
+it('lists visible folders, marking Git repositories, and says whether the folder itself is one', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs')
+  mkdirSync(join(root, 'app', '.git'), { recursive: true })
+  mkdirSync(join(root, 'linked'))
+  writeFileSync(join(root, 'linked', '.git'), 'gitdir: ../app/.git/worktrees/linked')
+  mkdirSync(join(root, 'notes'))
+  mkdirSync(join(root, '.cache'))
+  const folders = new HostFolders(() => [])
+  const listing = await folders.list(root)
+  expect(listing.repo).toBe(false)
+  expect(listing.folders.map(({ name, repo }) => ({ name, repo }))).toEqual([
+    { name: 'app', repo: true },
+    { name: 'linked', repo: true },
+    { name: 'notes', repo: false },
+  ])
+  expect((await folders.list(join(root, 'app'))).repo).toBe(true)
+})
