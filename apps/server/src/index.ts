@@ -192,8 +192,7 @@ let network: NetworkSetting = config.listen
 /** A tunnel's address from the command line wins over the one saved in Settings. */
 const publicUrl = () => config.publicUrl ?? network.publicUrl
 /** The tunnel's address, first: it answers from anywhere, while the listener's own addresses answer only nearby. */
-const publicCandidates = () =>
-  network.enabled && publicUrl() ? [{ url: publicUrl()!, interface: 'tunnel' }] : []
+const publicCandidates = () => (network.enabled && publicUrl() ? [{ url: publicUrl()!, interface: 'tunnel' }] : [])
 // A launchd instance can supervise a daemon that was started by the UI without interrupting it.
 // Intentional stops exit successfully; crashes let launchd restart or take over execution.
 const stoppedPath = join(userData, 'background.stopped')
