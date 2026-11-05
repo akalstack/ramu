@@ -32,6 +32,7 @@ const on = {
   acceptUnencrypted: true,
   discoverable: false,
   publicUrl: null,
+  tunnel: null,
 }
 
 it('accepts every network or one of this host’s addresses', () => {

@@ -4,6 +4,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { isIP } from 'node:net'
 import { networkInterfaces } from 'node:os'
+import type { TunnelChoice } from '@ramu/shared/types'
+import { parseTunnelChoice } from './tunnel'
 
 export interface Candidate {
   url: string
@@ -45,6 +47,8 @@ export interface NetworkSetting {
   discoverable: boolean
   /** The HTTPS address of a tunnel the person runs to this listener (cloudflared, Tailscale Funnel, ngrok), if any. */
   publicUrl: string | null
+  /** A tunnel Ramu runs itself; its address replaces `publicUrl` while it runs. */
+  tunnel: TunnelChoice | null
 }
 export const DEFAULT_NETWORK_PORT = 7788
 export const DEFAULT_NETWORK_SETTING: NetworkSetting = {
@@ -54,6 +58,7 @@ export const DEFAULT_NETWORK_SETTING: NetworkSetting = {
   acceptUnencrypted: false,
   discoverable: false,
   publicUrl: null,
+  tunnel: null,
 }
 
 /** Every address another device could reach this computer on, for choosing which network to listen on. */
@@ -93,6 +98,7 @@ export function validateNetworkSetting(input: unknown, tls: boolean, addresses =
   // Settings saved before discovery existed have no such field: it stays off until the person turns it on.
   const discoverable = value.discoverable ?? false
   const publicUrl = parsePublicUrl(value.publicUrl)
+  const tunnel = parseTunnelChoice(value.tunnel)
   if (
     typeof enabled !== 'boolean' ||
     typeof host !== 'string' ||
@@ -106,7 +112,7 @@ export function validateNetworkSetting(input: unknown, tls: boolean, addresses =
   if (!isIP(host) || !known) throw new Error('Choose one of this host’s addresses, or all networks')
   if (enabled && !isLoopback(host) && !tls && !acceptUnencrypted)
     throw new Error('Confirm that you trust the network: Ramu does not encrypt this connection')
-  return { enabled, host, port, acceptUnencrypted, discoverable, publicUrl }
+  return { enabled, host, port, acceptUnencrypted, discoverable, publicUrl, tunnel }
 }
 
 const isLoopback = (host: string) => host === '::1' || /^127\./.test(host)

@@ -82,6 +82,7 @@ import {
 import { PairingRequests } from './remote/pairingRequests'
 import { createPairingNotice } from './remote/pairingNotice'
 import { clientAddress } from './remote/clientAddress'
+import { parseTunnelChoice, TunnelManager } from './remote/tunnel'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
   candidateUrls,
@@ -187,10 +188,20 @@ let network: NetworkSetting = config.listen
       acceptUnencrypted: true,
       discoverable: config.discoverable,
       publicUrl: null,
+      tunnel: null,
     }
   : readNetworkSetting(config.networkPath, Boolean(config.tls))
+// A tunnel Ramu runs itself (Cloudflare quick tunnel, Tailscale Funnel, ngrok), while the listener is up.
+const tunnels = new TunnelManager()
+/** Where a tunnel reaches this host's listener on this computer. */
+const tunnelTarget = () => {
+  const scheme = config.tls ? 'https' : 'http'
+  const local = network.host === '0.0.0.0' || network.host === '::' || /^127\.|^::1$/.test(network.host)
+  return `${scheme}://${local ? '127.0.0.1' : network.host.includes(':') ? `[${network.host}]` : network.host}:${network.port}`
+}
+const syncTunnel = () => tunnels.use(network.tunnel, network.enabled && remote?.listening ? tunnelTarget() : null)
 /** A tunnel's address from the command line wins over the one saved in Settings. */
-const publicUrl = () => config.publicUrl ?? network.publicUrl
+const publicUrl = () => config.publicUrl ?? (network.tunnel ? tunnels.address() : network.publicUrl)
 /** The tunnel's address, first: it answers from anywhere, while the listener's own addresses answer only nearby. */
 const publicCandidates = () => (network.enabled && publicUrl() ? [{ url: publicUrl()!, interface: 'tunnel' }] : [])
 // A launchd instance can supervise a daemon that was started by the UI without interrupting it.
@@ -703,6 +714,7 @@ async function stop(intentional = false, exitCode = 0) {
   if (stopping) return
   stopping = true
   clearInterval(tick)
+  tunnels.stop()
   await schedules.stop()
   await pullRequestWatches.stop()
   await agentThreads.stop()
@@ -1466,6 +1478,7 @@ function listenRemote(server: NonNullable<typeof remote>, attempt = 0) {
     presence.announce()
     server.on('error', (error) => console.error(`Ramu network listener error: ${error.message}`))
     syncDiscovery()
+    syncTunnel()
     console.log(
       `Ramu server listening on ${config.tls ? 'https' : 'http'}://${host}:${port}; pair a device with \`ramu pair\``,
     )
@@ -1582,6 +1595,7 @@ function syncDiscovery() {
 }
 function stopRemote() {
   clearTimeout(remoteRetry)
+  tunnels.use(null, null)
   void advertiser.stop()
   const old = remote
   remote = null
@@ -1619,6 +1633,7 @@ function networkStatus() {
     permissionRequests: permissionRequests.list(),
     reachable: reachable(),
     publicAddress: { url: publicUrl(), source: config.publicUrl ? ('command-line' as const) : ('settings' as const) },
+    tunnel: tunnels.status(),
   }
 }
 async function networkMethod(method: string, args: unknown[]) {
@@ -1676,7 +1691,7 @@ async function networkMethod(method: string, args: unknown[]) {
   }
   if (method === 'network.configure') {
     if (config.listen) throw new Error('Network access was set with --listen; change it there')
-    const input = args[0] as { discoverable?: unknown; publicUrl?: unknown } | null
+    const input = args[0] as { discoverable?: unknown; publicUrl?: unknown; tunnel?: unknown } | null
     // A request that leaves a choice out keeps the saved one rather than clearing it.
     const next = validateNetworkSetting(
       input && typeof input === 'object'
@@ -1684,6 +1699,7 @@ async function networkMethod(method: string, args: unknown[]) {
             ...input,
             discoverable: input.discoverable ?? network.discoverable,
             publicUrl: input.publicUrl === undefined ? network.publicUrl : input.publicUrl,
+            tunnel: input.tunnel === undefined ? network.tunnel : input.tunnel,
           }
         : args[0],
       Boolean(config.tls),
@@ -1703,6 +1719,19 @@ async function networkMethod(method: string, args: unknown[]) {
     if (config.listen) throw new Error('Network access was set with --listen; pass --public-url there')
     network = { ...network, publicUrl: parsePublicUrl(args[0]) }
     writeNetworkSetting(config.networkPath, network)
+    return networkStatus()
+  }
+  if (method === 'network.setTunnel') {
+    if (config.publicUrl) throw new Error('The tunnel address was set with --public-url; change it there')
+    if (config.listen)
+      throw new Error('Network access was set with --listen; run the tunnel yourself and pass --public-url')
+    const tunnel = parseTunnelChoice(args[0])
+    // A tunnel needs the listener; turned on for this computer only, nothing else on the network can reach it.
+    const enable = tunnel && !network.enabled ? { enabled: true, host: '127.0.0.1' } : {}
+    network = { ...network, ...enable, tunnel }
+    writeNetworkSetting(config.networkPath, network)
+    if (enable.enabled) startRemote()
+    else syncTunnel()
     return networkStatus()
   }
   if (method === 'network.pair') {

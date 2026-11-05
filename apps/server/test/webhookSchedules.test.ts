@@ -235,7 +235,7 @@ describe('setting up a GitHub webhook for the person', () => {
     service.webhookBases = () => [{ url: 'http://192.168.1.4:7788', via: 'en0' }]
     const schedule = service.save({ ...input(), projectId: 'p1' })
     await expect(new WebhookSetup(service, ws, github).connectGithub(schedule.id, 'r1')).rejects.toThrow(
-      'Tunnel address',
+      'Reach from anywhere',
     )
   })
 

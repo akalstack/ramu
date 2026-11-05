@@ -50,6 +50,7 @@ import type {
   BackgroundStatus,
   NetworkStatus,
   NetworkSettingsInput,
+  TunnelChoice,
   PairingOffer,
   PairingOfferStatus,
   Computers,
@@ -604,6 +605,8 @@ export interface RamuMethods {
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus
   /** A tunnel's https:// address for this host, or null to remove it. */
   'network.setPublicUrl'(url: string | null): NetworkStatus
+  /** Runs a tunnel for this host (turning on access for this computer only if it is off), or stops it with null. */
+  'network.setTunnel'(choice: TunnelChoice | null): NetworkStatus
   /** One device's pairing lifetime: days, never, or back to this host's default. Host only. */
   'network.setDeviceExpiry'(deviceId: string, days: number | 'never' | 'default'): NetworkStatus
   /** A paired device saying what it runs on, so this host shows the right icon and OS for it. */

@@ -123,6 +123,19 @@ export interface NetworkStatus {
    * `command-line` means --public-url set it. Absent from hosts without the setting.
    */
   publicAddress?: { url: string | null; source: 'settings' | 'command-line' }
+  /** A tunnel Ramu runs for this host, and which tools are installed for it. Absent from hosts without the option. */
+  tunnel?: {
+    choice: TunnelChoice | null
+    state: 'off' | 'starting' | 'running' | 'failed' | 'missing'
+    url: string | null
+    error: string | null
+    tools: Record<'cloudflared' | 'tailscale' | 'ngrok', boolean>
+  }
+}
+/** A tunnel Ramu runs: Cloudflare's quick tunnel, Tailscale Funnel, or ngrok (with an optional static domain). */
+export interface TunnelChoice {
+  kind: 'quick' | 'tailscale' | 'ngrok'
+  domain?: string
 }
 /** What became of one pairing offer. */
 export type PairingOfferStatus =

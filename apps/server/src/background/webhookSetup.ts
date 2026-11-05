@@ -60,7 +60,7 @@ export class WebhookSetup {
     const url = urls.find((entry) => entry.url.startsWith('https://'))?.url
     if (!url)
       throw new Error(
-        'GitHub cannot reach this host yet. Run your own tunnel to it and set its address under Settings → Remote access → Tunnel address, then try again.',
+        'GitHub cannot reach this host yet. Turn on a tunnel under Settings → Remote access → Reach from anywhere (or run ramu tunnel quick), then try again.',
       )
     if (!secret) throw new Error('The schedule has no secret to sign requests with.')
     return { url, secret, events: githubEventsFor(schedule.rule as WebhookTrigger) }

@@ -15,7 +15,7 @@ To have agents use another computer's screen, add that computer as a host and ru
 **Let other devices use this host** decides who can reach this computer:
 
 - **Local network or VPN** opens the host on a network you choose (all networks, or one such as your VPN). The network and **Discoverable** choices appear once it is on; the port is under **Advanced**.
-- **How devices reach it** holds the network, **Discoverable** and the **Tunnel address**, which names [your own tunnel](#your-own-tunnel) to this host.
+- **How devices reach it** holds the network and **Discoverable**; **From anywhere** runs or names a [tunnel](#your-own-tunnel) to this host.
 - **Pair a device** shows a one-time code and this host's addresses. With **Discoverable** on, a nearby device can also ask without a code: Ramu asks you to allow it (in the app, or as a notification when it is in the background or closed). Allow it only when both screens show the same six-digit number.
 - **Device permissions** decide what each device may use: computer use, the browser, terminals, settings changes and agents. Grant this time, for an hour, a day or always. Each device shows what it runs on (an iPhone, an Android tablet, a Mac, an Ubuntu server…) once it has connected, and **Keep paired** sets how long that one device stays paired without use, or leaves it like the others. When a device asks for a permission it lacks, the request opens in Ramu on this host (or as a system notification when Ramu is in the background) with the same choices; closing it leaves the request waiting here until it lapses.
 
@@ -34,6 +34,7 @@ ramu pair
 | Command | What it does |
 | --- | --- |
 | `ramu [serve]` | Run the server in the foreground; `--public-url` names [your own tunnel](#your-own-tunnel) |
+| `ramu tunnel quick\|tailscale\|ngrok [domain]\|off` | Reach this host from anywhere through a [tunnel](#your-own-tunnel) Ramu runs |
 | `ramu status`, `stop`, `restart` | Check, stop or restart it |
 | `ramu up` | Let devices on your private network reach this host, keep it running as a service and pair a device; `--private-network`, `--no-private-network` and `--yes` make it scriptable |
 | `ramu pair [--role viewer]` | Print a one-time pairing code and this host's addresses |
@@ -58,24 +59,18 @@ A private network (Tailscale, NetBird, ZeroTier or WireGuard) is the simplest ch
 
 ### Your own tunnel
 
-A tunnel gives the host an `https://` address that works from any network, including devices that are not on your VPN. You run the tunnel; Ramu only needs its address.
+A tunnel gives the host an `https://` address that works from any network, including devices that are not on your VPN. **Settings → Remote access → From anywhere → Reach from anywhere** (or `ramu tunnel` on a headless host) offers:
 
-1. Keep Ramu listening on this computer: `ramu serve --listen 7788`, or turn on **Allow other devices** in Settings.
-2. Point a tunnel at `http://localhost:7788`:
+| Choice | What Ramu does | You need |
+| --- | --- | --- |
+| **Quick tunnel (Cloudflare)** | Runs `cloudflared` and uses the `trycloudflare.com` address it gets | `cloudflared` installed; no account. The address changes each time Ramu starts, so it suits trying things out |
+| **Tailscale Funnel** | Runs `tailscale funnel` and uses the machine's `.ts.net` address | Tailscale signed in, with Funnel allowed for the machine |
+| **ngrok** | Runs `ngrok http`, with your static domain if you give one | An ngrok account (`ngrok config add-authtoken` once) |
+| **My own tunnel address** | Uses the address you paste | A tunnel you run, such as a named Cloudflare Tunnel pointed at `http://localhost:7788` |
 
-   | Tunnel | How | Notes |
-   | --- | --- | --- |
-   | Cloudflare Tunnel | `cloudflared tunnel create ramu`, route a hostname such as `ramu.example.com` to it, then `cloudflared tunnel run --url http://localhost:7788 ramu` | Free; needs a domain on Cloudflare |
-   | Tailscale Funnel | `tailscale funnel 7788` | Free; no domain, the address ends in `.ts.net` |
-   | ngrok | `ngrok http 7788 --url <your free static domain>` | Free static domain |
-
-   A Cloudflare quick tunnel (`trycloudflare.com`) gets a new address on every restart, so paired devices lose the host; use a named tunnel.
-3. Give Ramu the address: **Settings → Remote access → How devices reach it → Tunnel address**, or `ramu serve --public-url https://ramu.example.com`.
-4. Pair a device. The pairing link, the address list paired devices learn and webhook schedules all put the tunnel address first.
+Choosing a tunnel turns on **Allow other devices** for this computer only if it is off, and Ramu keeps the tool running while it listens, restarting it if it stops. When the tool is missing, Settings shows how to install it (on a Mac, the Homebrew command). The address appears under the choice once the tunnel is up; pairing links, the addresses paired devices learn and webhook schedules put it first. From a terminal: `ramu tunnel quick`, `ramu tunnel tailscale`, `ramu tunnel ngrok [domain]`, `ramu tunnel off`, or `ramu tunnel` for its state; `ramu serve --public-url <https://…>` names a tunnel you run yourself.
 
 Every call through the tunnel still needs a paired device's token, and failed attempts are limited per visitor using the address the tunnel reports. The tunnel's provider decrypts HTTPS at its edge, so it can read what passes through; use a private network when that matters.
-
-A full-access device can do anything the desktop can, including run terminals and agents with your provider accounts. Treat each one like an SSH key.
 
 ### As a service
 

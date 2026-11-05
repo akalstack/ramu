@@ -1764,8 +1764,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Terminal: 'Terminal',
   'Replacement preview unavailable for this expression or truncated match':
     'Pratinjau pengganti tidak tersedia untuk ekspresi atau kecocokan yang terpotong ini',
-  'Set with --public-url when Ramu was started from the command line. Change it there.':
-    'Diatur dengan --public-url saat Ramu dijalankan dari baris perintah. Ubah di sana.',
   'Keep devices paired': 'Pertahankan perangkat tetap terhubung',
   'A device that is not used for this long must be paired again. Using it renews the time. Changes apply the next time each device connects.':
     'Perangkat yang tidak dipakai selama ini harus dipasangkan lagi. Memakainya memperpanjang waktunya. Perubahan berlaku saat setiap perangkat terhubung berikutnya.',
@@ -3677,15 +3675,43 @@ export const indonesian: Readonly<Record<string, string>> = {
   Access: 'Akses',
   'How devices reach it': 'Cara perangkat menjangkaunya',
   'Tunnel address': 'Alamat tunnel',
+  'From anywhere': 'Dari mana saja',
+  'Reach from anywhere': 'Jangkau dari mana saja',
+  'Only my network or VPN': 'Hanya jaringan atau VPN saya',
+  'Quick tunnel (Cloudflare)': 'Tunnel cepat (Cloudflare)',
+  'Tailscale Funnel': 'Tailscale Funnel',
+  ngrok: 'ngrok',
+  'My own tunnel address': 'Alamat tunnel saya sendiri',
+  'Devices reach this host on your network or VPN. Choose a tunnel to reach it from anywhere else too.':
+    'Perangkat menjangkau host ini di jaringan atau VPN Anda. Pilih tunnel agar juga dapat dijangkau dari mana saja.',
+  'Ramu starts Cloudflare’s quick tunnel: no account needed. Its address changes each time Ramu starts, so it suits trying things out. Cloudflare can read what passes through it.':
+    'Ramu menjalankan tunnel cepat Cloudflare: tanpa akun. Alamatnya berubah setiap kali Ramu dimulai, jadi cocok untuk mencoba. Cloudflare dapat membaca apa yang melewatinya.',
+  'Ramu turns on Tailscale Funnel for this machine, with an address that stays the same. Funnel must be allowed for it in your Tailscale settings. Tailscale can read what passes through it.':
+    'Ramu menyalakan Tailscale Funnel untuk mesin ini, dengan alamat yang tetap. Funnel harus diizinkan untuknya di pengaturan Tailscale Anda. Tailscale dapat membaca apa yang melewatinya.',
+  'Ramu runs ngrok with your account: run ngrok config add-authtoken once. ngrok can read what passes through it.':
+    'Ramu menjalankan ngrok dengan akun Anda: jalankan ngrok config add-authtoken sekali. ngrok dapat membaca apa yang melewatinya.',
+  'For a tunnel you run yourself, such as a named Cloudflare Tunnel, pointed at port {0} on this computer. Paste its https:// address.':
+    'Untuk tunnel yang Anda jalankan sendiri, seperti Cloudflare Tunnel bernama, yang diarahkan ke port {0} di komputer ini. Tempel alamat https://-nya.',
+  'Set when Ramu was started from the command line. Change it there.':
+    'Diatur saat Ramu dijalankan dari baris perintah. Ubah di sana.',
+  'Static domain': 'Domain statis',
+  'Optional. With your free ngrok static domain, the address stays the same.':
+    'Opsional. Dengan domain statis ngrok gratis Anda, alamatnya tetap sama.',
+  '{0} is not installed on this computer.': '{0} belum terpasang di komputer ini.',
+  'Copy the install command': 'Salin perintah pemasangan',
+  'Download it': 'Unduh',
+  'Then save again.': 'Lalu simpan lagi.',
+  'Reachable at {0}': 'Dapat dijangkau di {0}',
+  'Copy the tunnel address': 'Salin alamat tunnel',
+  'The tunnel stopped: {0}. Ramu tries again shortly.': 'Tunnel berhenti: {0}. Ramu akan mencoba lagi sebentar lagi.',
+  'Starting {0}…': 'Memulai {0}…',
+  'Starts once Allow other devices is on.': 'Dimulai setelah Izinkan perangkat lain aktif.',
   'Paired phones and computers can use this host’s threads, files and terminals. Then choose how they reach it: your network, a VPN or your own tunnel.':
     'Ponsel dan komputer yang dipasangkan dapat memakai thread, file, dan terminal host ini. Lalu pilih cara mereka menjangkaunya: jaringan Anda, VPN, atau tunnel Anda sendiri.',
   'Devices nearby or on your VPN connect on this network. Choose your VPN to keep Ramu off other networks.':
     'Perangkat di dekat Anda atau di VPN Anda terhubung lewat jaringan ini. Pilih VPN Anda agar Ramu tidak terbuka di jaringan lain.',
   'Devices on the same network see this host as {0} and can ask to pair. Seeing it gives no access. Off by default.':
     'Perangkat di jaringan yang sama melihat host ini sebagai {0} dan dapat meminta untuk dipasangkan. Melihatnya tidak memberi akses. Mati secara bawaan.',
-  'Update Ramu on this host to reach it through a tunnel.': 'Perbarui Ramu di host ini agar dapat dijangkau lewat tunnel.',
-  'To reach this host away from your network, run your own tunnel (Cloudflare Tunnel, Tailscale Funnel or ngrok) to port {0} and paste its https:// address. Devices try it first. The tunnel’s provider can read what passes through it.':
-    'Untuk menjangkau host ini dari luar jaringan Anda, jalankan tunnel Anda sendiri (Cloudflare Tunnel, Tailscale Funnel, atau ngrok) ke port {0} lalu tempel alamat https://-nya. Perangkat mencobanya lebih dulu. Penyedia tunnel dapat membaca apa yang melewatinya.',
   'Shows a one-time code and QR code for a phone or another computer. With Discoverable on, nearby devices can ask instead, and you allow them here.':
     'Menampilkan kode sekali pakai dan kode QR untuk ponsel atau komputer lain. Dengan Dapat ditemukan aktif, perangkat di dekat Anda dapat meminta, dan Anda mengizinkannya di sini.',
   'Turn on Allow other devices first.': 'Aktifkan Izinkan perangkat lain terlebih dahulu.',

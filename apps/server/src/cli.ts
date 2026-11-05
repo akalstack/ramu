@@ -58,6 +58,10 @@ Usage:
   ramu hosts add <address> <code> [--name <name>]
                                  Add one, with a code from \`ramu pair\` there; it may only start and follow threads
   ramu hosts forget <id|name>    Stop using a host here (revoke it on that host to end it there too)
+  ramu tunnel quick|tailscale|ngrok [domain]|off
+                                 Reach this host from anywhere through a tunnel Ramu runs: Cloudflare's quick tunnel (no
+                                 account), Tailscale Funnel, or ngrok (with your static domain). Turns on access for this
+                                 computer only if it is off. ramu tunnel alone shows its state and address.
   ramu up [--private-network] [--no-private-network] [--yes]
                                  Set up how other devices reach this host, keep it running as a service, and pair one.
                                  Without a terminal it never asks; pass --private-network (or --yes).
@@ -526,6 +530,36 @@ if (command === 'start') {
     for (const host of hosts)
       console.log(`${host.id.slice(0, 8)}  ${host.name.padEnd(20)}  ${host.address}  device ${host.deviceId} there`)
   }
+} else if (command === 'tunnel') {
+  const call = (method: string, args: unknown[] = []) =>
+    runtimeInvoke(config.socketPath, method, args).catch((error: Error) =>
+      fail(
+        /ENOENT|ECONNREFUSED/.test(String((error as { code?: string }).code))
+          ? 'ramu is not running. Start it first.'
+          : error.message,
+      ),
+    ) as Promise<NetworkStatus>
+  const kind = positional[1]
+  if (kind && !['quick', 'tailscale', 'ngrok', 'off'].includes(kind))
+    fail('Usage: ramu tunnel quick|tailscale|ngrok [domain]|off')
+  let status = kind
+    ? await call('network.setTunnel', [
+        kind === 'off' ? null : { kind, ...(kind === 'ngrok' && positional[2] ? { domain: positional[2] } : {}) },
+      ])
+    : await call('network.status')
+  // The address arrives once the tool has connected, usually within a few seconds.
+  for (let wait = 0; kind && kind !== 'off' && status.tunnel?.state === 'starting' && wait < 30; wait++) {
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    status = await call('network.status')
+  }
+  const tunnel = status.tunnel
+  if (!tunnel?.choice) console.log('No tunnel. Devices reach this host on your network or VPN.')
+  else if (tunnel.state === 'running') console.log(`Reachable at ${tunnel.url}. Pair a device with ramu pair.`)
+  else if (tunnel.state === 'missing')
+    console.log(
+      `${{ quick: 'cloudflared', tailscale: 'tailscale', ngrok: 'ngrok' }[tunnel.choice.kind]} is not installed. Install it, then run this again.`,
+    )
+  else console.log(`Tunnel ${tunnel.state}${tunnel.error ? `: ${tunnel.error}` : ''}`)
 } else if (command === 'up') {
   await up()
 } else fail(`unknown command "${command}". Run ramu --help.`)

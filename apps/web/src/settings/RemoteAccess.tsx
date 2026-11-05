@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { LocalInlineAction } from '@/components/inline-action'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { SETTINGS_CARD_LINE } from './cards'
 import { Button } from '@/components/desktop-button'
@@ -136,6 +137,86 @@ export function RemoteAccessSettings() {
   )
 }
 
+type ReachMode = 'off' | 'quick' | 'tailscale' | 'ngrok' | 'manual'
+const REACH_MODES: ReachMode[] = ['off', 'quick', 'tailscale', 'ngrok', 'manual']
+const REACH_LABEL: Record<ReachMode, string> = {
+  off: 'Only my network or VPN',
+  quick: 'Quick tunnel (Cloudflare)',
+  tailscale: 'Tailscale Funnel',
+  ngrok: 'ngrok',
+  manual: 'My own tunnel address',
+}
+const REACH_HELP: Record<ReachMode, string> = {
+  off: 'Devices reach this host on your network or VPN. Choose a tunnel to reach it from anywhere else too.',
+  quick:
+    'Ramu starts Cloudflare’s quick tunnel: no account needed. Its address changes each time Ramu starts, so it suits trying things out. Cloudflare can read what passes through it.',
+  tailscale:
+    'Ramu turns on Tailscale Funnel for this machine, with an address that stays the same. Funnel must be allowed for it in your Tailscale settings. Tailscale can read what passes through it.',
+  ngrok:
+    'Ramu runs ngrok with your account: run ngrok config add-authtoken once. ngrok can read what passes through it.',
+  manual:
+    'For a tunnel you run yourself, such as a named Cloudflare Tunnel, pointed at port {0} on this computer. Paste its https:// address.',
+}
+const TUNNEL_TOOL: Record<'quick' | 'tailscale' | 'ngrok', 'cloudflared' | 'tailscale' | 'ngrok'> = {
+  quick: 'cloudflared',
+  tailscale: 'tailscale',
+  ngrok: 'ngrok',
+}
+/** How to install each tool here: Homebrew on a Mac, the vendor's download page elsewhere. */
+const TOOL_INSTALL: Record<'cloudflared' | 'tailscale' | 'ngrok', { brew?: string; url: string }> = {
+  cloudflared: {
+    brew: 'brew install cloudflared',
+    url: 'https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/',
+  },
+  tailscale: { url: 'https://tailscale.com/download' },
+  ngrok: { brew: 'brew install ngrok', url: 'https://ngrok.com/download' },
+}
+
+/** What the chosen tunnel is doing: its address once it runs, why it stopped, or what to install for it. */
+function TunnelState({ status, mode, staged }: { status: NetworkStatus; mode: ReachMode; staged: boolean }) {
+  const tunnel = status.tunnel
+  if (!tunnel || mode === 'off' || mode === 'manual' || staged) return null
+  const tool = TUNNEL_TOOL[mode]
+  const install = TOOL_INSTALL[tool]
+  const mac = navigator.userAgent.includes('Mac')
+  const line = 'muted text-muted-foreground small text-caption m-[0_0_12px] flex flex-wrap items-center gap-x-1.5'
+  if (tunnel.state === 'missing' || !tunnel.tools[tool])
+    return (
+      <p className={line} role="status">
+        {t('{0} is not installed on this computer.', { 0: tool })}
+        {mac && install.brew ? (
+          <>
+            <code className="rounded-(--radius-s) bg-fill px-1.5 py-0.5">{install.brew}</code>
+            <CopyButton text={install.brew} label={t('Copy the install command')} />
+          </>
+        ) : (
+          <LocalInlineAction onClick={() => void ramu.invoke('app.openExternal', install.url).catch(() => {})}>
+            {t('Download it')}
+          </LocalInlineAction>
+        )}
+        {t('Then save again.')}
+      </p>
+    )
+  if (tunnel.state === 'running' && tunnel.url)
+    return (
+      <p className={line} role="status">
+        {t('Reachable at {0}', { 0: tunnel.url })}
+        <CopyButton text={tunnel.url} label={t('Copy the tunnel address')} />
+      </p>
+    )
+  if (tunnel.state === 'failed')
+    return (
+      <p className={`${line} text-warn`} role="status">
+        {t('The tunnel stopped: {0}. Ramu tries again shortly.', { 0: tunnel.error ?? tool })}
+      </p>
+    )
+  return (
+    <p className={line} role="status">
+      {status.enabled ? t('Starting {0}…', { 0: tool }) : t('Starts once Allow other devices is on.')}
+    </p>
+  )
+}
+
 function ThisComputer() {
   const invoke = useSettingsInvoke()
   const [status, setStatus, reload] = useNetworkStatus(2500)
@@ -184,12 +265,27 @@ function ThisComputer() {
       }
     },
   )
-  const [publicUrl, stagePublicUrl] = useStagedValue(
-    'network.publicUrl',
-    status?.publicAddress?.url ?? '',
-    async (value) => {
+  const tunnelChoice = status?.tunnel?.choice ?? null
+  const [reach, stageReach] = useStagedValue(
+    'network.reach',
+    {
+      mode: (tunnelChoice?.kind ?? (status?.publicAddress?.url ? 'manual' : 'off')) as ReachMode,
+      domain: tunnelChoice?.domain ?? '',
+      url: tunnelChoice ? '' : (status?.publicAddress?.url ?? ''),
+    },
+    async ({ mode, domain, url }) => {
       try {
-        setStatus(await invoke('network.setPublicUrl', value.trim() || null))
+        if (mode === 'quick' || mode === 'tailscale' || mode === 'ngrok')
+          setStatus(
+            await invoke('network.setTunnel', {
+              kind: mode,
+              ...(mode === 'ngrok' && domain.trim() ? { domain: domain.trim() } : {}),
+            }),
+          )
+        else {
+          if (tunnelChoice) await invoke('network.setTunnel', null)
+          setStatus(await invoke('network.setPublicUrl', mode === 'manual' ? url.trim() || null : null))
+        }
       } catch (error) {
         notifyError(errorText(error), t('Remote access'))
       }
@@ -323,34 +419,68 @@ function ThisComputer() {
               {t('Ramu does not encrypt this connection. Use it on a VPN or a network you trust.')}
             </p>
           )}
-          <SettingsRow>
-            <SettingsLabel
-              title={t('Tunnel address')}
-              help={
-                !status.publicAddress
-                  ? t('Update Ramu on this host to reach it through a tunnel.')
-                  : publicUrlFixed
-                    ? t('Set with --public-url when Ramu was started from the command line. Change it there.')
-                    : t(
-                        'To reach this host away from your network, run your own tunnel (Cloudflare Tunnel, Tailscale Funnel or ngrok) to port {0} and paste its https:// address. Devices try it first. The tunnel’s provider can read what passes through it.',
-                        { 0: status.port },
-                      )
-              }
-            />
-            <Input
-              aria-label={t('Tunnel address')}
-              type="url"
-              inputMode="url"
-              spellCheck={false}
-              placeholder="https://ramu.example.com"
-              value={publicUrl}
-              disabled={publicUrlFixed || !status.publicAddress}
-              onChange={(event) => stagePublicUrl(event.target.value)}
-            />
-          </SettingsRow>
         </>
       )}
-      <SettingsRow className="mt-5">
+      {status.publicAddress && (
+        <>
+          <SettingsGroupTitle className="mt-5">{t('From anywhere')}</SettingsGroupTitle>
+          <SettingsRow>
+            <SettingsLabel
+              title={t('Reach from anywhere')}
+              help={
+                publicUrlFixed
+                  ? t('Set when Ramu was started from the command line. Change it there.')
+                  : t(REACH_HELP[reach.mode], { 0: status.port })
+              }
+            />
+            <Dropdown
+              label={t('Reach from anywhere')}
+              value={reach.mode}
+              disabled={publicUrlFixed}
+              options={REACH_MODES.filter((mode) => status.tunnel || mode === 'off' || mode === 'manual').map(
+                (mode) => ({ value: mode, label: t(REACH_LABEL[mode]) }),
+              )}
+              onChange={(mode) => stageReach({ ...reach, mode: mode as ReachMode })}
+            />
+          </SettingsRow>
+          {reach.mode === 'ngrok' && (
+            <SettingsRow>
+              <SettingsLabel
+                title={t('Static domain')}
+                help={t('Optional. With your free ngrok static domain, the address stays the same.')}
+              />
+              <Input
+                aria-label={t('Static domain')}
+                spellCheck={false}
+                placeholder="example.ngrok-free.app"
+                value={reach.domain}
+                onChange={(event) => stageReach({ ...reach, domain: event.target.value })}
+              />
+            </SettingsRow>
+          )}
+          {reach.mode === 'manual' && (
+            <SettingsRow>
+              <SettingsLabel
+                title={t('Tunnel address')}
+                help={status.enabled ? undefined : t('Turn on Allow other devices first.')}
+              />
+              <Input
+                aria-label={t('Tunnel address')}
+                type="url"
+                inputMode="url"
+                spellCheck={false}
+                placeholder="https://ramu.example.com"
+                value={reach.url}
+                disabled={publicUrlFixed}
+                onChange={(event) => stageReach({ ...reach, url: event.target.value })}
+              />
+            </SettingsRow>
+          )}
+          <TunnelState status={status} mode={reach.mode} staged={reach.mode !== (tunnelChoice?.kind ?? null)} />
+        </>
+      )}
+      <SettingsGroupTitle className="mt-5">{t('Devices that can use this host')}</SettingsGroupTitle>
+      <SettingsRow>
         <SettingsLabel
           title={t('Pair a device')}
           help={
@@ -371,7 +501,6 @@ function ThisComputer() {
           {t('Pair a device…')}
         </Button>
       </SettingsRow>
-      <SettingsGroupTitle className="mt-5">{t('Devices that can use this host')}</SettingsGroupTitle>
       <PermissionRequests status={status} invoke={changePermission} />
       {status.devices.map((device) => (
         <PairedDeviceRow
