@@ -53,7 +53,7 @@ export function TaskStateIcon({ task, unread }: { task: Task; unread: boolean })
   // Anything that needs the person shows at once; only a plain stop waits to see whether the turn carries on.
   const held = useHeld(isWorking(status))
   return (
-    <span className="task-trailing inline-flex min-w-7 flex-none items-center justify-end [&>.task-state]:mr-0">
+    <span className="task-trailing inline-flex min-w-5 flex-none items-center justify-end [&>.task-state]:mr-0">
       {held && (!status || status.kind === 'finished') ? (
         <Spinner label={t('Agent working')} />
       ) : status ? (
