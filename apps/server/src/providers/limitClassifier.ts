@@ -155,6 +155,25 @@ function clock(
   return [hour, minute]
 }
 
+const GO_UNIT_MS: Record<string, number> = {
+  h: 3_600_000,
+  m: 60_000,
+  s: 1000,
+  ms: 1,
+  us: 0.001,
+  µs: 0.001,
+  μs: 0.001,
+  ns: 1e-6,
+}
+/** A Go duration such as `42s`, `3600s` or `1h2m3.5s` in milliseconds; undefined when it is not one or is zero. */
+function goDurationMs(value: string): number | undefined {
+  if (!/^(?:\d+(?:\.\d+)?(?:ns|us|µs|μs|ms|h|m|s))+$/.test(value)) return undefined
+  let total = 0
+  for (const [, amount, unit] of value.matchAll(/(\d+(?:\.\d+)?)(ns|us|µs|μs|ms|h|m|s)/g))
+    total += Number(amount) * GO_UNIT_MS[unit!]!
+  return total > 0 ? total : undefined
+}
+
 /**
  * When a limit notice says the limit lifts: "in 2 hours", "resets at 5pm", "try again at 5:30 PM", "at 17:00 UTC",
  * "Oct 20, 3:05 PM (America/New_York)" or an ISO timestamp. A zone the notice names wins; otherwise wall-clock times are
@@ -167,6 +186,10 @@ export function parseResetTime(
 ): { at: number; assumedZone: boolean } | undefined {
   const within = (at: number, assumedZone: boolean) =>
     at > now && at - now <= MAX_AHEAD_MS ? { at, assumedZone } : undefined
+  // Google's errors (Antigravity) carry Go durations: the quota's own reset first, else a plain rate limit's retry delay.
+  const delay = (/\bquotaResetDelay:(\S+?)(?=[\s\]]|$)/.exec(text) ?? /\bretryDelay:(\S+?)(?=[\s\]]|$)/.exec(text))?.[1]
+  const delayMs = delay ? goDurationMs(delay) : undefined
+  if (delayMs) return within(now + delayMs, false)
   const relative = /(?:in|after|wait)\s+(\d+(?:\.\d+)?)\s*(s|sec|second|m|min|minute|h|hr|hour|d|day)s?\b/i.exec(text)
   if (relative) {
     const ms = Number(relative[1]) * UNIT_MS[relative[2]!.toLowerCase()]!

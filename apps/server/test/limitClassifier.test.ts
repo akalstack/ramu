@@ -144,6 +144,16 @@ describe('parseResetTime', () => {
     expect(at('quota exceeded')).toBeUndefined()
     expect(limitResetsAt('Rate limited. Try again in 2 hours.', 0)).toBe(7_200_000)
   })
+  it('reads the Go durations in Antigravity’s quota errors, preferring the quota’s own reset', () => {
+    const quota =
+      'Error 429, Message: Quota exhausted., Status: RESOURCE_EXHAUSTED, Details: [map[@type:type.googleapis.com/google.rpc.RetryInfo retryDelay:42s] map[@type:type.googleapis.com/google.rpc.ErrorInfo metadata:map[quotaResetDelay:3600s quotaResetTimeStamp:soon] reason:QUOTA_EXHAUSTED]]'
+    expect(at(quota)).toEqual({ at: NOW + 3_600_000, assumedZone: false })
+    const rate =
+      'Error 429, Message: Resource has been exhausted (e.g. check quota)., Status: RESOURCE_EXHAUSTED, Details: [map[@type:type.googleapis.com/google.rpc.RetryInfo retryDelay:42s]]'
+    expect(at(rate)?.at).toBe(NOW + 42_000)
+    expect(at('retryDelay:1h2m3.5s]')?.at).toBe(NOW + 3_723_500)
+    expect(at('retryDelay:soon]')).toBeUndefined()
+  })
   it('reads wall-clock times in the host zone and says the zone was assumed', () => {
     // 10:00 in Jakarta: 5pm is later today.
     expect(at('resets at 5pm')).toEqual({ at: Date.parse('2026-10-18T10:00:00Z'), assumedZone: true })

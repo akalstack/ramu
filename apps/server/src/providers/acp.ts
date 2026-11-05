@@ -34,6 +34,12 @@ import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 
 /** How long a cancelled turn may take to end before steering or interrupting gives up. */
 const cancelWaitMs = () => Number(process.env.RAMU_ACP_CANCEL_WAIT_MS) || 15_000
+/**
+ * How long a turn may go without any output before Ramu ends it. Antigravity can stop answering a prompt without
+ * ending it; the clock holds while a tool runs or the agent waits on the person.
+ */
+const silentTurnMs = (provider: string) =>
+  provider === 'antigravity' ? Number(process.env.RAMU_ACP_SILENT_TURN_MS) || 15 * 60_000 : 0
 type Wire = Record<string, any>
 /** OpenCode chats run on `opencode serve`; its `opencode acp` server only lists models. */
 /**
@@ -161,7 +167,8 @@ export class AcpRpc {
           ),
         ),
       )
-      this.child.once('exit', (code) =>
+      // `close` waits for stdout to drain, so a last reply written just before the runtime exits is still read.
+      this.child.once('close', (code) =>
         finish(new Error(`${providerName(provider)} ACP runtime exited (${code ?? 'signal'})`)),
       )
     })
@@ -407,6 +414,12 @@ class AcpSession implements AgentRunner {
   private loading = false
   private events: AcpEvents
   private pending = new Map<string, Wire>()
+  /** When the running turn last showed progress, and the tools it has running, for the silence watchdog. */
+  private progressAt = 0
+  private runningTools = new Set<string>()
+  private watchdog?: ReturnType<typeof setInterval>
+  /** The runtime ended (it exited, or went silent and was closed): the next message starts it again on this session. */
+  private relaunch = false
   private session: Wire = {}
   private prompts?: { image?: boolean }
   constructor(
@@ -449,7 +462,9 @@ class AcpSession implements AgentRunner {
     this.rpc.terminal = !!this.terminals
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => {
+      this.endWatch()
       if (!this.stopped) {
+        this.relaunch = true
         this.emit({ kind: 'error', message: e.message })
         this.emit({ kind: 'state', state: 'failed' })
       }
@@ -623,6 +638,11 @@ class AcpSession implements AgentRunner {
   }
   async send(prompt: string, attachments: Attachment[] = []): Promise<void> {
     if (this.active) throw new Error('Wait for the current turn to finish, or interrupt it first.')
+    if (this.relaunch && !this.stopped && this.sessionId) {
+      // Continue the same session on a fresh runtime, as the thread would after a restart.
+      this.relaunch = false
+      return this.start(prompt, this.sessionId, attachments)
+    }
     if (!this.rpc || this.stopped) throw new Error('ACP session is not running')
     this.endLateWork(false)
     this.events.beginTurn()
@@ -631,8 +651,10 @@ class AcpSession implements AgentRunner {
     this.seenTools.clear()
     const content = this.promptBlocks(prompt, attachments)
     this.emit({ kind: 'state', state: 'running' })
+    this.watch()
     this.active = this.rpc.request('session/prompt', { sessionId: this.sessionId, prompt: content }, 0).then(
       (r) => {
+        this.endWatch()
         this.active = undefined
         this.cancelPending()
         if (this.stopped || this.steering) return
@@ -655,6 +677,7 @@ class AcpSession implements AgentRunner {
         )
       },
       (e: Error) => {
+        this.endWatch()
         this.active = undefined
         this.cancelPending()
         if (this.stopped || this.steering) return
@@ -695,6 +718,42 @@ class AcpSession implements AgentRunner {
       await this.cancelled()
     }
   }
+  /** Ends a turn that has shown nothing for too long, and closes its runtime so the next message starts a fresh one. */
+  private watch(): void {
+    const limit = silentTurnMs(this.settings.provider)
+    this.endWatch()
+    this.progressAt = Date.now()
+    this.runningTools.clear()
+    if (!limit) return
+    this.watchdog = setInterval(
+      () => {
+        if (!this.active || this.stopped) return this.endWatch()
+        // Waiting on the person or on a running tool is not silence.
+        if (this.pending.size || this.runningTools.size) this.progressAt = Date.now()
+        if (Date.now() - this.progressAt < limit) return
+        this.endWatch()
+        const minutes = Math.max(1, Math.round(limit / 60_000))
+        this.active = undefined
+        this.relaunch = true
+        this.cancelPending()
+        const rpc = this.rpc
+        this.rpc = undefined
+        void rpc?.close()
+        this.emit({
+          kind: 'result',
+          isError: true,
+          text: `${providerName(this.settings.provider as AcpProvider)} sent nothing for ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}, so Ramu stopped the turn and restarted the agent. Send a message to continue.`,
+          costUsd: null,
+        })
+      },
+      Math.min(30_000, Math.max(250, limit / 4)),
+    )
+    this.watchdog.unref?.()
+  }
+  private endWatch(): void {
+    if (this.watchdog) clearInterval(this.watchdog)
+    this.watchdog = undefined
+  }
   /** Waits for a cancelled turn to end. A runtime that ignores `session/cancel` must not hang the caller. */
   private async cancelled(): Promise<void> {
     const active = this.active
@@ -711,6 +770,7 @@ class AcpSession implements AgentRunner {
   }
   async stop(): Promise<void> {
     this.stopped = true
+    this.endWatch()
     this.terminals?.dispose()
     this.cancelPending()
     await this.rpc?.close()
@@ -827,7 +887,12 @@ class AcpSession implements AgentRunner {
         return
       const events = this.events.consume(u)
       if (!this.active && !this.loading && events.some((event) => LATE_WORK.has(event.kind))) this.lateWork(events)
+      // Output of the running turn resets the silence clock; session metadata above does not.
+      if (events.length) this.progressAt = Date.now()
       for (const event of events) {
+        if (event.kind === 'tool-use' && event.status !== 'completed' && event.status !== 'failed')
+          this.runningTools.add(event.toolUseId)
+        if (event.kind === 'tool-result') this.runningTools.delete(event.toolUseId)
         if (event.kind === 'text' && !event.agentId) this.turnText.set(event.messageId ?? '', event.text)
         if (event.kind === 'tool-use' && !event.agentId && !this.seenTools.has(event.toolUseId)) {
           this.seenTools.add(event.toolUseId)

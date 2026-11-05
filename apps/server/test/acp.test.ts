@@ -326,6 +326,27 @@ it('gives up on a runtime that ignores cancel instead of hanging steer and inter
   await expect(runner!.interrupt()).rejects.toThrow(/did not stop/)
   await expect(runner!.steer('limit')).rejects.toThrow(/did not stop/)
 })
+it('ends an Antigravity turn that stays silent, and continues the session on a fresh runtime', async () => {
+  vi.stubEnv('RAMU_ACP_SILENT_TURN_MS', '300')
+  await start('long', 'antigravity')
+  await until(() => events.some((e) => e.kind === 'result'))
+  expect(events.find((e) => e.kind === 'result')).toMatchObject({
+    isError: true,
+    text: expect.stringContaining('sent nothing for 1 minute'),
+  })
+  // The next message starts the runtime again and resumes the same session, rather than failing on a closed one.
+  await runner!.send('limit')
+  await until(() => log().filter((m) => m.method === 'session/load').length === 1)
+  expect(log().filter((m) => m.method === 'initialize')).toHaveLength(2)
+  expect(log().find((m) => m.method === 'session/load')?.params.sessionId).toBe('session-1')
+})
+it('keeps a turn waiting on the person past the silence limit', async () => {
+  vi.stubEnv('RAMU_ACP_SILENT_TURN_MS', '300')
+  await start('tool', 'antigravity')
+  await until(() => events.some((e) => e.kind === 'permission-request'))
+  await new Promise((r) => setTimeout(r, 900))
+  expect(events.some((e) => e.kind === 'result')).toBe(false)
+})
 it('refuses to steer when no turn is running', async () => {
   await start('limit')
   await until(() => events.some((e) => e.kind === 'result'))
