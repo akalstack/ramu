@@ -25,7 +25,6 @@ export function webhookRule(preset: WebhookPreset): WebhookTrigger {
     replayKey: source.replayKey,
     coalesceKey: preset.coalesceKey,
     coalesceSeconds: 120,
-    maxAgeMinutes: 60,
     fields: preset.fields,
   }
 }

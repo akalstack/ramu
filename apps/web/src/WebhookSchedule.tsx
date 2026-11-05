@@ -196,20 +196,6 @@ export function WebhookFields({
           />
         </label>
       )}
-      <label>
-        {t('If the host was offline')}
-        <Dropdown
-          label={t('If the host was offline')}
-          value={String(rule.maxAgeMinutes ?? 0)}
-          onChange={(value) => onRule({ ...rule, maxAgeMinutes: Number(value) || null })}
-          options={[
-            { value: '15', label: t('Run requests up to 15 minutes old') },
-            { value: '60', label: t('Run requests up to an hour old') },
-            { value: '1440', label: t('Run requests up to a day old') },
-            { value: '0', label: t('Run every request') },
-          ]}
-        />
-      </label>
       <p className="muted text-muted-foreground small text-caption">
         {t(
           'After saving, the schedule’s card shows the address and secret to give the sender. Requests for the same subject within two minutes join one run.',
@@ -229,7 +215,6 @@ const OUTCOME_TONE: Record<WebhookDelivery['outcome'], string> = {
   filtered: 'text-muted-foreground',
   duplicate: 'text-muted-foreground',
   paused: 'text-muted-foreground',
-  'too-old': 'text-muted-foreground',
   'bad-signature': 'text-bad',
   invalid: 'text-bad',
 }
@@ -241,7 +226,6 @@ const OUTCOME_LABEL: Record<WebhookDelivery['outcome'], string> = {
   filtered: 'Filtered out',
   duplicate: 'Repeat',
   paused: 'Not run',
-  'too-old': 'Too old',
   'bad-signature': 'Bad signature',
   invalid: 'Invalid',
 }
@@ -326,7 +310,7 @@ export function WebhookPanel({
       ) : (
         <p className="m-0 text-muted-foreground">
           {t(
-            'Nothing outside this computer can reach it yet. Turn on Ramu Link or Let other devices connect in Settings → Remote access; the address then appears here.',
+            'Nothing outside this computer can reach it yet. Turn on Allow other devices in Settings → Remote access; the address then appears here.',
           )}
           {address && (
             <>
@@ -458,12 +442,6 @@ export function WebhookPanel({
             </span>
             <span className="min-w-0 flex-1 truncate text-soft" title={delivery.detail ?? delivery.summary}>
               {new Date(delivery.receivedAt).toLocaleString()} · {delivery.summary}
-              {delivery.heldMs > 60_000 && (
-                <span className="text-muted-foreground">
-                  {' '}
-                  · {t('held {0} min while offline', { 0: Math.round(delivery.heldMs / 60_000) })}
-                </span>
-              )}
               {delivery.detail && <span className="text-muted-foreground"> · {delivery.detail}</span>}
             </span>
             {run?.taskId ? (

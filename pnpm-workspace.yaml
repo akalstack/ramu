@@ -30,7 +30,6 @@ allowBuilds:
   macos-alias: true
   node-pty: true
   react-native-enriched-markdown: true
-  workerd: true
 minimumReleaseAgeExclude:
   - '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.295'
   - '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.295'

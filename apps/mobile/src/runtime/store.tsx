@@ -26,7 +26,7 @@ import {
 import { createWorkspaceTask, workspaceCreation } from './workspaces'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState, NativeModules } from 'react-native'
-import { hostFetch as expoFetch, pinLinkKey } from './link'
+import { fetch as nativeFetch } from 'expo/fetch'
 import { shareRows } from './shareRows'
 import * as Device from 'expo-device'
 import { thisDeviceOs } from './deviceOs'
@@ -90,6 +90,8 @@ import { GOAL_VERIFY_METHOD } from './goalVerify'
 import { mergeTranscript, transcriptRows, updateThreadMetadata, readTranscriptBundle } from './transcriptChanges'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
 import type { Task } from '@ramu/shared/types'
+
+const expoFetch = nativeFetch as unknown as typeof globalThis.fetch
 
 /** Expo metadata also works in bridgeless builds where SourceCode is not exposed through NativeModules. */
 function developmentBundleUrl(): string | undefined {
@@ -1212,7 +1214,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }),
           usable: (address, signal) =>
             checkHostConnection(address, token, expoFetch as typeof globalThis.fetch, signal),
-          pinLinkKey,
         })
         if (!current()) return
         if (!route) throw new HostError('Host unreachable. Checking saved addresses again shortly.')
@@ -1540,7 +1541,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         onCode,
         signal,
       })
-      pinLinkKey(result.hostId, result.linkKey)
       return savePairing(name, url, result)
     },
     reviewAddress: reviewAddressFor,

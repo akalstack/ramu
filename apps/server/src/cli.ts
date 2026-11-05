@@ -58,13 +58,9 @@ Usage:
   ramu hosts add <address> <code> [--name <name>]
                                  Add one, with a code from \`ramu pair\` there; it may only start and follow threads
   ramu hosts forget <id|name>    Stop using a host here (revoke it on that host to end it there too)
-  ramu up [--link] [--private-network] [--no-link] [--no-private-network] [--yes]
+  ramu up [--private-network] [--no-private-network] [--yes]
                                  Set up how other devices reach this host, keep it running as a service, and pair one.
-                                 Without a terminal it never asks; name the ways you want, or --yes for Ramu Link.
-  ramu link login|logout|on|off|status [--json]
-                                 Sign this host in to Ramu Link with Google or GitHub (prints a code and link), or manage it
-  ramu link service <url|default>
-                                 Use your own Ramu Link deployment (see apps/link/README.md)
+                                 Without a terminal it never asks; pass --private-network (or --yes).
 
 Options:
   --data-dir <dir>               Profile directory (default: the desktop app's, so both share threads and settings)
@@ -82,7 +78,7 @@ Options:
 
 Environment: RAMU_USER_DATA, RAMU_SOCKET, RAMU_LISTEN, RAMU_DEVICES_FILE, RAMU_WORKTREES,
              RAMU_ALLOW_PLAINTEXT_REMOTE, RAMU_DISCOVERABLE, RAMU_TLS_CERT, RAMU_TLS_KEY, RAMU_DEVICE_TOKEN_DAYS (90 or never),
-             RAMU_BROWSER_ORIGINS (comma-separated exact origins), RAMU_LINK_URL (Ramu Link service),
+             RAMU_BROWSER_ORIGINS (comma-separated exact origins),
              RAMU_BROWSER_EXECUTABLE (optional host Chromium executable; Setup checks its sandbox).
 A paired device has the same control as the desktop app, including shell access. Pair only devices you own.`
 
@@ -114,7 +110,7 @@ async function answerNearby(offerId: string, role: 'owner' | 'viewer') {
       }
       answered.add(request.id)
       const reply = await prompt.question(
-        `\n${request.name || 'A device'} (${request.address}) wants to pair and shows ${request.code}.${request.viewerOnly ? ' It reaches this host through a Ramu Link share, so it pairs as a viewer.' : ''} Allow? [y/N] `,
+        `\n${request.name || 'A device'} (${request.address}) wants to pair and shows ${request.code}. Allow? [y/N] `,
       )
       if (/^y(es)?$/i.test(reply.trim()))
         await runtimeInvoke(config.socketPath, 'network.approveRequest', [request.id, role]).catch((error) =>
@@ -141,8 +137,6 @@ const booleans = new Set([
   'allow-plaintext-remote',
   'private-network',
   'discoverable',
-  'link',
-  'no-link',
   'no-private-network',
   'yes',
 ])
@@ -214,9 +208,6 @@ if (command === 'start') {
           pid: status.pid,
           version: status.version ?? null,
           listening: status.listening ?? null,
-          link: network
-            ? { enabled: network.link.enabled, state: network.link.state, account: network.link.account?.email ?? null }
-            : null,
         }),
       )
       process.exit(0)
@@ -276,7 +267,6 @@ if (command === 'start') {
       ]
       urls = candidateUrls(host, port, Boolean(status.tls)).map((c) => ({ url: c.url, note: `  (${c.interface})` }))
     }
-    if (network?.link.state === 'online') urls.push({ url: network.link.address, note: '  (Ramu Link)' })
     if (!urls.length) fail('No network address found for this host. Pass --url <address>.')
   }
   const role = text('role') ?? 'owner'
@@ -522,8 +512,6 @@ if (command === 'start') {
     for (const host of hosts)
       console.log(`${host.id.slice(0, 8)}  ${host.name.padEnd(20)}  ${host.address}  device ${host.deviceId} there`)
   }
-} else if (command === 'link') {
-  await linkCommand(positional[1] ?? 'status')
 } else if (command === 'up') {
   await up()
 } else fail(`unknown command "${command}". Run ramu --help.`)
@@ -532,10 +520,6 @@ function reachLines(network: NetworkStatus): string[] {
   const lines: string[] = []
   if (network.enabled)
     lines.push(`network  ${network.listening ? 'listening' : 'starting'} on ${network.host}:${network.port}`)
-  if (network.link.account || network.link.enabled)
-    lines.push(
-      `link     ${network.link.state}  ${network.link.account?.email ?? ''}${network.link.error ? `  (${network.link.error})` : ''}`,
-    )
   return lines
 }
 
@@ -553,53 +537,6 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** Signs in with the device-code flow: the person approves on any device, so this works over SSH. */
-async function linkLogin(): Promise<NetworkStatus> {
-  let status = await call<NetworkStatus>('network.status')
-  if (!status.link.service)
-    fail('No Ramu Link service is set. Run ramu link service <url> with your deployment (see apps/link/README.md).')
-  status = await call<NetworkStatus>('network.linkSignIn')
-  const pending = status.link.signIn
-  if (!pending) fail(status.link.error ?? 'Ramu Link did not start a sign-in.')
-  console.log(`\nOpen this link on any device and sign in with Google or GitHub:\n  ${pending.url}`)
-  console.log(`Then confirm the code  ${pending.userCode}\n\nWaiting… (Ctrl-C to stop)`)
-  for (;;) {
-    await sleep(1500)
-    status = await call<NetworkStatus>('network.status')
-    if (status.link.account && !status.link.signIn) return status
-    if (!status.link.signIn) fail(status.link.error ?? 'Sign-in did not finish.')
-  }
-}
-
-async function linkCommand(action: string) {
-  if (action === 'login') {
-    const status = await linkLogin()
-    console.log(
-      `Signed in as ${status.link.account?.email}. Devices signed in to this account can now reach this host.`,
-    )
-  } else if (action === 'logout') {
-    await call('network.linkSignOut')
-    console.log('Signed out. This host is unlinked from your Ramu Link account.')
-  } else if (action === 'on' || action === 'off') {
-    await call('network.linkSetEnabled', [action === 'on'])
-    console.log(action === 'on' ? 'Ramu Link is on.' : 'Ramu Link is off. Paired devices keep their other routes.')
-  } else if (action === 'service') {
-    const value = positional[2]
-    if (!value) fail('Usage: ramu link service <url|default>')
-    await call('network.linkSetService', [value === 'default' ? null : value])
-    console.log(value === 'default' ? 'Using the default Ramu Link service.' : `Using ${value}.`)
-  } else if (action === 'status') {
-    const status = await call<NetworkStatus>('network.status')
-    if (flags.has('json')) console.log(JSON.stringify(status.link, null, 2))
-    else
-      console.log(
-        status.link.account
-          ? `${status.link.state}  ${status.link.account.email}  ${status.link.service ?? ''}${status.link.error ? `\n${status.link.error}` : ''}`
-          : `signed out  ${status.link.service ?? 'no service set'}`,
-      )
-  } else fail(`unknown link command "${action}". Use login, logout, on, off, service or status.`)
-}
-
 /** Guided setup for a command-line host, like the desktop's Remote access section in one command. */
 async function up() {
   const interactive = process.stdin.isTTY && process.stdout.isTTY && !flags.has('yes')
@@ -615,9 +552,7 @@ async function up() {
     }
   }
   const named = (flag: string) => (flags.has(flag) ? true : flags.has(`no-${flag}`) ? false : undefined)
-  let wantLink = named('link')
-  let wantPrivate = named('private-network')
-  const chose = [wantLink, wantPrivate].some((value) => value !== undefined)
+  let wantPrivate = named('private-network') ?? (flags.has('yes') ? true : undefined)
 
   let running = await runtimeInvoke(config.socketPath, 'background.status').catch(() => null)
   if (!running) {
@@ -634,12 +569,12 @@ async function up() {
   }
 
   let status = await call<NetworkStatus>('network.status')
-  if (!chose) {
-    if (!interactive && !flags.has('yes') && !status.reachable)
-      fail('Name how devices reach this host: --link and/or --private-network (or --yes for Ramu Link).')
-    console.log('How should your other devices reach this host? Choose any.')
-    wantLink = await ask('  Ramu Link: sign in with Google or GitHub, works from anywhere, end-to-end encrypted.', true)
-    wantPrivate = await ask('  Private network: Tailscale, WireGuard or a LAN you trust.', false)
+  if (wantPrivate === undefined) {
+    if (!interactive && !status.reachable) fail('Name how devices reach this host: --private-network (or --yes).')
+    wantPrivate = await ask(
+      'Let devices on your private network (Tailscale, WireGuard or a LAN you trust) reach this host?',
+      true,
+    )
   }
 
   if (wantPrivate === true && !status.enabled) {
@@ -650,12 +585,6 @@ async function up() {
     console.log(`Listening on port ${status.port} for devices on your private network.`)
   } else if (wantPrivate === false && status.enabled && status.source !== 'command-line')
     await call('network.configure', [{ ...status, enabled: false, acceptUnencrypted: status.tls ? false : true }])
-
-  if (wantLink === true && !status.link.account) {
-    status = await linkLogin()
-    console.log(`Signed in to Ramu Link as ${status.link.account?.email}.`)
-  } else if (wantLink === true && !status.link.enabled) await call('network.linkSetEnabled', [true])
-  else if (wantLink === false && status.link.enabled) await call('network.linkSetEnabled', [false])
 
   status = await call<NetworkStatus>('network.status')
   for (const line of reachLines(status)) console.log(line)
@@ -669,7 +598,5 @@ async function up() {
   console.log(
     `\nPair a device with code  ${offer.code}  (works once, expires in ${Math.round(PAIRING_TTL_MS / 60000)} minutes)`,
   )
-  if (status.link.account)
-    console.log(`Or sign in to Ramu Link as ${status.link.account.email} on the device and choose this host.`)
   for (const { url, interface: via } of offer.urls) console.log(`  ${url}  (${via})`)
 }

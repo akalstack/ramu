@@ -93,8 +93,7 @@ export interface NetworkStatus {
    * Nearby devices asking to pair while an offer is open, each with the six-digit code it shows. Approve only when the
    * codes match.
    */
-  /** `viewerOnly`: asked through Ramu Link by an account this host was shared with, so it pairs only as a viewer. */
-  requests: { id: string; name: string; address: string; code: string; expiresAt: number; viewerOnly?: true }[]
+  requests: { id: string; name: string; address: string; code: string; expiresAt: number }[]
   /** What a newly paired full-access device holds. */
   defaultPermissions: import('../devicePermissions').DevicePermission[]
   /** Paired devices asking for a permission, waiting for a person here. */
@@ -117,26 +116,8 @@ export interface NetworkStatus {
     /** Name nearby devices see. */
     name: string
   }
-  link: LinkStatus
-  /** Some route beyond this computer is up: the network listener or Ramu Link. */
+  /** The network listener is up, so devices beyond this computer can reach it. */
   reachable: boolean
-}
-/** Ramu Link on this host. */
-export interface LinkStatus {
-  service: string | null
-  /** True when `RAMU_LINK_URL` chose the service; Settings cannot change it then. */
-  serviceFixed: boolean
-  enabled: boolean
-  account: { name: string; email: string } | null
-  /** A sign-in waiting for the person to approve `userCode` at `url`. */
-  signIn: { userCode: string; url: string; expiresAt: number } | null
-  state: 'off' | 'connecting' | 'online' | 'offline' | 'unauthorized'
-  error: string | null
-  /** This host's Link address, for devices to save as a route. */
-  address: string
-  streams: number
-  /** The account's plan and this month's relayed time, once the service has answered. */
-  plan: import('../link/protocol').LinkPlanStatus | null
 }
 /** What became of one pairing offer. */
 export type PairingOfferStatus =
@@ -163,7 +144,7 @@ export interface PairBackInvite {
   deviceId: string
   /** That computer's name, as it introduces itself. */
   name: string
-  /** Its addresses, tried in order; Ramu Link's comes last. */
+  /** Its addresses, tried in order. */
   urls: string[]
   code: string
   expiresAt: number
@@ -222,24 +203,4 @@ export interface AgentHostSummary {
   deviceId: string
   expiresAt: number | null
   addedAt: number
-}
-
-/** This desktop or phone's own Ramu Link account, which finds the hosts linked to it. */
-export interface LinkAccountStatus {
-  service: string | null
-  account: { name: string; email: string } | null
-  signIn: { userCode: string; url: string; expiresAt: number } | null
-  error: string | null
-}
-/** A host linked to the same account. */
-export interface LinkAccountHost {
-  hostId: string
-  name: string
-  publicKey: string
-  online: boolean
-  lastSeenAt: number | null
-  /** This device already paired it; the id of that saved host. */
-  pairedId?: string
-  /** Another account owns it and shared it with this one, so it pairs only as a viewer. */
-  sharedBy?: string
 }

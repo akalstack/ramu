@@ -89,4 +89,4 @@ The [guide](docs/README.md#guide) covers using Ramu, and [contributing](docs/REA
 
 ## License
 
-[MIT](LICENSE), except the Ramu Link service in [`apps/link`](apps/link), which is [AGPL-3.0](apps/link/LICENSE): anyone who runs a modified copy as a service must publish their changes. The licenses don't cover the Ramu name and logo; see [trademarks](TRADEMARKS.md). Third-party assets and provider trademarks retain their respective licenses; see [provider assets](apps/web/src/assets/providers/README.md) and [branding](assets/branding/README.md).
+[MIT](LICENSE). The license doesn't cover the Ramu name and logo; see [trademarks](TRADEMARKS.md). Third-party assets and provider trademarks retain their respective licenses; see [provider assets](apps/web/src/assets/providers/README.md) and [branding](assets/branding/README.md).

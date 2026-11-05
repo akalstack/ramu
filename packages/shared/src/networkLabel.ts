@@ -23,11 +23,10 @@ export function networkName(
 }
 
 /** How a device reaches a host, for a short "via …" label. Pass the label through `t()`. */
-export function routeName(url: string | null, ssh?: string): 'LAN' | 'VPN' | 'Ramu Link' | 'SSH' | 'Internet' | null {
+export function routeName(url: string | null, ssh?: string): 'LAN' | 'VPN' | 'SSH' | 'Internet' | null {
   if (ssh) return 'SSH'
   if (!url) return null
   const host = hostOfUrl(url).toLowerCase()
-  if (host.endsWith('.link.invalid')) return 'Ramu Link'
   if (MESH_ADDRESS.test(host) || host.endsWith('.ts.net')) return 'VPN'
   if (PRIVATE_ADDRESS.test(host) || host.endsWith('.local') || /^fe80:/i.test(host)) return 'LAN'
   return 'Internet'

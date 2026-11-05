@@ -24,8 +24,7 @@ import { useStore } from '../runtime/store'
 import { GlassButton, Header, Screen, useSheetKeyboardOffset, PageScrollView as ScrollView } from '../components/Screen'
 import { Card, T, Toggle, tap } from '../components/ui'
 import { animateLayout } from '../components/Motion'
-import { fill, useSay, useT } from '../i18n'
-import { LinkHosts } from '../components/LinkHosts'
+import { fill, useT } from '../i18n'
 import { reviewSelection } from '@ramu/shared/discovery/tracker'
 import { useNearbyHosts } from '../runtime/nearby'
 import type { ReviewAddressResult } from '@ramu/shared/api'
@@ -68,7 +67,6 @@ export default function Pair() {
   const [offerScanned, setOfferScanned] = useState(false)
   const [busy, setBusy] = useState(false)
   const t = useT()
-  const say = useSay()
   const live = Platform.OS !== 'web'
   // Nearby hosts come first. Opening this screen never starts the camera: it opens only for the QR method.
   const [method, setMethod] = useState<PairMethod>(() => initialMethod(live, Boolean(params.url)))
@@ -132,7 +130,6 @@ export default function Pair() {
   const methods = availableMethods(live)
   const label: Record<PairMethod, string> = {
     nearby: t.pairNearby,
-    link: say('Ramu Link'),
     qr: t.pairScanQr,
     manual: t.pairManual,
   }
@@ -213,7 +210,6 @@ export default function Pair() {
             </View>
           ) : null}
 
-          {method === 'link' ? <LinkHosts /> : null}
           {method === 'nearby' ? (
             <View style={{ width: '100%', gap: space.m }}>
               <T size={font.control} tone="muted" style={{ lineHeight: 19 }}>

@@ -41,14 +41,11 @@ import { workspaceVisible } from '../workspace/workspaceLifetime'
 import { onPairLink, takePairLink } from '../pairLink'
 import { NearbyHosts } from './NearbyHosts'
 import { AgentHosts } from './AgentHosts'
-import { LinkSettings } from './ReachThisHost'
-import { AccountHosts } from './AccountHosts'
 import { HostUpdateLine, UpdateAllHosts } from './HostUpdates'
 import { DeviceIcon } from '@/components/device-icon'
 import { DIALOG_SCROLLS, DialogScrollBody } from '@/components/dialog-scroll-body'
 import { osLine } from '@ramu/shared/deviceOs'
 import { isSshTarget } from '@ramu/shared/hostTarget'
-import { RamuGlyph } from '../Brand'
 import { useStagedValue } from './stagedChanges'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
@@ -128,7 +125,7 @@ export function RemoteAccessSettings() {
         help={
           here?.local === false
             ? t('You are looking at {0}. Who can connect to a host is set on that host.', { 0: here.name })
-            : t('Phones and your other computers reach it through Ramu Link or your network, after you pair them.')
+            : t('Phones and your other computers reach it over your network or VPN, after you pair them.')
         }
       >
         {here?.local !== false && <ThisComputer />}
@@ -218,7 +215,6 @@ function ThisComputer() {
   return (
     <>
       <AgentHosts />
-      <LinkSettings status={status} setStatus={setStatus} />
       <SettingsGroupTitle className="mt-5">{t('Local network or VPN')}</SettingsGroupTitle>
       <SettingsRow className="settings-toggle">
         <SettingsLabel
@@ -320,7 +316,7 @@ function ThisComputer() {
                 ? t(
                     'Creates a one-time code for a phone or another host. With Discoverable on, nearby devices can also ask, and you allow them here.',
                   )
-                : t('Turn on a way in above first: other devices or Ramu Link.')
+                : t('Turn on Allow other devices above first.')
             }
           />
           <Button
@@ -1008,7 +1004,7 @@ function InviteBackDialog({ computer, from, onClose }: { computer: Computer; fro
         </DialogHeader>
         {reachable === false && !sent && (
           <p role="status" className="m-0 text-caption text-muted-foreground">
-            {t('Turn on Ramu Link or Local network or VPN below first, so {0} can reach this computer.', {
+            {t('Turn on Local network or VPN below first, so {0} can reach this computer.', {
               0: computer.name,
             })}
           </p>
@@ -1033,15 +1029,15 @@ function InviteBackDialog({ computer, from, onClose }: { computer: Computer; fro
   )
 }
 
-type AddMode = 'account' | 'nearby' | 'address'
+type AddMode = 'nearby' | 'address'
 
 /**
- * Adding a host: Ramu Link hosts on the same account, hosts nearby, or one field that takes a pairing link, an address or
- * an SSH host and asks only for what that needs.
+ * Adding a host: hosts nearby, or one field that takes a pairing link, an address or an SSH host and asks only for what
+ * that needs.
  */
 function AddHostDialog({ link, repair, onClose }: { link?: string; repair?: Computer; onClose: () => void }) {
   useLanguage()
-  const [mode, setMode] = useState<AddMode>(link || repair ? 'address' : 'account')
+  const [mode, setMode] = useState<AddMode>(link || repair ? 'address' : 'nearby')
   const [busy, setBusy] = useState(false)
   const [text, setText] = useState(link ?? repair?.url ?? '')
   const [address, setAddress] = useState(repair?.url ?? ''),
@@ -1111,7 +1107,6 @@ function AddHostDialog({ link, repair, onClose }: { link?: string; repair?: Comp
       void run(() => invoke('computers.pair', address, code.trim(), name.trim() || undefined))
   }
   const tabs: { mode: AddMode; label: string; icon: ReactNode }[] = [
-    { mode: 'account', label: t('Ramu Link'), icon: <RamuGlyph size={14} /> },
     { mode: 'nearby', label: t('Nearby'), icon: <Radar size={14} /> },
     { mode: 'address', label: t('Link, address or SSH'), icon: <Link2 size={14} /> },
   ]
@@ -1175,12 +1170,6 @@ function AddHostDialog({ link, repair, onClose }: { link?: string; repair?: Comp
                 {t('Cancel')}
               </Button>
             </div>
-          ) : mode === 'account' ? (
-            <AccountHosts
-              onConnect={(host) =>
-                ask(host.name, () => Promise.resolve(invoke('linkAccount.connect', host.hostId, host.name)))
-              }
-            />
           ) : mode === 'nearby' ? (
             <NearbyHosts
               onFallback={() => setMode('address')}

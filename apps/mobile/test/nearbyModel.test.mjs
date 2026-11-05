@@ -20,9 +20,9 @@ const native = (patch = {}) => ({
   ...patch,
 })
 
-test('pairing offers nearby hosts, then Ramu Link, then the QR code, then manual entry', () => {
-  assert.deepEqual([...PAIR_METHODS], ['nearby', 'link', 'qr', 'manual'])
-  assert.deepEqual(availableMethods(true), ['nearby', 'link', 'qr', 'manual'])
+test('pairing offers nearby hosts, then the QR code, then manual entry', () => {
+  assert.deepEqual([...PAIR_METHODS], ['nearby', 'qr', 'manual'])
+  assert.deepEqual(availableMethods(true), ['nearby', 'qr', 'manual'])
   assert.deepEqual(availableMethods(false), ['manual'])
 })
 

@@ -81,8 +81,6 @@ import {
 } from '@ramu/shared/devicePermissions'
 import { PairingRequests } from './remote/pairingRequests'
 import { createPairingNotice } from './remote/pairingNotice'
-import { LinkService } from './remote/link/service'
-import { HostCredentialStore } from './credentials/store'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
   candidateUrls,
@@ -135,12 +133,9 @@ const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
 const pairingRequests = new PairingRequests({
   devices,
   hostId,
-  // Nearby devices may ask while this host lets itself be found, or while Pair a device is open. Devices signed in to this
-  // host's own Ramu Link account may always ask; accounts it was shared with arrive as another peer and ask like anyone.
-  accepting: (peer) =>
-    network.discoverable || devices.offers().length > 0 || (peer.startsWith('link:') && link.active()),
+  // Nearby devices may ask while this host lets itself be found, or while Pair a device is open.
+  accepting: () => network.discoverable || devices.offers().length > 0,
   changed: () => pairingNotice(pairingRequests.list()),
-  linkKey: () => link.hostKey(),
 })
 // Only the desktop apps on this machine answer permission requests, like pairing; paired devices never see them.
 /** What this host runs on; it does not change while the service runs. */
@@ -168,9 +163,7 @@ const remoteAccess = new RemoteAccess({
           ),
         )
       : []),
-    ...extraRoutes(),
   ],
-  linkKey: () => link.hostKey(),
   browserOrigins: config.browserOrigins,
 })
 const presence = new HostPresence(join(userData, 'presence.json'), (id) => devices.presenceKey(id))
@@ -457,18 +450,12 @@ const schedules = new ScheduleService(
   () => void mobilePush.deliverScheduleFailure().catch(() => {}),
 )
 const webhooks = new WebhookReceiver(schedules)
-// Where a sender can reach this host: every address the listener serves, then Ramu Link's public address.
-schedules.webhookBases = () => {
-  const linkBase = link.hookBase()
-  return [
-    // Ramu Link first: it reaches the host from anywhere, and holds requests while the host sleeps.
-    ...(linkBase ? [{ url: linkBase, via: 'Ramu Link' }] : []),
-    ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []).map((candidate) => ({
-      url: candidate.url,
-      via: candidate.interface,
-    })),
-  ]
-}
+// Where a sender can reach this host: every address the listener serves.
+schedules.webhookBases = () =>
+  (network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []).map((candidate) => ({
+    url: candidate.url,
+    via: candidate.interface,
+  }))
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
 schedules.recover()
 // eslint-disable-next-line prefer-const -- declared earlier because closures built before this point reference it
@@ -739,8 +726,6 @@ async function stop(intentional = false, exitCode = 0) {
   presence.close()
   clearTimeout(remoteRetry)
   mcpHttp.close()
-  link.stop()
-  linkSockets.close()
   localSockets.close()
   runtime.close()
   sockets?.close()
@@ -1554,42 +1539,9 @@ const localSocketHost: SocketHost = {
   },
 }
 const localSockets = serveSockets(runtime, localSocketHost)
-// Ramu Link streams reach the same handlers as the network listener: the same authentication, limits and socket. They
-// arrive in memory, so this server never listens.
-const linkServer = createServer(handle())
-const linkSockets = serveSockets(linkServer, socketHost)
-const linkCredentials = new HostCredentialStore()
-// Only apps on this computer manage Link, so only they hear that it changed.
-const networkChanged = () => {
-  const message = `data: ${JSON.stringify({ channel: 'network:changed', payload: {} })}\n\n`
-  for (const client of hostClients) if (!client.destroyed) writeEvent(client, message)
-}
-const link = new LinkService({
-  statePath: join(userData, 'link.json'),
-  hostId,
-  hostName: discoveryName,
-  server: linkServer,
-  changed: networkChanged,
-  fixedService: config.linkService,
-  credentials: linkCredentials,
-  // Webhooks through Link arrive sealed to this host and are opened by the relay client; held ones carry their age.
-  hook: (hook) => {
-    const now = Date.now()
-    webhooks.receive(hook.token, hook.headers, Buffer.from(hook.body, 'base64'), {
-      receivedAt: hook.receivedAt,
-      heldMs: Math.max(0, now - hook.receivedAt),
-      now,
-    })
-  },
-})
-void link.start()
 /** Any way a device can reach this host right now, beyond this computer. */
 function reachable() {
-  return network.enabled || link.active()
-}
-/** The Link address, after the direct ones, for pairing offers and the identity answer. */
-function extraRoutes(): string[] {
-  return link.status().enabled ? [link.address()] : []
+  return network.enabled
 }
 const pairingNotice = createPairingNotice({
   // Only the desktop apps on this machine answer pairing requests; paired devices never see them.
@@ -1654,7 +1606,6 @@ function networkStatus() {
     requests: pairingRequests.list(),
     defaultPermissions: devices.defaultPermissions(),
     permissionRequests: permissionRequests.list(),
-    link: link.status(),
     reachable: reachable(),
   }
 }
@@ -1732,7 +1683,7 @@ async function networkMethod(method: string, args: unknown[]) {
     return networkStatus()
   }
   if (method === 'network.pair') {
-    if (!reachable()) throw new Error('Turn on network access or Ramu Link first')
+    if (!reachable()) throw new Error('Turn on network access first')
     const role = args[0] ?? 'owner'
     if (role !== 'owner' && role !== 'viewer') throw new Error('Invalid device role')
     const owner = typeof args[1] === 'string' && args[1].length > 0 && args[1].length <= 80 ? args[1] : undefined
@@ -1745,7 +1696,7 @@ async function networkMethod(method: string, args: unknown[]) {
       offerId,
       code,
       expiresAt,
-      urls: [...direct, ...(link.active() ? [{ url: link.address(), interface: 'Ramu Link' }] : [])],
+      urls: direct,
     }
   }
   if (method === 'network.cancelOffer') {
@@ -1781,32 +1732,6 @@ async function networkMethod(method: string, args: unknown[]) {
     const days = args[0]
     if (days !== null && !validLifetime(days)) throw new Error('Choose 1 to 3650 days, or never')
     devices.setLifetime(days)
-    return networkStatus()
-  }
-  if (method === 'network.linkSignIn') return { ...networkStatus(), link: await link.signIn() }
-  if (method === 'network.linkCancelSignIn') {
-    link.cancelSignIn()
-    return networkStatus()
-  }
-  if (method === 'network.linkSignOut') {
-    await link.signOut()
-    return networkStatus()
-  }
-  if (method === 'network.linkSetEnabled') {
-    await link.setEnabled(z.boolean().parse(args[0]))
-    return networkStatus()
-  }
-  if (method === 'network.linkSetService') {
-    link.setService(z.string().max(500).nullable().parse(args[0]))
-    return networkStatus()
-  }
-  if (method === 'network.linkRefresh') return { ...networkStatus(), link: await link.refreshPlan() }
-  if (method === 'network.linkCheckout') return link.checkout(z.enum(['year', 'month']).parse(args[0]))
-  if (method === 'network.linkShares') return link.shares()
-  if (method === 'network.linkShare') return link.share(z.string().trim().min(3).max(320).parse(args[0]))
-  if (method === 'network.linkUnshare') return link.unshare(z.string().min(1).max(100).parse(args[0]))
-  if (method === 'network.linkDeleteAccount') {
-    await link.deleteAccount()
     return networkStatus()
   }
   if (method === 'network.pairBackInvites') return pairBackInvites.list()

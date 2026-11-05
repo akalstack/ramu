@@ -34,8 +34,6 @@ export interface WebhookTrigger {
   /** A template naming one subject (`{{body.pull_request.number}}`); requests for it within the window join one run. */
   coalesceKey: string | null
   coalesceSeconds: number
-  /** A request held this long (the host was asleep) is recorded but starts nothing. Null runs every held request. */
-  maxAgeMinutes: number | null
   /** Paths copied into the run's prompt; empty sends the whole body, clipped. */
   fields: string[]
 }

@@ -13,7 +13,6 @@ import {
   type PairWaitAnswer,
 } from '@ramu/shared/pairRequest'
 import type { DeviceInfo, DeviceRole, DeviceStore } from './devices'
-import { isSharedLinkPeer } from './sharedPeer'
 
 /** A few at once, so one noisy neighbour cannot block a real request; one per network address. */
 const MAX_REQUESTS = 4
@@ -45,8 +44,6 @@ export interface PairingRequestView {
   address: string
   code: string
   expiresAt: number
-  /** Asked through a host shared with another Ramu Link account; it is paired as a viewer whatever is chosen. */
-  viewerOnly?: true
 }
 
 export class PairingError extends Error {
@@ -70,8 +67,6 @@ export class PairingRequests {
       changed?: () => void
       now?: () => number
       random?: (bytes: number) => Uint8Array
-      /** This host's Link identity key, once it has one; vouched for inside the approved answer. */
-      linkKey?: () => string | null
     },
   ) {}
 
@@ -162,7 +157,6 @@ export class PairingRequests {
               address: request.peer,
               code: request.code!,
               expiresAt: request.expiresAt,
-              ...(isSharedLinkPeer(request.peer) ? { viewerOnly: true as const } : {}),
             },
           ]
         : [],
@@ -178,17 +172,14 @@ export class PairingRequests {
     const request = this.requests.get(id)
     if (!request || request.state !== 'revealed') throw new Error('That request expired. Ask the device to try again.')
     const now = this.now()
-    const role = isSharedLinkPeer(request.peer) ? 'viewer' : access
-    const { offerId } = this.options.devices.createCode(now, role, `request:${id}`)
+    const { offerId } = this.options.devices.createCode(now, access, `request:${id}`)
     const device = this.options.devices.redeemOffer(offerId, request.name || undefined, request.token!, now)
     if (!device) throw new Error('That request expired. Ask the device to try again.')
-    const linkKey = this.options.linkKey?.()
     const fields = {
       deviceId: device.id,
       role: device.role ?? ('owner' as const),
       hostId: this.options.hostId,
       expiresAt: device.expiresAt,
-      ...(linkKey ? { linkKey } : {}),
     }
     request.state = 'approved'
     request.result = { state: 'approved', ...fields, mac: pairResultMac(request.macKey!, fields) }

@@ -74,7 +74,6 @@ const webhookRuleSchema = z.object({
   replayKey: z.string().max(300).nullable(),
   coalesceKey: z.string().max(300).nullable(),
   coalesceSeconds: z.number().int().min(10).max(3600).default(120),
-  maxAgeMinutes: z.number().int().min(1).max(1440).nullable(),
   fields: z.array(webhookPath).max(40),
 })
 export const ruleSchema = z.discriminatedUnion('kind', [
@@ -443,20 +442,14 @@ export class ScheduleService {
    * Decides what one request does: filters, repeats, age and a burst for the same subject are checked in that order,
    * and every request is logged with its outcome. `signed` is false when the signature did not check out.
    */
-  deliver(
-    schedule: Schedule,
-    request: WebhookRequest,
-    options: { signed: boolean; receivedAt?: number; heldMs?: number; now?: number },
-  ): WebhookDelivery {
+  deliver(schedule: Schedule, request: WebhookRequest, options: { signed: boolean; now?: number }): WebhookDelivery {
     const rule = schedule.rule as WebhookTrigger
     const now = options.now ?? Date.now()
-    const receivedAt = options.receivedAt ?? now
     const summary = clipText(describeRequest(rule.source, request), 200)
     const base = {
       id: randomUUID(),
       scheduleId: schedule.id,
-      receivedAt,
-      heldMs: options.heldMs ?? 0,
+      receivedAt: now,
       summary,
       runId: null,
       excerpt: excerpt(request, rule.fields),
@@ -480,11 +473,6 @@ export class ScheduleService {
       )
     )
       return skip('duplicate', 'The sender sent this delivery again; it already arrived.')
-    if (rule.maxAgeMinutes !== null && now - receivedAt > rule.maxAgeMinutes * 60_000)
-      return skip(
-        'too-old',
-        `It waited ${Math.round((now - receivedAt) / 60_000)} minutes while this host was offline.`,
-      )
     if (schedule.state !== 'active') return skip('paused', 'The schedule is paused.')
     return this.queueFromDelivery(schedule, request, base, 'started', now)
   }
@@ -558,7 +546,7 @@ export class ScheduleService {
     return this.queueFromDelivery(
       schedule,
       { headers: {}, body: {} },
-      { ...original, id: randomUUID(), receivedAt: now, heldMs: 0, runId: null, replayKey: null },
+      { ...original, id: randomUUID(), receivedAt: now, runId: null, replayKey: null },
       'replayed',
       now,
       original.excerpt,
@@ -582,7 +570,6 @@ export class ScheduleService {
         id: randomUUID(),
         scheduleId: id,
         receivedAt: now,
-        heldMs: 0,
         summary: `Test · ${describeRequest(rule.source, request)}`,
         runId: null,
         excerpt: excerpt(request, rule.fields),

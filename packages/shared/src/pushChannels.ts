@@ -34,7 +34,6 @@ export const HOST_PUSH_CHANNELS = [
   'pairing:requests',
   'permission:requests',
   'pairBack:invites',
-  'network:changed',
   'background:connection',
 ] as const satisfies readonly (keyof PushEvents)[]
 export type HostPushChannel = (typeof HOST_PUSH_CHANNELS)[number]
@@ -62,7 +61,6 @@ export const WINDOW_PUSH_CHANNELS = [
   'computers:navigate',
   'computers:activity',
   'computers:pairCode',
-  'linkAccount:changed',
   'device-state:changed',
   'live:closed',
   'live:open',

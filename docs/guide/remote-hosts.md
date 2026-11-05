@@ -6,7 +6,7 @@ A **host** is a computer that runs Ramu's workspace server: your agents, termina
 
 **Settings → Remote access** has two parts.
 
-**Hosts you use** lists every host this computer works on. **Add a host** offers hosts on your Ramu Link account first, then hosts nearby, then one field that takes a pairing link, an address and code, or an SSH host (`user@host` or a name from `~/.ssh/config`). Each host shows its status and route, **Open**, and under ⋯ its **Connection settings…**, **Pause connection** and **Forget…**. A paused host shows **Resume**. A host's row also has **Agents here can start threads on** that host, and names any permission this computer lacks there with one **Request** for all of it; **Connection settings…** lists each permission. On the phone, Settings → Remote access shows the same for the selected host.
+**Hosts you use** lists every host this computer works on. **Add a host** offers hosts nearby first, then one field that takes a pairing link, an address and code, or an SSH host (`user@host` or a name from `~/.ssh/config`). Each host shows its status and route, **Open**, and under ⋯ its **Connection settings…**, **Pause connection** and **Forget…**. A paused host shows **Resume**. A host's row also has **Agents here can start threads on** that host, and names any permission this computer lacks there with one **Request** for all of it; **Connection settings…** lists each permission. On the phone, Settings → Remote access shows the same for the selected host.
 
 To work both ways, choose **Let {host} connect here…** under a connected host's ⋯. Ramu makes a code on this computer and asks on that host; once its owner taps **Connect**, each computer can open the other, and this one lists it under **Devices that can use this host**. Nobody types a code, and nothing connects until that owner accepts.
 
@@ -14,14 +14,13 @@ To have agents use another computer's screen, add that computer as a host and ru
 
 **Let other devices use this host** decides who can reach this computer:
 
-- **Ramu Link** reaches the host from anywhere without a VPN or open ports. Sign in with Google or GitHub; devices signed in to the same account list the host under **Add a host → Ramu Link** (on a phone, the pairing screen's Ramu Link tab) and pair after both screens show the same six-digit number. Streams are end-to-end encrypted, so the relay cannot read them. See [Ramu Link](#ramu-link).
 - **Local network or VPN** opens the host on a network you choose (all networks, or one such as your VPN). The network and **Discoverable** choices appear once it is on; the port is under **Advanced**.
 - **Pair a device** shows a one-time code and this host's addresses. With **Discoverable** on, a nearby device can also ask without a code: Ramu asks you to allow it (in the app, or as a notification when it is in the background or closed). Allow it only when both screens show the same six-digit number.
 - **Device permissions** decide what each device may use: computer use, the browser, terminals, settings changes and agents. Grant this time, for an hour, a day or always. Each device shows what it runs on (an iPhone, an Android tablet, a Mac, an Ubuntu server…) once it has connected, and **Keep paired** sets how long that one device stays paired without use, or leaves it like the others. When a device asks for a permission it lacks, the request opens in Ramu on this host (or as a system notification when Ramu is in the background) with the same choices; closing it leaves the request waiting here until it lapses.
 
 With a second host, a switcher appears at the top of the sidebar. Each host keeps its own threads, browser and settings, and notifications open the right host. **Apply settings to** in Settings edits one host or all of them. Beside each setting, the layers icon (shown on hover) lists its value on every selected host and whether that is the default. A setting whose hosts disagree says **Mixed** and offers to use one host's value everywhere; one a host does not know says **Not on** that host, because it runs an older Ramu, and offers **Restart service** when that host is this computer's background service.
 
-A device pairs once and keeps one token, role and set of permissions on every route. It learns the host's other addresses (LAN, VPN, Link), tries direct ones first, falls back to Link, and moves back to a direct route as soon as one answers.
+A device pairs once and keeps one token, role and set of permissions on every route. It learns the host's other addresses (LAN, VPN) and tries them when the saved one stops answering; each must prove it is the same host first.
 
 ## Headless server
 
@@ -35,8 +34,7 @@ ramu pair
 | --- | --- |
 | `ramu [serve]` | Run the server in the foreground |
 | `ramu status`, `stop`, `restart` | Check, stop or restart it |
-| `ramu up` | Choose how devices reach this host (Ramu Link, private network), keep it running as a service and pair a device; `--link`, `--private-network`, their `--no-` forms and `--yes` make it scriptable |
-| `ramu link login\|logout\|on\|off\|status`, `ramu link service <url>` | Sign this host in to Ramu Link (prints a code and a link to approve on any device) or manage it |
+| `ramu up` | Let devices on your private network reach this host, keep it running as a service and pair a device; `--private-network`, `--no-private-network` and `--yes` make it scriptable |
 | `ramu pair [--role viewer]` | Print a one-time pairing code and this host's addresses |
 | `ramu pair --approve <request>`, `--deny <request>` | Answer a nearby device's request; the server prints each one with its number |
 | `ramu devices` | List, revoke and grant permissions to paired devices |
@@ -54,25 +52,8 @@ A bare port (`--listen 7788`) listens on this computer only. Any other address n
 | LAN | The same, if you trust everyone on it |
 | SSH tunnel | Keep the loopback listener and `ssh -L 7788:127.0.0.1:7788 host` |
 | Public name | Put HTTPS in front, or give Ramu a certificate |
-| Anywhere, no setup | `ramu link login` (Ramu Link) |
 
 A full-access device can do anything the desktop can, including run terminals and agents with your provider accounts. Treat each one like an SSH key.
-
-### Ramu Link
-
-Ramu Link is a small service on Cloudflare Workers (`apps/link`): Better Auth for Google and GitHub sign-in, a list of the hosts each account links, and a relay that joins a device's stream to its host. No hosted deployment exists yet, so point Ramu at your own: deploy it with [apps/link/README.md](../../apps/link/README.md), then set it under Settings → Remote access → Ramu Link → **Service**, or `RAMU_LINK_URL` on a headless host. Once a hosted service exists, it is the default and another address goes under **Use my own service…**. Every client signs in with a short code approved in a browser, so it works over SSH and on a phone without a callback port.
-
-Under Ramu Link, Settings shows the account's **Plan**: hosts used and, on Free, relayed hours used this month. The phone's Ramu Link tab shows the same.
-
-- **Free** links 3 hosts and relays 60 hours a month. Only time the relay spends carrying a stream counts; an idle host or device and direct routes never do. Past 60 hours, Ramu Link takes no new connections until the 1st (UTC). Open connections continue, and devices keep their direct routes.
-- **Plus** links 20 hosts with unlimited relayed hours, and can **Share this host**. **Get Plus yearly** or **Monthly** opens Paddle's checkout in the browser, priced for your country (rupiah in Indonesia). Settings and the phone pick up Plus once Paddle confirms it. A cancelled subscription keeps Plus until its period ends. When Plus ends, hosts beyond 3 stay listed but take no new relayed connections until you unlink some or renew; nothing is deleted.
-- **Your own service** sells nothing: every account gets every feature, with only the host limit you set.
-
-**Share this host** lets another Ramu Link account, entered by email, find this host in its own Ramu Link list. A shared account still has to pair, and only as a viewer: it can ask while **Pair a device** is open, or use a view-only code. The approval dialog says it can only view. Removing a share ends that account's open streams. Relayed time from shared accounts counts toward the owner's plan.
-
-Ramu Link also gives every host a public address for [webhook schedules](background-work.md#when-a-request-arrives). The service seals each request to the host's identity key as it arrives, so it never stores one readably. It passes the request to the host at once, or holds it for up to a day while the host is offline (Plus or your own service). On Free, an offline host's sender gets a 503 and retries later.
-
-**Delete account…** removes the Ramu Link account, every host it links and its shares, after cancelling a Plus subscription. If the subscription cannot be cancelled, the account is kept.
 
 ### As a service
 

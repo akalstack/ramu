@@ -47,7 +47,6 @@ const trigger = (overrides: Partial<WebhookTrigger> = {}): WebhookTrigger => ({
   replayKey: SOURCE_DEFAULTS.github.replayKey,
   coalesceKey: ciPreset.coalesceKey,
   coalesceSeconds: 120,
-  maxAgeMinutes: 60,
   fields: ciPreset.fields,
   ...overrides,
 })
@@ -78,11 +77,7 @@ const failure = (sha = 'abc', delivery = `d-${Math.random()}`) => ({
   ),
 })
 /** Signs and sends a request the way GitHub does, to the schedule's own address. */
-function send(
-  scheduleId: string,
-  request = failure(),
-  options: { sign?: boolean; receivedAt?: number; now?: number } = {},
-) {
+function send(scheduleId: string, request = failure(), options: { sign?: boolean; now?: number } = {}) {
   const { path, secret } = service.webhook(scheduleId)
   const headers: Record<string, string> = { ...request.headers }
   if (options.sign !== false)
@@ -159,12 +154,8 @@ describe('receiving a request', () => {
     expect(service.runs(schedule.id)).toHaveLength(2)
   })
 
-  it('records but does not run a request held longer than the schedule allows, or one for a paused schedule', () => {
+  it('records but does not run a request for a paused schedule', () => {
     const schedule = service.save(input())
-    const now = Date.now()
-    expect(send(schedule.id, failure(), { receivedAt: now - 2 * 60 * 60_000, now })).toMatchObject({
-      delivery: { outcome: 'too-old' },
-    })
     service.pause(schedule.id, true)
     expect(send(schedule.id)).toMatchObject({ delivery: { outcome: 'paused' } })
     expect(service.runs(schedule.id).filter((run) => run.status === 'queued')).toHaveLength(0)
@@ -243,14 +234,14 @@ describe('setting up a GitHub webhook for the person', () => {
     project()
     service.webhookBases = () => [{ url: 'http://192.168.1.4:7788', via: 'en0' }]
     const schedule = service.save({ ...input(), projectId: 'p1' })
-    await expect(new WebhookSetup(service, ws, github).connectGithub(schedule.id, 'r1')).rejects.toThrow('Ramu Link')
+    await expect(new WebhookSetup(service, ws, github).connectGithub(schedule.id, 'r1')).rejects.toThrow('HTTPS')
   })
 
-  it('creates the webhook with the Link address, secret and the events its filters name, and keeps it current', async () => {
+  it('creates the webhook with the HTTPS address, secret and the events its filters name, and keeps it current', async () => {
     project()
     service.webhookBases = () => [
-      { url: 'https://link.example.com/h/abc', via: 'Ramu Link' },
       { url: 'http://192.168.1.4:7788', via: 'en0' },
+      { url: 'https://studio.example.ts.net', via: 'tailscale0' },
     ]
     const schedule = service.save({ ...input(), projectId: 'p1' })
     const setup = new WebhookSetup(service, ws, github)
@@ -260,7 +251,7 @@ describe('setting up a GitHub webhook for the person', () => {
     expect(calls[0]).toEqual({
       kind: 'create',
       root: '/code/ramu',
-      config: { url: `https://link.example.com/h/abc${path}`, secret, events: ['workflow_run'] },
+      config: { url: `https://studio.example.ts.net${path}`, secret, events: ['workflow_run'] },
     })
     service.rotateWebhook(schedule.id)
     await setup.refresh(schedule.id)

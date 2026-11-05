@@ -29,8 +29,8 @@ const STEPS = [
     lead: 'These features help agents but spend model tokens. Change them later in Settings.',
   },
   {
-    title: 'Reach Ramu from anywhere',
-    lead: 'Use your phone or another computer with this host. Pick any way; you can add the others later.',
+    title: 'Reach Ramu from your other devices',
+    lead: 'Use your phone or another computer with this host over your network or VPN. You can change this later.',
   },
   { title: 'Choose a project', lead: 'Pick the repository you want to work on. Your files stay where they are.' },
 ] as const

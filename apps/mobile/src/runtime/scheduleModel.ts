@@ -216,7 +216,6 @@ export function ruleOfKind(kind: ScheduleRule['kind'], previous: ScheduleRule, n
         replayKey: source.replayKey,
         coalesceKey: preset.coalesceKey,
         coalesceSeconds: 120,
-        maxAgeMinutes: 60,
         fields: preset.fields,
       }
     }

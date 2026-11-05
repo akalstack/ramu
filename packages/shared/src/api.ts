@@ -613,24 +613,6 @@ export interface RamuMethods {
   /** Pairs this host with another as a host pairing, using a code from `ramu pair` there. */
   'network.addAgentHost'(address: string, code: string, name?: string): import('./types').AgentHostSummary[]
   'network.forgetAgentHost'(id: string): import('./types').AgentHostSummary[]
-  /** Starts signing this host in to Ramu Link; the status carries the code to approve. Host-only. */
-  'network.linkSignIn'(): NetworkStatus
-  'network.linkCancelSignIn'(): NetworkStatus
-  /** Unlinks this host from the account and forgets its Link credentials. */
-  'network.linkSignOut'(): NetworkStatus
-  'network.linkSetEnabled'(enabled: boolean): NetworkStatus
-  /** The Ramu Link service URL, or null for the default. Only while signed out. */
-  'network.linkSetService'(url: string | null): NetworkStatus
-  /** Asks the service again for the account's plan and relayed time, after a checkout or when Settings opens. */
-  'network.linkRefresh'(): NetworkStatus
-  /** A Plus checkout to open in the browser. */
-  'network.linkCheckout'(interval: import('./link/protocol').LinkBillingInterval): { url: string }
-  /** Accounts this host is shared with (a Plus feature); they can reach it through Ramu Link and pair as viewers. */
-  'network.linkShares'(): import('./link/account').LinkShare[]
-  'network.linkShare'(email: string): import('./link/account').LinkShare[]
-  'network.linkUnshare'(userId: string): import('./link/account').LinkShare[]
-  /** Deletes the Ramu Link account (cancelling a Plus subscription first) and signs this host out. */
-  'network.linkDeleteAccount'(): NetworkStatus
   /** Computers this app is connected to, all at once. Handled by the desktop app itself. */
   'computers.settings.invoke'(id: string, method: string, args: unknown[]): unknown
   'computers.settings.get'(id: string): SettingsSnapshot
@@ -676,16 +658,6 @@ export interface RamuMethods {
   'computers.discovery.stop'(): NearbyHostsState
   /** Adds a computer over SSH: `target` is user@host or an alias from ~/.ssh/config. */
   'computers.pairSsh'(target: string, name?: string): Computers
-  /** This desktop's Ramu Link account. Handled by the desktop app itself. */
-  'linkAccount.status'(): import('./types').LinkAccountStatus
-  'linkAccount.signIn'(): import('./types').LinkAccountStatus
-  'linkAccount.cancelSignIn'(): import('./types').LinkAccountStatus
-  'linkAccount.signOut'(): import('./types').LinkAccountStatus
-  'linkAccount.setService'(url: string | null): import('./types').LinkAccountStatus
-  /** Hosts linked to the same account, other than this computer. */
-  'linkAccount.hosts'(): import('./types').LinkAccountHost[]
-  /** Pairs a host from the account through Ramu Link; the number to match arrives as `computers:pairCode`. */
-  'linkAccount.connect'(hostId: string, name?: string): Computers
   'computers.forget'(id: string): Computers
   'computers.retry'(id: string): Computers
   /** Moves a saved host to a new address after that address proves it is the host paired with; otherwise changes nothing. */
@@ -717,7 +689,7 @@ export interface RamuMethods {
   'schedules.setWebhookSecret'(id: string, secret: string | null): Schedule
   /** The schedule project's repositories on GitHub, to create its webhook on. */
   'schedules.githubRepos'(id: string): { repoId: string; name: string; slug: string }[]
-  /** Creates the webhook on that repository with the schedule's Ramu Link address, secret and events. */
+  /** Creates the webhook on that repository with the schedule's HTTPS address, secret and events. */
   'schedules.connectGithub'(id: string, repoId: string): Schedule
   'recaps.get'(): RecapSnapshot
   'recaps.refresh'(): RecapSnapshot
@@ -1357,10 +1329,6 @@ export type PushEvents = {
   'pairBack:invites': { invites: import('./types').PairBackInvite[] }
   /** Paired devices asking for a permission, waiting for the person here. Sent only to apps on the host itself. */
   'permission:requests': { requests: NetworkStatus['permissionRequests'] }
-  /** Link state changed; Settings reads `network.status` again. Sent only to apps on the host itself. */
-  'network:changed': Record<string, never>
-  /** This desktop's Ramu Link account changed. */
-  'linkAccount:changed': Record<string, never>
   'notify:inapp': {
     hostId?: string
     sessionId: string

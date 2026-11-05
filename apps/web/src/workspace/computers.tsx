@@ -75,7 +75,7 @@ export function activityText(computer: Pick<Computer, 'status' | 'running' | 'ne
   return parts.filter(Boolean).join(' · ')
 }
 
-/** How this device reaches a host right now, as "via LAN", "via Ramu Link" and so on; empty for this computer. */
+/** How this device reaches a host right now, as "via LAN", "via VPN" and so on; empty for this computer. */
 export function hostRoute(computer: Pick<Computer, 'local' | 'url' | 'ssh' | 'status'>): string {
   if (computer.local || computer.status !== 'connected') return ''
   const route = routeName(computer.url, computer.ssh)

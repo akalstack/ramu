@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Check, ExternalLink, FolderGit2, Layers, LogIn, SlidersHorizontal, Wifi } from 'lucide-react'
+import { Check, ExternalLink, FolderGit2, Layers, SlidersHorizontal, Wifi } from 'lucide-react'
 import { cn } from 'cn'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider, ModelPreferences, NetworkStatus, Project } from '@ramu/shared/types'
@@ -309,7 +309,7 @@ export function TokensStep({ choices, onChoices }: { choices: TokenChoices; onCh
 
 const LOOPBACK = /^(127\.|::1$|localhost$)/
 
-/** The two routes to this host from elsewhere: Ramu Link (Google or GitHub), and the local network or VPN. */
+/** The route to this host from elsewhere: the local network or a VPN. */
 export function ReachStep({ onError }: { onError(message: string): void }) {
   const [status, setStatus] = useState<NetworkStatus | null>(null)
   const [busy, setBusy] = useState(false)
@@ -321,11 +321,8 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
         () => {},
       )
     load()
-    // Sign-in finishes in the browser; follow it.
-    const timer = window.setInterval(load, 2500)
     return () => {
       live = false
-      window.clearInterval(timer)
     }
   }, [])
   const run = async (work: () => Promise<NetworkStatus>) => {
@@ -339,74 +336,17 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
       setBusy(false)
     }
   }
-  const open = (url: string) => void ramu.invoke('app.openExternal', url).catch(() => {})
   if (!status)
     return (
       <p className="m-0 text-caption text-muted-foreground" role="status">
         {t('Checking this host…')}
       </p>
     )
-  const { link } = status
   const managed = status.source === 'command-line'
   const network = status.enabled && !LOOPBACK.test(status.host)
   return (
     <div className="flex flex-col gap-3">
       <Group>
-        <Row
-          title={
-            <>
-              <LogIn size={15} className="text-muted-foreground" />
-              {t('Sign in with Google or GitHub')}
-              <Badge variant="secondary" className="font-normal">
-                {t('Recommended')}
-              </Badge>
-            </>
-          }
-          help={
-            link.account
-              ? t('Signed in as {0}. Devices on the same account find this host from anywhere.', {
-                  0: link.account.email,
-                })
-              : link.signIn
-                ? t('Confirm code {0} on the page that opened, then approve.', { 0: link.signIn.userCode })
-                : link.service
-                  ? t(
-                      'Ramu Link connects your devices through your account, end-to-end encrypted. No VPN or open ports.',
-                    )
-                  : t('Set the Ramu Link service address in Settings › Remote access first.')
-          }
-        >
-          {link.account ? (
-            <Check size={16} className="text-brand" aria-label={t('Signed in')} />
-          ) : link.signIn ? (
-            <span className="flex gap-1">
-              <Button variant="secondary" onClick={() => open(link.signIn!.url)}>
-                {t('Open page')}
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={() => void run(() => invoke('network.linkCancelSignIn'))}
-              >
-                {t('Cancel')}
-              </Button>
-            </span>
-          ) : (
-            <Button
-              variant="secondary"
-              disabled={busy || !link.service}
-              onClick={() =>
-                void run(async () => {
-                  const next = await invoke('network.linkSignIn')
-                  if (next.link.signIn) open(next.link.signIn.url)
-                  return next
-                })
-              }
-            >
-              {t('Sign in…')}
-            </Button>
-          )}
-        </Row>
         <Row
           title={
             <>

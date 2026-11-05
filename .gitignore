@@ -17,9 +17,5 @@ apps/web/_debug-*
 .playwright-cli/
 .expo/
 
-# Cloudflare Worker local state and secrets
-.wrangler/
-.dev.vars
-
 # Agent tool built-in skills (for example Antigravity run-workflow) stay out of the repo
 /skills/

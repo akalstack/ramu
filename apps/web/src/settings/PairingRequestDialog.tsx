@@ -94,21 +94,15 @@ export function PairingRequestDialog() {
             {t('Expires in {0}', { 0: countdown(request.expiresAt, now) })}
           </div>
         </div>
-        {request.viewerOnly ? (
-          <p className="muted text-muted-foreground small text-caption m-0">
-            {t('It reaches this host through a Ramu Link share, so it can only view threads and answer requests.')}
-          </p>
-        ) : (
-          <Dropdown
-            label={t('Device access')}
-            value={role}
-            options={[
-              { value: 'owner', label: t('Full access') },
-              { value: 'viewer', label: t('View threads and answer requests') },
-            ]}
-            onChange={(value) => setRole(value as 'owner' | 'viewer')}
-          />
-        )}
+        <Dropdown
+          label={t('Device access')}
+          value={role}
+          options={[
+            { value: 'owner', label: t('Full access') },
+            { value: 'viewer', label: t('View threads and answer requests') },
+          ]}
+          onChange={(value) => setRole(value as 'owner' | 'viewer')}
+        />
         {error && (
           <p className="text-bad small text-caption" role="alert">
             {error}

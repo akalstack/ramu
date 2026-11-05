@@ -15,7 +15,7 @@ import {
 const random = (bytes: number) => new Uint8Array(randomBytes(bytes))
 
 /** A host that follows the protocol and approves at once. */
-function host(options: { tamper?: boolean; hostId?: string; linkKey?: string; sentLinkKey?: string } = {}) {
+function host(options: { tamper?: boolean; hostId?: string } = {}) {
   const keys = pairKeys(random)
   let commit = ''
   let deviceKey = ''
@@ -40,7 +40,6 @@ function host(options: { tamper?: boolean; hostId?: string; linkKey?: string; se
       role: 'owner' as const,
       hostId: 'h1',
       expiresAt: null,
-      ...(options.linkKey ? { linkKey: options.linkKey } : {}),
     }
     const mac = pairResultMac(secrets().macKey, fields)
     return {
@@ -48,7 +47,6 @@ function host(options: { tamper?: boolean; hostId?: string; linkKey?: string; se
       body: {
         state: 'approved',
         ...fields,
-        ...(options.sentLinkKey ? { linkKey: options.sentLinkKey } : {}),
         hostId: options.hostId ?? 'h1',
         mac: options.tamper ? (mac[0] === '0' ? '1' : '0') + mac.slice(1) : mac,
       },
@@ -131,19 +129,4 @@ it('rejects malformed and low-order keys and treats a 404 as an older host', asy
       signal: new AbortController().signal,
     }),
   ).rejects.toBeInstanceOf(PairRequestUnsupported)
-})
-
-it('returns the host’s Link key only as the host vouched for it', async () => {
-  const linkKey = 'a'.repeat(64)
-  const pair = (options: Parameters<typeof host>[0]) =>
-    requestPairing({
-      post: host(options).post,
-      name: 'Phone',
-      random,
-      onCode() {},
-      signal: new AbortController().signal,
-    })
-  await expect(pair({ linkKey })).resolves.toMatchObject({ linkKey })
-  // A relay that swaps in its own key breaks the check the host computed over the real one.
-  await expect(pair({ linkKey, sentLinkKey: 'b'.repeat(64) })).rejects.toThrow('did not match')
 })

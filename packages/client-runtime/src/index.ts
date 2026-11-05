@@ -15,9 +15,6 @@ export { runtimeNetwork } from './network'
 export { PresenceListener, presenceKey, presenceMessage } from './presence'
 export { RuntimeSocket, type SocketFactory, type SocketState } from './socket'
 export { nodeSocketFactory } from './nodeSocket'
-export { hostFetch, useLinkTransport } from './linkTransport'
-import { hostFetch } from './linkTransport'
-import { isLinkAddress } from '@ramu/shared/link/protocol'
 export { closeHostSockets, forgetHostSocket, hostSocket, listenToHost } from './hostSocket'
 export type { HostListener } from './hostSocket'
 import { join } from 'node:path'
@@ -173,31 +170,7 @@ export async function runtimeInvokeRecoverable<M extends string>(
 }
 
 /** Trades a pairing code for this device's own token. Save the token; it is not shown again. */
-/** Pairing and renewal over Link: the same small JSON requests, carried by a sealed stream. */
-async function linkPost(url: URL, path: string, headers: Record<string, string>, body?: string) {
-  const response = await hostFetch(new URL(path, url), {
-    method: 'POST',
-    headers: { [PROTOCOL_HEADER]: String(PROTOCOL_VERSION), ...headers },
-    ...(body === undefined ? {} : { body }),
-    signal: AbortSignal.timeout(15_000),
-  })
-  return { status: response.status, body: (await response.json().catch(() => ({}))) as Record<string, unknown> }
-}
-
 export function runtimePair(serverUrl: string, code: string, name?: string, kind?: 'host'): Promise<PairResponse> {
-  const target = new URL(parseRemoteUrl(serverUrl))
-  if (isLinkAddress(target.origin))
-    return linkPost(
-      target,
-      PAIR_PATH,
-      { 'Content-Type': 'application/json' },
-      JSON.stringify({ code, name, ...(kind ? { kind } : {}) }),
-    ).then(({ status, body }) => {
-      if (status === 429) throw new Error('Too many failed attempts; try again shortly')
-      if (typeof body.error === 'string' || typeof body.token !== 'string')
-        throw new Error(typeof body.error === 'string' ? body.error : 'The server did not return a token')
-      return body as unknown as PairResponse
-    })
   return new Promise((resolve, reject) => {
     const url = new URL(parseRemoteUrl(serverUrl))
     const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
@@ -233,13 +206,6 @@ export function runtimePair(serverUrl: string, code: string, name?: string, kind
 
 /** Asks a host to swap this device's token for a fresh one. Save the new token before using it; null when the host says no. */
 export function runtimeRenew(serverUrl: string, token: string): Promise<RenewResponse | null> {
-  const target = new URL(parseRemoteUrl(serverUrl))
-  if (isLinkAddress(target.origin))
-    return linkPost(target, RENEW_PATH, { Authorization: `${AUTH_SCHEME} ${token}` }).then(({ status, body }) =>
-      status === 200 && typeof body.token === 'string' && /^[a-f0-9]{64}$/.test(body.token)
-        ? (body as unknown as RenewResponse)
-        : null,
-    )
   return new Promise((resolve, reject) => {
     const url = new URL(parseRemoteUrl(serverUrl))
     const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(

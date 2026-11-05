@@ -1,5 +1,4 @@
-// Webhook requests reaching a schedule: the host's own listener (`POST /hooks/<token>`) and Ramu Link both hand the raw
-// request here. The address token finds the schedule, the signature proves the sender, and the schedule decides the rest.
+// Webhook requests reaching a schedule: the host's own listener (`POST /hooks/<token>`) hands the raw request here. The address token finds the schedule, the signature proves the sender, and the schedule decides the rest.
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { MAX_WEBHOOK_BODY_BYTES, type WebhookRequest, type WebhookSignature } from '@ramu/shared/webhooks'
 import type { WebhookDelivery } from '@ramu/shared/types'
@@ -71,7 +70,7 @@ export class WebhookReceiver {
     token: string,
     headers: Record<string, string | string[] | undefined>,
     raw: Buffer,
-    options: { receivedAt?: number; heldMs?: number; now?: number } = {},
+    options: { now?: number } = {},
   ): WebhookAnswer {
     // An unknown address and a malformed one get the same answer, so addresses cannot be probed.
     const target = TOKEN.test(token) ? this.schedules.webhookTarget(token) : null
@@ -85,8 +84,6 @@ export class WebhookReceiver {
     const request: WebhookRequest = { headers: clean, body: parseBody(raw, clean['content-type']) }
     const delivery = this.schedules.deliver(target.schedule, request, {
       signed: signatureMatches(target.schedule.rule.signature, target.secret, clean, raw),
-      receivedAt: options.receivedAt,
-      heldMs: options.heldMs,
       now,
     })
     return { status: 202, delivery }

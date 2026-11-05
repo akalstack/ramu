@@ -52,17 +52,15 @@ export class WebhookSetup {
     return found.filter((entry) => entry !== null)
   }
 
-  /** GitHub must reach the address from the internet: Ramu Link, or an HTTPS address in front of this host. */
+  /** GitHub must reach the address from the internet: an HTTPS address in front of this host. */
   private config(id: string): RepoHookConfig {
     const schedule = this.schedules.get(id)
     if (schedule.rule.kind !== 'webhook') throw new Error('This schedule does not start from webhooks')
     const { urls, secret } = this.schedules.webhook(id)
-    const url =
-      urls.find((entry) => entry.via === 'Ramu Link')?.url ??
-      urls.find((entry) => entry.url.startsWith('https://'))?.url
+    const url = urls.find((entry) => entry.url.startsWith('https://'))?.url
     if (!url)
       throw new Error(
-        'GitHub cannot reach this host yet. Turn on Ramu Link in Settings → Remote access, then try again.',
+        'GitHub cannot reach this host yet. Serve it over HTTPS at an address the internet can reach, then try again.',
       )
     if (!secret) throw new Error('The schedule has no secret to sign requests with.')
     return { url, secret, events: githubEventsFor(schedule.rule as WebhookTrigger) }
