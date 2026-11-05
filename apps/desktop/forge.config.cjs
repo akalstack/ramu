@@ -4,6 +4,16 @@ const { join } = require('node:path')
 // Packaging runs from a staged copy of apps/desktop (see scripts/release/desktop-package.mjs); branding and output stay at the repository root.
 const repoRoot = process.env.RAMU_REPO_ROOT || join(__dirname, '..', '..')
 
+// Shared by the deb, rpm and AppImage makers. The npm name (@ramu/desktop) is not a package or executable name; the binary is packagerConfig.executableName.
+const linuxPackage = {
+  name: 'ramu',
+  productName: 'Ramu',
+  bin: 'Ramu',
+  homepage: 'https://github.com/akalstack/ramu',
+  icon: join(repoRoot, 'assets', 'icon.png'),
+  categories: ['Development'],
+}
+
 module.exports = {
   outDir: join(repoRoot, 'dist'),
   packagerConfig: {
@@ -71,19 +81,10 @@ module.exports = {
     {
       name: '@electron-forge/maker-deb',
       platforms: ['linux'],
-      // The npm name (@ramu/desktop) is not a package or executable name; the binary is packagerConfig.executableName.
-      config: {
-        options: {
-          name: 'ramu',
-          productName: 'Ramu',
-          bin: 'Ramu',
-          maintainer: 'Ramu contributors',
-          homepage: 'https://github.com/akalstack/ramu',
-          icon: join(repoRoot, 'assets', 'icon.png'),
-          categories: ['Development'],
-        },
-      },
+      config: { options: { ...linuxPackage, maintainer: 'Ramu contributors' } },
     },
+    { name: '@electron-forge/maker-rpm', platforms: ['linux'], config: { options: linuxPackage } },
+    { name: '@reforged/maker-appimage', platforms: ['linux'], config: { options: linuxPackage } },
     { name: '@electron-forge/maker-squirrel', platforms: ['win32'], config: { name: 'ramu' } },
   ],
   hooks: {

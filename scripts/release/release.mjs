@@ -28,7 +28,7 @@ export function collectAssets(source, destination, platform, arch) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name)
       if (entry.isDirectory()) visit(path)
-      else if (/\.(zip|dmg|deb)$/.test(entry.name)) files.push(path)
+      else if (/\.(zip|dmg|deb|rpm|AppImage)$/.test(entry.name)) files.push(path)
     }
   }
   visit(source)
@@ -87,7 +87,7 @@ export function run(args) {
       .split('\n')
       .find((name) => /^v\d+\.\d+\.\d+(?:-|$)/.test(name))
     const log = git('log', '--format=- %s (%h)', ...(previous ? [`${previous}..HEAD`] : ['HEAD']))
-    const notes = `# Ramu ${tag}\n\n## Changes\n\n${log || '- Initial release.'}\n\n## Downloads\n\nChoose the installer matching your OS and CPU: macOS arm64 (Apple Silicon), macOS x64 (Intel), or Linux x64. SHA256SUMS files accompany the downloads.\n\n## Known limitations\n\nDesktop alpha. Automated builds are unsigned and macOS builds are not notarized. Windows releases are not available yet. Agent providers require their own installation and authentication.\n`
+    const notes = `# Ramu ${tag}\n\n## Changes\n\n${log || '- Initial release.'}\n\n## Downloads\n\nChoose the installer matching your OS and CPU: macOS arm64 (Apple Silicon), macOS x64 (Intel), or Linux x64 or arm64 (.deb, .rpm, AppImage or ZIP). SHA256SUMS files accompany the downloads.\n\n## Known limitations\n\nDesktop alpha. Automated builds are unsigned and macOS builds are not notarized. Windows releases are not available yet. Agent providers require their own installation and authentication.\n`
     if (dryRun) {
       console.log(
         `Would set package.json versions (root and workspace packages) to ${version} and write ${notesPath}\n\n${notes}`,

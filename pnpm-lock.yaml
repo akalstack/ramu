@@ -174,6 +174,9 @@ importers:
       '@electron-forge/maker-dmg':
         specifier: ^8.0.1
         version: 8.0.1(supports-color@10.2.2)
+      '@electron-forge/maker-rpm':
+        specifier: ^8.0.1
+        version: 8.0.1(supports-color@10.2.2)
       '@electron-forge/maker-squirrel':
         specifier: ^8.0.1
         version: 8.0.1(supports-color@10.2.2)
@@ -195,6 +198,9 @@ importers:
       '@ramu/web':
         specifier: workspace:*
         version: link:../web
+      '@reforged/maker-appimage':
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@10.2.2)
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@7.3.7(@types/node@24.19.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.9.1))
@@ -1559,6 +1565,10 @@ packages:
 
   '@electron-forge/maker-dmg@8.0.1':
     resolution: {integrity: sha512-/FtNihspOpY+SKzyUClCsSgc+W4BJdHttA+eZh7mMs6DFNjJzO8xgJwOjLuHi1oVahrpRsw8UVRejs1wrk7YBw==}
+    engines: {node: '>= 22.13.0'}
+
+  '@electron-forge/maker-rpm@8.0.1':
+    resolution: {integrity: sha512-FAOUQeE3nzHfE0tE7vs2sWBDN1mspkpzoFQSJWk1qB3Qv9HF3iREYjzpV+AuGWe/zy0y5IK6mIx4GADdIlBaEg==}
     engines: {node: '>= 22.13.0'}
 
   '@electron-forge/maker-squirrel@8.0.1':
@@ -3358,6 +3368,13 @@ packages:
       '@types/react':
         optional: true
 
+  '@reforged/maker-appimage@6.0.0':
+    resolution: {integrity: sha512-2fdlJWV1RUh0+2kuVzi+0T2DnOUO/MHes45+dQThoarl5pD7LntvMG7IFJGW2qnjXnKOf1eZM56JnOuo1mXZLg==}
+    engines: {node: '>=20.12.0'}
+
+  '@reforged/maker-types@2.2.0':
+    resolution: {integrity: sha512-14B5Tu6fG2AWgH+bdsfJaQkAi8Bc7YC8GmMuNEWCJupU9IhvKHrdte3GAncBYO10yqSbsQx7Pi9xpyveJ5vL+Q==}
+
   '@rolldown/binding-android-arm-eabi@1.2.16':
     resolution: {integrity: sha512-ia3DwAs0OsMGS7+IConptSiyk9pEXkOx/AbJ2n/lAGxH3QkWQus1t8d7gnAT38FCU2sQu8lUbeR6AiZFv4JxaA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -3661,6 +3678,9 @@ packages:
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
+
+  '@spacingbat3/lss@1.2.0':
+    resolution: {integrity: sha512-aywhxHNb6l7COooF3m439eT/6QN8E/RSl5IVboSKthMHcp0GlZYMSoS7546rqDLmFRxTD8f1tu/NIS9vtDwYAg==}
 
   '@stablelib/base64@1.0.1':
     resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
@@ -5411,6 +5431,12 @@ packages:
   electron-installer-dmg@5.0.1:
     resolution: {integrity: sha512-qOa1aAQdX57C+vzhDk3549dd/PRlNL4F8y736MTD1a43qptD+PvHY97Bo9gSf+OZ8iUWE7BrYSpk/FgLUe40EA==}
     engines: {node: '>= 16'}
+    hasBin: true
+
+  electron-installer-redhat@4.0.0:
+    resolution: {integrity: sha512-ZTwRR2akAxD/K1S5GMdRnG/o/YfMww5CeWt+dDLZ9qCrybVw0YW3vHEoyvz+udztXZDpUCy12fwMmy8mUlpjCQ==}
+    engines: {node: '>= 22.12.0'}
+    os: [darwin, linux]
     hasBin: true
 
   electron-to-chromium@1.5.452:
@@ -9261,6 +9287,11 @@ packages:
     engines: {node: ^16.13.0 || >=18.0.0}
     hasBin: true
 
+  which@5.0.0:
+    resolution: {integrity: sha512-JEdGzHwwkrbWoGOlIHqQ5gtprKGOenpDHpxE9zVR1bWbOtYRyPPHMe9FaP6x61CmNaTThSkb0DAJte5jD+DmzQ==}
+    engines: {node: ^18.17.0 || >=20.5.0}
+    hasBin: true
+
   which@6.0.1:
     resolution: {integrity: sha512-oGLe46MIrCRqX7ytPUf66EAYvdeMIZYn3WaocqqKZAxrBpkqHfL/qvTyJ/bTk5+AqHCjXmrv3CEWgy368zhRUg==}
     engines: {node: ^20.17.0 || >=22.9.0}
@@ -10415,6 +10446,15 @@ snapshots:
       '@electron-forge/shared-types': 8.0.1(supports-color@10.2.2)
     optionalDependencies:
       electron-installer-dmg: 5.0.1(supports-color@10.2.2)
+    transitivePeerDependencies:
+      - supports-color
+
+  '@electron-forge/maker-rpm@8.0.1(supports-color@10.2.2)':
+    dependencies:
+      '@electron-forge/maker-base': 8.0.1(supports-color@10.2.2)
+      '@electron-forge/shared-types': 8.0.1(supports-color@10.2.2)
+    optionalDependencies:
+      electron-installer-redhat: 4.0.0(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -12240,6 +12280,17 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
+  '@reforged/maker-appimage@6.0.0(supports-color@10.2.2)':
+    dependencies:
+      '@electron-forge/maker-base': 8.0.1(supports-color@10.2.2)
+      '@reforged/maker-types': 2.2.0
+      '@spacingbat3/lss': 1.2.0
+      semver: 7.8.5
+    transitivePeerDependencies:
+      - supports-color
+
+  '@reforged/maker-types@2.2.0': {}
+
   '@rolldown/binding-android-arm-eabi@1.2.16':
     optional: true
 
@@ -12476,6 +12527,8 @@ snapshots:
   '@sinclair/typebox@0.27.12': {}
 
   '@sindresorhus/merge-streams@4.0.0': {}
+
+  '@spacingbat3/lss@1.2.0': {}
 
   '@stablelib/base64@1.0.1': {}
 
@@ -14389,6 +14442,18 @@ snapshots:
       minimist: 1.2.8
     optionalDependencies:
       appdmg: 0.6.6
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
+
+  electron-installer-redhat@4.0.0(supports-color@10.2.2):
+    dependencies:
+      '@malept/cross-spawn-promise': 2.0.0
+      debug: 4.4.3(supports-color@10.2.2)
+      electron-installer-common: 0.10.4(supports-color@10.2.2)
+      which: 5.0.0
+      word-wrap: 1.2.5
+      yargs: 18.2.0
     transitivePeerDependencies:
       - supports-color
     optional: true
@@ -18883,6 +18948,11 @@ snapshots:
   which@4.0.0:
     dependencies:
       isexe: 3.1.5
+
+  which@5.0.0:
+    dependencies:
+      isexe: 3.1.5
+    optional: true
 
   which@6.0.1:
     dependencies:

@@ -27,6 +27,29 @@ test('collects nested installers with platform names and verifiable checksums', 
       `${createHash('sha256').update('installer').digest('hex')}  darwin-arm64-Ramu.zip\n`,
     )
     assert.throws(() => collectAssets(source, destination, 'darwin', 'arm64'), /Duplicate/)
+    const linux = join(root, 'linux-make'),
+      linuxRelease = join(root, 'linux-release'),
+      installers = {
+        'deb/arm64/ramu_0.1.0_arm64.deb': 'deb',
+        'rpm/arm64/ramu-0.1.0-1.aarch64.rpm': 'rpm',
+        'AppImage/arm64/Ramu-0.1.0-arm64.AppImage': 'appimage',
+        'zip/linux/arm64/Ramu-linux-arm64-0.1.0.zip': 'zip',
+      }
+    for (const [path, contents] of Object.entries(installers)) {
+      mkdirSync(join(linux, path, '..'), { recursive: true })
+      writeFileSync(join(linux, path), contents)
+    }
+    collectAssets(linux, linuxRelease, 'linux', 'arm64')
+    const sums = readFileSync(join(linuxRelease, 'SHA256SUMS-linux-arm64.txt'), 'utf8').trim().split('\n')
+    assert.deepEqual(
+      sums.sort(),
+      Object.entries(installers)
+        .map(
+          ([path, contents]) =>
+            `${createHash('sha256').update(contents).digest('hex')}  linux-arm64-${path.split('/').at(-1)}`,
+        )
+        .sort(),
+    )
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

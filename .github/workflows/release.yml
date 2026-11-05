@@ -45,6 +45,9 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     env:
@@ -66,8 +69,9 @@ jobs:
         run: if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y ripgrep; else brew install ripgrep; fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      # dpkg and fakeroot build the .deb, rpm provides rpmbuild, squashfs-tools provides mksquashfs for the AppImage.
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg
+        run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg rpm squashfs-tools
       - name: Prepare macOS signing (skipped without secrets)
         if: runner.os == 'macOS'
         run: scripts/release/macos-signing.sh setup

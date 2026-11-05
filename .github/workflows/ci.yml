@@ -31,9 +31,9 @@ jobs:
       # One desktop startup smoke test uses an isolated profile and simulated providers.
       - if: runner.os == 'macOS'
         run: pnpm test:desktop-smoke
-      # On Linux the same smoke runs against the packaged app, installed from its .deb.
+      # On Linux the same smoke runs against the packaged app, installed from its .deb; only the release builds rpm and AppImage.
       - if: runner.os == 'Linux'
-        run: sudo apt-get install -y fakeroot dpkg && pnpm make --arch=x64
+        run: sudo apt-get install -y fakeroot dpkg && pnpm make --arch=x64 --targets=@electron-forge/maker-deb
       - if: runner.os == 'Linux'
         run: scripts/smoke/linux-deb-smoke.sh
       - uses: actions/upload-artifact@v4

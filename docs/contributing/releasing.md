@@ -1,6 +1,6 @@
 # Releases
 
-Electron Forge builds installers. GitHub Actions targets macOS arm64, macOS x64, and Linux x64, adds SHA-256 checksums, and creates a draft release. Publishing is manual. Windows packaging is not in the release matrix.
+Electron Forge builds installers. GitHub Actions targets macOS arm64, macOS x64, Linux x64 and Linux arm64 (`ubuntu-24.04-arm`), adds SHA-256 checksums, and creates a draft release. Publishing is manual. Windows packaging is not in the release matrix.
 
 ## Repository setup
 
@@ -45,7 +45,9 @@ CI macOS builds stay unsigned until the repository has these secrets: `MACOS_CER
 
 Test signed installers on another machine. Simulated checks do not verify live provider authentication, login startup, or real model calls. Linux packaged GUI validation remains separate.
 
-`pnpm make` writes installers to `dist/make`. On the matching build machine, `pnpm release:assets darwin arm64` (or `darwin x64` / `linux x64`) collects installers and checksums in `dist/release`. Clear old collected artifacts before rebuilding.
+Each Linux target builds a `.deb`, an `.rpm`, an AppImage and a ZIP. The runner needs `fakeroot` and `dpkg` for the `.deb`, `rpm` (for `rpmbuild`) for the `.rpm`, and `squashfs-tools` (for `mksquashfs`) for the AppImage; the AppImage maker also downloads the AppImage runtime for the target architecture from GitHub. CI and release builds smoke test only the installed `.deb` (`scripts/smoke/linux-deb-smoke.sh`). Running the AppImage needs FUSE 2: on Ubuntu 24.04 and later install `libfuse2t64`, on Ubuntu 22.04 `libfuse2` (`sudo apt install libfuse2t64` or `sudo apt install libfuse2`).
+
+`pnpm make` writes installers to `dist/make`. On the matching build machine, `pnpm release:assets darwin arm64` (or `darwin x64`, `linux x64`, `linux arm64`) collects installers and checksums in `dist/release`. Clear old collected artifacts before rebuilding.
 
 For packaged macOS checks, run `RAMU_PACKAGED_EXECUTABLE=/path/to/Ramu pnpm test:desktop-smoke`.
 

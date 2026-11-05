@@ -23,6 +23,7 @@
         "undici",
         "zod",
         "@electron-forge/*",
+        "@reforged/maker-appimage",
         "@ramu/web",
         "babel-plugin-react-compiler",
         "@dagrejs/dagre",

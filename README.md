@@ -59,7 +59,7 @@ Provider features vary. Agents run on your host, so it must stay awake while the
 
 Download the installer from [GitHub Releases](https://github.com/akalstack/ramu/releases), install and sign in to a provider ([setup](docs/guide/providers.md)), then open a folder or start a thread. For the phone, see the [mobile guide](apps/mobile/README.md).
 
-Ramu is in alpha: builds are for **macOS** (arm64, x64) and **Linux** (x64), unsigned for now, so updates are installed by hand. Windows is in progress.
+Ramu is in alpha: builds are for **macOS** (arm64, x64) and **Linux** (x64, arm64; `.deb`, `.rpm`, AppImage or ZIP), unsigned for now, so updates are installed by hand. The AppImage needs FUSE 2 (`sudo apt install libfuse2t64` on Ubuntu 24.04 and later, `libfuse2` on 22.04). Windows is in progress.
 
 ### Run from source
 
