@@ -85,10 +85,24 @@ export default function AsideScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [computerId, sessionId, load] by design; the values it reads beyond these are current as of that run
   }, [computerId, sessionId, load])
 
+  // While the thread loads, the bar already has its final shape (title, subtitle and Clear), so nothing in it moves or
+  // pops in when the side chat arrives.
   if (!chat || !sessionId)
     return (
       <Screen>
-        <Header title={say('Side questions')} />
+        <Header
+          title={say('Side questions')}
+          subtitle={chat?.title ?? ' '}
+          right={
+            <HeaderButton
+              icon={Trash2}
+              label={say('Clear side chat')}
+              systemIcon="trash"
+              actionId="clear-side-chat"
+              disabled
+            />
+          }
+        />
       </Screen>
     )
   const viewOnly = store.computers.find((host) => host.id === chat.computerId)?.access === 'viewer'
@@ -151,15 +165,17 @@ export default function AsideScreen() {
         title={say('Side questions')}
         subtitle={chat.title}
         right={
-          messages.length > 0 && !viewOnly ? (
+          viewOnly ? null : (
+            // Always in the bar, usable once there is something to clear, rather than appearing with the first answer.
             <HeaderButton
               icon={Trash2}
               label={say('Clear side chat')}
               systemIcon="trash"
               actionId="clear-side-chat"
+              disabled={!messages.length}
               onPress={clear}
             />
-          ) : null
+          )
         }
       />
       <View style={{ flex: 1 }}>

@@ -118,22 +118,26 @@ type HeaderButtonProps = {
   systemIcon?: ComponentProps<typeof Stack.Toolbar.Button>['icon']
   /** Stable native item identity, retained when an action changes between destinations. */
   actionId?: string
+  /** Shown but not usable yet: an action that stays in the bar instead of popping in once it applies. */
+  disabled?: boolean
 }
 
 /** A navigation-bar action. On iOS it is a glass circle (iOS 26 bar buttons); on Android a plain icon button. */
-export function HeaderButton({ icon: I, label, onPress }: HeaderButtonProps) {
+export function HeaderButton({ icon: I, label, onPress, disabled }: HeaderButtonProps) {
   const { c } = useTheme()
-  if (!floatingChrome) return <IconButton icon={I} label={label} onPress={onPress} />
+  if (!floatingChrome) return <IconButton icon={I} label={label} onPress={onPress} disabled={disabled} />
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
       hitSlop={4}
       onPress={() => {
         tap()
         onPress?.()
       }}
-      style={{ width: BAR, height: BAR, alignItems: 'center', justifyContent: 'center' }}
+      style={{ width: BAR, height: BAR, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.4 : 1 }}
     >
       <I size={21} color={c.text} strokeWidth={1.9} />
     </Pressable>
@@ -271,6 +275,7 @@ export function Header({
           hidesSharedBackground={false}
           icon={icon}
           accessibilityLabel={props.label}
+          disabled={props.disabled}
           tintColor={c.text}
           onPress={() => {
             tap()
