@@ -13,6 +13,7 @@ import type {
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { skillMcpTools, skillMetadata } from '../memory/skillFiles'
 import { providerAccountEnv, providerAccountHome } from '../providers/providerBinaries'
+import { userEnvironment } from '../userEnvironment'
 
 const MAX_FILE = 1024 * 1024
 const MAX_SKILLS_PER_DIR = 200
@@ -744,7 +745,7 @@ export function sharedSessionSkills(
 export function accountEnvironment(provider: AgentProvider, accountId = 'default'): NodeJS.ProcessEnv {
   if (accountId === 'default') return process.env
   try {
-    return { ...process.env, ...providerAccountEnv(provider, providerAccountHome(provider, accountId)) }
+    return userEnvironment(providerAccountEnv(provider, providerAccountHome(provider, accountId)))
   } catch {
     return process.env
   }

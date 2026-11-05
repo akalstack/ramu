@@ -120,3 +120,13 @@ it('applies global then provider variables over the shell, without overriding ac
     delete process.env.HTTPS_PROXY
   }
 })
+
+it('never hands the service’s Electron-as-Node flag to providers, so an Electron app they start runs as Electron', () => {
+  process.env.ELECTRON_RUN_AS_NODE = '1'
+  try {
+    expect(providerEnvironment('claude-code', {}).ELECTRON_RUN_AS_NODE).toBeUndefined()
+    expect(process.env.ELECTRON_RUN_AS_NODE).toBe('1')
+  } finally {
+    delete process.env.ELECTRON_RUN_AS_NODE
+  }
+})

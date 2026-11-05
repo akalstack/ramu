@@ -3,6 +3,7 @@
 // service prints it with the command that answers it.
 import { spawn } from 'node:child_process'
 import type { PairingRequestView } from './pairingRequests'
+import { userEnvironment } from '../userEnvironment'
 
 export interface PairingNoticeOptions {
   /** Pushes the current requests to the desktop apps on this host's local socket. */
@@ -16,9 +17,7 @@ export interface PairingNoticeOptions {
 }
 
 function openDesktop(executable: string) {
-  const env = { ...process.env }
-  delete env.ELECTRON_RUN_AS_NODE
-  const child = spawn(executable, ['--pairing-request'], { detached: true, stdio: 'ignore', env })
+  const child = spawn(executable, ['--pairing-request'], { detached: true, stdio: 'ignore', env: userEnvironment() })
   child.on('error', () => {})
   child.unref()
 }

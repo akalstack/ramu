@@ -7,6 +7,7 @@ import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
 import { scopedEnvironment, type ProviderEnvironmentValues } from '@ramu/shared/providers/environment'
 import { antigravityFileNames, managedAntigravityAt } from './adapters/antigravity'
 import { providerAdapter } from './adapters'
+import { userEnvironment } from '../userEnvironment'
 
 let configuration: ProviderConfiguration = {}
 let accountsRoot = join(homedir(), '.ramu', 'provider-accounts')
@@ -103,7 +104,7 @@ export function providerEnvironment(
   overrides = configuration,
   accountId = overrides[provider]?.accountId || 'default',
 ): NodeJS.ProcessEnv {
-  const env = { ...process.env }
+  const env = userEnvironment()
   let accountEnv: Record<string, string> = {}
   if (accountId !== 'default') {
     if (!overrides[provider]?.accounts?.some((account) => account.id === accountId))

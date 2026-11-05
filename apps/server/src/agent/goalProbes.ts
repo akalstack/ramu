@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { git, parseStatus, topLevel } from '../workspace/git'
+import { userEnvironment } from '../userEnvironment'
 
 /** The uncommitted state of a repository: a content hash for every changed path, relative to the repository root. */
 export interface WorkspaceSnapshot {
@@ -64,7 +65,7 @@ async function gitSnapshot(cwd: string): Promise<WorkspaceSnapshot | null> {
 function runCommand(cwd: string, command: string, signal: AbortSignal): Promise<VerifyResult> {
   return new Promise((resolve) => {
     // Its own process group, so a timeout or Stop ends the whole test run and not only the shell around it.
-    const child = spawn(command, { cwd, shell: true, detached: process.platform !== 'win32', env: process.env })
+    const child = spawn(command, { cwd, shell: true, detached: process.platform !== 'win32', env: userEnvironment() })
     let output = '',
       timedOut = false,
       settled = false

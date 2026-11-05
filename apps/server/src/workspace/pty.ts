@@ -7,6 +7,7 @@ import { planResume } from '@ramu/shared/sync/streamSync'
 import { removalCommands, type TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
 
 import type { TerminalInfo, BackgroundTerminalInfo, BackgroundTerminalState } from '@ramu/shared/api'
+import { userEnvironment } from '../userEnvironment'
 export type { TerminalInfo, BackgroundTerminalInfo } from '@ramu/shared/api'
 
 interface BackgroundMeta {
@@ -118,7 +119,7 @@ export class TerminalService {
       cwd,
       cols,
       rows,
-      env: { ...process.env, TERM_PROGRAM: 'Ramu' } as Record<string, string>,
+      env: userEnvironment({ TERM_PROGRAM: 'Ramu' }) as Record<string, string>,
     })
     const entry: Entry = { id, taskId, repoId, cwd, exited: false, pty, shell, output: '', cursor: 0 }
     if (command) {
