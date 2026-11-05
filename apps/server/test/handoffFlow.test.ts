@@ -282,6 +282,20 @@ describe('what a switch carries', () => {
     expect(settingsEvents(svc, s.id).at(-1)).toMatchObject({ handoff: false })
   })
 
+  it('refuses a model change that would end native sub-agents still running, but not Ramu’s own helpers', async () => {
+    const svc = make()
+    const s = svc.start('t', scopeOf(cwd), 'remember plum', codex)
+    await until(() => idle(svc, s.id))
+    const record = (event: AgentEvent) =>
+      (svc as unknown as { record(id: string, event: AgentEvent): void }).record(s.id, event)
+    // A helper Ramu runs in its own session survives the restart, so it does not hold the change.
+    record({ kind: 'agent', agentId: 'mine', name: 'Review', status: 'running', childSessionId: 'child-1' })
+    await svc.configure(s.id, { ...codex, model: 'codex-next' })
+    record({ kind: 'agent', agentId: 'native', name: 'Explore', status: 'running' })
+    await expect(svc.configure(s.id, codex)).rejects.toThrow('still running in this thread')
+    expect(svc.get(s.id).settings.model).toBe('codex-next')
+  })
+
   it('preflights a fresh-session model change and transfers history instead of resuming', async () => {
     const svc = make()
     const s = svc.start('t', scopeOf(cwd), 'remember plum', codex)

@@ -59,7 +59,7 @@ export interface FallbackRouterHost
     Pick<ProviderWaits, 'waitForGoalProvider'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
     Pick<SessionRegistry, 'draining' | 'revisions' | 'transitioning'>,
-    Pick<SessionStore, 'get' | 'events'>,
+    Pick<SessionStore, 'get' | 'events' | 'hasNativeWork'>,
     Pick<SubagentRunner, 'settleChild'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   mcpDestination(): AgentService['mcpDestination']
@@ -104,6 +104,11 @@ export class FallbackRouter {
     const { autoResume: _ignored, ...incoming } = settings
     settings = current.autoResume === undefined ? incoming : { ...incoming, autoResume: current.autoResume }
     if (sameSettings(current, settings)) return this.host.get(id)
+    // Changing settings restarts the provider's process, which would silently end its own sub-agents and commands.
+    if (this.host.hasNativeWork(id))
+      throw new Error(
+        'Sub-agents or background commands are still running in this thread, and changing its model would end them. Wait for them to finish or stop them, then change it.',
+      )
     const updated = await this.applySettings(id, settings)
     this.holds.delete(id)
     return updated

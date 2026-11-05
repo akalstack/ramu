@@ -210,6 +210,7 @@ export class AgentService {
       halt: (...a) => parts.process.halt(...a),
       hasBlockingQuestions: (...a) => parts.requests.hasBlockingQuestions(...a),
       hasRunningTasks: (...a) => parts.store.hasRunningTasks(...a),
+      hasNativeWork: (...a) => parts.store.hasNativeWork(...a),
       helperSummary: (...a) => parts.store.helperSummary(...a),
       helperHistory: () => this.helperHistory,
       goalProbes: () => this.goalProbes,
