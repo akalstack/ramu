@@ -2411,7 +2411,7 @@ describe('switching before a limit', () => {
     svc.stopAll()
   })
 
-  it('keeps an automatic fallback after higher-ranked models recover, until its own threshold', async () => {
+  it('keeps an automatic fallback while no current reading shows the earlier model has room, until its own threshold', async () => {
     const { svc, store } = withRouting([reading({ usedPercent: 40 })])
     const s = svc.start('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).state === 'idle')
@@ -2433,6 +2433,24 @@ describe('switching before a limit', () => {
     await until(() => restored.get(s.id).state === 'idle')
     expect(restored.get(s.id).provider).toBe('claude-code')
     restored.stopAll()
+  })
+
+  it('switches back to the model a limit moved it from once a current reading shows room, carrying what happened', async () => {
+    const { svc, store } = withRouting([reading({ usedPercent: 40 })])
+    const s = svc.start('t', scopeOf(cwd), 'hello', full)
+    await until(() => svc.get(s.id).state === 'idle')
+    store.readings = [reading({ usedPercent: 95 })]
+    await svc.send(s.id, 'move over')
+    await until(() => svc.get(s.id).provider === 'codex' && svc.get(s.id).state === 'idle')
+    store.readings = [reading({ usedPercent: 12, updatedAt: Date.now() + 1000 })]
+    await svc.send(s.id, 'back again')
+    await until(() => svc.get(s.id).provider === 'claude-code' && svc.get(s.id).state === 'idle')
+    const back = svc.events(s.id).findLast((event) => event.kind === 'settings')
+    expect(back).toMatchObject({
+      reason: expect.stringContaining('Claude has room again'),
+      previous: expect.objectContaining({ provider: 'codex' }),
+    })
+    svc.stopAll()
   })
 
   it('keeps a model picked by hand until it runs out, then follows the order again', async () => {

@@ -8,7 +8,7 @@ Pick another model while a turn runs and Ramu waits five seconds (**Apply now** 
 
 ## Usage limits and fallback
 
-**Settings → Models → Provider fallback** is an ordered list of provider and model pairs, best first. When a model hits its limit, the thread moves to the next one with room, carrying the visible conversation (never private reasoning). Switch at the limit (default) or earlier at 80, 90 or 95%.
+**Settings → Models → Provider fallback** is an ordered list of provider and model pairs, best first. When a model hits its limit, the thread moves to the next one with room, carrying the visible conversation (never private reasoning). Switch at the limit (default) or earlier at 80, 90 or 95%. Once a current usage reading shows the model it left has room again, the thread switches back before your next message, never mid-turn, and gets what happened in between. A model or login you picked yourself, or a provider held in the composer, is never switched back.
 
 **When a usage limit is reached** offers **Switch to another model**, **Wait on this model** or **Stop and let me decide**. When every option is limited, the thread waits with **Limit reached · resumes around …**, keeps your queued messages, and continues at the reset, even after a restart. **Try again** checks right away. A limit is never a failure.
 

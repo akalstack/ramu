@@ -225,6 +225,85 @@ it('switches an existing thread account before sending and preserves the convers
   expect(service.events(s.id).filter((event) => event.kind === 'user')).toHaveLength(2)
 })
 
+it('goes back to the login a limit moved it from once fresh usage shows room, and never past a choice of the person', async () => {
+  const runs: (string | undefined)[] = []
+  const factory: AgentRunnerFactory = (_scope, current, emit) => {
+    const run = async () => {
+      runs.push(current.accountId)
+      emit({ kind: 'text', text: 'Done' })
+      emit({ kind: 'result', text: 'Done', isError: false, costUsd: null })
+    }
+    return {
+      start: run,
+      send: run,
+      steer: run,
+      interrupt: async () => {},
+      stop: async () => {},
+      replyPermission() {},
+      replyQuestion() {},
+    }
+  }
+  service = new AgentService(
+    db,
+    () => {},
+    () => {
+      throw new Error('Unexpected Claude query')
+    },
+    { cursor: factory },
+  )
+  vi.spyOn(service, 'catalog').mockResolvedValue(catalogs)
+  service.apiKeyLogins = apiKeyLogins
+  service.preferences = () => prefs
+  const usage = new UsageService(
+    () => [],
+    () => {},
+    () => {},
+  )
+  service.usage = usage
+  service.refreshAccountUsage = vi.fn(async () => {})
+  const s = await service.startReviewed('t', { cwd, additionalDirs: [], covers: [cwd] }, 'Start', settings('cursor'))
+  const idle = async () => {
+    for (let i = 0; i < 200; i++) {
+      if (service!.get(s.id).state === 'idle') return
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    throw new Error('Thread did not finish')
+  }
+  const later = (value: UsageReading) => ({ ...value, updatedAt: Date.now() + 1000 })
+  await idle()
+  usage.update([reading('cursor'), reading('cursor', 'b', 3)])
+  await service.send(s.id, 'Second')
+  await idle()
+  expect(service.get(s.id).settings.accountId).toBe('b')
+
+  // Still limited: the thread stays on the login it moved to.
+  usage.update([later(reading('cursor'))])
+  expect(await service.nextRoute(s.id)).toEqual({ state: 'stays' })
+  await service.send(s.id, 'Third')
+  await idle()
+  expect(service.get(s.id).settings.accountId).toBe('b')
+
+  // The first login reset: the preview says so, and the next message goes back there with what happened meanwhile.
+  usage.update([later(reading('cursor', 'default', 4))])
+  expect(await service.nextRoute(s.id)).toMatchObject({ state: 'switch', provider: 'cursor', accountId: 'default' })
+  await service.send(s.id, 'Fourth')
+  await idle()
+  expect(service.get(s.id).settings).toMatchObject({ provider: 'cursor', accountId: 'default', effort: 'high' })
+  const back = service.events(s.id).findLast((event) => event.kind === 'settings')
+  expect(back).toMatchObject({ reason: expect.stringContaining('has room again'), handoff: true })
+  expect(back).not.toHaveProperty('limitMove')
+  expect(runs).toEqual(['default', 'b', 'b', 'default'])
+
+  // A login the person picks after a limit move is theirs: no later reset moves the thread off it.
+  usage.update([reading('cursor'), reading('cursor', 'b', 3)])
+  await service.send(s.id, 'Fifth')
+  await idle()
+  expect(service.get(s.id).settings.accountId).toBe('b')
+  await service.configure(s.id, { ...service.get(s.id).settings, accountId: 'c' })
+  usage.update([later(reading('cursor', 'default', 4)), later(reading('cursor', 'b', 4))])
+  expect(await service.nextRoute(s.id)).toEqual({ state: 'stays' })
+})
+
 it('routes helpers through another parent-provider account before moving to another model', async () => {
   const usage = new UsageService(
     () => [reading('claude-code'), reading('claude-code', 'b', 3)],

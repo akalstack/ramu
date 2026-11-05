@@ -482,6 +482,8 @@ type AgentEventBody =
       reason: string
       handoff: boolean
       previous?: AgentSettings
+      /** Moved here by usage-limit fallback, not by the person: the thread returns to where it was before once that has room. */
+      limitMove?: boolean
       /** Why the conversation is handed over and, once the next launch has built it, what was carried. Present only with `handoff`. */
       handoffInfo?: HandoffInfo
       /** Shared MCP connections the new login cannot use yet, so the person can review access or choose another login. */

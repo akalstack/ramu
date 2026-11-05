@@ -27,7 +27,7 @@ Open a project, say what you want, and review the result. The defaults work out 
 
 **Agents that keep going**
 
-- **Usage limits handled.** Rank providers and models; when one runs out, the thread moves to the next with its context. When all are limited, Ramu waits and resumes, even after a restart.
+- **Usage limits handled.** Rank providers and models; when one runs out, the thread moves to the next with its context, and switches back once your first choice has room again. When all are limited, Ramu waits and resumes, even after a restart.
 - **Goals.** An agent works toward an objective across turns, with an optional verification command that decides when it is done.
 - **Background work.** Schedules, webhook triggers, queued messages and long-running commands keep going after you close the window. Recaps say what happened.
 

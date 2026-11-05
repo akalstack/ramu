@@ -2,6 +2,7 @@ import { providerAccountId } from '../providers/providerBinaries'
 import { launchCompatibility } from '../providers/launchCompatibility'
 import {
   AGENT_PROVIDERS,
+  providerEnabled,
   providerName,
   supportsProviderAccounts,
   providerAccountOrder,
@@ -18,6 +19,7 @@ import {
   type ProviderCatalog,
   type NextMessageRoute,
   type SetupOmission,
+  type AgentEvent,
 } from '@ramu/shared/types'
 import {
   capSubagentEffort,
@@ -33,6 +35,7 @@ import {
   accountKey,
   peakFor,
   planRoute,
+  readingCounts,
   stepKey,
   type RouteDecision,
   type RouteContext,
@@ -117,7 +120,12 @@ export class FallbackRouter {
   }
 
   /** Moves a chat to other settings (any provider): ends the old process, keeps or hands over the conversation, relaunches if it was mid-request. */
-  private async applySettings(id: string, settings: AgentSettings, reason?: string): Promise<AgentSessionInfo> {
+  private async applySettings(
+    id: string,
+    settings: AgentSettings,
+    reason?: string,
+    limitMove = false,
+  ): Promise<AgentSessionInfo> {
     if (this.host.transitioning.has(id)) throw new Error('Provider switch already in progress')
     const s = this.host.get(id)
     const accountId =
@@ -175,6 +183,7 @@ export class FallbackRouter {
             : 'Changed conversation settings'),
         handoff: !!handoffInfo,
         previous: s.settings,
+        ...(limitMove ? { limitMove } : {}),
         ...(handoffInfo ? { handoffInfo } : {}),
         ...(mcpAttention?.length ? { mcpAttention } : {}),
         ...this.omissions(s, settings),
@@ -284,7 +293,21 @@ export class FallbackRouter {
       attemptedAccounts: this.attemptedAccounts.get(id),
       blocked: await this.blockedProviders(),
     })
-    if (!decision) return { state: 'stays' }
+    if (!decision) {
+      const back =
+        !this.holds.has(id) && s.settings.autoFallback
+          ? await this.returnStep(s, routing, catalogs, policy.switchAt, false)
+          : null
+      if (!back) return { state: 'stays' }
+      return {
+        state: 'switch',
+        provider: back.settings.provider,
+        model: back.settings.model,
+        ...(back.settings.accountId ? { accountId: back.settings.accountId } : {}),
+        reason: back.reason,
+        held: null,
+      }
+    }
     const { provider, model, accountId } = decision.step
     return {
       state: 'switch',
@@ -424,6 +447,7 @@ export class FallbackRouter {
       reason: `${reason} — continuing ${from.provider === to.provider && from.accountId !== to.accountId ? `on ${this.accountName(to.provider, to.accountId)}` : `with ${providerName(to.provider)}`}`,
       handoff: false,
       previous: from,
+      limitMove: true,
     })
   }
 
@@ -459,6 +483,15 @@ export class FallbackRouter {
       blocked: await this.blockedProviders(),
     })
     const hold = this.holds.get(id)
+    if (!decision && !hold && s.settings.autoFallback) {
+      const back = await this.returnStep(s, routing, catalogs, policy.switchAt, true)
+      if (back) {
+        this.attempted.delete(id)
+        this.attemptedAccounts.delete(id)
+        await this.applySettings(id, this.cappedChildSettings(s, back.settings, catalogs), back.reason)
+        return true
+      }
+    }
     if (!decision) {
       if (hold === 'chat') this.holds.delete(id)
       return false
@@ -474,8 +507,70 @@ export class FallbackRouter {
       id,
       this.cappedChildSettings(s, this.withStep(s.settings, decision.step), catalogs),
       `${decision.reason} — continuing ${decision.step.provider === s.provider && decision.step.accountId !== s.settings.accountId ? `on ${this.accountName(s.provider, decision.step.accountId)}` : `with ${providerName(decision.step.provider)}`}`,
+      true,
     )
     return true
+  }
+
+  /**
+   * Where a thread that usage limits moved should go back to, once that has room again: the settings before its first
+   * limit move, when no change of the person's own came after. It goes back only on fresh usage proving room, read after
+   * the move, so a provider that reports no usage, or one still limited, keeps the thread where it is. `refresh` reads
+   * the origin's usage when the stored reading is too old to say; a preview passes false and fetches nothing.
+   */
+  private async returnStep(
+    s: AgentSessionInfo,
+    routing: NonNullable<ReturnType<FallbackRouter['routing']>>,
+    catalogs: ProviderCatalog[],
+    switchAt: SwitchThreshold,
+    refresh: boolean,
+  ): Promise<{ settings: AgentSettings; reason: string } | null> {
+    const origin = limitOrigin(this.host.events(s.id))
+    if (!origin) return null
+    const target = origin.settings
+    const account = target.accountId || 'default'
+    const prefs = routing.prefs
+    const step = resolveStep(
+      { id: '', provider: target.provider, model: target.model, effort: target.effort ?? null },
+      catalogs,
+    )
+    if (
+      !step ||
+      sameRoute(target, s.settings) ||
+      !providerEnabled(prefs.providerBinaries, target.provider) ||
+      !providerAccountOrder(prefs.providerBinaries, target.provider).includes(account) ||
+      (await this.blockedProviders()).has(target.provider)
+    )
+      return null
+    const now = Date.now()
+    // Only a reading taken after the move, whose window has not reset since, says how much room there is now.
+    const proof = (all: UsageReading[]) => {
+      const own = all.filter(
+        (reading) => reading.provider === target.provider && (reading.accountId || 'default') === account,
+      )
+      if (isOver(peakFor(own, target.provider, step.model, now), switchAt)) return 'limited'
+      return own.some(
+        (reading) => reading.source !== 'notice' && reading.updatedAt > origin.movedAt && readingCounts(reading, now),
+      )
+        ? 'room'
+        : 'unknown'
+    }
+    let seen = proof(routing.all)
+    if (seen === 'unknown' && refresh) {
+      await this.freshAccountUsage(target.provider)
+      seen = proof(this.routing(s.settings)?.all ?? routing.all)
+    }
+    if (seen !== 'room') return null
+    const where =
+      target.provider !== s.provider
+        ? providerName(target.provider)
+        : account !== (s.settings.accountId || 'default')
+          ? this.accountName(target.provider, target.accountId)
+          : step.model
+    return {
+      settings: this.withStep(s.settings, { ...step, accountId: account }),
+      reason: `${where} has room again — switching back`,
+    }
   }
 
   /**
@@ -580,6 +675,7 @@ export class FallbackRouter {
           reason: `${providerName(s.provider)} usage limit reached on ${this.accountName(s.provider, s.settings.accountId)} — continuing on ${this.accountName(s.provider, account)}`,
           handoff: true,
           previous: s.settings,
+          limitMove: true,
           handoffInfo: accountPlan.info,
           ...(accountAttention.length ? { mcpAttention: accountAttention } : {}),
           ...this.omissions(s, accountSettings),
@@ -670,6 +766,7 @@ export class FallbackRouter {
         reason: `${providerName(s.provider)} usage limit reached${peak ? ` (${limitReason(s.provider, peak).replace(`${providerName(s.provider)}'s `, '')})` : ''} — continuing with ${providerName(step.provider)}${same ? ` on ${step.model}` : ''}`,
         handoff: !!plan?.info,
         previous: s.settings,
+        limitMove: true,
         ...(plan?.info ? { handoffInfo: plan.info } : {}),
         ...(fallbackAttention.length ? { mcpAttention: fallbackAttention } : {}),
         ...this.omissions(s, settings),
@@ -737,4 +834,25 @@ export class FallbackRouter {
       from: parent.provider,
     }
   }
+}
+
+const sameRoute = (a: AgentSettings, b: AgentSettings) =>
+  a.provider === b.provider && a.model === b.model && (a.accountId || 'default') === (b.accountId || 'default')
+
+/**
+ * The settings a thread had before usage limits moved it, and when the latest of those moves happened. Null when the
+ * latest change of provider, model or login was the person's own, or the thread was never moved by a limit.
+ */
+function limitOrigin(events: AgentEvent[]): { settings: AgentSettings; movedAt: number } | null {
+  let settings: AgentSettings | null = null
+  let movedAt: number | null = null
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i]!
+    if (event.kind !== 'settings' || event.agentId || !event.previous) continue
+    if (event.limitMove) {
+      settings = event.previous
+      movedAt ??= event.at ?? 0
+    } else if (!sameRoute(event.previous, event.settings)) break
+  }
+  return settings ? { settings, movedAt: movedAt ?? 0 } : null
 }
