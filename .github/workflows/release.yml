@@ -91,7 +91,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         run: scripts/release/macos-signing.sh cleanup
       - run: pnpm release:assets ${{ matrix.platform }} ${{ matrix.arch }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installers-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/release/*
