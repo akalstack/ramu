@@ -1,4 +1,5 @@
 import { mergeInputSummaries } from '@ramu/shared/chat/inputSummary'
+import { threadProviders, type ProviderUse } from '@ramu/shared/chat/threadProviders'
 import { generateBranchName } from '../../workspace/branchNaming'
 import { currentBranch } from '../../workspace/git'
 import { projectActionSchema } from '../../workspace/projectConfig'
@@ -310,14 +311,25 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         const helpers = tasks.length ? agents.helperSummaries() : new Map<string, never>()
         const advice = tasks.length ? agents.unreadAdvice() : new Map<string, number>()
         const sessionsByTask = tasks.length ? agents.listByTask() : new Map<string, AgentSessionInfo[]>()
+        const uses = tasks.length ? agents.providerUses() : new Map<string, ProviderUse[]>()
         return tasks.map((task) => {
           const sessions = sessionsByTask.get(task.id) ?? []
           const main = sessions.at(-1)
           const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
           const goal = main ? agents.goalOf(main.id) : null
           const executionState = main?.state
+          // The thread's cast: each session (the main agent and teammates) at its creation, plus every provider a
+          // session handed off between, with the main agent's provider leading.
+          const providers = threadProviders(
+            sessions.flatMap((session) => [
+              { provider: session.settings.provider, at: session.createdAt },
+              ...(uses.get(session.id) ?? []),
+            ]),
+            main?.settings.provider ?? null,
+          )
           const base = {
             ...task,
+            providers,
             inputSummary,
             executionState,
             helperSummary: helpers.get(task.id) ?? null,

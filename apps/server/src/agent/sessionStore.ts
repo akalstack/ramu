@@ -1,7 +1,9 @@
 import { providerAccountId } from '../providers/providerBinaries'
 import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
 import { randomUUID } from 'node:crypto'
+import type { ProviderUse } from '@ramu/shared/chat/threadProviders'
 import type {
+  AgentProvider,
   AgentTask,
   AgentEvent,
   AgentScope,
@@ -56,6 +58,20 @@ export class SessionStore {
   }
 
   /** Every task's top-level sessions, oldest first: `list` for all tasks at once, with one read of the input summaries. */
+  /** Each session's providers with when each last ran there: one row per provider a session has handed off between. */
+  providerUses(): Map<string, ProviderUse[]> {
+    const rows = this.db
+      .prepare('SELECT session_id, provider, updated_at FROM session_provider_sessions')
+      .all() as unknown as { session_id: string; provider: AgentProvider; updated_at: number }[]
+    const bySession = new Map<string, ProviderUse[]>()
+    for (const row of rows)
+      bySession.set(row.session_id, [
+        ...(bySession.get(row.session_id) ?? []),
+        { provider: row.provider, at: row.updated_at },
+      ])
+    return bySession
+  }
+
   listByTask(): Map<string, AgentSessionInfo[]> {
     const rows = this.db
       .prepare(`SELECT s.*, ${TITLE_SQL} FROM agent_sessions s WHERE parent_session_id IS NULL ORDER BY created_at`)

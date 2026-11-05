@@ -77,6 +77,7 @@ it('returns bounded identity/origin summaries through agent lists and task RPC w
       unreadAdvice: () => new Map(),
       list: (task: string) => store.list(task),
       listByTask: () => store.listByTask(),
+      providerUses: () => new Map(),
       goalOf: () => null,
     },
   } as unknown as Services)
@@ -118,6 +119,7 @@ it('exposes bounded verification context without leaking command output into tas
       unreadAdvice: () => new Map(),
       list: (task: string) => store.list(task),
       listByTask: () => store.listByTask(),
+      providerUses: () => new Map(),
       goalOf: () => goal,
     },
   } as unknown as Services)

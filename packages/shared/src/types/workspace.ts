@@ -1,6 +1,6 @@
 import type { BranchChoice, BranchNamingIntent } from '../workspaceDefaults'
 import type { ChatGoal } from './goal'
-import type { AgentSessionState, ThreadHelperSummary, ThreadInputSummary } from './agent'
+import type { AgentProvider, AgentSessionState, ThreadHelperSummary, ThreadInputSummary } from './agent'
 export type CheckoutMode = 'current' | 'worktree'
 
 export interface Project {
@@ -120,6 +120,11 @@ export interface Task {
    * means there is none (or it is complete).
    */
   goalState?: TaskGoalSummary | null
+  /**
+   * Every agent that has worked in the thread (model handoffs and teammates), oldest first, the leading one last. Only
+   * the task list sets it; older hosts omit it.
+   */
+  providers?: AgentProvider[]
   /** Unresolved requests from main sessions, including forwarded helper input. Older hosts omit this. */
   inputSummary?: ThreadInputSummary | null
   /** Independent helper work after the parent goes idle. Null means none. */

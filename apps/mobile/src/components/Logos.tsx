@@ -20,9 +20,18 @@ function tinted(xml: string, tint: string) {
 }
 
 /** Provider marks shared with the desktop: Claude keeps its orange, OpenAI and Cursor follow the text color, OpenCode and Antigravity keep their asset colors. */
-export function ProviderIcon({ provider, size = 14 }: { provider: AgentProvider; size?: number }) {
+/** `muted` draws a one-color mark in grey, for an agent that worked in a thread earlier and no longer leads it. */
+export function ProviderIcon({
+  provider,
+  size = 14,
+  muted,
+}: {
+  provider: AgentProvider
+  size?: number
+  muted?: boolean
+}) {
   const { c } = useTheme()
-  const tint = provider === 'claude-code' ? '#d97757' : c.soft
+  const tint = muted ? c.muted : provider === 'claude-code' ? '#d97757' : c.soft
   const xml = useMemo(() => (keepsColors(provider) ? svgs[provider] : tinted(svgs[provider], tint)), [provider, tint])
   return <SvgXml xml={xml} width={size} height={size} />
 }

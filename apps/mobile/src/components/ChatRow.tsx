@@ -19,7 +19,10 @@ import {
 } from 'lucide-react-native'
 import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
 import { TEXT_SCALE, font, space, useTheme } from '../theme'
-import type { Chat } from '../runtime/types'
+import { providerNames, type Chat } from '../runtime/types'
+import type { AgentProvider } from '@ramu/shared/types'
+import { providerStack } from '@ramu/shared/chat/threadProviders'
+import { ProviderIcon } from './Logos'
 import { ago, useT, type Strings, useSay } from '../i18n'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { inboxBlocker } from '@ramu/shared/hostInbox'
@@ -125,6 +128,9 @@ export const ChatRow = memo(function ChatRow({
   // that mix projects, helpers still working, and an unreachable host.
   const branch = chat.branch || (chat.mode === 'worktree' ? say('Worktree') : '')
   const detail = Boolean(state || branch || project || helpers || !online)
+  // Every agent that has worked here, as T3's rows show them: earlier ones (a handoff, a teammate) small and grey
+  // before the one leading now. An older host reports only the leading one.
+  const agents = providerStack(chat.providers?.length ? chat.providers : chat.provider ? [chat.provider] : [])
   const actions =
     chat.pending || commands.viewOnly || selecting
       ? []
@@ -171,6 +177,7 @@ export const ChatRow = memo(function ChatRow({
             !online ? strings.threadOffline : null,
             branch ? `${say('Branch')} ${branch}` : null,
             project,
+            agents.map((provider) => providerNames[provider]).join(', '),
           ]
             .filter(Boolean)
             .join(', ')}
@@ -216,6 +223,7 @@ export const ChatRow = memo(function ChatRow({
                 <Sparkles size={12} color={c.muted} accessibilityLabel={say('Naming thread')} />
               ) : null}
               {chat.pinnedAt !== null ? <Pin size={11} color={c.muted} /> : null}
+              {detail ? null : <AgentStack agents={agents} />}
               {/* As in the desktop sidebar: the thread's mark when it has something to report, otherwise its age. */}
               {chat.pending ? (
                 <Clock size={13} color={c.muted} />
@@ -263,6 +271,8 @@ export const ChatRow = memo(function ChatRow({
                     {strings.offline}
                   </Fact>
                 ) : null}
+                <View style={{ flex: 1, minWidth: space.s }} />
+                <AgentStack agents={agents} />
               </View>
             ) : null}
           </View>
@@ -345,6 +355,26 @@ function StateMark({
                   : c.placeholder
           }
         />
+      )}
+    </View>
+  )
+}
+
+/** The thread's agents, the leading one last and in its colours, earlier ones smaller and grey. */
+function AgentStack({ agents }: { agents: AgentProvider[] }) {
+  if (!agents.length) return null
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+      {agents.map((provider, index) =>
+        index < agents.length - 1 ? (
+          <View key={provider} style={{ opacity: 0.45 }}>
+            <ProviderIcon provider={provider} size={10} muted />
+          </View>
+        ) : (
+          <View key={provider} style={{ opacity: 0.75 }}>
+            <ProviderIcon provider={provider} size={12} />
+          </View>
+        ),
       )}
     </View>
   )

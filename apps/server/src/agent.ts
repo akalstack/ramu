@@ -663,6 +663,10 @@ export class AgentService {
     return this.parts.store.tail(...args)
   }
 
+  providerUses() {
+    return this.parts.store.providerUses()
+  }
+
   listByTask() {
     return this.parts.store.listByTask()
   }

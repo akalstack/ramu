@@ -4812,6 +4812,7 @@ for (const os of ['ios', 'android']) {
     let online = true
     const goalHold = load('../../../packages/shared/src/chat/goalHold.ts', os)
     const status = load('../../../packages/shared/src/chat/threadStatus.ts', os, { './goalHold': goalHold })
+    const providers = load('../../../packages/shared/src/chat/threadProviders.ts', os)
     const strings = {
       threadApproval: 'Approval',
       threadApprovalFull: 'Approval needed',
@@ -4830,6 +4831,7 @@ for (const os of ['ios', 'android']) {
         }),
       },
       '@ramu/shared/chat/threadStatus': status,
+      '@ramu/shared/chat/threadProviders': providers,
       '../i18n': { useT: () => strings, ago: () => 'now' },
       '../runtime/store': {
         useStore: () => ({ isOnline: () => online, inbox: { a: [{ kind: 'done', sessionId: 's' }] } }),
@@ -4863,6 +4865,9 @@ for (const os of ['ios', 'android']) {
     assert.match(find(tree, 'Row').props.accessibilityLabel, /Offline · last-known activity/)
     // Offline is a named fact on the detail line, so the host's state is not mistaken for the thread's.
     assert.ok(nodes(tree).some((node) => node.props?.label === 'Offline'))
+    // A thread handed from Claude to Codex keeps both agents, the leading one last.
+    tree = ChatRow({ chat: { ...chat, providers: ['claude-code', 'codex'] } })
+    assert.ok(nodes(tree).some((node) => JSON.stringify(node.props?.agents) === '["claude-code","codex"]'))
     tree = ChatRow({ chat: { ...chat, status: 'needs-input', inputSummary: undefined } })
     assert.match(find(tree, 'Row').props.accessibilityLabel, /Waiting for your input/)
     assert.ok(!nodes(tree).some((node) => node.props?.tone === 'warn' && node.props.children === 'Approval'))

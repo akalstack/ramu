@@ -35,6 +35,7 @@ import { WorkspaceNameDialog } from '../../workspace/WorkspaceNameDialog'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS } from './constants'
 import { InlineEdit } from './InlineEdit'
 import { TaskStateIcon } from './TaskStateIcon'
+import { AgentStack } from './AgentStack'
 import { offerThreadUndo } from './threadUndo'
 import { ThreadHoverCard } from './ThreadHoverCard'
 import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -461,6 +462,8 @@ export function TaskRow({
               />
             </span>
           )}
+          {/* The thread's agents, as the phone shows them: a handoff or teammate stays visible beside the leading one. */}
+          <AgentStack task={task} />
           <span className={`${ROW_ACTIONS_CLASS} task-actions`} hidden={viewOnly}>
             {!archived && (
               <Button
