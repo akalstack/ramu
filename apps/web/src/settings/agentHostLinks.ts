@@ -13,4 +13,10 @@ export const agentsOnEverywhere = (computers: Computer[], hosts: AgentHostSummar
 
 /** Agent hosts with no row in the host list, such as one added with `ramu hosts add`, so they stay visible. */
 export const unlistedAgentHosts = (hosts: AgentHostSummary[], computers: Computer[]) =>
-  hosts.filter((host) => !computers.some((computer) => computer.url && sameAddress(computer.url, host.address)))
+  hosts.filter(
+    (host) =>
+      // A host reached on one address and added for agents on another (its LAN versus its VPN) is still the same row.
+      !computers.some((computer) =>
+        [computer.url, ...(computer.routes ?? [])].some((address) => !!address && sameAddress(address, host.address)),
+      ),
+  )

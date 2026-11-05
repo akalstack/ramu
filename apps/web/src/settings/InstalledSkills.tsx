@@ -11,7 +11,7 @@ import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown } from '../Menu'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
-import { SettingsCard, SettingsCardList } from './cards'
+import { SettingsCard, SettingsCardList, SettingsEmpty } from './cards'
 import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { useWorkspace } from '../workspace/workspace'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
@@ -153,6 +153,11 @@ export function InstalledSkills() {
             {t('Create skill')}
           </Button>
         </div>
+        {currentHost && !own.length && !draft && (
+          <SettingsEmpty>
+            {t('No skills of your own yet. Create one to give agents instructions they reuse.')}
+          </SettingsEmpty>
+        )}
         <SettingsCardList>
           {(currentHost ? own : []).map((skill) => (
             <SettingsCard

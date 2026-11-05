@@ -26,13 +26,18 @@ export function AgentHosts() {
   if (!unlisted.length) return null
   return (
     <>
-      <SettingsSectionHead title={t('Other hosts for agents')} help={t('Added with ramu hosts add.')} />
+      <SettingsSectionHead
+        title={t('Hosts added for agents')}
+        help={t(
+          'Agents here may start threads on these hosts. They were added with ramu hosts add, so they have no row above.',
+        )}
+      />
       <SettingsCardList>
         {unlisted.map((host) => (
           <SettingsCard
             key={host.id}
             title={host.name}
-            meta={t('{0} · shown there as device {1}', { 0: host.address, 1: host.deviceId })}
+            meta={t('{0} · this computer is device {1} there', { 0: host.address, 1: host.deviceId })}
             actions={
               <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setForgetting(host)}>
                 {t('Forget')}

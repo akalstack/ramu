@@ -28,6 +28,7 @@ import {
   type MemoryPreferences,
   type MemorySnapshot,
 } from '@ramu/shared/types'
+import { SettingsEmpty } from './cards'
 
 const KIND_LABELS: Record<MemoryKind, string> = {
   user: 'About you',
@@ -267,10 +268,13 @@ export function MemoryBrowser() {
           onCancel={() => setEditing(null)}
         />
       )}
+      {!snapshot && <SettingsEmpty>{t('Loading…')}</SettingsEmpty>}
       {snapshot && !shown.length && (
-        <p className="muted text-muted-foreground small text-caption py-6 text-center">
-          {status === 'archived' ? t('No archived memories.') : t('No saved memories.')}
-        </p>
+        <SettingsEmpty>
+          {status === 'archived'
+            ? t('No archived memories.')
+            : t('No saved memories yet. Agents save them as they work, or use Add.')}
+        </SettingsEmpty>
       )}
       {paged.shown.map((m) =>
         editing?.id === m.id ? (

@@ -1438,8 +1438,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Agents on all hosts': 'Agen di semua host',
   'Let agents here start threads on every connected host. A host that has not allowed it is asked.':
     'Izinkan agen di sini memulai thread di setiap host yang terhubung. Host yang belum mengizinkan akan ditanya.',
-  'Other hosts for agents': 'Host lain untuk agen',
-  'Added with ramu hosts add.': 'Ditambahkan dengan ramu hosts add.',
   'Turn off': 'Matikan',
   'Let agents on that computer start threads here, up to the most access you allow.': 'Izinkan agen di komputer itu memulai thread di sini, hingga akses tertinggi yang Anda izinkan.',
   'Needs you': 'Butuh perhatianmu',
@@ -2496,7 +2494,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Let agents start threads': 'Izinkan agen memulai thread',
   "Agents can start threads in this project, other projects and hosts added for agents, and a paired host's agents can start threads here. Sub-agents are not affected. Turn off to start threads only yourself.":
     'Agen bisa memulai thread di proyek ini, proyek lain, dan host yang ditambahkan untuk agen, dan agen host terpasang bisa memulai thread di sini. Sub-agen tidak terpengaruh. Matikan agar hanya Anda yang memulai thread.',
-  '{0} · shown there as device {1}': '{0} · tampil di sana sebagai perangkat {1}',
   'Agents here stop using it. Threads already started there keep running. Revoke device {0} on that host to end the pairing there too.':
     'Agen di sini berhenti memakainya. Thread yang sudah dimulai di sana tetap berjalan. Cabut perangkat {0} di host itu untuk mengakhiri pemasangan di sana juga.',
   'Another host’s agents: start and follow threads only': 'Agen host lain: hanya memulai dan mengikuti thread',
@@ -3418,7 +3415,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Not cleaned up yet': 'Belum dibersihkan',
   'Clean up memory': 'Bersihkan memori',
   'No archived memories.': 'Belum ada memori yang diarsipkan.',
-  'No saved memories.': 'Belum ada memori tersimpan.',
   'About you': 'Tentang kamu',
   Feedback: 'Masukan',
   Reference: 'Referensi',
@@ -3676,6 +3672,25 @@ export const indonesian: Readonly<Record<string, string>> = {
   'How devices reach it': 'Cara perangkat menjangkaunya',
   'Tunnel address': 'Alamat tunnel',
   'From anywhere': 'Dari mana saja',
+  'Hosts added for agents': 'Host yang ditambahkan untuk agen',
+  'They stay connected together while Ramu is open.': 'Semuanya tetap terhubung selama Ramu terbuka.',
+  'No devices paired yet. Pair a phone or another computer above.':
+    'Belum ada perangkat yang dipasangkan. Pasangkan ponsel atau komputer lain di atas.',
+  'No custom agents yet. Describe one above and Ramu drafts it for you to edit.':
+    'Belum ada agen kustom. Jelaskan satu di atas dan Ramu membuat drafnya untuk Anda sunting.',
+  'No skills of your own yet. Create one to give agents instructions they reuse.':
+    'Belum ada skill buatan Anda. Buat satu untuk memberi agen instruksi yang bisa dipakai ulang.',
+  'No saved approvals yet. They appear here when you choose Always allow on an agent’s request.':
+    'Belum ada persetujuan tersimpan. Persetujuan muncul di sini saat Anda memilih Selalu izinkan pada permintaan agen.',
+  'No archived threads. Archive a thread from its menu in the sidebar to keep it out of the way.':
+    'Tidak ada thread yang diarsipkan. Arsipkan thread dari menunya di sidebar agar tidak mengganggu.',
+  'No saved memories yet. Agents save them as they work, or use Add.':
+    'Belum ada memori tersimpan. Agen menyimpannya saat bekerja, atau gunakan Tambah.',
+  'Agents here may start threads on these hosts. They were added with ramu hosts add, so they have no row above.':
+    'Agen di sini boleh memulai thread di host ini. Host ini ditambahkan dengan ramu hosts add, jadi tidak punya baris di atas.',
+  '{0} · this computer is device {1} there': '{0} · komputer ini adalah perangkat {1} di sana',
+  'No other hosts yet. Add a laptop, workstation or server to work on it from here.':
+    'Belum ada host lain. Tambahkan laptop, workstation, atau server untuk bekerja di sana dari sini.',
   'Reach from anywhere': 'Jangkau dari mana saja',
   'Only my network or VPN': 'Hanya jaringan atau VPN saya',
   'Quick tunnel (Cloudflare)': 'Tunnel cepat (Cloudflare)',
@@ -3718,7 +3733,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Phones and your other computers connect once paired: on your network, over a VPN, or from anywhere through your own tunnel.':
     'Ponsel dan komputer Anda yang lain terhubung setelah dipasangkan: di jaringan Anda, lewat VPN, atau dari mana saja lewat tunnel Anda sendiri.',
   'New code': 'Kode baru',
-  'No devices paired yet.': 'Belum ada perangkat yang dipasangkan.',
   'No network address found. Connect this host to a network or VPN.':
     'Alamat jaringan tidak ditemukan. Sambungkan host ini ke jaringan atau VPN.',
   'Open Remote access on that host, choose Pair a device, then enter what it shows. Projects live on that host, so add them there.':
@@ -3775,8 +3789,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Local: 'Lokal',
   'Connection settings': 'Pengaturan koneksi',
   '{0} connected · {1} saved': '{0} tersambung · {1} tersimpan',
-  'Add your laptop, workstation or server. They stay connected together while Ramu is open.':
-    'Tambahkan laptop, workstation, atau server. Semuanya tetap tersambung bersama selama Ramu terbuka.',
   'Saved on this device. The other host’s projects and settings stay as they are.':
     'Disimpan di perangkat ini. Proyek dan pengaturan host lain tetap seperti semula.',
   'Host name': 'Nama host',

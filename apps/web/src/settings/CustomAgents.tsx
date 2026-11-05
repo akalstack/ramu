@@ -13,6 +13,7 @@ import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { useModelSets } from '../models/ModelSets'
 import { useHost } from '../workspace/HostProvider'
+import { SettingsEmpty } from './cards'
 
 type Draft = Omit<CustomAgent, 'id' | 'updatedAt'> & { id?: string }
 
@@ -184,6 +185,11 @@ export function CustomAgentSettings() {
             void reload()
           }}
         />
+      )}
+      {!agents.length && !editing && (
+        <SettingsEmpty>
+          {t('No custom agents yet. Describe one above and Ramu drafts it for you to edit.')}
+        </SettingsEmpty>
       )}
       {agents.map((agent) => (
         <div key={agent.id} className="flex items-center gap-2 py-1">

@@ -44,6 +44,7 @@ vi.mock('../src/settings/SettingsScope', async () => ({
 vi.mock('../src/settings/cards', () => ({
   SettingsCard: 'SettingsCard',
   SettingsCardList: 'SettingsCardList',
+  SettingsEmpty: 'SettingsEmpty',
   usePaged: (shown: unknown[]) => ({ shown, more: null }),
 }))
 vi.mock('../src/workspace/workspace', () => ({ useWorkspace: () => ({ projects: [] }) }))

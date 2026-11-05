@@ -33,12 +33,17 @@ export function ArchivedThreads() {
   return (
     <div className={SETTINGS_FORM_CLASS}>
       <SettingsGroupTitle>
-        {t('Archived threads')} · {archivedChats.length}
+        {t('Archived threads')}
+        {archivedChats.length ? ` · ${archivedChats.length}` : ''}
       </SettingsGroupTitle>
       <div className="flex flex-col gap-3">
         <ListToolbar view={view} label={t('Search archived threads')} />
         <ListCount view={view} />
-        <ListEmpty view={view} none="No archived threads" filtered="No archived threads match your search." />
+        <ListEmpty
+          view={view}
+          none="No archived threads. Archive a thread from its menu in the sidebar to keep it out of the way."
+          filtered="No archived threads match your search."
+        />
         <div className="task-list flex flex-col gap-0.5">
           {view.paged.shown.map((task) => (
             <TaskRow key={task.id} task={task} projectName={projectName(task.projectId)} />

@@ -12,7 +12,7 @@ import {
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { LocalInlineAction } from '@/components/inline-action'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { SETTINGS_CARD_LINE } from './cards'
+import { SETTINGS_CARD_LINE, SettingsEmpty } from './cards'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -324,8 +324,7 @@ function ThisComputer() {
   const listening = status.listening ? `${status.tls ? 'https' : 'http'}://${status.host}:${status.port}` : null
   return (
     <>
-      <AgentHosts />
-      <SettingsGroupTitle className="mt-5">{t('Access')}</SettingsGroupTitle>
+      <SettingsGroupTitle>{t('Access')}</SettingsGroupTitle>
       <SettingsRow className="settings-toggle">
         <SettingsLabel
           title={t('Allow other devices')}
@@ -512,7 +511,7 @@ function ThisComputer() {
         />
       ))}
       {!status.devices.length && (
-        <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">{t('No devices paired yet.')}</p>
+        <SettingsEmpty>{t('No devices paired yet. Pair a phone or another computer above.')}</SettingsEmpty>
       )}
       <Collapsible className="mt-3">
         <CollapsibleTrigger
@@ -916,7 +915,7 @@ function Computers({ state }: { state: ComputerList }) {
       help={
         others.length
           ? t('{0} connected · {1} saved', { 0: connected, 1: state.computers.length })
-          : t('Add your laptop, workstation or server. They stay connected together while Ramu is open.')
+          : t('They stay connected together while Ramu is open.')
       }
       actions={
         <>
@@ -1057,7 +1056,13 @@ function Computers({ state }: { state: ComputerList }) {
             </div>
           </article>
         ))}
+        {!others.length && (
+          <SettingsEmpty>
+            {t('No other hosts yet. Add a laptop, workstation or server to work on it from here.')}
+          </SettingsEmpty>
+        )}
       </div>
+      <AgentHosts />
       {reachable.length > 1 && (
         <div className="mt-2">
           <SettingsRow className="settings-toggle">

@@ -7,7 +7,7 @@ import { t } from '../i18n'
 import { errorText } from '../lib/errors'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
-import { SettingsCard, SettingsCardList } from './cards'
+import { SettingsCard, SettingsCardList, SettingsEmpty } from './cards'
 import { ListCount, ListToolbar, useListView } from './ListView'
 
 export function PermissionRules({ disabled }: { disabled: boolean }) {
@@ -94,57 +94,65 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
           'Rules apply to the selected provider on this host. User rules cover all projects; project rules cover one project.',
         )}
       </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <Dropdown
-          label={t('Approval scope')}
-          value={target}
-          onChange={setTarget}
-          options={[
-            { value: 'all', label: t('All approvals') },
-            { value: 'user', label: t('User approvals') },
-            { value: 'projects', label: t('All project approvals') },
-            ...projects.map(([id, name]) => ({ value: `project:${id}`, label: `${t('Project')}: ${name}` })),
-          ]}
-        />
-        <Button
-          variant="secondary"
-          disabled={viewOnly || disabled || busy || !shown.length || view.query !== ''}
-          title={view.query ? t('Clear the search to remove a whole scope.') : undefined}
-          onClick={() => void change()}
-        >
-          {t('Remove displayed approvals')}
-        </Button>
-        <Button variant="ghost" disabled={viewOnly || busy} onClick={() => void load()}>
-          {t('Refresh')}
-        </Button>
-      </div>
-      <ListToolbar view={view} label={t('Search approvals')} />
-      <ListCount view={view} />
-      {!shown.length && (
-        <p className="m-0 text-caption text-muted-foreground">{t('No saved approvals in this scope.')}</p>
+      {!rules.length ? (
+        <SettingsEmpty>
+          {t('No saved approvals yet. They appear here when you choose Always allow on an agent’s request.')}
+        </SettingsEmpty>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Dropdown
+              label={t('Approval scope')}
+              value={target}
+              onChange={setTarget}
+              options={[
+                { value: 'all', label: t('All approvals') },
+                { value: 'user', label: t('User approvals') },
+                { value: 'projects', label: t('All project approvals') },
+                ...projects.map(([id, name]) => ({ value: `project:${id}`, label: `${t('Project')}: ${name}` })),
+              ]}
+            />
+            <Button
+              variant="secondary"
+              disabled={viewOnly || disabled || busy || !shown.length || view.query !== ''}
+              title={view.query ? t('Clear the search to remove a whole scope.') : undefined}
+              onClick={() => void change()}
+            >
+              {t('Remove displayed approvals')}
+            </Button>
+            <Button variant="ghost" disabled={viewOnly || busy} onClick={() => void load()}>
+              {t('Refresh')}
+            </Button>
+          </div>
+          <ListToolbar view={view} label={t('Search approvals')} />
+          <ListCount view={view} />
+          {!shown.length && (
+            <p className="m-0 text-caption text-muted-foreground">{t('No saved approvals in this scope.')}</p>
+          )}
+          <SettingsCardList>
+            {paged.shown.map((rule) => (
+              <SettingsCard
+                key={rule.id}
+                title={<code className="truncate text-caption">{rule.label}</code>}
+                meta={`${rule.provider} · ${
+                  rule.scope === 'user' ? t('User — all projects') : `${t('Project')}: ${rule.projectName}`
+                }`}
+                actions={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={viewOnly || disabled || busy}
+                    onClick={() => void change(rule.id)}
+                  >
+                    {t('Remove')}
+                  </Button>
+                }
+              />
+            ))}
+            {paged.more}
+          </SettingsCardList>
+        </>
       )}
-      <SettingsCardList>
-        {paged.shown.map((rule) => (
-          <SettingsCard
-            key={rule.id}
-            title={<code className="truncate text-caption">{rule.label}</code>}
-            meta={`${rule.provider} · ${
-              rule.scope === 'user' ? t('User — all projects') : `${t('Project')}: ${rule.projectName}`
-            }`}
-            actions={
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={viewOnly || disabled || busy}
-                onClick={() => void change(rule.id)}
-              >
-                {t('Remove')}
-              </Button>
-            }
-          />
-        ))}
-        {paged.more}
-      </SettingsCardList>
       {error && (
         <p role="alert" className="m-0 text-caption text-bad">
           {error}

@@ -11,6 +11,12 @@ it('lists only agent hosts that have no row in the host list', () => {
   const hosts = [{ address: 'http://mini:7788/' }, { address: 'http://vps:7788' }] as AgentHostSummary[]
   const computers = [{ url: 'http://mini:7788' }, { url: null }] as Computer[]
   expect(unlistedAgentHosts(hosts, computers).map((host) => host.address)).toEqual(['http://vps:7788'])
+  // Added for agents on its LAN address while the host list reaches it over the VPN: still the same host.
+  const viaVpn = [
+    { url: 'http://100.64.0.7:7788', routes: ['http://vps:7788'] },
+    { url: 'http://mini:7788' },
+  ] as Computer[]
+  expect(unlistedAgentHosts(hosts, viaVpn)).toEqual([])
 })
 
 it('reads on for all only when agents use every reachable host', () => {

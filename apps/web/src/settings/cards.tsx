@@ -67,6 +67,18 @@ export function SettingsSectionHead({
 export const SETTINGS_CARD_LINE =
   'flex min-h-8 items-center justify-between gap-3 [&_.dropdown-trigger]:max-w-[150px] [&_.dropdown-trigger]:flex-none'
 
+/** What an empty Settings list says in its place: that there is nothing yet, and how something gets there. */
+export function SettingsEmpty({ children }: { children: ReactNode }) {
+  return (
+    <p
+      className="m-0 rounded-(--radius-m) border border-dashed border-(--line) px-3 py-4 text-center text-caption text-muted-foreground"
+      role="status"
+    >
+      {children}
+    </p>
+  )
+}
+
 /** Cards stacked tightly, as one list. */
 export function SettingsCardList({ children }: { children: ReactNode }) {
   return <div className="flex flex-col gap-1.5">{children}</div>
