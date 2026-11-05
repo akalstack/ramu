@@ -90,6 +90,18 @@ export function SchedulesPage({
   const ws = useWorkspace(),
     { schedules, runs, reload, loading } = useSchedules()
   const viewOnly = useViewOnly()
+  // The sidebar's host filter applies here as it does to threads: All hosts lists every connected host's schedules,
+  // one host lists only its own. Each schedule still lives on, and is fired by, its host.
+  const own = useHost().id
+  const computers = useComputers()
+  const scope = computers?.scope ?? null
+  const showOwn = !scope || scope === own
+  const others = (computers?.computers ?? []).filter(
+    (computer) => computer.id !== own && computer.status === 'connected' && (!scope || computer.id === scope),
+  )
+  const ownName = computers?.computers.find((computer) => computer.id === own)?.name
+  // Bumped after the page's editor saves, so another host's list reads its schedules again at once.
+  const [version, setVersion] = useState(0)
   const [editing, setEditing] = useState<Schedule | 'new' | null>(null),
     [selected, setSelected] = useState<string | null>(null)
   const [busy, setBusy] = useState(false),
@@ -154,18 +166,25 @@ export function SchedulesPage({
           </p>
         )}
         {editing && (
-          <ScheduleEditor
-            key={editing === 'new' ? 'new' : editing.id}
-            schedule={editing === 'new' ? undefined : editing}
-            onClose={() => setEditing(null)}
-            onSaved={() => {
-              setEditing(null)
-              void reload()
-            }}
-          />
+          // A new schedule starts on the host in view; its Runs on still moves it.
+          <HostProvider hostId={showOwn ? undefined : scope!}>
+            <ScheduleEditor
+              key={editing === 'new' ? 'new' : editing.id}
+              schedule={editing === 'new' ? undefined : editing}
+              onClose={() => setEditing(null)}
+              onSaved={() => {
+                setEditing(null)
+                setVersion((value) => value + 1)
+                void reload()
+              }}
+            />
+          </HostProvider>
         )}
-        {!editing && loading && <ContentSkeleton variant="cards" rows={3} />}
-        {!editing && !loading && !schedules.length && (
+        {!editing && showOwn && others.length > 0 && schedules.length > 0 && ownName && (
+          <h2 className="m-0 text-control font-medium text-muted-foreground">{t('On {0}', { 0: ownName })}</h2>
+        )}
+        {!editing && showOwn && loading && <ContentSkeleton variant="cards" rows={3} />}
+        {!editing && !loading && !schedules.length && showOwn && !others.length && (
           <Empty className="automation-empty">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -187,7 +206,7 @@ export function SchedulesPage({
             </EmptyContent>
           </Empty>
         )}
-        {!editing && schedules.length > 0 && (
+        {!editing && showOwn && schedules.length > 0 && (
           <div className="flex flex-col gap-1.5">
             {byNextRun(schedules).map((s) => (
               <ScheduleCard
@@ -203,39 +222,44 @@ export function SchedulesPage({
             ))}
           </div>
         )}
-        {!editing && <OtherHostSchedules />}
+        {!editing &&
+          others.map((computer) => (
+            <HostProvider key={computer.id} hostId={computer.id}>
+              <HostScheduleList
+                name={computer.name}
+                heading={showOwn || others.length > 1}
+                version={version}
+                onCreate={() => setEditing('new')}
+              />
+            </HostProvider>
+          ))}
       </div>
     </div>
   )
 }
 
-/** Schedules live on their host, which fires them; other connected hosts' schedules are listed with a host label. */
-function OtherHostSchedules() {
-  const host = useHost()
-  const computers = useComputers()
-  const others = (computers?.computers ?? []).filter(
-    (computer) => computer.id !== host.id && computer.status === 'connected',
-  )
-  return (
-    <>
-      {others.map((computer) => (
-        <HostProvider key={computer.id} hostId={computer.id}>
-          <HostScheduleList name={computer.name} />
-        </HostProvider>
-      ))}
-    </>
-  )
-}
-
-function HostScheduleList({ name }: { name: string }) {
+/** Another connected host's schedules, read from that host; `heading` names it when the page lists several hosts. */
+function HostScheduleList({
+  name,
+  heading,
+  version,
+  onCreate,
+}: {
+  name: string
+  heading: boolean
+  version: number
+  onCreate: () => void
+}) {
   const { invoke } = useHost()
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [runs, setRuns] = useState<ScheduleRun[]>([])
+  const [loaded, setLoaded] = useState(false)
   const reload = useCallback(
     () =>
       Promise.all([invoke('schedules.list'), invoke('schedules.runs')]).then(([list, history]) => {
         setSchedules(list)
         setRuns(history)
+        setLoaded(true)
       }),
     [invoke],
   )
@@ -243,11 +267,28 @@ function HostScheduleList({ name }: { name: string }) {
     void reload().catch(() => {})
     const timer = setInterval(() => void reload().catch(() => {}), 30_000)
     return () => clearInterval(timer)
-  }, [reload])
+  }, [reload, version])
   const viewOnly = useViewOnly()
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState<Schedule | null>(null)
-  if (!schedules.length) return null
+  // Shown alone (the sidebar filters to this host), an empty host says so and offers to create, as the page's own does.
+  if (!schedules.length)
+    return heading || !loaded ? null : (
+      <Empty className="automation-empty">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <CalendarClock />
+          </EmptyMedia>
+          <EmptyTitle>{t('Let an agent handle it later')}</EmptyTitle>
+          <EmptyDescription>{t('Schedule a task once or at regular intervals.')}</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button variant="secondary" className="bg-fill hover:bg-fill-hover" disabled={viewOnly} onClick={onCreate}>
+            {t('Create your first schedule')}
+          </Button>
+        </EmptyContent>
+      </Empty>
+    )
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true)
     try {
@@ -261,7 +302,9 @@ function HostScheduleList({ name }: { name: string }) {
   }
   return (
     <section className="flex flex-col gap-1.5" aria-label={t('Schedules on {0}', { 0: name })}>
-      <h2 className="m-0 mt-4 text-control font-medium text-muted-foreground">{t('On {0}', { 0: name })}</h2>
+      {heading && (
+        <h2 className="m-0 mt-4 text-control font-medium text-muted-foreground">{t('On {0}', { 0: name })}</h2>
+      )}
       {editing && (
         <ScheduleEditor
           key={editing.id}

@@ -50,11 +50,14 @@ export function ScheduleRow({
   schedule,
   lastRun,
   divider,
+  host,
 }: {
   computerId: string
   schedule: Schedule
   lastRun?: ScheduleRun
   divider?: boolean
+  /** The host that fires it, named when the list mixes hosts. */
+  host?: string
 }) {
   const { c } = useTheme()
   const t = useT()
@@ -102,7 +105,7 @@ export function ScheduleRow({
               {schedule.name}
             </T>
             <T size={font.control} tone="soft" numberOfLines={1}>
-              {describeRule(schedule.rule, language, schedule.timezone)}
+              {[host, describeRule(schedule.rule, language, schedule.timezone)].filter(Boolean).join(' · ')}
             </T>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               <T size={font.control} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
