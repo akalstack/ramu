@@ -89,10 +89,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. [Report a
 
 ## Support Ramu
 
-Ramu is free and stays free. If it saves you time, you can help keep it going:
-
-- **Worldwide:** [GitHub Sponsors](https://github.com/sponsors/akalstack)
-- **Indonesia:** [Trakteer](https://trakteer.id/akalstack) (QRIS, e-wallet, transfer bank)
+Ramu is free and stays free. If it saves you time, you can help keep it going through [GitHub Sponsors](https://github.com/sponsors/akalstack) or [Trakteer](https://trakteer.id/akalstack).
 
 ## Acknowledgments
 
