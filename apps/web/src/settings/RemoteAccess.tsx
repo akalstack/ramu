@@ -125,7 +125,9 @@ export function RemoteAccessSettings() {
         help={
           here?.local === false
             ? t('You are looking at {0}. Who can connect to a host is set on that host.', { 0: here.name })
-            : t('Phones and your other computers reach it over your network or VPN, after you pair them.')
+            : t(
+                'Phones and your other computers connect once paired: on your network, over a VPN, or from anywhere through your own tunnel.',
+              )
         }
       >
         {here?.local !== false && <ThisComputer />}
@@ -227,14 +229,16 @@ function ThisComputer() {
   return (
     <>
       <AgentHosts />
-      <SettingsGroupTitle className="mt-5">{t('Local network or VPN')}</SettingsGroupTitle>
+      <SettingsGroupTitle className="mt-5">{t('Access')}</SettingsGroupTitle>
       <SettingsRow className="settings-toggle">
         <SettingsLabel
           title={t('Allow other devices')}
           help={
             managed
               ? t('Set when Ramu was started with --listen. Change it there.')
-              : t('Phones and other hosts can use this host’s threads, files and terminals after you pair them.')
+              : t(
+                  'Paired phones and computers can use this host’s threads, files and terminals. Then choose how they reach it: your network, a VPN or your own tunnel.',
+                )
           }
         />
         <Switch
@@ -247,59 +251,6 @@ function ThisComputer() {
           }}
         />
       </SettingsRow>
-      {!managed && config.enabled && (
-        <SettingsRow>
-          <SettingsLabel
-            title={t('Network')}
-            help={t(
-              'Other devices connect to and find this host only on this network. Choose your VPN to keep Ramu off other networks.',
-            )}
-          />
-          <Dropdown
-            label={t('Network')}
-            value={host}
-            options={options}
-            onChange={(next) => stageConfig({ ...config, host: next })}
-          />
-        </SettingsRow>
-      )}
-      {status.discovery && config.enabled && (
-        <>
-          <SettingsRow className="settings-toggle">
-            <SettingsLabel
-              title={t('Discoverable on this network')}
-              help={
-                managed
-                  ? t('Set with --discoverable when Ramu was started with --listen.')
-                  : t(
-                      'Devices on the same network can see this host’s name ({0}) while pairing. Finding a host never gives access; they still need a pairing code. Off by default.',
-                      { 0: status.discovery.name },
-                    )
-              }
-            />
-            <Switch
-              aria-label={t('Discoverable on this network')}
-              checked={!!config.discoverable}
-              disabled={managed || !config.enabled}
-              onCheckedChange={(checked) => stageConfig({ ...config, discoverable: checked })}
-            />
-          </SettingsRow>
-          {status.enabled && status.discovery.discoverable && (
-            <p className="muted text-muted-foreground small text-caption m-[0_0_12px]" role="status">
-              {status.discovery.state === 'advertising'
-                ? t('Visible as {0} on {1}', {
-                    0: status.discovery.name,
-                    1: status.discovery.interfaces.join(', '),
-                  })
-                : status.listening
-                  ? t('Not visible right now ({0}). Pairing by address or QR code still works.', {
-                      0: status.discovery.error ?? t('no network to advertise on'),
-                    })
-                  : t('Starting…')}
-            </p>
-          )}
-        </>
-      )}
       {status.enabled && (
         <p className="muted text-muted-foreground small text-caption m-[0_0_12px]" role="status">
           {listening
@@ -313,60 +264,112 @@ function ThisComputer() {
               : t('Starting…')}
         </p>
       )}
-      {!status.tls && status.enabled && !/^(127\.|::1$)/.test(status.host) && (
-        <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">
-          {t('Ramu does not encrypt this connection. Use it on a VPN or a network you trust.')}
-        </p>
+      {config.enabled && (
+        <>
+          <SettingsGroupTitle className="mt-5">{t('How devices reach it')}</SettingsGroupTitle>
+          {!managed && (
+            <SettingsRow>
+              <SettingsLabel
+                title={t('Network')}
+                help={t(
+                  'Devices nearby or on your VPN connect on this network. Choose your VPN to keep Ramu off other networks.',
+                )}
+              />
+              <Dropdown
+                label={t('Network')}
+                value={host}
+                options={options}
+                onChange={(next) => stageConfig({ ...config, host: next })}
+              />
+            </SettingsRow>
+          )}
+          {status.discovery && (
+            <SettingsRow className="settings-toggle">
+              <SettingsLabel
+                title={t('Discoverable on this network')}
+                help={
+                  managed
+                    ? t('Set with --discoverable when Ramu was started with --listen.')
+                    : t(
+                        'Devices on the same network see this host as {0} and can ask to pair. Seeing it gives no access. Off by default.',
+                        { 0: status.discovery.name },
+                      )
+                }
+              />
+              <Switch
+                aria-label={t('Discoverable on this network')}
+                checked={!!config.discoverable}
+                disabled={managed}
+                onCheckedChange={(checked) => stageConfig({ ...config, discoverable: checked })}
+              />
+            </SettingsRow>
+          )}
+          {status.enabled && status.discovery?.discoverable && (
+            <p className="muted text-muted-foreground small text-caption m-[0_0_12px]" role="status">
+              {status.discovery.state === 'advertising'
+                ? t('Visible as {0} on {1}', {
+                    0: status.discovery.name,
+                    1: status.discovery.interfaces.join(', '),
+                  })
+                : status.listening
+                  ? t('Not visible right now ({0}). Pairing by address or QR code still works.', {
+                      0: status.discovery.error ?? t('no network to advertise on'),
+                    })
+                  : t('Starting…')}
+            </p>
+          )}
+          {!status.tls && status.enabled && !/^(127\.|::1$)/.test(status.host) && (
+            <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">
+              {t('Ramu does not encrypt this connection. Use it on a VPN or a network you trust.')}
+            </p>
+          )}
+          <SettingsRow>
+            <SettingsLabel
+              title={t('Tunnel address')}
+              help={
+                !status.publicAddress
+                  ? t('Update Ramu on this host to reach it through a tunnel.')
+                  : publicUrlFixed
+                    ? t('Set with --public-url when Ramu was started from the command line. Change it there.')
+                    : t(
+                        'To reach this host away from your network, run your own tunnel (Cloudflare Tunnel, Tailscale Funnel or ngrok) to port {0} and paste its https:// address. Devices try it first. The tunnel’s provider can read what passes through it.',
+                        { 0: status.port },
+                      )
+              }
+            />
+            <Input
+              aria-label={t('Tunnel address')}
+              type="url"
+              inputMode="url"
+              spellCheck={false}
+              placeholder="https://ramu.example.com"
+              value={publicUrl}
+              disabled={publicUrlFixed || !status.publicAddress}
+              onChange={(event) => stagePublicUrl(event.target.value)}
+            />
+          </SettingsRow>
+        </>
       )}
-
-      <div>
-        <SettingsRow>
-          <SettingsLabel
-            title={t('Pair a device')}
-            help={
-              status.reachable
-                ? t(
-                    'Creates a one-time code for a phone or another host. With Discoverable on, nearby devices can also ask, and you allow them here.',
-                  )
-                : t('Turn on Allow other devices above first.')
-            }
-          />
-          <Button
-            variant="secondary"
-            className="bg-fill hover:bg-fill-hover"
-            disabled={!status.reachable}
-            onClick={() => setPairing(true)}
-          >
-            <Link2 size={14} />
-            {t('Pair a device…')}
-          </Button>
-        </SettingsRow>
-      </div>
-      <SettingsGroupTitle className="mt-5">{t('From anywhere')}</SettingsGroupTitle>
-      <SettingsRow>
+      <SettingsRow className="mt-5">
         <SettingsLabel
-          title={t('Public address')}
+          title={t('Pair a device')}
           help={
-            !status.publicAddress
-              ? t('Update Ramu on this host to set a public address.')
-              : publicUrlFixed
-                ? t('Set with --public-url when Ramu was started from the command line. Change it there.')
-                : t(
-                    'The https:// address of your own tunnel to this host (Cloudflare Tunnel, Tailscale Funnel, ngrok), pointed at port {0} on this computer. Paired devices and webhook senders try it first. The tunnel’s provider can read what passes through it.',
-                    { 0: status.port },
-                  )
+            status.reachable
+              ? t(
+                  'Shows a one-time code and QR code for a phone or another computer. With Discoverable on, nearby devices can ask instead, and you allow them here.',
+                )
+              : t('Turn on Allow other devices first.')
           }
         />
-        <Input
-          aria-label={t('Public address')}
-          type="url"
-          inputMode="url"
-          spellCheck={false}
-          placeholder="https://ramu.example.com"
-          value={publicUrl}
-          disabled={publicUrlFixed || !status.publicAddress}
-          onChange={(event) => stagePublicUrl(event.target.value)}
-        />
+        <Button
+          variant="secondary"
+          className="bg-fill hover:bg-fill-hover"
+          disabled={!status.reachable}
+          onClick={() => setPairing(true)}
+        >
+          <Link2 size={14} />
+          {t('Pair a device…')}
+        </Button>
       </SettingsRow>
       <SettingsGroupTitle className="mt-5">{t('Devices that can use this host')}</SettingsGroupTitle>
       <PermissionRequests status={status} invoke={changePermission} />

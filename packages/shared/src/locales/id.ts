@@ -246,8 +246,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Both devices must be on the network you pick. Ramu checks it is the same host before switching.':
     'Kedua perangkat harus ada di jaringan yang dipilih. Ramu memastikan host-nya sama sebelum beralih.',
   'Or enter another address': 'Atau masukkan alamat lain',
-  'Other devices connect to and find this host only on this network. Choose your VPN to keep Ramu off other networks.':
-    'Perangkat lain hanya bisa terhubung ke dan menemukan host ini di jaringan ini. Pilih VPN agar Ramu tidak terbuka di jaringan lain.',
   'Unverified: no compatibility rule covers this version. It can still be used.':
     'Belum terverifikasi: tidak ada aturan kompatibilitas untuk versi ini. Versi ini tetap bisa dipakai.',
   'Limited: some features are unavailable with this version.': 'Terbatas: beberapa fitur tidak tersedia di versi ini.',
@@ -1759,13 +1757,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   Terminal: 'Terminal',
   'Replacement preview unavailable for this expression or truncated match':
     'Pratinjau pengganti tidak tersedia untuk ekspresi atau kecocokan yang terpotong ini',
-  'Public address': 'Alamat publik',
-  'From anywhere': 'Dari mana saja',
-  'Update Ramu on this host to set a public address.': 'Perbarui Ramu di host ini untuk mengatur alamat publik.',
   'Set with --public-url when Ramu was started from the command line. Change it there.':
     'Diatur dengan --public-url saat Ramu dijalankan dari baris perintah. Ubah di sana.',
-  'The https:// address of your own tunnel to this host (Cloudflare Tunnel, Tailscale Funnel, ngrok), pointed at port {0} on this computer. Paired devices and webhook senders try it first. The tunnel’s provider can read what passes through it.':
-    'Alamat https:// tunnel milik Anda sendiri ke host ini (Cloudflare Tunnel, Tailscale Funnel, ngrok), yang diarahkan ke port {0} di komputer ini. Perangkat yang dipasangkan dan pengirim webhook mencobanya lebih dulu. Penyedia tunnel dapat membaca apa yang melewatinya.',
   'Keep devices paired': 'Pertahankan perangkat tetap terhubung',
   'A device that is not used for this long must be paired again. Using it renews the time. Changes apply the next time each device connects.':
     'Perangkat yang tidak dipakai selama ini harus dipasangkan lagi. Memakainya memperpanjang waktunya. Perubahan berlaku saat setiap perangkat terhubung berikutnya.',
@@ -3534,8 +3527,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Full access · {0} of {1} permissions': 'Akses penuh · {0} dari {1} izin',
   '{0}, {1}, last seen {2}': '{0}, {1}, terakhir terlihat {2}',
   'last seen {0}': 'terakhir terlihat {0}',
-  'Creates a one-time code for a phone or another host. With Discoverable on, nearby devices can also ask, and you allow them here.':
-    'Membuat kode sekali pakai untuk ponsel atau host lain. Saat Dapat ditemukan aktif, perangkat sekitar juga bisa meminta, dan Anda mengizinkannya di sini.',
   'What this computer may do there': 'Yang boleh dilakukan komputer ini di sana',
   'Not connected. Pull requests, builds and issues need an Atlassian API token.':
     'Belum terhubung. Pull request, build, dan issue memerlukan API token Atlassian.',
@@ -3676,6 +3667,23 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Listening on {0}': 'Mendengarkan di {0}',
   'Name (optional)': 'Nama (opsional)',
   Network: 'Jaringan',
+  Access: 'Akses',
+  'How devices reach it': 'Cara perangkat menjangkaunya',
+  'Tunnel address': 'Alamat tunnel',
+  'Paired phones and computers can use this host’s threads, files and terminals. Then choose how they reach it: your network, a VPN or your own tunnel.':
+    'Ponsel dan komputer yang dipasangkan dapat memakai thread, file, dan terminal host ini. Lalu pilih cara mereka menjangkaunya: jaringan Anda, VPN, atau tunnel Anda sendiri.',
+  'Devices nearby or on your VPN connect on this network. Choose your VPN to keep Ramu off other networks.':
+    'Perangkat di dekat Anda atau di VPN Anda terhubung lewat jaringan ini. Pilih VPN Anda agar Ramu tidak terbuka di jaringan lain.',
+  'Devices on the same network see this host as {0} and can ask to pair. Seeing it gives no access. Off by default.':
+    'Perangkat di jaringan yang sama melihat host ini sebagai {0} dan dapat meminta untuk dipasangkan. Melihatnya tidak memberi akses. Mati secara bawaan.',
+  'Update Ramu on this host to reach it through a tunnel.': 'Perbarui Ramu di host ini agar dapat dijangkau lewat tunnel.',
+  'To reach this host away from your network, run your own tunnel (Cloudflare Tunnel, Tailscale Funnel or ngrok) to port {0} and paste its https:// address. Devices try it first. The tunnel’s provider can read what passes through it.':
+    'Untuk menjangkau host ini dari luar jaringan Anda, jalankan tunnel Anda sendiri (Cloudflare Tunnel, Tailscale Funnel, atau ngrok) ke port {0} lalu tempel alamat https://-nya. Perangkat mencobanya lebih dulu. Penyedia tunnel dapat membaca apa yang melewatinya.',
+  'Shows a one-time code and QR code for a phone or another computer. With Discoverable on, nearby devices can ask instead, and you allow them here.':
+    'Menampilkan kode sekali pakai dan kode QR untuk ponsel atau komputer lain. Dengan Dapat ditemukan aktif, perangkat di dekat Anda dapat meminta, dan Anda mengizinkannya di sini.',
+  'Turn on Allow other devices first.': 'Aktifkan Izinkan perangkat lain terlebih dahulu.',
+  'Phones and your other computers connect once paired: on your network, over a VPN, or from anywhere through your own tunnel.':
+    'Ponsel dan komputer Anda yang lain terhubung setelah dipasangkan: di jaringan Anda, lewat VPN, atau dari mana saja lewat tunnel Anda sendiri.',
   'New code': 'Kode baru',
   'No devices paired yet.': 'Belum ada perangkat yang dipasangkan.',
   'No network address found. Connect this host to a network or VPN.':
@@ -3689,8 +3697,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Paired {0} · last seen {1}': 'Dipasangkan {0} · terakhir terlihat {1}',
   'Pairing code': 'Kode pemasangan',
   'Pairing…': 'Memasangkan…',
-  'Phones and other hosts can use this host’s threads, files and terminals after you pair them.':
-    'Ponsel dan host lain bisa memakai thread, file, dan terminal host ini setelah kamu pasangkan.',
   Port: 'Port',
   'Ramu does not encrypt this connection. Anyone on that network could read what a paired device sends. Turn it on only for a VPN such as Tailscale, NetBird or ZeroTier, or a network you trust. Devices still need a pairing code.':
     'Ramu tidak mengenkripsi koneksi ini. Siapa pun di jaringan itu bisa membaca yang dikirim perangkat terpasang. Aktifkan hanya untuk VPN seperti Tailscale, NetBird, atau ZeroTier, atau jaringan yang kamu percaya. Perangkat tetap butuh kode pemasangan.',
@@ -4556,8 +4562,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Discoverable on this network': 'Dapat ditemukan di jaringan ini',
   'Set with --discoverable when Ramu was started with --listen.':
     'Diatur dengan --discoverable saat Ramu dimulai dengan --listen.',
-  'Devices on the same network can see this host’s name ({0}) while pairing. Finding a host never gives access; they still need a pairing code. Off by default.':
-    'Perangkat di jaringan yang sama dapat melihat nama host ini ({0}) saat pairing. Menemukan host tidak memberi akses; mereka tetap memerlukan kode pairing. Mati secara bawaan.',
   'Visible as {0} on {1}': 'Terlihat sebagai {0} di {1}',
   'Not visible right now ({0}). Pairing by address or QR code still works.':
     'Tidak terlihat saat ini ({0}). Pairing lewat alamat atau kode QR tetap berfungsi.',
@@ -5273,8 +5277,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'idb installed without its executables. Try again.': 'idb terpasang tanpa file yang bisa dijalankan. Coba lagi.',
   'Reach Ramu from your other devices': 'Jangkau Ramu dari perangkatmu yang lain',
   'Use your phone or another computer with this host over your network or VPN. You can change this later.': 'Pakai ponsel atau komputer lain dengan host ini lewat jaringan atau VPN-mu. Kamu bisa mengubahnya nanti.',
-  'Turn on Allow other devices above first.': 'Nyalakan dulu Izinkan perangkat lain di atas.',
   'Nothing outside this computer can reach it yet. Turn on Allow other devices in Settings → Remote access; the address then appears here.': 'Belum ada yang bisa menjangkaunya dari luar komputer ini. Nyalakan Izinkan perangkat lain di Pengaturan → Akses jarak jauh; alamatnya lalu tampil di sini.',
-  'Phones and your other computers reach it over your network or VPN, after you pair them.': 'Ponsel dan komputermu yang lain menjangkaunya lewat jaringan atau VPN-mu, setelah kamu memasangkannya.',
   'Turn on Local network or VPN below first, so {0} can reach this computer.': 'Nyalakan dulu Jaringan lokal atau VPN di bawah, supaya {0} bisa menjangkau komputer ini.',
 }
