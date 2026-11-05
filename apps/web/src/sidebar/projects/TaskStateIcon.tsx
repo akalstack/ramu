@@ -45,7 +45,8 @@ export function StatusMark({ task, status }: { task: Task; status: ThreadStatus 
 
 /**
  * The trailing status of a chat row: working, needs input, waiting, failed, unread, or its age. Mark and age share one
- * fixed slot, so the agent marks before it line up down the list whichever a row shows.
+ * fixed slot, so the agent marks before it line up down the list whichever a row shows. On hover the row's two action
+ * buttons are this slot's width, so the last lands on it and the first on the agent mark.
  */
 export function TaskStateIcon({ task, unread }: { task: Task; unread: boolean }) {
   useLanguage()
@@ -53,7 +54,7 @@ export function TaskStateIcon({ task, unread }: { task: Task; unread: boolean })
   // Anything that needs the person shows at once; only a plain stop waits to see whether the turn carries on.
   const held = useHeld(isWorking(status))
   return (
-    <span className="task-trailing inline-flex min-w-5 flex-none items-center justify-end [&>.task-state]:mr-0">
+    <span className="task-trailing inline-flex min-w-5 flex-none items-center justify-center [&>.task-state]:mr-0">
       {held && (!status || status.kind === 'finished') ? (
         <Spinner label={t('Agent working')} />
       ) : status ? (
