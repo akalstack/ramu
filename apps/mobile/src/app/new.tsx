@@ -101,6 +101,20 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const { projects, computers, createChat, isOnline } = store
   const params = useLocalSearchParams<{ project?: string; quote?: string; computer?: string; draftContext?: string }>()
   const [selected, setHost] = useState(params.computer ?? store.selected)
+  // "Quote in new chat" hands the passage over once: it goes into the box, then leaves the route, so removing it there
+  // (or coming back to this tab later) does not bring it back.
+  const [quoted, setQuoted] = useState<{ text: string; n: number } | undefined>()
+  useEffect(() => {
+    if (!params.quote) return
+    const text = `${params.quote
+      .trim()
+      .split('\n')
+      .map((line) => `> ${line}`)
+      .join('\n')}\n\n`
+    setQuoted((current) => ({ text, n: (current?.n ?? 0) + 1 }))
+    router.setParams({ quote: undefined })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [params.quote] by design; the router is stable
+  }, [params.quote])
   const offline = !isOnline(selected)
   const list = projects.filter((p) => p.computerId === selected)
   // A chat runs in a project's folders, so the project is chosen (by hand or by Auto) rather than defaulted.
@@ -606,18 +620,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           <Composer
             key={composerKey}
             running={false}
-            restore={
-              params.quote
-                ? {
-                    text: `${params.quote
-                      .trim()
-                      .split('\n')
-                      .map((line) => `> ${line}`)
-                      .join('\n')}\n\n`,
-                    n: 1,
-                  }
-                : undefined
-            }
+            restore={quoted}
             autoFocus={picker === null && (projectId !== null || auto)}
             header={
               <>

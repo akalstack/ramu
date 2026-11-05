@@ -982,9 +982,12 @@ export function Composer({
     store.appPreferences?.[pc]?.busyMessageAction,
   )
   const otherMode = otherBusyMode(mode)
+  // Applied when a restore arrives, keyed by its count and text: a caller that rebuilds the same restore on every render
+  // must not keep putting back what the person just removed.
   useEffect(() => {
-    if (restore) setText(restore.text)
-  }, [restore])
+    if (restore) save(restore.text)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [restore?.n, restore?.text] by design; `save` writes the current draft
+  }, [restore?.n, restore?.text])
   useEffect(() => {
     revision.current += 1
   }, [text, draftKey])
