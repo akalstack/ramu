@@ -566,29 +566,30 @@ function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (ope
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(86vh,820px)] flex-col gap-0 p-0 sm:max-w-[680px]">
-        <DialogHeader className="flex-none flex-row items-center gap-3 border-b border-line px-5 py-3.5 pr-12">
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <DialogTitle className="flex items-center gap-2 text-base">
+        <DialogHeader className="flex-none gap-0.5 border-b border-line px-5 pt-2 pb-3.5 pr-12">
+          {/* The row matches the close button's height and offset, so the title, toggle and close line up. */}
+          <div className="flex min-h-7 items-center gap-3">
+            <DialogTitle className="m-0! flex min-w-0 flex-1 items-center gap-2 text-base">
               <Gauge size={16} className="text-muted-foreground" />
               {t('Plan usage')}
             </DialogTitle>
-            <DialogDescription className="text-caption">
-              {multiHost
-                ? t('Every login on every connected host. A login signed in on several hosts shows once.')
-                : t('Every login on this host. Fallback moves a thread to the next one when a limit is reached.')}
-            </DialogDescription>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-none text-muted-foreground"
+              aria-pressed={reveal}
+              title={reveal ? t('Hide account names and emails') : t('Show account names and emails')}
+              onClick={toggleReveal}
+            >
+              {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
+              {reveal ? t('Hide accounts') : t('Show accounts')}
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex-none text-muted-foreground"
-            aria-pressed={reveal}
-            title={reveal ? t('Hide account names and emails') : t('Show account names and emails')}
-            onClick={toggleReveal}
-          >
-            {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
-            {reveal ? t('Hide accounts') : t('Show accounts')}
-          </Button>
+          <DialogDescription className="text-caption">
+            {multiHost
+              ? t('Every login on every connected host. A login signed in on several hosts shows once.')
+              : t('Every login on this host. Fallback moves a thread to the next one when a limit is reached.')}
+          </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto scroll-fade-y px-5 pt-4 pb-5">
           {!hosts ? (

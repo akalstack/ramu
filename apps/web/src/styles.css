@@ -607,6 +607,16 @@ kbd {
 :where(div):has(> [data-slot='hover-card-content']) {
   @apply z-1200;
 }
+/* Hold each animation's end frame: without it the closing backdrop snaps back to full opacity for a frame before it
+   unmounts, and the opening one shows at full opacity before its fade starts, so the dim flashes. */
+:is(
+  [data-slot='dialog-overlay'],
+  [data-slot='dialog-content'],
+  [data-slot='alert-dialog-overlay'],
+  [data-slot='alert-dialog-content']
+) {
+  --tw-animation-fill-mode: both;
+}
 [data-slot='dialog-overlay'] {
   @apply z-1000;
   @apply [animation-duration:120ms];
