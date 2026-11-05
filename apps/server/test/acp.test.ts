@@ -34,6 +34,7 @@ let promptID; let current='';
 const finish=()=>send({id:promptID,result:{stopReason:'end_turn'}});
 const session={sessionId:'session-1',configOptions:[{id:'model',category:'model',type:'select',currentValue:'wire-model',options:[{value:'wire-model',name:'Wire model'}]},{id:'mode',category:'mode',type:'select',currentValue:'agent',options:[{value:'agent',name:'Agent'},{value:'ask',name:'Ask'},...JSON.parse(process.env.RAMU_EXTRA_MODES||'[]')]}]};
 const levels={id:'thinking_level',category:'thought_level',type:'select',currentValue:'high',options:[{value:'low'},{value:'high'}]};
+if(process.env.RAMU_NO_ASK)session.configOptions[1].options=session.configOptions[1].options.filter(o=>o.value!=='ask');
 if(process.env.RAMU_TWO_MODELS)session.configOptions=[{id:'model',category:'model',type:'select',currentValue:'gemini',options:[{value:'gemini',name:'Gemini'},{value:'claude',name:'Claude'}]},levels];
 if(process.env.RAMU_LEGACY_MODES){session.configOptions=undefined;session.models={currentModelId:'wire-model',availableModels:[{modelId:'wire-model',name:'Wire model'}]};session.modes={availableModes:[{id:'agent'},{id:'ask'},{id:'auto'},...JSON.parse(process.env.RAMU_EXTRA_MODES||'[]').map(mode=>({id:mode.value}))]};}
 rl.on('line',line=>{
@@ -232,6 +233,26 @@ it('uses read-only mode and rejects background tool permissions', async () => {
   await until(() => events.some((e) => e.kind === 'result'))
   expect(log().some((m) => m.method === 'session/set_config_option' && m.params.value === 'ask')).toBe(true)
   expect(log().find((m) => m.id === 900).result.outcome.optionId).toBe('no')
+})
+it('runs Antigravity background analysis in its approval mode when it lists no read-only mode, refusing every tool', async () => {
+  vi.stubEnv('RAMU_NO_ASK', '1')
+  vi.stubEnv(
+    'RAMU_EXTRA_MODES',
+    JSON.stringify([
+      { value: 'default', name: 'Default' },
+      { value: 'yolo', name: 'Yolo' },
+    ]),
+  )
+  await start('hello', 'antigravity', 'full', null, true)
+  await until(() => events.some((e) => e.kind === 'result'))
+  const modes = log().filter((m) => m.method === 'session/set_config_option' && m.params.configId === 'mode')
+  expect(modes.map((m) => m.params.value)).toEqual(['default'])
+  expect(log().find((m) => m.id === 900).result.outcome.optionId).toBe('no')
+  expect(events.some((e) => e.kind === 'error')).toBe(false)
+})
+it('still refuses background analysis on a runtime with neither a read-only nor an approval mode', async () => {
+  vi.stubEnv('RAMU_NO_ASK', '1')
+  await expect(start('hello', 'cursor', 'full', null, true)).rejects.toThrow(/read-only mode/)
 })
 it('passes scoped Ramu MCP connection and image content', async () => {
   const image = join(dir, 'image.png')

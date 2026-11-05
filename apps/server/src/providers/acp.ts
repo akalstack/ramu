@@ -54,6 +54,13 @@ export function reachableDirectories(
 }
 
 type AcpProvider = 'cursor' | 'antigravity' | 'opencode'
+
+/**
+ * A runtime with no read-only mode can still run background analysis in a mode that sends every edit and command to
+ * the client for approval, since a read-only session refuses them all. Antigravity lists none of ask, plan or
+ * read-only; its `default` mode asks before each edit and command (`auto_edit` and `yolo` are the ones that skip it).
+ */
+const APPROVAL_MODES: Partial<Record<AcpProvider, string>> = { antigravity: 'default' }
 /** Trust qualified tool identities, never arguments or a command's descriptive title. */
 function isRamuCall(call: Wire | undefined, provider: AcpProvider): boolean {
   if (!call) return false
@@ -542,7 +549,9 @@ class AcpSession implements AgentRunner {
       const modes = config
         ? optionsOf(config).map((o) => o.value)
         : (this.session.modes?.availableModes ?? []).map((m: Wire) => m.id)
-      const mode = modes.find((id: string) => id === 'ask' || id === 'plan' || id === 'read-only')
+      const mode =
+        modes.find((id: string) => id === 'ask' || id === 'plan' || id === 'read-only') ??
+        modes.find((id: string) => id === APPROVAL_MODES[provider])
       if (!mode)
         throw new Error(`${providerName(provider)} does not advertise a read-only mode for background analysis`)
       await this.rpc.request(
