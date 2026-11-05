@@ -9,7 +9,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - macOS signing and notarization in CI, and signed auto-update (`APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` stays `false` until builds are signed). See [Releasing](contributing/releasing.md).
 - Linux: the first release run builds x64 and arm64 `.deb`, `.rpm` and AppImage. Install the `.rpm` on Fedora and start the AppImage on Ubuntu 24.04 (its AppArmor user-namespace limit can block Electron's sandbox) by hand; only the `.deb` is smoke-tested in CI.
 - Windows: the port is under way on the `windows-port` branch (CI on Windows, the local service over a named pipe). Next are the server's shell, terminal and path handling, packaging, and a hands-on run in a Windows 11 VM.
-- Mobile distribution: the Expo project, app ID `com.akalstack.ramu` and Android push (FCM) are set up. Remaining: the Apple Developer account with APNs key and TestFlight, and a Google Play Console account with the first internal-track upload (manual once, then `eas:release:android` with a Play service-account key in EAS).
+- Mobile distribution: the Expo project, app ID `com.akalstack.ramu` and Android push (FCM) are set up. EAS holds the Android upload keystore and the Play submission key (`play-submit@akalstack-ramu`). Remaining: upload the first production `.aab` to Play's internal track by hand (later releases use `eas:release:android`), and the Apple Developer Program (APNs key, TestFlight), which also unblocks macOS signing.
 
 ## Implementation
 
