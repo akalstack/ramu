@@ -5,55 +5,66 @@
   </picture>
 </p>
 
-<p align="center">An open-source workspace for coding with agents, on desktop and mobile.</p>
+<p align="center">A free, open-source workspace for coding with agents, on desktop and mobile.</p>
 
 <p align="center">
   <a href="https://github.com/akalstack/ramu/actions/workflows/ci.yml"><img src="https://github.com/akalstack/ramu/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6" alt="License: MIT" /></a>
-  <a href="https://github.com/akalstack/ramu/releases">Downloads</a> ·
+  <a href="https://github.com/sponsors/akalstack"><img src="https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub" /></a>
+  <a href="https://trakteer.id/akalstack"><img src="https://img.shields.io/badge/Traktir-Trakteer-be1e2d" alt="Traktir di Trakteer" /></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/akalstack/ramu/releases">Download</a> ·
+  <a href="docs/README.md#guide">Guide</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-Ramu is an **Agent Development Environment (ADE)**: work with a coding agent next to your editor, terminals, Git, and code review, all in one window. Use Claude Code, Codex, OpenCode, Cursor, or Antigravity with your existing provider accounts.
+Ramu is an **Agent Development Environment**: your coding agents, editor, terminals, Git and review in one window. Use Claude Code, Codex, OpenCode, Cursor or Antigravity with the accounts you already have. No Ramu account, no subscription, nothing to host: agents run on your own computer.
 
-Open a project, describe what you want, and review the result. Everything else is optional: the defaults work out of the box, and **Settings** has the controls for power users.
+Open a project, say what you want, and review the result. The defaults work out of the box; **Settings** holds the rest.
 
-Inspired by [T3 Code](https://github.com/pingdotgg/t3code), [Codex](https://github.com/openai/codex), and [VS Code](https://github.com/microsoft/vscode).
+## What it does
 
-## Why Ramu
+**Agents that keep going**
 
-On top of the workspace, Ramu adds orchestration that works without setup:
+- **Usage limits handled.** Rank providers and models; when one runs out, the thread moves to the next with its context. When all are limited, Ramu waits and resumes, even after a restart.
+- **Goals.** An agent works toward an objective across turns, with an optional verification command that decides when it is done.
+- **Background work.** Schedules, webhook triggers, queued messages and long-running commands keep going after you close the window. Recaps say what happened.
 
-- **Keep working through usage limits.** Rank providers and models for automatic fallback, carrying visible conversation context into the same thread. When all are limited, Ramu waits and resumes when capacity returns, even after a restart.
-- **Follow goals across turns.** Persistent goals keep agents working toward an objective across provider changes, with pause, resume, and continuation limits. Schedule recurring work and leave threads and terminals running after closing the window.
-- **Bring models together.** Ask a second model for advice or review, and delegate tasks to helpers across providers, with optional isolated checkouts.
-- **Carry knowledge forward.** Share project memory and preferences across providers. Turn completed work into reusable skills and lessons, with editable notes and revision history. A periodic "What Ramu learned" summary says what was saved, merged or archived, and a review thread can fix it.
-- **Recall past work.** Ask agents to find decisions and fixes in earlier threads across providers, with links to the original messages. Skills can declare required tools and fallback procedures so agents can select instructions that fit their current tools.
-- **Work across repositories.** Add a parent folder and Ramu detects the child Git repositories and groups them into one workspace, with no multi-root file to write. Each repository gets its own branches, staging, stashes, sync, and diffs, and agents see the whole workspace.
-- **Give agents useful tools.** Use the integrated browser, grant an agent access to a specific app or screen, and connect external MCP tools with per-thread approvals and host-managed credentials. See [browser](docs/guide/browser-and-computer.md#browser), [computer use](docs/guide/browser-and-computer.md#computer-use), and [MCP security and setup](docs/contributing/architecture.md#shared-mcp).
-- **Continue from your phone.** Pair the iOS or Android app with your host to chat, review changes, manage Git, use terminals, and respond to agent requests.
+**Models working together**
 
-## Features
+- **Teammates and helpers.** `@`-mention another model into a thread, delegate tasks to helpers on any provider (optionally in their own checkout), or save custom agents for recurring jobs.
+- **Advice and asides.** Ask a second model for a review or an opinion; select text to quote it or ask a quick read-only question.
+- **Memory that carries over.** Project memory, preferences, skills and lessons are shared across providers, and agents can search earlier threads for past decisions and fixes.
 
-- Monaco editor, split terminals, and Git branches, staging, stashes, and sync.
-- Recorded diffs, inline review comments, and selective undo with conflict checks.
-- GitHub pull requests and issues: start a thread from an issue, open a pull request that closes it, and hand failing checks or review comments back to an agent.
-- File attachments, saved drafts, configurable fonts and colors, and English/Bahasa Indonesia.
-- A standalone workspace server for [headless use](docs/guide/remote-hosts.md) and mobile access.
+**A full workspace**
 
-Provider capabilities vary. Agents run on your host, which must stay awake; mobile access also requires a reachable connection.
+- Monaco editor, split terminals, recorded diffs, inline review comments and selective undo.
+- Git branches, staging, stashes, sync and worktrees, across several repositories in one folder.
+- GitHub, GitLab, Bitbucket and Azure DevOps: start from an issue, open a pull request, and hand failing checks or review comments back to an agent.
+- An integrated browser, computer use for a chosen app or screen, and iOS Simulator and Android emulator testing, all watchable and stoppable.
+- Interactive documents agents publish in a thread: diagrams, calculators, prototypes.
+- Shared MCP tools with per-thread approval, Inbox for what needs you, themes, and English or Bahasa Indonesia.
+
+**Anywhere**
+
+- **Phone app** (iOS and Android): chat, review, Git, terminals and approvals, with push notifications.
+- **Several hosts** from one desktop: continue a thread on another machine, or let agents start work there.
+- **Your network, your way**: LAN, a private network such as Tailscale or NetBird, SSH, or your own tunnel ([remote hosts](docs/guide/remote-hosts.md)).
+- **Headless server** and a `ramu` CLI for servers and terminals.
+
+Provider features vary. Agents run on your host, so it must stay awake while they work.
 
 ## Get started
 
-Download installers and SHA-256 checksums from [GitHub Releases](https://github.com/akalstack/ramu/releases).
+Download the installer from [GitHub Releases](https://github.com/akalstack/ramu/releases), install and sign in to a provider ([setup](docs/guide/providers.md)), then open a folder or start a thread. For the phone, see the [mobile guide](apps/mobile/README.md).
 
-Ramu is in alpha. Release targets are **macOS arm64/x64** and **Linux x64**; Linux packaged GUI validation is pending. Windows is not supported yet. CI macOS builds are unsigned and not notarized. Install alpha updates manually; automatic installation requires a signed macOS app and excludes prereleases.
-
-Install and sign in to an agent provider, select it in **Settings → Providers**, then add a repository or start a thread. See [provider setup](docs/guide/providers.md). For iOS and Android setup and pairing, see the [mobile guide](apps/mobile/README.md).
+Ramu is in alpha: builds are for **macOS** (arm64, x64) and **Linux** (x64), unsigned for now, so updates are installed by hand. Windows is in progress.
 
 ### Run from source
 
-Requires Git, Node.js 24 and pnpm 11.21.0. Project search and replace use your [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) when installed, and otherwise the copy inside the bundled Claude binary. Native dependencies may need Python 3 and a C/C++ toolchain (Xcode Command Line Tools on macOS; `build-essential` on Debian/Ubuntu).
+Requires Git, Node.js 24 and pnpm 11.21.0. Native modules may need Python 3 and a C/C++ toolchain (Xcode Command Line Tools on macOS, `build-essential` on Debian/Ubuntu).
 
 ```sh
 git clone https://github.com/akalstack/ramu.git
@@ -65,28 +76,31 @@ pnpm dev
 
 ## Development
 
-Built with Electron, React, React Native, and TypeScript. See the [architecture](docs/contributing/architecture.md) for the desktop, mobile, and server layout.
+Electron, React, React Native and TypeScript; see the [architecture](docs/contributing/architecture.md).
 
 | Command | Purpose |
 | --- | --- |
 | `pnpm dev` | Start with hot reload |
-| `pnpm check` | Format, lint, type-check, test, and build |
-| `pnpm test:desktop-smoke` | One macOS desktop startup check with simulated providers |
-| `pnpm make` | Build installers for the current platform |
+| `pnpm check` | Format, lint, type-check, test and build |
+| `pnpm test:desktop-smoke` | Desktop startup check with simulated providers |
+| `pnpm make` | Build installers for this platform |
 | `pnpm server serve` | Run the workspace server without the desktop app (after `pnpm build`) |
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and validation requirements. [Report bugs or request features](https://github.com/akalstack/ramu/issues/new/choose); report vulnerabilities through [SECURITY.md](SECURITY.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. [Report a bug or request a feature](https://github.com/akalstack/ramu/issues/new/choose); report vulnerabilities through [SECURITY.md](SECURITY.md). Unfinished work is in [the roadmap](docs/roadmap.md).
 
-## Docs
+## Support Ramu
 
-The [guide](docs/README.md#guide) covers using Ramu, and [contributing](docs/README.md#contributing) covers working on it. Unfinished work is in [the roadmap](docs/roadmap.md).
+Ramu is free and stays free. If it saves you time, you can help keep it going:
+
+- **Worldwide:** [GitHub Sponsors](https://github.com/sponsors/akalstack)
+- **Indonesia:** [Trakteer](https://trakteer.id/akalstack) (QRIS, e-wallet, transfer bank)
 
 ## Acknowledgments
 
-- [T3 Code](https://github.com/pingdotgg/t3code) by Ping Labs and Theo for client-host agent UX patterns, companion socket transport, and workflow shortcuts that inspired parts of Ramu.
-- [VS Code](https://github.com/microsoft/vscode) for foundational UI patterns and editor architecture.
-- [Codex](https://github.com/openai/codex) for agent session and provider interaction patterns.
+- [T3 Code](https://github.com/pingdotgg/t3code) by Ping Labs and Theo, for client-host agent UX, the companion socket transport and workflow shortcuts.
+- [VS Code](https://github.com/microsoft/vscode), for UI patterns and editor architecture.
+- [Codex](https://github.com/openai/codex), for agent session and provider interaction patterns.
 
 ## License
 
-[MIT](LICENSE). The license doesn't cover the Ramu name and logo; see [trademarks](TRADEMARKS.md). Third-party assets and provider trademarks retain their respective licenses; see [provider assets](apps/web/src/assets/providers/README.md) and [branding](assets/branding/README.md).
+[MIT](LICENSE). The license doesn't cover the Ramu name and logo; see [trademarks](TRADEMARKS.md). Third-party assets and provider trademarks keep their own licenses; see [provider assets](apps/web/src/assets/providers/README.md) and [branding](assets/branding/README.md).
