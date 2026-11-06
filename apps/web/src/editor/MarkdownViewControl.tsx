@@ -12,15 +12,18 @@ export function initialMarkdownView(preferred: MarkdownView | undefined, hasSele
 export function MarkdownViewControl({
   mode,
   onChange,
+  diagram = false,
 }: {
   mode: MarkdownView
   onChange: (mode: MarkdownView) => void
+  /** A Mermaid file: its source or its diagram, with no rendered editor. */
+  diagram?: boolean
 }) {
   return (
     <ToggleGroup
       size="sm"
       spacing={0}
-      aria-label={t('Markdown view')}
+      aria-label={diagram ? t('Diagram view') : t('Markdown view')}
       value={[mode]}
       onValueChange={(values) => {
         const next = values[0]
@@ -30,10 +33,16 @@ export function MarkdownViewControl({
       <ToggleGroupItem value="source" aria-label={t('Source')} title={t('Source')}>
         <Code2 />
       </ToggleGroupItem>
-      <ToggleGroupItem value="edit" aria-label={t('Edit')} title={t('Edit rendered Markdown')}>
-        <Pencil />
-      </ToggleGroupItem>
-      <ToggleGroupItem value="preview" aria-label={t('Preview')} title={t('Preview Markdown without editing')}>
+      {!diagram && (
+        <ToggleGroupItem value="edit" aria-label={t('Edit')} title={t('Edit rendered Markdown')}>
+          <Pencil />
+        </ToggleGroupItem>
+      )}
+      <ToggleGroupItem
+        value="preview"
+        aria-label={t('Preview')}
+        title={diagram ? t('Show diagram') : t('Preview Markdown without editing')}
+      >
         <Eye />
       </ToggleGroupItem>
     </ToggleGroup>

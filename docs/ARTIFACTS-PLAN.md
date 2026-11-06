@@ -62,7 +62,7 @@ The kind is chosen by the agent from the request, shown as a small mark on every
   - **Dashboard:** every query returns.
   - **Motion:** total length is within its bound.
   - **Diagram:** it parses.
-- **Renderers:** each kind's renderer is bundled into the frame's bootstrap: Markdown, a deck, a design canvas, charts, a timeline player and Mermaid. They share `ramu:kit` and the theme tokens, so artifacts look like Ramu in light and dark. Rendering stays offline unless the artifact declares sources.
+- **Renderers:** each kind's renderer is bundled into the frame's bootstrap: Markdown, a deck, a design canvas, charts, a timeline player and Mermaid (Pele with the theme variables chat diagrams use, in `apps/web/src/chat/MermaidBlock.tsx`). They share `ramu:kit` and the theme tokens, so artifacts look like Ramu in light and dark. Rendering stays offline unless the artifact declares sources.
 - **Exports run on the host:**
   - **PPTX and DOCX:** written from the source with a pinned writer library, never by a model.
   - **PDF:** the rendered frame printed by the headless browser.

@@ -4,12 +4,13 @@ import { cn } from 'cn'
 import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
 import { WrapText } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { MarkdownViewControl, initialMarkdownView } from '../editor/MarkdownViewControl'
 import type { AppPreferences } from '@ramu/shared/types'
 import { MarkdownEditor } from '../editor/MarkdownEditor'
 import { MarkdownPreview } from '../editor/MarkdownPreview'
 import { ChatFind } from '../chat/ChatFind'
+const MermaidBlock = lazy(() => import('../chat/MermaidBlock').then((m) => ({ default: m.MermaidBlock })))
 import type { EditorConfigProps, RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
 import { useAppSettings } from '../settings/AppSettings'
 import { registerBuffer, registerSelection } from '../editor/editorBuffers'
@@ -35,6 +36,7 @@ const readWrap = () => {
   }
 }
 const isMarkdown = (path: string) => /\.(md|markdown|mdx)$/i.test(path)
+const isDiagram = (path: string) => /\.(mmd|mermaid)$/i.test(path)
 
 type FileViewDesc = Extract<ViewDescriptor, { kind: 'file' }>
 
@@ -317,10 +319,13 @@ function TextFileView({
     window.addEventListener('ramu:word-wrap', apply)
     return () => window.removeEventListener('ramu:word-wrap', apply)
   }, [])
-  const markdown = isMarkdown(view.path)
-  const [mode, setMode] = useState<AppPreferences['defaultMarkdownView']>(() =>
+  const diagram = isDiagram(view.path)
+  // A Mermaid file previews as its diagram; it has no rendered editor, so the edit preference shows the preview.
+  const markdown = isMarkdown(view.path) || diagram
+  const [chosenMode, setMode] = useState<AppPreferences['defaultMarkdownView']>(() =>
     initialMarkdownView(preferences.defaultMarkdownView, !!view.selection),
   )
+  const mode = diagram && chosenMode === 'edit' ? 'preview' : chosenMode
   const [previewText, setPreviewText] = useState('')
   const previewPane = useRef<HTMLDivElement>(null)
   const [findingPreview, setFindingPreview] = useState(false)
@@ -378,7 +383,7 @@ function TextFileView({
         <span className="path text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
           {view.path}
         </span>
-        {markdown && <MarkdownViewControl mode={mode} onChange={setMode} />}
+        {markdown && <MarkdownViewControl mode={mode} onChange={setMode} diagram={diagram} />}
         {onViewImage && (
           <Button variant="ghost" size="sm" onClick={onViewImage}>
             {t('View image')}
@@ -488,7 +493,13 @@ function TextFileView({
             )}
           >
             <div
-              className={mode === 'edit' ? 'h-full min-h-0' : 'markdown-document max-w-[820px] m-[0_auto] select-text'}
+              className={
+                mode === 'edit'
+                  ? 'h-full min-h-0'
+                  : diagram
+                    ? 'select-text'
+                    : 'markdown-document max-w-[820px] m-[0_auto] select-text'
+              }
             >
               {mode === 'edit' && !loading && editorRef.current?.getModel() ? (
                 <MarkdownEditor
@@ -500,6 +511,10 @@ function TextFileView({
                   onSave={() => saveRef.current()}
                   onOpenLink={openMarkdownLink}
                 />
+              ) : mode === 'preview' && diagram ? (
+                <Suspense fallback={null}>
+                  <MermaidBlock source={previewText} />
+                </Suspense>
               ) : mode === 'preview' ? (
                 <MarkdownPreview
                   text={previewText}
