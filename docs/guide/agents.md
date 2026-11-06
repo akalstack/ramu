@@ -97,9 +97,9 @@ Hosts whose platform or description (**Settings → Threads → Describe this ho
 
 `ramu thread start|status|message|list` lets a terminal agent or script place work on this host. See [Remote hosts](remote-hosts.md#threads-from-a-terminal).
 
-## Pages
+## Artifacts
 
-Agents publish pages to keep with `publish_interactive` (`page: true`, or a page's id for a new version from any thread), find them with `page_list` and `page_get`, work with a page's records through `page_records`, start its runs with `page_run`, and record where one is live with `page_published` (a page publishes itself through **Publish to the web**; this records a deploy an agent did from a project). Deleting a page stays your action. See [Pages and interactive content](pages.md).
+Agents publish artifacts to keep with `artifact_publish` (`page: true`, or an artifact's id for a new version from any thread), find them with `artifact_list` and `artifact_get`, work with an artifact's records through `artifact_records`, start its runs with `artifact_run`, and record where one is live with `artifact_published` (an artifact publishes itself through **Publish to the web**; this records a deploy an agent did from a project). The earlier `page_*` and `*_interactive` names still work. Deleting an artifact stays your action. See [Artifacts](artifacts.md).
 
 ## Rules and MCP
 

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { toolQuery, toolResultLimit } from '../toolInputs'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import { currentToolName } from '@ramu/shared/pages'
 
 type Entry = {
   name: string
@@ -30,10 +31,9 @@ const ALIASES: Record<string, string> = {
   advisor: 'advice consult opinion',
   session: 'history transcript checkpoint',
   request: 'secret token password credential key pin login',
-  preview: 'interactive visual chart simulation calculator diagram prototype playground explorer walkthrough visualize',
-  publish: 'interactive visual chart simulation calculator diagram prototype playground explorer walkthrough visualize',
   theme: 'palette colors colours appearance dark light look style',
-  interactive: 'visual chart simulation calculator diagram prototype playground explorer walkthrough visualize',
+  artifact:
+    'interactive page visual chart simulation calculator diagram prototype playground explorer walkthrough visualize tracker dashboard',
 }
 const reply = (value: unknown): CallToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value) }] })
 
@@ -63,8 +63,9 @@ export class ToolRegistry {
   }
   search(query: string, limit = 5) {
     const terms = [...new Set(words(query))]
+    // A tool's earlier name still runs it, but search offers only the current one.
     return [...this.entries.values()]
-      .filter((entry) => entry.name !== 'codex_pre_tool_use')
+      .filter((entry) => entry.name !== 'codex_pre_tool_use' && currentToolName(entry.name) === entry.name)
       .map((entry) => {
         const nameWords = words(entry.name),
           descriptionWords = words(`${entry.description} ${ALIASES[entry.name.split('_')[0]!] ?? ''}`)

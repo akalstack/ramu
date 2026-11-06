@@ -46,9 +46,9 @@ export function PushRouting() {
           // Not about one thread: the schedules, or the Inbox on its recaps.
           if (target.kind === 'schedules') return router.navigate('/schedules')
           if (target.kind === 'recaps') return router.navigate({ pathname: '/inbox', params: { tab: 'recaps' } })
-          if (target.kind === 'page')
+          if (target.kind === 'artifact')
             return router.push({
-              pathname: '/page/[computer]/[id]',
+              pathname: '/artifact/[computer]/[id]',
               params: { computer: target.computerId, id: target.pageId },
             })
           await store.refresh(target.computerId).catch(() => {})

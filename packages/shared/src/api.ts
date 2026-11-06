@@ -211,7 +211,115 @@ type ComputerAction = import('./computerBridge').ComputerAction
 /** Why a changed address was or was not adopted: only `moved` changes anything. */
 export type ReviewAddressResult = 'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable' | 'insecure'
 
-export interface RamuMethods {
+/**
+ * Artifacts, kept under their internal name. Deprecated: the `pages.*` names are still answered for one release, for
+ * clients a release behind; call the `artifacts.*` names below.
+ */
+interface PageMethods {
+  'pages.list'(): import('./pages').PageInfo[]
+  'pages.get'(pageId: string): import('./pages').PageInfo
+  'pages.exists'(pageId: string): boolean
+  'pages.versions'(pageId: string): import('./pages').PageVersion[]
+  'pages.document'(pageId: string, version?: number): import('./interactive').InteractiveDocument
+  /** Keeps a thread's document as a page owned by the host. */
+  'pages.keep'(sessionId: string, contentId: string, title?: string, icon?: string): import('./pages').PageInfo
+  'pages.update'(
+    pageId: string,
+    patch: { title?: string; icon?: string; pinned?: boolean; projectId?: string | null },
+  ): import('./pages').PageInfo
+  'pages.delete'(pageId: string): void
+  'pages.restoreVersion'(pageId: string, version: number): import('./pages').PageInfo
+  'pages.duplicate'(pageId: string, title?: string): import('./pages').PageInfo
+  'pages.state'(pageId: string): import('./pages').PageState
+  /** Saves over the revision read; `accepted: false` returns the newer state another device saved. */
+  'pages.saveState'(
+    pageId: string,
+    state: unknown,
+    revision: number,
+  ): import('./pages').PageState & { accepted: boolean }
+  'pages.grant'(pageId: string, grants: import('./pages').PageGrants): import('./pages').PageInfo
+  'pages.usage'(pageId: string): import('./pages').PageUsage
+  /** One ramuContent call from the page's frame, checked against its grants. */
+  'pages.call'(pageId: string, method: string, args: unknown[]): unknown
+  /** Starts a page run and returns its id at once; its steps arrive on pages:changed. */
+  'pages.runStart'(
+    pageId: string,
+    task: string,
+    options?: {
+      shape?: unknown
+      maxSteps?: number
+      name?: string
+      functions?: { name: string; description: string; input: Record<string, string> }[]
+    },
+  ): string | null
+  'pages.runFlow'(
+    pageId: string,
+    name: string,
+    functions?: { name: string; description: string; input: Record<string, string> }[],
+  ): string | null
+  /** Ask this page: a read-only page agent answers a question about its records. */
+  'pages.ask'(pageId: string, question: string): import('./pages').PageRun
+  'pages.runs'(pageId: string): import('./pages').PageRun[]
+  'pages.runStop'(runId: string): void
+  'pages.runUndo'(runId: string): import('./pages').PageRun
+  'pages.runReply'(callId: string, value: unknown, error?: string): boolean
+  'pages.runConfirm'(confirmId: string, allowed: boolean): boolean
+  'pages.reportError'(
+    pageId: string,
+    error: { message: string; version: number; device?: string; steps?: string[] },
+  ): void
+  'pages.clearError'(pageId: string): void
+  'pages.exportRecords'(pageId: string): { json: string; csv: Record<string, string> }
+  'pages.importCsv'(pageId: string, collection: string, text: string): { added: number }
+  'pages.widget'(pageId: string): { title: string; value: string; items: string[] } | null
+  'pages.webhookUrls'(pageId: string): string[]
+  /** Hands work the page cannot do itself to a new thread, with the page attached. */
+  /** `selector` is an element Edit pointed at; the host attaches its screenshot. */
+  'pages.startThread'(pageId: string, prompt: string, selector?: string): StartedThread
+  'pages.makeProject'(pageId: string, name?: string): { projectId: string; folder: string; thread: StartedThread }
+  'pages.share'(pageId: string, canAdd: boolean): import('./pages').PageShare
+  'pages.shares'(pageId: string): import('./pages').PageShare[]
+  'pages.revokeShare'(token: string): void
+  'pages.renewShare'(token: string): import('./pages').PageShare
+  'pages.openShare'(token: string): {
+    share: import('./pages').PageShare
+    page: Pick<import('./pages').PageInfo, 'id' | 'title' | 'icon' | 'version' | 'capabilities'>
+    document: import('./interactive').InteractiveDocument
+    state: import('./pages').PageState
+  }
+  'pages.shareCall'(token: string, method: string, args: unknown[]): unknown
+  /** Static hosting platforms a page can be published to, and whether this host has their login. */
+  'pages.publishTargets'(): {
+    target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages'
+    name: string
+    connected: boolean
+  }[]
+  /** `account` is the Cloudflare account ID, for a token limited to Pages that cannot list accounts. */
+  'pages.saveHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string, account?: string): void
+  'pages.removeHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages'): void
+  /** Deploys the page's current version as a static site on the person's own account; updates the same site later. */
+  'pages.publish'(
+    pageId: string,
+    target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages',
+  ): import('./pages').PageInfo
+  /** Whether a page is open to people without Ramu, and its address. */
+  'pages.publicStatus'(pageId: string): import('./pages').PublicPageStatus
+  /** Opens a page to anyone through its own listener and tunnel; only a page that uses no host feature. */
+  'pages.openPublic'(pageId: string): import('./pages').PublicPageStatus
+  'pages.closePublic'(pageId: string): void
+  /** Copies a page another host shared into a new page here, with no records, values or grants. */
+  'pages.import'(
+    document: import('./interactive').InteractiveDocument,
+    from: { title: string; icon: string },
+  ): import('./pages').PageInfo
+}
+
+/** The names clients call: every `pages.*` method as `artifacts.*`, served by the same handler. */
+type ArtifactMethods = {
+  [K in keyof PageMethods as K extends `pages.${infer Method}` ? `artifacts.${Method}` : never]: PageMethods[K]
+}
+
+export interface RamuMethods extends ArtifactMethods, PageMethods {
   /** Test devices on this host: whether they are on, each platform's readiness and the devices. */
   'testDevices.status'(): import('./testDevices').TestDeviceStatus
   'testDevices.setEnabled'(enabled: boolean): void
@@ -446,103 +554,6 @@ export interface RamuMethods {
   'interactive.media'(sessionId: string, id: string, version: number): { wide: string | null; light: string | null }
   /** Publishes an older version again as the newest one. */
   'interactive.restore'(sessionId: string, id: string, version: number): import('./interactive').InteractiveReference
-  'pages.list'(): import('./pages').PageInfo[]
-  'pages.get'(pageId: string): import('./pages').PageInfo
-  'pages.exists'(pageId: string): boolean
-  'pages.versions'(pageId: string): import('./pages').PageVersion[]
-  'pages.document'(pageId: string, version?: number): import('./interactive').InteractiveDocument
-  /** Keeps a thread's document as a page owned by the host. */
-  'pages.keep'(sessionId: string, contentId: string, title?: string, icon?: string): import('./pages').PageInfo
-  'pages.update'(
-    pageId: string,
-    patch: { title?: string; icon?: string; pinned?: boolean; projectId?: string | null },
-  ): import('./pages').PageInfo
-  'pages.delete'(pageId: string): void
-  'pages.restoreVersion'(pageId: string, version: number): import('./pages').PageInfo
-  'pages.duplicate'(pageId: string, title?: string): import('./pages').PageInfo
-  'pages.state'(pageId: string): import('./pages').PageState
-  /** Saves over the revision read; `accepted: false` returns the newer state another device saved. */
-  'pages.saveState'(
-    pageId: string,
-    state: unknown,
-    revision: number,
-  ): import('./pages').PageState & { accepted: boolean }
-  'pages.grant'(pageId: string, grants: import('./pages').PageGrants): import('./pages').PageInfo
-  'pages.usage'(pageId: string): import('./pages').PageUsage
-  /** One ramuContent call from the page's frame, checked against its grants. */
-  'pages.call'(pageId: string, method: string, args: unknown[]): unknown
-  /** Starts a page run and returns its id at once; its steps arrive on pages:changed. */
-  'pages.runStart'(
-    pageId: string,
-    task: string,
-    options?: {
-      shape?: unknown
-      maxSteps?: number
-      name?: string
-      functions?: { name: string; description: string; input: Record<string, string> }[]
-    },
-  ): string | null
-  'pages.runFlow'(
-    pageId: string,
-    name: string,
-    functions?: { name: string; description: string; input: Record<string, string> }[],
-  ): string | null
-  /** Ask this page: a read-only page agent answers a question about its records. */
-  'pages.ask'(pageId: string, question: string): import('./pages').PageRun
-  'pages.runs'(pageId: string): import('./pages').PageRun[]
-  'pages.runStop'(runId: string): void
-  'pages.runUndo'(runId: string): import('./pages').PageRun
-  'pages.runReply'(callId: string, value: unknown, error?: string): boolean
-  'pages.runConfirm'(confirmId: string, allowed: boolean): boolean
-  'pages.reportError'(
-    pageId: string,
-    error: { message: string; version: number; device?: string; steps?: string[] },
-  ): void
-  'pages.clearError'(pageId: string): void
-  'pages.exportRecords'(pageId: string): { json: string; csv: Record<string, string> }
-  'pages.importCsv'(pageId: string, collection: string, text: string): { added: number }
-  'pages.widget'(pageId: string): { title: string; value: string; items: string[] } | null
-  'pages.webhookUrls'(pageId: string): string[]
-  /** Hands work the page cannot do itself to a new thread, with the page attached. */
-  /** `selector` is an element Edit pointed at; the host attaches its screenshot. */
-  'pages.startThread'(pageId: string, prompt: string, selector?: string): StartedThread
-  'pages.makeProject'(pageId: string, name?: string): { projectId: string; folder: string; thread: StartedThread }
-  'pages.share'(pageId: string, canAdd: boolean): import('./pages').PageShare
-  'pages.shares'(pageId: string): import('./pages').PageShare[]
-  'pages.revokeShare'(token: string): void
-  'pages.renewShare'(token: string): import('./pages').PageShare
-  'pages.openShare'(token: string): {
-    share: import('./pages').PageShare
-    page: Pick<import('./pages').PageInfo, 'id' | 'title' | 'icon' | 'version' | 'capabilities'>
-    document: import('./interactive').InteractiveDocument
-    state: import('./pages').PageState
-  }
-  'pages.shareCall'(token: string, method: string, args: unknown[]): unknown
-  /** Static hosting platforms a page can be published to, and whether this host has their login. */
-  'pages.publishTargets'(): {
-    target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages'
-    name: string
-    connected: boolean
-  }[]
-  /** `account` is the Cloudflare account ID, for a token limited to Pages that cannot list accounts. */
-  'pages.saveHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string, account?: string): void
-  'pages.removeHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages'): void
-  /** Deploys the page's current version as a static site on the person's own account; updates the same site later. */
-  'pages.publish'(
-    pageId: string,
-    target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages',
-  ): import('./pages').PageInfo
-  /** Whether a page is open to people without Ramu, and its address. */
-  'pages.publicStatus'(pageId: string): import('./pages').PublicPageStatus
-  /** Opens a page to anyone through its own listener and tunnel; only a page that uses no host feature. */
-  'pages.openPublic'(pageId: string): import('./pages').PublicPageStatus
-  'pages.closePublic'(pageId: string): void
-  /** Copies a page another host shared into a new page here, with no records, values or grants. */
-  'pages.import'(
-    document: import('./interactive').InteractiveDocument,
-    from: { title: string; icon: string },
-  ): import('./pages').PageInfo
-
   'onboarding.get'(): { needed: boolean }
   'onboarding.complete'(): void
   'diagnostics.export'(): string

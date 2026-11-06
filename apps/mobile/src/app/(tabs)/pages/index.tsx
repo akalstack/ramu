@@ -14,7 +14,7 @@ import { Nothing } from '../../../components/InboxParts'
 import { HostChip } from '../../../components/HostChip'
 import { Row, T } from '../../../components/ui'
 
-/** Every page on the paired hosts, newest first with pinned ones on top, as the desktop's Pages. */
+/** Every artifact on the paired hosts, newest first with pinned ones on top, as the desktop's Artifacts. */
 export default function PagesScreen() {
   const { c } = useTheme()
   const say = useSay()
@@ -33,7 +33,7 @@ export default function PagesScreen() {
   const load = useCallback(
     async (computerId: string) => {
       try {
-        const list = await store.invoke(computerId, 'pages.list')
+        const list = await store.invoke(computerId, 'artifacts.list')
         setPages((all) => ({ ...all, [computerId]: list }))
       } catch {
         // An offline host keeps the list it last gave.
@@ -63,7 +63,7 @@ export default function PagesScreen() {
     })
   const viewOnly = store.computers.find((x) => x.id === store.selected)?.access === 'viewer'
   const actions = useTabActions(
-    viewOnly ? null : { icon: Plus, label: say('New page'), systemIcon: 'plus', onPress: newPage },
+    viewOnly ? null : { icon: Plus, label: say('New'), systemIcon: 'plus', onPress: newPage },
   )
   const rows = hosts
     .flatMap((host) => (pages[host.id] ?? []).map((page) => ({ page, host })))
@@ -71,7 +71,7 @@ export default function PagesScreen() {
     .sort((a, b) => Number(b.page.pinned) - Number(a.page.pinned) || b.page.changedAt - a.page.changedAt)
   return (
     <Screen>
-      <Header back={false} large scrollEdge collapsed={edge.scrolled} title={say('Pages')} right={actions} />
+      <Header back={false} large scrollEdge collapsed={edge.scrolled} title={say('Artifacts')} right={actions} />
       <PageScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
@@ -88,13 +88,13 @@ export default function PagesScreen() {
           />
         }
       >
-        <LargeTitle>{say('Pages')}</LargeTitle>
+        <LargeTitle>{say('Artifacts')}</LargeTitle>
         <View style={{ flexDirection: 'row', paddingHorizontal: space.l, paddingTop: space.m }}>
           <HostChip all={multi && allHosts} onAll={multi ? setAllHosts : undefined} />
         </View>
         <TextInput
-          accessibilityLabel={say('Search pages')}
-          placeholder={say('Search pages')}
+          accessibilityLabel={say('Search artifacts')}
+          placeholder={say('Search artifacts')}
           placeholderTextColor={c.muted}
           value={query}
           onChangeText={setQuery}
@@ -115,7 +115,7 @@ export default function PagesScreen() {
               key={`${host.id}:${page.id}`}
               accessibilityLabel={page.title}
               onPress={() =>
-                router.push({ pathname: '/page/[computer]/[id]', params: { computer: host.id, id: page.id } })
+                router.push({ pathname: '/artifact/[computer]/[id]', params: { computer: host.id, id: page.id } })
               }
               style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l }}
             >
@@ -138,14 +138,14 @@ export default function PagesScreen() {
           <View>
             <Nothing
               icon={AppWindow}
-              title={say('No pages yet')}
+              title={say('No artifacts yet')}
               detail={say(
-                'Ask an agent for “a page to …”, or choose Keep as page on any interactive card in a thread.',
+                'Ask an agent for something to keep, like “a tracker for …”, or choose Keep as artifact on any interactive card in a thread.',
               )}
             />
             {viewOnly ? null : (
               <View style={{ alignItems: 'center' }}>
-                <GlassButton primary title={say('New page')} icon={Plus} onPress={newPage} />
+                <GlassButton primary title={say('New')} icon={Plus} onPress={newPage} />
               </View>
             )}
           </View>

@@ -41,3 +41,11 @@ test('Search remains a root destination while New thread occupies the final tab'
   assert.match(source('(tabs)/_layout.tsx'), /Trigger name="compose" prominent/)
   assert.ok(!source('(tabs)/_layout.tsx').includes('role="search"'))
 })
+
+test('ramu://artifact links open the artifact screen, and ramu://page links redirect to it', () => {
+  assert.ok(has('artifact/[computer]/[id].tsx'))
+  const old = source('page/[computer]/[id].tsx')
+  assert.match(old, /<Redirect/)
+  assert.match(old, /pathname: '\/artifact\/\[computer\]\/\[id\]'/)
+  assert.match(old, /share/)
+})

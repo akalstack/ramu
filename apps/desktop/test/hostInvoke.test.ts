@@ -89,7 +89,17 @@ describe('isHostInvokeAllowed', () => {
       expect(isHostInvokeAllowed(method)).toBe(false)
   })
   it('allows server-only domains and blocks native ones', () => {
-    for (const method of ['tasks.list', 'agent.submit', 'git.status', 'files.read', 'term.write', 'projects.list'])
+    for (const method of [
+      'tasks.list',
+      'agent.submit',
+      'git.status',
+      'files.read',
+      'term.write',
+      'projects.list',
+      // Import reads a share from another connected host, under either name.
+      'artifacts.openShare',
+      'pages.openShare',
+    ])
       expect(isHostInvokeAllowed(method)).toBe(true)
     for (const method of ['repos.pick', 'term.menu', 'attachments.save', 'background.stop', 'computers.list'])
       expect(isHostInvokeAllowed(method)).toBe(false)

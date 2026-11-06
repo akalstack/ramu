@@ -47,7 +47,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   const ws = useWorkspace()
   const host = useHost()
   const { viewOnly, canWrite } = useHostWriteAccess()
-  // Pages made for this project, found from its menu as well as from Pages.
+  // Artifacts made for this project, found from its menu as well as from Artifacts.
   const projectPages = [...usePageIndex().pages.values()].filter((page) => page.projectId === project.id)
   const repos = ws.repos[project.id] ?? []
   const { preferences } = useAppSettings()
@@ -138,7 +138,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
             key: 'pages',
             label: (
               <>
-                <AppWindow size={14} /> {t(' Pages')}
+                <AppWindow size={14} /> {t(' Artifacts')}
               </>
             ),
             submenu: projectPages.map((page) => ({

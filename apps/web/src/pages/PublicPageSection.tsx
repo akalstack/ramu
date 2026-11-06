@@ -19,7 +19,7 @@ export function PublicPageSection({ page }: { page: PageInfo }) {
   const [error, setError] = useState('')
   useEffect(() => {
     const load = () =>
-      void invoke('pages.publicStatus', page.id)
+      void invoke('artifacts.publicStatus', page.id)
         .then(setStatus)
         .catch(() => {})
     load()
@@ -30,7 +30,7 @@ export function PublicPageSection({ page }: { page: PageInfo }) {
   const servable = declaredCapabilities(page.capabilities).length === 0
   const act = (work: Promise<unknown>) =>
     void work
-      .then(() => invoke('pages.publicStatus', page.id).then(setStatus))
+      .then(() => invoke('artifacts.publicStatus', page.id).then(setStatus))
       .catch((e: unknown) =>
         setError(
           e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e),
@@ -71,7 +71,7 @@ export function PublicPageSection({ page }: { page: PageInfo }) {
       {servable && (
         <Button
           variant="outline"
-          onClick={() => act(open ? invoke('pages.closePublic', page.id) : invoke('pages.openPublic', page.id))}
+          onClick={() => act(open ? invoke('artifacts.closePublic', page.id) : invoke('artifacts.openPublic', page.id))}
         >
           {open ? t('Close to everyone') : t('Open to anyone')}
         </Button>

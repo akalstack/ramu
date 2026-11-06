@@ -1,6 +1,6 @@
 # Artifacts: everything an agent makes, kept and opened anywhere
 
-A person asks an agent for a document, a deck, a design, a dashboard, a short explainer video, a diagram, a small app or a live view of their tools, and gets an **artifact**: a standalone result beside the chat that they open, edit, run, export and share from the desktop or the phone, and change by asking from any thread. Pages already do this for interactive web content; this plan widens them to every kind of output and renames them, so one place holds everything agents make. Document shipped behavior in [Pages and interactive content](guide/pages.md) (renamed **Artifacts**) and delete this plan when implementation and acceptance are finished.
+A person asks an agent for a document, a deck, a design, a dashboard, a short explainer video, a diagram, a small app or a live view of their tools, and gets an **artifact**: a standalone result beside the chat that they open, edit, run, export and share from the desktop or the phone, and change by asking from any thread. Apps already do this for interactive web content; this plan widens artifacts to every kind of output, so one place holds everything agents make. Document shipped behavior in [Artifacts](guide/artifacts.md) and delete this plan when implementation and acceptance are finished.
 
 ## The need
 
@@ -49,21 +49,14 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 
 1. **Asking.** "Turn this report into 6 slides." The agent writes the slide list, previews it (each slide is rendered and checked at deck size, like pages are checked at phone and desktop widths) and publishes a Slides artifact. In the thread it is one live card showing the first slide, with **Open**.
 2. **Opening beside the chat.** **Open** shows the artifact as a tab in the thread's workspace area, next to the conversation, the way a file opens. Ramu's layout has no right sidebar, and this adds none. Reading the deck and asking for changes happen side by side; **Full window** gives it the whole window.
-3. **Finding it again.** **Artifacts** in the sidebar (desktop) and the phone's tab bar lists everything, newest first, with its kind's mark, project and last change. It can be filtered by kind and searched by title. **New** (as **New page** today) opens a thread with "Make me a …" begun for the chosen kind.
+3. **Finding it again.** **Artifacts** in the sidebar (desktop) and the phone's tab bar lists everything, newest first, with its kind's mark, project and last change. It can be filtered by kind and searched by title. **New** opens a thread with "Make me a …" begun for the chosen kind, from a kind menu.
 4. **Editing directly.** A Doc's text, a deck's slide text and order, a diagram's labels and a design's text are edited in place. Each save is a new version marked "Edited by you", so the agent's next revision builds on it rather than overwriting it. Anything structural is asked for: Edit (point and ask) works on every kind, pointing at a slide, a chart, a frame or a paragraph.
 5. **Exporting.** **Export** offers that kind's formats. Files that need the host to make them are made there and saved on the device: PPTX, DOCX, PDF and MP4.
 6. **Sharing and shipping.** **Share link**, **Open to anyone**, **Publish to the web** and **Make it a project** work as they do for pages, for every kind that can be shown as a web page. A deck or doc publishes as a read-only site.
 
 ## Delivery
 
-### 1. The rename
-
-- User-facing text: **Pages** to **Artifacts**, **Keep as page** to **Keep as artifact**, **New page** to **New**, with a kind menu. The guide is renamed to `guide/artifacts.md`, with redirects from its old anchors. Indonesian: **Artefak**.
-- `artifacts.*` IPC with the `pages.*` names still answered for one release. `artifact_*` agent tools with the `page_*` and `*_interactive` names accepted, and the Ramu tool rows in a transcript read the old names too.
-- `ramu://artifact/<host>/<id>` links, with `ramu://page/…` still opening the same screen. The push target, the phone route and deep links follow.
-- Every existing page becomes an App artifact with nothing copied: a `kind` column defaulting to `app` is added beside the existing tables.
-
-### 2. Kinds in the engine
+### 1. Kinds in the engine
 
 - **Kind and source:** `publish_interactive` takes `kind` and that kind's source, validated by a zod schema per kind in `packages/shared`. `preview_interactive` renders every kind in the headless browser, with the kind's own checks:
   - **Slides:** every slide fits its frame.
@@ -78,28 +71,28 @@ The kind is chosen by the agent from the request, shown as a small mark on every
   - **MP4 and WebM:** frames captured by the headless browser and encoded with the browser's own WebCodecs `VideoEncoder`. This adds no ffmpeg binary, which is what kept browser recording out of Ramu so far.
   - **Exports are kept:** every export is stored with the version it was made from, so a second export of the same version is instant.
 
-### 3. Editing in place
+### 2. Editing in place
 
 - A Doc opens in the editor Ramu already uses for files (Tiptap on the desktop) and in a native rich-text view on the phone. A deck's slide text and order, a diagram's labels and a design frame's text are edited through the same frame message channel pages use for state.
 - An edit is saved as a version with `changes: "Edited by you"` and the device that made it. Two devices editing at once see the later one's version offered as a new version, never merged silently.
 - The agent's tools read the latest version, edits included, and its instructions say to keep the person's wording unless asked to change it.
 
-### 4. Dashboards and Live artifacts
+### 3. Dashboards and Live artifacts
 
 - **Sources** are the ones a page can already be granted: its own records, one project folder (read-only), Ramu data (read-only) and Shared MCP servers allowed one by one.
 - **New source:** a project's deployments, usage and uptime, once the shipping plan adds them.
 - **Refreshing:** a refresh rule (every N minutes while open, or on a schedule) re-runs the declared queries on the host. Results are stored with the time they were read, so a Dashboard opened offline on the phone shows "As of 09:40", never data passed off as current.
 - **Live** is a Dashboard or App whose refresh runs on the host through the existing page schedules. It can raise a notification when a declared value changes, using the existing triggers. MCP calls that only read run without asking each time once the person allowed that server for that artifact. Anything that writes still asks in the toolbar.
 
-### 5. Design systems
+### 4. Design systems
 
 - A **design system** is itself an artifact (kind Design) holding tokens (colors, type, radii, spacing), components as HTML and CSS, and its fonts as files. A project or the person picks one as default.
 - Design, Slides and App artifacts made after that use its tokens, and **Restyle** applies another system to an existing artifact as a new version.
 - From a codebase, the agent can draft a design system from the project's own CSS variables and components. The person reviews it before it is used.
 
-### 6. Desktop
+### 5. Desktop
 
-- **Artifacts** in the sidebar where **Pages** is, the list with kind filters, and the artifact view as a workspace tab beside the chat, with the toolbar each kind needs:
+- The **Artifacts** list in the sidebar gets kind filters, and the artifact view opens as a workspace tab beside the chat, with the toolbar each kind needs:
   - Slides: previous, next, present.
   - Doc: outline, edit.
   - Motion: play and scrub.
@@ -107,9 +100,9 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 - Thread cards for every kind show a live preview (the first slide, the doc's opening, the chart, the poster frame) with **Open**, **Keep as artifact** and the kind's export.
 - **Present** for Slides fills the screen, with notes on a second display when there is one.
 
-### 7. Phone
+### 6. Phone
 
-- An **Artifacts** tab where **Pages** is, with the host filter and kind filters. Each kind has a viewer that fits the phone:
+- The **Artifacts** tab gets kind filters beside the host filter. Each kind has a viewer that fits the phone:
   - Slides: swipe, with Present when the phone is connected to a display.
   - Doc: reading width, with editing.
   - Motion: native video for the exported MP4.
@@ -117,7 +110,7 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 - **Export** hands the file to the share sheet; **Add to Home Screen or share** and the home-screen widget work for every kind.
 - **Present from the phone:** the phone turns slides on the desktop's Present view of the same deck.
 
-### 8. Connection with shipping an app
+### 7. Connection with shipping an app
 
 The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the smallest thing that does the job first, and grow it when it needs more.
 
@@ -132,12 +125,12 @@ The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the s
 - **Shipped apps feed dashboards:** a deployed project's deployments, usage and uptime (shipping plan sections 3, 8 and 9) become Dashboard and Live sources. "Show me this week's errors and deploys" is an artifact, not a page of the hosting dashboard.
 - **Launch artifacts:** **Make a release note** and **Make a launch deck** from a project's merged pull requests are Doc and Slides artifacts on the project, ready to export or publish with the site.
 
-### 9. Documentation
+### 8. Documentation
 
-- `guide/pages.md` becomes `guide/artifacts.md`, with a section per kind, edit in place, exports, design systems, dashboards and live refresh. The mobile README, VERIFICATION.md, SECURITY.md (exports run on the host; live refresh and what each source can read), [Agents](guide/agents.md) (the `artifact_*` tools and `kind`) and the site's feature list are updated.
+- [Artifacts](guide/artifacts.md) gets a section per kind, edit in place, exports, design systems, dashboards and live refresh. The mobile README, VERIFICATION.md, SECURITY.md (exports run on the host; live refresh and what each source can read), [Agents](guide/agents.md) (the `artifact_*` tools and `kind`) and the site's feature list are updated.
 - Every string goes through `t()` with its Indonesian translation.
 
-### 10. Two people editing one artifact
+### 9. Two people editing one artifact
 
 Ramu is one person across devices today, so versions are enough. A household or a small team sharing an artifact through a share link that can edit needs more:
 
@@ -145,19 +138,19 @@ Ramu is one person across devices today, so versions are enough. A household or 
 - **Merging:** a Doc's and a deck's text are kept as a CRDT (Yjs) on the host, so two people typing at once merge instead of making competing versions. A version is still saved when either stops editing for a minute, so Restore and Compare keep working.
 - **Access:** an editing share link names the person it is for and can be revoked like any share link. Kinds without text (Dashboard, Motion) stay one editor at a time, with "Being edited by …" shown to the other.
 
-### 11. Templates
+### 10. Templates
 
 - **Save as template** on any artifact keeps its source and its design system with no records, values or history. **New** shows the person's templates for the chosen kind above the blank start, for example "Weekly report", "Pitch deck" or "Expense tracker".
-- Templates travel between hosts the way **Import a page** does now: a template share link opens on another connected host as a copy.
+- Templates travel between hosts the way **Import an artifact** does now: a template share link opens on another connected host as a copy.
 - Ramu ships a small starting set per kind (a report, a 6-slide deck, a landing page, a metrics dashboard, a 30-second explainer, a flowchart). It is kept in the repository and checked by the same previews as any artifact.
 
-### 12. Dashboards from named services
+### 11. Dashboards from named services
 
 - Besides records, folders, Ramu data and Shared MCP servers, a Dashboard or Live artifact can read **named services** through connectors on the host: Salesforce, Amplitude and Grafana first.
 - Each connector is one file implementing `query(spec)` with that service's own sign-in, kept in `credentials/`. It is read-only, and each service is its own grant on the artifact, listed in plain words.
 - A connector is added only after its sign-in and the data it can read are reviewed and written up in SECURITY.md, the same bar as Shared MCP.
 
-### 13. Voice-over for Motion
+### 12. Voice-over for Motion
 
 - A Motion artifact can have narration: the agent writes a script per scene, and the **speech** ability ([Abilities](ABILITIES-PLAN.md)) turns it into audio on a signed-in provider that offers it. The host mixes the audio into the MP4 with the browser's own audio encoder, timed to the scenes.
 - **Narration** in the artifact's toolbar previews, re-records one scene, or removes the narration. The grant sheet says which provider receives the script, and no other content leaves the host.
@@ -171,7 +164,6 @@ Ramu is one person across devices today, so versions are enough. A household or 
 
 ## Acceptance
 
-- **Rename:** existing pages show under **Artifacts** as Apps, their old `ramu://page/…` links open them, and a thread that called `page_list` before still reads correctly.
 - **Doc:** "write a launch plan for the sync feature" makes a Doc. Editing a paragraph on the phone and then asking "add a risks section" keeps the edit and adds the section. It exports as DOCX that opens in Word and as PDF.
 - **Slides:** "turn this report into 6 slides" makes a deck that exports as PPTX opening in PowerPoint and Keynote. **Present** runs on the desktop with the phone turning slides.
 - **Design:** with a design system drafted from a project's CSS, "design the pricing screen" uses its tokens, and **Make it a project** starts a project whose first screen matches it.

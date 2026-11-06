@@ -52,8 +52,8 @@ export function PageWidgetSync() {
         if (!latest.current.isOnline(target.computerId)) return
         try {
           const [page, data] = await Promise.all([
-            latest.current.invoke(target.computerId, 'pages.get', target.pageId),
-            latest.current.invoke(target.computerId, 'pages.widget', target.pageId),
+            latest.current.invoke(target.computerId, 'artifacts.get', target.pageId),
+            latest.current.invoke(target.computerId, 'artifacts.widget', target.pageId),
           ])
           widget.updateSnapshot({
             page: `${page.icon} ${page.title}`,

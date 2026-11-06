@@ -45,11 +45,13 @@ test('a delivered push leaves once its notice is read elsewhere, but not before 
   assert.deepEqual(readPushes(presented, listed, {}), [])
 })
 
-test("a page's notification opens that page", () => {
-  assert.deepEqual(pushTarget({ computerId: 'host-a', kind: 'pages', target: 'page', pageId: 'p-1' }, hosts), {
-    kind: 'page',
-    computerId: 'host-a',
-    pageId: 'p-1',
-  })
+test("an artifact's notification opens that artifact, also when a host a release behind calls it a page", () => {
+  for (const target of ['artifact', 'page'])
+    assert.deepEqual(pushTarget({ computerId: 'host-a', kind: 'pages', target, pageId: 'p-1' }, hosts), {
+      kind: 'artifact',
+      computerId: 'host-a',
+      pageId: 'p-1',
+    })
+  assert.equal(pushTarget({ computerId: 'host-a', target: 'artifact', pageId: '../x' }, hosts), null)
   assert.equal(pushTarget({ computerId: 'host-a', target: 'page', pageId: '../x' }, hosts), null)
 })

@@ -1,4 +1,5 @@
 import type { AgentEvent } from '../types'
+import { currentToolName } from '@ramu/shared/pages'
 
 type ToolUse = Extract<AgentEvent, { kind: 'tool-use' }>
 type CallSource = Pick<ToolUse, 'name' | 'summary'> & { input?: string }
@@ -80,6 +81,16 @@ const KNOWN = new Set([
   'background_terminal_wait',
   'background_terminal_stop',
   'codex_pre_tool_use',
+  // Earlier names of these (preview_interactive, page_list and the rest) read as the same rows.
+  'artifact_preview',
+  'artifact_publish',
+  'artifact_read',
+  'artifact_versions',
+  'artifact_list',
+  'artifact_get',
+  'artifact_records',
+  'artifact_published',
+  'artifact_run',
 ])
 
 /** Calls whose result Ramu already draws somewhere else in the chat: a card, the question dock, the goal tray. */
@@ -121,15 +132,17 @@ const quote = (value: string | undefined) => (value ? `“${clip(value)}”` : u
 export function ramuTool(tool: CallSource): RamuToolCall | null {
   const claude = /^mcp__ramu__(.+)$/.exec(tool.name)?.[1]
   const opencode = /^ramu_(.+)$/.exec(tool.name)?.[1]
-  const name =
+  const spelled =
     claude ??
-    (opencode && KNOWN.has(opencode) ? opencode : undefined) ??
+    (opencode && KNOWN.has(currentToolName(opencode)) ? opencode : undefined) ??
     (tool.summary === 'ramu' ? tool.name : undefined)
+  const name = spelled && currentToolName(spelled)
   if (!name || !KNOWN.has(name)) return null
   const args = record(parse(tool.input) ?? (tool.summary.startsWith('{') ? parse(tool.summary) : undefined))
   // Most calls arrive through the deferred catalog as tool_invoke { name, arguments }.
   if (name === 'tool_invoke') {
-    const inner = text(args.name)
+    const called = text(args.name)
+    const inner = called && currentToolName(called)
     return inner && KNOWN.has(inner) && inner !== 'tool_invoke'
       ? { name: inner, args: record(args.arguments) }
       : { name, args }
@@ -370,6 +383,35 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Stopped a background command', 'Stopping a background command', 'terminal', command(data.command))
     case 'background_terminal_wait':
       return describeWait(args, data, reply)
+    case 'artifact_preview':
+      return reply('Previewed an artifact', 'Previewing an artifact', 'sparkles', quote(text(args.title)))
+    case 'artifact_publish':
+      return reply('Published an artifact', 'Publishing an artifact', 'sparkles', quote(text(args.title)), [
+        { label: 'Changes', value: text(args.changes) ?? '' },
+      ])
+    case 'artifact_read':
+      return reply('Read an artifact', 'Reading an artifact', 'book', quote(text(record(data.reference).title)))
+    case 'artifact_versions':
+      return reply('Listed artifact versions', 'Listing artifact versions', 'book')
+    case 'artifact_list':
+      return reply('Listed artifacts', 'Listing artifacts', 'search')
+    case 'artifact_get':
+      return reply('Read an artifact', 'Reading an artifact', 'book', quote(text(record(data.page).title)))
+    case 'artifact_records':
+      return args.action === 'add'
+        ? reply('Added a record', 'Adding a record', 'book', text(args.collection))
+        : args.action === 'update'
+          ? reply('Updated a record', 'Updating a record', 'book', text(args.collection))
+          : reply('Read records', 'Reading records', 'book', text(args.collection))
+    case 'artifact_published':
+      return reply(
+        'Recorded where an artifact is live',
+        'Recording where an artifact is live',
+        'wrench',
+        text(args.url),
+      )
+    case 'artifact_run':
+      return reply('Ran an artifact', 'Running an artifact', 'sparkles', text(args.run) ?? quote(text(args.task)))
     default:
       return reply('Used', 'Using', 'wrench', call.name.replace(/_/g, ' '))
   }

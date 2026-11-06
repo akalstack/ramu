@@ -11,6 +11,7 @@ const DOMAINS = new Set([
   'device',
   'hostBrowser',
   'interactive',
+  'artifacts',
   'pages',
   'tasks',
   'projects',

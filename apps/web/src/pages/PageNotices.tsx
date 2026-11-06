@@ -22,7 +22,7 @@ export function PageNotices() {
           type: 'info',
           priority: 'high',
           actionProps: {
-            children: t('Open page'),
+            children: t('Open'),
             onClick: () => {
               openPage(payload.pageId)
               notify.close(id)

@@ -117,7 +117,7 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
     }
     if (text.includes('[interactive tool]')) {
       const preview = await call({
-        name: 'preview_interactive',
+        name: 'artifact_preview',
         arguments: {
           title: 'Deploy health',
           summary: 'Latency and service status with a responsive layout.',
@@ -128,7 +128,7 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
       if (preview.isError) throw new Error(JSON.stringify(preview.content))
       const { id } = JSON.parse((preview.content as { text: string }[])[0]!.text)
       const published = await call({
-        name: 'publish_interactive',
+        name: 'artifact_publish',
         arguments: { previewId: id, requestId: `fixture-${id}` },
       })
       if (published.isError) throw new Error(JSON.stringify(published.content))

@@ -21,11 +21,15 @@ const ref = (version: number, id = 'doc', changes?: string): InteractiveReferenc
   ...(changes ? { changes } : {}),
 })
 const card = (reference: InteractiveReference) => ({ kind: 'interactive', reference }) as AgentEvent
-const previewCall = (toolUseId: string, previous?: { id: string; version: number }) =>
+const previewCall = (
+  toolUseId: string,
+  previous?: { id: string; version: number },
+  name = 'mcp__ramu__artifact_preview',
+) =>
   ({
     kind: 'tool-use',
     toolUseId,
-    name: 'mcp__ramu__preview_interactive',
+    name,
     summary: '',
     input: JSON.stringify({ title: 'x', ...(previous ? { previous } : {}) }),
   }) as AgentEvent
@@ -84,4 +88,12 @@ it('diffs sources line by line around the change', () => {
     { kind: ' ', text: 'd' },
     { kind: '+', text: 'e' },
   ])
+})
+
+it('reads a revision previewed under the tool’s earlier name as updating too', () => {
+  const previous = { id: 'doc', version: 1 }
+  for (const name of ['mcp__ramu__preview_interactive', 'ramu_preview_interactive', 'mcp__ramu__artifact_preview'])
+    expect(interactiveUpdates([card(ref(1)), previewCall('a', previous, name)]).get('doc'), name).toEqual({
+      state: 'updating',
+    })
 })

@@ -38,3 +38,21 @@ it('refuses a profile from another schema without changing it', () => {
   expect(again.prepare("SELECT name FROM sqlite_master WHERE name = 'kept'").get()).toBeDefined()
   again.close()
 })
+
+it('adds the artifact kind to a profile kept before it, reading existing pages as apps', () => {
+  const path = profile()
+  openDb(path).close()
+  const earlier = new DatabaseSync(path)
+  earlier.exec('ALTER TABLE interactive_pages DROP COLUMN kind')
+  earlier.exec(
+    "INSERT INTO interactive_pages (id, data, current_version, pinned, created_at, changed_at) VALUES ('kept', '{}', 1, 0, 0, 0)",
+  )
+  earlier.close()
+  const reopened = openDb(path)
+  expect(reopened.prepare("SELECT kind FROM interactive_pages WHERE id = 'kept'").get()).toEqual({ kind: 'app' })
+  reopened.close()
+  // Opening again finds the column and leaves it alone.
+  const again = openDb(path)
+  expect(again.prepare('SELECT COUNT(*) AS n FROM interactive_pages').get()).toEqual({ n: 1 })
+  again.close()
+})

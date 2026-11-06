@@ -126,11 +126,11 @@ export function InteractiveDocumentCard({
   const [kept, setKept] = useState<boolean | null>(null)
   useEffect(() => {
     if (!actionsOpen || kept !== null) return
-    void invoke(chat.computerId, 'pages.exists', reference.id).then(setKept, () => setKept(false))
+    void invoke(chat.computerId, 'artifacts.exists', reference.id).then(setKept, () => setKept(false))
   }, [actionsOpen, kept, invoke, chat.computerId, reference.id])
   const openPage = () => {
     setActionsOpen(false)
-    router.push({ pathname: '/page/[computer]/[id]', params: { computer: chat.computerId, id: reference.id } })
+    router.push({ pathname: '/artifact/[computer]/[id]', params: { computer: chat.computerId, id: reference.id } })
   }
   const [expanded, setExpanded] = useState(false)
   const live = !!document && (visible || expanded) && foreground && !failed && !evicted && mode === 'preview'
@@ -406,12 +406,12 @@ export function InteractiveDocumentCard({
           <T tone="muted">{reference.summary}</T>
           <Card>
             {kept ? (
-              <ContentAction title={t('Open page')} onPress={openPage} />
+              <ContentAction title={t('Open')} onPress={openPage} />
             ) : kept === false && !copyFrom ? (
               <ContentAction
-                title={t('Keep as page')}
+                title={t('Keep as artifact')}
                 onPress={() =>
-                  void invoke(chat.computerId, 'pages.keep', reference.sessionId, reference.id).then(
+                  void invoke(chat.computerId, 'artifacts.keep', reference.sessionId, reference.id).then(
                     () => openPage(),
                     (e) => setError(e instanceof Error ? e.message : String(e)),
                   )

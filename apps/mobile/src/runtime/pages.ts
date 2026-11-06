@@ -1,27 +1,6 @@
-// Pages on the phone: links that open one, a saved copy for when the host is away, and record changes made offline.
+// Artifacts on the phone: a saved copy for when the host is away, and record changes made offline.
 // No React Native in here, so it is unit tested.
 import type { InteractiveDocument } from '@ramu/shared/interactive'
-
-export interface PageLink {
-  computerId: string
-  pageId: string
-  share?: string
-}
-
-/** A `ramu://page/<host>/<page>` link (with `?share=` for a share link), as Add to Home Screen and share links use. */
-export function pageLink(link: PageLink): string {
-  return `ramu://page/${encodeURIComponent(link.computerId)}/${encodeURIComponent(link.pageId)}${link.share ? `?share=${encodeURIComponent(link.share)}` : ''}`
-}
-
-export function parsePageLink(url: string): PageLink | null {
-  const match = /^ramu:\/\/page\/([^/?#]{1,120})\/([\w-]{1,80})(?:\?share=([\w-]{8,80}))?$/.exec(url.trim())
-  if (!match) return null
-  return {
-    computerId: decodeURIComponent(match[1]!),
-    pageId: match[2]!,
-    ...(match[3] ? { share: match[3] } : {}),
-  }
-}
 
 export interface Storage {
   getItem(key: string): string | null

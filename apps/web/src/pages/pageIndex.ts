@@ -30,7 +30,7 @@ export function usePageIndex(): { pages: Map<string, PageInfo>; loaded: boolean 
     const load = () => {
       if (index.loading) return
       index.loading = true
-      void invoke('pages.list')
+      void invoke('artifacts.list')
         .then((list) => {
           index.pages = new Map(list.map((page) => [page.id, page]))
           index.loaded = true

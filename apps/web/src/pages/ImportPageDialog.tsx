@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { parseArtifactLink } from '@ramu/shared/pages'
 import { Input } from '../components/desktop-input'
 import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
@@ -6,15 +7,9 @@ import { invokerFor } from '../ipc'
 import { useHost } from '../workspace/HostProvider'
 import { openPage } from './openPage'
 
-/** `ramu://page/<host>/<page>?share=<token>`, as Share links copy. */
-export function parseShareLink(text: string): { host: string; pageId: string; token: string } | null {
-  const match = /^ramu:\/\/page\/([^/?#]{1,120})\/([\w-]{1,80})\?share=([\w-]{8,80})$/.exec(text.trim())
-  return match ? { host: decodeURIComponent(match[1]!), pageId: match[2]!, token: match[3]! } : null
-}
-
 /**
- * Copies a page another connected host shared into this host: its code and capabilities as a new page, with none of
- * its records or values. The share link must be from a host this desktop is connected to.
+ * Copies an artifact another connected host shared into this host: its code and capabilities as a new artifact, with
+ * none of its records or values. The share link must be from a host this desktop is connected to.
  */
 export function ImportPageDialog({ onClose }: { onClose(): void }) {
   useLanguage()
@@ -22,10 +17,11 @@ export function ImportPageDialog({ onClose }: { onClose(): void }) {
   const [link, setLink] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const parsed = parseShareLink(link)
+  const found = parseArtifactLink(link)
+  const parsed = found?.share ? { host: found.computerId, token: found.share } : null
   return (
     <Dialog
-      title={t('Import a page')}
+      title={t('Import an artifact')}
       confirmLabel={t('Import')}
       confirmDisabled={!parsed}
       busy={busy}
@@ -35,9 +31,9 @@ export function ImportPageDialog({ onClose }: { onClose(): void }) {
         if (!parsed) return
         setBusy(true)
         setError(null)
-        void invokerFor(parsed.host)('pages.openShare', parsed.token)
+        void invokerFor(parsed.host)('artifacts.openShare', parsed.token)
           .then((shared) =>
-            invoke('pages.import', shared.document, { title: shared.page.title, icon: shared.page.icon }),
+            invoke('artifacts.import', shared.document, { title: shared.page.title, icon: shared.page.icon }),
           )
           .then((page) => {
             onClose()
@@ -47,7 +43,7 @@ export function ImportPageDialog({ onClose }: { onClose(): void }) {
             setError(
               e instanceof Error
                 ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
-                : t('Could not import that page.'),
+                : t('Could not import that artifact.'),
             ),
           )
           .finally(() => setBusy(false))
@@ -55,13 +51,13 @@ export function ImportPageDialog({ onClose }: { onClose(): void }) {
     >
       <p>
         {t(
-          'Paste a share link from another host this desktop is connected to. The page’s code comes over; its records and values stay there.',
+          'Paste a share link from another host this desktop is connected to. The artifact’s code comes over; its records and values stay there.',
         )}
       </p>
       <Input
         autoFocus
         aria-label={t('Share link')}
-        placeholder="ramu://page/…"
+        placeholder="ramu://artifact/…"
         value={link}
         onChange={(event) => setLink(event.target.value)}
       />

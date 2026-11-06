@@ -52,7 +52,9 @@ const viewerMethods = new Set([
   'interactive.get',
   'interactive.list',
   'interactive.media',
-  // Share links: a viewer device opens a page someone shared and adds records only when the link allows it.
+  // Share links: a viewer device opens an artifact someone shared and adds records only when the link allows it.
+  'artifacts.openShare',
+  'artifacts.shareCall',
   'pages.openShare',
   'pages.shareCall',
   'attachments.text',

@@ -111,8 +111,12 @@ export interface PagePublication {
   siteId?: string
 }
 
+/** What an artifact is. Every page kept so far is an App: interactive web content. */
+export type ArtifactKind = 'app'
+
 export interface PageInfo {
   id: string
+  kind: ArtifactKind
   title: string
   /** One emoji. */
   icon: string
@@ -277,3 +281,57 @@ export interface PublicPageStatus {
   error: string | null
   since: number | null
 }
+
+/** Where an artifact link points: a host, an artifact on it, and the token of a share link. */
+export interface ArtifactLink {
+  computerId: string
+  pageId: string
+  share?: string
+}
+
+/** A `ramu://artifact/<host>/<id>` link (with `?share=` for a share link), as Share and Add to Home Screen copy. */
+export function artifactLink(link: ArtifactLink): string {
+  return `ramu://artifact/${encodeURIComponent(link.computerId)}/${encodeURIComponent(link.pageId)}${link.share ? `?share=${encodeURIComponent(link.share)}` : ''}`
+}
+
+/** Reads an artifact link, including the `ramu://page/…` form that earlier share links and home-screen icons carry. */
+export function parseArtifactLink(url: string): ArtifactLink | null {
+  const match = /^ramu:\/\/(?:artifact|page)\/([^/?#]{1,120})\/([\w-]{1,80})(?:\?share=([\w-]{8,80}))?$/.exec(
+    url.trim(),
+  )
+  if (!match) return null
+  try {
+    return {
+      computerId: decodeURIComponent(match[1]!),
+      pageId: match[2]!,
+      ...(match[3] ? { share: match[3] } : {}),
+    }
+  } catch {
+    // A malformed percent escape is not a link.
+    return null
+  }
+}
+
+/**
+ * The artifact tools under the names agents were given before artifacts. Both names call the same tool and read the
+ * same in a transcript; agents are only told the current ones.
+ */
+const OLD_ARTIFACT_TOOLS: Record<string, string> = {
+  preview_interactive: 'artifact_preview',
+  publish_interactive: 'artifact_publish',
+  interactive_read: 'artifact_read',
+  interactive_list: 'artifact_versions',
+  page_list: 'artifact_list',
+  page_get: 'artifact_get',
+  page_records: 'artifact_records',
+  page_published: 'artifact_published',
+  page_run: 'artifact_run',
+}
+
+/** The earlier name of an artifact tool, if it had one. */
+export const oldArtifactToolName = (name: string): string | undefined =>
+  Object.entries(OLD_ARTIFACT_TOOLS).find(([, current]) => current === name)?.[0]
+
+/** A tool's current name, whichever name it was called by. */
+export const currentToolName = (name: string): string =>
+  Object.hasOwn(OLD_ARTIFACT_TOOLS, name) ? OLD_ARTIFACT_TOOLS[name]! : name

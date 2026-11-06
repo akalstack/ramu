@@ -33,7 +33,7 @@ export function PublishDialog({ page, onClose }: { page: PageInfo; onClose(): vo
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    void invoke('pages.publishTargets')
+    void invoke('artifacts.publishTargets')
       .then(setTargets)
       .catch(() => {})
   }, [invoke])
@@ -55,8 +55,8 @@ export function PublishDialog({ page, onClose }: { page: PageInfo; onClose(): vo
         setError(null)
         void (async () => {
           if (needsToken)
-            await invoke('pages.saveHostingToken', target as Exclude<Target, 'github-pages'>, token.trim())
-          await invoke('pages.publish', page.id, target)
+            await invoke('artifacts.saveHostingToken', target as Exclude<Target, 'github-pages'>, token.trim())
+          await invoke('artifacts.publish', page.id, target)
           onClose()
         })()
           .catch((e) => setError(message(e)))

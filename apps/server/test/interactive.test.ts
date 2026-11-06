@@ -102,15 +102,19 @@ it('publishes through the portable provider wrapper using the same canonical cal
     store = new InteractiveStore(d, record, previewer)
   const registry = new ToolRegistry(new McpServer({ name: 'test', version: '1' }), true)
   registerInteractiveTools(registry.server, store, 's')
-  expect(registry.search('interactive', 10).some((v) => v.name === 'preview_interactive')).toBe(true)
+  const found = registry.search('interactive', 20).map((v) => v.name)
+  expect(found).toContain('artifact_preview')
+  // Earlier names still run, but agents are only offered the current ones.
+  expect(found).not.toContain('preview_interactive')
   const p = await store.preview('s', input)
   const extra = { signal: new AbortController().signal } as Parameters<typeof registry.invoke>[2]
   const result = await registry.invoke('publish_interactive', { previewId: p.id, requestId: 'wrapper' }, extra)
   expect(result.isError).not.toBe(true)
   expect(record).toHaveBeenCalledTimes(1)
   expect(record.mock.calls[0]?.[1]).toMatchObject({ title: 'Capacity', checked: true })
-  const forbidden = await registry.invoke('interactive_read', { id: 'forged', version: 1 }, extra)
+  const forbidden = await registry.invoke('artifact_read', { id: 'forged', version: 1 }, extra)
   expect(forbidden.isError).toBe(true)
+  expect((await registry.invoke('interactive_read', { id: 'forged', version: 1 }, extra)).isError).toBe(true)
 })
 it.skipIf(!interactiveBrowserPath())(
   'uses an isolated real preview browser to observe a working control and diagnose broken behavior',
@@ -185,12 +189,22 @@ it.each([false, true])('uses the real MCP boundary for direct/deferred publicati
       client.callTool(
         deferred ? { name: 'tool_invoke', arguments: { name, arguments: args } } : { name, arguments: args },
       )
-    const preview = await call('preview_interactive', input)
+    const preview = await call('artifact_preview', input)
     const blocks = preview.content as { type: string; text?: string }[]
     const previewId = JSON.parse(blocks.find((b) => b.type === 'text')!.text!).id
+    // The earlier name reaches the same tool, so a retry under either name returns the first publication.
     const first = await call('publish_interactive', { previewId, requestId: 'retry' })
-    const retry = await call('publish_interactive', { previewId, requestId: 'retry' })
+    const retry = await call('artifact_publish', { previewId, requestId: 'retry' })
     expect(retry).toEqual(first)
+    if (!deferred) {
+      const { tools } = await client.listTools()
+      expect(tools.find((tool) => tool.name === 'publish_interactive')?.description).toBe(
+        'Old name for artifact_publish.',
+      )
+      expect(tools.find((tool) => tool.name === 'artifact_publish')?.description).toMatch(
+        /^Publish a previewed artifact/,
+      )
+    }
     expect(record).toHaveBeenCalledTimes(1)
     expect(d.prepare('SELECT COUNT(*) AS n FROM agent_events').get()).toEqual({ n: 1 })
     expect(store.list('s')).toHaveLength(1)

@@ -15,6 +15,11 @@ it.each([
   'reviews.get',
   'computer.session',
   'notifications.register',
+  // Share links, under the artifact names and the earlier page names.
+  'artifacts.openShare',
+  'artifacts.shareCall',
+  'pages.openShare',
+  'pages.shareCall',
 ])('keeps viewer read/request-answer access for %s', (method) => expect(viewerMayInvoke(method)).toBe(true))
 
 it.each([
@@ -35,4 +40,6 @@ it.each([
   'computer.input',
   'computer.grant',
   'newMethod.get',
+  'artifacts.delete',
+  'artifacts.call',
 ])('never infers viewer access for %s', (method) => expect(viewerMayInvoke(method)).toBe(false))

@@ -74,11 +74,11 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
   const frame = useRef<HTMLIFrameElement>(null)
   const load = useCallback(async () => {
     try {
-      const [info, saved] = await Promise.all([invoke('pages.get', pageId), invoke('pages.state', pageId)])
+      const [info, saved] = await Promise.all([invoke('artifacts.get', pageId), invoke('artifacts.state', pageId)])
       setPage(info)
       setDocument((current) => {
         if (current?.reference.version === info.version) return current
-        void invoke('pages.document', pageId)
+        void invoke('artifacts.document', pageId)
           .then(setDocument)
           .catch(() => {})
         return current
@@ -142,7 +142,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
   }, [instance])
   const startThread = async (prompt: string, selector?: string) => {
     try {
-      const started = await invoke('pages.startThread', pageId, prompt, selector)
+      const started = await invoke('artifacts.startThread', pageId, prompt, selector)
       await ws.refresh()
       ws.openTask(started.taskId)
     } catch (error) {
@@ -152,9 +152,9 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
   if (missing)
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-muted-foreground">
-        <p>{t('This page was deleted or is on a host that is not connected.')}</p>
+        <p>{t('This artifact was deleted or is on a host that is not connected.')}</p>
         <Button variant="outline" onClick={onBack}>
-          {t('Back to Pages')}
+          {t('Back to Artifacts')}
         </Button>
       </div>
     )
@@ -179,7 +179,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
       key: 'pin',
       label: page.pinned ? t('Unpin') : t('Pin to top'),
       disabled: viewOnly,
-      onSelect: () => void invoke('pages.update', pageId, { pinned: !page.pinned }).catch(() => {}),
+      onSelect: () => void invoke('artifacts.update', pageId, { pinned: !page.pinned }).catch(() => {}),
     },
     { key: 'sep1', separator: true },
     { key: 'export', label: t('Export HTML'), disabled: !document, onSelect: exportHtml },
@@ -201,14 +201,14 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
       label: t('Duplicate'),
       disabled: viewOnly,
       onSelect: () =>
-        void invoke('pages.duplicate', pageId)
+        void invoke('artifacts.duplicate', pageId)
           .then((copy) => openPage(copy.id))
           .catch((e) => notifyError(message(e))),
     },
     { key: 'sep2', separator: true },
     {
       key: 'delete',
-      label: t('Delete page…'),
+      label: t('Delete artifact…'),
       danger: true,
       disabled: viewOnly,
       onSelect: () => setDialog({ kind: 'delete' }),
@@ -221,7 +221,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
           variant="ghost"
           size="icon-sm"
           className={GHOST_ICON_BUTTON_CLASS}
-          aria-label={t('Back to Pages')}
+          aria-label={t('Back to Artifacts')}
           onClick={onBack}
         >
           <ArrowLeft size={15} />
@@ -250,7 +250,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
               disabled={viewOnly || !!bridge.running || !page.grants.ai}
               title={run.prompt}
               onClick={() =>
-                void invoke('pages.runFlow', pageId, name).catch((e) => notifyError(message(e), page.title))
+                void invoke('artifacts.runFlow', pageId, name).catch((e) => notifyError(message(e), page.title))
               }
             >
               <Play size={12} /> {run.label}
@@ -316,8 +316,8 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
               onClick={() => {
                 const error = page.lastError!
                 void startThread(
-                  `Fix this error in my page. Reproduce it with preview_interactive, then publish the fixed version with publish_interactive {page: "${page.id}", changes}.\nError on ${error.device ?? 'a device'} in v${error.version}: ${error.message}${error.steps?.length ? `\nWhat the person did before it: ${error.steps.join(' → ')}` : ''}`,
-                ).then(() => invoke('pages.clearError', pageId))
+                  `Fix this error in my page. Reproduce it with artifact_preview, then publish the fixed version with artifact_publish {page: "${page.id}", changes}.\nError on ${error.device ?? 'a device'} in v${error.version}: ${error.message}${error.steps?.length ? `\nWhat the person did before it: ${error.steps.join(' → ')}` : ''}`,
+                ).then(() => invoke('artifacts.clearError', pageId))
               }}
             >
               {t('Fix this')}
@@ -328,7 +328,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
             size="icon-sm"
             className={`${GHOST_ICON_BUTTON_CLASS} size-6`}
             aria-label={t('Dismiss')}
-            onClick={() => void invoke('pages.clearError', pageId)}
+            onClick={() => void invoke('artifacts.clearError', pageId)}
           >
             <X size={12} />
           </Button>
@@ -416,7 +416,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
             if (question.trim().length < 2) return
             setAsking(true)
             setAnswer(null)
-            void invoke('pages.ask', pageId, question.trim())
+            void invoke('artifacts.ask', pageId, question.trim())
               .then(setAnswer)
               .catch((e) => notifyError(message(e), page.title))
               .finally(() => setAsking(false))
@@ -482,7 +482,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
           page={page}
           onClose={() => setDialog(null)}
           onRestore={(version) =>
-            void invoke('pages.restoreVersion', pageId, version)
+            void invoke('artifacts.restoreVersion', pageId, version)
               .then(() => setStatus(t('Restored v{version} as the newest version.', { version })))
               .catch((e) => notifyError(message(e), page.title))
           }
@@ -492,11 +492,11 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
       {dialog?.kind === 'delete' && (
         <Dialog
           title={t('Delete {title}?', { title: page.title })}
-          confirmLabel={t('Delete page')}
+          confirmLabel={t('Delete artifact')}
           danger
           onCancel={() => setDialog(null)}
           onConfirm={() =>
-            void invoke('pages.delete', pageId)
+            void invoke('artifacts.delete', pageId)
               .then(onBack)
               .catch((e) => notifyError(message(e)))
           }
@@ -511,7 +511,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
           onCancel={() => setDialog(null)}
           onConfirm={() => {
             setDialog(null)
-            void invoke('pages.makeProject', pageId)
+            void invoke('artifacts.makeProject', pageId)
               .then(async (made) => {
                 await ws.refresh()
                 ws.openTask(made.thread.taskId)
@@ -633,7 +633,7 @@ function VersionsDialog({
   const { invoke } = useHost()
   const [versions, setVersions] = useState<PageVersion[] | null>(null)
   useEffect(() => {
-    void invoke('pages.versions', page.id)
+    void invoke('artifacts.versions', page.id)
       .then(setVersions)
       .catch(() => setVersions([]))
   }, [invoke, page.id])
@@ -693,12 +693,12 @@ function RenameDialog({ page, onClose }: { page: PageInfo; onClose(): void }) {
   const [icon, setIcon] = useState(page.icon)
   return (
     <Dialog
-      title={t('Rename page')}
+      title={t('Rename artifact')}
       confirmLabel={t('Save')}
       confirmDisabled={!title.trim()}
       onCancel={onClose}
       onConfirm={() =>
-        void invoke('pages.update', page.id, { title, icon })
+        void invoke('artifacts.update', page.id, { title, icon })
           .then(onClose)
           .catch((e) => notifyError(message(e)))
       }

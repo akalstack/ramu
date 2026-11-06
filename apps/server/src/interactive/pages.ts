@@ -39,6 +39,7 @@ interface PageData {
 }
 interface PageRow {
   id: string
+  kind: string
   data: string
   current_version: number
   pinned: number
@@ -74,6 +75,8 @@ export class PageStore {
     const data = JSON.parse(row.data) as PageData
     return {
       id: row.id,
+      // A kind this build does not know yet, written by a newer one, still opens as the web page it renders as.
+      kind: row.kind === 'app' ? row.kind : 'app',
       title: data.title,
       icon: data.icon,
       projectId: data.projectId,

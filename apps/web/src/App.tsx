@@ -720,7 +720,7 @@ function Shell() {
                 aria-pressed={ui.sidebar === 'pages'}
                 onClick={() => ws.setSidebar(ui.sidebar === 'pages' ? 'projects' : 'pages')}
               >
-                <AppWindow size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Pages')}</span>
+                <AppWindow size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Artifacts')}</span>
               </Button>
             </nav>
             <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden flex-1 overflow-auto min-h-0">

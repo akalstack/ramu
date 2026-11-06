@@ -23,7 +23,7 @@ export function usePages() {
   const { on } = useHostRuntime()
   const [pages, setPages] = useState<PageInfo[] | null>(null)
   const reload = useCallback(() => {
-    void invoke('pages.list')
+    void invoke('artifacts.list')
       .then(setPages)
       .catch(() => setPages([]))
   }, [invoke])
@@ -68,7 +68,7 @@ export function PagesPage() {
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 px-6 pt-6 pb-10">
         <header className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="m-[0_0_4px] text-heading font-semibold tracking-[-0.01em]">{t('Pages')}</h1>
+            <h1 className="m-[0_0_4px] text-heading font-semibold tracking-[-0.01em]">{t('Artifacts')}</h1>
             <p className="m-0 text-control text-muted-foreground">
               {t(
                 'Sites agents made for you to keep. Open them here or on your phone, and change one by asking in any thread.',
@@ -77,11 +77,11 @@ export function PagesPage() {
           </div>
           <div className="flex flex-none gap-2">
             <Button variant="outline" disabled={viewOnly} onClick={() => setImporting(true)}>
-              {t('Import a page…')}
+              {t('Import an artifact…')}
             </Button>
             <Button disabled={viewOnly} onClick={newPage}>
               <Plus size={14} />
-              {t('New page')}
+              {t('New')}
             </Button>
           </div>
         </header>
@@ -89,8 +89,8 @@ export function PagesPage() {
           <SearchInput
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={t('Search pages')}
-            aria-label={t('Search pages')}
+            placeholder={t('Search artifacts')}
+            aria-label={t('Search artifacts')}
           />
         )}
         {pages && pages.length === 0 && (
@@ -99,9 +99,11 @@ export function PagesPage() {
               <EmptyMedia variant="icon">
                 <AppWindow />
               </EmptyMedia>
-              <EmptyTitle>{t('No pages yet')}</EmptyTitle>
+              <EmptyTitle>{t('No artifacts yet')}</EmptyTitle>
               <EmptyDescription>
-                {t('Ask an agent for “a page to …”, or choose Keep as page on any interactive card in a thread.')}
+                {t(
+                  'Ask an agent for something to keep, like “a tracker for …”, or choose Keep as artifact on any interactive card in a thread.',
+                )}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

@@ -16,7 +16,7 @@ const slug = (text: string) =>
  * the folder becomes a project, and a thread starts there with the page as context to grow it into an app.
  */
 export async function makePageProject(ctx: HandlerContext, pageId: string, name?: string) {
-  if (!ctx.pages || !ctx.pageAi || !ctx.agentThreads) throw new Error('Update this host for Pages.')
+  if (!ctx.pages || !ctx.pageAi || !ctx.agentThreads) throw new Error('Update this host for Artifacts.')
   const page = ctx.pages.get(pageId)
   const document = ctx.pages.document(pageId)
   const parent = join(homedir(), 'Ramu Projects')

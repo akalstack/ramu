@@ -76,6 +76,41 @@ it('keeps a thread document as a page and takes versions from any thread', async
   expect(pages.has(page.id)).toBe(false)
 })
 
+it('answers every artifacts method under its earlier pages name too, with the same handler', async () => {
+  const { registerPageHandlers } = await import('../src/ipc/handlers/pages')
+  const { pages, page } = await setup()
+  const methods = registerPageHandlers({ pages, pageAi: {}, activity: { run: () => {} } } as never)
+  const old = Object.keys(methods).filter((name) => name.startsWith('pages.'))
+  expect(old.length).toBeGreaterThan(40)
+  for (const name of old) expect(methods[name.replace('pages.', 'artifacts.')], name).toBe(methods[name])
+  expect(Object.keys(methods)).toHaveLength(old.length * 2)
+  const listed = methods['artifacts.list']!.run() as { id: string; kind: string }[]
+  expect(listed).toEqual(methods['pages.list']!.run())
+  expect(listed).toMatchObject([{ id: page.id, kind: 'app' }])
+})
+
+it('offers the artifact tools to agents and still runs them under their earlier page names', async () => {
+  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js')
+  const { ToolRegistry } = await import('../src/agent/toolRegistry')
+  const { registerInteractiveTools } = await import('../src/interactive/tools')
+  const { interactive, pages, page } = await setup()
+  const registry = new ToolRegistry(new McpServer({ name: 'test', version: '1' }), true)
+  registerInteractiveTools(registry.server, interactive, 's', { pages, ai: {} as never, projectId: () => null })
+  const extra = { signal: new AbortController().signal } as Parameters<typeof registry.invoke>[2]
+  const text = async (name: string, args: Record<string, unknown>) => {
+    const result = await registry.invoke(name, args, extra)
+    expect(result.isError, name).not.toBe(true)
+    return JSON.parse((result.content[0] as { text: string }).text) as unknown
+  }
+  const listed = await text('artifact_list', {})
+  expect(listed).toMatchObject([{ id: page.id, kind: 'app', title: 'My ledger' }])
+  expect(await text('page_list', {})).toEqual(listed)
+  expect(await text('page_get', { id: page.id })).toEqual(await text('artifact_get', { id: page.id }))
+  const names = registry.search('artifact', 30).map((tool) => tool.name)
+  expect(names).toEqual(expect.arrayContaining(['artifact_list', 'artifact_get', 'artifact_records', 'artifact_run']))
+  expect(names.some((name) => name.startsWith('page_') || name.endsWith('_interactive'))).toBe(false)
+})
+
 it('shares state across devices without blind overwrites', async () => {
   const { pages, page } = await setup()
   const state = { controls: [{ key: '0:amount', value: '35', checked: false }], custom: null }
@@ -305,7 +340,7 @@ it('reads only the granted project folder, read-only', async () => {
     activity: { run: (_l: string, _d: string, work: () => unknown) => work() },
   } as never)
   const call = (method: string, args: unknown[]) =>
-    methods['pages.call']!.run(page.id, method, args) as Promise<unknown>
+    methods['artifacts.call']!.run(page.id, method, args) as Promise<unknown>
   await expect(call('folder.list', [])).rejects.toThrow('not allowed')
   pages.grant(page.id, { folder: true })
   expect(await call('folder.list', [])).toEqual([{ name: 'a.json', folder: false }])
@@ -496,7 +531,7 @@ it('reads Ramu data only for the sources declared and allowed, scoped to the pag
     agents: { activity: () => [{ day: '2026-11-06', provider: 'codex', tokens: 10 }] },
     activity: { run: (_l: string, _d: string, work: () => unknown) => work() },
   } as never)
-  const read = (source: string) => methods['pages.call']!.run(page.id, 'ramu.read', [source])
+  const read = (source: string) => methods['artifacts.call']!.run(page.id, 'ramu.read', [source])
   expect(() => read('activity')).toThrow('not allowed')
   pages.grant(page.id, { ramu: ['threads'] })
   expect(() => read('activity')).toThrow('not allowed')

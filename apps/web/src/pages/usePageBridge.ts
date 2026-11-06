@@ -101,7 +101,7 @@ export function usePageBridge({
       if (m.type === 'tools' && Array.isArray(m.value)) functions.current = (m.value as FrameFunction[]).slice(0, 16)
       if (m.type === 'tool-result' && m.value && typeof m.value === 'object') {
         const result = m.value as { id: string; value?: unknown; error?: string }
-        void invoke('pages.runReply', result.id, result.value ?? null, result.error).catch(() => {})
+        void invoke('artifacts.runReply', result.id, result.value ?? null, result.error).catch(() => {})
       }
       if (m.type === 'picked' && m.value && typeof m.value === 'object') onPicked(m.value as PickedElement)
       if (m.type === 'error') {
@@ -112,7 +112,7 @@ export function usePageBridge({
         const message = String(error.message ?? 'An interaction failed.')
         onError(message)
         if (!share)
-          void invoke('pages.reportError', pageId, {
+          void invoke('artifacts.reportError', pageId, {
             message,
             version,
             device: 'desktop',
@@ -124,7 +124,7 @@ export function usePageBridge({
         if (!next) return
         clearTimeout(saving.current)
         saving.current = setTimeout(() => {
-          void invoke('pages.saveState', pageId, next, stateRevision.current ?? 0)
+          void invoke('artifacts.saveState', pageId, next, stateRevision.current ?? 0)
             .then((saved) => {
               stateRevision.current = saved.revision
               // Another device saved first: show its values rather than overwrite them.
@@ -141,8 +141,8 @@ export function usePageBridge({
         const options = (args[1] ?? {}) as { shape?: unknown; maxSteps?: number; runId?: string; name?: string }
         const start =
           method === 'ai.flow'
-            ? invoke('pages.runFlow', pageId, String(args[0]), functions.current)
-            : invoke('pages.runStart', pageId, String(args[0]), {
+            ? invoke('artifacts.runFlow', pageId, String(args[0]), functions.current)
+            : invoke('artifacts.runStart', pageId, String(args[0]), {
                 shape: options.shape,
                 maxSteps: options.maxSteps,
                 name: options.name,
@@ -163,13 +163,13 @@ export function usePageBridge({
         const prompt = String(args[0] ?? '')
         answer(
           requestId,
-          onStartThread(prompt).then((agreed) => (agreed ? invoke('pages.startThread', pageId, prompt) : null)),
+          onStartThread(prompt).then((agreed) => (agreed ? invoke('artifacts.startThread', pageId, prompt) : null)),
         )
         return
       }
       answer(
         requestId,
-        share ? invoke('pages.shareCall', share, method, args) : invoke('pages.call', pageId, method, args),
+        share ? invoke('artifacts.shareCall', share, method, args) : invoke('artifacts.call', pageId, method, args),
       )
     }
     window.addEventListener('message', receive)
@@ -218,8 +218,8 @@ export function usePageBridge({
     answerConfirm: (allowed: boolean) => {
       if (!confirm) return
       setConfirm(null)
-      void invoke('pages.runConfirm', confirm.id, allowed).catch(() => {})
+      void invoke('artifacts.runConfirm', confirm.id, allowed).catch(() => {})
     },
-    stopRun: () => running && void invoke('pages.runStop', running.id).catch(() => {}),
+    stopRun: () => running && void invoke('artifacts.runStop', running.id).catch(() => {}),
   }
 }

@@ -7,7 +7,7 @@ const SCHEMA_VERSION = 36
 
 /**
  * Tables added after this schema version was stamped. Each is created if missing on every open, so an existing profile
- * gains them in place; they only ever add tables and indexes.
+ * gains them in place; they only ever add tables and indexes, and `ADDED_COLUMNS` only adds columns with defaults.
  */
 const ADDED_TABLES = `
 CREATE TABLE IF NOT EXISTS interactive_media (
@@ -45,6 +45,23 @@ CREATE TABLE IF NOT EXISTS page_shares (
 CREATE INDEX IF NOT EXISTS page_records_by_page ON page_records(page_id, collection, created_at);
 CREATE INDEX IF NOT EXISTS page_runs_by_page ON page_runs(page_id, created_at);
 `
+
+/**
+ * Columns added to tables after this schema version was stamped, each with a default, so existing rows read as that
+ * default and nothing is copied.
+ */
+const ADDED_COLUMNS: { table: string; column: string; definition: string }[] = [
+  // Every page kept before artifacts had kinds is an App.
+  { table: 'interactive_pages', column: 'kind', definition: "TEXT NOT NULL DEFAULT 'app'" },
+]
+
+function addColumns(db: DatabaseSync) {
+  for (const { table, column, definition } of ADDED_COLUMNS) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+    if (!columns.some((entry) => entry.name === column))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  }
+}
 
 const SCHEMA = `
 CREATE TABLE projects (
@@ -336,6 +353,7 @@ export function openDb(path: string): Db {
     )
   }
   db.exec(ADDED_TABLES)
+  addColumns(db)
   db.exec('PRAGMA foreign_keys = ON;')
   return db
 }

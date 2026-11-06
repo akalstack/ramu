@@ -1,28 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  pageCopy,
-  pageLink,
-  parsePageLink,
-  queueCall,
-  queuedCalls,
-  savePageCopy,
-  syncCalls,
-} from '../src/runtime/pages.ts'
+import { pageCopy, queueCall, queuedCalls, savePageCopy, syncCalls } from '../src/runtime/pages.ts'
 
 const memory = () => {
   const data = new Map()
   return { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) }
 }
-
-test('page links round-trip, with or without a share token', () => {
-  const link = { computerId: 'host a', pageId: 'p-1', share: 'tok_en-123' }
-  assert.equal(pageLink(link), 'ramu://page/host%20a/p-1?share=tok_en-123')
-  assert.deepEqual(parsePageLink(pageLink(link)), link)
-  assert.deepEqual(parsePageLink('ramu://page/h/p'), { computerId: 'h', pageId: 'p' })
-  assert.equal(parsePageLink('ramu://page/h/../x'), null)
-  assert.equal(parsePageLink('https://example.com/page/h/p'), null)
-})
 
 test('a saved copy is kept per host and page', () => {
   const storage = memory()

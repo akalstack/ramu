@@ -20,6 +20,36 @@ describe('Ramu tool calls', () => {
     expect(ramuTool(use('mcp__ramu__made_up'))).toBeNull()
   })
 
+  it('reads artifact tools the same under their current and earlier names', () => {
+    const pairs = [
+      ['artifact_preview', 'preview_interactive'],
+      ['artifact_publish', 'publish_interactive'],
+      ['artifact_read', 'interactive_read'],
+      ['artifact_versions', 'interactive_list'],
+      ['artifact_list', 'page_list'],
+      ['artifact_get', 'page_get'],
+      ['artifact_records', 'page_records'],
+      ['artifact_published', 'page_published'],
+      ['artifact_run', 'page_run'],
+    ]
+    for (const [current, old] of pairs) {
+      const args = { title: 'Ledger', collection: 'transactions' }
+      const now = ramuTool(use(`mcp__ramu__${current}`, args))
+      expect(now?.name, current).toBe(current)
+      expect(ramuTool(use(`mcp__ramu__${old}`, args)), old).toEqual(now)
+      expect(ramuTool(use(`ramu_${old}`, args)), old).toEqual(now)
+      expect(ramuTool(use('mcp__ramu__tool_invoke', { name: old, arguments: args })), old).toEqual(now)
+      expect(describeRamuTool(now!).done).not.toBe('Used')
+    }
+    expect(describeRamuTool(ramuTool(use('mcp__ramu__page_records', { action: 'add', collection: 'rows' }))!)).toEqual({
+      icon: 'book',
+      done: 'Added a record',
+      running: 'Adding a record',
+      subject: 'rows',
+      facts: [],
+    })
+  })
+
   it('unwraps tool_invoke', () => {
     const call = ramuTool(
       use('mcp__ramu__tool_invoke', { name: 'memory_save', arguments: { title: 'Tabs', kind: 'user' } }),

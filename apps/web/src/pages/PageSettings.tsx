@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { PageCapability, PageGrants, PageInfo, PageRun, PageShare, PageUsage } from '@ramu/shared/pages'
-import { declaredCapabilities } from '@ramu/shared/pages'
+import { artifactLink, declaredCapabilities } from '@ramu/shared/pages'
 import { Button } from '../components/desktop-button'
 import { Checkbox } from '../components/desktop-checkbox'
 import { Input } from '../components/desktop-input'
@@ -199,7 +199,7 @@ export function GrantSheet({ page, onDone }: { page: PageInfo; onDone(): void })
     try {
       const grants = grantsOf(all, model, daily, page)
       await invoke(
-        'pages.grant',
+        'artifacts.grant',
         page.id,
         Object.fromEntries(
           Object.entries(grants).filter(([name]) => page.pendingGrants.includes(name as PageCapability)),
@@ -259,16 +259,16 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
   const [status, setStatus] = useState('')
   useEffect(() => {
     const load = () => {
-      void invoke('pages.usage', page.id)
+      void invoke('artifacts.usage', page.id)
         .then(setUsage)
         .catch(() => {})
-      void invoke('pages.runs', page.id)
+      void invoke('artifacts.runs', page.id)
         .then(setRuns)
         .catch(() => {})
-      void invoke('pages.shares', page.id)
+      void invoke('artifacts.shares', page.id)
         .then(setShares)
         .catch(() => {})
-      void invoke('pages.webhookUrls', page.id)
+      void invoke('artifacts.webhookUrls', page.id)
         .then(setHooks)
         .catch(() => {})
     }
@@ -292,8 +292,7 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
     link.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
-  const shareLink = (share: PageShare) =>
-    `ramu://page/${encodeURIComponent(hostId)}/${share.pageId}?share=${share.token}`
+  const shareLink = (share: PageShare) => artifactLink({ computerId: hostId, pageId: share.pageId, share: share.token })
   return (
     <Dialog
       title={t('Page settings')}
@@ -302,7 +301,7 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
       onCancel={onClose}
       onConfirm={() => {
         setBusy(true)
-        void act(() => invoke('pages.grant', page.id, grantsOf(chosen, model, daily, page))).finally(() => {
+        void act(() => invoke('artifacts.grant', page.id, grantsOf(chosen, model, daily, page))).finally(() => {
           setBusy(false)
           onClose()
         })
@@ -355,11 +354,11 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
             {t('For devices paired with this host. Links expire after 30 days unless renewed.')}
           </p>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => void act(() => invoke('pages.share', page.id, false))}>
+            <Button variant="outline" onClick={() => void act(() => invoke('artifacts.share', page.id, false))}>
               {t('Read-only link')}
             </Button>
             {page.capabilities.records && (
-              <Button variant="outline" onClick={() => void act(() => invoke('pages.share', page.id, true))}>
+              <Button variant="outline" onClick={() => void act(() => invoke('artifacts.share', page.id, true))}>
                 {t('Link that can add records')}
               </Button>
             )}
@@ -380,14 +379,14 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
               <Button
                 variant="ghost"
                 className={GHOST_TEXT_BUTTON_CLASS}
-                onClick={() => void act(() => invoke('pages.renewShare', share.token))}
+                onClick={() => void act(() => invoke('artifacts.renewShare', share.token))}
               >
                 {t('Renew')}
               </Button>
               <Button
                 variant="ghost"
                 className={GHOST_TEXT_BUTTON_CLASS}
-                onClick={() => void act(() => invoke('pages.revokeShare', share.token))}
+                onClick={() => void act(() => invoke('artifacts.revokeShare', share.token))}
               >
                 {t('Revoke')}
               </Button>
@@ -402,7 +401,7 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
                 variant="outline"
                 onClick={() =>
                   void act(async () => {
-                    const exported = await invoke('pages.exportRecords', page.id)
+                    const exported = await invoke('artifacts.exportRecords', page.id)
                     download(`${page.title}.json`, exported.json, 'application/json')
                     for (const [name, csv] of Object.entries(exported.csv))
                       download(`${page.title}-${name}.csv`, csv, 'text/csv')
@@ -425,7 +424,7 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
                       event.target.value = ''
                       if (file)
                         void act(async () => {
-                          const { added } = await invoke('pages.importCsv', page.id, collection, await file.text())
+                          const { added } = await invoke('artifacts.importCsv', page.id, collection, await file.text())
                           setStatus(t('Imported {count} records', { count: added }))
                         })
                     }}
@@ -462,7 +461,7 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
                     <Button
                       variant="ghost"
                       className={GHOST_TEXT_BUTTON_CLASS}
-                      onClick={() => void act(() => invoke('pages.runUndo', run.id))}
+                      onClick={() => void act(() => invoke('artifacts.runUndo', run.id))}
                     >
                       {t('Undo run')}
                     </Button>

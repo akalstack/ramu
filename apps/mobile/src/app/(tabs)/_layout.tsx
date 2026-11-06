@@ -4,7 +4,7 @@ import { useTheme } from '../../theme'
 import { useAutomation } from '../../runtime/automation'
 import { useSay, useT } from '../../i18n'
 
-// The app's places, as a native tab bar (Liquid Glass on iOS 26): Threads, Inbox, Schedules, Pages and New thread.
+// The app's places, as a native tab bar (Liquid Glass on iOS 26): Threads, Inbox, Schedules, Artifacts and New thread.
 // Each tab holds its own stack, so a thread opened from any of them pushes on the root stack above the bar.
 export default function TabsLayout() {
   const { c, scheme } = useTheme()
@@ -49,7 +49,7 @@ export default function TabsLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="pages">
         <NativeTabs.Trigger.Icon sf={{ default: 'macwindow', selected: 'macwindow' }} md="web" />
-        <NativeTabs.Trigger.Label>{say('Pages')}</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>{say('Artifacts')}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="compose" prominent>
         <NativeTabs.Trigger.Icon sf="square.and.pencil" md="edit_square" />

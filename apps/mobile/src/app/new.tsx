@@ -104,7 +104,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     quote?: string
     computer?: string
     draftContext?: string
-    /** A request already begun in the box, such as New page's "Make me a page to". */
+    /** A request already begun in the box, such as Artifacts' New with "Make me a page to". */
     start?: string
   }>()
   const [selected, setHost] = useState(params.computer ?? store.selected)

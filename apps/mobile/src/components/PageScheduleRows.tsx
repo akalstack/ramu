@@ -21,7 +21,7 @@ export function PageScheduleRows({ hosts }: { hosts: readonly string[] }) {
         .split(',')
         .filter(Boolean)
         .map((host) =>
-          store.invoke(host, 'pages.list').then(
+          store.invoke(host, 'artifacts.list').then(
             (list) => list.map((page) => ({ host, page })),
             () => [],
           ),
@@ -41,7 +41,9 @@ export function PageScheduleRows({ hosts }: { hosts: readonly string[] }) {
       {rows.map(({ host, page, schedule, index }) => (
         <Row
           key={`${host}:${page.id}:${index}`}
-          onPress={() => router.push({ pathname: '/page/[computer]/[id]', params: { computer: host, id: page.id } })}
+          onPress={() =>
+            router.push({ pathname: '/artifact/[computer]/[id]', params: { computer: host, id: page.id } })
+          }
           style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l }}
         >
           <T size={20}>{page.icon}</T>

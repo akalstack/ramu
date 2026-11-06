@@ -323,14 +323,14 @@ function InteractiveDocumentCard({
     ...(onClose
       ? []
       : page?.info
-        ? [{ key: 'open-page', label: t('Open page'), onSelect: () => openPage(page.info!.id) }]
+        ? [{ key: 'open-page', label: t('Open'), onSelect: () => openPage(page.info!.id) }]
         : [
             {
               key: 'keep',
-              label: t('Keep as page'),
-              title: t('List it under Pages, open it on any device and change it from any thread'),
+              label: t('Keep as artifact'),
+              title: t('List it under Artifacts, open it on any device and change it from any thread'),
               onSelect: () =>
-                void invoke('pages.keep', reference.sessionId, reference.id)
+                void invoke('artifacts.keep', reference.sessionId, reference.id)
                   .then((kept) => openPage(kept.id))
                   .catch((e) => setError(String(e))),
             },
@@ -416,14 +416,14 @@ function InteractiveDocumentCard({
             <Button
               variant="ghost"
               className={`${GHOST_TEXT_BUTTON_CLASS} h-6 min-h-0 flex-none`}
-              title={t('Open page')}
+              title={t('Open')}
               onClick={() => openPage(page.info!.id)}
             >
-              <span aria-hidden>{page.info.icon}</span> {t('Page')}
+              <span aria-hidden>{page.info.icon}</span> {t('Artifact')}
             </Button>
           )}
           {page && !page.info && reference.pageId && (
-            <span className="flex-none text-caption text-muted-foreground">{t('Page deleted')}</span>
+            <span className="flex-none text-caption text-muted-foreground">{t('Artifact deleted')}</span>
           )}
           {page?.elsewhere && (
             <span className="flex-none text-caption text-muted-foreground">{t('Updated in another thread')}</span>
@@ -855,7 +855,7 @@ export function InteractiveContent({
   useEffect(() => {
     if (!newer) return setCurrent(null)
     let cancelled = false
-    void invoke('pages.document', reference.id, newer)
+    void invoke('artifacts.document', reference.id, newer)
       .then((document) => !cancelled && setCurrent(document.reference))
       .catch(() => {})
     return () => {
