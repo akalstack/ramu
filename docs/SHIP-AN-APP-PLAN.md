@@ -53,6 +53,8 @@ Left as they are: T3 Code's queue-editing tool and changing another thread's mod
 - **No new screen.** Starting an app is a thread like any other, so Home stays the one start box. Three additions: **New project** in the Auto "No project matched" choices (and **New project…** in the Project picker), **Start something new** in the no-projects state beside **Open a folder**, and Auto's project routing recognizing a request to build something new. The agent then runs the questions, `project_create` and the goal with its verification command, and the thread moves from No project into the new project's checkout, the same handoff **Continue in a new worktree** uses. The browser opens on the dev server's ready line, using the existing `background_terminal_wait` ready-text match.
 - **Project facts** saved in `projectConfig.ts`: the stack, the dev, build and test commands, and later the deploy target, so new threads in the project know them without being told.
 
+A request that needs no backend, shared data or domain becomes a page instead of a project ([Pages](PAGES-PLAN.md)); a page that outgrows itself returns here through **Make it a project**, and **Publish to the web** reuses the hosting adapters below.
+
 ### 3. Deploy targets
 
 Nothing for deploys exists in code yet. Platforms differ more than forges do (Netlify has no database of its own, Neon is only a database, Vercel and Cloudflare are both), so instead of one large interface like `ForgeAdapter`, there are three small ones under `workspace/deploy/`, each with a registry like `registerForgeAdapter`. Callers and the UI see only the shared shapes in `packages/shared/src/types/deploy.ts`, so a new platform is one file, its credentials file and its tests, with no change to callers, IPC or UI:
