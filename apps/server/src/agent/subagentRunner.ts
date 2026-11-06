@@ -29,6 +29,7 @@ import {
 } from '@ramu/shared/chat/agentTasks'
 import { applyIsolation, collectPatch, createIsolation, removeIsolation } from '../workspace/isolation'
 import { needsOwnCheckout, otherWriters } from './helperCheckout'
+import { helperRoleBrief, helperRoleReadOnly } from '@ramu/shared/chat/helperRoles'
 import type { ChildRun, SubagentInput, SubagentResult } from './types'
 
 import { FOREGROUND_WAIT_MS, ASK_WAIT_MS } from './constants'
@@ -89,6 +90,15 @@ const TEAMMATE_TOOL =
 
 /** Why a teammate exchange refuses another message until the person writes. */
 export const TEAMMATE_PAUSED = `The exchange with the teammate paused after ${TEAMMATE_ROUNDS} rounds without the person. Wait for them to write.`
+
+/** A result that is not the report ends with this, so the agent waits instead of polling for it. */
+export const HELPER_NEXT =
+  'The report arrives as a message. End your turn and do not poll; use ramu_agent_status only if the person asks.'
+
+/** A read-only custom agent or role reads and reports; it never edits and never needs its own checkout. */
+function helperReadOnly(input: SubagentInput): boolean {
+  return !!input.custom?.readOnly || helperRoleReadOnly(input.role)
+}
 
 function customPreamble(agent: CustomAgent): string {
   return `You are the custom agent "${agent.name}": ${agent.description}\n${agent.instructions}${agent.readOnly ? '\nYou are read-only: read and report, never edit files.' : ''}`
@@ -310,7 +320,7 @@ export class SubagentRunner {
       throw new Error(`${cap} sub-agents are already running. Wait for one to finish, then try again.`)
     const reservation = Symbol()
     this.pendingStarts.set(reservation, parentId)
-    if (!input.custom?.readOnly && !input.teammate) this.pendingWriters.set(reservation, parentId)
+    if (!helperReadOnly(input) && !input.teammate) this.pendingWriters.set(reservation, parentId)
     try {
       return await this.startSubagent(parentId, input, signal, forced, reservation)
     } finally {
@@ -378,8 +388,9 @@ export class SubagentRunner {
     const ownCheckout = () =>
       needsOwnCheckout({
         background: !!input.background,
-        readOnly: !!input.custom?.readOnly,
+        readOnly: helperReadOnly(input),
         teammate: !!input.teammate,
+        ...(input.isolation ? { requested: input.isolation } : {}),
         otherWriters: otherWriters({
           events: this.host.events(parentId),
           running: [...this.children].filter(
@@ -393,7 +404,7 @@ export class SubagentRunner {
       })
     let separate = ownCheckout()
     // A provider may report a sibling call a moment after this one; look once more before sharing the checkout.
-    if (!separate && !input.custom?.readOnly && !input.teammate) {
+    if (!separate && !helperReadOnly(input) && !input.teammate) {
       await new Promise((resolve) => setTimeout(resolve, SIBLING_SETTLE_MS))
       separate = ownCheckout()
     }
@@ -445,6 +456,7 @@ export class SubagentRunner {
       })
     if (input.custom)
       this.host.record(child.id, { kind: 'custom-agent', name: input.custom.name, readOnly: input.custom.readOnly })
+    if (input.role) this.host.record(child.id, { kind: 'helper-role', role: input.role })
     const run: ChildRun = {
       parentId,
       name,
@@ -452,7 +464,7 @@ export class SubagentRunner {
         ? { teammate: input.teammate, seenParent: this.host.events(parentId).length, leadRevision: parentRevision }
         : {}),
       ...(isolation ? { isolation } : {}),
-      ...(input.custom?.readOnly ? { readOnly: true } : {}),
+      ...(helperReadOnly(input) ? { readOnly: true } : {}),
       ...(input.type ? { type: input.type } : {}),
       prompt: input.prompt,
       report: !!input.background,
@@ -473,6 +485,7 @@ export class SubagentRunner {
       taskType: 'ramu_agent',
       ...(input.custom ? { agentType: `custom: ${input.custom.name}` } : {}),
       ...(input.teammate ? { teammate: input.teammate } : {}),
+      ...(input.role ? { role: input.role } : {}),
       childSessionId: child.id,
       status: 'running',
       background: !!input.background,
@@ -505,7 +518,7 @@ export class SubagentRunner {
       child.id,
       input.teammate
         ? `${teammatePreamble(input.teammate)}\n\n${context}${input.prompt}`
-        : `${SUBAGENT_PREAMBLE}\n\n${input.custom ? `${customPreamble(input.custom)}\n\n` : ''}${context}Task: ${input.description.trim()}\n\n${input.prompt}`,
+        : `${SUBAGENT_PREAMBLE}\n\n${input.custom ? `${customPreamble(input.custom)}\n\n` : ''}${input.role ? `${helperRoleBrief(input.role)}\n\n` : ''}${context}Task: ${input.description.trim()}\n\n${input.prompt}`,
       null,
       true,
       [],
@@ -519,15 +532,19 @@ export class SubagentRunner {
       model: this.host.get(child.id).settings.model,
     })
     if (input.background)
-      return done('running', 'Started in the background. Its report arrives as a message when it finishes.')
+      return {
+        ...done('running', 'Started in the background. Its report arrives as a message when it finishes.'),
+        next: HELPER_NEXT,
+      }
     return new Promise<SubagentResult>((resolve) => {
       const timer = setTimeout(() => {
         if (run.waiter) {
           run.waiter = undefined
           run.report = true
-          resolve(
-            done('running', 'Still working after 45 minutes. Its report will arrive as a message when it finishes.'),
-          )
+          resolve({
+            ...done('running', 'Still working after 45 minutes. Its report will arrive as a message when it finishes.'),
+            next: HELPER_NEXT,
+          })
         }
       }, FOREGROUND_WAIT_MS)
       run.waiter = (result) => {
@@ -590,6 +607,7 @@ export class SubagentRunner {
         report: `${text}\n\nIt keeps waiting for your answer; its final report arrives as a message.`,
         provider: child.provider,
         model: child.settings.model,
+        next: 'Answer it with answer_subagent, then end your turn; its report arrives as a message.',
       })
     } else void this.reportToParent(run, text)
     try {

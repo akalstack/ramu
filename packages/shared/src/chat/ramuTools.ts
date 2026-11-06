@@ -64,6 +64,9 @@ const KNOWN = new Set([
   'schedule_delete',
   'schedule_context',
   'ramu_agent',
+  'ramu_agent_status',
+  'ramu_agent_stop',
+  'agent_models',
   'message_parent',
   'ask_parent',
   'answer_subagent',
@@ -340,6 +343,12 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Updated a schedule', 'Updating a schedule', 'calendar')
     case 'ramu_agent':
       return reply('Started an agent', 'Starting an agent', 'message')
+    case 'ramu_agent_status':
+      return reply('Checked helpers', 'Checking helpers', 'message')
+    case 'ramu_agent_stop':
+      return reply('Stopped a helper', 'Stopping a helper', 'message')
+    case 'agent_models':
+      return reply('Listed models', 'Listing models', 'search', quote(text(args.query)))
     case 'advisor':
       return reply('Asked the advisor', 'Asking the advisor', 'message')
     case 'wait_for_advice':

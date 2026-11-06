@@ -18,6 +18,12 @@ it('never copies for a read-only helper or a teammate', () => {
   expect(needsOwnCheckout({ ...helper, otherWriters: 2, teammate: true })).toBe(false)
 })
 
+it('follows the isolation the agent asked for, but never shares beside another writer', () => {
+  expect(needsOwnCheckout({ ...helper, requested: 'worktree' })).toBe(true)
+  expect(needsOwnCheckout({ ...helper, background: true, requested: 'shared' })).toBe(false)
+  expect(needsOwnCheckout({ ...helper, otherWriters: 1, requested: 'shared' })).toBe(true)
+})
+
 describe('otherWriters', () => {
   const call = (toolUseId: string, name = 'mcp__ramu__ramu_agent') =>
     ({ kind: 'tool-use', toolUseId, name, summary: '' }) as AgentEvent

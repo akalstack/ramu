@@ -13,6 +13,7 @@ const SILENT = new Set<AgentEvent['kind']>([
   'title',
   'context',
   'custom-agent',
+  'helper-role',
   'teammate',
 ])
 

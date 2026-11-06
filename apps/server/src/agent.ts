@@ -11,7 +11,9 @@ import {
 } from '@ramu/shared/chat/agentTasks'
 import { clipText } from '@ramu/shared/text'
 import { providerName } from '@ramu/shared/providers/providers'
-import { modelHandle, teammateSettings } from '@ramu/shared/chat/teammateMentions'
+import { teammateSettings } from '@ramu/shared/chat/teammateMentions'
+import { agentModelList, findModelByHandle, modelHandles } from '@ramu/shared/chat/modelChoice'
+import { RequestReplay } from './agent/requestReplay'
 import { customAgentFor, type CustomAgent } from '@ramu/shared/customAgents'
 import type { ActivityRow } from '@ramu/shared/usageAcrossHosts'
 import { PermissionApprovals } from './agent/permissionApprovals'
@@ -22,6 +24,7 @@ import type { Db } from './db'
 import type {
   ContextUsage,
   AgentMcpStatus,
+  AgentModel,
   AppPreferences,
   AgentEvent,
   AgentScope,
@@ -38,7 +41,7 @@ import type {
 import type { UsageService } from './providers/usage'
 import { loadHelperHistory, type HelperHistoryLoader } from './agent/helperHistory'
 import { realGoalProbes, type GoalProbes } from './agent/goalProbes'
-import type { QueryFn } from './agent/types'
+import type { QueryFn, SubagentResult } from './agent/types'
 import { SessionStore } from './agent/sessionStore'
 import { readHelperSummaries } from './agent/helperSummaries'
 import { markAdviceRead, readUnreadAdvice } from './agent/adviceUnread'
@@ -992,18 +995,7 @@ export class AgentService {
         declined: true,
         message: 'The person declined a teammate already. Do not suggest another until they write.',
       }
-    const models = (await this.catalog()).flatMap((catalog) => catalog.models)
-    const wanted = input.model.trim().replace(/^@/, '').toLowerCase()
-    const model =
-      models.find((entry) => !entry.isLegacy && modelHandle(entry) === wanted) ??
-      models.find((entry) => entry.id.toLowerCase() === wanted || modelHandle(entry) === wanted)
-    if (!model)
-      throw new Error(
-        `Name a model from: ${models
-          .filter((entry) => !entry.isLegacy)
-          .map((entry) => modelHandle(entry))
-          .join(', ')}.`,
-      )
+    const model = await this.modelNamed(input.model)
     const settings = teammateSettings(lead.settings, model)
     const accounts = this.preferences?.().providerBinaries[model.provider]?.accounts ?? []
     const login = settings.accountId
@@ -1060,8 +1052,64 @@ export class AgentService {
   /** Custom agents the lead may use; set by the host, so tests and a bare service run without any. */
   customAgents: () => readonly CustomAgent[] = () => []
 
+  /** A model the agent named by handle or id, or an error listing the handles it can use. */
+  private async modelNamed(handle: string): Promise<AgentModel> {
+    const models = (await this.catalog()).flatMap((catalog) => catalog.models)
+    const model = findModelByHandle(models, handle)
+    if (!model) throw new Error(`Name a model from: ${modelHandles(models).join(', ')}. agent_models lists them.`)
+    return model
+  }
+
+  /** agent_models: the host's providers and their current models, so the agent stops guessing handles. */
+  async agentModels(query?: string) {
+    return agentModelList(await this.catalog(), query)
+  }
+
+  /** ramu_agent_status: the caller's own helpers (not teammates), or one of them. */
+  helperStatus(parentId: string, agentId?: string) {
+    const helpers = latestTasks(this.events(parentId)).filter(
+      (task) => task.taskType === 'ramu_agent' && !task.teammate && (!agentId || task.agentId === agentId),
+    )
+    if (agentId && !helpers.length) throw new Error('That is not one of your helpers.')
+    return helpers.map((task) => ({
+      agent: task.agentId,
+      name: task.name,
+      status: task.status,
+      ...(task.waitingFor ? { waitingFor: task.waitingFor } : {}),
+      ...(task.role ? { role: task.role } : {}),
+      ...(task.provider ? { provider: task.provider, model: task.model } : {}),
+      ...(task.isolated ? { isolated: true } : {}),
+      ...(task.startedAt ? { startedAt: task.startedAt } : {}),
+      ...(task.endedAt ? { endedAt: task.endedAt } : {}),
+      ...(task.summary ? { summary: clipText(task.summary, 2000) } : {}),
+    }))
+  }
+
+  /** ramu_agent_stop: a lead stops one of its own helpers that went off track. Stopping the thread still stops them all. */
+  async stopHelper(parentId: string, agentId: string): Promise<{ stopped: boolean; status: string }> {
+    const [task] = this.helperStatus(parentId, agentId)
+    if (task!.status !== 'running') return { stopped: false, status: task!.status }
+    await this.stopTask(parentId, agentId)
+    return { stopped: true, status: 'stopped' }
+  }
+
+  private readonly helperStarts = new RequestReplay<SubagentResult>()
+
   spawnSubagent(...args: Parameters<SubagentRunner['spawnSubagent']>) {
     const [parentId, input, ...rest] = args
+    if (!input.requestId) return this.startHelper(parentId, input, ...rest)
+    const { requestId, ...once } = input
+    return this.helperStarts.run(`${parentId}:${requestId}`, () => this.startHelper(parentId, once, ...rest))
+  }
+
+  private async startHelper(...args: Parameters<SubagentRunner['spawnSubagent']>) {
+    const [parentId, asked, ...rest] = args
+    let input = asked
+    if (input.model && !input.settings) {
+      const parent = this.get(parentId)
+      // The parent's settings on the named model, so the helper keeps the parent's access and never gets more.
+      input = { ...input, settings: teammateSettings(parent.settings, await this.modelNamed(input.model)) }
+    }
     const custom = input.custom ?? customAgentFor(this.customAgents(), input.type)
     if (custom && !input.custom) {
       const parent = this.get(parentId)
@@ -1073,14 +1121,14 @@ export class AgentService {
           type: undefined,
           name: input.name || custom.name,
           custom,
-          ...(custom.model
+          ...(custom.model && !input.settings
             ? { settings: { ...parent.settings, ...custom.model, effort: custom.model.effort ?? null } }
             : {}),
         },
         ...rest,
       )
     }
-    return this.parts.subagents.spawnSubagent(...args)
+    return this.parts.subagents.spawnSubagent(parentId, input, ...rest)
   }
 
   messageParent(...args: Parameters<SubagentRunner['messageParent']>) {

@@ -24,6 +24,7 @@ import { goalInstructions } from './goals'
 import type { QueryFn, PendingRequest } from './types'
 import { InputQueue } from './inputQueue'
 import { errorMessage } from './util'
+import { helperRoleReadOnly } from '@ramu/shared/chat/helperRoles'
 import { claudeHooks, createCanUseTool, dangerousCommandHooks, readOnlyBashHooks } from './permissions'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
@@ -433,9 +434,13 @@ export class SessionProcess {
     const actualPrompt = `${rulesUpdate ?? ''}${carried ? `${carried.built.prompt}\n\nNext request: ${request}` : request}`
     const deltaResume = carried?.built.info.mode === 'delta' && !!carried.resume
     // A Review teammate never writes, whatever the thread allows; its session records that it is one.
-    const marker = this.host.events(id).findLast((event) => event.kind === 'teammate' || event.kind === 'custom-agent')
+    const marker = this.host
+      .events(id)
+      .findLast((event) => event.kind === 'teammate' || event.kind === 'custom-agent' || event.kind === 'helper-role')
     const readOnly =
-      (marker?.kind === 'teammate' && marker.mode === 'review') || (marker?.kind === 'custom-agent' && marker.readOnly)
+      (marker?.kind === 'teammate' && marker.mode === 'review') ||
+      (marker?.kind === 'custom-agent' && marker.readOnly) ||
+      (marker?.kind === 'helper-role' && helperRoleReadOnly(marker.role))
     if (this.host.usesRunner(s.provider)) {
       let runner: AgentRunner
       try {

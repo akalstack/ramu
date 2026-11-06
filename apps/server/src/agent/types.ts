@@ -49,6 +49,13 @@ export interface SubagentInput {
   personRequest?: string
   /** The custom agent this helper runs: its instructions lead the prompt and read-only narrows its access. */
   custom?: import('@ramu/shared/customAgents').CustomAgent
+  /** A model handle the agent asked for, such as `opus-5.5`; resolved to settings before the start. */
+  model?: string
+  /** `worktree` gives it its own copy of the checkout; `shared` keeps it in the thread's unless another writer is there. */
+  isolation?: 'shared' | 'worktree'
+  role?: import('@ramu/shared/chat/helperRoles').HelperRole
+  /** Repeating a call with the same id returns the first call's result instead of starting a second helper. */
+  requestId?: string
 }
 export interface SubagentResult {
   agentId: string
@@ -57,6 +64,8 @@ export interface SubagentResult {
   report: string
   provider: AgentProvider
   model: string
+  /** What the caller should do now, for a result that is not the final report. */
+  next?: string
 }
 
 export interface AdviceRequest {

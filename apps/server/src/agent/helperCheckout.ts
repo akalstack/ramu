@@ -13,8 +13,12 @@ export function needsOwnCheckout(helper: {
   teammate: boolean
   /** Writing helpers of the same thread that are still running. */
   otherWriters: number
+  /** What the agent asked for; sharing still gives way when another writer would collide with it. */
+  requested?: 'shared' | 'worktree'
 }): boolean {
   if (helper.readOnly || helper.teammate) return false
+  if (helper.requested === 'worktree') return true
+  if (helper.requested === 'shared') return helper.otherWriters > 0
   return helper.background || helper.otherWriters > 0
 }
 

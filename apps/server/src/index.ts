@@ -1,4 +1,5 @@
 import { terminalThreadRequest } from './background/agentThreads'
+import { HELPER_ROLES } from '@ramu/shared/chat/helperRoles'
 import { CustomAgentStore } from './agent/customAgents'
 import { TEST_DEVICE_GUIDE, TestDevices } from './testDevice/testDevices'
 import { customAgentList } from '@ramu/shared/customAgents'
@@ -1358,13 +1359,17 @@ const mcpHttp = createServer(async (req, res) => {
     server.registerTool(
       'ramu_agent',
       {
-        description: `Start a sub-agent through Ramu, which may run it on a different provider or model than you. Use it when told to, or when the Agent tool is refused. It takes a description, a prompt and optionally a type, a name and background. Without background it waits and returns the sub-agent's report; with background it returns at once and the report arrives later as a message.${customAgentList(customAgents.list())}`,
+        description: `Start a sub-agent through Ramu, which may run it on a different provider or model than you. Use it when told to, or when the Agent tool is refused. It takes a description, a prompt and optionally a type, a name and background. Without background it waits and returns the sub-agent's report; with background it returns at once and the report arrives later as a message. model picks the helper's model by handle (agent_models lists them); without it, the person's Sub-agents routing decides. isolation: worktree gives it its own copy of the checkout (with your uncommitted changes), shared keeps it in yours unless another helper is writing there. role: research and review read and report and never edit; implementation and test may edit. A helper never gets more access than you. requestId: any unique string; sending the same call again returns the first result instead of starting a second helper.${customAgentList(customAgents.list())}`,
         inputSchema: {
           description: z.string().min(1).max(200),
           prompt: z.string().min(1).max(100000),
           type: z.string().max(80).optional(),
           name: z.string().max(80).optional(),
           background: z.boolean().optional(),
+          model: z.string().min(1).max(80).optional(),
+          isolation: z.enum(['shared', 'worktree']).optional(),
+          role: z.enum(HELPER_ROLES).optional(),
+          requestId: z.string().min(1).max(120).optional(),
         },
       },
       async (value, extra) => {
@@ -1378,6 +1383,53 @@ const mcpHttp = createServer(async (req, res) => {
         }
       },
     )
+  if (!agents.get(source.id).parentId) {
+    server.registerTool(
+      'agent_models',
+      {
+        description:
+          "List this host's providers and their current models with the handles ramu_agent's model and teammate_suggest take, at most eight per provider (the default first). query narrows by name, handle or provider. A provider marked unavailable cannot run a helper now.",
+        inputSchema: { query: z.string().max(80).optional() },
+      },
+      async ({ query }) => result(await agents.agentModels(query)),
+    )
+    server.registerTool(
+      'ramu_agent_status',
+      {
+        description:
+          'Your own ramu_agent helpers with their status, model and latest summary, or one by agent id. Reports arrive as messages on their own; check status only when the person asks or before stopping one, never in a loop.',
+        inputSchema: { agent: z.string().max(200).optional() },
+      },
+      async ({ agent }) => {
+        try {
+          return result(agents.helperStatus(source.id, agent))
+        } catch (error) {
+          return {
+            isError: true,
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+          }
+        }
+      },
+    )
+    server.registerTool(
+      'ramu_agent_stop',
+      {
+        description:
+          'Stop one of your own ramu_agent helpers that has gone off track, by agent id. Its partial work stays as it is; say in your reply what you stopped and why.',
+        inputSchema: { agent: z.string().min(1).max(200) },
+      },
+      async ({ agent }) => {
+        try {
+          return result(await agents.stopHelper(source.id, agent))
+        } catch (error) {
+          return {
+            isError: true,
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+          }
+        }
+      },
+    )
+  }
   // The lead and a teammate the person added address each other by name. A lead may gain a teammate mid-thread, so it always has the tool.
   const teammateSession = agents.events(source.id).some((event) => event.kind === 'teammate')
   if (!agents.get(source.id).parentId || teammateSession)

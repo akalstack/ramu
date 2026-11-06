@@ -33,18 +33,9 @@ A developer can enter at any step: **Deploy** on an existing project, or **Set u
 
 ## Delivery
 
-### 1. Orchestration lessons from T3 Code
+### 1. Orchestration
 
-T3 Code's orchestrator tools (`delegate_task`, `orchestrator_capabilities`, `task_status`, `task_cancel`, `t3_project_create`) do a few things Ramu's `ramu_agent`, `thread_start` and `project_add` don't. These come first because the rest of the plan is a long, multi-agent task and needs them:
-
-- **Choose the helper per call.** `ramu_agent` takes only a type and a name; the provider and model come from **Sub-agents → Routing**. Add optional `model` (a handle such as `opus-5.5`), `isolation` (`shared` or `worktree`) and `role` (implementation, research, review, test), validated against the providers the host has. The helper never gets broader access than its parent; when the target lacks the parent's mode it steps down to the next narrower one, and asking for a mode it lacks is refused. Routing stays the default when the agent passes nothing.
-- **Show what's available.** A short `agent_models` tool lists the host's providers and models (at most eight per provider, searchable), so the agent stops guessing handles. It extends the data **Settings → Providers** already shows.
-- **Status and stop for the agent.** `ramu_agent_status` and `ramu_agent_stop` act only on the caller's own helpers, so a lead can stop a helper that has gone off track without the person. Stopping the thread still stops them all.
-- **Retries never start work twice.** An optional `requestId` on `ramu_agent`, `thread_start`, `project_add` and the new `project_create` replays the first result when a provider re-sends a tool call after a dropped connection.
-- **Say what comes next.** Background results end with one instruction: "The report arrives as a message; end your turn and do not poll." T3 Code returns the same `next` and it stops agents from looping on status calls.
-- **Isolated helpers start from the parent's current state.** T3 Code's worktree children start from the parent's `HEAD` and lose uncommitted edits. Ramu's isolation should copy them the way **Continue in a new worktree** already does (`thread_continue_in_worktree`).
-
-Left as they are: T3 Code's queue-editing tool and changing another thread's model (already declined in [the roadmap](roadmap.md#decisions-and-deferred-scope)), and `html_preview`, which `preview_interactive` covers.
+Per-call `model`, `isolation` and `role` on `ramu_agent`, `agent_models`, `ramu_agent_status` and `ramu_agent_stop`, `requestId` replay on `ramu_agent`, `thread_start` and `project_add`, and the `next` line on background results are built ([Agents](guide/agents.md#sub-agents)). `project_create` below takes `requestId` too.
 
 ### 2. New project from scratch
 

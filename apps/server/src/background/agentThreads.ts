@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { RequestReplay } from '../agent/requestReplay'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -38,6 +39,12 @@ export const MAX_THREADS_PER_HOUR = 8
 /** A person's thread is depth 0; threads it starts are 1 and may start threads at depth 2, which may not. */
 export const MAX_DEPTH = 2
 export const MAX_MESSAGES_PER_HOUR = 20
+const REQUEST_ID = z
+  .string()
+  .min(1)
+  .max(120)
+  .optional()
+  .describe('Any unique string; sending the same call again returns the first result instead of repeating it.')
 const TERMINAL_DEVICE = 'terminal'
 const TERMINAL_GROUP = 'terminal:'
 
@@ -161,18 +168,30 @@ export class AgentThreadService {
     )
   }
 
+  private readonly replays = new RequestReplay<unknown>()
+
+  /**
+   * A tool call a provider sends again after a dropped connection returns the first call's result instead of adding a
+   * project or starting threads twice. Errors are not replayed, so a refused call can be retried.
+   */
+  private once(sessionId: string, tool: string, requestId: string | undefined, work: () => Promise<unknown>) {
+    return this.result(requestId ? () => this.replays.run(`${sessionId}:${tool}:${requestId}`, work) : work)
+  }
+
+  private async result(work: () => unknown) {
+    try {
+      // Turned off mid-thread: the tools stay listed until it relaunches, and refuse.
+      if (!this.enabled()) throw new Error(OFF)
+      return { content: [{ type: 'text' as const, text: JSON.stringify(await work()) }] }
+    } catch (e) {
+      return { isError: true, content: [{ type: 'text' as const, text: e instanceof Error ? e.message : String(e) }] }
+    }
+  }
+
   register(server: McpServer, sessionId: string): void {
     const session = this.agents.get(sessionId)
     if (session.parentId || !this.enabled()) return
-    const result = async (work: () => unknown) => {
-      try {
-        // Turned off mid-thread: the tools stay listed until it relaunches, and refuse.
-        if (!this.enabled()) throw new Error(OFF)
-        return { content: [{ type: 'text' as const, text: JSON.stringify(await work()) }] }
-      } catch (e) {
-        return { isError: true, content: [{ type: 'text' as const, text: e instanceof Error ? e.message : String(e) }] }
-      }
-    }
+    const result = (work: () => unknown) => this.result(work)
     server.registerTool(
       'project_list',
       {
@@ -221,10 +240,11 @@ export class AgentThreadService {
             .regex(/^[\w.-]{1,100}$/)
             .optional()
             .describe('Folder name for a clone; defaults to the repository name.'),
+          requestId: REQUEST_ID,
         },
       },
-      (input, extra) =>
-        result(async () => {
+      ({ requestId, ...input }, extra) =>
+        this.once(sessionId, 'project_add', requestId, async () => {
           const caller = this.agents.get(sessionId)
           if (caller.settings.access !== 'full') {
             const allowed = await this.agents.requestPermission(
@@ -249,10 +269,11 @@ export class AgentThreadService {
           threads: z.array(thread).min(1).max(MAX_THREADS_PER_CALL),
           access: z.enum(['edits', 'auto', 'full']).optional(),
           host: z.string().max(100).optional(),
+          requestId: REQUEST_ID,
         },
       },
-      ({ threads, access, host }, extra) =>
-        result(async () => {
+      ({ threads, access, host, requestId }, extra) =>
+        this.once(sessionId, 'thread_start', requestId, async () => {
           const caller = this.agents.get(sessionId)
           const settings = { ...caller.settings, ...(access ? { access } : {}) }
           if (ACCESS_RANK[settings.access] > ACCESS_RANK[caller.settings.access])
@@ -305,7 +326,8 @@ export class AgentThreadService {
           this.agents.threadsStarted(sessionId, started)
           return {
             started: started.map((entry) => ({ threadId: entry.taskId, ...entry })),
-            note: 'Each thread reports back here when it finishes or needs input. Use thread_status to check on them.',
+            note: 'Each thread reports back here when it finishes or needs input.',
+            next: 'End your turn and do not poll; use thread_status only if the person asks.',
           }
         }),
     )

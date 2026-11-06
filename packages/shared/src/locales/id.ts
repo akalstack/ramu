@@ -162,6 +162,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Messaged teammate': 'Mengirim pesan ke rekan',
   'Asked teammate': 'Bertanya ke rekan',
   'Suggested a teammate': 'Menyarankan rekan',
+  'Checked helpers': 'Memeriksa helper',
+  'Checking helpers': 'Memeriksa helper',
+  'Stopped a helper': 'Menghentikan helper',
+  'Stopping a helper': 'Menghentikan helper',
+  'Listed models': 'Menampilkan model',
+  'Listing models': 'Menampilkan model',
   'Suggesting a teammate': 'Menyarankan rekan',
   'Let agents suggest teammates': 'Izinkan agen menyarankan rekan',
   "The thread's agent may suggest bringing another model in, for example to review its work. Each suggestion asks you first and says which login it uses.":

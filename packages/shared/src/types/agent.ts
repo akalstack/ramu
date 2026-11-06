@@ -298,6 +298,8 @@ export interface AgentTask {
   name: string
   /** Claude subagent type (e.g. "Explore") or Codex agent role. */
   agentType?: string
+  /** What a helper started with `ramu_agent` is for, when the agent said. */
+  role?: import('../chat/helperRoles').HelperRole
   /** Claude task kind: local_agent, local_bash, … Absent for Codex sub-agents. */
   taskType?: string
   /** Set for a teammate the person added, rather than a helper the agent started. */
@@ -386,6 +388,8 @@ type AgentEventBody =
   | { kind: 'teammate-message'; teammateId: string; name: string; text: string }
   /** Recorded on a helper's session when it runs a custom agent, so its read-only choice holds across restarts. */
   | { kind: 'custom-agent'; name: string; readOnly: boolean }
+  /** Recorded on a helper's session when the agent gave it a role, so a read-only role holds across restarts. */
+  | { kind: 'helper-role'; role: import('../chat/helperRoles').HelperRole }
   /** This thread continues on another host. The original stays and links to it. */
   | { kind: 'continued'; hostId: string; host: string; taskId: string; title: string }
   | { kind: 'background-terminal-stop'; terminalId: string; command: string }

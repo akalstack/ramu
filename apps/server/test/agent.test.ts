@@ -2809,6 +2809,48 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
+  it('starts a helper on the model the agent names, keeps the thread access, and replays a resent call', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc)
+    const call = {
+      description: 'Review',
+      prompt: 'Review code',
+      model: 'codex-test',
+      role: 'review' as const,
+      requestId: 'once',
+    }
+    const [first, again] = await Promise.all([svc.spawnSubagent(parent.id, call), svc.spawnSubagent(parent.id, call)])
+    expect(again.agentId).toBe(first.agentId)
+    expect(new Set(svc.helperStatus(parent.id).map((task) => task.agent))).toEqual(new Set([first.agentId]))
+    expect(svc.get(first.agentId).settings).toMatchObject({ provider: 'codex', model: 'codex-test', access: 'full' })
+    expect(svc.events(first.agentId).find((event) => event.kind === 'helper-role')).toMatchObject({ role: 'review' })
+    expect(svc.task(parent.id, first.agentId)).toMatchObject({ role: 'review' })
+    await expect(svc.spawnSubagent(parent.id, { description: 'X', prompt: 'Y', model: 'nope' })).rejects.toThrow(
+      /codex-test/,
+    )
+    svc.stopAll()
+  })
+
+  it('lets the lead check and stop only its own helpers, and tells it not to poll', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc, 'edits')
+    const started = await svc.spawnSubagent(
+      parent.id,
+      { description: 'Edit', prompt: 'Change it', background: true },
+      undefined,
+      { step: { ...codexStep }, reason: 'test' },
+    )
+    expect(started.next).toMatch(/do not poll/)
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
+    expect(svc.helperStatus(parent.id, started.agentId)).toEqual([
+      expect.objectContaining({ agent: started.agentId, name: 'Edit', status: 'running' }),
+    ])
+    expect(() => svc.helperStatus(parent.id, 'someone-else')).toThrow(/not one of your helpers/)
+    expect(await svc.stopHelper(parent.id, started.agentId)).toEqual({ stopped: true, status: 'stopped' })
+    expect(await svc.stopHelper(parent.id, started.agentId)).toEqual({ stopped: false, status: 'stopped' })
+    svc.stopAll()
+  })
+
   it("chooses each helper's model and effort on the thread's provider", async () => {
     const svc = routed({ model: 'auto', step: null })
     const parent = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'codex', model: 'codex-test' })
