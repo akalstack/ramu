@@ -19,7 +19,7 @@ Page capabilities, declared in ramu.json (projects) or <meta name="ramu-capabili
 - runs: {"runs": {"monthly-review": {"label": "Monthly review", "prompt": "..."}}} adds toolbar buttons; schedules: [{"run": "monthly-review", "every": "daily", "at": "08:00"}]; triggers: [{"collection": "transactions", "when": {"field": "amount", "op": ">", "value": 500000}, "notify": "Large transaction", "run": "..."}].
 - camera: {"camera": {"purpose": "Photos of receipts"}} then const ref = await ramuContent.pickImage() (a downscaled photo kept with the page; store ref in a file field; ramuContent.files.get(ref) returns a data URL to show or send to ai.ask images).
 - notify: {"notify": {"purpose": "Tells you when spending passes your budget"}} then ramuContent.notify(title, body), a few per day.
-- widget: {"widget": {"title": "This month", "collection": "transactions", "kind": "number", "sum": "amount"}} for the phone's home screen. webhook: {"webhook": {"collection": "transactions"}} lets outside services add records. folder: {"folder": {"path": "data"}} gives read-only access to one project folder.
+- widget: {"widget": {"title": "This month", "collection": "transactions", "kind": "number", "sum": "amount"}} for the phone's home screen. webhook: {"webhook": {"collection": "transactions"}} lets outside services add records. folder: {"folder": {"path": "data"}} gives read-only access to one folder of the page's project: await ramuContent.folder.list(subpath?) returns [{name, folder}], await ramuContent.folder.read(path) returns a text file up to 200 KB.
 Preview runs capability calls against an in-frame fake, so checks can exercise them; the declaration is validated before preview.`
 
 export function registerInteractiveTools(

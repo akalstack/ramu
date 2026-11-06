@@ -1,3 +1,5 @@
+import { readdir, readFile, realpath, stat } from 'node:fs/promises'
+import { join, sep } from 'node:path'
 import { z } from 'zod'
 import type { JsonValue } from '@ramu/shared/interactive'
 import type { PageGrants, PageRecordQuery } from '@ramu/shared/pages'
@@ -94,6 +96,8 @@ const frameCall = z.discriminatedUnion('method', [
   z.object({ method: z.literal('files.add'), args: z.tuple([z.string().max(3_000_000)]) }),
   z.object({ method: z.literal('files.get'), args: z.tuple([z.string().max(100)]) }),
   z.object({ method: z.literal('notify'), args: z.tuple([z.string().max(80), z.string().max(240)]) }),
+  z.object({ method: z.literal('folder.list'), args: z.tuple([z.string().max(400)]).or(z.tuple([])) }),
+  z.object({ method: z.literal('folder.read'), args: z.tuple([z.string().min(1).max(400)]) }),
 ])
 type FrameCall = z.infer<typeof frameCall>
 
@@ -126,6 +130,10 @@ function runFrameCall(ctx: HandlerContext, pageId: string, call: FrameCall): unk
       return pages.addFile(pageId, call.args[0])
     case 'files.get':
       return pages.file(pageId, call.args[0])
+    case 'folder.list':
+      return readPageFolder(ctx, pageId, call.args[0] ?? '', 'list')
+    case 'folder.read':
+      return readPageFolder(ctx, pageId, call.args[0], 'read')
     case 'notify': {
       const page = pages.requireGrant(pageId, 'notify')
       pages.spend(pageId, 'notify')
@@ -133,6 +141,34 @@ function runFrameCall(ctx: HandlerContext, pageId: string, call: FrameCall): unk
       return null
     }
   }
+}
+
+/**
+ * The one project folder a page was granted, read-only: a listing or one text file, never outside that folder (links
+ * included) and never larger than 200 KB.
+ */
+async function readPageFolder(ctx: HandlerContext, pageId: string, path: string, mode: 'list' | 'read') {
+  const page = ctx.pages!.requireGrant(pageId, 'folder')
+  const root = ctx.workspace.listProjects().find((project) => project.id === page.projectId)?.root
+  if (!root) throw new Error('This page belongs to no project with a folder.')
+  const base = await realpath(join(root, page.capabilities.folder!.path)).catch(() => {
+    throw new Error(`The folder ${page.capabilities.folder!.path} does not exist in the project.`)
+  })
+  const target = await realpath(join(base, path)).catch(() => {
+    throw new Error('Not found.')
+  })
+  if (target !== base && !target.startsWith(base + sep)) throw new Error('Only the granted folder can be read.')
+  if (mode === 'list') {
+    const entries = await readdir(target, { withFileTypes: true })
+    return entries
+      .filter((entry) => !entry.name.startsWith('.'))
+      .slice(0, 500)
+      .map((entry) => ({ name: entry.name, folder: entry.isDirectory() }))
+  }
+  const info = await stat(target)
+  if (!info.isFile()) throw new Error('That is not a file.')
+  if (info.size > 200_000) throw new Error('That file is larger than 200 KB.')
+  return readFile(target, 'utf8')
 }
 
 /** Pages: kept documents with shared state, records, AI, runs, shares and the way to a project. */

@@ -264,10 +264,10 @@ export class PageStore {
     return (
       this.db
         .prepare(
-          'SELECT reference,preview FROM interactive_page_versions WHERE page_id=? ORDER BY version DESC LIMIT 100',
+          'SELECT v.reference, v.preview, m.wide FROM interactive_page_versions v LEFT JOIN interactive_media m ON m.id=v.page_id AND m.version=v.version WHERE v.page_id=? ORDER BY v.version DESC LIMIT 100',
         )
-        .all(pageId) as { reference: string; preview: string | null }[]
-    ).map((row) => ({ reference: JSON.parse(row.reference), preview: row.preview }))
+        .all(pageId) as { reference: string; preview: string | null; wide: string | null }[]
+    ).map((row) => ({ reference: JSON.parse(row.reference), preview: row.preview, wide: row.wide }))
   }
   document(pageId: string, version?: number): InteractiveDocument {
     const target = version ?? this.row(pageId).current_version
@@ -451,7 +451,9 @@ export class PageStore {
     const usage = this.usage(pageId)
     const limit =
       kind === 'ai'
-        ? (page.grants.ai ? page.grants.ai.daily : 0)
+        ? page.grants.ai
+          ? page.grants.ai.daily
+          : 0
         : Math.min(PAGE_LIMITS.notifyDaily, page.capabilities.notify?.daily ?? PAGE_LIMITS.notifyDaily)
     if (usage[kind] >= limit)
       throw new Error(

@@ -270,3 +270,44 @@ it('parses CSV and strips photo location metadata', () => {
   const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8]), exif, Buffer.from([0xff, 0xda, 0x00, 0x02, 0x09])])
   expect(stripJpegMetadata(jpeg, 'image/jpeg')).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xda, 0x00, 0x02, 0x09]))
 })
+
+it('reads only the granted project folder, read-only', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { registerPageHandlers } = await import('../src/ipc/handlers/pages')
+  const root = mkdtempSync(join(tmpdir(), 'ramu-page-folder-'))
+  mkdirSync(join(root, 'data'))
+  writeFileSync(join(root, 'data', 'a.json'), '{"ok":true}')
+  writeFileSync(join(root, 'secret.txt'), 'no')
+  const db = openDb(':memory:')
+  databases.push(db)
+  db.exec(
+    "INSERT INTO projects(id,name,created_at) VALUES('p','P',0); INSERT INTO tasks(id,project_id,title,mode,status,created_at) VALUES('t','p','T','current','idle',0); INSERT INTO agent_sessions(id,task_id,provider,cwd,state,created_at) VALUES('s','t','codex','/tmp','idle',0)",
+  )
+  const interactive = new InteractiveStore(db, () => {}, previewer)
+  const pages = new PageStore(db, interactive)
+  const v1 = interactive.publish(
+    's',
+    (await interactive.preview('s', { ...input, html: html({ folder: { path: 'data' } }) })).id,
+    'r',
+  )
+  const page = pages.keep('s', v1.id, { projectId: 'p' })
+  const methods = registerPageHandlers({
+    pages,
+    pageAi: new PageAi(
+      pages,
+      async () => ({ message: '', provider: 'codex', model: 'm' }),
+      () => DEFAULT_AGENT_SETTINGS,
+    ),
+    workspace: { listProjects: () => [{ id: 'p', root }] },
+    activity: { run: (_l: string, _d: string, work: () => unknown) => work() },
+  } as never)
+  const call = (method: string, args: unknown[]) =>
+    methods['pages.call']!.run(page.id, method, args) as Promise<unknown>
+  await expect(call('folder.list', [])).rejects.toThrow('not allowed')
+  pages.grant(page.id, { folder: true })
+  expect(await call('folder.list', [])).toEqual([{ name: 'a.json', folder: false }])
+  expect(await call('folder.read', ['a.json'])).toBe('{"ok":true}')
+  await expect(call('folder.read', ['../secret.txt'])).rejects.toThrow('Only the granted folder')
+})

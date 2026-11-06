@@ -1,9 +1,12 @@
+import { usePageIndex } from '../../pages/pageIndex'
+import { openPage } from '../../pages/openPage'
 import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../composer/viewerAccess'
 import { animateThreadListChange } from '../../workspace/threadListMotion'
 import { offerThreadUndo } from './threadUndo'
 import { Button } from '@/components/desktop-button'
 import {
+  AppWindow,
   Archive,
   ChevronRight,
   FolderClosed,
@@ -44,6 +47,8 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   const ws = useWorkspace()
   const host = useHost()
   const { viewOnly, canWrite } = useHostWriteAccess()
+  // Pages made for this project, found from its menu as well as from Pages.
+  const projectPages = [...usePageIndex().pages.values()].filter((page) => page.projectId === project.id)
   const repos = ws.repos[project.id] ?? []
   const { preferences } = useAppSettings()
   const recent = Math.min(preferences.recentChats, previewLimit ?? Infinity)
@@ -127,6 +132,23 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
         if (canWrite()) setRouting(true)
       },
     },
+    ...(projectPages.length
+      ? [
+          {
+            key: 'pages',
+            label: (
+              <>
+                <AppWindow size={14} /> {t(' Pages')}
+              </>
+            ),
+            submenu: projectPages.map((page) => ({
+              key: page.id,
+              label: `${page.icon} ${page.title}`,
+              onSelect: () => openPage(page.id),
+            })),
+          } as MenuEntry,
+        ]
+      : []),
     { key: 'sep1', separator: true },
     {
       key: 'connect',

@@ -129,6 +129,8 @@ export interface PageVersion {
   reference: InteractiveReference
   /** Phone screenshot from its checks. */
   preview: string | null
+  /** Desktop screenshot from the same checks, when it was kept. */
+  wide?: string | null
 }
 
 export interface PageRecord {

@@ -18,7 +18,9 @@ export function capabilityLine(name: PageCapability, page: Pick<PageInfo, 'capab
     case 'records':
       return t('Keeps records on this host: {list}', { list: Object.keys(c.records ?? {}).join(', ') })
     case 'ai':
-      return t('Uses a model on this host: {purpose}', { purpose: c.ai?.purpose ?? '' })
+      return t('Uses a model on this host: {purpose}. The model sees only what the page sends it.', {
+        purpose: c.ai?.purpose ?? '',
+      })
     case 'camera':
       return t('Uses photos you choose: {purpose}', { purpose: c.camera?.purpose ?? '' })
     case 'notify':

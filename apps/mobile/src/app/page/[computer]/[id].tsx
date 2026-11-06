@@ -684,7 +684,9 @@ function grantText(say: ReturnType<typeof useSay>, name: string, page: PageInfo)
     case 'records':
       return say('Keeps records on this host: {list}', { list: Object.keys(c.records ?? {}).join(', ') })
     case 'ai':
-      return say('Uses a model on this host: {purpose}', { purpose: c.ai?.purpose ?? '' })
+      return say('Uses a model on this host: {purpose}. The model sees only what the page sends it.', {
+        purpose: c.ai?.purpose ?? '',
+      })
     case 'camera':
       return say('Uses photos you choose: {purpose}', { purpose: c.camera?.purpose ?? '' })
     case 'notify':

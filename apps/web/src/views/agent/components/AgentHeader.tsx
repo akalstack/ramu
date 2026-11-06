@@ -5,6 +5,7 @@ import { useHost } from '../../../workspace/HostProvider'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import {
+  AppWindow,
   Bot,
   ArrowUpRight,
   GitFork,
@@ -47,6 +48,7 @@ export function AgentHeader({
   continuing,
   onContinue,
   onContinueOnHost,
+  onMakePage,
   latestRequest,
 }: {
   history?: React.ReactNode
@@ -69,6 +71,8 @@ export function AgentHeader({
   continuing: boolean
   onContinue: () => void
   onContinueOnHost: (hostId: string) => void
+  /** Asks the agent to turn this thread's results into a page to keep. */
+  onMakePage?: () => void
   /** The person's latest message, for suggesting a host whose platform it names. */
   latestRequest?: string
   /** Absent when this device may only view. */
@@ -198,6 +202,19 @@ export function AgentHeader({
                 ]
               : []),
             ...(canContinue ? continueItems : []),
+            ...(canContinue && onMakePage && !readOnly
+              ? [
+                  {
+                    key: 'make-page',
+                    label: (
+                      <>
+                        <AppWindow size={13} /> {translate('Make a page from this thread')}
+                      </>
+                    ),
+                    onSelect: onMakePage,
+                  },
+                ]
+              : []),
           ]}
         />
       )}

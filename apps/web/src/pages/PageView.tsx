@@ -650,11 +650,18 @@ function VersionsDialog({
             {version.preview ? (
               <img
                 src={version.preview}
-                alt={t('Preview of {title}', { title: `v${version.reference.version}` })}
+                alt={t('Phone preview of {title}', { title: `v${version.reference.version}` })}
                 className="h-40 w-24 flex-none rounded-md object-cover object-top"
               />
             ) : (
               <div className="h-40 w-24 flex-none rounded-md bg-fill" />
+            )}
+            {version.wide && (
+              <img
+                src={version.wide}
+                alt={t('Desktop preview of {title}', { title: `v${version.reference.version}` })}
+                className="h-40 w-56 flex-none rounded-md object-cover object-top"
+              />
             )}
             <div className="min-w-0 flex-1">
               <p className="m-0 font-medium text-foreground">

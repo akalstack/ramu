@@ -5537,7 +5537,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Undone": "Dibatalkan",
   "Update live site": "Perbarui situs live",
   "Updated in another thread": "Diperbarui di thread lain",
-  "Uses a model on this host: {purpose}": "Memakai model di host ini: {purpose}",
+  "Uses a model on this host: {purpose}. The model sees only what the page sends it.": "Memakai model di host ini: {purpose}. Model hanya melihat apa yang dikirim halaman.",
   "Uses photos you choose: {purpose}": "Memakai foto yang kamu pilih: {purpose}",
   "Versions of {title}": "Versi {title}",
   "Versions…": "Versi…",
@@ -5555,4 +5555,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Saved copy · reconnect to see the current version": "Salinan tersimpan · sambungkan lagi untuk melihat versi terkini",
   "Some changes made offline were not saved:": "Beberapa perubahan saat offline tidak tersimpan:",
   "The offline queue is full. Reconnect to the host.": "Antrean offline penuh. Sambungkan lagi ke host.",
+  "Make a page from this thread": "Buat halaman dari thread ini",
+  "Phone preview of {title}": "Pratinjau ponsel {title}",
+  "Desktop preview of {title}": "Pratinjau desktop {title}",
+  " Pages": " Halaman",
 }
