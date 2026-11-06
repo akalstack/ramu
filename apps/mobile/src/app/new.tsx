@@ -99,7 +99,14 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const storeRef = useRef(store)
   storeRef.current = store
   const { projects, computers, createChat, isOnline } = store
-  const params = useLocalSearchParams<{ project?: string; quote?: string; computer?: string; draftContext?: string }>()
+  const params = useLocalSearchParams<{
+    project?: string
+    quote?: string
+    computer?: string
+    draftContext?: string
+    /** A request already begun in the box, such as New page's "Make me a page to". */
+    start?: string
+  }>()
   const [selected, setHost] = useState(params.computer ?? store.selected)
   // "Quote in new chat" hands the passage over once: it goes into the box, then leaves the route, so removing it there
   // (or coming back to this tab later) does not bring it back.
@@ -115,6 +122,12 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     router.setParams({ quote: undefined })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [params.quote] by design; the router is stable
   }, [params.quote])
+  useEffect(() => {
+    if (!params.start) return
+    setQuoted((current) => ({ text: params.start!, n: (current?.n ?? 0) + 1 }))
+    router.setParams({ start: undefined })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [params.start] by design; the router is stable
+  }, [params.start])
   const offline = !isOnline(selected)
   const list = projects.filter((p) => p.computerId === selected)
   // A chat runs in a project's folders, so the project is chosen (by hand or by Auto) rather than defaulted.

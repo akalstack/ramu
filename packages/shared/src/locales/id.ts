@@ -5596,4 +5596,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "This looks like something new. Choose where to start.": "Ini tampak seperti sesuatu yang baru. Pilih tempat memulai.",
   "Suggested · something new that needs no project yet": "Disarankan · sesuatu yang baru dan belum perlu proyek",
   "Standalone": "Mandiri",
+  "Make me a page to": "Buatkan halaman untuk",
+  "New page": "Halaman baru",
 }

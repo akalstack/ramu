@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, TextInput, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { AppWindow, Pin } from 'lucide-react-native'
+import { AppWindow, Pin, Plus } from 'lucide-react-native'
+import { useTabActions } from '../../../components/Overlays'
+import { STANDALONE } from '../../../runtime/types'
+import { GlassButton } from '../../../components/Screen'
 import type { PageInfo } from '@ramu/shared/pages'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
@@ -52,13 +55,23 @@ export default function PagesScreen() {
       )
     return () => offs.forEach((off) => off())
   }, [onlineKey, load, store])
+  // A page starts as a request to an agent: a new thread with no project and the request begun in the box.
+  const newPage = () =>
+    router.push({
+      pathname: '/new',
+      params: { project: STANDALONE, computer: store.selected, start: `${say('Make me a page to')} ` },
+    })
+  const viewOnly = store.computers.find((x) => x.id === store.selected)?.access === 'viewer'
+  const actions = useTabActions(
+    viewOnly ? null : { icon: Plus, label: say('New page'), systemIcon: 'plus', onPress: newPage },
+  )
   const rows = hosts
     .flatMap((host) => (pages[host.id] ?? []).map((page) => ({ page, host })))
     .filter(({ page }) => page.title.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => Number(b.page.pinned) - Number(a.page.pinned) || b.page.changedAt - a.page.changedAt)
   return (
     <Screen>
-      <Header back={false} large scrollEdge collapsed={edge.scrolled} title={say('Pages')} />
+      <Header back={false} large scrollEdge collapsed={edge.scrolled} title={say('Pages')} right={actions} />
       <PageScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
@@ -122,11 +135,20 @@ export default function PagesScreen() {
             </Row>
           ))
         ) : (
-          <Nothing
-            icon={AppWindow}
-            title={say('No pages yet')}
-            detail={say('Ask an agent for “a page to …”, or choose Keep as page on any interactive card in a thread.')}
-          />
+          <View>
+            <Nothing
+              icon={AppWindow}
+              title={say('No pages yet')}
+              detail={say(
+                'Ask an agent for “a page to …”, or choose Keep as page on any interactive card in a thread.',
+              )}
+            />
+            {viewOnly ? null : (
+              <View style={{ alignItems: 'center' }}>
+                <GlassButton primary title={say('New page')} icon={Plus} onPress={newPage} />
+              </View>
+            )}
+          </View>
         )}
       </PageScrollView>
     </Screen>

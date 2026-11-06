@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AppWindow, Pin } from 'lucide-react'
+import { AppWindow, Pin, Plus } from 'lucide-react'
+import { NO_PROJECT } from '@ramu/shared/types'
+import { draftKey, draftStore, loadDraft, saveDraft } from '../composer/drafts'
 import type { PageInfo } from '@ramu/shared/pages'
 import { declaredCapabilities } from '@ramu/shared/pages'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -41,6 +43,14 @@ export function PagesPage() {
   const [query, setQuery] = useState('')
   const [importing, setImporting] = useState(false)
   const viewOnly = useViewOnly()
+  const host = useHost()
+  // A page starts as a request to an agent: New chat outside any project, with the request begun in the box.
+  const newPage = () => {
+    const key = draftKey.newChat(NO_PROJECT)
+    const store = draftStore(host.id)
+    if (!loadDraft(key, store).trim()) saveDraft(key, `${t('Make me a page to')} `, store)
+    ws.newTask(NO_PROJECT)
+  }
   const [open, setOpen] = useState<string | null>(() => takePendingPage())
   useEffect(() => {
     const select = (event: Event) => {
@@ -65,9 +75,15 @@ export function PagesPage() {
               )}
             </p>
           </div>
-          <Button variant="outline" className="flex-none" disabled={viewOnly} onClick={() => setImporting(true)}>
-            {t('Import a page…')}
-          </Button>
+          <div className="flex flex-none gap-2">
+            <Button variant="outline" disabled={viewOnly} onClick={() => setImporting(true)}>
+              {t('Import a page…')}
+            </Button>
+            <Button disabled={viewOnly} onClick={newPage}>
+              <Plus size={14} />
+              {t('New page')}
+            </Button>
+          </div>
         </header>
         {pages && pages.length > 0 && (
           <SearchInput
