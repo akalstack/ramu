@@ -1,4 +1,5 @@
 import type { AgentEvent } from '@ramu/shared/types'
+import { interactiveRevisions, interactiveSuccessor, interactiveUpdates } from '@ramu/shared/interactiveRevisions'
 import { helperGroups } from '@ramu/shared/chat/helperPresentation'
 import { toolKind } from '@ramu/shared/chat/agentTools'
 import { visibleMessage } from '@ramu/shared/chat/visibleMessage'
@@ -68,6 +69,14 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
   const results = new Map<string, Extract<AgentEvent, { kind: 'tool-result' }>>()
   const helperEvents = new Map<string, AgentEvent[]>()
   const goals = goalChanges(events)
+  const revisions = interactiveRevisions(events)
+  const updates = interactiveUpdates(events)
+  // The row of each document's newest version, so an older row can scroll to it.
+  const latestItem = new Map<string, string>()
+  events.forEach((e, index) => {
+    if (e.kind === 'interactive' && revisions.get(e.reference.id)?.latest.version === e.reference.version)
+      latestItem.set(e.reference.id, `event-${index}`)
+  })
   for (const e of events) {
     if (e.kind === 'question-state' && e.answers)
       answers.set(e.requestId, { ...answers.get(e.requestId), ...e.answers })
@@ -163,8 +172,27 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         seq: seqs?.[index],
         raw: e.text,
       })
-    else if (e.kind === 'interactive') items.push({ kind: 'interactive', id, reference: e.reference })
-    else if (e.kind === 'theme') items.push({ kind: 'theme', id, theme: e.theme })
+    else if (e.kind === 'interactive') {
+      const revision = revisions.get(e.reference.id)
+      const replaced = revision && revision.latest.version > e.reference.version
+      items.push({
+        kind: 'interactive',
+        id,
+        reference: e.reference,
+        ...(replaced
+          ? {
+              replacedBy: {
+                itemId: latestItem.get(e.reference.id) ?? id,
+                version: revision.latest.version,
+                changes: interactiveSuccessor(e.reference, revision)?.changes,
+              },
+            }
+          : {
+              previous: revision?.versions.find((entry) => entry.version < e.reference.version),
+              update: updates.get(e.reference.id),
+            }),
+      })
+    } else if (e.kind === 'theme') items.push({ kind: 'theme', id, theme: e.theme })
     else if (e.kind === 'threads-started') items.push({ kind: 'threads', id, threads: e.threads })
     else if (e.kind === 'continued') items.push({ kind: 'continued', id, event: e })
     // A block can open empty as a reply starts; an empty row would blink in and out at the end of the chat.

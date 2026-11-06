@@ -17,6 +17,12 @@ export interface InteractiveReference {
   /** Exact HTTPS origins the document may reach; empty means offline. */
   network: InteractiveNetwork
   libraries?: Record<string, string>
+  /** What this version changed from the one before it, in the agent's words; every revision has one. */
+  changes?: string
+  /** The version this one restored, when the person brought an older version back. */
+  restoredFrom?: number
+  /** The kept page that owns this document, when there is one. */
+  pageId?: string
 }
 export interface InteractiveNetwork {
   resources: string[]

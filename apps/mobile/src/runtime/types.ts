@@ -62,7 +62,16 @@ export type TranscriptItem = (
       /** The text as sent, including any hidden <ramu-context>. */ raw?: string
     }
   /** An image the agent returned (MCP or tool content). */
-  | { kind: 'interactive'; id: string; reference: import('@ramu/shared/interactive').InteractiveReference }
+  | {
+      kind: 'interactive'
+      id: string
+      reference: import('@ramu/shared/interactive').InteractiveReference
+      /** The newest version and its row, when a later version replaced this one. */
+      replacedBy?: { itemId: string; version: number; changes?: string }
+      /** The version this one replaced, for carrying values over. */
+      previous?: import('@ramu/shared/interactive').InteractiveReference
+      update?: import('@ramu/shared/interactiveRevisions').InteractiveUpdate
+    }
   | { kind: 'image'; id: string; uri: string; alt?: string }
   /** A theme the agent drafted with `propose_theme`; the person previews it before anything changes. */
   | { kind: 'theme'; id: string; theme: import('@ramu/shared/theme').RamuTheme }

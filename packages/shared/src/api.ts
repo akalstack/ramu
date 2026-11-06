@@ -442,6 +442,10 @@ export interface RamuMethods {
   'app.content.release'(url: string): void
   'interactive.get'(sessionId: string, id: string, version: number): import('./interactive').InteractiveDocument
   'interactive.list'(sessionId: string): import('./interactive').InteractiveReference[]
+  /** The desktop and light screenshots a version's checks took, for Compare. */
+  'interactive.media'(sessionId: string, id: string, version: number): { wide: string | null; light: string | null }
+  /** Publishes an older version again as the newest one. */
+  'interactive.restore'(sessionId: string, id: string, version: number): import('./interactive').InteractiveReference
 
   'onboarding.get'(): { needed: boolean }
   'onboarding.complete'(): void

@@ -20,6 +20,13 @@ import { Button } from '../components/desktop-button'
 import { GHOST_ICON_BUTTON_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
 import { Menu, type MenuEntry } from '../Menu'
 import { ChatCodeBlock } from '../chat/ChatCodeBlock'
+import type { InteractiveRevision, InteractiveUpdate } from '@ramu/shared/interactiveRevisions'
+import {
+  InteractiveCarriedValues,
+  InteractiveCompare,
+  InteractiveVersionRow,
+  interactiveAnchor,
+} from './InteractiveRevision'
 import {
   AppWindow,
   Maximize2,
@@ -73,11 +80,17 @@ function InteractiveDocumentCard({
   copyFrom,
   versions,
   onClose,
+  previous,
+  update,
 }: {
   reference: InteractiveReference
   copyFrom?: InteractiveReference
   versions?: { load(): void; items: MenuEntry[] }
   onClose?: () => void
+  /** The version this one replaced, for Compare and carrying values over. */
+  previous?: InteractiveReference
+  /** A revision of this document the agent is checking now. */
+  update?: InteractiveUpdate
 }) {
   useLanguage()
   const host = useHost()
@@ -111,6 +124,30 @@ function InteractiveDocumentCard({
   const frame = useRef<HTMLIFrameElement>(null)
   const root = useRef<HTMLElement>(null)
   const state = useRef(cache.state(reference.id, reference.version))
+  const [comparing, setComparing] = useState(false)
+  const [carried, setCarried] = useState<
+    { kind: 'moved'; from: number } | { kind: 'kept'; from: number; state: InteractiveState } | null
+  >(null)
+  // A new version takes the values entered in the one it replaced once, when their meaning is declared the same.
+  useEffect(() => {
+    if (!previous || state.current) return
+    const store = hostStorageFor(host.id)
+    const flag = `ramu.interactive.carried.${reference.id}:${reference.version}`
+    try {
+      if (store.getItem(flag)) return
+      store.setItem(flag, '1')
+    } catch {
+      return
+    }
+    const saved = cache.state(previous.id, previous.version)
+    if (!saved) return
+    if (canCopyInteractiveState(previous, reference)) {
+      state.current = saved
+      cache.saveState(reference.id, reference.version, saved)
+      setCarried({ kind: 'moved', from: previous.version })
+      setGeneration((n) => n + 1)
+    } else setCarried({ kind: 'kept', from: previous.version, state: saved })
+  }, [previous, reference, cache, host.id])
   // Scrolling away releases the document; hiding the app pauses it without losing its in-memory playback state.
   const live = !!document && visible && !evicted && !failed && view === 'preview'
   const instance = `${key}:${generation}`
@@ -344,6 +381,7 @@ function InteractiveDocumentCard({
             ? 'fixed inset-4 z-50 flex flex-col overflow-hidden rounded-xl bg-(--canvas) shadow-2xl'
             : 'my-3 overflow-hidden rounded-xl bg-(--canvas)'
         }
+        id={onClose ? undefined : interactiveAnchor(reference.id)}
         aria-label={reference.title}
         aria-describedby={`interactive-summary-${key}`}
       >
@@ -353,6 +391,11 @@ function InteractiveDocumentCard({
           <span className="flex-none text-caption text-muted-foreground" title={checked}>
             v{reference.version}
           </span>
+          {update?.state === 'updating' && (
+            <span role="status" className="flex-none animate-pulse text-caption text-muted-foreground">
+              {t('Updating…')}
+            </span>
+          )}
           <p id={`interactive-summary-${key}`} className="sr-only">
             {reference.summary}
           </p>
@@ -438,6 +481,66 @@ function InteractiveDocumentCard({
             )}
           </div>
         </header>
+        {reference.changes && !onClose && (
+          <div className="flex items-center gap-1.5 border-t border-border px-3 py-1 text-caption text-muted-foreground">
+            <span className="min-w-0 truncate" title={reference.changes}>
+              {t('Updated · v{version}', { version: reference.version })} · {reference.changes}
+            </span>
+            {previous && (
+              <Button
+                variant="ghost"
+                aria-pressed={comparing}
+                className={`${GHOST_TEXT_BUTTON_CLASS} ml-auto h-6 min-h-0 flex-none aria-pressed:bg-raised aria-pressed:text-foreground`}
+                onClick={() => setComparing((value) => !value)}
+              >
+                {t('Compare')}
+              </Button>
+            )}
+          </div>
+        )}
+        {update?.state === 'failed' && (
+          <p role="status" className="m-0 border-t border-border px-3 py-1.5 text-caption text-muted-foreground">
+            {t('The latest revision did not publish, so this version is unchanged: {detail}', {
+              detail: update.detail,
+            })}
+          </p>
+        )}
+        {carried && (
+          <div role="status" className="border-t border-border px-3 py-1.5 text-caption text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <span className="min-w-0 flex-1">
+                {carried.kind === 'moved'
+                  ? t('Your values from v{version} carried over.', { version: carried.from })
+                  : t('Values from v{version} could not carry over because this version changed what they mean.', {
+                      version: carried.from,
+                    })}
+              </span>
+              {carried.kind === 'moved' && (
+                <Button
+                  variant="ghost"
+                  className={`${GHOST_TEXT_BUTTON_CLASS} h-6 min-h-0`}
+                  onClick={() => {
+                    setCarried(null)
+                    reset()
+                  }}
+                >
+                  {t('Undo')}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className={`${GHOST_ICON_BUTTON_CLASS} size-6`}
+                aria-label={t('Dismiss')}
+                onClick={() => setCarried(null)}
+              >
+                <X size={12} />
+              </Button>
+            </div>
+            {carried.kind === 'kept' && <InteractiveCarriedValues state={carried.state} />}
+          </div>
+        )}
+        {comparing && previous && <InteractiveCompare previous={previous} current={reference} document={document} />}
         {selection && (
           <InteractiveFollowupPicker
             key={selectionId}
@@ -635,7 +738,15 @@ function InteractivePoster({
 }
 
 /** Another version opens in a separate viewer; the historical card is never rewritten. */
-function InteractiveContentBrowser({ reference }: { reference: InteractiveReference }) {
+function InteractiveContentBrowser({
+  reference,
+  previous,
+  update,
+}: {
+  reference: InteractiveReference
+  previous?: InteractiveReference
+  update?: InteractiveUpdate
+}) {
   useLanguage()
   const { id: hostId, invoke } = useHost()
   const [versions, setVersions] = useState<InteractiveReference[] | null>(null)
@@ -669,6 +780,8 @@ function InteractiveContentBrowser({ reference }: { reference: InteractiveRefere
         key={`${reference.id}:${reference.version}`}
         reference={reference}
         versions={{ load, items }}
+        previous={previous}
+        update={update}
       />
       {selected && selected.version !== reference.version && (
         <InteractiveDocumentCard
@@ -682,12 +795,26 @@ function InteractiveContentBrowser({ reference }: { reference: InteractiveRefere
   )
 }
 
-export function InteractiveContent({ reference }: { reference: InteractiveReference }) {
+/** One live card per document: the newest version in full, every older one collapsed to a row in its place. */
+export function InteractiveContent({
+  reference,
+  revision,
+  update,
+}: {
+  reference: InteractiveReference
+  revision?: InteractiveRevision
+  update?: InteractiveUpdate
+}) {
   const { id } = useHost()
+  if (revision && revision.latest.version > reference.version)
+    return <InteractiveVersionRow reference={reference} revision={revision} />
+  const previous = revision?.versions.find((entry) => entry.version < reference.version)
   return (
     <InteractiveContentBrowser
       key={`${id}:${reference.sessionId}:${reference.id}:${reference.version}`}
       reference={reference}
+      previous={previous}
+      update={update}
     />
   )
 }

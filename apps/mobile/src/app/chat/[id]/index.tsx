@@ -1106,6 +1106,15 @@ export default function ChatScreen() {
         value={{
           readOnly: viewOnly,
           select: setSelection,
+          goTo: (itemId) => {
+            const index = pageRows.findIndex((row) => row.id === itemId)
+            if (index < 0) return
+            following.current = false
+            // A row not laid out yet can refuse to be scrolled to.
+            try {
+              scroll.current?.scrollToIndex({ index, animated: true, viewPosition: 0 })
+            } catch {}
+          },
           // Quote: "> line" blocks appended to the draft, as the desktop's Quote does.
           quote: (text) => {
             const key = `${chat.computerId}:chat:${chat.taskId || chat.id}`

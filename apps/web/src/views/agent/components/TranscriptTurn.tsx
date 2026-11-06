@@ -104,6 +104,7 @@ function TranscriptBlock({
             }
             outcomes={ctx.outcomes}
             questionStates={ctx.questionStates}
+            interactive={ctx.interactive}
             latest={latest}
             onEdit={
               ctx.onEditMessage && ctx.eventSequences.has(b.event)

@@ -106,6 +106,7 @@ import {
 } from './agent/lib/derive'
 import { CONTEXT_MARKER, outboxFullError, quoteLines, visibleText } from './agent/lib/messages'
 import { interactiveAttachmentBlock, type InteractiveAttachment } from '@ramu/shared/interactive'
+import { interactiveRevisions, interactiveUpdates } from '@ramu/shared/interactiveRevisions'
 import {
   addInteractiveAttachment,
   INTERACTIVE_FOLLOWUP_EVENT,
@@ -199,6 +200,10 @@ export const AgentView = memo(function AgentView({
 
   const outcomes = useMemo(() => outcomesOf(events), [events])
   const questionStates = useMemo(() => questionStatesOf(events), [events])
+  const interactive = useMemo(
+    () => ({ revisions: interactiveRevisions(events), updates: interactiveUpdates(events) }),
+    [events],
+  )
   const [showQuestions, setShowQuestions] = useState(false)
   // Questions float above the message box; the transcript row opens them.
   const [questionDockOpen, setQuestionDockOpen] = useState(true)
@@ -686,6 +691,7 @@ export const AgentView = memo(function AgentView({
     results,
     outcomes,
     questionStates,
+    interactive,
     goalNotes,
     liveText,
     live,

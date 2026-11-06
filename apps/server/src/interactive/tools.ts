@@ -6,14 +6,30 @@ Quality bar: complete and dependable rather than decorative. Lead with the answe
 Structure: send one html document, or files [{path, content, encoding?}] with an HTML entry (default index.html). Local CSS, classic scripts, SVG and base64 assets are inlined. For React/TSX use <script type="module" src="./src/main.tsx"></script>; local JS/TS/TSX/JSON/CSS and asset imports are compiled before preview. Available pinned imports: react, react/jsx-runtime, react-dom/client, chart.js, chart.js/auto, chart.js/helpers, @dagrejs/dagre. Use Chart.js for interactive charts and Dagre plus accessible SVG for flow/architecture diagrams. Simple diagrams can use SVG directly. No arbitrary package installs, Node imports or host filesystem access. Use imported assets in modules; strings containing file paths are not imports. Sources, library versions and the exact tested runnable bytes are retained with each publication.
 Runtime: new documents work offline by default, including bundled libraries. If remote data or resources are essential, declare network: {resources: ["https://images.example.com"], connect: ["https://data.example.com"]}; use exact public HTTPS origins, not paths, wildcards or broad CDN access. Resources and API connections are separate, immutable per published version. Prefer bundled libraries and local assets. No eval/new Function is available in new documents. Plain http, frames, forms, plugins, page navigation, local files and app commands are unavailable; controls run locally with no model call. Remote parts are missing when the reader is offline, so prefer the kit and icons for app-styled UI and use libraries for heavy lifting. Use accessible labels, keyboard controls and responsive layouts; preview checks narrow phone, phone, tablet and desktop widths and returns phone/desktop screenshots, your console.log/info/warn output, script errors and failed remote loads, so check both screenshots and fix every failure. Leave html, body and the outermost element without a background, border or outer card, and do not repeat the title as a heading: the card header already shows it and the document sits on the thread's own background. Give charts fixed pixel heights; viewport height units (vh, svh, lvh, dvh) are rejected because the frame grows to fit the content. Include check actions with expected visible text. Preview validates rendering/observed behavior, not factual accuracy. For custom state use window.ramuContent.setState(JSON-compatible data), onRestore(state=>...), and onActive(active=>...) to pause animation offscreen. Standard input/select/textarea values restore automatically. Theme tokens follow the app's live palette and light/dark mode: --background, --foreground, --muted (secondary text), --primary (brand accent), --surface (cards), --surface-raised (buttons, inputs), --border, --code-background, --button and --button-foreground (solid actions), --success, --warning, --danger, --chart-1 to --chart-6, --radius, --font-sans, --font-mono. Artwork may use its own palette.
 Built-ins (inlined at preview, so they work offline and never change after publishing; prefer them over a CSS framework): <link rel="stylesheet" href="ramu:kit"> adds app-styled defaults for headings, inputs and :focus-visible plus classes .card, .btn (data-variant=primary|ghost|danger, data-size=sm|icon), .badge, .callout, .dot and .bar>span (data-tone=primary|success|warning|danger), .stat/.stat-label/.stat-value/.stat-delta, .table (td.num right-aligns), [role=tablist]/[role=tab][aria-selected], .field, .stack, .row, .grid, .muted, .small, .mono, .num; all rules have zero specificity so your CSS wins. Any Lucide icon: <svg data-icon="chevron-right"></svg> (kebab-case name; sized 1em, currentColor; add aria-label for meaningful icons). For icons created from JS, put them in a <template> and clone them. Prefer the kit and icons over hand-drawn equivalents.
-Revisions: read the current version, preserve content id/expected version and resend all files. Set stateSchema to the same explicit identifier across revisions ONLY when control keys and custom JSON retain the exact same meaning; otherwise use a new identifier or omit it. Do not put document bytes in chat or claim static screenshots are working interactions.`
+Revisions: read the current version, pass previous {id, version} to preview_interactive and publish_interactive, resend all files, and give publish_interactive a short changes sentence. Checks kept with the previous version run again; drop one with dropChecks only when that behavior changed on purpose. Set stateSchema to the same explicit identifier across revisions ONLY when control keys and custom JSON retain the exact same meaning; otherwise use a new identifier or omit it. Do not put document bytes in chat or claim static screenshots are working interactions.`
 export function registerInteractiveTools(server: McpServer, store: InteractiveStore, session: string) {
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
   server.registerTool(
     'preview_interactive',
-    { description: INTERACTIVE_GUIDE, inputSchema: interactiveInput.shape },
-    async (input, extra) => {
-      const preview = await store.preview(session, input, extra.signal)
+    {
+      description: INTERACTIVE_GUIDE,
+      inputSchema: {
+        ...interactiveInput.shape,
+        previous: z
+          .object({ id: z.string().uuid(), version: z.number().int().positive() })
+          .optional()
+          .describe(
+            'The version this revises. The card shows that the document is updating, and the checks kept with that version run again.',
+          ),
+        dropChecks: z
+          .array(z.string().max(200))
+          .max(24)
+          .optional()
+          .describe('Labels of kept checks to stop running, only when that behavior changed on purpose.'),
+      },
+    },
+    async ({ previous, dropChecks, ...input }, extra) => {
+      const preview = await store.preview(session, input, extra.signal, { previous, dropChecks })
       return {
         content: [
           {
@@ -44,14 +60,16 @@ export function registerInteractiveTools(server: McpServer, store: InteractiveSt
     'publish_interactive',
     {
       description:
-        'Publish a previewed Interactive Content version in this conversation. Supply a stable requestId for retries; use previous to revise an existing version. Failed/expired previews cannot publish. The saved event appears independently of this tool result.',
+        'Publish a previewed Interactive Content version in this conversation. Supply a stable requestId for retries; use previous to revise an existing version, with changes saying in one short sentence what this version changes (shown on the card). Failed/expired previews cannot publish. The saved event appears independently of this tool result; older versions collapse to one row in the thread.',
       inputSchema: {
         previewId: z.string().uuid(),
         requestId: z.string().min(1).max(160),
         previous: z.object({ id: z.string().uuid(), version: z.number().int().positive() }).optional(),
+        changes: z.string().trim().min(1).max(300).optional(),
       },
     },
-    ({ previewId, requestId, previous }) => result(store.publish(session, previewId, requestId, previous)),
+    ({ previewId, requestId, previous, changes }) =>
+      result(store.publish(session, previewId, requestId, { previous, changes })),
   )
   server.registerTool(
     'interactive_read',

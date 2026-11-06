@@ -7,7 +7,7 @@ import { toolVerb } from '@ramu/shared/chat/toolStatus'
 import { DiffLines } from './DiffLines'
 import { changedFile } from '../runtime/diff'
 import { Helpers, ReportCard, TeammateTo } from './Helpers'
-import { InteractiveContent } from './InteractiveContent'
+import { InteractiveContent, InteractiveOlderVersion } from './InteractiveContent'
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ActionSheetIOS,
@@ -127,6 +127,8 @@ export const MessageMenu = createContext<{
   aside(text: string, from: 'user' | 'assistant'): void
   /** The text selected in a message, for the bar over the message box; null when nothing is selected. */
   select(selection: MessageSelection | null): void
+  /** Scrolls the chat to a row, such as a document's newest version. */
+  goTo?(itemId: string): void
 } | null>(null)
 
 export interface MessageSelection {
@@ -653,7 +655,11 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
     case 'thinking':
       return <ThinkingRow text={item.text} live={Boolean(meta?.streaming)} />
     case 'interactive':
-      return <InteractiveBlock reference={item.reference} chat={chat} />
+      return item.replacedBy ? (
+        <InteractiveVersionRow reference={item.reference} replacedBy={item.replacedBy} chat={chat} />
+      ) : (
+        <InteractiveBlock reference={item.reference} previous={item.previous} update={item.update} chat={chat} />
+      )
     case 'image':
       return <ImageBlock uri={item.uri} alt={item.alt} />
     case 'theme':
@@ -2105,9 +2111,13 @@ function ElicitationInput({
 
 function InteractiveBlock({
   reference,
+  previous,
+  update,
   chat,
 }: {
   reference: import('@ramu/shared/interactive').InteractiveReference
+  previous?: import('@ramu/shared/interactive').InteractiveReference
+  update?: import('@ramu/shared/interactiveRevisions').InteractiveUpdate
   chat: Chat
 }) {
   const menu = useContext(MessageMenu)
@@ -2115,8 +2125,31 @@ function InteractiveBlock({
     <InteractiveContent
       key={`${reference.id}:${reference.version}`}
       reference={reference}
+      previous={previous}
+      update={update}
       chat={chat}
       onAsk={(text) => menu?.quote(text)}
+    />
+  )
+}
+
+function InteractiveVersionRow({
+  reference,
+  replacedBy,
+  chat,
+}: {
+  reference: import('@ramu/shared/interactive').InteractiveReference
+  replacedBy: { itemId: string; version: number; changes?: string }
+  chat: Chat
+}) {
+  const menu = useContext(MessageMenu)
+  return (
+    <InteractiveOlderVersion
+      reference={reference}
+      replacedBy={replacedBy}
+      chat={chat}
+      readOnly={menu?.readOnly}
+      onLatest={() => menu?.goTo?.(replacedBy.itemId)}
     />
   )
 }

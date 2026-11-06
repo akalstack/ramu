@@ -75,7 +75,7 @@ export const interactiveInput = z.object({
         expect: z.string().min(1).max(1000),
       }),
     )
-    .max(12)
+    .max(24)
     .default([]),
 })
 export type InteractiveInput = z.infer<typeof interactiveInput>
@@ -110,6 +110,22 @@ export function rejectViewportHeights(html: string) {
 }
 export const interactiveDigest = (input: InteractiveInput) =>
   createHash('sha256').update(JSON.stringify(input)).digest('hex')
+export interface PublishOptions {
+  previous?: { id: string; version: number }
+  /** What the revision changes; required with previous. */
+  changes?: string
+  restoredFrom?: number
+  pageId?: string
+  /** Pages take new versions from any thread, so their latest version is not this thread's. */
+  acrossSessions?: boolean
+  /** Runs inside the publication's transaction, so a page's own copy commits with the thread's event. */
+  onPublished?: (published: {
+    reference: InteractiveReference
+    html: string
+    preview: string | null
+    files: string | null
+  }) => void
+}
 const entryFirst = <T extends { path: string }>(files: T[], entry = 'index.html') => [
   ...files.filter((file) => file.path === entry),
   ...files.filter((file) => file.path !== entry),
@@ -124,9 +140,29 @@ export class InteractiveStore {
     if (!this.db.prepare('SELECT id FROM agent_sessions WHERE id=?').get(id))
       throw new Error('Thread session not found')
   }
-  async preview(session: string, value: InteractiveInput, signal?: AbortSignal): Promise<InteractivePreview> {
+  /**
+   * Checks a revision must still pass: the ones kept with the version it revises, less any the agent drops because that
+   * behavior changed on purpose. New checks with the same label replace the kept ones.
+   */
+  keptChecks(previous: { id: string; version: number } | undefined, input: InteractiveInput, drop: string[] = []) {
+    if (!previous) return []
+    const row = this.db
+      .prepare('SELECT checks FROM interactive_media WHERE id=? AND version=?')
+      .get(previous.id, previous.version) as { checks: string } | undefined
+    const kept = row ? (JSON.parse(row.checks) as InteractiveInput['checks']) : []
+    const own = new Set(input.checks.map((check) => check.label))
+    return kept.filter((check) => !own.has(check.label) && !drop.includes(check.label)).slice(0, 12)
+  }
+  async preview(
+    session: string,
+    value: InteractiveInput,
+    signal?: AbortSignal,
+    revision?: { previous?: { id: string; version: number }; dropChecks?: string[] },
+  ): Promise<InteractivePreview & { keptChecks?: string[] }> {
     this.session(session)
-    const input = interactiveInput.parse({ ...value, network: value.network ?? OFFLINE_NETWORK })
+    const parsed = interactiveInput.parse({ ...value, network: value.network ?? OFFLINE_NETWORK })
+    const kept = this.keptChecks(revision?.previous, parsed, revision?.dropChecks)
+    const input = kept.length ? { ...parsed, checks: [...parsed.checks, ...kept].slice(0, 24) } : parsed
     if (signal?.aborted) throw new Error('Preview cancelled')
     if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
     if (
@@ -142,8 +178,9 @@ export class InteractiveStore {
     rejectViewportHeights(html)
     const output = await this.previewer(html, input.checks, signal, input.network)
     if (signal?.aborted) throw new Error('Preview cancelled')
-    const result: InteractivePreview = {
+    const result: InteractivePreview & { keptChecks?: string[] } = {
       ...output,
+      ...(kept.length ? { keptChecks: kept.map((check) => check.label) } : {}),
       id: randomUUID(),
       digest: interactiveDigest(input),
       createdAt: Date.now(),
@@ -170,13 +207,11 @@ export class InteractiveStore {
       )
     return result
   }
-  publish(
-    session: string,
-    previewId: string,
-    requestId: string,
-    previous?: { id: string; version: number },
-  ): InteractiveReference {
+  publish(session: string, previewId: string, requestId: string, options: PublishOptions = {}): InteractiveReference {
     this.session(session)
+    const { previous } = options
+    if (previous && !options.changes?.trim())
+      throw new Error('Say in a sentence what this revision changes (changes), so the person can tell versions apart.')
     const retry = this.db
       .prepare('SELECT reference,request_signature FROM interactive_versions WHERE session_id=? AND request_id=?')
       .get(session, requestId) as { reference: string; request_signature: string } | undefined
@@ -205,9 +240,14 @@ export class InteractiveStore {
     let id: string = randomUUID(),
       version = 1
     if (previous) {
+      // A kept page's versions come from any thread, so the latest is read across sessions for its id.
       const latest = this.db
-        .prepare('SELECT MAX(version) AS version FROM interactive_versions WHERE session_id=? AND id=?')
-        .get(session, previous.id) as { version: number | null }
+        .prepare(
+          options.acrossSessions
+            ? 'SELECT MAX(version) AS version FROM interactive_versions WHERE id=?'
+            : 'SELECT MAX(version) AS version FROM interactive_versions WHERE session_id=? AND id=?',
+        )
+        .get(...(options.acrossSessions ? [previous.id] : [session, previous.id])) as { version: number | null }
       if (latest.version !== previous.version)
         throw new Error('Content changed or belongs to another session. Read the latest version first.')
       id = previous.id
@@ -228,25 +268,21 @@ export class InteractiveStore {
         : {}),
       ...(input.stateSchema ? { stateSchema: input.stateSchema } : {}),
       ...(input.files ? { files: entryFirst(input.files, input.entry).map((file) => file.path) } : {}),
+      ...(previous ? { changes: options.changes!.trim().slice(0, 300) } : {}),
+      ...(options.restoredFrom ? { restoredFrom: options.restoredFrom } : {}),
+      ...(options.pageId ? { pageId: options.pageId } : {}),
     }
+    const html = preview.artifact ?? interactiveDocumentHtml(input)
+    const files = input.files ? JSON.stringify(entryFirst(input.files, input.entry)) : null
     // The immutable version and its canonical event commit together. Reopening never resurrects a deliberately rewound event.
     this.db.exec('SAVEPOINT publish_interactive')
     try {
-      this.db
-        .prepare(
-          'INSERT INTO interactive_versions(id,version,session_id,request_id,request_signature,reference,html,preview,files) VALUES(?,?,?,?,?,?,?,?,?)',
-        )
-        .run(
-          id,
-          version,
-          session,
-          requestId,
-          signature,
-          JSON.stringify(reference),
-          preview.artifact ?? interactiveDocumentHtml(input),
-          preview.screenshot,
-          input.files ? JSON.stringify(entryFirst(input.files, input.entry)) : null,
-        )
+      this.insert(session, requestId, signature, reference, html, preview.screenshot, files, {
+        wide: preview.wideScreenshot ?? null,
+        light: preview.lightScreenshot ?? null,
+        checks: input.checks,
+      })
+      options.onPublished?.({ reference, html, preview: preview.screenshot, files })
       this.record(session, reference)
       this.db.exec('RELEASE publish_interactive')
     } catch (error) {
@@ -254,6 +290,93 @@ export class InteractiveStore {
       throw error
     }
     return reference
+  }
+  private insert(
+    session: string,
+    requestId: string,
+    signature: string,
+    reference: InteractiveReference,
+    html: string,
+    preview: string | null,
+    files: string | null,
+    media: { wide: string | null; light: string | null; checks: InteractiveInput['checks'] },
+  ) {
+    this.db
+      .prepare(
+        'INSERT INTO interactive_versions(id,version,session_id,request_id,request_signature,reference,html,preview,files) VALUES(?,?,?,?,?,?,?,?,?)',
+      )
+      .run(
+        reference.id,
+        reference.version,
+        session,
+        requestId,
+        signature,
+        JSON.stringify(reference),
+        html,
+        preview,
+        files,
+      )
+    this.db
+      .prepare('INSERT OR REPLACE INTO interactive_media(id,version,wide,light,checks) VALUES(?,?,?,?,?)')
+      .run(reference.id, reference.version, media.wide, media.light, JSON.stringify(media.checks))
+  }
+  /**
+   * The person brings an older version back. It is published as the newest version with the same tested bytes, so the
+   * latest card is always the one in use and nothing in the transcript is rewritten.
+   */
+  restore(session: string, id: string, version: number): InteractiveReference {
+    const source = this.get(session, id, version)
+    const latest = this.latest(session, id)
+    if (latest.version === version) return latest
+    const media = this.media(id, version)
+    const reference: InteractiveReference = {
+      ...source.reference,
+      version: latest.version + 1,
+      sessionId: session,
+      createdAt: Date.now(),
+      changes: `Restored v${version}`,
+      restoredFrom: version,
+      ...(latest.pageId ? { pageId: latest.pageId } : {}),
+    }
+    this.db.exec('SAVEPOINT restore_interactive')
+    try {
+      this.insert(
+        session,
+        `restore:${id}:${reference.version}`,
+        JSON.stringify(['restore', id, version]),
+        reference,
+        source.html,
+        source.preview,
+        source.files ? JSON.stringify(source.files) : null,
+        { wide: media.wide, light: media.light, checks: media.checks },
+      )
+      this.record(session, reference)
+      this.db.exec('RELEASE restore_interactive')
+    } catch (error) {
+      this.db.exec('ROLLBACK TO restore_interactive; RELEASE restore_interactive')
+      throw error
+    }
+    return reference
+  }
+  /** The newest version of one document in this thread. */
+  latest(session: string, id: string): InteractiveReference {
+    const row = this.db
+      .prepare('SELECT reference FROM interactive_versions WHERE session_id=? AND id=? ORDER BY version DESC LIMIT 1')
+      .get(session, id) as { reference: string } | undefined
+    if (!row) throw new Error('Interactive content not found in this session')
+    return JSON.parse(row.reference)
+  }
+  /** The desktop and light screenshots and the checks a version passed, kept for Compare and later revisions. */
+  media(
+    id: string,
+    version: number,
+  ): { wide: string | null; light: string | null; checks: InteractiveInput['checks'] } {
+    const row = this.db
+      .prepare('SELECT wide,light,checks FROM interactive_media WHERE id=? AND version=?')
+      .get(id, version) as { wide: string | null; light: string | null; checks: string } | undefined
+    return row
+      ? { wide: row.wide, light: row.light, checks: JSON.parse(row.checks) }
+      : { wide: null, light: null, checks: [] }
   }
   get(session: string, id: string, version: number): InteractiveDocument {
     const row = this.db

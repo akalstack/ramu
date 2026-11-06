@@ -46,6 +46,7 @@ export function EventRow({
   assistantActions = false,
   outcomes,
   questionStates,
+  interactive,
   latest = false,
   editor,
   onEdit,
@@ -62,6 +63,7 @@ export function EventRow({
   assistantActions?: boolean
   outcomes: Map<string, string>
   questionStates: Map<string, QuestionState>
+  interactive?: import('../types').TranscriptContext['interactive']
   latest?: boolean
   editor?: React.ReactNode
   onEdit?: (text: string, attachments: Attachment[]) => void
@@ -212,7 +214,14 @@ export function EventRow({
     case 'thinking':
       return <ThinkingRow text={e.text} active={generating} />
     case 'interactive':
-      return <InteractiveContent key={`${e.reference.id}:${e.reference.version}`} reference={e.reference} />
+      return (
+        <InteractiveContent
+          key={`${e.reference.id}:${e.reference.version}`}
+          reference={e.reference}
+          revision={interactive?.revisions.get(e.reference.id)}
+          update={interactive?.updates.get(e.reference.id)}
+        />
+      )
     case 'theme':
       return <ThemeCard theme={e.theme} />
     case 'content':

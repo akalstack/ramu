@@ -5,6 +5,47 @@ import { DatabaseSync } from 'node:sqlite'
 /** Stamped on every database, so a profile from a build with another schema is refused rather than misread. */
 const SCHEMA_VERSION = 36
 
+/**
+ * Tables added after this schema version was stamped. Each is created if missing on every open, so an existing profile
+ * gains them in place; they only ever add tables and indexes.
+ */
+const ADDED_TABLES = `
+CREATE TABLE IF NOT EXISTS interactive_media (
+    id TEXT NOT NULL, version INTEGER NOT NULL, wide TEXT, light TEXT, checks TEXT NOT NULL DEFAULT '[]',
+    PRIMARY KEY(id,version)
+  );
+CREATE TABLE IF NOT EXISTS interactive_pages (
+    id TEXT PRIMARY KEY, data TEXT NOT NULL, current_version INTEGER NOT NULL, pinned INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL, changed_at INTEGER NOT NULL
+  );
+CREATE TABLE IF NOT EXISTS interactive_page_versions (
+    page_id TEXT NOT NULL REFERENCES interactive_pages(id) ON DELETE CASCADE, version INTEGER NOT NULL,
+    reference TEXT NOT NULL, html TEXT NOT NULL, preview TEXT, files TEXT, PRIMARY KEY(page_id,version)
+  );
+CREATE TABLE IF NOT EXISTS interactive_page_state (
+    page_id TEXT PRIMARY KEY REFERENCES interactive_pages(id) ON DELETE CASCADE, state TEXT NOT NULL,
+    revision INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  );
+CREATE TABLE IF NOT EXISTS page_records (
+    page_id TEXT NOT NULL REFERENCES interactive_pages(id) ON DELETE CASCADE, collection TEXT NOT NULL, id TEXT NOT NULL,
+    data TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(page_id,collection,id)
+  );
+CREATE TABLE IF NOT EXISTS page_files (
+    page_id TEXT NOT NULL REFERENCES interactive_pages(id) ON DELETE CASCADE, id TEXT NOT NULL, mime TEXT NOT NULL,
+    data BLOB NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(page_id,id)
+  );
+CREATE TABLE IF NOT EXISTS page_runs (
+    id TEXT PRIMARY KEY, page_id TEXT NOT NULL REFERENCES interactive_pages(id) ON DELETE CASCADE, data TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+CREATE TABLE IF NOT EXISTS page_shares (
+    token TEXT PRIMARY KEY, page_id TEXT NOT NULL REFERENCES interactive_pages(id) ON DELETE CASCADE, data TEXT NOT NULL,
+    created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL
+  );
+CREATE INDEX IF NOT EXISTS page_records_by_page ON page_records(page_id, collection, created_at);
+CREATE INDEX IF NOT EXISTS page_runs_by_page ON page_runs(page_id, created_at);
+`
+
 const SCHEMA = `
 CREATE TABLE projects (
     id TEXT PRIMARY KEY,
@@ -294,6 +335,7 @@ export function openDb(path: string): Db {
       `${path} has schema version ${version}, and this build reads ${SCHEMA_VERSION}. Move the file aside to start fresh.`,
     )
   }
+  db.exec(ADDED_TABLES)
   db.exec('PRAGMA foreign_keys = ON;')
   return db
 }

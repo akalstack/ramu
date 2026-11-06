@@ -58,6 +58,11 @@ export interface TranscriptContext {
   /** Whether a source message was requested, so folded work keeps its block indexes for navigation. */
   hasSourceSeq: boolean
   eventSequences: Map<AgentEvent, number>
+  /** Every document's versions in this chat, so only the newest is a full card. */
+  interactive: {
+    revisions: Map<string, import('@ramu/shared/interactiveRevisions').InteractiveRevision>
+    updates: Map<string, import('@ramu/shared/interactiveRevisions').InteractiveUpdate>
+  }
   claimArrival?: (event: AgentEvent) => boolean
   onBackground: ((toolUseId: string) => void) | undefined
   onOpenAgent: (agentId: string | null) => void

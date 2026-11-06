@@ -52,6 +52,7 @@ const render = ({ ended = false, working = true, needsInput = false, isLast = tr
     results: new Map(),
     outcomes: new Map(),
     questionStates: new Map(),
+    interactive: { revisions: new Map(), updates: new Map() },
     goalNotes: new Map(),
     liveText: null,
     live: true,

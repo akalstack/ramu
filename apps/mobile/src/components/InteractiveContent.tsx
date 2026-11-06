@@ -10,6 +10,7 @@ import { Expand, MoreHorizontal } from 'lucide-react-native'
 import type { InteractiveDocument, InteractiveReference, InteractiveState } from '@ramu/shared/interactive'
 import { interactiveFollowup, interactiveHtml, readInteractiveState } from '@ramu/shared/interactive'
 import { interactiveStorage } from '@ramu/shared/interactiveStorage'
+import type { InteractiveUpdate } from '@ramu/shared/interactiveRevisions'
 import { interactiveThemeVariables } from '@ramu/shared/interactiveTheme'
 import { claimInteractive } from '@ramu/shared/interactiveLease'
 import { contentStorage } from '../storage'
@@ -40,12 +41,16 @@ export function InteractiveDocumentCard({
   onAsk,
   copyFrom,
   onVersions,
+  previous,
+  update,
 }: {
   reference: InteractiveReference
   onVersions?(): void
   copyFrom?: InteractiveReference
   chat: Chat
   onAsk(text: string): void
+  previous?: InteractiveReference
+  update?: InteractiveUpdate
 }) {
   const visible = useContext(InteractiveVisibility)
   const store = useStore()
@@ -80,6 +85,26 @@ export function InteractiveDocumentCard({
   const sequence = useRef(0)
   const [snapshot, setSnapshot] = useState('')
   const state = useRef(cache.state(reference.id, reference.version))
+  const [carried, setCarried] = useState<{ moved: boolean; from: number } | null>(null)
+  // A new version takes the values entered in the one it replaced once, when their meaning is declared the same.
+  useEffect(() => {
+    if (!previous || state.current) return
+    const flag = `ramu.interactive.carried.${chat.computerId}.${reference.id}:${reference.version}`
+    try {
+      if (contentStorage.getItem(flag)) return
+      contentStorage.setItem(flag, '1')
+    } catch {
+      return
+    }
+    const saved = cache.state(previous.id, previous.version)
+    if (!saved) return
+    if (canCopyInteractiveState(previous, reference)) {
+      state.current = saved
+      cache.saveState(reference.id, reference.version, saved)
+      setCarried({ moved: true, from: previous.version })
+      setGeneration((n) => n + 1)
+    } else setCarried({ moved: false, from: previous.version })
+  }, [previous, reference, cache, chat.computerId])
   const [selectionId, setSelectionId] = useState(0)
   const [selection, setSelection] = useState<InteractiveState | null>(null)
   const [scenarioName, setScenarioName] = useState('')
@@ -294,6 +319,46 @@ export function InteractiveDocumentCard({
         />
         <IconButton icon={MoreHorizontal} label={t('Content actions')} onPress={() => setActionsOpen(true)} />
       </View>
+      {update?.state === 'updating' ? <T tone="muted">{t('Updating…')}</T> : null}
+      {reference.changes ? (
+        <T tone="muted">
+          {translate(store.language, 'Updated · v{version}', { version: reference.version })} · {reference.changes}
+        </T>
+      ) : null}
+      {update?.state === 'failed' ? (
+        <T tone="muted">
+          {translate(store.language, 'The latest revision did not publish, so this version is unchanged: {detail}', {
+            detail: update.detail,
+          })}
+        </T>
+      ) : null}
+      {carried ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <T tone="muted" style={{ flex: 1 }}>
+            {carried.moved
+              ? translate(store.language, 'Your values from v{version} carried over.', { version: carried.from })
+              : translate(
+                  store.language,
+                  'Values from v{version} could not carry over because this version changed what they mean.',
+                  { version: carried.from },
+                )}
+          </T>
+          {carried.moved ? (
+            <Button
+              kind="ghost"
+              title={t('Undo')}
+              onPress={() => {
+                setCarried(null)
+                state.current = null
+                cache.saveState(reference.id, reference.version, null)
+                setGeneration((n) => n + 1)
+              }}
+            />
+          ) : (
+            <Button kind="ghost" title={t('Dismiss')} onPress={() => setCarried(null)} />
+          )}
+        </View>
+      ) : null}
       {!document && !error ? <T tone="muted">{t('Loading content…')}</T> : null}
       {error ? (
         <T tone="muted">
@@ -480,10 +545,14 @@ function InteractiveContentBrowser({
   reference,
   chat,
   onAsk,
+  previous,
+  update,
 }: {
   reference: InteractiveReference
   chat: Chat
   onAsk(text: string): void
+  previous?: InteractiveReference
+  update?: InteractiveUpdate
 }) {
   const store = useStore(),
     { invoke } = store
@@ -510,6 +579,8 @@ function InteractiveContentBrowser({
         chat={chat}
         onAsk={onAsk}
         onVersions={() => void browse()}
+        previous={previous}
+        update={update}
       />
       {versions && (
         <View style={{ gap: 8 }}>
@@ -546,7 +617,90 @@ function InteractiveContentBrowser({
   )
 }
 
-export function InteractiveContent(props: { reference: InteractiveReference; chat: Chat; onAsk(text: string): void }) {
+/** An older version, collapsed in its place: what replaced it, Go to latest, and a read-only look with Restore. */
+export function InteractiveOlderVersion({
+  reference,
+  replacedBy,
+  chat,
+  readOnly,
+  onLatest,
+}: {
+  reference: InteractiveReference
+  replacedBy: { version: number; changes?: string }
+  chat: Chat
+  readOnly?: boolean
+  onLatest(): void
+}) {
+  const store = useStore()
+  const { c } = useTheme()
+  const t = (text: string) => translate(store.language, text)
+  const [open, setOpen] = useState(false)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    if (!open || preview) return
+    let cancelled = false
+    void store
+      .invoke(chat.computerId, 'interactive.get', reference.sessionId, reference.id, reference.version)
+      .then((value) => !cancelled && setPreview(value.preview))
+      .catch(() => !cancelled && setError(translate(store.language, 'Host unavailable. Reconnect to load content.')))
+    return () => {
+      cancelled = true
+    }
+  }, [open, preview, store, chat.computerId, reference])
+  return (
+    <View style={{ marginVertical: 6, padding: space.m, gap: 6, borderRadius: 10, backgroundColor: c.fill }}>
+      <T weight="600" numberOfLines={1}>
+        {reference.title}
+      </T>
+      <T tone="muted" numberOfLines={2}>
+        {translate(store.language, 'v{version} · replaced by v{latest}', {
+          version: reference.version,
+          latest: replacedBy.version,
+        })}
+        {replacedBy.changes ? ` · ${replacedBy.changes}` : ''}
+      </T>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Button kind="secondary" title={t('Go to latest')} onPress={onLatest} />
+        <Button
+          kind="ghost"
+          title={open ? t('Hide this version') : t('Show this version')}
+          onPress={() => setOpen((value) => !value)}
+        />
+      </View>
+      {open ? (
+        <View style={{ gap: 8 }}>
+          {preview ? (
+            <Image source={{ uri: preview }} resizeMode="contain" style={{ height: 260, width: '100%' }} />
+          ) : null}
+          {error ? <T tone="muted">{error}</T> : null}
+          {readOnly ? null : (
+            <Button
+              title={translate(store.language, 'Restore v{version}', { version: reference.version })}
+              disabled={busy}
+              onPress={() => {
+                setBusy(true)
+                void store
+                  .invoke(chat.computerId, 'interactive.restore', reference.sessionId, reference.id, reference.version)
+                  .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+                  .finally(() => setBusy(false))
+              }}
+            />
+          )}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+export function InteractiveContent(props: {
+  reference: InteractiveReference
+  chat: Chat
+  onAsk(text: string): void
+  previous?: InteractiveReference
+  update?: InteractiveUpdate
+}) {
   return (
     <InteractiveContentBrowser
       key={`${props.chat.computerId}:${props.reference.sessionId}:${props.reference.id}:${props.reference.version}`}

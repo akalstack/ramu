@@ -43,13 +43,37 @@ it('persists exact versions, enforces ownership and retries without adding versi
   expect(() => store.get('other', v1.id, 1)).toThrow('not found')
   const second = await store.preview('s', { ...input, html: input.html + '<p>New version</p>' })
   expect(() => store.publish('s', second.id, 'r1')).toThrow('different publication')
-  const v2 = store.publish('s', second.id, 'r2', { id: v1.id, version: 1 })
-  expect(v2).toMatchObject({ id: v1.id, version: 2 })
-  expect(() => store.publish('s', second.id, 'r3', { id: v1.id, version: 1 })).toThrow('changed')
+  expect(() => store.publish('s', second.id, 'r2', { previous: { id: v1.id, version: 1 } })).toThrow('changes')
+  const v2 = store.publish('s', second.id, 'r2', { previous: { id: v1.id, version: 1 }, changes: 'Adds a note' })
+  expect(v2).toMatchObject({ id: v1.id, version: 2, changes: 'Adds a note' })
+  expect(() => store.publish('s', second.id, 'r3', { previous: { id: v1.id, version: 1 }, changes: 'Again' })).toThrow(
+    'changed',
+  )
   expect(store.get('s', v1.id, 1).html).toBe(input.html)
   const reopened = new InteractiveStore(d, record, previewer)
   expect(reopened.get('s', v2.id, 2).html).toContain('New version')
   expect(record).toHaveBeenCalledWith('s', v2)
+})
+it('restores an older version as the newest one and keeps its checks for the next revision', async () => {
+  const d = db(),
+    record = vi.fn(),
+    checked = vi.fn((_html: string, _checks: InteractiveInput['checks']) => previewer()),
+    store = new InteractiveStore(d, record, checked)
+  const v1 = store.publish('s', (await store.preview('s', input)).id, 'r1')
+  expect(store.media(v1.id, 1).checks).toEqual(input.checks)
+  const next = { ...input, html: input.html + '<p>Two</p>', checks: [] }
+  const preview = await store.preview('s', next, undefined, { previous: { id: v1.id, version: 1 } })
+  // The kept check runs again although the revision sent none.
+  expect(checked.mock.calls.at(-1)?.[1]).toEqual(input.checks)
+  expect(preview.keptChecks).toEqual(['People'])
+  await store.preview('s', next, undefined, { previous: { id: v1.id, version: 1 }, dropChecks: ['People'] })
+  expect(checked.mock.calls.at(-1)?.[1]).toEqual([])
+  store.publish('s', preview.id, 'r2', { previous: { id: v1.id, version: 1 }, changes: 'Adds two' })
+  const restored = store.restore('s', v1.id, 1)
+  expect(restored).toMatchObject({ version: 3, restoredFrom: 1, changes: 'Restored v1' })
+  expect(store.get('s', v1.id, 3).html).toBe(input.html)
+  expect(store.latest('s', v1.id).version).toBe(3)
+  expect(record).toHaveBeenLastCalledWith('s', restored)
 })
 it('refuses failed, expired, changed and oversized previews', async () => {
   const d = db(),

@@ -51,6 +51,7 @@ const viewerMethods = new Set([
   'aside.list',
   'interactive.get',
   'interactive.list',
+  'interactive.media',
   'attachments.text',
   'attachments.preview',
   'reviews.list',

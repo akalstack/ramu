@@ -41,6 +41,23 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable => {
         args: z.tuple([z.string().min(1).max(200)]),
         run: (session: string) => ctx.interactive?.list(session) ?? [],
       },
+      'interactive.media': {
+        args: z.tuple([z.string().min(1).max(200), z.string().uuid(), z.number().int().positive()]),
+        run: (session: string, id: string, version: number) => {
+          if (!ctx.interactive) throw new Error('Update this host for Interactive Content')
+          // Reading the version first keeps another thread's media out of reach.
+          ctx.interactive.get(session, id, version)
+          const { wide, light } = ctx.interactive.media(id, version)
+          return { wide, light }
+        },
+      },
+      'interactive.restore': {
+        args: z.tuple([z.string().min(1).max(200), z.string().uuid(), z.number().int().positive()]),
+        run: (session: string, id: string, version: number) => {
+          if (!ctx.interactive) throw new Error('Update this host for Interactive Content')
+          return ctx.interactive.restore(session, id, version)
+        },
+      },
     },
     registerWorkspaceHandlers(ctx),
     registerAgentHandlers(ctx),
