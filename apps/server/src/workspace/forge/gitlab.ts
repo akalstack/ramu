@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type {
   ForgeAccessReport,
+  ForgeAvailability,
   ForgeCheck,
   ForgeCheckResult,
   ForgeCheckState,
@@ -13,8 +14,15 @@ import type {
   ForgeStatus,
   GitlabSummary,
   IssueSummary,
+  MergeMethod,
+  MergeOptions,
   PublishRepositoryInput,
-  PullRequestFeedbackKind,
+  PullRequestAction,
+  PullRequestList,
+  PullRequestSummary,
+  PullRequestThread,
+  ReviewCommentDraft,
+  ReviewVerdict,
   PullRequestInfo,
   PullRequestInput,
   PullRequestReviewDecision,
@@ -181,8 +189,8 @@ export async function gitlabApi<T>(
   return (text ? JSON.parse(text) : null) as T
 }
 
-const projectApi = (a: Access, path = '') =>
-  gitlabApi({ ...a, origin: a.project.origin }, `/projects/${encode(a.project.path)}${path}`)
+const projectApi = <T = unknown>(a: Access, path = '', init?: { method?: string; body?: unknown }) =>
+  gitlabApi<T>({ ...a, origin: a.project.origin }, `/projects/${encode(a.project.path)}${path}`, init)
 
 interface RawMergeRequest {
   iid: number
@@ -309,46 +317,11 @@ export async function createPullRequest(cwd: string, input: PullRequestInput): P
   return pullRequestStatus(cwd)
 }
 
-interface RawNote {
-  body: string
-  resolvable?: boolean
-  resolved?: boolean
-  system?: boolean
-  author?: { username?: string }
-  position?: { new_path?: string; new_line?: number | null }
-}
-
-/** Unresolved review threads as a prompt, or null when there are none. */
-export function discussionsPrompt(mr: PullRequestInfo, discussions: { notes: RawNote[] }[]): string | null {
-  const open = discussions
-    .map((discussion) => discussion.notes.filter((note) => !note.system))
-    .filter((notes) => notes.length && notes[0]!.resolvable && !notes[0]!.resolved)
-  if (!open.length) return null
-  const threads = open.map((notes) => {
-    const first = notes[0]!
-    const where = first.position?.new_path
-      ? `${first.position.new_path}${first.position.new_line ? `:${first.position.new_line}` : ''}: `
-      : ''
-    return `- ${where}${notes.map((note) => `${note.author?.username ?? 'reviewer'}: ${note.body.trim()}`).join('\n  ')}`
-  })
-  return [`Address the unresolved review comments on merge request !${mr.number} (${mr.title}):`, '', ...threads].join(
-    '\n',
-  )
-}
-
-export async function pullRequestFeedback(cwd: string, kind: PullRequestFeedbackKind, url?: string): Promise<string> {
+export async function checksFeedback(cwd: string, url?: string): Promise<string> {
   const a = await access(cwd)
   const raw = await mergeRequest(a, url)
   if (!raw) throw new Error('This branch has no merge request.')
-  const mr = parseMergeRequest(raw, false, kind === 'checks' ? await checksOf(a, raw.iid) : [])
-  if (kind === 'reviews') {
-    const discussions = (await projectApi(a, `/merge_requests/${raw.iid}/discussions?per_page=100`)) as {
-      notes: RawNote[]
-    }[]
-    const prompt = discussionsPrompt(mr, discussions)
-    if (!prompt) throw new Error('No unresolved review comments.')
-    return redactSecrets(prompt)
-  }
+  const mr = parseMergeRequest(raw, false, await checksOf(a, raw.iid))
   const failed = mr.checks.filter((check) => check.state === 'failure')
   if (!failed.length) throw new Error('No failing pipeline jobs.')
   const sections: string[] = []
@@ -550,6 +523,370 @@ export async function checkAccess(cwd: string): Promise<ForgeAccessReport> {
   }
 }
 
+// ---- Merge request lists, actions and review threads ----
+
+interface RawUser {
+  id: number
+  username: string
+  bot?: boolean
+}
+
+interface RawListMergeRequest extends RawMergeRequest {
+  author?: RawUser | null
+  reviewers?: RawUser[]
+  updated_at?: string
+  source_project_id?: number
+  target_project_id?: number
+  has_conflicts?: boolean
+}
+
+/** What merging into a merge request's target is held up by, from `detailed_merge_status`. */
+export function gitlabMergeability(raw: Pick<RawListMergeRequest, 'detailed_merge_status' | 'has_conflicts'>) {
+  const status = raw.detailed_merge_status
+  if (raw.has_conflicts || status === 'conflict') return 'conflicts' as const
+  if (status === 'mergeable') return 'clean' as const
+  if (status === 'need_rebase') return 'behind' as const
+  // Still being computed, or a state the list shows on its own (draft, closed).
+  if (
+    !status ||
+    ['checking', 'unchecked', 'preparing', 'approvals_syncing', 'draft_status', 'not_open'].includes(status)
+  )
+    return 'unknown' as const
+  return 'blocked' as const
+}
+
+const isFork = (raw: Pick<RawListMergeRequest, 'source_project_id' | 'target_project_id'>) =>
+  raw.source_project_id !== undefined && raw.source_project_id !== raw.target_project_id
+
+/**
+ * One merge request as a list row. The list call carries no pipeline or approval state, so checks are unknown and
+ * approval shows only through `detailed_merge_status`.
+ */
+export function parseListMergeRequest(raw: RawListMergeRequest, viewer: string | null): PullRequestSummary {
+  const author = raw.author?.username ?? null
+  const reviewers = (raw.reviewers ?? []).map((reviewer) => reviewer.username)
+  const me = viewer?.toLowerCase()
+  return {
+    ...parseMergeRequest(raw, false, []),
+    author,
+    fork: isFork(raw),
+    checks: null,
+    mergeable: gitlabMergeability(raw),
+    openThreads: null,
+    requestedReviewers: reviewers,
+    group:
+      me && author?.toLowerCase() === me
+        ? 'mine'
+        : me && reviewers.some((name) => name.toLowerCase() === me)
+          ? 'review'
+          : 'other',
+    updatedAt: raw.updated_at ? Date.parse(raw.updated_at) || 0 : 0,
+  }
+}
+
+const viewerOf = (a: Access) =>
+  gitlabApi<{ id?: number; username?: string }>({ ...a, origin: a.project.origin }, '/user').catch(() => null)
+
+export async function listPullRequests(cwd: string, options: { includeClosed: boolean }): Promise<PullRequestList> {
+  const unavailable = (availability: ForgeAvailability): PullRequestList => ({
+    availability,
+    service: 'gitlab',
+    viewer: null,
+    pullRequests: [],
+  })
+  try {
+    const a = await access(cwd)
+    const list = (state: string, count: number) =>
+      projectApi<RawListMergeRequest[]>(a, `/merge_requests?state=${state}&order_by=updated_at&per_page=${count}`)
+    const [user, open, merged, closed] = await Promise.all([
+      viewerOf(a),
+      list('opened', 50),
+      options.includeClosed ? list('merged', 30) : [],
+      options.includeClosed ? list('closed', 30) : [],
+    ])
+    const viewer = user?.username ?? null
+    const done = [...merged, ...closed]
+      .sort((x, y) => (Date.parse(y.updated_at ?? '') || 0) - (Date.parse(x.updated_at ?? '') || 0))
+      .slice(0, 30)
+    return {
+      availability: 'ready',
+      service: 'gitlab',
+      viewer,
+      pullRequests: [...open, ...done].map((raw) => parseListMergeRequest(raw, viewer)),
+    }
+  } catch (error) {
+    if (error instanceof ForgeError && error.availability) return unavailable(error.availability)
+    throw error
+  }
+}
+
+function iidOf(url: string): number {
+  const match = /\/-\/merge_requests\/(\d+)(?:[/?#]|$)/.exec(url)
+  if (!match) throw new Error('That is not a GitLab merge request link.')
+  return Number(match[1])
+}
+
+interface RawOneMergeRequest extends RawListMergeRequest {
+  description?: string | null
+  force_remove_source_branch?: boolean | null
+  head_pipeline?: { status?: string } | null
+  user?: { can_merge?: boolean }
+  diff_refs?: { base_sha: string; start_sha: string; head_sha: string } | null
+}
+
+interface RawProjectSettings {
+  merge_method?: 'merge' | 'rebase_merge' | 'ff'
+  squash_option?: 'never' | 'always' | 'default_on' | 'default_off'
+}
+
+const readMergeRequest = (a: Access, url: string) => projectApi<RawOneMergeRequest>(a, `/merge_requests/${iidOf(url)}`)
+
+const BLOCKED_BY: Record<string, string> = {
+  not_approved: 'It needs approval before it can merge.',
+  requested_changes: 'A reviewer requested changes.',
+  discussions_not_resolved: 'Every discussion must be resolved first.',
+  ci_must_pass: 'The pipeline must succeed first.',
+  ci_still_running: 'The pipeline is still running.',
+  blocked_status: 'Another merge request it depends on has to merge first.',
+  external_status_checks: 'External status checks have not passed.',
+  status_checks_must_pass: 'External status checks have not passed.',
+  jira_association_missing: 'The title or description must name a Jira issue.',
+  security_policy_violations: 'A security policy is blocking it.',
+  locked_paths: 'It changes paths another user has locked.',
+  locked_lfs_files: 'It changes LFS files another user has locked.',
+  title_regex: 'Its title does not match the format the project requires.',
+}
+
+/**
+ * GitLab merges with the project's own method (merge commit, semi-linear or fast-forward); squashing is the one choice
+ * per merge request. So the methods are the project's method plus squash, unless the project forbids or forces it.
+ */
+export function gitlabMergeOptions(project: RawProjectSettings, mr: RawOneMergeRequest): MergeOptions {
+  const squash = project.squash_option ?? 'default_off'
+  const own: MergeMethod = project.merge_method === 'ff' ? 'rebase' : 'merge'
+  const methods: MergeMethod[] = squash === 'always' ? ['squash'] : squash === 'never' ? [own] : ['squash', own]
+  const blockers: string[] = []
+  if (mr.state !== 'opened') blockers.push('This merge request is not open.')
+  if (mr.draft ?? mr.work_in_progress) blockers.push('It is a draft. Mark it ready for review first.')
+  const merge = gitlabMergeability(mr)
+  if (merge === 'conflicts') blockers.push('It has conflicts with its target branch.')
+  if (merge === 'behind') blockers.push('It must be rebased onto its target branch, which this project requires.')
+  const status = mr.detailed_merge_status ?? ''
+  if (merge === 'blocked') blockers.push(BLOCKED_BY[status] ?? 'GitLab reports it cannot merge yet.')
+  if (mr.head_pipeline?.status === 'failed' && status !== 'ci_must_pass') blockers.push('Some checks are failing.')
+  if (mr.user?.can_merge === false) blockers.push('This account cannot merge into this project.')
+  return { methods, blockers, canDeleteBranch: !isFork(mr) && !mr.force_remove_source_branch }
+}
+
+export async function mergeOptions(cwd: string, url: string): Promise<MergeOptions> {
+  const a = await access(cwd)
+  const [project, mr] = await Promise.all([projectApi<RawProjectSettings>(a), readMergeRequest(a, url)])
+  return gitlabMergeOptions(project, mr)
+}
+
+const DRAFT_PREFIX = /^\s*(?:\[draft\]|\(draft\)|draft:|\[wip\]|wip:)\s*/i
+
+/** GitLab marks a merge request a draft by its title, so marking it ready removes the prefix. */
+export const readyTitle = (title: string) => title.replace(DRAFT_PREFIX, '')
+
+/** Merge, close, reopen, mark ready or rebase. A merge whose reply is lost is checked before it fails. */
+export async function pullRequestAction(cwd: string, url: string, action: PullRequestAction): Promise<void> {
+  const a = await access(cwd)
+  const mr = await readMergeRequest(a, url)
+  const path = `/merge_requests/${mr.iid}`
+  switch (action.kind) {
+    case 'merge':
+      try {
+        await projectApi(a, `${path}/merge`, {
+          method: 'PUT',
+          body: {
+            squash: action.method === 'squash',
+            should_remove_source_branch: action.deleteBranch && !isFork(mr),
+            merge_when_pipeline_succeeds: false,
+            ...(mr.sha ? { sha: mr.sha } : {}),
+          },
+        })
+      } catch (error) {
+        const after = await readMergeRequest(a, url).catch(() => null)
+        if (after?.state !== 'merged') throw error
+      }
+      return
+    case 'close':
+    case 'reopen':
+      await projectApi(a, path, { method: 'PUT', body: { state_event: action.kind } })
+      return
+    case 'ready':
+      if (DRAFT_PREFIX.test(mr.title))
+        await projectApi(a, path, { method: 'PUT', body: { title: readyTitle(mr.title) } })
+      return
+    case 'update-branch':
+      await projectApi(a, `${path}/rebase`, { method: 'PUT' })
+      return
+  }
+}
+
+export async function pullRequestBody(cwd: string, url: string): Promise<string> {
+  return (await readMergeRequest(await access(cwd), url)).description ?? ''
+}
+
+interface RawDiscussionNote {
+  id: number
+  body: string
+  system?: boolean
+  resolvable?: boolean
+  resolved?: boolean
+  created_at?: string
+  author?: RawUser
+  position?: { new_path?: string | null; old_path?: string | null; new_line?: number | null; old_line?: number | null }
+}
+
+interface RawDiscussion {
+  id: string
+  notes: RawDiscussionNote[]
+}
+
+const isBotName = (name: string) => /(?:^|_)bot(?:_|\d|$)|\[bot\]$/i.test(name)
+
+/**
+ * Every discussion with a person's note in it. Resolvable ones are review threads; general comments come as threads
+ * that cannot be resolved. A note is trusted from the author, reviewers, members with Developer access or more, and
+ * bots. GitLab does not report whether a diff note is outdated, so none is marked outdated.
+ */
+export function parseDiscussions(
+  discussions: RawDiscussion[],
+  mr: Pick<RawListMergeRequest, 'author' | 'reviewers'>,
+  developers: Set<number>,
+): PullRequestThread[] {
+  const known = new Set(
+    [mr.author?.username, ...(mr.reviewers ?? []).map((reviewer) => reviewer.username)]
+      .filter((name): name is string => !!name)
+      .map((name) => name.toLowerCase()),
+  )
+  return discussions.flatMap((discussion) => {
+    const notes = discussion.notes.filter((note) => !note.system)
+    const first = notes[0]
+    if (!first) return []
+    const resolvable = notes.filter((note) => note.resolvable)
+    return [
+      {
+        id: discussion.id,
+        path: first.position?.new_path ?? first.position?.old_path ?? null,
+        line: first.position?.new_line ?? first.position?.old_line ?? null,
+        outdated: false,
+        resolved: resolvable.length > 0 && resolvable.every((note) => note.resolved),
+        resolvable: resolvable.length > 0,
+        comments: notes.map((note) => {
+          const login = note.author?.username ?? null
+          const bot = note.author?.bot === true || (!!login && isBotName(login))
+          return {
+            id: String(note.id),
+            author: login,
+            bot,
+            trusted:
+              bot ||
+              (!!login && known.has(login.toLowerCase())) ||
+              (note.author !== undefined && developers.has(note.author.id)),
+            body: note.body.trim(),
+            createdAt: note.created_at ? Date.parse(note.created_at) || 0 : 0,
+          }
+        }),
+      },
+    ]
+  })
+}
+
+export async function reviewThreads(cwd: string, url: string): Promise<PullRequestThread[]> {
+  const a = await access(cwd)
+  const iid = iidOf(url)
+  const [mr, discussions] = await Promise.all([
+    readMergeRequest(a, url),
+    projectApi<RawDiscussion[]>(a, `/merge_requests/${iid}/discussions?per_page=100`),
+  ])
+  const ids = [
+    ...new Set(discussions.flatMap((discussion) => discussion.notes.map((note) => note.author?.id ?? -1))),
+  ].filter((id) => id >= 0)
+  const members = ids.length
+    ? await projectApi<{ id: number; access_level: number }[]>(
+        a,
+        `/members/all?per_page=100&${ids.map((id) => `user_ids[]=${id}`).join('&')}`,
+      ).catch(() => [])
+    : []
+  const developers = new Set(members.filter((member) => member.access_level >= WRITE_LEVEL).map((member) => member.id))
+  return parseDiscussions(discussions, mr, developers)
+}
+
+export async function replyToThread(cwd: string, url: string, threadId: string, body: string): Promise<string> {
+  const a = await access(cwd)
+  const note = await projectApi<{ id: number }>(
+    a,
+    `/merge_requests/${iidOf(url)}/discussions/${encode(threadId)}/notes`,
+    { method: 'POST', body: { body } },
+  )
+  return String(note.id)
+}
+
+export async function resolveThread(cwd: string, url: string, threadId: string): Promise<void> {
+  const a = await access(cwd)
+  const path = `/merge_requests/${iidOf(url)}/discussions/${encode(threadId)}`
+  const discussion = await projectApi<RawDiscussion>(a, path)
+  if (!discussion.notes.some((note) => note.resolvable)) return
+  await projectApi(a, path, { method: 'PUT', body: { resolved: true } })
+}
+
+/** Adds the named users as reviewers, keeping the ones already there. */
+export async function requestReviews(cwd: string, url: string, reviewers: string[]): Promise<void> {
+  if (!reviewers.length) return
+  const a = await access(cwd)
+  const mr = await readMergeRequest(a, url)
+  const target = { ...a, origin: a.project.origin }
+  const found = await Promise.all(
+    reviewers.map(async (name) => {
+      const existing = mr.reviewers?.find((reviewer) => reviewer.username.toLowerCase() === name.toLowerCase())
+      if (existing) return existing.id
+      const [user] = await gitlabApi<{ id: number }[]>(target, `/users?username=${encode(name)}`)
+      if (!user) throw new Error(`GitLab has no user named ${name}.`)
+      return user.id
+    }),
+  )
+  const ids = [...new Set([...(mr.reviewers ?? []).map((reviewer) => reviewer.id), ...found])]
+  await projectApi(a, `/merge_requests/${mr.iid}`, { method: 'PUT', body: { reviewer_ids: ids } })
+}
+
+/**
+ * Inline comments as diff discussions on the current version, the summary as a note, then the approval. GitLab's API
+ * has no "request changes" verdict, so that review posts its comments and summary without approving.
+ */
+export async function submitReview(
+  cwd: string,
+  url: string,
+  review: { verdict: ReviewVerdict; body: string; comments: ReviewCommentDraft[] },
+): Promise<void> {
+  const a = await access(cwd)
+  const mr = await readMergeRequest(a, url)
+  const path = `/merge_requests/${mr.iid}`
+  const refs = mr.diff_refs
+  if (review.comments.length && !refs) throw new Error('GitLab has not prepared this merge request’s diff yet.')
+  for (const comment of review.comments)
+    await projectApi(a, `${path}/discussions`, {
+      method: 'POST',
+      body: {
+        body: comment.body,
+        position: {
+          position_type: 'text',
+          base_sha: refs!.base_sha,
+          start_sha: refs!.start_sha,
+          head_sha: refs!.head_sha,
+          old_path: comment.path,
+          new_path: comment.path,
+          new_line: comment.line,
+        },
+      },
+    })
+  if (review.body.trim()) await projectApi(a, `${path}/notes`, { method: 'POST', body: { body: review.body } })
+  if (review.verdict === 'approve')
+    await projectApi(a, `${path}/approve`, { method: 'POST', body: mr.sha ? { sha: mr.sha } : {} })
+}
+
 /** GitLab behind the shared adapter boundary, chosen for checkouts whose remote is a GitLab server. */
 registerForgeAdapter({
   id: 'gitlab',
@@ -558,7 +895,16 @@ registerForgeAdapter({
   pullRequestStatus,
   pullRequestDraft,
   createPullRequest,
-  pullRequestFeedback,
+  checksFeedback,
+  listPullRequests,
+  mergeOptions,
+  pullRequestAction,
+  pullRequestBody,
+  reviewThreads,
+  replyToThread,
+  resolveThread,
+  requestReviews,
+  submitReview,
   listIssues,
   issueDetails,
   publishRepository,

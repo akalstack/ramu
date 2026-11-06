@@ -36,6 +36,7 @@ import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS } from './constan
 import { InlineEdit } from './InlineEdit'
 import { TaskStateIcon } from './TaskStateIcon'
 import { AgentStack } from './AgentStack'
+import { PullRequestIcon, stageLabel } from '../../git/PullRequestIcon'
 import { offerThreadUndo } from './threadUndo'
 import { ThreadHoverCard } from './ThreadHoverCard'
 import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -453,14 +454,28 @@ export function TaskRow({
               aria-label={t('Naming thread')}
             />
           )}
-          {task.mode === 'worktree' && (
-            <span title={ws?.workspaces.find((w) => w.id === task.workspaceId)?.name ?? t('Isolated worktrees')}>
-              <GitBranch
-                size={12}
-                className="muted text-muted-foreground mode-icon flex-none"
-                aria-label={t('Isolated worktrees')}
-              />
+          {task.pullRequest ? (
+            <span
+              className="mode-icon flex-none inline-flex"
+              title={`#${task.pullRequest.number} · ${stageLabel(task.pullRequest.stage)} · ${task.pullRequest.title}`}
+              role="img"
+              aria-label={t('Pull request #{0}: {1}', {
+                '0': String(task.pullRequest.number),
+                '1': stageLabel(task.pullRequest.stage),
+              })}
+            >
+              <PullRequestIcon pr={task.pullRequest} stage={task.pullRequest.stage} size={12} />
             </span>
+          ) : (
+            task.mode === 'worktree' && (
+              <span title={ws?.workspaces.find((w) => w.id === task.workspaceId)?.name ?? t('Isolated worktrees')}>
+                <GitBranch
+                  size={12}
+                  className="muted text-muted-foreground mode-icon flex-none"
+                  aria-label={t('Isolated worktrees')}
+                />
+              </span>
+            )
           )}
           {/* The thread's agents, as the phone shows them: a handoff or teammate stays visible beside the leading one. */}
           <AgentStack task={task} />

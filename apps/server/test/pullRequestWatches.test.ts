@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionInfo, PullRequestInfo } from '@ramu/shared/types'
+import type { AgentSessionInfo, PullRequestInfo, PullRequestThread } from '@ramu/shared/types'
 import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import type { AgentService } from '../src/agent'
 import { PullRequestWatchService } from '../src/background/pullRequestWatches'
 import { currentBranch } from '../src/workspace/git'
-import { pullRequestFeedback, pullRequestStatus, resolvedAccountChoice } from '../src/workspace/forge'
+import { pullRequestFeedback, pullRequestStatus, resolvedAccountChoice, reviewThreads } from '../src/workspace/forge'
 
 vi.mock('../src/workspace/git', () => ({ currentBranch: vi.fn() }))
 vi.mock('../src/workspace/forge', () => ({
@@ -13,6 +13,7 @@ vi.mock('../src/workspace/forge', () => ({
   pullRequestStatus: vi.fn(),
   resolvedConnectionId: vi.fn(async () => null),
   resolvedAccountChoice: vi.fn(async () => null),
+  reviewThreads: vi.fn(async () => []),
 }))
 
 let db: Db, ws: Workspace, service: PullRequestWatchService
@@ -21,6 +22,24 @@ let archived: boolean, paused: boolean, gone: boolean
 let pr: PullRequestInfo
 let enqueue: ReturnType<typeof vi.fn>
 let agents: AgentService
+let threads: PullRequestThread[]
+const comment = (id: string, author: string, trusted = true) => ({
+  id,
+  author,
+  bot: false,
+  trusted,
+  body: `Comment ${id}`,
+  createdAt: 1,
+})
+const thread = (id: string, comments: ReturnType<typeof comment>[], resolved = false): PullRequestThread => ({
+  id,
+  path: 'src/a.ts',
+  line: 3,
+  outdated: false,
+  resolved,
+  resolvable: true,
+  comments,
+})
 const queued = () => ws.getAppState<unknown[]>('test-queue', [])
 const createService = () => new PullRequestWatchService(db, ws, agents, () => {})
 beforeEach(() => {
@@ -68,6 +87,8 @@ beforeEach(() => {
     pullRequest: structuredClone(pr),
   }))
   vi.mocked(pullRequestFeedback).mockImplementation(async (_cwd, kind) => `Feedback: ${kind}. Do not push.`)
+  threads = []
+  vi.mocked(reviewThreads).mockImplementation(async () => structuredClone(threads))
   service = createService()
 })
 afterEach(async () => {
@@ -97,18 +118,29 @@ describe('persistent PR watches', () => {
     expect(enqueue).toHaveBeenCalledTimes(2)
   })
 
-  it('wakes on requested changes and on changed review feedback, without repeating unchanged reviews', async () => {
+  it('wakes on new review comments of any kind, once each, and ignores settled threads', async () => {
     pr.checks = []
-    pr.reviewDecision = 'changes-requested'
+    threads = [thread('old', [comment('c0', 'ana')], true), thread('t1', [comment('c1', 'ana')])]
     await watch()
     await service.tick(0)
-    await service.tick(60_000)
-    pr.headCommit = 'sha2'
-    await service.tick(120_000)
     expect(enqueue).toHaveBeenCalledTimes(1)
-    vi.mocked(pullRequestFeedback).mockResolvedValue('A new review comment')
-    await service.tick(180_000)
+    expect(String(enqueue.mock.calls[0]![1])).toContain('Thread id: t1')
+    expect(String(enqueue.mock.calls[0]![1])).not.toContain('Thread id: old')
+    await service.tick(60_000)
+    expect(enqueue).toHaveBeenCalledTimes(1)
+    // A plain reply, not a "Request changes" review, still starts the next round.
+    threads[1]!.comments.push(comment('c2', 'ana'))
+    await service.tick(120_000)
     expect(enqueue).toHaveBeenCalledTimes(2)
+    expect(String(enqueue.mock.calls[1]![1])).toContain('[new]')
+  })
+
+  it('never starts a round from comments outside the project', async () => {
+    pr.checks = []
+    threads = [thread('t1', [comment('c1', 'stranger', false)])]
+    await watch()
+    await service.tick(0)
+    expect(enqueue).not.toHaveBeenCalled()
   })
 
   it('retries transient errors and rolls back both queue and receipt on failure', async () => {

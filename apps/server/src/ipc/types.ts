@@ -47,6 +47,8 @@ export interface Services {
   agents: AgentService
   schedules: ScheduleService
   pullRequestWatches?: PullRequestWatchService
+  pullRequestIndex?: import('../background/pullRequestIndex').PullRequestIndex
+  pullRequestDrafts?: import('../background/pullRequestDrafts').PullRequestDrafts
   recaps: RecapService
   learning?: LearningService
   memory?: MemoryService

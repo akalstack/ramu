@@ -78,6 +78,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   rules,
   learning,
   agentThreads,
+  pullRequestIndex,
 }) => {
   const continuations = () => {
     if (!agentThreads) throw new Error('Continuing threads is unavailable on this host.')
@@ -291,6 +292,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
             executionState,
             helperSummary: helpers.get(task.id) ?? null,
             ...(advice.get(task.id) ? { unreadAdvice: advice.get(task.id) } : {}),
+            pullRequest: pullRequestIndex?.forTask(task) ?? null,
             snapshotAt,
           }
           if (!goal || goal.status === 'completed') return { ...base, goalState: null }
@@ -400,6 +402,16 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           branchNaming: namingIntent.optional(),
           branchChoice: branchChoice.optional(),
           baseBranch: z.string().min(1).max(250).refine(validBranchName).optional(),
+          checkout: z
+            .object({
+              repoId: id,
+              branch: z.string().min(1).max(160).refine(validBranchName),
+              fetchRef: z
+                .string()
+                .regex(/^refs\/(pull\/\d+\/head|merge-requests\/\d+\/head)$/)
+                .optional(),
+            })
+            .optional(),
           projectId: id,
           title: z.string().max(200),
           mode: z.enum(['current', 'worktree']),
@@ -420,7 +432,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
             branchPrefix: input.mode === 'worktree' ? (input.branchPrefix ?? prefs.worktreeBranchPrefix) : undefined,
           },
           plan,
-          intent.strategy === 'fixed'
+          intent.strategy === 'fixed' || input.checkout
             ? undefined
             : async () => {
                 const reason = await workspace.worktreeUnavailable(input.projectId)
@@ -494,6 +506,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
             await workspace.deleteTask(taskId, removeWorktrees)
             terminals.closeTask(taskId)
             notices?.forgetTask(taskId)
+            pullRequestIndex?.forget(taskId)
             watchers.release(taskId)
             if (removeWorktrees && task.workspaceId) terminals.closeTask(`worktree:${task.workspaceId}`)
           })

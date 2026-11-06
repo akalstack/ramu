@@ -423,6 +423,15 @@ export async function fetchedBranch(cwd: string, branch: string): Promise<{ ref:
   return { ref, oid: (await git(cwd, ['rev-parse', '--verify', ref])).trim() }
 }
 
+/** Fetches a ref that is not a branch of the remote (a fork's pull request head) to a Ramu-owned ref. */
+export async function fetchedRef(cwd: string, ref: string, name: string): Promise<{ ref: string; oid: string }> {
+  const { remote } = await publishRemote(cwd, null)
+  if (!remote) throw new Error('This repository has no remote to fetch that pull request from.')
+  const local = `refs/ramu/checkout/${name}`
+  await git(cwd, ['fetch', '--no-tags', remote, `+${ref}:${local}`])
+  return { ref: local, oid: (await git(cwd, ['rev-parse', '--verify', local])).trim() }
+}
+
 /** The facts Continue on another host shows: what travels as a commit, and what stays behind. */
 export async function continuationFacts(cwd: string) {
   const branch = (await currentBranch(cwd)) ?? ''

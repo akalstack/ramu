@@ -18,6 +18,7 @@ import {
   FileDiff,
   FileText,
   GitBranch,
+  GitPullRequest,
   Globe,
   History,
   FileSearch,
@@ -41,6 +42,7 @@ import { NEW_TAB, openBrowser } from '../views/browserPane'
 import { AgentView } from '../views/AgentView'
 import { ErrorBoundary } from '../ErrorBoundary'
 import { GitDetailsView } from '../views/GitDetailsView'
+import { PullRequestView } from '../git/PullRequestView'
 import { DiffView } from '../views/DiffView'
 import { FileView } from '../views/FileView'
 import { BrowserView } from '../views/BrowserView'
@@ -540,6 +542,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                               {v.kind === 'git' && binding && (
                                 <GitDetailsView taskId={workspaceId} view={v} binding={binding} />
                               )}
+                              {v.kind === 'pull-request' && <PullRequestView taskId={workspaceId} view={v} />}
                             </ErrorBoundary>
                           </VisitedView>
                         )}
@@ -875,6 +878,7 @@ function FileTab({
 function ViewIcon({ kind, path }: { kind: ViewDescriptor['kind']; path?: string }) {
   useLanguage()
   if (kind === 'git') return <GitBranch size={13} className="kind" />
+  if (kind === 'pull-request') return <GitPullRequest size={13} className="kind" />
   if (kind === 'review') return <FileDiff size={13} className="kind" />
   if (kind === 'diff') return <FileDiff size={13} className={path ? `kind file-kind ${fileToneClass(path)}` : 'kind'} />
   if (kind === 'terminal') return <SquareTerminal size={13} className="kind" />
@@ -906,6 +910,13 @@ function ViewLabel({
       <>
         {t('Changes')}
         <span className="tab-repo text-muted-foreground text-caption">{ws.task(v.taskId)?.title ?? t('Thread')}</span>
+      </>
+    )
+  if (v.kind === 'pull-request')
+    return (
+      <>
+        #{v.number}
+        <span className="tab-repo text-muted-foreground text-caption">{v.title}</span>
       </>
     )
   if (v.kind === 'git')

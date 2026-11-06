@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { stageLabel } from '../git/PullRequestIcon'
 import { ChevronRight, CircleCheck } from 'lucide-react'
 import {
   blockerTally,
@@ -226,6 +227,14 @@ export function Brief() {
     const title = task(row.chat.computerId, row.chat.taskId)?.title ?? ''
     const base = { taskId: row.chat.taskId, sessionId: row.chat.sessionId, title }
     if (row.kind === 'failure') return { ...base, detail: t('Failed'), tone: 'bad' }
+    if (row.kind === 'pull-request') {
+      const pr = row.chat.pullRequest!
+      return {
+        ...base,
+        detail: `#${pr.number} · ${stageLabel(pr.stage)}`,
+        tone: pr.stage === 'conflicts' ? 'bad' : 'warn',
+      }
+    }
     const request = row.chat.inputSummary?.requests[0]
     // A helper's request belongs to the helper's session; Open goes there and to the request itself.
     return {

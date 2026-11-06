@@ -1,13 +1,16 @@
 import { expect, it, vi } from 'vitest'
 import {
   bitbucketApi,
-  commentsPrompt,
+  bitbucketMergeOptions,
   parseBitbucketRemote,
+  parseComments,
+  parseListPullRequest,
   parsePullRequest,
   parseRepositories,
   parseStatuses,
   pipelineNumber,
-  pullRequestFeedback,
+  pullRequestAction,
+  checksFeedback,
 } from '../src/workspace/forge/bitbucket'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -65,27 +68,145 @@ it('maps build statuses and reviewers onto the shared pull request shape', () =>
   expect(parsePullRequest({ ...raw, state: 'MERGED', participants: [] }, []).reviewDecision).toBeNull()
 })
 
-it('turns only open top-level comments into a review prompt', () => {
-  const pr = parsePullRequest(
-    {
-      id: 3,
-      title: 'Add search',
-      state: 'OPEN',
-      source: { branch: { name: 's' } },
-      destination: { branch: { name: 'main' } },
-      links: { html: { href: 'https://bitbucket.org/a/b/pull-requests/3' } },
-    },
-    [],
+const listRow = {
+  id: 3,
+  title: 'Add search',
+  state: 'OPEN' as const,
+  source: { branch: { name: 's' }, repository: { full_name: 'acme/app' } },
+  destination: { branch: { name: 'main' }, repository: { full_name: 'acme/app' } },
+  links: { html: { href: 'https://bitbucket.org/acme/app/pull-requests/3' } },
+  author: { uuid: '{ana}', nickname: 'ana' },
+  reviewers: [{ uuid: '{bo}', nickname: 'bo' }],
+  participants: [{ role: 'REVIEWER', approved: true, user: { uuid: '{bo}', nickname: 'bo' } }],
+  updated_on: '2026-01-02T00:00:00Z',
+}
+
+it('lists pull requests grouped by the viewer’s part in them, leaving unknown facts unknown', () => {
+  expect(parseListPullRequest(listRow, { uuid: '{ana}' })).toMatchObject({
+    number: 3,
+    author: 'ana',
+    fork: false,
+    reviewDecision: 'approved',
+    checks: null,
+    mergeable: 'unknown',
+    openThreads: null,
+    requestedReviewers: ['bo'],
+    group: 'mine',
+    updatedAt: Date.parse('2026-01-02T00:00:00Z'),
+  })
+  expect(parseListPullRequest(listRow, { uuid: '{bo}' }).group).toBe('review')
+  const fork = { ...listRow, source: { ...listRow.source, repository: { full_name: 'eve/app' } } }
+  expect(parseListPullRequest(fork, null)).toMatchObject({ group: 'other', fork: true })
+})
+
+it('offers the target branch’s merge strategies and explains what blocks the merge', () => {
+  const pr = {
+    ...listRow,
+    destination: { ...listRow.destination, branch: { name: 'main', merge_strategies: ['squash', 'fast_forward'] } },
+  }
+  const clean = { checks: [], conflicts: false, permission: 'write' }
+  expect(bitbucketMergeOptions(pr, clean)).toEqual({
+    methods: ['squash', 'rebase'],
+    blockers: [],
+    canDeleteBranch: true,
+  })
+  expect(bitbucketMergeOptions(listRow, clean).methods).toEqual(['squash', 'merge', 'rebase'])
+  expect(
+    bitbucketMergeOptions(
+      { ...pr, draft: true, close_source_branch: true },
+      { checks: [{ name: 'ci', state: 'failure', url: null }], conflicts: true, permission: 'read' },
+    ),
+  ).toEqual({
+    methods: ['squash', 'rebase'],
+    blockers: [
+      'It is a draft. Mark it ready for review first.',
+      'It has conflicts with its base branch.',
+      'Some checks are failing.',
+      'This account cannot merge into this repository.',
+    ],
+    canDeleteBranch: false,
+  })
+})
+
+it('threads replies under their top-level comment and trusts only the author, reviewers, the viewer and apps', () => {
+  const threads = parseComments(
+    [
+      {
+        id: 1,
+        content: { raw: 'Handle empty input' },
+        inline: { path: 'src/search.ts', to: 12, outdated: true },
+        user: { uuid: '{bo}', nickname: 'bo' },
+        resolution: { type: 'resolved' },
+        created_on: '2026-01-02T00:00:00Z',
+      },
+      { id: 2, content: { raw: 'Done' }, parent: { id: 1 }, user: { uuid: '{ana}', nickname: 'ana' } },
+      { id: 3, content: { raw: 'Deep reply' }, parent: { id: 2 }, user: { uuid: '{eve}', nickname: 'eve' } },
+      { id: 4, content: { raw: 'Why?' }, user: { uuid: '{eve}', nickname: 'eve' } },
+      { id: 5, content: { raw: 'Gone' }, deleted: true },
+      { id: 6, content: { raw: 'Draft' }, pending: true },
+      { id: 7, content: { raw: 'Scan passed' }, user: { uuid: '{app}', nickname: 'scanner', type: 'app_user' } },
+      { id: 8, content: { raw: 'Note to self' }, user: { uuid: '{me}', nickname: 'me' } },
+    ],
+    listRow,
+    { uuid: '{me}' },
   )
-  const prompt = commentsPrompt(pr, [
-    { content: { raw: 'Handle empty input' }, inline: { path: 'src/search.ts', to: 12 }, user: { nickname: 'dana' } },
-    { content: { raw: 'Done already' }, resolution: { type: 'resolved' } },
-    { content: { raw: 'A reply' }, parent: { id: 1 } },
-    { content: { raw: 'Gone' }, deleted: true },
+  expect(threads.map((thread) => [thread.id, thread.resolved, thread.outdated])).toEqual([
+    ['1', true, true],
+    ['4', false, false],
+    ['7', false, false],
+    ['8', false, false],
   ])
-  expect(prompt).toContain('src/search.ts:12: dana: Handle empty input')
-  expect(prompt).not.toMatch(/Done already|A reply|Gone/)
-  expect(commentsPrompt(pr, [])).toBeNull()
+  expect(threads[0]).toMatchObject({ path: 'src/search.ts', line: 12 })
+  expect(threads[0]!.comments.map((comment) => [comment.id, comment.author, comment.trusted])).toEqual([
+    ['1', 'bo', true],
+    ['2', 'ana', true],
+    ['3', 'eve', false],
+  ])
+  expect(threads[2]!.comments[0]).toMatchObject({ bot: true, trusted: true })
+  expect(threads[3]!.comments[0]!.trusted).toBe(true)
+})
+
+it('treats a merge whose reply was lost as done when Bitbucket shows it merged, and refuses to reopen', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-bitbucket-merge-'))
+  execFileSync('git', ['init', '-q', '-b', 's'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:acme/app.git'], { cwd: dir })
+  vi.stubEnv('BITBUCKET_ACCESS_TOKEN', 'workspace-token')
+  let mergedAfter = true
+  let reads = 0
+  const merges: unknown[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const path = url.replace('https://api.bitbucket.org/2.0/repositories/acme/app', '')
+      if (path === '/pullrequests/3/merge') {
+        merges.push(JSON.parse(String(init?.body)))
+        return new Response('', { status: 502 })
+      }
+      if (path === '/pullrequests/3') {
+        reads++
+        return new Response(JSON.stringify({ ...listRow, state: reads > 1 && mergedAfter ? 'MERGED' : 'OPEN' }))
+      }
+      return new Response('', { status: 404 })
+    }),
+  )
+  const url = 'https://bitbucket.org/acme/app/pull-requests/3'
+  try {
+    await expect(
+      pullRequestAction(dir, url, { kind: 'merge', method: 'rebase', deleteBranch: true }),
+    ).resolves.toBeUndefined()
+    expect(merges[0]).toEqual({ type: 'pullrequest', merge_strategy: 'fast_forward', close_source_branch: true })
+    mergedAfter = false
+    reads = 0
+    await expect(pullRequestAction(dir, url, { kind: 'merge', method: 'merge', deleteBranch: false })).rejects.toThrow(
+      'Bitbucket answered 502',
+    )
+    await expect(pullRequestAction(dir, url, { kind: 'reopen' })).rejects.toThrow('cannot reopen')
+    await expect(pullRequestAction(dir, url, { kind: 'update-branch' })).rejects.toThrow('cannot update')
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 it('never keeps the account name Bitbucket puts in clone addresses', () => {
@@ -187,7 +308,7 @@ it('carries the end of each failed Pipelines step log, fetched from storage with
     }),
   )
   try {
-    const prompt = await pullRequestFeedback(dir, 'checks')
+    const prompt = await checksFeedback(dir)
     expect(prompt).toContain('- Pipeline #12 (https://bitbucket.org/acme/app/pipelines/results/12)')
     expect(prompt).toContain('Test (pipeline #12):\n```\n')
     expect(prompt).toContain('Error: expected 2, got 3\n```')

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { reviewThreadsPrompt } from '../src/workspace/forge/reviewPrompt'
 import * as forge from '../src/workspace/forge'
 
 const pr = {
@@ -118,51 +119,40 @@ describe('feedback prompts', () => {
     expect(excerpt).not.toContain('\x1b')
   })
 
-  it('lists only open review threads and reviews with text', () => {
-    const prompt = forge.reviewFeedbackPrompt(pr, {
-      data: {
-        repository: {
-          pullRequest: {
-            reviewThreads: {
-              nodes: [
-                {
-                  isResolved: false,
-                  isOutdated: false,
-                  path: 'src/a.ts',
-                  line: 12,
-                  comments: { nodes: [{ author: { login: 'ana' }, body: 'Handle null here.' }] },
-                },
-                {
-                  isResolved: true,
-                  isOutdated: false,
-                  path: 'src/b.ts',
-                  line: 3,
-                  comments: { nodes: [{ author: { login: 'ana' }, body: 'Already fixed.' }] },
-                },
-              ],
-            },
-            reviews: {
-              nodes: [
-                { state: 'CHANGES_REQUESTED', body: 'Close, a few things.', author: { login: 'ana' } },
-                { state: 'APPROVED', body: '', author: { login: 'ben' } },
-              ],
-            },
-          },
-        },
-      },
+  it('writes review threads with their ids, marks new and outside comments, and asks for drafted replies', () => {
+    const comment = (id: string, author: string, trusted = true) => ({
+      id,
+      author,
+      bot: false,
+      trusted,
+      body: `Comment from ${author}`,
+      createdAt: 1,
     })
-    expect(prompt).toContain('### src/a.ts:12')
-    expect(prompt).toContain('- ana: Handle null here.')
-    expect(prompt).toContain('- ana (changes requested): Close, a few things.')
-    expect(prompt).not.toContain('Already fixed.')
-    expect(prompt).not.toContain('ben')
-    expect(prompt).toContain('which checks you ran locally')
+    const prompt = reviewThreadsPrompt(
+      pr,
+      [
+        {
+          id: 'T1',
+          path: 'src/a.ts',
+          line: 12,
+          outdated: true,
+          resolved: false,
+          resolvable: true,
+          comments: [comment('c1', 'ana'), comment('c2', 'stranger', false)],
+        },
+      ],
+      new Set(['c2']),
+    )
+    expect(prompt).toContain('### src/a.ts:12 (outdated, includes comments from outside the project)')
+    expect(prompt).toContain('Thread id: T1')
+    expect(prompt).toContain('- stranger [new]: Comment from stranger')
+    expect(prompt).not.toContain('- ana [new]')
+    expect(prompt).toContain('review_reply')
     expect(prompt).toContain('Do not push')
   })
 
-  it('has nothing to hand off when every thread is resolved', () => {
-    const empty = { data: { repository: { pullRequest: { reviewThreads: { nodes: [] }, reviews: { nodes: [] } } } } }
-    expect(forge.reviewFeedbackPrompt(pr, empty)).toBeNull()
+  it('has nothing to hand off without open threads', () => {
+    expect(reviewThreadsPrompt(pr, [])).toBeNull()
   })
 
   it('writes an issue as an opening message with its comments', () => {

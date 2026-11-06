@@ -69,6 +69,197 @@ export interface PullRequestInput {
   branch?: string
 }
 
+/** Whether the pull request merges cleanly into its base, as the hosting service last computed it. */
+export type PullRequestMergeability = 'clean' | 'conflicts' | 'behind' | 'blocked' | 'unknown'
+
+/** The rolled-up state of a pull request's checks; null when it has none. */
+export type PullRequestChecksState = 'failure' | 'pending' | 'success' | null
+
+/** Which part of the list a pull request belongs to for the account in use. */
+export type PullRequestGroup = 'mine' | 'review' | 'other'
+
+/** One row of a repository's pull request list. */
+export interface PullRequestSummary {
+  number: number
+  title: string
+  url: string
+  state: 'open' | 'closed' | 'merged'
+  draft: boolean
+  baseBranch: string
+  headBranch: string
+  headCommit?: string
+  author: string | null
+  /** Opened from a fork: its branch is not on this repository's remote, so it cannot be pushed to from here. */
+  fork: boolean
+  reviewDecision: PullRequestReviewDecision
+  checks: PullRequestChecksState
+  mergeable: PullRequestMergeability
+  /** Review threads nobody has resolved yet; null when the service does not say. */
+  openThreads: number | null
+  requestedReviewers: string[]
+  group: PullRequestGroup
+  updatedAt: number
+}
+
+export interface PullRequestList {
+  availability: ForgeAvailability
+  service?: ForgeService
+  /** The account the list was read with, so "yours" can be explained. */
+  viewer: string | null
+  pullRequests: PullRequestSummary[]
+  /** Threads already working on each pull request, by URL, so a row can open them instead of starting another. */
+  threads?: Record<string, { taskId: string; title: string }[]>
+}
+
+/** What opening a pull request in a thread needs: the thread already on it, or how to start one. */
+export interface PullRequestHandoff {
+  existing: { taskId: string; title: string } | null
+  /** The worktree's branch; null when the pull request cannot be checked out here (a fork on a service without pull refs). */
+  checkout: { repoId: string; branch: string; fetchRef?: string } | null
+  title: string
+  prompt: string
+}
+
+/**
+ * Where a pull request stands for the person, most pressing first: one word for the row, the chip and the phone.
+ * `replies-ready` and `agent-working` come from Ramu's own state; the rest from the hosting service.
+ */
+export type PullRequestStage =
+  | 'replies-ready'
+  | 'agent-working'
+  | 'conflicts'
+  | 'checks-failing'
+  | 'changes-requested'
+  | 'draft'
+  | 'checks-pending'
+  | 'review-required'
+  | 'ready'
+  | 'merged'
+  | 'closed'
+
+/** What a thread row shows of the pull request for its branch. */
+export interface TaskPullRequest {
+  repoId: string
+  number: number
+  title: string
+  url: string
+  state: PullRequestSummary['state']
+  draft: boolean
+  stage: PullRequestStage
+}
+
+export type MergeMethod = 'merge' | 'squash' | 'rebase'
+
+/** What merging needs: the methods the repository allows and what still blocks it. */
+export interface MergeOptions {
+  methods: MergeMethod[]
+  /** Reasons the merge cannot happen yet, as sentences; empty when it can. */
+  blockers: string[]
+  /** The service can delete the head branch after merging. */
+  canDeleteBranch: boolean
+}
+
+export type PullRequestAction =
+  | { kind: 'merge'; method: MergeMethod; deleteBranch: boolean }
+  | { kind: 'close' }
+  | { kind: 'reopen' }
+  | { kind: 'ready' }
+  | { kind: 'update-branch' }
+
+/** One review thread, the same shape on every hosting service. */
+export interface PullRequestThread {
+  id: string
+  path: string | null
+  line: number | null
+  outdated: boolean
+  resolved: boolean
+  /** Whether Ramu can mark it resolved on this service. */
+  resolvable: boolean
+  comments: PullRequestComment[]
+}
+
+export interface PullRequestComment {
+  id: string
+  author: string | null
+  /** A bot or service account, shown as such. */
+  bot: boolean
+  /** Has write access, was asked to review, or opened the pull request. Others never start a round on their own. */
+  trusted: boolean
+  body: string
+  createdAt: number
+}
+
+/** What the agent decided about one thread. `skipped` posts nothing. */
+export type ReviewReplyOutcome = 'fixed' | 'no-change' | 'question' | 'skipped'
+
+export interface ReviewReplyDraft {
+  threadId: string
+  outcome: ReviewReplyOutcome
+  reply: string
+  /** The commit that addressed it, linked in the reply after the push. */
+  commit: string | null
+  /** Set once posted, so a retry never posts it twice. */
+  postedId?: string | null
+  error?: string | null
+}
+
+/** A comment the agent drafted while reviewing someone's pull request. */
+export interface ReviewCommentDraft {
+  id: string
+  path: string
+  line: number
+  body: string
+}
+
+export type ReviewVerdict = 'comment' | 'approve' | 'request-changes'
+
+/** Replies to the open threads of the person's own pull request, waiting to be checked and sent. */
+export interface ReviewReplyBatch {
+  kind: 'replies'
+  id: string
+  url: string
+  number: number
+  repoId: string
+  branch: string
+  sessionId: string
+  /** The threads as they were given to the agent, for showing the comment beside its draft. */
+  threads: PullRequestThread[]
+  drafts: ReviewReplyDraft[]
+  /** Reviewers who requested changes; review is asked of them again on send. */
+  reviewers: string[]
+  createdAt: number
+}
+
+/** A review of someone else's pull request, drafted by an agent, waiting to be checked and posted. */
+export interface ReviewDraftBatch {
+  kind: 'review'
+  id: string
+  url: string
+  number: number
+  repoId: string
+  sessionId: string
+  verdict: ReviewVerdict
+  body: string
+  comments: ReviewCommentDraft[]
+  createdAt: number
+}
+
+export type PullRequestDraftBatch = ReviewReplyBatch | ReviewDraftBatch
+
+export interface SendRepliesInput {
+  push: boolean
+  resolveFixed: boolean
+  requestReview: boolean
+  /** Edited replies and outcomes by thread id; a thread left out keeps the agent's draft. */
+  edits: { threadId: string; outcome: ReviewReplyOutcome; reply: string }[]
+}
+
+export interface SendRepliesResult {
+  pushed: boolean
+  posted: number
+  failed: { threadId: string; error: string }[]
+}
+
 /** What to hand back to an agent from a pull request. */
 export type PullRequestFeedbackKind = 'checks' | 'reviews'
 

@@ -116,6 +116,8 @@ import { OperationLog, runOnce } from './ipc/operationLog'
 import { ScheduleService, scheduleSchema } from './background/schedules'
 import { WEBHOOK_PATH, WebhookReceiver, readWebhookBody } from './background/webhookReceiver'
 import { PullRequestWatchService } from './background/pullRequestWatches'
+import { PullRequestIndex } from './background/pullRequestIndex'
+import { PullRequestDrafts } from './background/pullRequestDrafts'
 import { AgentThreadService, hostThreadRequest } from './background/agentThreads'
 import { describeValidationError } from './validation'
 import { RemoteThreads } from './background/remoteThreads'
@@ -479,6 +481,17 @@ schedules.webhookBases = () =>
     ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []),
   ].map((candidate) => ({ url: candidate.url, via: candidate.interface }))
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
+// Thread rows show their pull request, so a change there refreshes the thread lists.
+const pullRequestIndex = new PullRequestIndex(workspace, agents, () => send('workspace:changed', {}))
+const pullRequestDrafts = new PullRequestDrafts(
+  workspace,
+  agents,
+  () => send('workspace:changed', {}),
+  (repoId) => pullRequestIndex.viewer(repoId),
+)
+pullRequestIndex.drafts = () => pullRequestDrafts.list()
+pullRequestWatches.drafts = pullRequestDrafts
+pullRequestWatches.index = pullRequestIndex
 const secretFiles = new SecretFiles(join(userData, 'secret-files'))
 agents.secretFiles = secretFiles
 secretFiles.start()
@@ -700,6 +713,8 @@ const dispatcher = createDispatcher(
     interactive,
     schedules,
     pullRequestWatches,
+    pullRequestIndex,
+    pullRequestDrafts,
     recaps,
     reviews,
     memory,
@@ -722,6 +737,7 @@ async function stop(intentional = false, exitCode = 0) {
   tunnels.stop()
   await schedules.stop()
   await pullRequestWatches.stop()
+  await pullRequestIndex.stop()
   secretFiles.stop()
   await agentThreads.stop()
   // Capture after the scheduler drains, so a chat that finished during that wait is not resumed.
@@ -1829,6 +1845,7 @@ const tick = setInterval(() => {
   void agents.resumeInterruptedChats().catch(console.error)
   void schedules.tick().catch(console.error)
   void pullRequestWatches.tick().catch(console.error)
+  void pullRequestIndex.tick().catch(console.error)
   void agentThreads.tick().catch(console.error)
   void recaps.tick().catch(console.error)
   void memory.tick().catch(console.error)

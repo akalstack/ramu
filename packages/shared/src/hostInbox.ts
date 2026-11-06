@@ -1,4 +1,5 @@
-import type { ChatGoal, LibrarySummary, RecapItem, TaskStatus, ThreadInputSummary } from './types'
+import type { ChatGoal, LibrarySummary, RecapItem, TaskPullRequest, TaskStatus, ThreadInputSummary } from './types'
+import { stageNeedsYou } from '@ramu/shared/pullRequests'
 import { goalContinues } from '@ramu/shared/chat/goalHold'
 import type { LowMemory } from './resources'
 
@@ -28,6 +29,8 @@ export interface InboxChat {
   sessionId: string | null
   doneAt?: number | null
   pending?: boolean
+  /** The thread's pull request; its stage can need the person (replies to send, ready to merge). */
+  pullRequest?: TaskPullRequest | null
 }
 
 /** Why a thread is waiting on the person, in the order a person would act on it. */
@@ -227,6 +230,10 @@ export function buildInbox(input: {
   const failed = live
     .filter((chat) => chat.status === 'failed' && !needsInput(chat) && !helpersRunning(chat) && !failureSeen(chat))
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  // A pull request whose next step is the person's, on a thread that is not already asking for something else.
+  const pullRequests = live
+    .filter((chat) => !!chat.pullRequest && stageNeedsYou(chat.pullRequest.stage) && !needsInput(chat))
+    .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   const lowMemory = (input.lowMemory ?? []).filter((entry) => inScope(entry.computerId))
   const enabled = input.recapsEnabled ?? (() => true)
   const recaps = splitRecaps(
@@ -266,6 +273,7 @@ export function buildInbox(input: {
   return {
     waiting,
     failed,
+    pullRequests,
     lowMemory,
     running,
     ...recaps,
@@ -274,10 +282,11 @@ export function buildInbox(input: {
     completed,
     days,
     /** What the badge counts: waiting threads, failures not yet looked at, low hosts and recaps that need a decision. */
-    needsYou: waiting.length + failed.length + lowMemory.length + recaps.attention.length,
+    needsYou: waiting.length + failed.length + pullRequests.length + lowMemory.length + recaps.attention.length,
     empty:
       !waiting.length &&
       !failed.length &&
+      !pullRequests.length &&
       !lowMemory.length &&
       !running.length &&
       !recaps.attention.length &&
@@ -295,6 +304,7 @@ export interface InboxLowMemory {
 
 export type BriefRow =
   | { kind: 'failure'; chat: InboxChat }
+  | { kind: 'pull-request'; chat: InboxChat }
   | { kind: 'blocker'; chat: InboxChat; blocker: InboxBlocker }
   | { kind: 'low-memory'; memory: InboxLowMemory }
   | { kind: 'recap'; recap: InboxRecap }
@@ -307,20 +317,23 @@ const blockerRank = (kind: InboxBlockerKind) =>
 const briefRank = (row: BriefRow) =>
   row.kind === 'blocker'
     ? blockerRank(row.blocker.kind)
-    : row.kind === 'failure'
+    : row.kind === 'failure' || row.kind === 'pull-request'
       ? 1
       : row.kind === 'low-memory'
         ? 3
         : 4
 
-/** What needs the person now: requests, then failures, then limits and paused goals, then recaps needing a decision. */
-export function briefRows(model: Pick<InboxModel, 'waiting' | 'failed' | 'attention' | 'lowMemory'>): BriefRow[] {
+/** What needs the person now: requests, then failures and pull requests, then limits and paused goals, then recaps needing a decision. */
+export function briefRows(
+  model: Pick<InboxModel, 'waiting' | 'failed' | 'pullRequests' | 'attention' | 'lowMemory'>,
+): BriefRow[] {
   const rows: BriefRow[] = [
     ...model.waiting.flatMap((chat): BriefRow[] => {
       const blocker = inboxBlocker(chat)
       return blocker ? [{ kind: 'blocker', chat, blocker }] : []
     }),
     ...model.failed.map((chat): BriefRow => ({ kind: 'failure', chat })),
+    ...model.pullRequests.map((chat): BriefRow => ({ kind: 'pull-request', chat })),
     ...model.lowMemory.map((memory): BriefRow => ({ kind: 'low-memory', memory })),
     ...model.attention.map((recap): BriefRow => ({ kind: 'recap', recap })),
   ]

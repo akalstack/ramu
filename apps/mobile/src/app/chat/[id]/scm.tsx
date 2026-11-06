@@ -51,6 +51,8 @@ import { Disclosure } from '../../../components/Motion'
 import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { Glass, floatingChrome } from '../../../components/Glass'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
+import { CurrentPullRequest, PullRequestListSection } from '../../../components/PullRequestSections'
+import { canWriteHost } from '../../../runtime/viewerAccess'
 import {
   Button,
   Card,
@@ -246,7 +248,7 @@ export default function SourceControl() {
   const [message, setMessage] = useState('')
   const [draft, setDraft] = useState<CommitDraft | null>(null)
   const [action, setAction] = useState<CommitAction>('commit')
-  const [tab, setTab] = useState<'changes' | 'commits' | 'stashes'>('changes')
+  const [tab, setTab] = useState<'changes' | 'commits' | 'stashes' | 'pulls'>('changes')
   const [filter, setFilter] = useState('')
   const [folded, setFolded] = useState<{ staged?: boolean; changes?: boolean }>({})
   const [sheet, setSheet] = useState<'repo' | 'branch' | 'newBranch' | 'action' | 'menu' | null>(null)
@@ -369,6 +371,11 @@ export default function SourceControl() {
   const shownUnstaged = needle ? changes.filter((f) => f.path.toLowerCase().includes(needle)) : changes
   const gates = gitGates(gitStatus, commits.length)
   const loaded = gitStatus !== null
+  const hasRemote = !!gitStatus?.remote
+  const canWrite = canWriteHost(store.computers.find((pc) => pc.id === chat?.computerId))
+  useEffect(() => {
+    if (tab === 'pulls' && loaded && !hasRemote) setTab('changes')
+  }, [tab, loaded, hasRemote])
   // The computer's own default (Commit, Commit & Push or Commit & Sync) until you pick another here.
   const savedAction = store.appPreferences[chat?.computerId ?? '']?.defaultCommitAction
   useEffect(() => {
@@ -834,15 +841,26 @@ export default function SourceControl() {
               </View>
             </Card>
           ) : null}
+          {chat && binding && hasRemote && gitStatus?.branch ? (
+            <CurrentPullRequest
+              chat={chat}
+              repoId={binding.repoId}
+              branch={gitStatus.branch}
+              readOnly={!canWrite}
+              onError={(text) => notify(text, true)}
+            />
+          ) : null}
           <Segmented
             value={tab}
             onChange={setTab}
             options={[
-              { key: 'changes', label: 'Changes', count: changeCount },
-              { key: 'commits', label: 'Commits', count: commits.length },
-              { key: 'stashes', label: 'Stashes', count: stashes.length },
+              { key: 'changes', label: tr('Changes'), count: changeCount },
+              { key: 'commits', label: tr('Commits'), count: commits.length },
+              { key: 'stashes', label: tr('Stashes'), count: stashes.length },
+              ...(hasRemote ? [{ key: 'pulls' as const, label: tr('Pull requests') }] : []),
             ]}
           />
+          {tab === 'pulls' && chat && binding ? <PullRequestListSection chat={chat} repoId={binding.repoId} /> : null}
           {tab === 'changes' ? (
             <>
               {
@@ -915,7 +933,7 @@ export default function SourceControl() {
               {!changeCount ? <T tone="muted">No changes in this checkout.</T> : null}
             </>
           ) : null}
-          {tab !== 'changes' ? (
+          {tab === 'commits' || tab === 'stashes' ? (
             <View style={{ marginHorizontal: -space.l }}>
               {tab === 'commits' ? (
                 commits.length ? (

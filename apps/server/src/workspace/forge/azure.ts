@@ -12,8 +12,16 @@ import type {
   ForgeRepositorySummary,
   ForgeStatus,
   IssueSummary,
+  MergeMethod,
+  MergeOptions,
   PublishRepositoryInput,
-  PullRequestFeedbackKind,
+  PullRequestAction,
+  PullRequestList,
+  PullRequestMergeability,
+  PullRequestSummary,
+  PullRequestThread,
+  ReviewCommentDraft,
+  ReviewVerdict,
   PullRequestInfo,
   PullRequestInput,
   PullRequestReviewDecision,
@@ -176,7 +184,17 @@ interface RawStatus {
 
 interface RawEvaluation {
   status: 'queued' | 'running' | 'approved' | 'rejected' | 'notApplicable' | 'broken'
-  configuration: { type: { id: string; displayName?: string }; settings?: { displayName?: string } }
+  configuration: {
+    type: { id: string; displayName?: string }
+    isBlocking?: boolean
+    settings?: {
+      displayName?: string
+      allowNoFastForward?: boolean
+      allowSquash?: boolean
+      allowRebase?: boolean
+      allowRebaseMerge?: boolean
+    }
+  }
   context?: { buildId?: number; buildDefinitionName?: string }
 }
 
@@ -256,7 +274,10 @@ async function findPullRequest(a: Access, url?: string): Promise<RawPullRequest 
   return page.value[0] ?? null
 }
 
-async function checksOf(a: Access, raw: RawPullRequest): Promise<{ checks: ForgeCheck[]; builds: number[] }> {
+async function checksOf(
+  a: Access,
+  raw: RawPullRequest,
+): Promise<{ checks: ForgeCheck[]; builds: number[]; evaluations: RawEvaluation[] }> {
   const statuses = await repoApi<{ value: RawStatus[] }>(a, `/pullrequests/${raw.pullRequestId}/statuses`)
     .then((page) => page.value)
     .catch(() => [])
@@ -277,7 +298,7 @@ async function checksOf(a: Access, raw: RawPullRequest): Promise<{ checks: Forge
         evaluation.context?.buildId,
     )
     .map((evaluation) => evaluation.context!.buildId!)
-  return { checks: parseChecks(statuses, evaluations, a.repo), builds }
+  return { checks: parseChecks(statuses, evaluations, a.repo), builds, evaluations }
 }
 
 export async function pullRequestStatus(cwd: string, url?: string): Promise<ForgeStatus> {
@@ -319,31 +340,6 @@ export async function createPullRequest(cwd: string, input: PullRequestInput): P
   return pullRequestStatus(cwd)
 }
 
-interface RawThread {
-  status?: 'active' | 'pending' | 'fixed' | 'wontFix' | 'closed' | 'byDesign' | 'unknown'
-  isDeleted?: boolean
-  threadContext?: { filePath?: string; rightFileStart?: { line?: number } } | null
-  comments?: { content?: string; commentType?: string; isDeleted?: boolean; author?: { displayName?: string } }[]
-}
-
-/** Active review threads as a prompt, or null when there are none. System notes (votes, pushes) are left out. */
-export function commentsPrompt(pr: PullRequestInfo, threads: RawThread[]): string | null {
-  const lines = threads
-    .filter((thread) => !thread.isDeleted && (thread.status === 'active' || thread.status === 'pending'))
-    .map((thread) => {
-      const comment = thread.comments?.find((entry) => !entry.isDeleted && entry.commentType !== 'system')
-      const text = comment?.content?.trim()
-      if (!text) return null
-      const path = thread.threadContext?.filePath?.replace(/^\//, '')
-      const line = thread.threadContext?.rightFileStart?.line
-      const where = path ? `${path}${line ? `:${line}` : ''}: ` : ''
-      return `- ${where}${comment?.author?.displayName ?? 'reviewer'}: ${text}`
-    })
-    .filter((line): line is string => !!line)
-  if (!lines.length) return null
-  return [`Address the open review comments on pull request #${pr.number} (${pr.title}):`, '', ...lines].join('\n')
-}
-
 interface RawTimeline {
   records?: { type?: string; name?: string; result?: string | null; log?: { id?: number } | null }[]
 }
@@ -364,17 +360,10 @@ async function failedBuildLogs(a: Access, buildId: number): Promise<string[]> {
   return logs
 }
 
-export async function pullRequestFeedback(cwd: string, kind: PullRequestFeedbackKind, url?: string): Promise<string> {
+export async function checksFeedback(cwd: string, url?: string): Promise<string> {
   const a = await access(cwd)
   const raw = await findPullRequest(a, url)
   if (!raw) throw new Error('This branch has no pull request.')
-  if (kind === 'reviews') {
-    const pr = parsePullRequest(raw, [], a.repo)
-    const threads = await repoApi<{ value: RawThread[] }>(a, `/pullrequests/${raw.pullRequestId}/threads`)
-    const prompt = commentsPrompt(pr, threads.value)
-    if (!prompt) throw new Error('No open review comments.')
-    return redactSecrets(prompt)
-  }
   const { checks, builds } = await checksOf(a, raw)
   const pr = parsePullRequest(raw, checks, a.repo)
   const failed = pr.checks.filter((check) => check.state === 'failure')
@@ -633,6 +622,330 @@ export async function azureSummary(check: boolean): Promise<AzureSummary> {
   }
 }
 
+// ---- Pull request lists, actions and review threads ----
+
+interface RawIdentity {
+  id?: string
+  displayName?: string
+  uniqueName?: string
+  /** A group or team rather than a person. */
+  isContainer?: boolean
+}
+
+type RawReviewer = RawIdentity & { vote: number; isRequired?: boolean }
+
+interface RawListPullRequest extends RawPullRequest {
+  description?: string
+  createdBy?: RawIdentity
+  reviewers?: RawReviewer[]
+  mergeStatus?: 'notSet' | 'queued' | 'conflicts' | 'succeeded' | 'rejectedByPolicy' | 'failure'
+  forkSource?: unknown
+  creationDate?: string
+  closedDate?: string
+  completionOptions?: { deleteSourceBranch?: boolean }
+}
+
+const nameOf = (identity: RawIdentity | undefined) => identity?.displayName ?? identity?.uniqueName ?? null
+
+function azureMergeability(status: RawListPullRequest['mergeStatus']): PullRequestMergeability {
+  if (status === 'succeeded') return 'clean'
+  if (status === 'conflicts') return 'conflicts'
+  if (status === 'rejectedByPolicy') return 'blocked'
+  return 'unknown'
+}
+
+/** One pull request as a list row. The list carries no build state and no change date, so its latest date is used. */
+export function parseListPullRequest(
+  raw: RawListPullRequest,
+  repo: AzureRepository,
+  viewerId: string | null,
+): PullRequestSummary {
+  const people = (raw.reviewers ?? []).filter((reviewer) => !reviewer.isContainer)
+  return {
+    ...parsePullRequest(raw, [], repo),
+    author: nameOf(raw.createdBy),
+    fork: raw.forkSource != null,
+    checks: null,
+    mergeable: azureMergeability(raw.mergeStatus),
+    openThreads: null,
+    requestedReviewers: (raw.reviewers ?? []).map(nameOf).filter((name): name is string => !!name),
+    group:
+      viewerId && raw.createdBy?.id === viewerId
+        ? 'mine'
+        : viewerId && people.some((reviewer) => reviewer.id === viewerId)
+          ? 'review'
+          : 'other',
+    updatedAt: Date.parse(raw.closedDate ?? raw.creationDate ?? '') || 0,
+  }
+}
+
+const viewerOf = (a: Access) =>
+  azureApi<{ authenticatedUser?: { id?: string; providerDisplayName?: string } }>(
+    a.credential,
+    `/${q(a.repo.organization)}/_apis/connectionData`,
+  )
+    .then((data) => data.authenticatedUser ?? null)
+    .catch(() => null)
+
+export async function listPullRequests(cwd: string, options: { includeClosed: boolean }): Promise<PullRequestList> {
+  try {
+    const a = await access(cwd)
+    const list = (status: string, top: number) =>
+      repoApi<{ value: RawListPullRequest[] }>(a, `/pullrequests?searchCriteria.status=${status}&$top=${top}`).then(
+        (page) => page.value,
+      )
+    const [viewer, open, completed, abandoned] = await Promise.all([
+      viewerOf(a),
+      list('active', 50),
+      options.includeClosed ? list('completed', 20) : [],
+      options.includeClosed ? list('abandoned', 10) : [],
+    ])
+    const viewerId = viewer?.id ?? null
+    return {
+      availability: 'ready',
+      service: 'azure',
+      viewer: viewer?.providerDisplayName ?? null,
+      pullRequests: [...open, ...completed, ...abandoned].map((raw) => parseListPullRequest(raw, a.repo, viewerId)),
+    }
+  } catch (error) {
+    if (error instanceof ForgeError && error.availability)
+      return { availability: error.availability, service: 'azure', viewer: null, pullRequests: [] }
+    throw error
+  }
+}
+
+function idOf(url: string): number {
+  const match = /\/pullrequest\/(\d+)(?:[/?#]|$)/i.exec(url)
+  if (!match) throw new Error('That is not an Azure DevOps pull request link.')
+  return Number(match[1])
+}
+
+const readPullRequest = (a: Access, url: string) => repoApi<RawListPullRequest>(a, `/pullrequests/${idOf(url)}`)
+
+/** The "Limit merge types" branch policy; its type id is the same in every organization. */
+const MERGE_TYPE_POLICY = 'fa4e907d-c16b-4a4c-9dfa-4916e5d171ab'
+
+const STRATEGY: Record<MergeMethod, string> = { merge: 'noFastForward', squash: 'squash', rebase: 'rebase' }
+
+/** What completing the pull request needs, from its merge status, its branch policies and its checks. */
+export function azureMergeOptions(
+  pr: RawListPullRequest,
+  checks: ForgeCheck[],
+  evaluations: RawEvaluation[],
+): MergeOptions {
+  const typeOf = (evaluation: RawEvaluation) => evaluation.configuration.type.id.toLowerCase()
+  const limit = evaluations.find(
+    (evaluation) => typeOf(evaluation) === MERGE_TYPE_POLICY && evaluation.status !== 'notApplicable',
+  )?.configuration.settings
+  const methods: MergeMethod[] = limit
+    ? [
+        ...(limit.allowSquash ? (['squash'] as const) : []),
+        ...(limit.allowNoFastForward ? (['merge'] as const) : []),
+        ...(limit.allowRebase ? (['rebase'] as const) : []),
+      ]
+    : ['squash', 'merge', 'rebase']
+  const blockers: string[] = []
+  if (pr.status !== 'active') blockers.push('This pull request is not active.')
+  if (pr.isDraft) blockers.push('It is a draft. Publish it for review first.')
+  if (pr.mergeStatus === 'conflicts') blockers.push('It has conflicts with its target branch.')
+  const failing = checks.some((check) => check.state === 'failure')
+  if (failing) blockers.push('Some checks are failing.')
+  const pending = evaluations.filter(
+    (evaluation) =>
+      evaluation.configuration.isBlocking &&
+      ![MERGE_TYPE_POLICY, BUILD_POLICY].includes(typeOf(evaluation)) &&
+      !['approved', 'notApplicable'].includes(evaluation.status),
+  )
+  if (pending.length) blockers.push('Branch policies are blocking it: required reviewers or comments are missing.')
+  const building = evaluations.some(
+    (evaluation) =>
+      evaluation.configuration.isBlocking &&
+      typeOf(evaluation) === BUILD_POLICY &&
+      (evaluation.status === 'queued' || evaluation.status === 'running'),
+  )
+  if (building) blockers.push('Required builds are still running.')
+  if (!methods.length) blockers.push('This repository allows no merge type Ramu can use.')
+  return { methods, blockers, canDeleteBranch: pr.forkSource == null }
+}
+
+export async function mergeOptions(cwd: string, url: string): Promise<MergeOptions> {
+  const a = await access(cwd)
+  const pr = await readPullRequest(a, url)
+  const { checks, evaluations } = await checksOf(a, pr)
+  return azureMergeOptions(pr, checks, evaluations)
+}
+
+/** Complete, abandon, reactivate or publish. A completion whose reply is lost is checked before it fails. */
+export async function pullRequestAction(cwd: string, url: string, action: PullRequestAction): Promise<void> {
+  const a = await access(cwd)
+  const pr = await readPullRequest(a, url)
+  const path = `/pullrequests/${pr.pullRequestId}`
+  switch (action.kind) {
+    case 'merge':
+      try {
+        await repoApi(a, path, {
+          method: 'PATCH',
+          body: {
+            status: 'completed',
+            lastMergeSourceCommit: pr.lastMergeSourceCommit,
+            completionOptions: {
+              mergeStrategy: STRATEGY[action.method],
+              deleteSourceBranch: action.deleteBranch && pr.forkSource == null,
+            },
+          },
+        })
+      } catch (error) {
+        const after = await readPullRequest(a, url).catch(() => null)
+        if (after?.status !== 'completed') throw error
+      }
+      return
+    case 'close':
+      await repoApi(a, path, { method: 'PATCH', body: { status: 'abandoned' } })
+      return
+    case 'reopen':
+      await repoApi(a, path, { method: 'PATCH', body: { status: 'active' } })
+      return
+    case 'ready':
+      await repoApi(a, path, { method: 'PATCH', body: { isDraft: false } })
+      return
+    case 'update-branch':
+      throw new Error(
+        'Azure DevOps cannot update a pull request’s branch from its target. Merge or rebase the target branch locally and push.',
+      )
+  }
+}
+
+export async function pullRequestBody(cwd: string, url: string): Promise<string> {
+  return (await readPullRequest(await access(cwd), url)).description ?? ''
+}
+
+interface RawThread {
+  id: number
+  status?: 'active' | 'pending' | 'fixed' | 'wontFix' | 'closed' | 'byDesign' | 'unknown'
+  isDeleted?: boolean
+  threadContext?: {
+    filePath?: string
+    rightFileStart?: { line?: number }
+    leftFileStart?: { line?: number }
+  } | null
+  comments?: {
+    id: number
+    content?: string
+    commentType?: string
+    isDeleted?: boolean
+    publishedDate?: string
+    author?: RawIdentity
+  }[]
+}
+
+const isBot = (identity: RawIdentity | undefined) => /build service|\[bot\]$/i.test(nameOf(identity) ?? '')
+
+/**
+ * Threads with a person's comment in them; system notes (votes, pushes) are left out. Only project members with
+ * permission to contribute to pull requests can comment on Azure Repos, so every comment is trusted. Azure DevOps does
+ * not report whether a thread's line has since changed, so none is marked outdated.
+ */
+export function parseThreads(threads: RawThread[]): PullRequestThread[] {
+  return threads.flatMap((thread) => {
+    if (thread.isDeleted) return []
+    const comments = (thread.comments ?? []).filter(
+      (comment) => !comment.isDeleted && comment.commentType !== 'system' && comment.content?.trim(),
+    )
+    if (!comments.length) return []
+    const context = thread.threadContext
+    const status = thread.status ?? 'unknown'
+    return [
+      {
+        id: String(thread.id),
+        path: context?.filePath?.replace(/^\//, '') ?? null,
+        line: context?.rightFileStart?.line ?? context?.leftFileStart?.line ?? null,
+        outdated: false,
+        resolved: !['active', 'pending', 'unknown'].includes(status),
+        resolvable: status !== 'unknown',
+        comments: comments.map((comment) => ({
+          id: `${thread.id}/${comment.id}`,
+          author: nameOf(comment.author),
+          bot: isBot(comment.author),
+          trusted: true,
+          body: (comment.content ?? '').trim(),
+          createdAt: Date.parse(comment.publishedDate ?? '') || 0,
+        })),
+      },
+    ]
+  })
+}
+
+export async function reviewThreads(cwd: string, url: string): Promise<PullRequestThread[]> {
+  const a = await access(cwd)
+  const page = await repoApi<{ value: RawThread[] }>(a, `/pullrequests/${idOf(url)}/threads`)
+  return parseThreads(page.value)
+}
+
+export async function replyToThread(cwd: string, url: string, threadId: string, body: string): Promise<string> {
+  const a = await access(cwd)
+  const comment = await repoApi<{ id: number }>(a, `/pullrequests/${idOf(url)}/threads/${q(threadId)}/comments`, {
+    method: 'POST',
+    body: { content: body, parentCommentId: 1, commentType: 1 },
+  })
+  return `${threadId}/${comment.id}`
+}
+
+export async function resolveThread(cwd: string, url: string, threadId: string): Promise<void> {
+  const a = await access(cwd)
+  await repoApi(a, `/pullrequests/${idOf(url)}/threads/${q(threadId)}`, { method: 'PATCH', body: { status: 'fixed' } })
+}
+
+/** Asks the named reviewers again, resetting their vote. Azure DevOps finds people by id, so names match reviewers. */
+export async function requestReviews(cwd: string, url: string, reviewers: string[]): Promise<void> {
+  if (!reviewers.length) return
+  const a = await access(cwd)
+  const pr = await readPullRequest(a, url)
+  const found = reviewers.map((name) => {
+    const reviewer = (pr.reviewers ?? []).find((entry) =>
+      [entry.displayName, entry.uniqueName].some((value) => value?.toLowerCase() === name.toLowerCase()),
+    )
+    if (!reviewer?.id) throw new Error(`${name} is not a reviewer of this pull request.`)
+    return reviewer
+  })
+  for (const reviewer of found)
+    await repoApi(a, `/pullrequests/${pr.pullRequestId}/reviewers/${q(reviewer.id!)}`, {
+      method: 'PUT',
+      body: { vote: 0, ...(reviewer.isRequired ? { isRequired: true } : {}) },
+    })
+}
+
+/** Votes: 10 approves, -5 waits for the author. A plain comment review leaves the vote alone. */
+const VOTE: Record<ReviewVerdict, number | null> = { comment: null, approve: 10, 'request-changes': -5 }
+
+/** Inline comments as threads on the right-hand side, the summary as a general thread, then the vote. */
+export async function submitReview(
+  cwd: string,
+  url: string,
+  review: { verdict: ReviewVerdict; body: string; comments: ReviewCommentDraft[] },
+): Promise<void> {
+  const a = await access(cwd)
+  const path = `/pullrequests/${idOf(url)}`
+  const vote = VOTE[review.verdict]
+  const viewer = vote === null ? null : await viewerOf(a)
+  if (vote !== null && !viewer?.id) throw new Error('Azure DevOps did not say whose token this is, so it cannot vote.')
+  const thread = (content: string, extra: Record<string, unknown>) =>
+    repoApi(a, `${path}/threads`, {
+      method: 'POST',
+      body: { comments: [{ parentCommentId: 0, content, commentType: 1 }], ...extra },
+    })
+  for (const comment of review.comments) {
+    const position = { line: comment.line, offset: 1 }
+    await thread(comment.body, {
+      status: 'active',
+      threadContext: { filePath: `/${comment.path}`, rightFileStart: position, rightFileEnd: position },
+    })
+  }
+  // An approval's summary is closed so it does not trip a "resolve every comment" policy on its own.
+  if (review.body.trim()) await thread(review.body, { status: review.verdict === 'approve' ? 'closed' : 'active' })
+  if (vote !== null && viewer?.id)
+    await repoApi(a, `${path}/reviewers/${q(viewer.id)}`, { method: 'PUT', body: { vote } })
+}
+
 registerForgeAdapter({
   id: 'azure',
   repositoryAccount,
@@ -640,7 +953,16 @@ registerForgeAdapter({
   pullRequestStatus,
   pullRequestDraft,
   createPullRequest,
-  pullRequestFeedback,
+  checksFeedback,
+  listPullRequests,
+  mergeOptions,
+  pullRequestAction,
+  pullRequestBody,
+  reviewThreads,
+  replyToThread,
+  resolveThread,
+  requestReviews,
+  submitReview,
   listIssues,
   issueDetails,
   publishRepository,

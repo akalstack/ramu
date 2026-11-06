@@ -11,8 +11,15 @@ import type {
   ForgeRepositorySummary,
   ForgeStatus,
   IssueSummary,
+  MergeMethod,
+  MergeOptions,
   PublishRepositoryInput,
-  PullRequestFeedbackKind,
+  PullRequestAction,
+  PullRequestList,
+  PullRequestSummary,
+  PullRequestThread,
+  ReviewCommentDraft,
+  ReviewVerdict,
   PullRequestInfo,
   PullRequestInput,
   PullRequestReviewDecision,
@@ -221,32 +228,6 @@ export async function createPullRequest(cwd: string, input: PullRequestInput): P
   return pullRequestStatus(cwd)
 }
 
-interface RawComment {
-  content?: { raw?: string }
-  deleted?: boolean
-  parent?: unknown
-  resolution?: unknown
-  inline?: { path?: string; to?: number | null }
-  user?: { display_name?: string; nickname?: string }
-}
-
-/** Open review comments as a prompt, or null when there are none. */
-export function commentsPrompt(pr: PullRequestInfo, comments: RawComment[]): string | null {
-  const open = comments.filter((comment) => !comment.deleted && !comment.parent && !comment.resolution)
-  const lines = open
-    .map((comment) => {
-      const text = comment.content?.raw?.trim()
-      if (!text) return null
-      const where = comment.inline?.path
-        ? `${comment.inline.path}${comment.inline.to ? `:${comment.inline.to}` : ''}: `
-        : ''
-      return `- ${where}${comment.user?.nickname ?? comment.user?.display_name ?? 'reviewer'}: ${text}`
-    })
-    .filter((line): line is string => !!line)
-  if (!lines.length) return null
-  return [`Address the open review comments on pull request #${pr.number} (${pr.title}):`, '', ...lines].join('\n')
-}
-
 /** The build number of a Bitbucket Pipelines result, from the link its build status carries. */
 export function pipelineNumber(url: string | null): number | null {
   const match = url ? /bitbucket\.org\/[^/]+\/[^/]+\/pipelines\/results\/(\d+)/.exec(url) : null
@@ -308,17 +289,11 @@ async function pipelineLogs(a: Access, number: number): Promise<string[]> {
   return logs
 }
 
-export async function pullRequestFeedback(cwd: string, kind: PullRequestFeedbackKind, url?: string): Promise<string> {
+export async function checksFeedback(cwd: string, url?: string): Promise<string> {
   const a = await access(cwd)
   const raw = await findPullRequest(a, url)
   if (!raw) throw new Error('This branch has no pull request.')
-  const pr = parsePullRequest(raw, kind === 'checks' ? await checksOf(a, raw.id) : [])
-  if (kind === 'reviews') {
-    const comments = await repoApi<{ values: RawComment[] }>(a, `/pullrequests/${raw.id}/comments?pagelen=100`)
-    const prompt = commentsPrompt(pr, comments.values)
-    if (!prompt) throw new Error('No open review comments.')
-    return redactSecrets(prompt)
-  }
+  const pr = parsePullRequest(raw, await checksOf(a, raw.id))
   const failed = pr.checks.filter((check) => check.state === 'failure')
   if (!failed.length) throw new Error('No failing builds.')
   const pipelines = [...new Set(failed.map((check) => pipelineNumber(check.url)).filter((n) => n !== null))]
@@ -537,6 +512,330 @@ export async function bitbucketSummary(
   }
 }
 
+// ---- Pull request lists, actions and review threads ----
+
+interface RawUser {
+  uuid?: string
+  account_id?: string
+  username?: string
+  nickname?: string
+  display_name?: string
+  /** `app_user` for apps and bots. */
+  type?: string
+}
+
+const userName = (user: RawUser | null | undefined) => user?.username ?? user?.nickname ?? user?.display_name ?? null
+
+interface RawListPullRequest extends RawPullRequest {
+  author?: RawUser | null
+  reviewers?: RawUser[]
+  participants?: (NonNullable<RawPullRequest['participants']>[number] & { user?: RawUser })[]
+  updated_on?: string
+  close_source_branch?: boolean
+  description?: string
+  source: RawPullRequest['source'] & { repository?: { full_name?: string } }
+  destination: RawPullRequest['destination'] & {
+    repository?: { full_name?: string }
+    branch: { name: string; merge_strategies?: string[] }
+  }
+}
+
+const isFork = (raw: RawListPullRequest) =>
+  !!raw.source.repository?.full_name && raw.source.repository.full_name !== raw.destination.repository?.full_name
+
+/** One pull request as a list row. Bitbucket's list carries no build status or mergeability. */
+export function parseListPullRequest(raw: RawListPullRequest, viewer: RawUser | null): PullRequestSummary {
+  const reviewers = raw.reviewers ?? []
+  const same = (user: RawUser | null | undefined) => !!viewer?.uuid && user?.uuid === viewer.uuid
+  return {
+    ...parsePullRequest(raw, []),
+    author: userName(raw.author),
+    fork: isFork(raw),
+    checks: null,
+    mergeable: 'unknown',
+    openThreads: null,
+    requestedReviewers: reviewers.map(userName).filter((name): name is string => !!name),
+    group: same(raw.author) ? 'mine' : reviewers.some(same) ? 'review' : 'other',
+    updatedAt: raw.updated_on ? Date.parse(raw.updated_on) || 0 : 0,
+  }
+}
+
+const viewerOf = (a: Access) => bitbucketApi<RawUser>(a.credential, '/user').catch(() => null)
+
+// The list leaves reviewers and participants out unless asked for.
+const LIST_FIELDS = `fields=${q('+values.participants,+values.reviewers')}`
+
+export async function listPullRequests(cwd: string, options: { includeClosed: boolean }): Promise<PullRequestList> {
+  try {
+    const a = await access(cwd)
+    const list = (states: string[], count: number) =>
+      repoApi<{ values: RawListPullRequest[] }>(
+        a,
+        `/pullrequests?${states.map((state) => `state=${state}`).join('&')}&sort=-updated_on&pagelen=${count}&${LIST_FIELDS}`,
+      ).then((page) => page.values)
+    const [viewer, open, closed] = await Promise.all([
+      viewerOf(a),
+      list(['OPEN'], 50),
+      options.includeClosed ? list(['MERGED', 'DECLINED'], 30) : [],
+    ])
+    return {
+      availability: 'ready',
+      service: 'bitbucket',
+      viewer: userName(viewer),
+      pullRequests: [...open, ...closed].map((raw) => parseListPullRequest(raw, viewer)),
+    }
+  } catch (error) {
+    if (error instanceof ForgeError && error.availability)
+      return { availability: error.availability, service: 'bitbucket', viewer: null, pullRequests: [] }
+    throw error
+  }
+}
+
+function idOf(url: string): number {
+  const match = /\/pull-requests\/(\d+)(?:[/?#]|$)/.exec(url)
+  if (!match) throw new Error('That is not a Bitbucket pull request link.')
+  return Number(match[1])
+}
+
+const readPullRequest = (a: Access, url: string) => repoApi<RawListPullRequest>(a, `/pullrequests/${idOf(url)}`)
+
+const STRATEGY: Record<MergeMethod, string> = { merge: 'merge_commit', squash: 'squash', rebase: 'fast_forward' }
+
+/** What a merge needs, from the target branch's allowed strategies, the build statuses and the diff's conflicts. */
+export function bitbucketMergeOptions(
+  pr: RawListPullRequest,
+  facts: { checks: ForgeCheck[]; conflicts: boolean; permission: string | null },
+): MergeOptions {
+  const allowed = pr.destination.branch.merge_strategies
+  const methods = (['squash', 'merge', 'rebase'] as const).filter(
+    (method) => !allowed || allowed.includes(STRATEGY[method]),
+  )
+  const blockers: string[] = []
+  if (pr.state !== 'OPEN') blockers.push('This pull request is not open.')
+  if (pr.draft) blockers.push('It is a draft. Mark it ready for review first.')
+  if (facts.conflicts) blockers.push('It has conflicts with its base branch.')
+  if (facts.checks.some((check) => check.state === 'failure')) blockers.push('Some checks are failing.')
+  if (facts.permission === 'read') blockers.push('This account cannot merge into this repository.')
+  if (!methods.length) blockers.push('This repository allows no merge method Ramu can use.')
+  return { methods: [...methods], blockers, canDeleteBranch: !isFork(pr) && !pr.close_source_branch }
+}
+
+export async function mergeOptions(cwd: string, url: string): Promise<MergeOptions> {
+  const a = await access(cwd)
+  const pr = await readPullRequest(a, url)
+  const full = `${a.repo.workspace}/${a.repo.slug}`
+  const [checks, diffstat, permission] = await Promise.all([
+    checksOf(a, pr.id).catch(() => []),
+    repoApi<{ values: { status?: string }[] }>(a, `/pullrequests/${pr.id}/diffstat?pagelen=500`).catch(() => ({
+      values: [],
+    })),
+    bitbucketApi<{ values: { permission: string }[] }>(
+      a.credential,
+      `/user/permissions/repositories?q=${q(`repository.full_name="${full}"`)}`,
+    )
+      .then((page) => page.values[0]?.permission ?? null)
+      .catch(() => null),
+  ])
+  const conflicts = diffstat.values.some((entry) => entry.status === 'merge conflict')
+  return bitbucketMergeOptions(pr, { checks, conflicts, permission })
+}
+
+/** Merge, decline or mark ready. A merge whose reply is lost is checked before it fails. */
+export async function pullRequestAction(cwd: string, url: string, action: PullRequestAction): Promise<void> {
+  const a = await access(cwd)
+  const pr = await readPullRequest(a, url)
+  const path = `/pullrequests/${pr.id}`
+  switch (action.kind) {
+    case 'merge':
+      try {
+        await repoApi(a, `${path}/merge`, {
+          method: 'POST',
+          body: {
+            type: 'pullrequest',
+            merge_strategy: STRATEGY[action.method],
+            close_source_branch: action.deleteBranch && !isFork(pr),
+          },
+        })
+      } catch (error) {
+        const after = await readPullRequest(a, url).catch(() => null)
+        if (after?.state !== 'MERGED') throw error
+      }
+      return
+    case 'close':
+      await repoApi(a, `${path}/decline`, { method: 'POST' })
+      return
+    case 'reopen':
+      throw new Error('Bitbucket cannot reopen a declined pull request. Open a new one from the same branch.')
+    case 'ready':
+      await repoApi(a, path, { method: 'PUT', body: { title: pr.title, draft: false } })
+      return
+    case 'update-branch':
+      throw new Error(
+        'Bitbucket cannot update a pull request’s branch from its base. Merge or rebase the base branch locally and push.',
+      )
+  }
+}
+
+export async function pullRequestBody(cwd: string, url: string): Promise<string> {
+  return (await readPullRequest(await access(cwd), url)).description ?? ''
+}
+
+interface RawComment {
+  id: number
+  content?: { raw?: string }
+  deleted?: boolean
+  pending?: boolean
+  parent?: { id: number }
+  resolution?: unknown
+  inline?: { path?: string; to?: number | null; from?: number | null; outdated?: boolean }
+  user?: RawUser
+  created_on?: string
+}
+
+const isBot = (user: RawUser | undefined) => user?.type === 'app_user' || /\[bot\]$/i.test(userName(user) ?? '')
+
+/**
+ * Top-level comments as threads with their replies under them. Bitbucket does not say who can write to the
+ * repository, so a comment is trusted from the pull request's author, its reviewers, the account in use and bots.
+ */
+export function parseComments(
+  comments: RawComment[],
+  pr: Pick<RawListPullRequest, 'author' | 'reviewers' | 'participants'>,
+  viewer: RawUser | null,
+): PullRequestThread[] {
+  const trustedIds = new Set(
+    [
+      pr.author,
+      viewer,
+      ...(pr.reviewers ?? []),
+      ...(pr.participants ?? []).filter((entry) => entry.role === 'REVIEWER').map((entry) => entry.user),
+    ]
+      .map((user) => user?.uuid)
+      .filter((uuid): uuid is string => !!uuid),
+  )
+  const live = comments.filter((comment) => !comment.deleted && !comment.pending)
+  const byId = new Map(live.map((comment) => [comment.id, comment]))
+  const rootOf = (comment: RawComment) => {
+    let current = comment
+    for (let depth = 0; current.parent && depth < 100; depth++) {
+      const parent = byId.get(current.parent.id)
+      if (!parent) return null
+      current = parent
+    }
+    return current.parent ? null : current
+  }
+  const replies = new Map<number, RawComment[]>()
+  for (const comment of live) {
+    const root = rootOf(comment)
+    if (root && root !== comment) replies.set(root.id, [...(replies.get(root.id) ?? []), comment])
+  }
+  return live
+    .filter((comment) => !comment.parent)
+    .map((root) => ({
+      id: String(root.id),
+      path: root.inline?.path ?? null,
+      line: root.inline?.to ?? root.inline?.from ?? null,
+      outdated: root.inline?.outdated === true,
+      resolved: root.resolution != null,
+      resolvable: true,
+      comments: [root, ...(replies.get(root.id) ?? [])].map((comment) => {
+        const bot = isBot(comment.user)
+        return {
+          id: String(comment.id),
+          author: userName(comment.user),
+          bot,
+          trusted: bot || (!!comment.user?.uuid && trustedIds.has(comment.user.uuid)),
+          body: (comment.content?.raw ?? '').trim(),
+          createdAt: comment.created_on ? Date.parse(comment.created_on) || 0 : 0,
+        }
+      }),
+    }))
+}
+
+async function readComments(a: Access, id: number): Promise<RawComment[]> {
+  const comments: RawComment[] = []
+  let path: string | null = `/pullrequests/${id}/comments?pagelen=100`
+  // A long review runs to a few pages; five is far past what a thread hands to an agent.
+  for (let page = 0; path && page < 5; page++) {
+    const result: { values: RawComment[]; next?: string } = await repoApi(a, path)
+    comments.push(...result.values)
+    path = result.next?.startsWith(API)
+      ? result.next.slice(API.length).replace(/^\/repositories\/[^/]+\/[^/]+/, '')
+      : null
+  }
+  return comments
+}
+
+export async function reviewThreads(cwd: string, url: string): Promise<PullRequestThread[]> {
+  const a = await access(cwd)
+  const [pr, comments, viewer] = await Promise.all([readPullRequest(a, url), readComments(a, idOf(url)), viewerOf(a)])
+  return parseComments(comments, pr, viewer)
+}
+
+export async function replyToThread(cwd: string, url: string, threadId: string, body: string): Promise<string> {
+  const a = await access(cwd)
+  const comment = await repoApi<{ id: number }>(a, `/pullrequests/${idOf(url)}/comments`, {
+    method: 'POST',
+    body: { content: { raw: body }, parent: { id: Number(threadId) } },
+  })
+  return String(comment.id)
+}
+
+export async function resolveThread(cwd: string, url: string, threadId: string): Promise<void> {
+  const a = await access(cwd)
+  await repoApi(a, `/pullrequests/${idOf(url)}/comments/${q(threadId)}/resolve`, { method: 'POST' })
+}
+
+/**
+ * Adds the named people as reviewers. Bitbucket finds people by id only, so names are matched against the pull
+ * request's reviewers, participants and commenters.
+ */
+export async function requestReviews(cwd: string, url: string, reviewers: string[]): Promise<void> {
+  if (!reviewers.length) return
+  const a = await access(cwd)
+  const [pr, comments] = await Promise.all([readPullRequest(a, url), readComments(a, idOf(url))])
+  const people = [
+    pr.author,
+    ...(pr.reviewers ?? []),
+    ...(pr.participants ?? []).map((entry) => entry.user),
+    ...comments.map((comment) => comment.user),
+  ].filter((user): user is RawUser => !!user?.uuid)
+  const matches = (user: RawUser, name: string) =>
+    [user.username, user.nickname, user.display_name, user.uuid, user.account_id].some(
+      (value) => value?.toLowerCase() === name.toLowerCase(),
+    )
+  const wanted = reviewers.map((name) => {
+    const user = people.find((person) => matches(person, name))
+    if (!user)
+      throw new Error(`${name} has not taken part in this pull request, so Bitbucket cannot be asked for them.`)
+    return user.uuid!
+  })
+  const uuids = [...new Set([...(pr.reviewers ?? []).map((user) => user.uuid).filter(Boolean), ...wanted])]
+  await repoApi(a, `/pullrequests/${pr.id}`, {
+    method: 'PUT',
+    body: { title: pr.title, reviewers: uuids.map((uuid) => ({ uuid })) },
+  })
+}
+
+/** Inline comments, the summary as a comment, then the approval or the request for changes. */
+export async function submitReview(
+  cwd: string,
+  url: string,
+  review: { verdict: ReviewVerdict; body: string; comments: ReviewCommentDraft[] },
+): Promise<void> {
+  const a = await access(cwd)
+  const path = `/pullrequests/${idOf(url)}`
+  for (const comment of review.comments)
+    await repoApi(a, `${path}/comments`, {
+      method: 'POST',
+      body: { content: { raw: comment.body }, inline: { path: comment.path, to: comment.line } },
+    })
+  if (review.body.trim())
+    await repoApi(a, `${path}/comments`, { method: 'POST', body: { content: { raw: review.body } } })
+  if (review.verdict === 'approve') await repoApi(a, `${path}/approve`, { method: 'POST' })
+  if (review.verdict === 'request-changes') await repoApi(a, `${path}/request-changes`, { method: 'POST' })
+}
+
 registerForgeAdapter({
   id: 'bitbucket',
   repositoryAccount,
@@ -544,7 +843,16 @@ registerForgeAdapter({
   pullRequestStatus,
   pullRequestDraft,
   createPullRequest,
-  pullRequestFeedback,
+  checksFeedback,
+  listPullRequests,
+  mergeOptions,
+  pullRequestAction,
+  pullRequestBody,
+  reviewThreads,
+  replyToThread,
+  resolveThread,
+  requestReviews,
+  submitReview,
   listIssues,
   issueDetails,
   publishRepository,

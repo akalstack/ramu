@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CircleCheck, CircleDot, CircleX, ExternalLink, GitPullRequest, MessageSquare, Wrench } from 'lucide-react'
+import {
+  CircleCheck,
+  CircleDot,
+  CircleX,
+  ExternalLink,
+  GitPullRequest,
+  MessageSquare,
+  PanelRight,
+  Wrench,
+} from 'lucide-react'
 import type {
   AgentSettings,
   ForgeCheck,
@@ -88,12 +97,19 @@ export function PullRequestSection({
     enabled: pr?.state === 'open',
   })
   const { refetch: refreshWatch } = watchQuery
+  const drafts = useQuery({
+    queryKey: ipcQueryKeyOn(host.id, 'forge.drafts', pr?.url ?? ''),
+    queryFn: () => call('forge.drafts', pr!.url),
+    enabled: pr?.state === 'open',
+  })
+  const { refetch: refreshDrafts } = drafts
   useEffect(() => {
     if (pr?.state !== 'open') return
     return on('workspace:changed', () => {
       void refreshWatch()
+      void refreshDrafts()
     })
-  }, [on, refreshWatch, pr?.state])
+  }, [on, refreshWatch, refreshDrafts, pr?.state])
   const { refetch } = query
 
   // Keep visible PR details fresh; opted-in feedback delivery belongs to the background service.
@@ -237,6 +253,23 @@ export function PullRequestSection({
             </span>
             <ExternalLink size={11} className="flex-none text-muted-foreground" />
           </a>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 justify-start gap-1.5 px-1 text-caption text-muted-foreground"
+            onClick={() =>
+              ws.openView(taskId, {
+                kind: 'pull-request',
+                repoId: binding.repoId,
+                url: pr.url,
+                number: pr.number,
+                title: pr.title,
+              })
+            }
+          >
+            <PanelRight size={12} />
+            {drafts.data ? t('Replies ready · open pull request') : t('Open pull request')}
+          </Button>
           <div className="flex items-center gap-1.5 min-w-0 text-muted-foreground text-caption">
             {pr.checks.length ? (
               <>
@@ -294,9 +327,9 @@ export function PullRequestSection({
               <p className="text-caption text-muted-foreground">
                 {watchQuery.data.sessionId
                   ? t(
-                      'New failures and requested changes return to this thread, even with the window closed. You review and push.',
+                      'New failing checks and review comments return to this thread, even with the window closed. Its replies wait for you to send.',
                     )
-                  : t('Choose a thread to handle new failures and requested changes automatically.')}
+                  : t('Choose a thread to handle new failing checks and review comments automatically.')}
               </p>
             </div>
           )}

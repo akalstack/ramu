@@ -4,12 +4,22 @@ import type {
   PullRequestFeedbackKind,
   PullRequestInfo,
   PullRequestWatchStatus,
+  PullRequestThread,
 } from '@ramu/shared/types'
 import type { Db } from '../db'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
 import { currentBranch } from '../workspace/git'
-import { pullRequestFeedback, pullRequestStatus, resolvedAccountChoice, resolvedConnectionId } from '../workspace/forge'
+import {
+  pullRequestFeedback,
+  pullRequestStatus,
+  resolvedAccountChoice,
+  resolvedConnectionId,
+  reviewThreads,
+} from '../workspace/forge'
+import { reviewThreadsPrompt } from '../workspace/forge/reviewPrompt'
+import type { PullRequestDrafts } from './pullRequestDrafts'
+import type { PullRequestIndex } from './pullRequestIndex'
 import { fingerprint } from './inputGate'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
@@ -17,6 +27,8 @@ import { z } from 'zod'
 const KEY = 'pull-request-watches'
 const INTERVAL = 60_000
 const RATE_LIMIT_PAUSE = 10 * 60_000
+/** Comment ids remembered per watch; the oldest are forgotten first. */
+const SEEN_LIMIT = 2_000
 interface Watch {
   id: string
   cwd: string
@@ -29,7 +41,22 @@ interface Watch {
   /** The account choice (connection id, `cli` or `cli:<login>`) this watch was made under; it ends when that changes. */
   account?: string | null
   delivered: Partial<Record<PullRequestFeedbackKind, string>>
+  /**
+   * Review comments already handed to the thread or present before the watch began. Absent until the first look, which
+   * counts comments in resolved threads as seen and delivers the open ones.
+   */
+  seen?: string[]
 }
+
+/** What the thread row needs of a pull request read from its branch. */
+const linkOf = (pr: PullRequestInfo) => ({
+  url: pr.url,
+  number: pr.number,
+  title: pr.title,
+  state: pr.state,
+  draft: pr.draft,
+  reviewDecision: pr.reviewDecision,
+})
 
 function checksSignature(pr: PullRequestInfo): string {
   return fingerprint({ head: pr.headCommit, checks: pr.checks.filter((check) => check.state === 'failure') })
@@ -37,9 +64,14 @@ function checksSignature(pr: PullRequestInfo): string {
 
 /** Opt-in PR feedback, owned by a thread and polled by the service rather than a window. */
 export class PullRequestWatchService {
+  /** Set at startup: where replies are drafted and which pull request each thread works on. */
+  drafts: PullRequestDrafts | null = null
+  index: PullRequestIndex | null = null
+
   register(server: McpServer, sessionId: string): void {
     const session = this.agents.get(sessionId)
     if (session.parentId) return
+    this.drafts?.register(server, sessionId)
     const result = async (work: () => unknown) => {
       try {
         return { content: [{ type: 'text' as const, text: JSON.stringify(await work()) }] }
@@ -51,7 +83,7 @@ export class PullRequestWatchService {
       'watch_pull_request',
       {
         description:
-          'Watch this thread’s checked-out GitHub pull request when the user asks to watch or monitor it. New failing checks or requested changes enter this same thread’s queue. Never pushes. With several repositories, ask which one before supplying repoId.',
+          'Watch this thread’s checked-out pull request when the user asks to watch or monitor it. New failing checks and new review comments enter this same thread’s queue; answer comments with review_reply. Never pushes. With several repositories, ask which one before supplying repoId.',
         inputSchema: { repoId: z.string().max(100).optional(), url: z.string().url().max(2000).optional() },
       },
       ({ repoId, url }) =>
@@ -135,6 +167,7 @@ export class PullRequestWatchService {
     const account = await resolvedAccountChoice(cwd)
     const watch: Watch = { id: randomUUID(), cwd, repoId, branch, url, sessionId, connectionId, account, delivered: {} }
     this.workspace.setAppState(KEY, [...this.list().filter((w) => w.cwd !== cwd || w.url !== url), watch])
+    this.index?.link(this.agents.get(sessionId).taskId, repoId, linkOf(pr))
     this.changed()
     this.nextPoll = 0
   }
@@ -178,6 +211,7 @@ export class PullRequestWatchService {
     }
     if (!this.valid(watch)) return
     this.workspace.setAppState(KEY, [...this.list(), watch])
+    this.index?.link(taskId, repoId, linkOf(pr))
     this.nextPoll = 0
     this.changed()
   }
@@ -196,14 +230,15 @@ export class PullRequestWatchService {
     const { pullRequest: pr } = await pullRequestStatus(cwd)
     const watch = this.list().find((watch) => watch.cwd === cwd && watch.url === pr?.url)
     if (!watch || !pr || pr.state !== 'open') return null
+    if (kind === 'reviews') {
+      const open = (await reviewThreads(cwd, watch.url)).filter((thread) => !thread.resolved)
+      if (!open.length) throw new Error(`Pull request #${pr.number} has no open review comments.`)
+      if (!(await this.deliverReviews(watch, pr, open, null, true)))
+        throw new Error('The watch or branch changed while collecting feedback. Refresh and try again.')
+      return watch.sessionId
+    }
     const prompt = await pullRequestFeedback(cwd, kind, watch.url)
-    const delivered = await this.deliver(
-      watch,
-      kind,
-      kind === 'checks' ? checksSignature(pr) : fingerprint(prompt),
-      prompt,
-      true,
-    )
+    const delivered = await this.deliver(watch, kind, checksSignature(pr), prompt, true)
     if (!delivered) throw new Error('The watch or branch changed while collecting feedback. Refresh and try again.')
     return watch.sessionId
   }
@@ -260,6 +295,81 @@ export class PullRequestWatchService {
     return true
   }
 
+  /**
+   * Hands review threads to the watched thread as one round: the drafts batch starts with them, and their comments
+   * count as seen so the same comment never starts a second round.
+   */
+  private async deliverReviews(
+    watch: Watch,
+    pr: PullRequestInfo,
+    threads: PullRequestThread[],
+    fresh: Set<string> | null,
+    manual = false,
+  ): Promise<boolean> {
+    const prompt = reviewThreadsPrompt(pr, threads, fresh ?? undefined)
+    if (!prompt) return false
+    const ids = threads.flatMap((thread) => thread.comments.map((comment) => comment.id))
+    const delivered = await this.deliver(watch, 'reviews', fingerprint(ids), prompt, manual)
+    if (!delivered) return false
+    this.markSeen(watch.id, ids)
+    this.drafts?.begin({
+      url: watch.url,
+      number: pr.number,
+      repoId: watch.repoId,
+      branch: watch.branch,
+      sessionId: watch.sessionId,
+      threads,
+      reviewers: this.drafts.reviewersOf(watch.repoId, threads),
+    })
+    return true
+  }
+
+  private markSeen(watchId: string, ids: string[]): void {
+    this.workspace.setAppState(
+      KEY,
+      this.list().map((entry) =>
+        entry.id === watchId
+          ? { ...entry, seen: [...new Set([...(entry.seen ?? []), ...ids])].slice(-SEEN_LIMIT) }
+          : entry,
+      ),
+    )
+  }
+
+  /**
+   * New comments worth a round: in open threads, from trusted people other than the person, not yet seen. While
+   * drafted replies wait to be sent, new comments wait too, so the agent is not interrupted mid-review.
+   */
+  private async pollReviews(watch: Watch, pr: PullRequestInfo): Promise<void> {
+    const threads = await reviewThreads(watch.cwd, watch.url)
+    const current = this.list().find((entry) => entry.id === watch.id)
+    if (!current) return
+    if (!current.seen) {
+      // The first look: what was settled before the watch began is not news.
+      this.markSeen(
+        watch.id,
+        threads.filter((thread) => thread.resolved).flatMap((thread) => thread.comments.map((comment) => comment.id)),
+      )
+    }
+    const seen = new Set(this.list().find((entry) => entry.id === watch.id)?.seen ?? [])
+    const viewer = this.index?.viewer(watch.repoId)?.toLowerCase() ?? null
+    const fresh = new Set(
+      threads
+        .filter((thread) => !thread.resolved)
+        .flatMap((thread) => thread.comments)
+        .filter(
+          (comment) =>
+            !seen.has(comment.id) && comment.trusted && (!viewer || comment.author?.toLowerCase() !== viewer),
+        )
+        .map((comment) => comment.id),
+    )
+    if (!fresh.size) return
+    const waiting = this.drafts?.get(watch.url)
+    if (waiting?.kind === 'replies' && waiting.drafts.some((draft) => !draft.postedId && draft.outcome !== 'skipped'))
+      return
+    const touched = threads.filter((thread) => thread.comments.some((comment) => fresh.has(comment.id)))
+    await this.deliverReviews(watch, pr, touched, fresh)
+  }
+
   private suspended(watch: Watch): boolean {
     return (
       ['needs-input', 'stopped', 'failed'].includes(this.agents.get(watch.sessionId).state) ||
@@ -309,29 +419,22 @@ export class PullRequestWatchService {
         // Switching branches suspends delivery. A stopped thread or pending request stays under user control.
         if (this.suspended(watch) || (await currentBranch(watch.cwd)) !== watch.branch) continue
         this.agents.wakeBackground(watch.sessionId)
-        for (const kind of ['checks', 'reviews'] as const) {
-          const relevant =
-            kind === 'checks'
-              ? pr.checks.some((check) => check.state === 'failure')
-              : pr.reviewDecision === 'changes-requested'
-          if (!relevant) {
-            // A later failure/request on the same commit is new after an observed recovery.
-            this.workspace.setAppState(
-              KEY,
-              this.list().map((entry) =>
-                entry.id === watch.id ? { ...entry, delivered: { ...entry.delivered, [kind]: undefined } } : entry,
-              ),
-            )
-            continue
-          }
-          const before = this.list().find((entry) => entry.id === watch.id)
-          if (!before || (kind === 'checks' && before.delivered.checks === checksSignature(pr))) continue
-          const prompt = await pullRequestFeedback(watch.cwd, kind, watch.url)
-          const signature = kind === 'checks' ? checksSignature(pr) : fingerprint(prompt)
-          const current = this.list().find((entry) => entry.id === watch.id)
-          if (!current || current.delivered[kind] === signature) continue
-          await this.deliver(watch, kind, signature, prompt)
+        await this.pollReviews(watch, pr)
+        if (!pr.checks.some((check) => check.state === 'failure')) {
+          // A later failure on the same commit is new after an observed recovery.
+          this.workspace.setAppState(
+            KEY,
+            this.list().map((entry) =>
+              entry.id === watch.id ? { ...entry, delivered: { ...entry.delivered, checks: undefined } } : entry,
+            ),
+          )
+          continue
         }
+        const signature = checksSignature(pr)
+        if (this.list().find((entry) => entry.id === watch.id)?.delivered.checks === signature) continue
+        const prompt = await pullRequestFeedback(watch.cwd, 'checks', watch.url)
+        if (this.list().find((entry) => entry.id === watch.id)?.delivered.checks === signature) continue
+        await this.deliver(watch, 'checks', signature, prompt)
       } catch (error) {
         // Authentication, connectivity and log failures are retried on the next poll, independently per watch.
         console.error('Pull request watch:', watch.url, error)

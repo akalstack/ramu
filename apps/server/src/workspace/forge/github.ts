@@ -19,7 +19,6 @@ import type {
   IssueSummary,
   PublishRepositoryInput,
   PullRequestDraft,
-  PullRequestFeedbackKind,
   PullRequestInfo,
   PullRequestInput,
   PullRequestReviewDecision,
@@ -48,6 +47,7 @@ import {
   repositoriesDirect,
   type ApiAccess,
 } from './githubApi'
+import * as pulls from './githubPulls'
 
 export class ForgeError extends Error {
   constructor(
@@ -520,6 +520,18 @@ async function remoteBranchName(cwd: string, branch: string): Promise<string> {
   return merge.startsWith('refs/heads/') ? merge.slice('refs/heads/'.length) : branch
 }
 
+/** Whether GitHub calls can work for this checkout at all: a remote, and a signed-in `gh` or a usable saved token. */
+export async function githubAvailability(cwd: string): Promise<ForgeAvailability> {
+  if (!(await hasRemote(cwd))) return 'no-remote'
+  try {
+    const direct = await directAccess(cwd)
+    return ghExecutable() || direct ? 'ready' : 'no-cli'
+  } catch (error) {
+    if (error instanceof ForgeError && error.availability) return error.availability
+    throw error
+  }
+}
+
 /** The pull request for the checked-out branch, and whether forge features work here at all. */
 export async function pullRequestStatus(cwd: string, url?: string): Promise<ForgeStatus> {
   if (!(await hasRemote(cwd))) return { availability: 'no-remote', pullRequest: null }
@@ -897,96 +909,11 @@ async function failedChecksFeedback(cwd: string, pr: PullRequestInfo): Promise<s
   ].join('\n')
 }
 
-interface RawReviewData {
-  data: {
-    repository: {
-      pullRequest: {
-        reviewThreads: {
-          nodes: {
-            isResolved: boolean
-            isOutdated: boolean
-            path: string
-            line: number | null
-            comments: { nodes: { author: { login: string } | null; body: string }[] }
-          }[]
-        }
-        reviews: { nodes: { state: string; body: string; author: { login: string } | null }[] }
-      }
-    }
-  }
-}
-
-const REVIEW_QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
-  repository(owner: $owner, name: $repo) {
-    pullRequest(number: $number) {
-      reviewThreads(first: 100) {
-        nodes { isResolved isOutdated path line comments(first: 30) { nodes { author { login } body } } }
-      }
-      reviews(last: 30) { nodes { state body author { login } } }
-    }
-  }
-}`
-
-/** Open review threads and review summaries, written as a task for an agent. */
-export function reviewFeedbackPrompt(pr: PullRequestInfo, raw: RawReviewData): string | null {
-  const data = raw.data.repository.pullRequest
-  const author = (node: { author: { login: string } | null }) => node.author?.login ?? 'someone'
-  const threads = data.reviewThreads.nodes
-    .filter((thread) => !thread.isResolved && thread.comments.nodes.length)
-    .map((thread) =>
-      [
-        `### ${thread.path}${thread.line ? `:${thread.line}` : ''}${thread.isOutdated ? ' (outdated)' : ''}`,
-        ...thread.comments.nodes.map((comment) => `- ${author(comment)}: ${comment.body.trim()}`),
-      ].join('\n'),
-    )
-  const reviews = data.reviews.nodes
-    .filter((review) => review.body.trim() && review.state !== 'DISMISSED')
-    .map((review) => `- ${author(review)} (${review.state.toLowerCase().replace(/_/g, ' ')}): ${review.body.trim()}`)
-  if (!threads.length && !reviews.length) return null
-  return [
-    `Address the open review feedback on pull request #${pr.number} (${pr.url}).`,
-    '',
-    '<ramu-context>',
-    `Branch: ${pr.headBranch} → ${pr.baseBranch}`,
-    ...(reviews.length ? ['', '## Reviews', ...reviews] : []),
-    ...(threads.length ? ['', '## Open comment threads', ...threads] : []),
-    '',
-    'Make the requested changes where you agree. Where you disagree or a comment is unclear, leave the code and explain why.',
-    'Commit the changes on this branch. Do not push or reply on GitHub; I will review and push from Source Control.',
-    'Reply briefly: one line per thread on what you did, and which checks you ran locally. The reviewer has not seen the changes until they are pushed.',
-    '</ramu-context>',
-  ].join('\n')
-}
-
-/** A prompt that hands the pull request's failing checks or open review comments to an agent. */
-export async function pullRequestFeedback(cwd: string, kind: PullRequestFeedbackKind, url?: string): Promise<string> {
+/** A prompt that hands the pull request's failing checks to an agent. */
+export async function checksFeedback(cwd: string, url?: string): Promise<string> {
   const { pullRequest: pr } = await pullRequestStatus(cwd, url)
   if (!pr) throw new Error('This branch has no pull request.')
-  if (kind === 'checks') return failedChecksFeedback(cwd, pr)
-  const direct = await directAccess(cwd)
-  const raw = direct
-    ? await graphql<RawReviewData>(direct, REVIEW_QUERY, {
-        owner: direct.owner,
-        repo: direct.repo,
-        number: pr.number,
-      }).catch(directFailure)
-    : (JSON.parse(
-        await gh(cwd, [
-          'api',
-          'graphql',
-          '-F',
-          'owner={owner}',
-          '-F',
-          'repo={repo}',
-          '-F',
-          `number=${pr.number}`,
-          '-f',
-          `query=${REVIEW_QUERY}`,
-        ]),
-      ) as RawReviewData)
-  const prompt = reviewFeedbackPrompt(pr, raw)
-  if (!prompt) throw new Error(`Pull request #${pr.number} has no open review comments.`)
-  return prompt
+  return failedChecksFeedback(cwd, pr)
 }
 
 // ---- Issues ----
@@ -1073,12 +1000,21 @@ export async function issueDetails(
 /** GitHub behind the shared adapter boundary: `gh` when it is signed in, otherwise the direct API with a saved token. */
 registerForgeAdapter({
   id: 'github',
+  listPullRequests: pulls.listPullRequests,
+  mergeOptions: pulls.mergeOptions,
+  pullRequestAction: pulls.pullRequestAction,
+  pullRequestBody: pulls.pullRequestBody,
+  reviewThreads: pulls.reviewThreads,
+  replyToThread: pulls.replyToThread,
+  resolveThread: pulls.resolveThread,
+  requestReviews: pulls.requestReviews,
+  submitReview: pulls.submitReview,
   repositoryAccount,
   checkAccess,
   pullRequestStatus,
   pullRequestDraft,
   createPullRequest,
-  pullRequestFeedback,
+  checksFeedback,
   listIssues,
   issueDetails,
   publishRepository,
@@ -1102,7 +1038,7 @@ export interface RepoHookConfig {
  * One call to the repository-hooks API, through a saved token or `gh`. The body (which holds the secret) reaches `gh`
  * through a private temporary file, never its arguments, where other processes could read it.
  */
-async function hookCall<T>(cwd: string, method: string, path: string, body?: unknown): Promise<T> {
+export async function githubRest<T>(cwd: string, method: string, path: string, body?: unknown): Promise<T> {
   const direct = await directAccess(cwd)
   if (direct)
     return apiRequest<T>(direct, path, { method, ...(body === undefined ? {} : { body }) }).catch(directFailure)
@@ -1110,14 +1046,35 @@ async function hookCall<T>(cwd: string, method: string, path: string, body?: unk
     const out = await gh(cwd, ['api', path.slice(1), '--method', method])
     return (out.trim() ? JSON.parse(out) : null) as T
   }
-  const dir = await mkdtemp(join(tmpdir(), 'ramu-hook-'))
+  return withBodyFile(body, async (file) => {
+    const out = await gh(cwd, ['api', path.slice(1), '--method', method, '--input', file])
+    return (out.trim() ? JSON.parse(out) : null) as T
+  })
+}
+
+/** A request body for `gh` in a private temporary file, so its text never appears in a process's arguments. */
+async function withBodyFile<T>(body: unknown, use: (file: string) => Promise<T>): Promise<T> {
+  const dir = await mkdtemp(join(tmpdir(), 'ramu-gh-'))
   const file = join(dir, 'body.json')
   try {
     await writeFile(file, JSON.stringify(body), { mode: 0o600 })
-    return JSON.parse(await gh(cwd, ['api', path.slice(1), '--method', method, '--input', file])) as T
+    return await use(file)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+}
+
+/** One GraphQL document against the checkout's GitHub server, through a saved token or `gh`. */
+export async function githubGraphql<T>(cwd: string, query: string, variables: Record<string, unknown>): Promise<T> {
+  const direct = await directAccess(cwd)
+  if (direct) return (await graphql<{ data: T }>(direct, query, variables).catch(directFailure)).data
+  const result = await withBodyFile(
+    { query, variables },
+    async (file) =>
+      JSON.parse(await gh(cwd, ['api', 'graphql', '--input', file])) as { data: T; errors?: { message: string }[] },
+  )
+  if (result.errors?.length) throw new ForgeError(redactSecrets(result.errors[0]!.message), null)
+  return result.data
 }
 
 const hookBody = (config: RepoHookConfig) => ({
@@ -1130,7 +1087,7 @@ const hookBody = (config: RepoHookConfig) => ({
 export async function createRepoHook(cwd: string, config: RepoHookConfig): Promise<RepoHook> {
   const remote = await forgeRemoteOf(cwd)
   if (!remote) throw new ForgeError('This checkout has no GitHub remote.', 'no-remote')
-  const created = await hookCall<{ id: number }>(cwd, 'POST', `/repos/${remote.owner}/${remote.repo}/hooks`, {
+  const created = await githubRest<{ id: number }>(cwd, 'POST', `/repos/${remote.owner}/${remote.repo}/hooks`, {
     name: 'web',
     ...hookBody(config),
   })
@@ -1138,9 +1095,9 @@ export async function createRepoHook(cwd: string, config: RepoHookConfig): Promi
 }
 
 export async function updateRepoHook(cwd: string, hook: RepoHook, config: RepoHookConfig): Promise<void> {
-  await hookCall(cwd, 'PATCH', `/repos/${hook.owner}/${hook.repo}/hooks/${hook.id}`, hookBody(config))
+  await githubRest(cwd, 'PATCH', `/repos/${hook.owner}/${hook.repo}/hooks/${hook.id}`, hookBody(config))
 }
 
 export async function deleteRepoHook(cwd: string, hook: RepoHook): Promise<void> {
-  await hookCall(cwd, 'DELETE', `/repos/${hook.owner}/${hook.repo}/hooks/${hook.id}`)
+  await githubRest(cwd, 'DELETE', `/repos/${hook.owner}/${hook.repo}/hooks/${hook.id}`)
 }

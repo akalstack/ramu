@@ -1,6 +1,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { titleSourceNote } from '@ramu/shared/chat/threadStatus'
 import { Folder, GitBranch } from 'lucide-react'
+import { PullRequestIcon, StageChip } from '../../git/PullRequestIcon'
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { Button } from '@/components/desktop-button'
 import type { RepositoryBinding, Task } from '@ramu/shared/types'
@@ -208,6 +209,15 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
           {worktree && sharedWorkspace && ` · ${t('Shared workspace')}`}
         </span>
       </div>
+      {task.pullRequest && (
+        <div className="flex items-center gap-2 text-caption text-soft">
+          <PullRequestIcon pr={task.pullRequest} stage={task.pullRequest.stage} size={14} />
+          <span className="min-w-0 [overflow-wrap:anywhere]">
+            #{task.pullRequest.number} {task.pullRequest.title}
+          </span>
+          <StageChip stage={task.pullRequest.stage} className="ml-auto" />
+        </div>
+      )}
       {offline ? (
         <div className="text-caption text-muted-foreground">{t('Branch unavailable while offline')}</div>
       ) : places.isPending ? (

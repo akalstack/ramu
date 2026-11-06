@@ -34,6 +34,8 @@ import { useComputerUse } from '../runtime/computerUse'
 import { Monitor } from 'lucide-react-native'
 import { useStore } from '../runtime/store'
 import { threadSelection, useThreadSelection } from '../runtime/threadSelection'
+import { PULL_REQUEST_STAGE_LABEL, PULL_REQUEST_STAGE_TONE } from '@ramu/shared/pullRequests'
+import { PullRequestGlyph } from './PullRequestParts'
 
 /** Statuses where the thread waits on the person. */
 const WAITING = new Set(['approval', 'input', 'blocked', 'turn-limit'])
@@ -128,7 +130,11 @@ export const ChatRow = memo(function ChatRow({
   // Then where the work lands: its branch (a worktree's own, or the one its checkout has out), the project in lists
   // that mix projects, helpers still working, and an unreachable host.
   const branch = chat.branch || (chat.mode === 'worktree' ? say('Worktree') : '')
-  const facts = Boolean(branch || project || helpers || !online)
+  const pr = chat.pullRequest ?? null
+  const prLabel = pr
+    ? say('Pull request #{0}: {1}', { 0: pr.number, 1: say(PULL_REQUEST_STAGE_LABEL[pr.stage]) })
+    : null
+  const facts = Boolean(pr || branch || project || helpers || !online)
   // Without a state to report, the reply says what the thread came to, which is what a person scans the list for.
   const reply = state ? '' : (chat.lastReply ?? '')
   const detail = Boolean(state || reply || facts)
@@ -180,6 +186,7 @@ export const ChatRow = memo(function ChatRow({
             fullKey ? strings[fullKey] : chat.pending ? state?.text : null,
             reply || null,
             !online ? strings.threadOffline : null,
+            prLabel,
             branch ? `${say('Branch')} ${branch}` : null,
             project,
             agents.map((provider) => providerNames[provider]).join(', '),
@@ -270,8 +277,24 @@ export const ChatRow = memo(function ChatRow({
                   overflow: 'hidden',
                 }}
               >
+                {/* The pull request leads where there is one: its shape and stage say more than the branch's mark. */}
+                {pr ? (
+                  <View
+                    accessible
+                    accessibilityLabel={prLabel ?? undefined}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}
+                  >
+                    <PullRequestGlyph pr={pr} stage={pr.stage} size={11} />
+                    <T size={font.control} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+                      {`#${pr.number}`}
+                    </T>
+                    <T size={font.control} tone={PULL_REQUEST_STAGE_TONE[pr.stage]} numberOfLines={1}>
+                      {say(PULL_REQUEST_STAGE_LABEL[pr.stage])}
+                    </T>
+                  </View>
+                ) : null}
                 {branch ? (
-                  <Fact icon={<GitBranch size={11} color={c.muted} />} grow>
+                  <Fact icon={pr ? undefined : <GitBranch size={11} color={c.muted} />} grow>
                     {branch}
                   </Fact>
                 ) : null}

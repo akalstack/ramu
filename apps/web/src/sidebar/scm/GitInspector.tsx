@@ -1,5 +1,5 @@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Archive, GitCommitHorizontal } from 'lucide-react'
+import { Archive, GitCommitHorizontal, GitPullRequest } from 'lucide-react'
 import type { GitBranchInfo, GitCommit, GitStash, GitStatus, RepositoryBinding } from '@ramu/shared/types'
 import { t } from '../../i18n'
 import { BranchSection } from './BranchSection'
@@ -7,6 +7,7 @@ import { GIT_INSPECTOR } from './classes'
 import { CommitsPane } from './CommitsPane'
 import { GitInspectorHead } from './GitInspectorHead'
 import { StashesPane } from './StashesPane'
+import { PullRequestsPane } from './PullRequestsPane'
 import type { GitTab } from './types'
 
 /** The pinned Git section: branch, tracking state, commit history and stashes of one repository. */
@@ -103,6 +104,12 @@ export function GitInspector({
                 </span>
               )}
             </TabsTrigger>
+            {!!status?.remote && (
+              <TabsTrigger value="pulls" className="git-tab" aria-label={t('Pull requests')}>
+                <GitPullRequest size={14} className="flex-none" aria-hidden="true" />
+                {t('Pull requests')}
+              </TabsTrigger>
+            )}
           </TabsList>
           <CommitsPane
             taskId={taskId}
@@ -125,6 +132,7 @@ export function GitInspector({
             onDrop={onDropStash}
             onStash={onStash}
           />
+          {!!status?.remote && <PullRequestsPane taskId={taskId} binding={binding} enabled={tab === 'pulls'} />}
         </>
       )}
     </Tabs>

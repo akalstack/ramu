@@ -147,6 +147,8 @@ export interface Task {
    * has none here. Absent for threads a person started.
    */
   startedFrom?: ThreadOrigin | null
+  /** The pull request for the thread's branch, from the host's last look; absent when there is none or it is unknown. */
+  pullRequest?: import('./forge').TaskPullRequest | null
 }
 
 export interface ThreadOrigin {
@@ -201,6 +203,11 @@ export interface CreateTaskInput {
   /** Start from this branch on the remote, fetched first, instead of the repository's current branch. */
   baseBranch?: string
 
+  /**
+   * Work on an existing branch instead of a new one, in a new worktree: a pull request's head. `fetchRef` names the
+   * remote ref to fetch when the branch is not on the remote under its own name (a pull request from a fork).
+   */
+  checkout?: { repoId: string; branch: string; fetchRef?: string }
   /** Reuse an isolated workspace instead of creating new worktrees. */
   workspaceId?: string
   projectId: string

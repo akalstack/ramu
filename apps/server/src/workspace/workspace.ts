@@ -519,6 +519,7 @@ export class Workspace {
     prefix = 'ramu/',
     choice?: BranchChoice,
     baseBranch?: string,
+    checkout?: CreateTaskInput['checkout'],
   ): Promise<WorktreePlanEntry[]> {
     if (choice && (!validBranchName(choice.name) || choice.name.length > 160))
       throw new Error('Invalid Git branch name')
@@ -534,6 +535,10 @@ export class Workspace {
         throw new Error(
           `${repo.name} is not a Git repository. Initialize it in Source Control to use isolated worktrees.`,
         )
+      if (checkout?.repoId === repoId) {
+        plan.push(await this.checkoutPlan(repo, checkout, join(taskDir, repo.name)))
+        continue
+      }
       const base = baseBranch ? await gitCli.fetchedBranch(repo.root, baseBranch) : null
       const baseOid = base?.oid ?? (await gitCli.headOid(repo.root))
       const baseRef = base?.ref ?? (await gitCli.currentBranch(repo.root)) ?? baseOid
@@ -635,6 +640,41 @@ export class Workspace {
     return promise
   }
 
+  /** A worktree on an existing branch: the local one when it is there, otherwise created from the fetched remote head. */
+  private async checkoutPlan(
+    repo: Repository,
+    checkout: NonNullable<CreateTaskInput['checkout']>,
+    path: string,
+  ): Promise<WorktreePlanEntry> {
+    if (!validBranchName(checkout.branch) || checkout.branch.length > 160) throw new Error('Invalid Git branch name')
+    const taken = this.db
+      .prepare("SELECT 1 FROM bindings WHERE repo_id = ? AND mode = 'worktree' AND lower(task_branch) = lower(?)")
+      .get(repo.id, checkout.branch)
+    if (taken) throw new Error(`${checkout.branch} is already open in another thread's worktree.`)
+    if (await gitCli.branchExists(repo.root, checkout.branch)) {
+      const oid = (await gitCli.git(repo.root, ['rev-parse', '--verify', `refs/heads/${checkout.branch}`])).trim()
+      return {
+        repoId: repo.id,
+        repoName: repo.name,
+        baseRef: checkout.branch,
+        baseOid: oid,
+        taskBranch: checkout.branch,
+        path,
+      }
+    }
+    const fetched = checkout.fetchRef
+      ? await gitCli.fetchedRef(repo.root, checkout.fetchRef, checkout.branch)
+      : await gitCli.fetchedBranch(repo.root, checkout.branch)
+    return {
+      repoId: repo.id,
+      repoName: repo.name,
+      baseRef: fetched.ref,
+      baseOid: fetched.oid,
+      taskBranch: checkout.branch,
+      path,
+    }
+  }
+
   private async allocateTask(input: CreateTaskInput, plan?: WorktreePlanEntry[], choice?: BranchChoice): Promise<Task> {
     const requestKey = input.requestId ? `task-request:${input.requestId}` : null
     const fingerprint = JSON.stringify(input)
@@ -675,6 +715,7 @@ export class Workspace {
         input.branchPrefix,
         choice,
         input.baseBranch,
+        input.checkout,
       )
       if (expected) {
         if (expected.length !== repos.length || !repos.every((r) => expected.some((p) => p.repoId === r.id)))
@@ -726,6 +767,15 @@ export class Workspace {
           `worktree-bases:${task.workspaceId}`,
           Object.fromEntries(plan.map((p) => [p.repoId, p.baseOid])),
         )
+      const checkout = input.checkout && plan?.find((entry) => entry.repoId === input.checkout!.repoId)
+      if (checkout && task.workspaceId)
+        // The branch already exists or comes from the remote, so setup adopts it instead of claiming a new one.
+        this.setAppState(`worktree-checkout:${task.workspaceId}:${checkout.repoId}`, {
+          upstream:
+            !input.checkout!.fetchRef && checkout.baseRef.startsWith('refs/remotes/')
+              ? checkout.baseRef.slice('refs/remotes/'.length)
+              : null,
+        })
       if (choice?.source === 'fallback') {
         task.branchNamingFallback = true
         this.setAppState(`branch-fallback:${task.id}`, true)
@@ -763,7 +813,13 @@ export class Workspace {
           if (!isWithin(root, await realpath(dirname(b.cwd))))
             throw new Error('Worktree directory escaped the managed root')
           await gitCli.git(repo.root, ['check-ref-format', '--branch', b.taskBranch!])
-          if (await gitCli.branchExists(repo.root, b.taskBranch!)) {
+          const adopted = this.getAppState<{ upstream: string | null } | null>(
+            `worktree-checkout:${workspaceId}:${b.repoId}`,
+            null,
+          )
+          if (adopted && (await gitCli.branchExists(repo.root, b.taskBranch!))) {
+            // A pull request's existing local branch: worked on as it is.
+          } else if (await gitCli.branchExists(repo.root, b.taskBranch!)) {
             const owned = this.getAppState<string | null>(ownershipKey, null)
             const actual = (
               await gitCli.git(repo.root, ['rev-parse', '--verify', `refs/heads/${b.taskBranch!}`])
@@ -778,6 +834,12 @@ export class Workspace {
             this.setAppState(ownershipKey, oid)
           }
           await gitCli.worktreeAddExistingBranch(repo.root, b.cwd, b.taskBranch!)
+          if (adopted?.upstream)
+            await gitCli
+              .git(repo.root, ['branch', `--set-upstream-to=${adopted.upstream}`, '--', b.taskBranch!])
+              .catch(() => {
+                // Pushing still sets the upstream on first push; tracking is a convenience here.
+              })
         } else if ((await gitCli.currentBranch(b.cwd)) !== b.taskBranch) {
           throw new Error('Registered worktree no longer uses its recorded branch')
         }

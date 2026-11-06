@@ -1,3 +1,4 @@
+import { PULL_REQUEST_STAGE_LABEL } from '@ramu/shared/pullRequests'
 import { useState } from 'react'
 import { View } from 'react-native'
 import { useRouter } from 'expo-router'
@@ -75,7 +76,9 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
           : say('{0} GB free', { 0: gigabytes(row.memory.low.availableBytes) })
         : row.kind === 'failure'
           ? say('Failed')
-          : request?.title || inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
+          : row.kind === 'pull-request'
+            ? `#${row.chat.pullRequest!.number} · ${say(PULL_REQUEST_STAGE_LABEL[row.chat.pullRequest!.stage])}`
+            : request?.title || inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
   return (
     <View>
       {divider ? <Divider inset={space.l} /> : null}

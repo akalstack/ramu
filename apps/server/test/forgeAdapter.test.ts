@@ -8,15 +8,24 @@ const OPERATIONS: (keyof ForgeAdapter)[] = [
   'pullRequestStatus',
   'pullRequestDraft',
   'createPullRequest',
-  'pullRequestFeedback',
+  'checksFeedback',
+  'listPullRequests',
+  'mergeOptions',
+  'pullRequestAction',
+  'pullRequestBody',
+  'reviewThreads',
+  'replyToThread',
+  'resolveThread',
+  'requestReviews',
+  'submitReview',
   'listIssues',
   'issueDetails',
   'publishRepository',
   'searchRepositories',
 ]
 
-it('registers GitHub and GitLab behind the shared boundary, with every operation the facade offers', () => {
-  for (const id of ['github', 'gitlab'] as const) {
+it('registers every hosting service behind the shared boundary, with every operation the facade offers', () => {
+  for (const id of ['github', 'gitlab', 'bitbucket', 'azure'] as const) {
     const adapter = forgeAdapter(id)
     expect(adapter.id).toBe(id)
     for (const operation of OPERATIONS) {

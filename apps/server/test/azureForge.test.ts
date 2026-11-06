@@ -5,12 +5,15 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import {
   azureApi,
-  commentsPrompt,
+  azureMergeOptions,
   htmlText,
   parseAzureRemote,
   parseChecks,
+  parseListPullRequest,
   parsePullRequest,
   parseRepositories,
+  parseThreads,
+  pullRequestAction,
   reviewDecision,
 } from '../src/workspace/forge/azure'
 import { AzureCredentials, azureCredential } from '../src/workspace/forge/azureCredentials'
@@ -110,22 +113,160 @@ it('maps votes and required reviewers onto the shared review decision and pull r
   })
 })
 
-it('turns only active review threads into a prompt, leaving out system notes', () => {
-  const pr = { number: 7, title: 'Fix login' } as Parameters<typeof commentsPrompt>[0]
-  const prompt = commentsPrompt(pr, [
-    {
-      status: 'active',
-      threadContext: { filePath: '/src/a.ts', rightFileStart: { line: 12 } },
-      comments: [{ content: 'Handle null', author: { displayName: 'Rina' } }],
+const listRow = {
+  pullRequestId: 7,
+  title: 'Fix login',
+  status: 'active' as const,
+  sourceRefName: 'refs/heads/fix/login',
+  targetRefName: 'refs/heads/main',
+  lastMergeSourceCommit: { commitId: 'abc123' },
+  createdBy: { id: 'u-ana', displayName: 'Ana' },
+  reviewers: [
+    { id: 'u-bo', displayName: 'Bo', vote: 10 },
+    { id: 'g-team', displayName: 'Web Team', vote: 0, isContainer: true },
+  ],
+  mergeStatus: 'conflicts' as const,
+  creationDate: '2026-01-02T00:00:00Z',
+}
+
+it('lists pull requests grouped by the viewer’s part in them, with their merge status', () => {
+  expect(parseListPullRequest(listRow, repo, 'u-ana')).toMatchObject({
+    number: 7,
+    url: 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7',
+    author: 'Ana',
+    fork: false,
+    reviewDecision: 'approved',
+    checks: null,
+    mergeable: 'conflicts',
+    openThreads: null,
+    requestedReviewers: ['Bo', 'Web Team'],
+    group: 'mine',
+    updatedAt: Date.parse('2026-01-02T00:00:00Z'),
+  })
+  expect(parseListPullRequest(listRow, repo, 'u-bo').group).toBe('review')
+  expect(parseListPullRequest({ ...listRow, forkSource: {}, mergeStatus: 'queued' }, repo, null)).toMatchObject({
+    group: 'other',
+    fork: true,
+    mergeable: 'unknown',
+  })
+})
+
+it('offers the merge types branch policy allows and explains what blocks completion', () => {
+  const limit = {
+    status: 'approved' as const,
+    configuration: {
+      type: { id: 'FA4E907D-C16B-4A4C-9DFA-4916E5D171AB' },
+      isBlocking: true,
+      settings: { allowSquash: true, allowNoFastForward: false, allowRebase: true },
     },
-    { status: 'fixed', comments: [{ content: 'Done already' }] },
-    { status: 'active', comments: [{ content: 'Ahmad voted 10', commentType: 'system' }] },
-    { status: 'active', isDeleted: true, comments: [{ content: 'gone' }] },
-  ])
-  expect(prompt).toBe(
-    'Address the open review comments on pull request #7 (Fix login):\n\n- src/a.ts:12: Rina: Handle null',
+  }
+  const clean = { ...listRow, mergeStatus: 'succeeded' as const }
+  expect(azureMergeOptions(clean, [], [limit])).toEqual({
+    methods: ['squash', 'rebase'],
+    blockers: [],
+    canDeleteBranch: true,
+  })
+  expect(azureMergeOptions(clean, [], []).methods).toEqual(['squash', 'merge', 'rebase'])
+  const options = azureMergeOptions(
+    { ...listRow, isDraft: true },
+    [{ name: 'Build', state: 'failure', url: null }],
+    [
+      limit,
+      { status: 'queued', configuration: { type: { id: 'fd2167ab-b0be-447a-8ec8-39368250530e' }, isBlocking: true } },
+      { status: 'running', configuration: { type: { id: '0609b952-1397-4640-95ec-e00a01b2c241' }, isBlocking: true } },
+      { status: 'queued', configuration: { type: { id: 'optional-policy' }, isBlocking: false } },
+    ],
   )
-  expect(commentsPrompt(pr, [])).toBeNull()
+  expect(options.blockers).toEqual([
+    'It is a draft. Publish it for review first.',
+    'It has conflicts with its target branch.',
+    'Some checks are failing.',
+    'Branch policies are blocking it: required reviewers or comments are missing.',
+    'Required builds are still running.',
+  ])
+})
+
+it('reads threads without system notes, resolved by status, with every member’s comment trusted', () => {
+  const threads = parseThreads([
+    {
+      id: 1,
+      status: 'fixed',
+      threadContext: { filePath: '/src/a.ts', rightFileStart: { line: 12 } },
+      comments: [
+        { id: 1, content: ' Handle null ', author: { displayName: 'Rina' }, publishedDate: '2026-01-02T00:00:00Z' },
+        { id: 2, content: 'Done', author: { displayName: 'Ana' } },
+      ],
+    },
+    { id: 2, status: 'active', comments: [{ id: 1, content: 'Ahmad voted 10', commentType: 'system' }] },
+    { id: 3, status: 'active', isDeleted: true, comments: [{ id: 1, content: 'gone' }] },
+    { id: 4, status: 'active', comments: [{ id: 1, content: 'Why?', author: { displayName: 'Eve' } }] },
+    {
+      id: 5,
+      comments: [{ id: 1, content: 'Build passed', author: { displayName: 'Web App Build Service (acme)' } }],
+    },
+  ])
+  expect(threads.map((thread) => [thread.id, thread.resolved, thread.resolvable, thread.outdated])).toEqual([
+    ['1', true, true, false],
+    ['4', false, true, false],
+    ['5', false, false, false],
+  ])
+  expect(threads[0]).toMatchObject({ path: 'src/a.ts', line: 12 })
+  expect(threads[0]!.comments[0]).toEqual({
+    id: '1/1',
+    author: 'Rina',
+    bot: false,
+    trusted: true,
+    body: 'Handle null',
+    createdAt: Date.parse('2026-01-02T00:00:00Z'),
+  })
+  expect(threads[2]!.comments[0]!.bot).toBe(true)
+})
+
+it('treats a completion whose reply was lost as done when Azure DevOps shows it completed', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-merge-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Web%20App/_git/site'], { cwd: dir })
+  vi.stubEnv('AZURE_DEVOPS_EXT_PAT', 'pat')
+  let completedAfter = true
+  let reads = 0
+  const patches: unknown[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('https://dev.azure.com/acme/Web%20App/_apis/git/repositories/site/pullrequests/7?')) {
+        if (init?.method === 'PATCH') {
+          patches.push(JSON.parse(String(init.body)))
+          return new Response('', { status: 502 })
+        }
+        reads++
+        return new Response(
+          JSON.stringify({ ...listRow, status: reads > 1 && completedAfter ? 'completed' : 'active' }),
+        )
+      }
+      return new Response('', { status: 404 })
+    }),
+  )
+  const url = 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7'
+  try {
+    await expect(
+      pullRequestAction(dir, url, { kind: 'merge', method: 'squash', deleteBranch: true }),
+    ).resolves.toBeUndefined()
+    expect(patches[0]).toEqual({
+      status: 'completed',
+      lastMergeSourceCommit: { commitId: 'abc123' },
+      completionOptions: { mergeStrategy: 'squash', deleteSourceBranch: true },
+    })
+    completedAfter = false
+    reads = 0
+    await expect(pullRequestAction(dir, url, { kind: 'merge', method: 'merge', deleteBranch: false })).rejects.toThrow(
+      'Azure DevOps answered 502',
+    )
+    await expect(pullRequestAction(dir, url, { kind: 'update-branch' })).rejects.toThrow('cannot update')
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  }
 })
 
 it('never keeps the organization Azure puts in clone addresses, and skips disabled repositories', () => {

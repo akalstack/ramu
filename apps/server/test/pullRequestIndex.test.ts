@@ -1,0 +1,135 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PullRequestSummary, RepositoryBinding, Task } from '@ramu/shared/types'
+import { openDb, type Db } from '../src/db'
+import { Workspace } from '../src/workspace/workspace'
+import type { AgentService } from '../src/agent'
+import { PullRequestIndex } from '../src/background/pullRequestIndex'
+import { listPullRequests } from '../src/workspace/forge'
+import { currentBranch } from '../src/workspace/git'
+
+vi.mock('../src/workspace/forge', () => ({ listPullRequests: vi.fn() }))
+vi.mock('../src/workspace/git', () => ({ currentBranch: vi.fn() }))
+
+let db: Db, ws: Workspace, index: PullRequestIndex, changed: () => void
+let tasks: Task[]
+let bindings: Record<string, Partial<RepositoryBinding>>
+
+const pr = (overrides: Partial<PullRequestSummary>): PullRequestSummary => ({
+  number: 1,
+  title: 'Change',
+  url: 'https://github.com/o/r/pull/1',
+  state: 'open',
+  draft: false,
+  baseBranch: 'main',
+  headBranch: 'feature',
+  author: 'me',
+  fork: false,
+  reviewDecision: null,
+  checks: 'failure',
+  mergeable: 'clean',
+  openThreads: 0,
+  requestedReviewers: [],
+  group: 'mine',
+  updatedAt: 10,
+  ...overrides,
+})
+const task = (id: string, lastActiveAt: number) => ({ id, title: id, status: 'idle', lastActiveAt }) as Task
+
+const at = async (ms: number) => {
+  vi.setSystemTime(1_000_000_000_000 + ms)
+  await index.tick()
+}
+
+beforeEach(() => {
+  vi.resetAllMocks()
+  vi.useFakeTimers({ toFake: ['Date'] })
+  db = openDb(':memory:')
+  ws = new Workspace(db, '/tmp/ramu-pr-index-test')
+  tasks = [task('worktree', 1), task('old-shared', 2), task('new-shared', 3)]
+  bindings = {
+    worktree: { mode: 'worktree', taskBranch: 'feature' },
+    'old-shared': { mode: 'current', taskBranch: null },
+    'new-shared': { mode: 'current', taskBranch: null },
+  }
+  vi.spyOn(ws, 'listTasks').mockImplementation(() => tasks)
+  vi.spyOn(ws, 'listBindings').mockImplementation((id: string) => [
+    { repoId: 'repo', cwd: '/repo', setupState: 'ready', ...bindings[id] } as RepositoryBinding,
+  ])
+  vi.spyOn(ws, 'getRepository').mockReturnValue({ id: 'repo', projectId: 'p', name: 'r', root: '/repo' })
+  vi.mocked(currentBranch).mockResolvedValue('shared-branch')
+  vi.mocked(listPullRequests).mockResolvedValue({
+    availability: 'ready',
+    viewer: 'me',
+    pullRequests: [
+      pr({}),
+      pr({ number: 2, url: 'https://github.com/o/r/pull/2', headBranch: 'shared-branch', checks: 'success' }),
+      pr({ number: 3, url: 'https://github.com/o/r/pull/3', headBranch: 'fork-branch', fork: true }),
+    ],
+  })
+  changed = vi.fn()
+  const agents = { list: () => [] } as unknown as AgentService
+  index = new PullRequestIndex(ws, agents, changed)
+})
+afterEach(async () => {
+  await index.stop()
+  db.close()
+  vi.useRealTimers()
+})
+
+describe('pull requests on thread rows', () => {
+  it('links a worktree thread by its branch and only the latest thread in the shared checkout', async () => {
+    await at(0)
+    expect(index.forTask(tasks[0]!)).toMatchObject({ number: 1, stage: 'checks-failing' })
+    expect(index.forTask(tasks[1]!)).toBeNull()
+    expect(index.forTask(tasks[2]!)).toMatchObject({ number: 2, stage: 'review-required' })
+    expect(vi.mocked(changed)).toHaveBeenCalled()
+    expect(index.viewer('repo')).toBe('me')
+  })
+
+  it('keeps a link after the branch moves on, with its last-known state refreshed by later looks', async () => {
+    await at(0)
+    vi.mocked(currentBranch).mockResolvedValue('main')
+    vi.mocked(listPullRequests).mockResolvedValue({
+      availability: 'ready',
+      viewer: 'me',
+      pullRequests: [
+        pr({ state: 'merged', checks: 'success' }),
+        pr({ number: 2, url: 'https://github.com/o/r/pull/2', headBranch: 'shared-branch', state: 'merged' }),
+      ],
+    })
+    await at(10 * 60_000)
+    expect(index.forTask(tasks[2]!)).toMatchObject({ number: 2, state: 'merged', stage: 'merged' })
+    expect(index.forTask(tasks[0]!)).toMatchObject({ stage: 'merged' })
+  })
+
+  it('does not ask again before the list is stale, and backs off when the service is unavailable', async () => {
+    await at(0)
+    await at(30_000)
+    expect(listPullRequests).toHaveBeenCalledTimes(1)
+    index.invalidate('repo')
+    vi.mocked(listPullRequests).mockResolvedValue({ availability: 'signed-out', viewer: null, pullRequests: [] })
+    await at(31_000)
+    await at(5 * 60_000)
+    expect(listPullRequests).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows replies ready when drafts wait for the person', async () => {
+    await at(0)
+    index.drafts = () => [
+      {
+        kind: 'replies',
+        id: 'b',
+        url: 'https://github.com/o/r/pull/1',
+        number: 1,
+        repoId: 'repo',
+        branch: 'feature',
+        sessionId: 's',
+        threads: [],
+        drafts: [{ threadId: 't', outcome: 'question', reply: 'Which one?', commit: null }],
+        reviewers: [],
+        createdAt: 1,
+      },
+    ]
+    expect(index.forTask(tasks[0]!)?.stage).toBe('replies-ready')
+  })
+})

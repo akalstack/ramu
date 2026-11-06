@@ -80,6 +80,7 @@ export function hostInboxInput(hosts: { id: string; data?: HostOverview }[]) {
           lastActiveAt: task.lastActiveAt,
           sessionId: session?.nativeTask ? (session.parentId ?? null) : (session?.id ?? null),
           doneAt: task.doneAt,
+          pullRequest: task.pullRequest ?? null,
         }
       }),
     ),

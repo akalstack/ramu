@@ -381,3 +381,24 @@ it('counts finished threads since the last visit', () => {
   expect(finishedSince(model, now - 20)).toBe(1)
   expect(finishedSince(model, now)).toBe(0)
 })
+
+it('asks for pull requests whose next step is the person’s, after requests and beside failures', () => {
+  const pr = (taskId: string, stage: 'replies-ready' | 'ready' | 'checks-pending'): InboxChat => ({
+    ...chat('host', taskId),
+    status: 'idle',
+    pullRequest: { repoId: 'r', number: 3, title: 'Fix', url: `u/${taskId}`, state: 'open', draft: false, stage },
+  })
+  const approval = {
+    ...chat('host', 'approval'),
+    inputSummary: { count: 1, approvals: 1, connectors: 0, requests: [] },
+  }
+  const model = buildInbox({
+    chats: [pr('replies', 'replies-ready'), pr('merge', 'ready'), pr('waiting', 'checks-pending'), approval],
+    recaps: [],
+    summaries: [],
+    now,
+  })
+  expect(model.pullRequests.map((entry) => entry.taskId).sort()).toEqual(['merge', 'replies'])
+  expect(briefRows(model).map((row) => row.kind)).toEqual(['blocker', 'pull-request', 'pull-request'])
+  expect(model.needsYou).toBe(3)
+})

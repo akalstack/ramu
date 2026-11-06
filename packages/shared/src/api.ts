@@ -1056,6 +1056,59 @@ export interface RamuMethods {
   'forge.createPullRequest'(taskId: string, repoId: string, input: PullRequestInput): ForgeStatus
   /** An opening message that hands failing checks or open review comments to an agent. */
   'forge.pullRequestFeedback'(taskId: string, repoId: string, kind: PullRequestFeedbackKind): string
+  /** The repository's pull requests in groups for the account in use; `force` skips the host's short cache. */
+  'forge.pullRequests'(
+    taskId: string,
+    repoId: string,
+    includeClosed: boolean,
+    force: boolean,
+  ): import('./types').PullRequestList
+  'forge.mergeOptions'(taskId: string, repoId: string, url: string): import('./types').MergeOptions
+  /** Merge, close, reopen, mark ready or update the branch. Never available to agents. */
+  'forge.pullRequestAction'(
+    taskId: string,
+    repoId: string,
+    url: string,
+    action: import('./types').PullRequestAction,
+  ): void
+  'forge.reviewThreads'(taskId: string, repoId: string, url: string): import('./types').PullRequestThread[]
+  /** How to open a pull request in a thread: to work on it, or to review it with an agent. */
+  'forge.pullRequestHandoff'(
+    taskId: string,
+    repoId: string,
+    url: string,
+    purpose: 'work' | 'review',
+  ): import('./types').PullRequestHandoff
+  /** Records that a new thread works on (or reviews) a pull request, after its first message started. */
+  'forge.linkPullRequest'(taskId: string, repoId: string, url: string, purpose: 'work' | 'review'): void
+  /** Drafted replies or review waiting for `url`, or null. */
+  'forge.drafts'(url: string): import('./types').PullRequestDraftBatch | null
+  /** Pushes when asked, then posts the checked replies; a failed push posts nothing. */
+  'forge.sendReplies'(batchId: string, input: import('./types').SendRepliesInput): import('./types').SendRepliesResult
+  'forge.sendReview'(
+    batchId: string,
+    review: {
+      verdict: import('./types').ReviewVerdict
+      body: string
+      comments: { path: string; line: number; body: string }[]
+    },
+  ): void
+  'forge.discardDrafts'(batchId: string): void
+  /** Keeps the person's edits to drafted replies or a drafted review on the host, where the agent can read them. */
+  'forge.editDrafts'(
+    batchId: string,
+    change:
+      | {
+          kind: 'replies'
+          edits: { threadId: string; outcome: import('./types').ReviewReplyOutcome; reply: string }[]
+        }
+      | {
+          kind: 'review'
+          verdict: import('./types').ReviewVerdict
+          body: string
+          comments: { id: string; body: string }[]
+        },
+  ): void
   'forge.issues'(repoId: string, search: string): IssueSummary[]
   /** Repositories the host's GitHub account can see (yours when the search is empty), or one `owner/name`; to clone. */
   /** Repositories to clone. `origin` names a GitHub Enterprise server that has a saved connection on this host. */
