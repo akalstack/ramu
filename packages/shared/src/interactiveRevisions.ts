@@ -1,6 +1,5 @@
 import type { InteractiveReference } from './interactive'
 import type { AgentEvent } from './types'
-import { currentToolName } from '@ramu/shared/pages'
 
 /** Every version of one document a transcript published, newest first. */
 export interface InteractiveRevision {
@@ -50,7 +49,7 @@ const parse = (text: string | undefined): unknown => {
   }
 }
 
-/** The Ramu tool a call names, by its current name however its provider spells it, unwrapping tool_invoke. */
+/** The Ramu tool a call names, however its provider spells it, unwrapping the deferred catalog's tool_invoke. */
 function interactiveCall(event: AgentEvent): { name: string; args: Record<string, unknown> } | null {
   if (event.kind !== 'tool-use') return null
   const name =
@@ -61,9 +60,9 @@ function interactiveCall(event: AgentEvent): { name: string; args: Record<string
   const args = record(parse(event.input))
   if (name === 'tool_invoke') {
     const inner = typeof args.name === 'string' ? args.name : ''
-    return inner ? { name: currentToolName(inner), args: record(args.arguments) } : null
+    return inner ? { name: inner, args: record(args.arguments) } : null
   }
-  return { name: currentToolName(name), args }
+  return { name, args }
 }
 
 const resultText = (event: AgentEvent & { kind: 'tool-result' }): string =>

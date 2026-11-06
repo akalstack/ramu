@@ -49,7 +49,7 @@ export function PushRouting() {
           if (target.kind === 'artifact')
             return router.push({
               pathname: '/artifact/[computer]/[id]',
-              params: { computer: target.computerId, id: target.pageId },
+              params: { computer: target.computerId, id: target.artifactId },
             })
           await store.refresh(target.computerId).catch(() => {})
           if (alive)

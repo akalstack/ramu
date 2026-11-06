@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net'
 import { interactiveCsp } from '@ramu/shared/interactive'
 import { interactiveExport } from '@ramu/shared/interactiveExport'
 import type { TunnelChoice } from '@ramu/shared/types'
-import { declaredCapabilities, type PublicPageStatus } from '@ramu/shared/pages'
+import { declaredCapabilities, type PublicArtifactStatus } from '@ramu/shared/artifacts'
 import { TunnelManager } from '../remote/tunnel'
 import type { PageStore } from './pages'
 
@@ -31,7 +31,7 @@ export class PublicPages {
     private readonly pages: PageStore,
     private readonly saved: { read(): string[]; write(ids: string[]): void },
     private readonly tunnels: (changed: () => void) => TunnelManager = (changed) => new TunnelManager({ changed }),
-    private readonly changed: (pageId: string) => void = () => {},
+    private readonly changed: (artifactId: string) => void = () => {},
   ) {}
 
   /** Opens again, after a restart, the pages the person left open. */
@@ -39,8 +39,8 @@ export class PublicPages {
     for (const id of this.saved.read()) await this.start(id, choice).catch(() => {})
   }
 
-  async start(pageId: string, choice: TunnelChoice): Promise<PublicPageStatus> {
-    const page = this.pages.get(pageId)
+  async start(artifactId: string, choice: TunnelChoice): Promise<PublicArtifactStatus> {
+    const page = this.pages.get(artifactId)
     if (!servableAlone(page.capabilities))
       throw new Error(
         'This page uses records, AI or other host features, so it cannot be opened to people without Ramu. Make it a project instead.',
@@ -51,7 +51,7 @@ export class PublicPages {
       )
     if (choice.kind === 'ngrok' && choice.domain)
       throw new Error('A fixed ngrok domain belongs to this host. Use ngrok without a domain or Cloudflare.')
-    if (this.open.has(pageId)) return this.status(pageId)
+    if (this.open.has(artifactId)) return this.status(artifactId)
     const server = createServer((req, res) => {
       // One resource, read-only. Every other path, method and header-driven trick gets nothing.
       const path = (req.url ?? '/').split('?')[0]
@@ -59,9 +59,9 @@ export class PublicPages {
       if (path !== '/') return void res.writeHead(404).end()
       let body: string
       try {
-        const current = this.pages.get(pageId)
+        const current = this.pages.get(artifactId)
         if (!servableAlone(current.capabilities)) return void res.writeHead(410).end()
-        const document = this.pages.document(pageId)
+        const document = this.pages.document(artifactId)
         body = interactiveExport(document, null, false).html.replace(
           '<head>',
           `<head><title>${current.title.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))}</title>`,
@@ -87,33 +87,33 @@ export class PublicPages {
       server.listen(0, '127.0.0.1', () => resolve())
     })
     const port = (server.address() as AddressInfo).port
-    const tunnel = this.tunnels(() => this.changed(pageId))
-    this.open.set(pageId, { server, tunnel, since: Date.now() })
+    const tunnel = this.tunnels(() => this.changed(artifactId))
+    this.open.set(artifactId, { server, tunnel, since: Date.now() })
     tunnel.use(choice, `http://127.0.0.1:${port}`)
-    this.saved.write([...new Set([...this.saved.read(), pageId])])
-    this.changed(pageId)
-    return this.status(pageId)
+    this.saved.write([...new Set([...this.saved.read(), artifactId])])
+    this.changed(artifactId)
+    return this.status(artifactId)
   }
 
-  stop(pageId: string) {
-    const open = this.open.get(pageId)
-    this.open.delete(pageId)
+  stop(artifactId: string) {
+    const open = this.open.get(artifactId)
+    this.open.delete(artifactId)
     open?.tunnel.stop()
     open?.server.close()
-    this.saved.write(this.saved.read().filter((id) => id !== pageId))
-    this.changed(pageId)
+    this.saved.write(this.saved.read().filter((id) => id !== artifactId))
+    this.changed(artifactId)
   }
 
-  status(pageId: string): PublicPageStatus {
-    const open = this.open.get(pageId)
+  status(artifactId: string): PublicArtifactStatus {
+    const open = this.open.get(artifactId)
     if (!open) return { state: 'off', url: null, error: null, since: null }
     const status = open.tunnel.status()
     return { state: status.state, url: open.tunnel.address(), error: status.error, since: open.since }
   }
 
   /** Port of a page's listener, for tests. */
-  port(pageId: string): number | null {
-    const address = this.open.get(pageId)?.server.address()
+  port(artifactId: string): number | null {
+    const address = this.open.get(artifactId)?.server.address()
     return address && typeof address === 'object' ? address.port : null
   }
 

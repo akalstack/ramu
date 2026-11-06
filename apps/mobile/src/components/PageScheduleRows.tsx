@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { View } from 'react-native'
 import { useRouter } from 'expo-router'
-import type { PageInfo } from '@ramu/shared/pages'
+import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import { font, space } from '../theme'
 import { useStore } from '../runtime/store'
 import { useSay } from '../i18n'
@@ -12,7 +12,7 @@ export function PageScheduleRows({ hosts }: { hosts: readonly string[] }) {
   const store = useStore()
   const say = useSay()
   const router = useRouter()
-  const [pages, setPages] = useState<{ host: string; page: PageInfo }[]>([])
+  const [pages, setPages] = useState<{ host: string; page: ArtifactInfo }[]>([])
   const key = hosts.join(',')
   useEffect(() => {
     let cancelled = false

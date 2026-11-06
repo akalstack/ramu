@@ -96,12 +96,18 @@ describe('isHostInvokeAllowed', () => {
       'files.read',
       'term.write',
       'projects.list',
-      // Import reads a share from another connected host, under either name.
+      // Import reads a share from another connected host.
       'artifacts.openShare',
-      'pages.openShare',
     ])
       expect(isHostInvokeAllowed(method)).toBe(true)
-    for (const method of ['repos.pick', 'term.menu', 'attachments.save', 'background.stop', 'computers.list'])
+    for (const method of [
+      'repos.pick',
+      'term.menu',
+      'attachments.save',
+      'background.stop',
+      'computers.list',
+      'pages.list',
+    ])
       expect(isHostInvokeAllowed(method)).toBe(false)
     // Settings reads this device's role on each host; stopping or restarting that host's service stays there.
     expect(isHostInvokeAllowed('background.status')).toBe(true)

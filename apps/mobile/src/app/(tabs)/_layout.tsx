@@ -47,7 +47,7 @@ export default function TabsLayout() {
         />
         <NativeTabs.Trigger.Label>{t.schedules}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="pages">
+      <NativeTabs.Trigger name="artifacts">
         <NativeTabs.Trigger.Icon sf={{ default: 'macwindow', selected: 'macwindow' }} md="web" />
         <NativeTabs.Trigger.Label>{say('Artifacts')}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>

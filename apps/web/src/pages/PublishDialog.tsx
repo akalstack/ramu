@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { PageInfo } from '@ramu/shared/pages'
+import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import { Input } from '../components/desktop-input'
 import { RowButton } from '../components/row-button'
 import { Dialog } from '../Menu'
@@ -23,7 +23,7 @@ const message = (error: unknown) =>
  * Publish to the web: the page's tested bytes as a static site on the person's own account. Choosing a platform and
  * pressing Publish is the approval; a page already live updates the same site.
  */
-export function PublishDialog({ page, onClose }: { page: PageInfo; onClose(): void }) {
+export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose(): void }) {
   useLanguage()
   const { invoke } = useHost()
   const [targets, setTargets] = useState<{ target: Target; name: string; connected: boolean }[]>([])

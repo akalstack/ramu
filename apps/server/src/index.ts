@@ -38,7 +38,7 @@ import { compileInteractive, pinnedLibraries } from './interactive/compile'
 import { resolveInteractiveKit } from './interactive/kit'
 import { previewInteractive } from './interactive/preview'
 import { openHeadlessPage } from './interactive/pageHeadless'
-import type { PageInfo } from '@ramu/shared/pages'
+import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import type { TunnelChoice } from '@ramu/shared/types'
 import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
@@ -611,8 +611,8 @@ const pageSettings = (quality: 'fast' | 'smart') => {
   const chosen = quality === 'fast' ? (preferences.intelligence?.maintenanceModel ?? step) : step
   return { ...DEFAULT_AGENT_SETTINGS, ...chosen }
 }
-const pages = new PageStore(db, interactive, (pageId, run) =>
-  send('pages:changed', { pageId, ...(run ? { run } : {}) }),
+const pages = new PageStore(db, interactive, (artifactId, run) =>
+  send('artifacts:changed', { artifactId, ...(run ? { run } : {}) }),
 )
 /**
  * Page runs reach the web through a keyless search and Shared MCP servers through their own gateway, bound to the
@@ -627,7 +627,7 @@ const pageExternal: PageExternal = {
       .snapshot()
       .connections.filter((item) => item.enabled && servers.includes(item.name))
     const gateway = service.gateway(
-      `page:${page.id}`,
+      `artifact:${page.id}`,
       {
         hostId: service.storage.hostId,
         provider: settings.provider,
@@ -663,17 +663,17 @@ const pageExternal: PageExternal = {
   },
 }
 const pageAi = new PageAi(pages, (...args) => agents.analyze(...args), pageSettings, pageExternal)
-const notifyPage = (page: PageInfo, title: string, body: string) => {
-  send('pages:changed', { pageId: page.id, notice: { title: title.slice(0, 80), body: body.slice(0, 240) } })
-  void mobilePush.deliverPage(page.id, title, body).catch(() => {})
+const notifyPage = (page: ArtifactInfo, title: string, body: string) => {
+  send('artifacts:changed', { artifactId: page.id, notice: { title: title.slice(0, 80), body: body.slice(0, 240) } })
+  void mobilePush.deliverArtifact(page.id, title, body).catch(() => {})
 }
 const pageAutomation = new PageAutomation(
   pages,
   pageAi,
   (page, title, body) => notifyPage(page, title, body),
   {
-    read: () => workspace.getAppState<Record<string, number>>('page-schedule-marks', {}),
-    write: (marks) => workspace.setAppState('page-schedule-marks', marks),
+    read: () => workspace.getAppState<Record<string, number>>('artifact-schedule-marks', {}),
+    write: (marks) => workspace.setAppState('artifact-schedule-marks', marks),
   },
   (page) => openHeadlessPage(page, pages),
   {
@@ -687,23 +687,23 @@ const pageAutomation = new PageAutomation(
         (html, checks, network) => previewInteractive(html, checks, undefined, network),
       ),
     seen: {
-      read: () => workspace.getAppState<Record<string, string>>('page-library-checks', {}),
-      write: (seen) => workspace.setAppState('page-library-checks', seen),
+      read: () => workspace.getAppState<Record<string, string>>('artifact-library-checks', {}),
+      write: (seen) => workspace.setAppState('artifact-library-checks', seen),
     },
   },
 )
-pages.onRecord = (pageId, record) => pageAutomation.recordChanged(pageId, record)
+pages.onRecord = (artifactId, record) => pageAutomation.recordChanged(artifactId, record)
 /** The tunnel a public page uses: the host's ngrok when it has no fixed domain, else a Cloudflare quick tunnel. */
 const publicPageTunnel = (): TunnelChoice =>
   network.tunnel?.kind === 'ngrok' && !network.tunnel.domain ? { kind: 'ngrok' } : { kind: 'quick' }
 const publicPages = new PublicPages(
   pages,
   {
-    read: () => workspace.getAppState<string[]>('public-pages', []),
-    write: (ids) => workspace.setAppState('public-pages', ids),
+    read: () => workspace.getAppState<string[]>('public-artifacts', []),
+    write: (ids) => workspace.setAppState('public-artifacts', ids),
   },
   undefined,
-  (pageId) => send('pages:changed', { pageId }),
+  (artifactId) => send('artifacts:changed', { artifactId }),
 )
 void publicPages.restore(publicPageTunnel())
 pageAutomation.start()
@@ -850,7 +850,7 @@ const dispatcher = createDispatcher(
     notifyPage,
     publicPages,
     publicPageTunnel,
-    pageWebhookBases: () => schedules.webhookBases?.().map((base) => base.url.replace(/\/$/, '')) ?? [],
+    artifactWebhookBases: () => schedules.webhookBases?.().map((base) => base.url.replace(/\/$/, '')) ?? [],
     schedules,
     pullRequestWatches,
     pullRequestIndex,
@@ -1134,10 +1134,10 @@ const handle = () => async (req: import('node:http').IncomingMessage, res: Serve
     }
     // A webhook carries no device token: its unguessable address and the schedule's signature check stand in for one.
     const hookPath = (req.url ?? '').split('?')[0] ?? ''
-    if (req.method === 'POST' && hookPath.startsWith(`${WEBHOOK_PATH}page/`)) {
+    if (req.method === 'POST' && hookPath.startsWith(`${WEBHOOK_PATH}artifact/`)) {
       const raw = await readWebhookBody(req)
       const answer = raw
-        ? pageAutomation.receive(decodeURIComponent(hookPath.slice(`${WEBHOOK_PATH}page/`.length)), raw)
+        ? pageAutomation.receive(decodeURIComponent(hookPath.slice(`${WEBHOOK_PATH}artifact/`.length)), raw)
         : { status: 413, body: { error: 'The request is too large' } }
       res.writeHead(answer.status, json).end(JSON.stringify(answer.body))
       return

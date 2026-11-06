@@ -16,7 +16,7 @@ import { registerSharedMcpHandlers } from './handlers/mcp'
 import { registerProjectSetupHandlers } from './handlers/projectSetup'
 import { registerReviewHandlers } from './handlers/reviews'
 import { registerScheduleHandlers } from './handlers/schedules'
-import { registerPageHandlers } from './handlers/pages'
+import { registerArtifactHandlers } from './handlers/artifacts'
 import { registerSearchHandlers } from './handlers/search'
 import { registerSettingsHandlers } from './handlers/settings'
 import { registerRuleHandlers } from './handlers/rules'
@@ -83,7 +83,7 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable => {
     registerHostBrowserHandlers(ctx),
     registerComputerHandlers(ctx),
     registerScheduleHandlers(ctx),
-    registerPageHandlers(ctx),
+    registerArtifactHandlers(ctx),
   )
   // Composed from the methods above, so it runs them exactly as they run on their own.
   return mergeMethods(base, registerThreadStartHandlers(base))

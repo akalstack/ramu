@@ -5,7 +5,7 @@ import { AppWindow, Pin, Plus } from 'lucide-react-native'
 import { useTabActions } from '../../../components/Overlays'
 import { STANDALONE } from '../../../runtime/types'
 import { GlassButton } from '../../../components/Screen'
-import type { PageInfo } from '@ramu/shared/pages'
+import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { ago, useSay } from '../../../i18n'
@@ -27,7 +27,7 @@ export default function PagesScreen() {
     () => (multi && allHosts ? store.computers : store.computers.filter((x) => x.id === store.selected)),
     [multi, allHosts, store.computers, store.selected],
   )
-  const [pages, setPages] = useState<Record<string, PageInfo[]>>({})
+  const [pages, setPages] = useState<Record<string, ArtifactInfo[]>>({})
   const [query, setQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const load = useCallback(
@@ -50,7 +50,7 @@ export default function PagesScreen() {
       .filter(Boolean)
       .map((id) =>
         store.subscribe(id, (...[channel, payload]) => {
-          if (channel === 'pages:changed' && !(payload as { run?: unknown }).run) void load(id)
+          if (channel === 'artifacts:changed' && !(payload as { run?: unknown }).run) void load(id)
         }),
       )
     return () => offs.forEach((off) => off())

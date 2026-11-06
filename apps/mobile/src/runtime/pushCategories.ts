@@ -3,10 +3,10 @@
 /**
  * `input`: a thread needs you. `failed` / `done`: an ordinary thread stopped with an error or finished.
  * `scheduled`: a thread started by a schedule finished or failed, or a scheduled run could not start (needing input still
- * counts as `input`). `digest`: the once-a-day "your recap is ready" note, with no content. `pages`: notifications
- * pages you allowed to notify send, in their own words.
+ * counts as `input`). `digest`: the once-a-day "your recap is ready" note, with no content. `artifacts`: notifications
+ * artifacts you allowed to notify send, in their own words.
  */
-export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'digest', 'pages'] as const
+export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'digest', 'artifacts'] as const
 export type PushCategory = (typeof PUSH_CATEGORIES)[number]
 
 /** Off until switched on; every other category is on until switched off. */

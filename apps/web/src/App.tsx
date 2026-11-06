@@ -357,11 +357,11 @@ function Shell() {
 
   // The start screen shows for New chat, and when nothing is open yet.
   useEffect(() => {
-    const show = () => ws.setSidebar('pages')
+    const show = () => ws.setSidebar('artifacts')
     window.addEventListener('ramu:open-page', show)
     return () => window.removeEventListener('ramu:open-page', show)
   }, [ws])
-  const globalPage = ui.sidebar === 'schedules' || ui.sidebar === 'inbox' || ui.sidebar === 'pages'
+  const globalPage = ui.sidebar === 'schedules' || ui.sidebar === 'inbox' || ui.sidebar === 'artifacts'
   const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
   // Chats with nothing open is the home page: the start box and a line leading to the Inbox. New chat without a project lands here too.
   const landing = ui.sidebar === 'projects' && !ui.activeTaskId
@@ -716,9 +716,9 @@ function Shell() {
               </Button>
               <Button
                 variant="secondary"
-                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'pages' ? ' active' : ''}`}
-                aria-pressed={ui.sidebar === 'pages'}
-                onClick={() => ws.setSidebar(ui.sidebar === 'pages' ? 'projects' : 'pages')}
+                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'artifacts' ? ' active' : ''}`}
+                aria-pressed={ui.sidebar === 'artifacts'}
+                onClick={() => ws.setSidebar(ui.sidebar === 'artifacts' ? 'projects' : 'artifacts')}
               >
                 <AppWindow size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Artifacts')}</span>
               </Button>
@@ -759,7 +759,7 @@ function Shell() {
             <div key={`task-area:${shownHost}`} className="task-area flex-1 min-h-0 flex">
               {landing && <HomePage />}
               {ui.sidebar === 'inbox' && <InboxPage />}
-              {ui.sidebar === 'pages' && <PagesPage />}
+              {ui.sidebar === 'artifacts' && <PagesPage />}
               {ui.sidebar === 'schedules' && (
                 <SchedulesPage
                   createRequested={createScheduleRequested}

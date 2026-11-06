@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
-import type { PageCapability, PageGrants, PageInfo, PageRun, PageShare, PageUsage } from '@ramu/shared/pages'
-import { artifactLink, declaredCapabilities } from '@ramu/shared/pages'
+import type {
+  ArtifactCapability,
+  ArtifactGrants,
+  ArtifactInfo,
+  ArtifactRun,
+  ArtifactShare,
+  ArtifactUsage,
+} from '@ramu/shared/artifacts'
+import { artifactLink, declaredCapabilities } from '@ramu/shared/artifacts'
 import { Button } from '../components/desktop-button'
 import { Checkbox } from '../components/desktop-checkbox'
 import { Input } from '../components/desktop-input'
@@ -13,7 +20,7 @@ import { useHostRuntime } from '../workspace/workspace'
 import { notifyError } from '../chat/Notifications'
 
 /** What a capability does, in the words the grant sheet and settings use. */
-export function capabilityLine(name: PageCapability, page: Pick<PageInfo, 'capabilities'>): string {
+export function capabilityLine(name: ArtifactCapability, page: Pick<ArtifactInfo, 'capabilities'>): string {
   const c = page.capabilities
   switch (name) {
     case 'records':
@@ -52,7 +59,7 @@ export function capabilityLine(name: PageCapability, page: Pick<PageInfo, 'capab
 const everyLabel = (every: 'hourly' | 'daily' | 'weekly') =>
   every === 'hourly' ? t('Every hour') : every === 'daily' ? t('Every day') : t('Every week')
 
-export const runStatusLabel = (status: PageRun['status']) =>
+export const runStatusLabel = (status: ArtifactRun['status']) =>
   ({
     running: t('Running'),
     done: t('Done'),
@@ -62,8 +69,13 @@ export const runStatusLabel = (status: PageRun['status']) =>
   })[status]
 
 /** The grants a set of choices makes; AI keeps its model and daily limit. */
-function grantsOf(chosen: Record<string, boolean>, model: 'fast' | 'smart', daily: number, page: PageInfo): PageGrants {
-  const grants: PageGrants = {}
+function grantsOf(
+  chosen: Record<string, boolean>,
+  model: 'fast' | 'smart',
+  daily: number,
+  page: ArtifactInfo,
+): ArtifactGrants {
+  const grants: ArtifactGrants = {}
   for (const name of declaredCapabilities(page.capabilities)) {
     const on = chosen[name] ?? false
     if (name === 'ai')
@@ -95,8 +107,8 @@ function GrantChoices({
   daily,
   setDaily,
 }: {
-  page: PageInfo
-  names: PageCapability[]
+  page: ArtifactInfo
+  names: ArtifactCapability[]
   chosen: Record<string, boolean>
   setChosen(next: Record<string, boolean>): void
   model: 'fast' | 'smart'
@@ -184,7 +196,7 @@ function GrantChoices({
 }
 
 /** Shown the first time a page asks for something, and again when a new version asks for more. */
-export function GrantSheet({ page, onDone }: { page: PageInfo; onDone(): void }) {
+export function GrantSheet({ page, onDone }: { page: ArtifactInfo; onDone(): void }) {
   useLanguage()
   const { invoke } = useHost()
   const [chosen, setChosen] = useState<Record<string, boolean>>(() => ({
@@ -202,7 +214,7 @@ export function GrantSheet({ page, onDone }: { page: PageInfo; onDone(): void })
         'artifacts.grant',
         page.id,
         Object.fromEntries(
-          Object.entries(grants).filter(([name]) => page.pendingGrants.includes(name as PageCapability)),
+          Object.entries(grants).filter(([name]) => page.pendingGrants.includes(name as ArtifactCapability)),
         ),
       )
       onDone()
@@ -238,7 +250,7 @@ export function GrantSheet({ page, onDone }: { page: PageInfo; onDone(): void })
 }
 
 /** Grants, usage, run history with Undo, share links, the webhook address and records export and import. */
-export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): void }) {
+export function PageSettings({ page, onClose }: { page: ArtifactInfo; onClose(): void }) {
   useLanguage()
   const { invoke, id: hostId } = useHost()
   const { on } = useHostRuntime()
@@ -250,9 +262,9 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
   }))
   const [model, setModel] = useState<'fast' | 'smart'>((page.grants.ai && page.grants.ai.model) || 'fast')
   const [daily, setDaily] = useState((page.grants.ai && page.grants.ai.daily) || 200)
-  const [usage, setUsage] = useState<PageUsage | null>(null)
-  const [runs, setRuns] = useState<PageRun[]>([])
-  const [shares, setShares] = useState<PageShare[]>([])
+  const [usage, setUsage] = useState<ArtifactUsage | null>(null)
+  const [runs, setRuns] = useState<ArtifactRun[]>([])
+  const [shares, setShares] = useState<ArtifactShare[]>([])
   const [hooks, setHooks] = useState<string[]>([])
   const [open, setOpen] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -273,8 +285,8 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
         .catch(() => {})
     }
     load()
-    return on('pages:changed', (payload) => {
-      if (payload.pageId === page.id) load()
+    return on('artifacts:changed', (payload) => {
+      if (payload.artifactId === page.id) load()
     })
   }, [invoke, on, page.id])
   const act = async (work: () => Promise<unknown>) => {
@@ -292,7 +304,8 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
     link.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
-  const shareLink = (share: PageShare) => artifactLink({ computerId: hostId, pageId: share.pageId, share: share.token })
+  const shareLink = (share: ArtifactShare) =>
+    artifactLink({ computerId: hostId, artifactId: share.artifactId, share: share.token })
   return (
     <Dialog
       title={t('Page settings')}

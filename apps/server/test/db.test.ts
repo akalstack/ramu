@@ -39,20 +39,20 @@ it('refuses a profile from another schema without changing it', () => {
   again.close()
 })
 
-it('adds the artifact kind to a profile kept before it, reading existing pages as apps', () => {
+it('drops page tables a profile still holds and keeps artifacts, each an App unless it says otherwise', () => {
   const path = profile()
   openDb(path).close()
   const earlier = new DatabaseSync(path)
-  earlier.exec('ALTER TABLE interactive_pages DROP COLUMN kind')
-  earlier.exec(
-    "INSERT INTO interactive_pages (id, data, current_version, pinned, created_at, changed_at) VALUES ('kept', '{}', 1, 0, 0, 0)",
-  )
+  earlier.exec('CREATE TABLE interactive_pages (id TEXT PRIMARY KEY); CREATE TABLE page_records (page_id TEXT)')
   earlier.close()
-  const reopened = openDb(path)
-  expect(reopened.prepare("SELECT kind FROM interactive_pages WHERE id = 'kept'").get()).toEqual({ kind: 'app' })
-  reopened.close()
-  // Opening again finds the column and leaves it alone.
-  const again = openDb(path)
-  expect(again.prepare('SELECT COUNT(*) AS n FROM interactive_pages').get()).toEqual({ n: 1 })
-  again.close()
+  const db = openDb(path)
+  const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map(
+    (row) => row.name,
+  )
+  expect(tables).not.toContain('interactive_pages')
+  expect(tables).not.toContain('page_records')
+  expect(tables).toEqual(expect.arrayContaining(['artifacts', 'artifact_versions', 'artifact_records']))
+  db.exec("INSERT INTO artifacts (id, data, current_version, created_at, changed_at) VALUES ('a', '{}', 1, 0, 0)")
+  expect(db.prepare("SELECT kind FROM artifacts WHERE id = 'a'").get()).toEqual({ kind: 'app' })
+  db.close()
 })

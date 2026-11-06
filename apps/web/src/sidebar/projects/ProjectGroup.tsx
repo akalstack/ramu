@@ -135,7 +135,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
     ...(projectPages.length
       ? [
           {
-            key: 'pages',
+            key: 'artifacts',
             label: (
               <>
                 <AppWindow size={14} /> {t(' Artifacts')}

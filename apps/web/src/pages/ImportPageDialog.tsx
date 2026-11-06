@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { parseArtifactLink } from '@ramu/shared/pages'
+import { parseArtifactLink } from '@ramu/shared/artifacts'
 import { Input } from '../components/desktop-input'
 import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
@@ -33,7 +33,7 @@ export function ImportPageDialog({ onClose }: { onClose(): void }) {
         setError(null)
         void invokerFor(parsed.host)('artifacts.openShare', parsed.token)
           .then((shared) =>
-            invoke('artifacts.import', shared.document, { title: shared.page.title, icon: shared.page.icon }),
+            invoke('artifacts.import', shared.document, { title: shared.artifact.title, icon: shared.artifact.icon }),
           )
           .then((page) => {
             onClose()

@@ -3,23 +3,23 @@ import type { Db } from '../db'
 import type { InteractiveDocument, InteractiveReference, JsonValue } from '@ramu/shared/interactive'
 import { interactiveOrigin, readInteractiveState } from '@ramu/shared/interactive'
 import {
-  PAGE_LIMITS,
+  ARTIFACT_LIMITS,
   declaredCapabilities,
   migrateRecord,
   pendingGrants,
   recordProblem,
-  type PageCapabilities,
-  type PageError,
-  type PageGrants,
-  type PageInfo,
-  type PageRecord,
-  type PageRecordQuery,
-  type PageRun,
-  type PageShare,
-  type PageState,
-  type PageUsage,
-  type PageVersion,
-} from '@ramu/shared/pages'
+  type ArtifactCapabilities,
+  type ArtifactError,
+  type ArtifactGrants,
+  type ArtifactInfo,
+  type ArtifactRecord,
+  type ArtifactRecordQuery,
+  type ArtifactRun,
+  type ArtifactShare,
+  type ArtifactState,
+  type ArtifactUsage,
+  type ArtifactVersion,
+} from '@ramu/shared/artifacts'
 import { pageCapabilitiesOf } from './capabilities'
 import type { InteractiveStore } from './store'
 
@@ -29,13 +29,13 @@ interface PageData {
   icon: string
   projectId: string | null
   sessionId: string
-  capabilities: PageCapabilities
-  grants: PageGrants
-  lastError?: PageError
-  grewInto?: PageInfo['grewInto']
-  published?: PageInfo['published']
+  capabilities: ArtifactCapabilities
+  grants: ArtifactGrants
+  lastError?: ArtifactError
+  grewInto?: ArtifactInfo['grewInto']
+  published?: ArtifactInfo['published']
   duplicatedFrom?: string
-  usage?: PageUsage
+  usage?: ArtifactUsage
 }
 interface PageRow {
   id: string
@@ -63,15 +63,15 @@ export class PageStore {
   constructor(
     private readonly db: Db,
     private readonly interactive: InteractiveStore,
-    private readonly changed: (pageId: string, run?: PageRun) => void = () => {},
+    private readonly changed: (artifactId: string, run?: ArtifactRun) => void = () => {},
   ) {}
 
   private row(id: string): PageRow {
-    const row = this.db.prepare('SELECT * FROM interactive_pages WHERE id=?').get(id) as PageRow | undefined
+    const row = this.db.prepare('SELECT * FROM artifacts WHERE id=?').get(id) as PageRow | undefined
     if (!row) throw new Error('Page not found. It may have been deleted.')
     return row
   }
-  private info(row: PageRow): PageInfo {
+  private info(row: PageRow): ArtifactInfo {
     const data = JSON.parse(row.data) as PageData
     return {
       id: row.id,
@@ -100,28 +100,28 @@ export class PageStore {
   private write(id: string, update: (data: PageData) => PageData, touch = true) {
     const next = update(this.data(id))
     this.db
-      .prepare(`UPDATE interactive_pages SET data=?${touch ? ', changed_at=?' : ''} WHERE id=?`)
+      .prepare(`UPDATE artifacts SET data=?${touch ? ', changed_at=?' : ''} WHERE id=?`)
       .run(...(touch ? [JSON.stringify(next), Date.now(), id] : [JSON.stringify(next), id]))
     this.changed(id)
   }
 
-  list(): PageInfo[] {
+  list(): ArtifactInfo[] {
     return (
       this.db
-        .prepare('SELECT * FROM interactive_pages ORDER BY pinned DESC, changed_at DESC LIMIT 500')
+        .prepare('SELECT * FROM artifacts ORDER BY pinned DESC, changed_at DESC LIMIT 500')
         .all() as unknown as PageRow[]
     ).map((row) => this.info(row))
   }
-  get(id: string): PageInfo {
+  get(id: string): ArtifactInfo {
     return this.info(this.row(id))
   }
   /** Whether a page exists, without throwing; thread cards ask this to show a deleted page. */
   has(id: string): boolean {
-    return !!this.db.prepare('SELECT 1 FROM interactive_pages WHERE id=?').get(id)
+    return !!this.db.prepare('SELECT 1 FROM artifacts WHERE id=?').get(id)
   }
 
   /** Capabilities a document declares, read from its sources; previews call this so a bad declaration fails early. */
-  capabilitiesOf(id: string, version: number): PageCapabilities {
+  capabilitiesOf(id: string, version: number): ArtifactCapabilities {
     const document = this.document(id, version)
     return pageCapabilitiesOf({ html: document.files ? undefined : document.html, files: document.files })
   }
@@ -159,19 +159,17 @@ export class PageStore {
     this.db.exec('SAVEPOINT keep_page')
     try {
       this.db
-        .prepare(
-          'INSERT INTO interactive_pages(id,data,current_version,pinned,created_at,changed_at) VALUES(?,?,?,0,?,?)',
-        )
+        .prepare('INSERT INTO artifacts(id,data,current_version,pinned,created_at,changed_at) VALUES(?,?,?,0,?,?)')
         .run(contentId, JSON.stringify(data), latest.version, now, now)
       for (const version of versions)
         this.db
           .prepare(
-            'INSERT INTO interactive_page_versions(page_id,version,reference,html,preview,files) VALUES(?,?,?,?,?,?)',
+            'INSERT INTO artifact_versions(artifact_id,version,reference,html,preview,files) VALUES(?,?,?,?,?,?)',
           )
           .run(
             contentId,
             version.version,
-            JSON.stringify({ ...JSON.parse(version.reference), pageId: contentId }),
+            JSON.stringify({ ...JSON.parse(version.reference), artifactId: contentId }),
             version.html,
             version.preview,
             version.files,
@@ -184,7 +182,7 @@ export class PageStore {
     this.changed(contentId)
     return this.get(contentId)
   }
-  private declared(_id: string, _version: number, row: { html: string; files: string | null }): PageCapabilities {
+  private declared(_id: string, _version: number, row: { html: string; files: string | null }): ArtifactCapabilities {
     const files = row.files ? (JSON.parse(row.files) as InteractiveDocument['files']) : undefined
     try {
       return pageCapabilitiesOf(files ? { files } : { html: row.html })
@@ -195,17 +193,15 @@ export class PageStore {
 
   /** A version published from a thread with this page as its target; runs inside the publication's transaction. */
   addVersion(
-    pageId: string,
+    artifactId: string,
     published: { reference: InteractiveReference; html: string; preview: string | null; files: string | null },
   ) {
-    const capabilities = this.declared(pageId, published.reference.version, published)
-    this.migrate(pageId, capabilities, false)
+    const capabilities = this.declared(artifactId, published.reference.version, published)
+    this.migrate(artifactId, capabilities, false)
     this.db
-      .prepare(
-        'INSERT INTO interactive_page_versions(page_id,version,reference,html,preview,files) VALUES(?,?,?,?,?,?)',
-      )
+      .prepare('INSERT INTO artifact_versions(artifact_id,version,reference,html,preview,files) VALUES(?,?,?,?,?,?)')
       .run(
-        pageId,
+        artifactId,
         published.reference.version,
         JSON.stringify(published.reference),
         published.html,
@@ -213,9 +209,9 @@ export class PageStore {
         published.files,
       )
     this.db
-      .prepare('UPDATE interactive_pages SET current_version=?, changed_at=? WHERE id=?')
-      .run(published.reference.version, Date.now(), pageId)
-    this.write(pageId, (data) => ({
+      .prepare('UPDATE artifacts SET current_version=?, changed_at=? WHERE id=?')
+      .run(published.reference.version, Date.now(), artifactId)
+    this.write(artifactId, (data) => ({
       ...data,
       sessionId: published.reference.sessionId,
       capabilities,
@@ -224,7 +220,7 @@ export class PageStore {
         Object.entries(data.grants).filter(
           ([name]) => name in capabilities || (name === 'records' && capabilities.records),
         ),
-      ) as PageGrants,
+      ) as ArtifactGrants,
       lastError: undefined,
     }))
   }
@@ -233,13 +229,17 @@ export class PageStore {
    * Moves records to a new version's schema. A dry run reports what would not fit; a real one rewrites them. Records
    * of collections the new version drops are kept, unread, so restoring the old version brings them back.
    */
-  migrate(pageId: string, capabilities: PageCapabilities, dryRun: boolean): { moved: number; problems: string[] } {
+  migrate(
+    artifactId: string,
+    capabilities: ArtifactCapabilities,
+    dryRun: boolean,
+  ): { moved: number; problems: string[] } {
     const problems: string[] = []
     let moved = 0
     for (const [collection, schema] of Object.entries(capabilities.records ?? {})) {
       const rows = this.db
-        .prepare('SELECT id,data FROM page_records WHERE page_id=? AND collection=?')
-        .all(pageId, collection) as { id: string; data: string }[]
+        .prepare('SELECT id,data FROM artifact_records WHERE artifact_id=? AND collection=?')
+        .all(artifactId, collection) as { id: string; data: string }[]
       for (const row of rows) {
         const before = JSON.parse(row.data) as Record<string, JsonValue>
         const next = migrateRecord(schema, before)
@@ -251,8 +251,8 @@ export class PageStore {
         moved++
         if (!dryRun)
           this.db
-            .prepare('UPDATE page_records SET data=?, updated_at=? WHERE page_id=? AND collection=? AND id=?')
-            .run(JSON.stringify(next.data), Date.now(), pageId, collection, row.id)
+            .prepare('UPDATE artifact_records SET data=?, updated_at=? WHERE artifact_id=? AND collection=? AND id=?')
+            .run(JSON.stringify(next.data), Date.now(), artifactId, collection, row.id)
       }
     }
     if (problems.length && !dryRun)
@@ -262,21 +262,21 @@ export class PageStore {
     return { moved, problems }
   }
 
-  versions(pageId: string): PageVersion[] {
-    this.row(pageId)
+  versions(artifactId: string): ArtifactVersion[] {
+    this.row(artifactId)
     return (
       this.db
         .prepare(
-          'SELECT v.reference, v.preview, m.wide FROM interactive_page_versions v LEFT JOIN interactive_media m ON m.id=v.page_id AND m.version=v.version WHERE v.page_id=? ORDER BY v.version DESC LIMIT 100',
+          'SELECT v.reference, v.preview, m.wide FROM artifact_versions v LEFT JOIN interactive_media m ON m.id=v.artifact_id AND m.version=v.version WHERE v.artifact_id=? ORDER BY v.version DESC LIMIT 100',
         )
-        .all(pageId) as { reference: string; preview: string | null; wide: string | null }[]
+        .all(artifactId) as { reference: string; preview: string | null; wide: string | null }[]
     ).map((row) => ({ reference: JSON.parse(row.reference), preview: row.preview, wide: row.wide }))
   }
-  document(pageId: string, version?: number): InteractiveDocument {
-    const target = version ?? this.row(pageId).current_version
+  document(artifactId: string, version?: number): InteractiveDocument {
+    const target = version ?? this.row(artifactId).current_version
     const row = this.db
-      .prepare('SELECT reference,html,preview,files FROM interactive_page_versions WHERE page_id=? AND version=?')
-      .get(pageId, target) as
+      .prepare('SELECT reference,html,preview,files FROM artifact_versions WHERE artifact_id=? AND version=?')
+      .get(artifactId, target) as
       { reference: string; html: string; preview: string | null; files: string | null } | undefined
     if (!row) throw new Error('Page version not found')
     return {
@@ -289,7 +289,7 @@ export class PageStore {
 
   update(id: string, patch: { title?: string; icon?: string; pinned?: boolean; projectId?: string | null }) {
     if (patch.pinned !== undefined)
-      this.db.prepare('UPDATE interactive_pages SET pinned=? WHERE id=?').run(patch.pinned ? 1 : 0, id)
+      this.db.prepare('UPDATE artifacts SET pinned=? WHERE id=?').run(patch.pinned ? 1 : 0, id)
     this.write(
       id,
       (data) => ({
@@ -305,26 +305,26 @@ export class PageStore {
   /** The person's action only: records, files, runs and shares go with it; thread cards say the page was deleted. */
   delete(id: string) {
     this.row(id)
-    this.db.prepare('DELETE FROM interactive_pages WHERE id=?').run(id)
+    this.db.prepare('DELETE FROM artifacts WHERE id=?').run(id)
     this.changed(id)
   }
 
   /** Restores an older version as the newest, with the same tested bytes. */
-  restoreVersion(pageId: string, version: number): PageInfo {
-    const source = this.document(pageId, version)
-    const current = this.row(pageId).current_version
-    if (current === version) return this.get(pageId)
+  restoreVersion(artifactId: string, version: number): ArtifactInfo {
+    const source = this.document(artifactId, version)
+    const current = this.row(artifactId).current_version
+    if (current === version) return this.get(artifactId)
     const reference: InteractiveReference = {
       ...source.reference,
       version: current + 1,
       createdAt: Date.now(),
       changes: `Restored v${version}`,
       restoredFrom: version,
-      pageId,
+      artifactId,
     }
     this.db.exec('SAVEPOINT restore_page')
     try {
-      this.addVersion(pageId, {
+      this.addVersion(artifactId, {
         reference,
         html: source.html,
         preview: source.preview,
@@ -335,13 +335,13 @@ export class PageStore {
       this.db.exec('ROLLBACK TO restore_page; RELEASE restore_page')
       throw error
     }
-    return this.get(pageId)
+    return this.get(artifactId)
   }
 
   /** A copy with the same code and capabilities and none of the records, state, grants or history. */
-  duplicate(pageId: string, title?: string): PageInfo {
-    const source = this.get(pageId)
-    const document = this.document(pageId)
+  duplicate(artifactId: string, title?: string): ArtifactInfo {
+    const source = this.get(artifactId)
+    const document = this.document(artifactId)
     const id = randomUUID()
     const now = Date.now()
     const data: PageData = {
@@ -351,22 +351,18 @@ export class PageStore {
       sessionId: source.sessionId,
       capabilities: source.capabilities,
       grants: {},
-      duplicatedFrom: pageId,
+      duplicatedFrom: artifactId,
     }
     this.db.exec('SAVEPOINT duplicate_page')
     try {
       this.db
-        .prepare(
-          'INSERT INTO interactive_pages(id,data,current_version,pinned,created_at,changed_at) VALUES(?,?,1,0,?,?)',
-        )
+        .prepare('INSERT INTO artifacts(id,data,current_version,pinned,created_at,changed_at) VALUES(?,?,1,0,?,?)')
         .run(id, JSON.stringify(data), now, now)
       this.db
-        .prepare(
-          'INSERT INTO interactive_page_versions(page_id,version,reference,html,preview,files) VALUES(?,1,?,?,?,?)',
-        )
+        .prepare('INSERT INTO artifact_versions(artifact_id,version,reference,html,preview,files) VALUES(?,1,?,?,?,?)')
         .run(
           id,
-          JSON.stringify({ ...document.reference, id, version: 1, pageId: id, createdAt: now, changes: undefined }),
+          JSON.stringify({ ...document.reference, id, version: 1, artifactId: id, createdAt: now, changes: undefined }),
           document.html,
           document.preview,
           document.files ? JSON.stringify(document.files) : null,
@@ -384,7 +380,7 @@ export class PageStore {
    * A copy of a page another host shared: its code, capabilities and screenshot as a new page here, with none of its
    * records, values, grants or history. The bytes still run only in the sandboxed frame, and every capability asks again.
    */
-  importPage(document: InteractiveDocument, from: { title: string; icon: string }): PageInfo {
+  importPage(document: InteractiveDocument, from: { title: string; icon: string }): ArtifactInfo {
     const id = randomUUID()
     const now = Date.now()
     const network = {
@@ -403,7 +399,7 @@ export class PageStore {
       createdAt: now,
       checked: false,
       network,
-      pageId: id,
+      artifactId: id,
       ...(document.reference.files ? { files: document.reference.files.slice(0, 40) } : {}),
       ...(document.reference.libraries ? { libraries: document.reference.libraries } : {}),
     }
@@ -418,14 +414,10 @@ export class PageStore {
     this.db.exec('SAVEPOINT import_page')
     try {
       this.db
-        .prepare(
-          'INSERT INTO interactive_pages(id,data,current_version,pinned,created_at,changed_at) VALUES(?,?,1,0,?,?)',
-        )
+        .prepare('INSERT INTO artifacts(id,data,current_version,pinned,created_at,changed_at) VALUES(?,?,1,0,?,?)')
         .run(id, JSON.stringify(data), now, now)
       this.db
-        .prepare(
-          'INSERT INTO interactive_page_versions(page_id,version,reference,html,preview,files) VALUES(?,1,?,?,?,?)',
-        )
+        .prepare('INSERT INTO artifact_versions(artifact_id,version,reference,html,preview,files) VALUES(?,1,?,?,?,?)')
         .run(id, JSON.stringify(reference), document.html, document.preview, files)
       this.db.exec('RELEASE import_page')
     } catch (error) {
@@ -438,9 +430,9 @@ export class PageStore {
 
   // Shared state
 
-  state(pageId: string): PageState {
-    this.row(pageId)
-    const row = this.db.prepare('SELECT state,revision FROM interactive_page_state WHERE page_id=?').get(pageId) as
+  state(artifactId: string): ArtifactState {
+    this.row(artifactId)
+    const row = this.db.prepare('SELECT state,revision FROM artifact_state WHERE artifact_id=?').get(artifactId) as
       { state: string; revision: number } | undefined
     return row
       ? { state: readInteractiveState(JSON.parse(row.state)), revision: row.revision }
@@ -450,32 +442,32 @@ export class PageStore {
    * Last write wins, but only over the revision the device read: a device that missed another device's change gets
    * the newer state back instead of overwriting it.
    */
-  saveState(pageId: string, value: unknown, revision: number): PageState & { accepted: boolean } {
-    const current = this.state(pageId)
+  saveState(artifactId: string, value: unknown, revision: number): ArtifactState & { accepted: boolean } {
+    const current = this.state(artifactId)
     if (current.revision !== revision) return { ...current, accepted: false }
     const state = value === null ? null : readInteractiveState(value)
     if (value !== null && !state) throw new Error('Page state is too large or malformed.')
     const next = current.revision + 1
     this.db
       .prepare(
-        'INSERT INTO interactive_page_state(page_id,state,revision,updated_at) VALUES(?,?,?,?) ON CONFLICT(page_id) DO UPDATE SET state=excluded.state, revision=excluded.revision, updated_at=excluded.updated_at',
+        'INSERT INTO artifact_state(artifact_id,state,revision,updated_at) VALUES(?,?,?,?) ON CONFLICT(artifact_id) DO UPDATE SET state=excluded.state, revision=excluded.revision, updated_at=excluded.updated_at',
       )
-      .run(pageId, JSON.stringify(state), next, Date.now())
-    this.changed(pageId)
+      .run(artifactId, JSON.stringify(state), next, Date.now())
+    this.changed(artifactId)
     return { state, revision: next, accepted: true }
   }
 
   // Grants and usage
 
-  grant(pageId: string, grants: PageGrants): PageInfo {
+  grant(artifactId: string, grants: ArtifactGrants): ArtifactInfo {
     // Only what the page declares can be allowed; anything else in the request is ignored.
-    const declared = new Set<string>(declaredCapabilities(this.data(pageId).capabilities))
-    grants = Object.fromEntries(Object.entries(grants).filter(([name]) => declared.has(name))) as PageGrants
+    const declared = new Set<string>(declaredCapabilities(this.data(artifactId).capabilities))
+    grants = Object.fromEntries(Object.entries(grants).filter(([name]) => declared.has(name))) as ArtifactGrants
     this.write(
-      pageId,
+      artifactId,
       (data) => {
-        const next: PageGrants = { ...data.grants, ...grants }
-        if (next.ai) next.ai = { ...next.ai, daily: Math.min(PAGE_LIMITS.aiDaily, Math.max(1, next.ai.daily)) }
+        const next: ArtifactGrants = { ...data.grants, ...grants }
+        if (next.ai) next.ai = { ...next.ai, daily: Math.min(ARTIFACT_LIMITS.aiDaily, Math.max(1, next.ai.daily)) }
         if (grants.webhook === undefined && data.grants.webhook) next.webhook = data.grants.webhook
         else if (grants.webhook && typeof grants.webhook === 'object')
           next.webhook = {
@@ -487,11 +479,11 @@ export class PageStore {
       },
       false,
     )
-    return this.get(pageId)
+    return this.get(artifactId)
   }
   /** Refuses a capability the page did not declare or the person did not allow, in words the page can show. */
-  requireGrant(pageId: string, name: keyof PageGrants): PageInfo {
-    const page = this.get(pageId)
+  requireGrant(artifactId: string, name: keyof ArtifactGrants): ArtifactInfo {
+    const page = this.get(artifactId)
     const declared =
       name === 'records'
         ? !!page.capabilities.records
@@ -500,64 +492,66 @@ export class PageStore {
     if (!page.grants[name]) throw new Error(`This page is not allowed to use ${name}. Allow it in Page settings.`)
     return page
   }
-  usage(pageId: string): PageUsage {
-    const usage = this.data(pageId).usage
+  usage(artifactId: string): ArtifactUsage {
+    const usage = this.data(artifactId).usage
     return usage?.day === today() ? usage : { day: today(), ai: 0, notify: 0 }
   }
   /** Counts one use against the day's limit, or refuses when the limit is reached. */
-  spend(pageId: string, kind: 'ai' | 'notify') {
-    const page = this.get(pageId)
-    const usage = this.usage(pageId)
+  spend(artifactId: string, kind: 'ai' | 'notify') {
+    const page = this.get(artifactId)
+    const usage = this.usage(artifactId)
     const limit =
       kind === 'ai'
         ? page.grants.ai
           ? page.grants.ai.daily
           : 0
-        : Math.min(PAGE_LIMITS.notifyDaily, page.capabilities.notify?.daily ?? PAGE_LIMITS.notifyDaily)
+        : Math.min(ARTIFACT_LIMITS.notifyDaily, page.capabilities.notify?.daily ?? ARTIFACT_LIMITS.notifyDaily)
     if (usage[kind] >= limit)
       throw new Error(
         kind === 'ai'
           ? `This page reached its ${limit} model requests for today. Raise the limit in Page settings.`
           : 'This page has sent all its notifications for today.',
       )
-    this.write(pageId, (data) => ({ ...data, usage: { ...usage, [kind]: usage[kind] + 1 } }), false)
+    this.write(artifactId, (data) => ({ ...data, usage: { ...usage, [kind]: usage[kind] + 1 } }), false)
   }
 
   // Records
 
-  private collection(pageId: string, name: string) {
-    const page = this.requireGrant(pageId, 'records')
+  private collection(artifactId: string, name: string) {
+    const page = this.requireGrant(artifactId, 'records')
     const schema = page.capabilities.records?.[name]
     if (!schema) throw new Error(`This page has no collection named ${name}.`)
     return schema
   }
-  private bytes(pageId: string): number {
+  private bytes(artifactId: string): number {
     const records = this.db
-      .prepare('SELECT COALESCE(SUM(LENGTH(data)),0) AS n, COUNT(*) AS c FROM page_records WHERE page_id=?')
-      .get(pageId) as { n: number; c: number }
+      .prepare('SELECT COALESCE(SUM(LENGTH(data)),0) AS n, COUNT(*) AS c FROM artifact_records WHERE artifact_id=?')
+      .get(artifactId) as { n: number; c: number }
     const files = this.db
-      .prepare('SELECT COALESCE(SUM(LENGTH(data)),0) AS n FROM page_files WHERE page_id=?')
-      .get(pageId) as { n: number }
+      .prepare('SELECT COALESCE(SUM(LENGTH(data)),0) AS n FROM artifact_files WHERE artifact_id=?')
+      .get(artifactId) as { n: number }
     return records.n + files.n
   }
-  private count(pageId: string): number {
-    return (this.db.prepare('SELECT COUNT(*) AS n FROM page_records WHERE page_id=?').get(pageId) as { n: number }).n
+  private count(artifactId: string): number {
+    return (
+      this.db.prepare('SELECT COUNT(*) AS n FROM artifact_records WHERE artifact_id=?').get(artifactId) as { n: number }
+    ).n
   }
-  records(pageId: string, collection: string, query: PageRecordQuery = {}): PageRecord[] {
-    this.collection(pageId, collection)
+  records(artifactId: string, collection: string, query: ArtifactRecordQuery = {}): ArtifactRecord[] {
+    this.collection(artifactId, collection)
     const rows = this.db
       .prepare(
-        'SELECT id,data,created_at,updated_at FROM page_records WHERE page_id=? AND collection=? ORDER BY created_at',
+        'SELECT id,data,created_at,updated_at FROM artifact_records WHERE artifact_id=? AND collection=? ORDER BY created_at',
       )
-      .all(pageId, collection) as { id: string; data: string; created_at: number; updated_at: number }[]
-    let list: PageRecord[] = rows.map((row) => ({
+      .all(artifactId, collection) as { id: string; data: string; created_at: number; updated_at: number }[]
+    let list: ArtifactRecord[] = rows.map((row) => ({
       id: row.id,
       collection,
       data: JSON.parse(row.data),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }))
-    const value = (record: PageRecord, field: string): JsonValue | number =>
+    const value = (record: ArtifactRecord, field: string): JsonValue | number =>
       field === 'createdAt' ? record.createdAt : field === 'id' ? record.id : (record.data[field] ?? null)
     const comparable = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d\d-\d\d/.test(v) ? Date.parse(v) : v)
     for (const condition of query.where ?? [])
@@ -604,9 +598,9 @@ export class PageStore {
     return list.slice(0, Math.min(query.limit ?? 1000, 1000))
   }
   /** Sums a number field, by another field when given: totals by category, the month's spending. */
-  sum(pageId: string, collection: string, field: string, by?: string, query: PageRecordQuery = {}) {
+  sum(artifactId: string, collection: string, field: string, by?: string, query: ArtifactRecordQuery = {}) {
     const totals: Record<string, number> = {}
-    for (const record of this.records(pageId, collection, { ...query, limit: 1000 })) {
+    for (const record of this.records(artifactId, collection, { ...query, limit: 1000 })) {
       const amount = record.data[field]
       if (typeof amount !== 'number') continue
       const key = by ? String(record.data[by] ?? '') : 'total'
@@ -615,49 +609,49 @@ export class PageStore {
     return totals
   }
   /** Told about records the person, an agent or a webhook added or changed, for triggers; runs change records quietly. */
-  onRecord?: (pageId: string, record: PageRecord) => void
+  onRecord?: (artifactId: string, record: ArtifactRecord) => void
   addRecord(
-    pageId: string,
+    artifactId: string,
     collection: string,
     data: Record<string, JsonValue>,
     options: { id?: string; quiet?: boolean } = {},
-  ): PageRecord {
-    const schema = this.collection(pageId, collection)
+  ): ArtifactRecord {
+    const schema = this.collection(artifactId, collection)
     const problem = recordProblem(schema, data)
     if (problem) throw new Error(`Record not saved: ${problem}.`)
     const text = JSON.stringify(data)
     if (text.length > 100_000) throw new Error('Record not saved: it is larger than 100 KB.')
-    if (this.count(pageId) >= PAGE_LIMITS.records) throw new Error('This page already keeps 10,000 records.')
-    if (this.bytes(pageId) + text.length > PAGE_LIMITS.bytes)
+    if (this.count(artifactId) >= ARTIFACT_LIMITS.records) throw new Error('This page already keeps 10,000 records.')
+    if (this.bytes(artifactId) + text.length > ARTIFACT_LIMITS.bytes)
       throw new Error('This page already keeps 20 MB of records.')
     const now = Date.now()
     const recordId = options.id ?? randomUUID()
     this.db
-      .prepare('INSERT INTO page_records(page_id,collection,id,data,created_at,updated_at) VALUES(?,?,?,?,?,?)')
-      .run(pageId, collection, recordId, text, now, now)
-    this.changed(pageId)
+      .prepare('INSERT INTO artifact_records(artifact_id,collection,id,data,created_at,updated_at) VALUES(?,?,?,?,?,?)')
+      .run(artifactId, collection, recordId, text, now, now)
+    this.changed(artifactId)
     const record = { id: recordId, collection, data, createdAt: now, updatedAt: now }
-    if (!options.quiet) this.onRecord?.(pageId, record)
+    if (!options.quiet) this.onRecord?.(artifactId, record)
     return record
   }
-  record(pageId: string, collection: string, id: string): PageRecord | null {
-    this.collection(pageId, collection)
+  record(artifactId: string, collection: string, id: string): ArtifactRecord | null {
+    this.collection(artifactId, collection)
     const row = this.db
-      .prepare('SELECT data,created_at,updated_at FROM page_records WHERE page_id=? AND collection=? AND id=?')
-      .get(pageId, collection, id) as { data: string; created_at: number; updated_at: number } | undefined
+      .prepare('SELECT data,created_at,updated_at FROM artifact_records WHERE artifact_id=? AND collection=? AND id=?')
+      .get(artifactId, collection, id) as { data: string; created_at: number; updated_at: number } | undefined
     return row
       ? { id, collection, data: JSON.parse(row.data), createdAt: row.created_at, updatedAt: row.updated_at }
       : null
   }
   updateRecord(
-    pageId: string,
+    artifactId: string,
     collection: string,
     id: string,
     patch: Record<string, JsonValue>,
     options: { quiet?: boolean } = {},
-  ): PageRecord {
-    const schema = this.collection(pageId, collection)
-    const current = this.record(pageId, collection, id)
+  ): ArtifactRecord {
+    const schema = this.collection(artifactId, collection)
+    const current = this.record(artifactId, collection, id)
     if (!current) throw new Error('Record not found.')
     const data = Object.fromEntries(
       Object.entries({ ...current.data, ...patch }).filter(([, value]) => value !== null),
@@ -666,39 +660,41 @@ export class PageStore {
     if (problem) throw new Error(`Record not saved: ${problem}.`)
     const now = Date.now()
     this.db
-      .prepare('UPDATE page_records SET data=?, updated_at=? WHERE page_id=? AND collection=? AND id=?')
-      .run(JSON.stringify(data), now, pageId, collection, id)
-    this.changed(pageId)
+      .prepare('UPDATE artifact_records SET data=?, updated_at=? WHERE artifact_id=? AND collection=? AND id=?')
+      .run(JSON.stringify(data), now, artifactId, collection, id)
+    this.changed(artifactId)
     const record = { ...current, data, updatedAt: now }
-    if (!options.quiet) this.onRecord?.(pageId, record)
+    if (!options.quiet) this.onRecord?.(artifactId, record)
     return record
   }
-  deleteRecord(pageId: string, collection: string, id: string): PageRecord | null {
-    const current = this.record(pageId, collection, id)
+  deleteRecord(artifactId: string, collection: string, id: string): ArtifactRecord | null {
+    const current = this.record(artifactId, collection, id)
     if (!current) return null
-    this.db.prepare('DELETE FROM page_records WHERE page_id=? AND collection=? AND id=?').run(pageId, collection, id)
-    this.changed(pageId)
+    this.db
+      .prepare('DELETE FROM artifact_records WHERE artifact_id=? AND collection=? AND id=?')
+      .run(artifactId, collection, id)
+    this.changed(artifactId)
     return current
   }
   /** Puts a record back exactly as it was, for undoing a run. */
-  putRecord(pageId: string, record: PageRecord) {
+  putRecord(artifactId: string, record: ArtifactRecord) {
     this.db
       .prepare(
-        'INSERT OR REPLACE INTO page_records(page_id,collection,id,data,created_at,updated_at) VALUES(?,?,?,?,?,?)',
+        'INSERT OR REPLACE INTO artifact_records(artifact_id,collection,id,data,created_at,updated_at) VALUES(?,?,?,?,?,?)',
       )
-      .run(pageId, record.collection, record.id, JSON.stringify(record.data), record.createdAt, record.updatedAt)
+      .run(artifactId, record.collection, record.id, JSON.stringify(record.data), record.createdAt, record.updatedAt)
   }
   /** Records as CSV per collection and one JSON document, for Export. */
-  exportRecords(pageId: string): { json: string; csv: Record<string, string> } {
-    const page = this.get(pageId)
-    const all: Record<string, PageRecord[]> = {}
+  exportRecords(artifactId: string): { json: string; csv: Record<string, string> } {
+    const page = this.get(artifactId)
+    const all: Record<string, ArtifactRecord[]> = {}
     const csv: Record<string, string> = {}
     for (const [name, schema] of Object.entries(page.capabilities.records ?? {})) {
       const list = this.db
         .prepare(
-          'SELECT id,data,created_at,updated_at FROM page_records WHERE page_id=? AND collection=? ORDER BY created_at',
+          'SELECT id,data,created_at,updated_at FROM artifact_records WHERE artifact_id=? AND collection=? ORDER BY created_at',
         )
-        .all(pageId, name) as { id: string; data: string; created_at: number; updated_at: number }[]
+        .all(artifactId, name) as { id: string; data: string; created_at: number; updated_at: number }[]
       all[name] = list.map((row) => ({
         id: row.id,
         collection: name,
@@ -720,8 +716,8 @@ export class PageStore {
     return { json: JSON.stringify(all, null, 2), csv }
   }
   /** Adds rows from CSV with a header row; numbers and booleans follow the schema. Stops at the first bad row. */
-  importCsv(pageId: string, collection: string, text: string): { added: number } {
-    const schema = this.collection(pageId, collection)
+  importCsv(artifactId: string, collection: string, text: string): { added: number } {
+    const schema = this.collection(artifactId, collection)
     const rows = parseCsv(text)
     const header = rows.shift() ?? []
     let added = 0
@@ -737,7 +733,7 @@ export class PageStore {
           data[name] = type === 'number' ? Number(raw) : type === 'boolean' ? raw.toLowerCase() === 'true' : raw
         })
         try {
-          this.addRecord(pageId, collection, data)
+          this.addRecord(artifactId, collection, data)
         } catch (error) {
           throw new Error(`Row ${index + 2}: ${(error as Error).message}`, { cause: error })
         }
@@ -753,32 +749,33 @@ export class PageStore {
 
   // Files the person chose (photos of receipts, labels)
 
-  addFile(pageId: string, dataUrl: string): string {
-    this.requireGrant(pageId, 'camera')
+  addFile(artifactId: string, dataUrl: string): string {
+    this.requireGrant(artifactId, 'camera')
     const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl)
     if (!match) throw new Error('Only JPEG, PNG and WebP photos can be kept.')
     const bytes = Buffer.from(match[2]!, 'base64')
-    if (bytes.length > PAGE_LIMITS.file) throw new Error('That photo is larger than 2 MB after resizing.')
-    if (this.bytes(pageId) + bytes.length > PAGE_LIMITS.bytes) throw new Error('This page already keeps 20 MB.')
+    if (bytes.length > ARTIFACT_LIMITS.file) throw new Error('That photo is larger than 2 MB after resizing.')
+    if (this.bytes(artifactId) + bytes.length > ARTIFACT_LIMITS.bytes) throw new Error('This page already keeps 20 MB.')
     const id = randomUUID()
     this.db
-      .prepare('INSERT INTO page_files(page_id,id,mime,data,created_at) VALUES(?,?,?,?,?)')
-      .run(pageId, id, match[1]!, stripJpegMetadata(bytes, match[1]!), Date.now())
+      .prepare('INSERT INTO artifact_files(artifact_id,id,mime,data,created_at) VALUES(?,?,?,?,?)')
+      .run(artifactId, id, match[1]!, stripJpegMetadata(bytes, match[1]!), Date.now())
     return `ramu-file:${id}`
   }
-  file(pageId: string, ref: string): string {
+  file(artifactId: string, ref: string): string {
     const id = ref.replace(/^ramu-file:/, '')
-    const row = this.db.prepare('SELECT mime,data FROM page_files WHERE page_id=? AND id=?').get(pageId, id) as
-      { mime: string; data: Uint8Array } | undefined
+    const row = this.db
+      .prepare('SELECT mime,data FROM artifact_files WHERE artifact_id=? AND id=?')
+      .get(artifactId, id) as { mime: string; data: Uint8Array } | undefined
     if (!row) throw new Error('File not found.')
     return `data:${row.mime};base64,${Buffer.from(row.data).toString('base64')}`
   }
 
   // Errors reported by any device, for Fix this
 
-  reportError(pageId: string, error: Omit<PageError, 'at'>) {
+  reportError(artifactId: string, error: Omit<ArtifactError, 'at'>) {
     this.write(
-      pageId,
+      artifactId,
       (data) => ({
         ...data,
         lastError: {
@@ -791,14 +788,14 @@ export class PageStore {
       false,
     )
   }
-  clearError(pageId: string) {
-    this.write(pageId, (data) => ({ ...data, lastError: undefined }), false)
+  clearError(artifactId: string) {
+    this.write(artifactId, (data) => ({ ...data, lastError: undefined }), false)
   }
 
   // Runs
 
-  saveRun(run: PageRun & { undo?: PageUndo[] }) {
-    const existing = this.db.prepare('SELECT data FROM page_runs WHERE id=?').get(run.id) as
+  saveRun(run: ArtifactRun & { undo?: PageUndo[] }) {
+    const existing = this.db.prepare('SELECT data FROM artifact_runs WHERE id=?').get(run.id) as
       { data: string } | undefined
     // A call or confirmation is a moment in the run, not part of its record; the undo log stays on the host.
     const { call: _call, confirm: _confirm, ...kept } = run
@@ -809,47 +806,49 @@ export class PageStore {
       undo: run.undo ?? (existing ? (JSON.parse(existing.data) as { undo?: PageUndo[] }).undo : undefined),
     }
     this.db
-      .prepare('INSERT OR REPLACE INTO page_runs(id,page_id,data,created_at) VALUES(?,?,?,?)')
-      .run(run.id, run.pageId, JSON.stringify(stored), run.startedAt)
+      .prepare('INSERT OR REPLACE INTO artifact_runs(id,artifact_id,data,created_at) VALUES(?,?,?,?)')
+      .run(run.id, run.artifactId, JSON.stringify(stored), run.startedAt)
     this.db
       .prepare(
-        'DELETE FROM page_runs WHERE page_id=? AND id NOT IN (SELECT id FROM page_runs WHERE page_id=? ORDER BY created_at DESC LIMIT 50)',
+        'DELETE FROM artifact_runs WHERE artifact_id=? AND id NOT IN (SELECT id FROM artifact_runs WHERE artifact_id=? ORDER BY created_at DESC LIMIT 50)',
       )
-      .run(run.pageId, run.pageId)
+      .run(run.artifactId, run.artifactId)
     const { undo: _undo, ...visible } = run
     void _undo
-    this.changed(run.pageId, visible)
+    this.changed(run.artifactId, visible)
   }
-  runs(pageId: string): PageRun[] {
-    this.row(pageId)
+  runs(artifactId: string): ArtifactRun[] {
+    this.row(artifactId)
     return (
-      this.db.prepare('SELECT data FROM page_runs WHERE page_id=? ORDER BY created_at DESC LIMIT 50').all(pageId) as {
+      this.db
+        .prepare('SELECT data FROM artifact_runs WHERE artifact_id=? ORDER BY created_at DESC LIMIT 50')
+        .all(artifactId) as {
         data: string
       }[]
     ).map((row) => {
-      const { undo: _undo, ...run } = JSON.parse(row.data) as PageRun & { undo?: PageUndo[] }
+      const { undo: _undo, ...run } = JSON.parse(row.data) as ArtifactRun & { undo?: PageUndo[] }
       void _undo
       return run
     })
   }
-  run(id: string): PageRun & { undo?: PageUndo[] } {
-    const row = this.db.prepare('SELECT data FROM page_runs WHERE id=?').get(id) as { data: string } | undefined
+  run(id: string): ArtifactRun & { undo?: PageUndo[] } {
+    const row = this.db.prepare('SELECT data FROM artifact_runs WHERE id=?').get(id) as { data: string } | undefined
     if (!row) throw new Error('Run not found.')
     return JSON.parse(row.data)
   }
   /** Puts back every record a run changed, newest change first, as one step. */
-  undoRun(id: string): PageRun {
+  undoRun(id: string): ArtifactRun {
     const run = this.run(id)
     if (run.status === 'undone') return run
     if (run.status === 'running') throw new Error('Stop the run before undoing it.')
     this.db.exec('SAVEPOINT undo_run')
     try {
       for (const change of [...(run.undo ?? [])].reverse()) {
-        if (change.before) this.putRecord(run.pageId, change.before)
+        if (change.before) this.putRecord(run.artifactId, change.before)
         else
           this.db
-            .prepare('DELETE FROM page_records WHERE page_id=? AND collection=? AND id=?')
-            .run(run.pageId, change.collection, change.id)
+            .prepare('DELETE FROM artifact_records WHERE artifact_id=? AND collection=? AND id=?')
+            .run(run.artifactId, change.collection, change.id)
       }
       this.db.exec('RELEASE undo_run')
     } catch (error) {
@@ -863,65 +862,65 @@ export class PageStore {
 
   // Share links
 
-  share(pageId: string, canAdd: boolean): PageShare {
-    this.row(pageId)
+  share(artifactId: string, canAdd: boolean): ArtifactShare {
+    this.row(artifactId)
     const token = randomBytes(18).toString('base64url')
     const now = Date.now()
-    const share: PageShare = { token, pageId, canAdd, createdAt: now, expiresAt: now + 30 * 86_400_000 }
+    const share: ArtifactShare = { token, artifactId, canAdd, createdAt: now, expiresAt: now + 30 * 86_400_000 }
     this.db
-      .prepare('INSERT INTO page_shares(token,page_id,data,created_at,expires_at) VALUES(?,?,?,?,?)')
-      .run(token, pageId, JSON.stringify({ canAdd }), now, share.expiresAt)
+      .prepare('INSERT INTO artifact_shares(token,artifact_id,data,created_at,expires_at) VALUES(?,?,?,?,?)')
+      .run(token, artifactId, JSON.stringify({ canAdd }), now, share.expiresAt)
     return share
   }
-  shares(pageId: string): PageShare[] {
+  shares(artifactId: string): ArtifactShare[] {
     return (
       this.db
         .prepare(
-          'SELECT token,page_id,data,created_at,expires_at FROM page_shares WHERE page_id=? AND expires_at>? ORDER BY created_at DESC',
+          'SELECT token,artifact_id,data,created_at,expires_at FROM artifact_shares WHERE artifact_id=? AND expires_at>? ORDER BY created_at DESC',
         )
-        .all(pageId, Date.now()) as {
+        .all(artifactId, Date.now()) as {
         token: string
-        page_id: string
+        artifact_id: string
         data: string
         created_at: number
         expires_at: number
       }[]
     ).map((row) => ({
       token: row.token,
-      pageId: row.page_id,
+      artifactId: row.artifact_id,
       canAdd: !!(JSON.parse(row.data) as { canAdd?: boolean }).canAdd,
       createdAt: row.created_at,
       expiresAt: row.expires_at,
     }))
   }
-  renewShare(token: string): PageShare {
-    this.db.prepare('UPDATE page_shares SET expires_at=? WHERE token=?').run(Date.now() + 30 * 86_400_000, token)
+  renewShare(token: string): ArtifactShare {
+    this.db.prepare('UPDATE artifact_shares SET expires_at=? WHERE token=?').run(Date.now() + 30 * 86_400_000, token)
     return this.resolveShare(token)
   }
   revokeShare(token: string) {
-    this.db.prepare('DELETE FROM page_shares WHERE token=?').run(token)
+    this.db.prepare('DELETE FROM artifact_shares WHERE token=?').run(token)
   }
   /** A live share link, or an error a viewer can read. */
-  resolveShare(token: string): PageShare {
+  resolveShare(token: string): ArtifactShare {
     const row = this.db
-      .prepare('SELECT token,page_id,data,created_at,expires_at FROM page_shares WHERE token=?')
+      .prepare('SELECT token,artifact_id,data,created_at,expires_at FROM artifact_shares WHERE token=?')
       .get(token) as
-      { token: string; page_id: string; data: string; created_at: number; expires_at: number } | undefined
+      { token: string; artifact_id: string; data: string; created_at: number; expires_at: number } | undefined
     if (!row || row.expires_at <= Date.now()) throw new Error('This share link expired or was revoked.')
     return {
       token: row.token,
-      pageId: row.page_id,
+      artifactId: row.artifact_id,
       canAdd: !!(JSON.parse(row.data) as { canAdd?: boolean }).canAdd,
       createdAt: row.created_at,
       expiresAt: row.expires_at,
     }
   }
 
-  markPublished(pageId: string, published: NonNullable<PageInfo['published']>) {
-    this.write(pageId, (data) => ({ ...data, published }), false)
+  markPublished(artifactId: string, published: NonNullable<ArtifactInfo['published']>) {
+    this.write(artifactId, (data) => ({ ...data, published }), false)
   }
-  markGrewInto(pageId: string, grewInto: NonNullable<PageInfo['grewInto']>) {
-    this.write(pageId, (data) => ({ ...data, grewInto }), false)
+  markGrewInto(artifactId: string, grewInto: NonNullable<ArtifactInfo['grewInto']>) {
+    this.write(artifactId, (data) => ({ ...data, grewInto }), false)
   }
 }
 
@@ -929,7 +928,7 @@ export class PageStore {
 export interface PageUndo {
   collection: string
   id: string
-  before: PageRecord | null
+  before: ArtifactRecord | null
 }
 
 /** RFC 4180 CSV: quoted fields, doubled quotes, commas and newlines inside quotes. */
@@ -962,7 +961,7 @@ export function parseCsv(text: string): string[][] {
     row.push(cell)
     rows.push(row)
   }
-  return rows.slice(0, PAGE_LIMITS.records + 1)
+  return rows.slice(0, ARTIFACT_LIMITS.records + 1)
 }
 
 /** Drops JPEG APP1 (EXIF, which carries location) segments; other formats are stored as given. */

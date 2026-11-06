@@ -55,8 +55,6 @@ const viewerMethods = new Set([
   // Share links: a viewer device opens an artifact someone shared and adds records only when the link allows it.
   'artifacts.openShare',
   'artifacts.shareCall',
-  'pages.openShare',
-  'pages.shareCall',
   'attachments.text',
   'attachments.preview',
   'reviews.list',

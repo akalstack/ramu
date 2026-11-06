@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import type { InteractiveDocument, InteractiveState } from '@ramu/shared/interactive'
-import type { PageInfo, PageRun, PageVersion } from '@ramu/shared/pages'
+import type { ArtifactInfo, ArtifactRun, ArtifactVersion } from '@ramu/shared/artifacts'
 import { interactiveExport } from '@ramu/shared/interactiveExport'
 import { Button } from '../components/desktop-button'
 import { Input } from '../components/desktop-input'
@@ -45,13 +45,13 @@ const message = (error: unknown) =>
     : String(error)
 
 /** One page, full window: its frame, toolbar, runs, questions about its records and everything the person can do with it. */
-export function PageView({ pageId, onBack }: { pageId: string; onBack(): void }) {
+export function PageView({ artifactId, onBack }: { artifactId: string; onBack(): void }) {
   useLanguage()
   const { invoke } = useHost()
   const { on } = useHostRuntime()
   const ws = useWorkspace()
   const viewOnly = useViewOnly()
-  const [page, setPage] = useState<PageInfo | null>(null)
+  const [page, setPage] = useState<ArtifactInfo | null>(null)
   const [document, setDocument] = useState<InteractiveDocument | null>(null)
   const [missing, setMissing] = useState(false)
   const [generation, setGeneration] = useState(0)
@@ -66,7 +66,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
   const [picking, setPicking] = useState(false)
   const [picked, setPicked] = useState<PickedElement | null>(null)
   const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState<PageRun | null>(null)
+  const [answer, setAnswer] = useState<ArtifactRun | null>(null)
   const [asking, setAsking] = useState(false)
   const [status, setStatus] = useState('')
   const state = useRef<InteractiveState | null>(null)
@@ -74,11 +74,14 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
   const frame = useRef<HTMLIFrameElement>(null)
   const load = useCallback(async () => {
     try {
-      const [info, saved] = await Promise.all([invoke('artifacts.get', pageId), invoke('artifacts.state', pageId)])
+      const [info, saved] = await Promise.all([
+        invoke('artifacts.get', artifactId),
+        invoke('artifacts.state', artifactId),
+      ])
       setPage(info)
       setDocument((current) => {
         if (current?.reference.version === info.version) return current
-        void invoke('artifacts.document', pageId)
+        void invoke('artifacts.document', artifactId)
           .then(setDocument)
           .catch(() => {})
         return current
@@ -93,15 +96,15 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
     } catch {
       setMissing(true)
     }
-  }, [invoke, pageId])
+  }, [invoke, artifactId])
   const bridgeRestore = useRef<((state: InteractiveState | null) => void) | null>(null)
   useEffect(() => {
     void load()
-    return on('pages:changed', (payload) => {
-      if (payload.pageId === pageId && !payload.run) void load()
+    return on('artifacts:changed', (payload) => {
+      if (payload.artifactId === artifactId && !payload.run) void load()
     })
-  }, [load, on, pageId])
-  const instance = `page:${pageId}:${document?.reference.version ?? 0}:${generation}`
+  }, [load, on, artifactId])
+  const instance = `page:${artifactId}:${document?.reference.version ?? 0}:${generation}`
   const { url } = useContentDocument(document?.html, instance, !!document, state, document?.reference.network)
   useEffect(() => setReady(false), [url])
   const askThread = useCallback(
@@ -110,7 +113,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
     [],
   )
   const bridge = usePageBridge({
-    pageId,
+    artifactId,
     version: document?.reference.version ?? 1,
     frame,
     instance,
@@ -142,7 +145,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
   }, [instance])
   const startThread = async (prompt: string, selector?: string) => {
     try {
-      const started = await invoke('artifacts.startThread', pageId, prompt, selector)
+      const started = await invoke('artifacts.startThread', artifactId, prompt, selector)
       await ws.refresh()
       ws.openTask(started.taskId)
     } catch (error) {
@@ -179,7 +182,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
       key: 'pin',
       label: page.pinned ? t('Unpin') : t('Pin to top'),
       disabled: viewOnly,
-      onSelect: () => void invoke('artifacts.update', pageId, { pinned: !page.pinned }).catch(() => {}),
+      onSelect: () => void invoke('artifacts.update', artifactId, { pinned: !page.pinned }).catch(() => {}),
     },
     { key: 'sep1', separator: true },
     { key: 'export', label: t('Export HTML'), disabled: !document, onSelect: exportHtml },
@@ -201,7 +204,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
       label: t('Duplicate'),
       disabled: viewOnly,
       onSelect: () =>
-        void invoke('artifacts.duplicate', pageId)
+        void invoke('artifacts.duplicate', artifactId)
           .then((copy) => openPage(copy.id))
           .catch((e) => notifyError(message(e))),
     },
@@ -250,7 +253,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
               disabled={viewOnly || !!bridge.running || !page.grants.ai}
               title={run.prompt}
               onClick={() =>
-                void invoke('artifacts.runFlow', pageId, name).catch((e) => notifyError(message(e), page.title))
+                void invoke('artifacts.runFlow', artifactId, name).catch((e) => notifyError(message(e), page.title))
               }
             >
               <Play size={12} /> {run.label}
@@ -316,8 +319,8 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
               onClick={() => {
                 const error = page.lastError!
                 void startThread(
-                  `Fix this error in my page. Reproduce it with artifact_preview, then publish the fixed version with artifact_publish {page: "${page.id}", changes}.\nError on ${error.device ?? 'a device'} in v${error.version}: ${error.message}${error.steps?.length ? `\nWhat the person did before it: ${error.steps.join(' → ')}` : ''}`,
-                ).then(() => invoke('artifacts.clearError', pageId))
+                  `Fix this error in my page. Reproduce it with artifact_preview, then publish the fixed version with artifact_publish {artifact: "${page.id}", changes}.\nError on ${error.device ?? 'a device'} in v${error.version}: ${error.message}${error.steps?.length ? `\nWhat the person did before it: ${error.steps.join(' → ')}` : ''}`,
+                ).then(() => invoke('artifacts.clearError', artifactId))
               }}
             >
               {t('Fix this')}
@@ -328,7 +331,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
             size="icon-sm"
             className={`${GHOST_ICON_BUTTON_CLASS} size-6`}
             aria-label={t('Dismiss')}
-            onClick={() => void invoke('artifacts.clearError', pageId)}
+            onClick={() => void invoke('artifacts.clearError', artifactId)}
           >
             <X size={12} />
           </Button>
@@ -416,7 +419,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
             if (question.trim().length < 2) return
             setAsking(true)
             setAnswer(null)
-            void invoke('artifacts.ask', pageId, question.trim())
+            void invoke('artifacts.ask', artifactId, question.trim())
               .then(setAnswer)
               .catch((e) => notifyError(message(e), page.title))
               .finally(() => setAsking(false))
@@ -482,7 +485,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
           page={page}
           onClose={() => setDialog(null)}
           onRestore={(version) =>
-            void invoke('artifacts.restoreVersion', pageId, version)
+            void invoke('artifacts.restoreVersion', artifactId, version)
               .then(() => setStatus(t('Restored v{version} as the newest version.', { version })))
               .catch((e) => notifyError(message(e), page.title))
           }
@@ -496,7 +499,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
           danger
           onCancel={() => setDialog(null)}
           onConfirm={() =>
-            void invoke('artifacts.delete', pageId)
+            void invoke('artifacts.delete', artifactId)
               .then(onBack)
               .catch((e) => notifyError(message(e)))
           }
@@ -511,7 +514,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
           onCancel={() => setDialog(null)}
           onConfirm={() => {
             setDialog(null)
-            void invoke('artifacts.makeProject', pageId)
+            void invoke('artifacts.makeProject', artifactId)
               .then(async (made) => {
                 await ws.refresh()
                 ws.openTask(made.thread.taskId)
@@ -559,7 +562,7 @@ function PageAnswer({
   onKeep,
   onClose,
 }: {
-  run: PageRun
+  run: ArtifactRun
   question: string
   onKeep(prompt: string): void
   onClose(): void
@@ -625,13 +628,13 @@ function VersionsDialog({
   onClose,
   onRestore,
 }: {
-  page: PageInfo
+  page: ArtifactInfo
   onClose(): void
   onRestore(version: number): void
 }) {
   useLanguage()
   const { invoke } = useHost()
-  const [versions, setVersions] = useState<PageVersion[] | null>(null)
+  const [versions, setVersions] = useState<ArtifactVersion[] | null>(null)
   useEffect(() => {
     void invoke('artifacts.versions', page.id)
       .then(setVersions)
@@ -686,7 +689,7 @@ function VersionsDialog({
   )
 }
 
-function RenameDialog({ page, onClose }: { page: PageInfo; onClose(): void }) {
+function RenameDialog({ page, onClose }: { page: ArtifactInfo; onClose(): void }) {
   useLanguage()
   const { invoke } = useHost()
   const [title, setTitle] = useState(page.title)

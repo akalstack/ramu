@@ -267,7 +267,7 @@ export function Notifications() {
       ws.composing ||
       ws.ui.sidebar === 'schedules' ||
       ws.ui.sidebar === 'inbox' ||
-      ws.ui.sidebar === 'pages'
+      ws.ui.sidebar === 'artifacts'
     )
       return false
     const state = ws.taskUi[taskId]

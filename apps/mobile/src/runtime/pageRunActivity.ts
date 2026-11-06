@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import { requireOptionalNativeModule } from 'expo'
-import type { PageRun } from '@ramu/shared/pages'
+import type { ArtifactRun } from '@ramu/shared/artifacts'
 import type { PageRunActivityProps } from '../activities/PageRunActivity'
 
 type Instance = {
@@ -17,8 +17,8 @@ export function pageRunActivity(page: string, locale: string) {
     Platform.OS === 'ios' && Number(Platform.Version) >= 16.2 && !!requireOptionalNativeModule('ExpoWidgets')
   let instance: Instance | null = null
   let timer: ReturnType<typeof setTimeout> | undefined
-  let last: PageRun | null = null
-  const props = (run: PageRun): PageRunActivityProps => ({
+  let last: ArtifactRun | null = null
+  const props = (run: ArtifactRun): PageRunActivityProps => ({
     page,
     run: run.name ?? run.task.slice(0, 60),
     step: run.steps.at(-1)?.text ?? '',
@@ -35,7 +35,7 @@ export function pageRunActivity(page: string, locale: string) {
   })
   return {
     page,
-    update(run: PageRun) {
+    update(run: ArtifactRun) {
       if (!available) return
       last = run
       if (run.status !== 'running') {

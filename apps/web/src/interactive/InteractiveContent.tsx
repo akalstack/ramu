@@ -20,7 +20,7 @@ import { Button } from '../components/desktop-button'
 import { GHOST_ICON_BUTTON_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
 import { Menu, type MenuEntry } from '../Menu'
 import { ChatCodeBlock } from '../chat/ChatCodeBlock'
-import type { PageInfo } from '@ramu/shared/pages'
+import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import { usePageIndex } from '../pages/pageIndex'
 import { openPage } from '../pages/openPage'
 import type { InteractiveRevision, InteractiveUpdate } from '@ramu/shared/interactiveRevisions'
@@ -92,7 +92,7 @@ function InteractiveDocumentCard({
   versions?: { load(): void; items: MenuEntry[] }
   onClose?: () => void
   /** The kept page this document belongs to, and whether the card shows a version another thread published. */
-  page?: { info: PageInfo | null; elsewhere: boolean }
+  page?: { info: ArtifactInfo | null; elsewhere: boolean }
   /** The version this one replaced, for Compare and carrying values over. */
   previous?: InteractiveReference
   /** A revision of this document the agent is checking now. */
@@ -422,7 +422,7 @@ function InteractiveDocumentCard({
               <span aria-hidden>{page.info.icon}</span> {t('Artifact')}
             </Button>
           )}
-          {page && !page.info && reference.pageId && (
+          {page && !page.info && reference.artifactId && (
             <span className="flex-none text-caption text-muted-foreground">{t('Artifact deleted')}</span>
           )}
           {page?.elsewhere && (
@@ -784,7 +784,7 @@ function InteractiveContentBrowser({
   reference: InteractiveReference
   previous?: InteractiveReference
   update?: InteractiveUpdate
-  page?: { info: PageInfo | null; elsewhere: boolean }
+  page?: { info: ArtifactInfo | null; elsewhere: boolean }
 }) {
   useLanguage()
   const { id: hostId, invoke } = useHost()

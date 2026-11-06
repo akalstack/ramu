@@ -1,5 +1,5 @@
 import { interactiveExport } from '@ramu/shared/interactiveExport'
-import type { PageInfo } from '@ramu/shared/pages'
+import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import { SavedCredential } from '../workspace/forge/savedCredential'
 import type { ForgeAccountStore } from '../workspace/forgeAccounts'
 import { STATIC_TARGETS, staticAdapter, type StaticTarget } from '../hosting/staticSite'
@@ -68,15 +68,15 @@ export class PagePublisher {
   }
 
   /** Deploys the page's current version; a page already live on this platform updates the same site. */
-  async publish(pageId: string, target: StaticTarget, signal?: AbortSignal): Promise<PageInfo> {
-    const page = this.pages.get(pageId)
+  async publish(artifactId: string, target: StaticTarget, signal?: AbortSignal): Promise<ArtifactInfo> {
+    const page = this.pages.get(artifactId)
     if (page.capabilities.records || page.capabilities.ai)
       throw new Error(
         'This page keeps records or uses a model on this host, so it cannot go on the web as it is. Make it a project instead.',
       )
-    const document = this.pages.document(pageId)
+    const document = this.pages.document(artifactId)
     // The runnable export: the tested bytes with their isolation policy, opening on the page's saved values.
-    const exported = interactiveExport(document, this.pages.state(pageId).state, false)
+    const exported = interactiveExport(document, this.pages.state(artifactId).state, false)
     const html = exported.html.replace(
       '<head>',
       `<head><title>${page.title.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))}</title>`,
@@ -90,13 +90,13 @@ export class PagePublisher {
       await this.token(target),
       signal,
     )
-    this.pages.markPublished(pageId, {
+    this.pages.markPublished(artifactId, {
       target,
       url: site.url,
       siteId: site.siteId,
       version: page.version,
       at: Date.now(),
     })
-    return this.pages.get(pageId)
+    return this.pages.get(artifactId)
   }
 }

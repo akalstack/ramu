@@ -16,14 +16,14 @@ function pageWidget(): Promise<Widget | null> {
   return loading
 }
 
-/** The draft key naming the page the home-screen widget shows, as `{ computerId, pageId }`. */
-export const WIDGET_PAGE_KEY = 'widget-page'
+/** The draft key naming the page the home-screen widget shows, as `{ computerId, artifactId }`. */
+export const WIDGET_PAGE_KEY = 'widget-artifact'
 
-export function widgetPage(text: string | undefined): { computerId: string; pageId: string } | null {
+export function widgetPage(text: string | undefined): { computerId: string; artifactId: string } | null {
   try {
-    const value = JSON.parse(text || 'null') as { computerId?: unknown; pageId?: unknown } | null
-    return value && typeof value.computerId === 'string' && typeof value.pageId === 'string'
-      ? { computerId: value.computerId, pageId: value.pageId }
+    const value = JSON.parse(text || 'null') as { computerId?: unknown; artifactId?: unknown } | null
+    return value && typeof value.computerId === 'string' && typeof value.artifactId === 'string'
+      ? { computerId: value.computerId, artifactId: value.artifactId }
       : null
   } catch {
     return null
@@ -39,7 +39,7 @@ export function PageWidgetSync() {
   const latest = useRef(store)
   latest.current = store
   const chosen = widgetPage(store.drafts[WIDGET_PAGE_KEY])
-  const key = chosen ? `${chosen.computerId}:${chosen.pageId}` : ''
+  const key = chosen ? `${chosen.computerId}:${chosen.artifactId}` : ''
   const online = chosen ? store.isOnline(chosen.computerId) : false
   useEffect(() => {
     let active = true
@@ -52,8 +52,8 @@ export function PageWidgetSync() {
         if (!latest.current.isOnline(target.computerId)) return
         try {
           const [page, data] = await Promise.all([
-            latest.current.invoke(target.computerId, 'artifacts.get', target.pageId),
-            latest.current.invoke(target.computerId, 'artifacts.widget', target.pageId),
+            latest.current.invoke(target.computerId, 'artifacts.get', target.artifactId),
+            latest.current.invoke(target.computerId, 'artifacts.widget', target.artifactId),
           ])
           widget.updateSnapshot({
             page: `${page.icon} ${page.title}`,
@@ -70,7 +70,10 @@ export function PageWidgetSync() {
       const timer = setInterval(() => void refresh(), 15 * 60_000)
       const app = AppState.addEventListener('change', (state) => state === 'active' && void refresh())
       const off = latest.current.subscribe(target.computerId, (...[channel, payload]) => {
-        if (channel === 'pages:changed' && (payload as { pageId: string; run?: unknown }).pageId === target.pageId)
+        if (
+          channel === 'artifacts:changed' &&
+          (payload as { artifactId: string; run?: unknown }).artifactId === target.artifactId
+        )
           void refresh()
       })
       stop = () => {

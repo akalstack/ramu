@@ -9,7 +9,13 @@ import {
   type InteractiveState,
 } from '@ramu/shared/interactive'
 import { interactiveThemeVariables } from '@ramu/shared/interactiveTheme'
-import { artifactLink, declaredCapabilities, type PageInfo, type PageRun, type PageVersion } from '@ramu/shared/pages'
+import {
+  artifactLink,
+  declaredCapabilities,
+  type ArtifactInfo,
+  type ArtifactRun,
+  type ArtifactVersion,
+} from '@ramu/shared/artifacts'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { useSay } from '../../../i18n'
@@ -27,7 +33,7 @@ import {
   savePageCopy,
   syncCalls,
   type QueuedCall,
-} from '../../../runtime/pages'
+} from '../../../runtime/artifacts'
 
 type FrameMessage = { ramuInteractive?: number; instance?: string; type?: string; value?: unknown; requestId?: string }
 type Shared = { token: string; canAdd: boolean }
@@ -47,7 +53,7 @@ const unreachable = (error: unknown) =>
 export default function PageScreen() {
   const params = useLocalSearchParams<{ computer: string; id: string; share?: string }>()
   const computerId = String(params.computer ?? '')
-  const pageId = String(params.id ?? '')
+  const artifactId = String(params.id ?? '')
   const shareToken = params.share ? String(params.share) : undefined
   const store = useStore()
   const say = useSay()
@@ -56,23 +62,23 @@ export default function PageScreen() {
   const { height: screenHeight } = useWindowDimensions()
   const online = store.isOnline(computerId)
   const viewer = store.computers.find((x) => x.id === computerId)?.access === 'viewer'
-  const [page, setPage] = useState<PageInfo | null>(null)
+  const [page, setPage] = useState<ArtifactInfo | null>(null)
   const [shared, setShared] = useState<Shared | null>(null)
   const [document, setDocument] = useState<InteractiveDocument | null>(() =>
-    pageCopy(contentStorage, computerId, pageId),
+    pageCopy(contentStorage, computerId, artifactId),
   )
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [messages, setMessages] = useState<{ id: number; data: object }[]>([])
   const [menu, setMenu] = useState(false)
-  const [versions, setVersions] = useState<PageVersion[] | null>(null)
-  const [running, setRunning] = useState<PageRun | null>(null)
+  const [versions, setVersions] = useState<ArtifactVersion[] | null>(null)
+  const [running, setRunning] = useState<ArtifactRun | null>(null)
   const [confirm, setConfirm] = useState<{ id: string; text: string } | null>(null)
   const [picked, setPicked] = useState<{ selector: string; text: string; html: string } | null>(null)
   const [change, setChange] = useState('')
   const [about, setAbout] = useState<string | null>(null)
   const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState<PageRun | null>(null)
+  const [answer, setAnswer] = useState<ArtifactRun | null>(null)
   const [conflicts, setConflicts] = useState<string[]>([])
   const [frameError, setFrameError] = useState('')
   const [generation, setGeneration] = useState(0)
@@ -103,8 +109,7 @@ export default function PageScreen() {
         const opened = await store.invoke(computerId, 'artifacts.openShare', shareToken)
         setShared({ token: opened.share.token, canAdd: opened.share.canAdd })
         setPage({
-          ...opened.page,
-          kind: 'app',
+          ...opened.artifact,
           pinned: false,
           projectId: null,
           createdAt: 0,
@@ -112,15 +117,15 @@ export default function PageScreen() {
           sessionId: '',
           grants: {},
           pendingGrants: [],
-        } as PageInfo)
+        } as ArtifactInfo)
         setDocument(opened.document)
         state.current = opened.state.state
         revision.current = opened.state.revision
       } else {
         const [info, current, values] = await Promise.all([
-          store.invoke(computerId, 'artifacts.get', pageId),
-          store.invoke(computerId, 'artifacts.document', pageId),
-          store.invoke(computerId, 'artifacts.state', pageId),
+          store.invoke(computerId, 'artifacts.get', artifactId),
+          store.invoke(computerId, 'artifacts.document', artifactId),
+          store.invoke(computerId, 'artifacts.state', artifactId),
         ])
         setPage(info)
         activity.current =
@@ -128,7 +133,7 @@ export default function PageScreen() {
             ? activity.current
             : pageRunActivity(`${info.icon} ${info.title}`, store.language)
         setDocument((before) => (before?.reference.version === current.reference.version && !saved ? before : current))
-        savePageCopy(contentStorage, computerId, pageId, current)
+        savePageCopy(contentStorage, computerId, artifactId, current)
         if (values.revision !== revision.current) {
           revision.current = values.revision
           state.current = values.state
@@ -137,21 +142,21 @@ export default function PageScreen() {
       setSaved(false)
       setError('')
     } catch (failure) {
-      if (pageCopy(contentStorage, computerId, pageId)) setSaved(true)
+      if (pageCopy(contentStorage, computerId, artifactId)) setSaved(true)
       setError(unreachable(failure) || !online ? say('Host unavailable. Reconnect to load content.') : reason(failure))
     }
-  }, [store, computerId, pageId, shareToken, say, online, saved])
+  }, [store, computerId, artifactId, shareToken, say, online, saved])
   useEffect(() => {
     void load()
   }, [load])
   // Calls queued offline go to the host as soon as it answers, in order; refused ones are shown, not dropped.
   useEffect(() => {
-    if (!online || shareToken || !queuedCalls(contentStorage, computerId, pageId).length) return
+    if (!online || shareToken || !queuedCalls(contentStorage, computerId, artifactId).length) return
     void syncCalls(
       contentStorage,
       computerId,
-      pageId,
-      (call) => store.invoke(computerId, 'artifacts.call', pageId, call.method, call.args),
+      artifactId,
+      (call) => store.invoke(computerId, 'artifacts.call', artifactId, call.method, call.args),
       (failure) => !unreachable(failure),
     ).then(({ conflicts: refused, results }) => {
       if (refused.length) setConflicts(refused.map((entry) => entry.error))
@@ -162,13 +167,13 @@ export default function PageScreen() {
       }
       void load()
     })
-  }, [online, shareToken, computerId, pageId, store, reply, load])
+  }, [online, shareToken, computerId, artifactId, store, reply, load])
   useEffect(() => {
     if (!online) return
     return store.subscribe(computerId, (...[channel, payload]) => {
-      if (channel !== 'pages:changed') return
-      const event = payload as { pageId: string; run?: PageRun }
-      if (event.pageId !== pageId) return
+      if (channel !== 'artifacts:changed') return
+      const event = payload as { artifactId: string; run?: ArtifactRun }
+      if (event.artifactId !== artifactId) return
       const run = event.run
       if (!run) return void load()
       const followed = follow.current.get(run.id)
@@ -193,7 +198,7 @@ export default function PageScreen() {
         })
       }
     })
-  }, [online, store, computerId, pageId, load, post, reply])
+  }, [online, store, computerId, artifactId, load, post, reply])
   const theme = useMemo(
     () =>
       interactiveThemeVariables({
@@ -213,7 +218,7 @@ export default function PageScreen() {
       }),
     [c, scheme],
   )
-  const instance = `page:${pageId}:${document?.reference.version ?? 0}:${generation}`
+  const instance = `page:${artifactId}:${document?.reference.version ?? 0}:${generation}`
   const html = useMemo(
     () => (document ? interactiveHtml(document.html, instance, state.current, theme, document.reference.network) : ''),
     // The frame keeps its own state once loaded; a theme change reaches it as a message.
@@ -222,7 +227,7 @@ export default function PageScreen() {
   )
   const startThread = async (prompt: string, selector?: string) => {
     try {
-      const started = await store.invoke(computerId, 'artifacts.startThread', pageId, prompt, selector)
+      const started = await store.invoke(computerId, 'artifacts.startThread', artifactId, prompt, selector)
       await store.refresh(computerId).catch(() => {})
       router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(computerId, started.taskId) } })
     } catch (failure) {
@@ -233,11 +238,11 @@ export default function PageScreen() {
     const send = () =>
       shared
         ? store.invoke(computerId, 'artifacts.shareCall', shared.token, method, args)
-        : store.invoke(computerId, 'artifacts.call', pageId, method, args)
+        : store.invoke(computerId, 'artifacts.call', artifactId, method, args)
     const queue = () => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       const entry: QueuedCall = { id, method, args, at: Date.now() }
-      if (!queueCall(contentStorage, computerId, pageId, entry))
+      if (!queueCall(contentStorage, computerId, artifactId, entry))
         return reply(requestId, null, say('The offline queue is full. Reconnect to the host.'))
       // A record shows at once as queued; a question waits for the host while this page stays open.
       if (method === 'ai.ask') waiting.current.set(id, requestId)
@@ -269,7 +274,7 @@ export default function PageScreen() {
       setFrameError(String(value.message ?? say('An interaction failed.')))
       if (!shared && online && document)
         void store
-          .invoke(computerId, 'artifacts.reportError', pageId, {
+          .invoke(computerId, 'artifacts.reportError', artifactId, {
             message: String(value.message ?? ''),
             version: document.reference.version,
             device: 'phone',
@@ -280,7 +285,7 @@ export default function PageScreen() {
     if (m.type === 'state' && !shared && online) {
       const next = readInteractiveState(m.value)
       if (next)
-        void store.invoke(computerId, 'artifacts.saveState', pageId, next, revision.current).then(
+        void store.invoke(computerId, 'artifacts.saveState', artifactId, next, revision.current).then(
           (result) => {
             revision.current = result.revision
             if (!result.accepted) post({ type: 'restore', value: result.state })
@@ -296,8 +301,8 @@ export default function PageScreen() {
       const options = (args[1] ?? {}) as { shape?: unknown; maxSteps?: number; runId?: string; name?: string }
       const start =
         method === 'ai.flow'
-          ? store.invoke(computerId, 'artifacts.runFlow', pageId, String(args[0]), functions.current)
-          : store.invoke(computerId, 'artifacts.runStart', pageId, String(args[0]), {
+          ? store.invoke(computerId, 'artifacts.runFlow', artifactId, String(args[0]), functions.current)
+          : store.invoke(computerId, 'artifacts.runStart', artifactId, String(args[0]), {
               shape: options.shape,
               maxSteps: options.maxSteps,
               name: options.name,
@@ -324,13 +329,13 @@ export default function PageScreen() {
     call(requestId, method, args)
   }
   const run = (name: string) =>
-    void store.invoke(computerId, 'artifacts.runFlow', pageId, name, functions.current).then(
+    void store.invoke(computerId, 'artifacts.runFlow', artifactId, name, functions.current).then(
       (runId) => runId && follow.current.set(runId, { requestId: `toolbar-${runId}`, shown: 0 }),
       (failure) => Alert.alert(say('That didn’t work'), reason(failure)),
     )
   const ask = () =>
     void store
-      .invoke(computerId, 'artifacts.ask', pageId, question.trim())
+      .invoke(computerId, 'artifacts.ask', artifactId, question.trim())
       .then(setAnswer, (failure) => Alert.alert(say('That didn’t work'), reason(failure)))
   const pending = !shared && !viewer && page ? page.pendingGrants : []
   const runs = Object.entries(page?.capabilities.runs ?? {})
@@ -376,8 +381,8 @@ export default function PageScreen() {
                 onPress={() => {
                   const failure = page.lastError!
                   void startThread(
-                    `Fix this error in my page. Reproduce it with artifact_preview, then publish the fixed version with artifact_publish {page: "${page.id}", changes}.\nError on ${failure.device ?? 'a device'} in v${failure.version}: ${failure.message}${failure.steps?.length ? `\nWhat the person did before it: ${failure.steps.join(' → ')}` : ''}`,
-                  ).then(() => store.invoke(computerId, 'artifacts.clearError', pageId))
+                    `Fix this error in my page. Reproduce it with artifact_preview, then publish the fixed version with artifact_publish {artifact: "${page.id}", changes}.\nError on ${failure.device ?? 'a device'} in v${failure.version}: ${failure.message}${failure.steps?.length ? `\nWhat the person did before it: ${failure.steps.join(' → ')}` : ''}`,
+                  ).then(() => store.invoke(computerId, 'artifacts.clearError', artifactId))
                 }}
               />
             ) : null}
@@ -614,7 +619,9 @@ export default function PageScreen() {
             {!shared ? (
               <Row
                 onPress={() =>
-                  void store.invoke(computerId, 'artifacts.versions', pageId).then(setVersions, () => setVersions([]))
+                  void store
+                    .invoke(computerId, 'artifacts.versions', artifactId)
+                    .then(setVersions, () => setVersions([]))
                 }
               >
                 <T>{say('Versions')}</T>
@@ -627,12 +634,12 @@ export default function PageScreen() {
                   const current = widgetPage(store.drafts[WIDGET_PAGE_KEY])
                   store.setDraft(
                     WIDGET_PAGE_KEY,
-                    current?.pageId === pageId ? '' : JSON.stringify({ computerId, pageId }),
+                    current?.artifactId === artifactId ? '' : JSON.stringify({ computerId, artifactId }),
                   )
                 }}
               >
                 <T>
-                  {widgetPage(store.drafts[WIDGET_PAGE_KEY])?.pageId === pageId
+                  {widgetPage(store.drafts[WIDGET_PAGE_KEY])?.artifactId === artifactId
                     ? say('Remove from the home screen widget')
                     : say('Show in the home screen widget')}
                 </T>
@@ -643,8 +650,8 @@ export default function PageScreen() {
                 setMenu(false)
                 void Share.share({
                   title: page?.title,
-                  message: `${page?.title ?? ''} ${artifactLink({ computerId, pageId, ...(shared ? { share: shared.token } : {}) })}`,
-                  url: artifactLink({ computerId, pageId, ...(shared ? { share: shared.token } : {}) }),
+                  message: `${page?.title ?? ''} ${artifactLink({ computerId, artifactId, ...(shared ? { share: shared.token } : {}) })}`,
+                  url: artifactLink({ computerId, artifactId, ...(shared ? { share: shared.token } : {}) }),
                 })
               }}
             >
@@ -671,7 +678,7 @@ export default function PageScreen() {
                     setVersions(null)
                     setMenu(false)
                     void store
-                      .invoke(computerId, 'artifacts.restoreVersion', pageId, version.reference.version)
+                      .invoke(computerId, 'artifacts.restoreVersion', artifactId, version.reference.version)
                       .then(() => load())
                   }}
                 />
@@ -683,7 +690,7 @@ export default function PageScreen() {
       {page && pending.length ? (
         <Sheet
           open
-          onClose={() => void store.invoke(computerId, 'artifacts.grant', pageId, denyAll(page)).then(() => load())}
+          onClose={() => void store.invoke(computerId, 'artifacts.grant', artifactId, denyAll(page)).then(() => load())}
           title={say('{title} asks to', { title: page.title })}
         >
           <View style={{ padding: space.l, gap: space.m }}>
@@ -696,13 +703,15 @@ export default function PageScreen() {
             <Button
               title={say('Allow')}
               onPress={() =>
-                void store.invoke(computerId, 'artifacts.grant', pageId, allowAll(page)).then(() => load())
+                void store.invoke(computerId, 'artifacts.grant', artifactId, allowAll(page)).then(() => load())
               }
             />
             <Button
               kind="ghost"
               title={say('Not now')}
-              onPress={() => void store.invoke(computerId, 'artifacts.grant', pageId, denyAll(page)).then(() => load())}
+              onPress={() =>
+                void store.invoke(computerId, 'artifacts.grant', artifactId, denyAll(page)).then(() => load())
+              }
             />
           </View>
         </Sheet>
@@ -711,7 +720,7 @@ export default function PageScreen() {
   )
 }
 
-function grantText(say: ReturnType<typeof useSay>, name: string, page: PageInfo): string {
+function grantText(say: ReturnType<typeof useSay>, name: string, page: ArtifactInfo): string {
   const c = page.capabilities
   switch (name) {
     case 'records':
@@ -741,7 +750,7 @@ function grantText(say: ReturnType<typeof useSay>, name: string, page: PageInfo)
   }
 }
 
-function allowAll(page: PageInfo) {
+function allowAll(page: ArtifactInfo) {
   return Object.fromEntries(
     page.pendingGrants.map((name) => [
       name,
@@ -761,6 +770,6 @@ function allowAll(page: PageInfo) {
   )
 }
 
-function denyAll(page: PageInfo) {
+function denyAll(page: ArtifactInfo) {
   return Object.fromEntries(page.pendingGrants.map((name) => [name, false]))
 }

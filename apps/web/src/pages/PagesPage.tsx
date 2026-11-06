@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { AppWindow, Pin, Plus } from 'lucide-react'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { draftKey, draftStore, loadDraft, saveDraft } from '../composer/drafts'
-import type { PageInfo } from '@ramu/shared/pages'
-import { declaredCapabilities } from '@ramu/shared/pages'
+import type { ArtifactInfo } from '@ramu/shared/artifacts'
+import { declaredCapabilities } from '@ramu/shared/artifacts'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { RowButton } from '../components/row-button'
 import { SearchInput } from '../SearchInput'
@@ -21,7 +21,7 @@ import { useViewOnly } from '../composer/useViewOnly'
 export function usePages() {
   const { invoke } = useHost()
   const { on } = useHostRuntime()
-  const [pages, setPages] = useState<PageInfo[] | null>(null)
+  const [pages, setPages] = useState<ArtifactInfo[] | null>(null)
   const reload = useCallback(() => {
     void invoke('artifacts.list')
       .then(setPages)
@@ -29,7 +29,7 @@ export function usePages() {
   }, [invoke])
   useEffect(() => {
     reload()
-    return on('pages:changed', (payload) => {
+    return on('artifacts:changed', (payload) => {
       if (!payload.run) reload()
     })
   }, [reload, on])
@@ -60,7 +60,7 @@ export function PagesPage() {
     window.addEventListener('ramu:open-page', select)
     return () => window.removeEventListener('ramu:open-page', select)
   }, [])
-  if (open) return <PageView key={open} pageId={open} onBack={() => setOpen(null)} />
+  if (open) return <PageView key={open} artifactId={open} onBack={() => setOpen(null)} />
   const projects = new Map(ws.projects.map((project) => [project.id, project.name]))
   const shown = (pages ?? []).filter((page) => page.title.toLowerCase().includes(query.trim().toLowerCase()))
   return (

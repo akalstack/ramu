@@ -2,7 +2,7 @@
 
 Agents can publish small interactive documents in a thread: explanations, diagrams, data explorers, calculators and prototypes. Their controls run locally with no further model call. A document you want to keep becomes an **artifact**: listed under **Artifacts** on the desktop and the phone, opened without its thread, changed by asking in any thread, and able to keep records and use your host's AI when you allow it.
 
-Every artifact is an **App**: interactive web content, shown as a web page. Pages kept before artifacts existed are Apps under **Artifacts**, unchanged. "Page" still names the web page an App shows, as in **Page settings**.
+Every artifact is an **App**: interactive web content. Below, an App's **page** is the web page it shows, as in **Page settings**.
 
 ## In a thread
 
@@ -18,7 +18,7 @@ Documents run in an isolated, sandboxed frame with no access to your files or Ra
 
 Ask for something to keep ("make me a page to split our trip costs") and the agent publishes it as an artifact, or choose **Keep as artifact** on any card. **Artifacts** sits in the sidebar under Inbox and Schedules, and in the phone's tabs: every artifact on the host, newest first, pinned ones on top, searchable by title. **New** starts a thread with "Make me a page to" begun. A project's menu lists its artifacts too. **Make a page from this thread** (in a thread's More actions) asks the agent to turn what the thread found or built into an App.
 
-An artifact opens full window on the desktop and full screen on the phone. Its saved values live on the host, so what you enter on the laptop is there on the phone; when two devices change it at once, the later one sees the other's values instead of overwriting them. On the phone, **Add to Home Screen or share** shares a `ramu://artifact/…` link that opens it in Ramu; `ramu://page/…` links shared before open the same screen. The last version opened stays as a **Saved copy** while the host is away, never shown as current.
+An artifact opens full window on the desktop and full screen on the phone. Its saved values live on the host, so what you enter on the laptop is there on the phone; when two devices change it at once, the later one sees the other's values instead of overwriting them. On the phone, **Add to Home Screen or share** shares a `ramu://artifact/…` link that opens it in Ramu. The last version opened stays as a **Saved copy** while the host is away, never shown as current.
 
 - **Changing it:** **Ask about this** starts a thread with the artifact attached, and any thread can update an artifact by name. **Edit** lets you point at an element and say what to change; the agent gets that element's screenshot, its text and its markup. **Versions** shows each version's phone and desktop screenshots with what changed, and **Restore** brings one back as the newest.
 - **Errors:** a script error on any device is reported to the host with the version and the steps before it. The page shows **Fix this**, which starts a thread with that report; the agent reproduces it and publishes a fixed version.
@@ -55,9 +55,8 @@ On the phone, **Show in the home screen widget** puts a page's declared widget (
 
 Agents use `artifact_preview` to test a document (one HTML file or a small project, up to 512 KB) and `artifact_publish` to publish the exact tested version. Preview clicks the declared controls in a headless browser, takes screenshots at phone and desktop widths, and blocks publication on script errors or failed checks. A revision passes `previous` to both and a short `changes` sentence to publish; checks kept with the previous version run again unless dropped on purpose.
 
-- `artifact_publish` with `page: true` keeps a new document as an artifact (with `title` and one emoji `icon`); `page: "<id>"` publishes a new version of an existing artifact from any thread.
+- `artifact_publish` with `artifact: true` keeps a new document as an artifact (with `title` and one emoji `icon`); `artifact: "<id>"` publishes a new version of an existing artifact from any thread.
 - `artifact_list` and `artifact_get` find an artifact and read its kind, sources, capabilities and last error; `artifact_records` queries, adds or updates its records; `artifact_run` starts one of its runs; `artifact_published` records where it is live. `artifact_read` and `artifact_versions` read a thread's own documents.
-- The earlier names (`preview_interactive`, `publish_interactive`, `interactive_read`, `interactive_list` and the `page_*` tools) still work, and transcripts that used them read the same.
 - Capabilities are declared in `ramu.json` or a `<meta name="ramu-capabilities">` tag and used through `window.ramuContent`: `records`, `ai.ask`, `ai.run`, `ai.tool`, `pickImage`, `files`, `notify`, `folder` and `startThread`. Preview answers these from an in-frame fake so checks can exercise them.
 - Pinned libraries: React 19.3.0, Chart.js 4.6.1, Dagre 2.0.4.
 - `<link rel="stylesheet" href="ramu:kit">` adds app-styled cards, buttons, badges, tables and tabs; `<svg data-icon="name">` inserts a [Lucide](https://lucide.dev) icon. Both work offline.

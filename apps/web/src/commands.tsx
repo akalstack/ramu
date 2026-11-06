@@ -41,7 +41,7 @@ export interface ShellControls {
   openPalette(mode: PaletteMode): void
   toggleSidebar(): void
   showSearch(): void
-  showSidebar?(tab: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules' | 'inbox' | 'pages'): void
+  showSidebar?(tab: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules' | 'inbox' | 'artifacts'): void
   createSchedule(): void
   addProject?(): void
   /** The bound `invoke` of the host on screen (`useHost().invoke`); thread and Git commands run there. */

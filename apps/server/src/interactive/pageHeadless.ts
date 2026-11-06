@@ -1,7 +1,7 @@
 import { chromium } from 'playwright-core'
 import type { JsonValue } from '@ramu/shared/interactive'
 import { interactiveCsp, interactiveHtml } from '@ramu/shared/interactive'
-import type { PageInfo, PageRecordQuery } from '@ramu/shared/pages'
+import type { ArtifactInfo, ArtifactRecordQuery } from '@ramu/shared/artifacts'
 import type { PageFunction } from './pageAi'
 import type { PageStore } from './pages'
 import { ensureInteractiveBrowser } from './browser'
@@ -23,7 +23,11 @@ export const registersFunctions = (html: string) => /ramuContent\.ai\.tool\s*\(/
  * the run can use the functions the page registers. The frame reads its records through the host with the same grants;
  * it has no network, and anything else it asks for is refused.
  */
-export async function openHeadlessPage(page: PageInfo, pages: PageStore, signal?: AbortSignal): Promise<HeadlessPage> {
+export async function openHeadlessPage(
+  page: ArtifactInfo,
+  pages: PageStore,
+  signal?: AbortSignal,
+): Promise<HeadlessPage> {
   const document = pages.document(page.id)
   const executablePath = await ensureInteractiveBrowser(signal)
   const browser = await chromium.launch({ executablePath, headless: true, chromiumSandbox: true, timeout: 10_000 })
@@ -97,7 +101,7 @@ export async function openHeadlessPage(page: PageInfo, pages: PageStore, signal?
       answer(m.requestId, () => {
         switch (method) {
           case 'records.list':
-            return pages.records(page.id, collection, (second ?? {}) as PageRecordQuery)
+            return pages.records(page.id, collection, (second ?? {}) as ArtifactRecordQuery)
           case 'records.get':
             return pages.record(page.id, collection, String(second))
           case 'records.sum':
@@ -106,7 +110,7 @@ export async function openHeadlessPage(page: PageInfo, pages: PageStore, signal?
               collection,
               String(second),
               third ? String(third) : undefined,
-              (fourth ?? {}) as PageRecordQuery,
+              (fourth ?? {}) as ArtifactRecordQuery,
             )
           case 'files.get':
             return pages.file(page.id, String(collection))

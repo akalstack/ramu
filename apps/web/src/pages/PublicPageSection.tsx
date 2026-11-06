@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { PageInfo, PublicPageStatus } from '@ramu/shared/pages'
-import { declaredCapabilities } from '@ramu/shared/pages'
+import type { ArtifactInfo, PublicArtifactStatus } from '@ramu/shared/artifacts'
+import { declaredCapabilities } from '@ramu/shared/artifacts'
 import { Button } from '../components/desktop-button'
 import { GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
 import { t, useLanguage } from '../i18n'
@@ -11,11 +11,11 @@ import { useHostRuntime } from '../workspace/workspace'
  * Open to anyone: the page on a hostname of its own through this host's tunnel tool, for people without Ramu. Only a
  * page that uses no host feature can be opened, and closing it ends its tunnel at once.
  */
-export function PublicPageSection({ page }: { page: PageInfo }) {
+export function PublicPageSection({ page }: { page: ArtifactInfo }) {
   useLanguage()
   const { invoke } = useHost()
   const { on } = useHostRuntime()
-  const [status, setStatus] = useState<PublicPageStatus | null>(null)
+  const [status, setStatus] = useState<PublicArtifactStatus | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
     const load = () =>
@@ -23,8 +23,8 @@ export function PublicPageSection({ page }: { page: PageInfo }) {
         .then(setStatus)
         .catch(() => {})
     load()
-    return on('pages:changed', (payload) => {
-      if (payload.pageId === page.id && !payload.run) load()
+    return on('artifacts:changed', (payload) => {
+      if (payload.artifactId === page.id && !payload.run) load()
     })
   }, [invoke, on, page.id])
   const servable = declaredCapabilities(page.capabilities).length === 0

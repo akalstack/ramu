@@ -7,22 +7,22 @@ export interface Storage {
   setItem(key: string, value: string): void
 }
 
-const copyKey = (computerId: string, pageId: string) => `ramu.page.copy.${computerId}.${pageId}`
-const queueKey = (computerId: string, pageId: string) => `ramu.page.queue.${computerId}.${pageId}`
+const copyKey = (computerId: string, artifactId: string) => `ramu.artifact.copy.${computerId}.${artifactId}`
+const queueKey = (computerId: string, artifactId: string) => `ramu.artifact.queue.${computerId}.${artifactId}`
 
 /** The last version opened here, shown as a saved copy until the host answers. Never shown as current. */
-export function savePageCopy(storage: Storage, computerId: string, pageId: string, document: InteractiveDocument) {
+export function savePageCopy(storage: Storage, computerId: string, artifactId: string, document: InteractiveDocument) {
   try {
     const text = JSON.stringify(document)
-    if (text.length < 2_000_000) storage.setItem(copyKey(computerId, pageId), text)
+    if (text.length < 2_000_000) storage.setItem(copyKey(computerId, artifactId), text)
   } catch {
     // A full cache only means no saved copy.
   }
 }
 
-export function pageCopy(storage: Storage, computerId: string, pageId: string): InteractiveDocument | null {
+export function pageCopy(storage: Storage, computerId: string, artifactId: string): InteractiveDocument | null {
   try {
-    const value = JSON.parse(storage.getItem(copyKey(computerId, pageId)) ?? 'null') as InteractiveDocument | null
+    const value = JSON.parse(storage.getItem(copyKey(computerId, artifactId)) ?? 'null') as InteractiveDocument | null
     return value?.reference && typeof value.html === 'string' ? value : null
   } catch {
     return null
@@ -40,20 +40,20 @@ export interface QueuedCall {
 /** Calls that can wait for the host: adding and changing records, and asking the page's model. */
 export const QUEUEABLE = new Set(['records.add', 'records.update', 'ai.ask'])
 
-export function queuedCalls(storage: Storage, computerId: string, pageId: string): QueuedCall[] {
+export function queuedCalls(storage: Storage, computerId: string, artifactId: string): QueuedCall[] {
   try {
-    const value = JSON.parse(storage.getItem(queueKey(computerId, pageId)) ?? '[]')
+    const value = JSON.parse(storage.getItem(queueKey(computerId, artifactId)) ?? '[]')
     return Array.isArray(value) ? value.slice(0, 200) : []
   } catch {
     return []
   }
 }
 
-export function queueCall(storage: Storage, computerId: string, pageId: string, call: QueuedCall): boolean {
-  const queue = queuedCalls(storage, computerId, pageId)
+export function queueCall(storage: Storage, computerId: string, artifactId: string, call: QueuedCall): boolean {
+  const queue = queuedCalls(storage, computerId, artifactId)
   if (queue.length >= 200) return false
   try {
-    storage.setItem(queueKey(computerId, pageId), JSON.stringify([...queue, call]))
+    storage.setItem(queueKey(computerId, artifactId), JSON.stringify([...queue, call]))
     return true
   } catch {
     return false
@@ -67,11 +67,11 @@ export function queueCall(storage: Storage, computerId: string, pageId: string, 
 export async function syncCalls(
   storage: Storage,
   computerId: string,
-  pageId: string,
+  artifactId: string,
   send: (call: QueuedCall) => Promise<unknown>,
   reachable: (error: unknown) => boolean,
 ): Promise<{ sent: number; conflicts: { call: QueuedCall; error: string }[]; results: Map<string, unknown> }> {
-  const queue = queuedCalls(storage, computerId, pageId)
+  const queue = queuedCalls(storage, computerId, artifactId)
   const conflicts: { call: QueuedCall; error: string }[] = []
   const results = new Map<string, unknown>()
   let sent = 0
@@ -81,12 +81,12 @@ export async function syncCalls(
       sent++
     } catch (error) {
       if (!reachable(error)) {
-        storage.setItem(queueKey(computerId, pageId), JSON.stringify(queue.slice(index)))
+        storage.setItem(queueKey(computerId, artifactId), JSON.stringify(queue.slice(index)))
         return { sent, conflicts, results }
       }
       conflicts.push({ call, error: error instanceof Error ? error.message : String(error) })
     }
   }
-  storage.setItem(queueKey(computerId, pageId), '[]')
+  storage.setItem(queueKey(computerId, artifactId), '[]')
   return { sent, conflicts, results }
 }

@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { PageInfo } from '@ramu/shared/pages'
+import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
 
-type Index = { pages: Map<string, PageInfo>; listeners: Set<() => void>; loading: boolean; loaded: boolean }
+type Index = { pages: Map<string, ArtifactInfo>; listeners: Set<() => void>; loading: boolean; loaded: boolean }
 const indexes = new Map<string, Index>()
 
 /**
  * The host's pages by id, read once per host and shared by every thread card, so a transcript with many documents
  * asks the host one question instead of one per card.
  */
-export function usePageIndex(): { pages: Map<string, PageInfo>; loaded: boolean } {
+export function usePageIndex(): { pages: Map<string, ArtifactInfo>; loaded: boolean } {
   const { id, invoke } = useHost()
   const { on } = useHostRuntime()
   const index = useMemo(() => {
@@ -42,7 +42,7 @@ export function usePageIndex(): { pages: Map<string, PageInfo>; loaded: boolean 
         })
     }
     if (!index.loaded) load()
-    const off = on('pages:changed', (payload) => {
+    const off = on('artifacts:changed', (payload) => {
       if (!payload.run) load()
     })
     return () => {

@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { toolQuery, toolResultLimit } from '../toolInputs'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import { currentToolName } from '@ramu/shared/pages'
 
 type Entry = {
   name: string
@@ -63,9 +62,8 @@ export class ToolRegistry {
   }
   search(query: string, limit = 5) {
     const terms = [...new Set(words(query))]
-    // A tool's earlier name still runs it, but search offers only the current one.
     return [...this.entries.values()]
-      .filter((entry) => entry.name !== 'codex_pre_tool_use' && currentToolName(entry.name) === entry.name)
+      .filter((entry) => entry.name !== 'codex_pre_tool_use')
       .map((entry) => {
         const nameWords = words(entry.name),
           descriptionWords = words(`${entry.description} ${ALIASES[entry.name.split('_')[0]!] ?? ''}`)

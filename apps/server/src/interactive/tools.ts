@@ -4,7 +4,7 @@ import { interactiveInput, type InteractiveStore } from './store'
 import type { PageStore } from './pages'
 import type { PageAi } from './pageAi'
 import { pageCapabilitiesOf } from './capabilities'
-import { declaredCapabilities, oldArtifactToolName } from '@ramu/shared/pages'
+import { declaredCapabilities } from '@ramu/shared/artifacts'
 export const INTERACTIVE_GUIDE = `Create an artifact when working with something beats reading about it: architecture and request-flow diagrams, algorithm or state-machine walkthroughs, data/log/JSON explorers, API, regex or config playgrounds, UI prototypes, performance or cost comparisons, calculators and simulations. Use the conversation's real code, data and numbers rather than placeholders. Use artifact_preview then artifact_publish; the card opens live in the chat, so the first frame must already be useful.
 Quality bar: complete and dependable rather than decorative. Lead with the answer (the key diagram, chart or result) and let controls refine it; label units, states and edge cases; keep layout dense, aligned and readable in the app's dark/light theme; use motion only where it explains change. When the user asks for something creative (a game, story or illustration), make it a finished, polished piece with considered art and evolving state. Check the preview screenshot critically and revise visual flaws, clipped text or dead controls before publishing.
 Structure: send one html document, or files [{path, content, encoding?}] with an HTML entry (default index.html). Local CSS, classic scripts, SVG and base64 assets are inlined. For React/TSX use <script type="module" src="./src/main.tsx"></script>; local JS/TS/TSX/JSON/CSS and asset imports are compiled before preview. Available pinned imports: react, react/jsx-runtime, react-dom/client, chart.js, chart.js/auto, chart.js/helpers, @dagrejs/dagre. Use Chart.js for interactive charts and Dagre plus accessible SVG for flow/architecture diagrams. Simple diagrams can use SVG directly. No arbitrary package installs, Node imports or host filesystem access. Use imported assets in modules; strings containing file paths are not imports. Sources, library versions and the exact tested runnable bytes are retained with each publication.
@@ -12,40 +12,23 @@ Runtime: new documents work offline by default, including bundled libraries. If 
 Built-ins (inlined at preview, so they work offline and never change after publishing; prefer them over a CSS framework): <link rel="stylesheet" href="ramu:kit"> adds app-styled defaults for headings, inputs and :focus-visible plus classes .card, .btn (data-variant=primary|ghost|danger, data-size=sm|icon), .badge, .callout, .dot and .bar>span (data-tone=primary|success|warning|danger), .stat/.stat-label/.stat-value/.stat-delta, .table (td.num right-aligns), [role=tablist]/[role=tab][aria-selected], .field, .stack, .row, .grid, .muted, .small, .mono, .num; all rules have zero specificity so your CSS wins. Any Lucide icon: <svg data-icon="chevron-right"></svg> (kebab-case name; sized 1em, currentColor; add aria-label for meaningful icons). For icons created from JS, put them in a <template> and clone them. Prefer the kit and icons over hand-drawn equivalents.
 Revisions: read the current version, pass previous {id, version} to artifact_preview and artifact_publish, resend all files, and give artifact_publish a short changes sentence. Checks kept with the previous version run again; drop one with dropChecks only when that behavior changed on purpose. Set stateSchema to the same explicit identifier across revisions ONLY when control keys and custom JSON retain the exact same meaning; otherwise use a new identifier or omit it. Do not put document bytes in chat or claim static screenshots are working interactions.`
 
-export const ARTIFACTS_GUIDE = `Artifacts: when the person asks for something to keep and come back to (a tracker, a planner, a calculator they will reuse, a dashboard of their own data), publish with page: true and a short title and one emoji icon. An artifact is listed under Artifacts on every device, keeps one shared state across devices, and later threads change it with artifact_list, artifact_get and artifact_publish {page: id, changes}. A web page kept this way is an App artifact. Use artifact_records and artifact_run in a thread the artifact handed off to.
+export const ARTIFACTS_GUIDE = `Artifacts: when the person asks for something to keep and come back to (a tracker, a planner, a calculator they will reuse, a dashboard of their own data), publish with artifact: true and a short title and one emoji icon. An artifact is listed under Artifacts on every device, keeps one shared state across devices, and later threads change it with artifact_list, artifact_get and artifact_publish {artifact: id, changes}. A web page kept this way is an App artifact. Use artifact_records and artifact_run in a thread the artifact handed off to.
 App capabilities, declared in ramu.json (projects) or <meta name="ramu-capabilities" content='{...}'> (single files), each granted by the person on first use:
 - records: {"records": {"transactions": {"fields": {"date": "date", "amount": "number", "category": "string", "note": "string?", "receipt": "file?"}}}}. Use records, not setState, for anything that grows over time. Field types: string, number, boolean, date (YYYY-MM-DD), file, json; ? makes one optional. API: await ramuContent.records.list(collection, {where:[{field,op,value}], sort:{field,direction}, range:{field,from,to}, limit}), get, add(collection, data), update(collection, id, patch), delete(collection, id), sum(collection, field, by?, query?). A revision that adds or renames fields declares "migrate": {"newField": {"from": "oldField"} | {"default": value}}.
-- ai: {"ai": {"purpose": "Reads what you type into a transaction", "quality": "fast"|"smart", "daily": 200}}. Pick the smallest level: ramuContent.ai.ask(prompt, {schema, images}) for one call (parsing "coffee 35k yesterday", categorizing, reading a receipt image); ramuContent.ai.run(task, {schema, onStep, maxSteps}) for a page agent that reads and changes records and calls page functions registered with ramuContent.ai.tool(name, {description, input: {field: type}}, handler); ramuContent.startThread(prompt) for work that needs code or the page itself to change. A schema is {field: type} or [{field: type}] for a list. Never call AI on every keystroke; call it on a button or submit.
+- ai: {"ai": {"purpose": "Reads what you type into a transaction", "quality": "fast"|"smart", "daily": 200}}. Pick the smallest level: ramuContent.ai.ask(prompt, {schema, images}) for one call (parsing "coffee 35k yesterday", categorizing, reading a receipt image); ramuContent.ai.run(task, {schema, onStep, maxSteps}) for an artifact agent that reads and changes records and calls functions registered with ramuContent.ai.tool(name, {description, input: {field: type}}, handler); ramuContent.startThread(prompt) for work that needs code or the artifact itself to change. A schema is {field: type} or [{field: type}] for a list. Never call AI on every keystroke; call it on a button or submit.
 - runs: {"runs": {"monthly-review": {"label": "Monthly review", "prompt": "..."}}} adds toolbar buttons; schedules: [{"run": "monthly-review", "every": "daily", "at": "08:00"}]; triggers: [{"collection": "transactions", "when": {"field": "amount", "op": ">", "value": 500000}, "notify": "Large transaction", "run": "..."}].
-- camera: {"camera": {"purpose": "Photos of receipts"}} then const ref = await ramuContent.pickImage() (a downscaled photo kept with the page; store ref in a file field; ramuContent.files.get(ref) returns a data URL to show or send to ai.ask images).
+- camera: {"camera": {"purpose": "Photos of receipts"}} then const ref = await ramuContent.pickImage() (a downscaled photo kept with the artifact; store ref in a file field; ramuContent.files.get(ref) returns a data URL to show or send to ai.ask images).
 - notify: {"notify": {"purpose": "Tells you when spending passes your budget"}} then ramuContent.notify(title, body), a few per day.
-- widget: {"widget": {"title": "This month", "collection": "transactions", "kind": "number", "sum": "amount"}} for the phone's home screen. webhook: {"webhook": {"collection": "transactions"}} lets outside services add records. folder: {"folder": {"path": "data"}} gives read-only access to one folder of the page's project: await ramuContent.folder.list(subpath?) returns [{name, folder}], await ramuContent.folder.read(path) returns a text file up to 200 KB.
-- ramu: {"ramu": {"purpose": "Shows my agent usage", "sources": ["activity", "threads", "pullRequests"]}} then await ramuContent.ramu.read("activity") (tokens by day and provider for 30 days), read("threads") (titles, states, last activity) or read("pullRequests"), each source granted separately; threads and pull requests are the page's project's when it has one.
+- widget: {"widget": {"title": "This month", "collection": "transactions", "kind": "number", "sum": "amount"}} for the phone's home screen. webhook: {"webhook": {"collection": "transactions"}} lets outside services add records. folder: {"folder": {"path": "data"}} gives read-only access to one folder of the artifact's project: await ramuContent.folder.list(subpath?) returns [{name, folder}], await ramuContent.folder.read(path) returns a text file up to 200 KB.
+- ramu: {"ramu": {"purpose": "Shows my agent usage", "sources": ["activity", "threads", "pullRequests"]}} then await ramuContent.ramu.read("activity") (tokens by day and provider for 30 days), read("threads") (titles, states, last activity) or read("pullRequests"), each source granted separately; threads and pull requests are the artifact's project's when it has one.
 Preview runs capability calls against an in-frame fake, so checks can exercise them; the declaration is validated before preview.`
 
-/**
- * Registers each artifact tool under its earlier name too, described only as that, so an agent or provider session that
- * learned the old name keeps working.
- */
-function withOldNames(server: McpServer): McpServer {
-  const registerTool: McpServer['registerTool'] = (name, config, callback) => {
-    const registered = server.registerTool(name, config, callback)
-    const old = oldArtifactToolName(name)
-    if (old) server.registerTool(old, { ...config, description: `Old name for ${name}.` }, callback)
-    return registered
-  }
-  return new Proxy(server, {
-    get: (object, key) => (key === 'registerTool' ? registerTool : Reflect.get(object, key, object)),
-  })
-}
-
 export function registerInteractiveTools(
-  target: McpServer,
+  server: McpServer,
   store: InteractiveStore,
   session: string,
   pageTools?: { pages: PageStore; ai: PageAi; projectId(): string | null },
 ) {
-  const server = withOldNames(target)
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
   server.registerTool(
     'artifact_preview',
@@ -68,7 +51,7 @@ export function registerInteractiveTools(
     },
     async ({ previous, dropChecks, ...input }, extra) => {
       const preview = await store.preview(session, input, extra.signal, { previous, dropChecks })
-      // A page revision is checked against the records it already keeps, on a dry run.
+      // An artifact revision is checked against the records it already keeps, on a dry run.
       const migration =
         previous && pageTools?.pages.has(previous.id)
           ? pageTools.pages.migrate(previous.id, pageCapabilitiesOf(input), true)
@@ -111,7 +94,7 @@ export function registerInteractiveTools(
       description:
         'Publish a previewed artifact version in this conversation. Supply a stable requestId for retries; use previous to revise an existing version, with changes saying in one short sentence what this version changes (shown on the card). Failed/expired previews cannot publish. The saved event appears independently of this tool result; older versions collapse to one row in the thread.' +
         (pageTools
-          ? ' page: true keeps a new document as an artifact listed under Artifacts (give title and one emoji icon); page: "<artifact id>" publishes a new version of an existing artifact from this thread (with changes; previous is not needed).'
+          ? ' artifact: true keeps a new document as an artifact listed under Artifacts (give title and one emoji icon); artifact: "<artifact id>" publishes a new version of an existing artifact from this thread (with changes; previous is not needed).'
           : ''),
       inputSchema: {
         previewId: z.string().uuid(),
@@ -120,32 +103,32 @@ export function registerInteractiveTools(
         changes: z.string().trim().min(1).max(300).optional(),
         ...(pageTools
           ? {
-              page: z.union([z.literal(true), z.string().uuid()]).optional(),
+              artifact: z.union([z.literal(true), z.string().uuid()]).optional(),
               title: z.string().trim().min(1).max(160).optional(),
               icon: z.string().trim().max(16).optional(),
             }
           : {}),
       },
     },
-    ({ previewId, requestId, previous, changes, page, title, icon }) => {
+    ({ previewId, requestId, previous, changes, artifact, title, icon }) => {
       const pages = pageTools?.pages
-      const target = typeof page === 'string' ? page : previous && pages?.has(previous.id) ? previous.id : null
+      const target = typeof artifact === 'string' ? artifact : previous && pages?.has(previous.id) ? previous.id : null
       if (pages && target) {
         const current = pages.get(target)
         const reference = store.publish(session, previewId, requestId, {
           previous: { id: target, version: current.version },
           changes,
           acrossSessions: true,
-          pageId: target,
+          artifactId: target,
           onPublished: (published) => pages.addVersion(target, published),
         })
         if (title || icon) pages.update(target, { title, icon })
-        return result({ ...reference, page: pages.get(target) })
+        return result({ ...reference, artifact: pages.get(target) })
       }
       const reference = store.publish(session, previewId, requestId, { previous, changes })
-      if (pages && page === true) {
+      if (pages && artifact === true) {
         const kept = pages.keep(session, reference.id, { title, icon, projectId: pageTools.projectId() })
-        return result({ ...reference, page: kept })
+        return result({ ...reference, artifact: kept })
       }
       return result(reference)
     },
@@ -195,7 +178,7 @@ function registerPageTools(server: McpServer, pages: PageStore, ai: PageAi) {
     'artifact_get',
     {
       description:
-        'Read an artifact before changing it: its current sources (html, or files), capabilities, record counts and the last error a device reported. Then preview with previous {id, version} and artifact_publish {page: id, changes}.',
+        'Read an artifact before changing it: its current sources (html, or files), capabilities, record counts and the last error a device reported. Then preview with previous {id, version} and artifact_publish {artifact: id, changes}.',
       inputSchema: { id: z.string().uuid() },
     },
     ({ id }) => {
@@ -210,7 +193,7 @@ function registerPageTools(server: McpServer, pages: PageStore, ai: PageAi) {
           }
         }),
       )
-      return result({ page, document, records: counts })
+      return result({ artifact: page, document, records: counts })
     },
   )
   server.registerTool(

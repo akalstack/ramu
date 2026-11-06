@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { readInteractiveState, type InteractiveState } from '@ramu/shared/interactive'
-import type { PageRun } from '@ramu/shared/pages'
+import type { ArtifactRun } from '@ramu/shared/artifacts'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
 
@@ -24,12 +24,12 @@ interface Following {
 }
 
 /**
- * Connects a page's frame to its host: ramuContent calls go to pages.call (or pages.shareCall for a share link), runs
- * stream their steps back, page functions run in the frame, errors are reported for Fix this, and the shared state is
+ * Connects an artifact's frame to its host: ramuContent calls go to artifacts.call (or artifacts.shareCall for a share
+ * link), runs stream their steps back, artifact functions run in the frame, errors are reported for Fix this, and the shared state is
  * saved over the revision this device read.
  */
 export function usePageBridge({
-  pageId,
+  artifactId,
   share,
   version,
   frame,
@@ -39,7 +39,7 @@ export function usePageBridge({
   onError,
   onStartThread,
 }: {
-  pageId: string
+  artifactId: string
   share?: string
   version: number
   frame: RefObject<HTMLIFrameElement | null>
@@ -55,7 +55,7 @@ export function usePageBridge({
   const functions = useRef<FrameFunction[]>([])
   const following = useRef(new Map<string, Following>())
   const [confirm, setConfirm] = useState<{ id: string; text: string } | null>(null)
-  const [running, setRunning] = useState<PageRun | null>(null)
+  const [running, setRunning] = useState<ArtifactRun | null>(null)
   const post = useCallback(
     (type: string, value: unknown, requestId?: string) =>
       frame.current?.contentWindow?.postMessage({ ramuInteractive: 1, instance, type, value, requestId }, '*'),
@@ -112,7 +112,7 @@ export function usePageBridge({
         const message = String(error.message ?? 'An interaction failed.')
         onError(message)
         if (!share)
-          void invoke('artifacts.reportError', pageId, {
+          void invoke('artifacts.reportError', artifactId, {
             message,
             version,
             device: 'desktop',
@@ -124,7 +124,7 @@ export function usePageBridge({
         if (!next) return
         clearTimeout(saving.current)
         saving.current = setTimeout(() => {
-          void invoke('artifacts.saveState', pageId, next, stateRevision.current ?? 0)
+          void invoke('artifacts.saveState', artifactId, next, stateRevision.current ?? 0)
             .then((saved) => {
               stateRevision.current = saved.revision
               // Another device saved first: show its values rather than overwrite them.
@@ -141,8 +141,8 @@ export function usePageBridge({
         const options = (args[1] ?? {}) as { shape?: unknown; maxSteps?: number; runId?: string; name?: string }
         const start =
           method === 'ai.flow'
-            ? invoke('artifacts.runFlow', pageId, String(args[0]), functions.current)
-            : invoke('artifacts.runStart', pageId, String(args[0]), {
+            ? invoke('artifacts.runFlow', artifactId, String(args[0]), functions.current)
+            : invoke('artifacts.runStart', artifactId, String(args[0]), {
                 shape: options.shape,
                 maxSteps: options.maxSteps,
                 name: options.name,
@@ -163,23 +163,36 @@ export function usePageBridge({
         const prompt = String(args[0] ?? '')
         answer(
           requestId,
-          onStartThread(prompt).then((agreed) => (agreed ? invoke('artifacts.startThread', pageId, prompt) : null)),
+          onStartThread(prompt).then((agreed) => (agreed ? invoke('artifacts.startThread', artifactId, prompt) : null)),
         )
         return
       }
       answer(
         requestId,
-        share ? invoke('artifacts.shareCall', share, method, args) : invoke('artifacts.call', pageId, method, args),
+        share ? invoke('artifacts.shareCall', share, method, args) : invoke('artifacts.call', artifactId, method, args),
       )
     }
     window.addEventListener('message', receive)
     return () => window.removeEventListener('message', receive)
-  }, [frame, instance, invoke, pageId, share, version, stateRevision, post, answer, onPicked, onError, onStartThread])
+  }, [
+    frame,
+    instance,
+    invoke,
+    artifactId,
+    share,
+    version,
+    stateRevision,
+    post,
+    answer,
+    onPicked,
+    onError,
+    onStartThread,
+  ])
   useEffect(
     () =>
-      on('pages:changed', (payload) => {
+      on('artifacts:changed', (payload) => {
         const run = payload.run
-        if (payload.pageId !== pageId || !run) return
+        if (payload.artifactId !== artifactId || !run) return
         const follow = following.current.get(run.id)
         if (!follow) return
         setRunning(run.status === 'running' ? run : null)
@@ -205,7 +218,7 @@ export function usePageBridge({
           )
         }
       }),
-    [on, pageId, post],
+    [on, artifactId, post],
   )
   useEffect(() => () => clearTimeout(saving.current), [])
   return {

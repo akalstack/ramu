@@ -8,7 +8,7 @@ export const takePendingPage = () => {
 }
 
 /** Opens a page from anywhere: a thread card, a notification or the command palette. The app switches to Artifacts. */
-export function openPage(pageId: string) {
-  pending = pageId
-  window.dispatchEvent(new CustomEvent('ramu:open-page', { detail: { id: pageId } }))
+export function openPage(artifactId: string) {
+  pending = artifactId
+  window.dispatchEvent(new CustomEvent('ramu:open-page', { detail: { id: artifactId } }))
 }

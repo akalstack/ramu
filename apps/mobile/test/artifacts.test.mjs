@@ -1,13 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { pageCopy, queueCall, queuedCalls, savePageCopy, syncCalls } from '../src/runtime/pages.ts'
+import { pageCopy, queueCall, queuedCalls, savePageCopy, syncCalls } from '../src/runtime/artifacts.ts'
 
 const memory = () => {
   const data = new Map()
   return { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) }
 }
 
-test('a saved copy is kept per host and page', () => {
+test('a saved copy is kept per host and artifact', () => {
   const storage = memory()
   const document = { reference: { id: 'p', version: 2 }, html: '<p>x</p>', preview: null }
   savePageCopy(storage, 'h', 'p', document)

@@ -10,10 +10,10 @@ export function PageNotices() {
   const { on } = useHostRuntime()
   useEffect(
     () =>
-      on('pages:changed', (payload) => {
+      on('artifacts:changed', (payload) => {
         const notice = payload.notice
         if (!notice) return
-        const id = `page:${payload.pageId}:${Date.now()}`
+        const id = `page:${payload.artifactId}:${Date.now()}`
         notify.add<AppToastData>({
           id,
           title: notice.title,
@@ -24,7 +24,7 @@ export function PageNotices() {
           actionProps: {
             children: t('Open'),
             onClick: () => {
-              openPage(payload.pageId)
+              openPage(payload.artifactId)
               notify.close(id)
             },
           },

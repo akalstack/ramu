@@ -22,7 +22,7 @@ export interface InteractiveReference {
   /** The version this one restored, when the person brought an older version back. */
   restoredFrom?: number
   /** The kept page that owns this document, when there is one. */
-  pageId?: string
+  artifactId?: string
 }
 export interface InteractiveNetwork {
   resources: string[]

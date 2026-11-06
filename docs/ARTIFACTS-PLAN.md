@@ -18,9 +18,7 @@ Agents already make more than web pages, but only pages have a home:
 
 **Rename.** Pages become **Artifacts** in every place a person or an agent reads them: the sidebar entry and the phone tab, the guide, the agent tools and the grant sheet. "Artifact" is the word people who use Claude already know for "a standalone result the model made". It covers every kind below and it is generic, not a product name. A web page is one kind of artifact: an **App**. The words "page" and "Page settings" stay only where they still mean a web page.
 
-- **What is kept:** the code's internal module and table names (`interactive_pages`, `page_records` and the rest) stay, because the schema only ever adds tables. Renaming them would be churn with no benefit to anyone using Ramu.
-- **What is renamed:** the IPC namespace (`pages.*` becomes `artifacts.*`) and the agent tools (`page_list` becomes `artifact_list`, and so on), with the old names still accepted.
-- **What keeps working:** `ramu://page/…` links, share links, transcripts that call the old tools, and pages that already exist, which become App artifacts unchanged.
+- **What is renamed:** everything, inside and out: the IPC namespace (`artifacts.*`), the agent tools (`artifact_*`), links (`ramu://artifact/…`) and the tables (`artifacts`, `artifact_records` and the rest). Ramu is alpha, so no old name is kept.
 
 **One engine.** Every kind reuses what pages already have: an owner on the host, versions published from any thread with what changed, one live card per artifact in a thread, Restore, Compare, kept checks, a shared state, grants, runs, Fix this, Edit (point and ask), share links, Open to anyone, Publish to the web and Make it a project. What a kind adds is three things only:
 
@@ -58,7 +56,7 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 
 ### 1. Kinds in the engine
 
-- **Kind and source:** `publish_interactive` takes `kind` and that kind's source, validated by a zod schema per kind in `packages/shared`. `preview_interactive` renders every kind in the headless browser, with the kind's own checks:
+- **Kind and source:** `artifact_publish` takes `kind` and that kind's source, validated by a zod schema per kind in `packages/shared`. `artifact_preview` renders every kind in the headless browser, with the kind's own checks:
   - **Slides:** every slide fits its frame.
   - **Doc:** every heading is reachable.
   - **Dashboard:** every query returns.

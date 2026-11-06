@@ -1,5 +1,4 @@
 import type { AgentEvent } from '../types'
-import { currentToolName } from '@ramu/shared/pages'
 
 type ToolUse = Extract<AgentEvent, { kind: 'tool-use' }>
 type CallSource = Pick<ToolUse, 'name' | 'summary'> & { input?: string }
@@ -81,7 +80,6 @@ const KNOWN = new Set([
   'background_terminal_wait',
   'background_terminal_stop',
   'codex_pre_tool_use',
-  // Earlier names of these (preview_interactive, page_list and the rest) read as the same rows.
   'artifact_preview',
   'artifact_publish',
   'artifact_read',
@@ -132,17 +130,15 @@ const quote = (value: string | undefined) => (value ? `“${clip(value)}”` : u
 export function ramuTool(tool: CallSource): RamuToolCall | null {
   const claude = /^mcp__ramu__(.+)$/.exec(tool.name)?.[1]
   const opencode = /^ramu_(.+)$/.exec(tool.name)?.[1]
-  const spelled =
+  const name =
     claude ??
-    (opencode && KNOWN.has(currentToolName(opencode)) ? opencode : undefined) ??
+    (opencode && KNOWN.has(opencode) ? opencode : undefined) ??
     (tool.summary === 'ramu' ? tool.name : undefined)
-  const name = spelled && currentToolName(spelled)
   if (!name || !KNOWN.has(name)) return null
   const args = record(parse(tool.input) ?? (tool.summary.startsWith('{') ? parse(tool.summary) : undefined))
   // Most calls arrive through the deferred catalog as tool_invoke { name, arguments }.
   if (name === 'tool_invoke') {
-    const called = text(args.name)
-    const inner = called && currentToolName(called)
+    const inner = text(args.name)
     return inner && KNOWN.has(inner) && inner !== 'tool_invoke'
       ? { name: inner, args: record(args.arguments) }
       : { name, args }
@@ -396,7 +392,7 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
     case 'artifact_list':
       return reply('Listed artifacts', 'Listing artifacts', 'search')
     case 'artifact_get':
-      return reply('Read an artifact', 'Reading an artifact', 'book', quote(text(record(data.page).title)))
+      return reply('Read an artifact', 'Reading an artifact', 'book', quote(text(record(data.artifact).title)))
     case 'artifact_records':
       return args.action === 'add'
         ? reply('Added a record', 'Adding a record', 'book', text(args.collection))

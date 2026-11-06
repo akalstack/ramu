@@ -12,7 +12,6 @@ const DOMAINS = new Set([
   'hostBrowser',
   'interactive',
   'artifacts',
-  'pages',
   'tasks',
   'projects',
   'agent',

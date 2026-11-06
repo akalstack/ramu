@@ -776,7 +776,7 @@ export const AgentView = memo(function AgentView({
             invoke(
               'agent.submit',
               view.sessionId,
-              'Make a page I can keep from what this thread found or built (results, comparisons, checklists, numbers): use the real data from this conversation, preview it, and publish it with page: true, a short title and one emoji icon.',
+              'Make a page I can keep from what this thread found or built (results, comparisons, checklists, numbers): use the real data from this conversation, preview it, and publish it with artifact: true, a short title and one emoji icon.',
               'queue',
               [],
               [],

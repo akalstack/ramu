@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { PageCapabilities } from '@ramu/shared/pages'
+import type { ArtifactCapabilities } from '@ramu/shared/artifacts'
 import type { InteractiveInput } from './store'
 
 const name = z.string().regex(/^[a-z][a-zA-Z0-9_-]{0,39}$/, 'Use a short name that starts with a lowercase letter.')
@@ -135,7 +135,7 @@ const decode = (text: string) =>
  * What a document declares it uses: ramu.json in a project, or a ramu-capabilities meta tag in a single file. A
  * declaration that does not validate fails preview, so a broken capability never reaches publication.
  */
-export function pageCapabilitiesOf(input: Pick<InteractiveInput, 'html' | 'files'>): PageCapabilities {
+export function pageCapabilitiesOf(input: Pick<InteractiveInput, 'html' | 'files'>): ArtifactCapabilities {
   let raw: string | undefined
   const manifest = input.files?.find((file) => file.path === 'ramu.json')
   if (manifest) raw = manifest.content
@@ -159,5 +159,5 @@ export function pageCapabilitiesOf(input: Pick<InteractiveInput, 'html' | 'files
         .map((issue) => `${issue.path.join('.') || 'declaration'}: ${issue.message}`)
         .join('; ')}`,
     )
-  return result.data as PageCapabilities
+  return result.data as ArtifactCapabilities
 }

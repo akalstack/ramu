@@ -6,12 +6,12 @@ import { createFinishedGate } from '@ramu/shared/chat/finishedGate'
  * or fails counts as `scheduled` instead, so scheduled work can be muted on its own, and so does a scheduled run that could
  * not start a thread at all. `input` covers every thread. `digest` is the once-a-day "your recap is ready" note.
  */
-export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'digest', 'pages'] as const
+export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'digest', 'artifacts'] as const
 export type PushCategory = (typeof PUSH_CATEGORIES)[number]
 /** Off until a phone asks for them: a registration that lists no categories does not get these. */
 export const OPT_IN_CATEGORIES: readonly PushCategory[] = ['digest']
 /** Where a tap on a push that is not about one thread goes; see `pushTarget` in the mobile app. */
-export type PushTarget = 'schedules' | 'recaps' | 'page'
+export type PushTarget = 'schedules' | 'recaps' | 'artifact'
 interface Registration {
   deviceId: string
   token: string
@@ -151,19 +151,18 @@ export class MobilePush {
     }))
   }
   /**
-   * A notification a page sends, with the words it chose. The person allowed this page to notify, and the grant sheet
-   * says the text travels through the phone's push service; the tap opens the page.
+   * A notification an artifact sends, with the words it chose. The person allowed this artifact to notify, and the grant
+   * sheet says the text travels through the phone's push service; the tap opens the artifact.
    */
-  async deliverPage(pageId: string, title: string, body: string) {
+  async deliverArtifact(artifactId: string, title: string, body: string) {
     await this.send(
-      'pages',
+      'artifacts',
       body,
       (registration) => ({
         computerId: registration.computerId,
-        kind: 'pages',
-        // Phones on the previous release only open `page`; this release's phone reads `page` and `artifact` alike.
-        target: 'page' satisfies PushTarget,
-        pageId,
+        kind: 'artifacts',
+        target: 'artifact' satisfies PushTarget,
+        artifactId,
       }),
       title,
     )

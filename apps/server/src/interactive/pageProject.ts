@@ -15,10 +15,10 @@ const slug = (text: string) =>
  * Make it a project: the page's sources, its record schemas and its records as seed data are written to a new folder,
  * the folder becomes a project, and a thread starts there with the page as context to grow it into an app.
  */
-export async function makePageProject(ctx: HandlerContext, pageId: string, name?: string) {
+export async function makePageProject(ctx: HandlerContext, artifactId: string, name?: string) {
   if (!ctx.pages || !ctx.pageAi || !ctx.agentThreads) throw new Error('Update this host for Artifacts.')
-  const page = ctx.pages.get(pageId)
-  const document = ctx.pages.document(pageId)
+  const page = ctx.pages.get(artifactId)
+  const document = ctx.pages.document(artifactId)
   const parent = join(homedir(), 'Ramu Projects')
   await mkdir(parent, { recursive: true })
   let folder = join(parent, slug(name ?? page.title))
@@ -31,7 +31,7 @@ export async function makePageProject(ctx: HandlerContext, pageId: string, name?
     await mkdir(dirname(target), { recursive: true })
     await writeFile(target, file.encoding === 'base64' ? Buffer.from(file.content, 'base64') : file.content)
   }
-  const exported = page.grants.records ? ctx.pages.exportRecords(pageId) : null
+  const exported = page.grants.records ? ctx.pages.exportRecords(artifactId) : null
   if (page.capabilities.records) {
     await mkdir(join(folder, 'data'), { recursive: true })
     await writeFile(join(folder, 'data', 'schema.json'), JSON.stringify(page.capabilities.records, null, 2))
@@ -67,6 +67,6 @@ export async function makePageProject(ctx: HandlerContext, pageId: string, name?
     },
     settings,
   )
-  ctx.pages.markGrewInto(pageId, { projectId: project.id, taskId: thread.taskId })
+  ctx.pages.markGrewInto(artifactId, { projectId: project.id, taskId: thread.taskId })
   return { projectId: project.id, folder, thread }
 }

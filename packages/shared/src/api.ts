@@ -211,39 +211,44 @@ type ComputerAction = import('./computerBridge').ComputerAction
 /** Why a changed address was or was not adopted: only `moved` changes anything. */
 export type ReviewAddressResult = 'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable' | 'insecure'
 
-/**
- * Artifacts, kept under their internal name. Deprecated: the `pages.*` names are still answered for one release, for
- * clients a release behind; call the `artifacts.*` names below.
- */
-interface PageMethods {
-  'pages.list'(): import('./pages').PageInfo[]
-  'pages.get'(pageId: string): import('./pages').PageInfo
-  'pages.exists'(pageId: string): boolean
-  'pages.versions'(pageId: string): import('./pages').PageVersion[]
-  'pages.document'(pageId: string, version?: number): import('./interactive').InteractiveDocument
-  /** Keeps a thread's document as a page owned by the host. */
-  'pages.keep'(sessionId: string, contentId: string, title?: string, icon?: string): import('./pages').PageInfo
-  'pages.update'(
-    pageId: string,
+/** Artifacts: what agents make and people keep, with their state, records, runs, shares and publishing. */
+interface ArtifactMethods {
+  'artifacts.list'(): import('./artifacts').ArtifactInfo[]
+  'artifacts.get'(artifactId: string): import('./artifacts').ArtifactInfo
+  'artifacts.exists'(artifactId: string): boolean
+  'artifacts.versions'(artifactId: string): import('./artifacts').ArtifactVersion[]
+  'artifacts.document'(artifactId: string, version?: number): import('./interactive').InteractiveDocument
+  /** Keeps a thread's document as an artifact owned by the host. */
+  'artifacts.keep'(
+    sessionId: string,
+    contentId: string,
+    title?: string,
+    icon?: string,
+  ): import('./artifacts').ArtifactInfo
+  'artifacts.update'(
+    artifactId: string,
     patch: { title?: string; icon?: string; pinned?: boolean; projectId?: string | null },
-  ): import('./pages').PageInfo
-  'pages.delete'(pageId: string): void
-  'pages.restoreVersion'(pageId: string, version: number): import('./pages').PageInfo
-  'pages.duplicate'(pageId: string, title?: string): import('./pages').PageInfo
-  'pages.state'(pageId: string): import('./pages').PageState
+  ): import('./artifacts').ArtifactInfo
+  'artifacts.delete'(artifactId: string): void
+  'artifacts.restoreVersion'(artifactId: string, version: number): import('./artifacts').ArtifactInfo
+  'artifacts.duplicate'(artifactId: string, title?: string): import('./artifacts').ArtifactInfo
+  'artifacts.state'(artifactId: string): import('./artifacts').ArtifactState
   /** Saves over the revision read; `accepted: false` returns the newer state another device saved. */
-  'pages.saveState'(
-    pageId: string,
+  'artifacts.saveState'(
+    artifactId: string,
     state: unknown,
     revision: number,
-  ): import('./pages').PageState & { accepted: boolean }
-  'pages.grant'(pageId: string, grants: import('./pages').PageGrants): import('./pages').PageInfo
-  'pages.usage'(pageId: string): import('./pages').PageUsage
-  /** One ramuContent call from the page's frame, checked against its grants. */
-  'pages.call'(pageId: string, method: string, args: unknown[]): unknown
-  /** Starts a page run and returns its id at once; its steps arrive on pages:changed. */
-  'pages.runStart'(
-    pageId: string,
+  ): import('./artifacts').ArtifactState & { accepted: boolean }
+  'artifacts.grant'(
+    artifactId: string,
+    grants: import('./artifacts').ArtifactGrants,
+  ): import('./artifacts').ArtifactInfo
+  'artifacts.usage'(artifactId: string): import('./artifacts').ArtifactUsage
+  /** One ramuContent call from the artifact's frame, checked against its grants. */
+  'artifacts.call'(artifactId: string, method: string, args: unknown[]): unknown
+  /** Starts an artifact run and returns its id at once; its steps arrive on artifacts:changed. */
+  'artifacts.runStart'(
+    artifactId: string,
     task: string,
     options?: {
       shape?: unknown
@@ -252,74 +257,72 @@ interface PageMethods {
       functions?: { name: string; description: string; input: Record<string, string> }[]
     },
   ): string | null
-  'pages.runFlow'(
-    pageId: string,
+  'artifacts.runFlow'(
+    artifactId: string,
     name: string,
     functions?: { name: string; description: string; input: Record<string, string> }[],
   ): string | null
-  /** Ask this page: a read-only page agent answers a question about its records. */
-  'pages.ask'(pageId: string, question: string): import('./pages').PageRun
-  'pages.runs'(pageId: string): import('./pages').PageRun[]
-  'pages.runStop'(runId: string): void
-  'pages.runUndo'(runId: string): import('./pages').PageRun
-  'pages.runReply'(callId: string, value: unknown, error?: string): boolean
-  'pages.runConfirm'(confirmId: string, allowed: boolean): boolean
-  'pages.reportError'(
-    pageId: string,
+  /** Ask this artifact: a read-only agent answers a question about its records. */
+  'artifacts.ask'(artifactId: string, question: string): import('./artifacts').ArtifactRun
+  'artifacts.runs'(artifactId: string): import('./artifacts').ArtifactRun[]
+  'artifacts.runStop'(runId: string): void
+  'artifacts.runUndo'(runId: string): import('./artifacts').ArtifactRun
+  'artifacts.runReply'(callId: string, value: unknown, error?: string): boolean
+  'artifacts.runConfirm'(confirmId: string, allowed: boolean): boolean
+  'artifacts.reportError'(
+    artifactId: string,
     error: { message: string; version: number; device?: string; steps?: string[] },
   ): void
-  'pages.clearError'(pageId: string): void
-  'pages.exportRecords'(pageId: string): { json: string; csv: Record<string, string> }
-  'pages.importCsv'(pageId: string, collection: string, text: string): { added: number }
-  'pages.widget'(pageId: string): { title: string; value: string; items: string[] } | null
-  'pages.webhookUrls'(pageId: string): string[]
-  /** Hands work the page cannot do itself to a new thread, with the page attached. */
+  'artifacts.clearError'(artifactId: string): void
+  'artifacts.exportRecords'(artifactId: string): { json: string; csv: Record<string, string> }
+  'artifacts.importCsv'(artifactId: string, collection: string, text: string): { added: number }
+  'artifacts.widget'(artifactId: string): { title: string; value: string; items: string[] } | null
+  'artifacts.webhookUrls'(artifactId: string): string[]
+  /** Hands work the artifact cannot do itself to a new thread, with the artifact attached. */
   /** `selector` is an element Edit pointed at; the host attaches its screenshot. */
-  'pages.startThread'(pageId: string, prompt: string, selector?: string): StartedThread
-  'pages.makeProject'(pageId: string, name?: string): { projectId: string; folder: string; thread: StartedThread }
-  'pages.share'(pageId: string, canAdd: boolean): import('./pages').PageShare
-  'pages.shares'(pageId: string): import('./pages').PageShare[]
-  'pages.revokeShare'(token: string): void
-  'pages.renewShare'(token: string): import('./pages').PageShare
-  'pages.openShare'(token: string): {
-    share: import('./pages').PageShare
-    page: Pick<import('./pages').PageInfo, 'id' | 'title' | 'icon' | 'version' | 'capabilities'>
+  'artifacts.startThread'(artifactId: string, prompt: string, selector?: string): StartedThread
+  'artifacts.makeProject'(
+    artifactId: string,
+    name?: string,
+  ): { projectId: string; folder: string; thread: StartedThread }
+  'artifacts.share'(artifactId: string, canAdd: boolean): import('./artifacts').ArtifactShare
+  'artifacts.shares'(artifactId: string): import('./artifacts').ArtifactShare[]
+  'artifacts.revokeShare'(token: string): void
+  'artifacts.renewShare'(token: string): import('./artifacts').ArtifactShare
+  'artifacts.openShare'(token: string): {
+    share: import('./artifacts').ArtifactShare
+    artifact: Pick<import('./artifacts').ArtifactInfo, 'id' | 'kind' | 'title' | 'icon' | 'version' | 'capabilities'>
     document: import('./interactive').InteractiveDocument
-    state: import('./pages').PageState
+    state: import('./artifacts').ArtifactState
   }
-  'pages.shareCall'(token: string, method: string, args: unknown[]): unknown
-  /** Static hosting platforms a page can be published to, and whether this host has their login. */
-  'pages.publishTargets'(): {
+  'artifacts.shareCall'(token: string, method: string, args: unknown[]): unknown
+  /** Static hosting platforms an artifact can be published to, and whether this host has their login. */
+  'artifacts.publishTargets'(): {
     target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages'
     name: string
     connected: boolean
   }[]
   /** `account` is the Cloudflare account ID, for a token limited to Pages that cannot list accounts. */
-  'pages.saveHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string, account?: string): void
-  'pages.removeHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages'): void
-  /** Deploys the page's current version as a static site on the person's own account; updates the same site later. */
-  'pages.publish'(
-    pageId: string,
+  'artifacts.saveHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string, account?: string): void
+  'artifacts.removeHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages'): void
+  /** Deploys the artifact's current version as a static site on the person's own account; updates the same site later. */
+  'artifacts.publish'(
+    artifactId: string,
     target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages',
-  ): import('./pages').PageInfo
-  /** Whether a page is open to people without Ramu, and its address. */
-  'pages.publicStatus'(pageId: string): import('./pages').PublicPageStatus
-  /** Opens a page to anyone through its own listener and tunnel; only a page that uses no host feature. */
-  'pages.openPublic'(pageId: string): import('./pages').PublicPageStatus
-  'pages.closePublic'(pageId: string): void
-  /** Copies a page another host shared into a new page here, with no records, values or grants. */
-  'pages.import'(
+  ): import('./artifacts').ArtifactInfo
+  /** Whether an artifact is open to people without Ramu, and its address. */
+  'artifacts.publicStatus'(artifactId: string): import('./artifacts').PublicArtifactStatus
+  /** Opens an artifact to anyone through its own listener and tunnel; only one that uses no host feature. */
+  'artifacts.openPublic'(artifactId: string): import('./artifacts').PublicArtifactStatus
+  'artifacts.closePublic'(artifactId: string): void
+  /** Copies an artifact another host shared into a new one here, with no records, values or grants. */
+  'artifacts.import'(
     document: import('./interactive').InteractiveDocument,
     from: { title: string; icon: string },
-  ): import('./pages').PageInfo
+  ): import('./artifacts').ArtifactInfo
 }
 
-/** The names clients call: every `pages.*` method as `artifacts.*`, served by the same handler. */
-type ArtifactMethods = {
-  [K in keyof PageMethods as K extends `pages.${infer Method}` ? `artifacts.${Method}` : never]: PageMethods[K]
-}
-
-export interface RamuMethods extends ArtifactMethods, PageMethods {
+export interface RamuMethods extends ArtifactMethods {
   /** Test devices on this host: whether they are on, each platform's readiness and the devices. */
   'testDevices.status'(): import('./testDevices').TestDeviceStatus
   'testDevices.setEnabled'(enabled: boolean): void
@@ -1498,8 +1501,12 @@ export type PushEvents = {
   /** Projects, repositories, chats or sessions were created, renamed, moved or removed (by any client). */
   'workspace:changed': Record<string, never>
   'memory:changed': Record<string, never>
-  /** A page, its records or one of its runs changed; `run` carries a run's newest steps while it works. */
-  'pages:changed': { pageId: string; run?: import('./pages').PageRun; notice?: { title: string; body: string } }
+  /** An artifact, its records or one of its runs changed; `run` carries a run's newest steps while it works. */
+  'artifacts:changed': {
+    artifactId: string
+    run?: import('./artifacts').ArtifactRun
+    notice?: { title: string; body: string }
+  }
   /** `created` is the id of a summary that just became ready, so clients can raise one notification. */
   'summaries:changed': { created: string | null }
   'rules:changed': Record<string, never>

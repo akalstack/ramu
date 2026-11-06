@@ -1,5 +1,5 @@
 import type { JsonValue } from '@ramu/shared/interactive'
-import type { PageInfo, PageRecord, PageSchedule, PageTrigger } from '@ramu/shared/pages'
+import type { ArtifactInfo, ArtifactRecord, ArtifactSchedule, ArtifactTrigger } from '@ramu/shared/artifacts'
 import type { PageStore } from './pages'
 import type { PageAi } from './pageAi'
 import { registersFunctions, type HeadlessPage } from './pageHeadless'
@@ -8,7 +8,7 @@ import { registersFunctions, type HeadlessPage } from './pageHeadless'
 export type ScheduleMarks = Record<string, number>
 
 /** The start of the period a schedule runs once in: this hour, today at its time, or this week on Monday. */
-export function scheduleSlot(schedule: PageSchedule, now: Date): number | null {
+export function scheduleSlot(schedule: ArtifactSchedule, now: Date): number | null {
   const [hours, minutes] = (schedule.at ?? '08:00').split(':').map(Number) as [number, number]
   if (schedule.every === 'hourly') {
     const slot = new Date(now)
@@ -21,7 +21,7 @@ export function scheduleSlot(schedule: PageSchedule, now: Date): number | null {
   return slot.getTime() <= now.getTime() ? slot.getTime() : null
 }
 
-export function triggerMatches(trigger: PageTrigger, record: PageRecord): boolean {
+export function triggerMatches(trigger: ArtifactTrigger, record: ArtifactRecord): boolean {
   if (trigger.collection !== record.collection) return false
   const value = record.data[trigger.when.field]
   const expected = trigger.when.value
@@ -43,7 +43,10 @@ export function triggerMatches(trigger: PageTrigger, record: PageRecord): boolea
 }
 
 /** What a home-screen widget shows: one number, or the newest few labels, from this month's records. */
-export function widgetData(pages: PageStore, page: PageInfo): { title: string; value: string; items: string[] } | null {
+export function widgetData(
+  pages: PageStore,
+  page: ArtifactInfo,
+): { title: string; value: string; items: string[] } | null {
   const widget = page.capabilities.widget
   if (!widget || !page.grants.records) return null
   const start = new Date()
@@ -81,13 +84,13 @@ export class PageAutomation {
   constructor(
     private readonly pages: PageStore,
     private readonly ai: PageAi,
-    private readonly notify: (page: PageInfo, title: string, body: string) => void,
+    private readonly notify: (page: ArtifactInfo, title: string, body: string) => void,
     private readonly marks: { read(): ScheduleMarks; write(marks: ScheduleMarks): void },
     /** Loads a page on the host so a run nobody opened can still call the functions it registers. */
-    private readonly headless?: (page: PageInfo) => Promise<HeadlessPage>,
+    private readonly headless?: (page: ArtifactInfo) => Promise<HeadlessPage>,
     private readonly libraries?: {
       pinned(): Record<string, string>
-      check(page: PageInfo): Promise<LibraryCheck>
+      check(page: ArtifactInfo): Promise<LibraryCheck>
       seen: { read(): Record<string, string>; write(seen: Record<string, string>): void }
     },
   ) {}
@@ -135,7 +138,7 @@ export class PageAutomation {
   /** Starts every schedule whose slot has come and has not run in it yet; a host that slept runs each once. */
   async tick(now = new Date()) {
     const marks = this.marks.read()
-    const due: { page: PageInfo; run: string }[] = []
+    const due: { page: ArtifactInfo; run: string }[] = []
     for (const page of this.pages.list()) {
       if (!page.grants.schedules || !page.grants.ai) continue
       for (const [index, schedule] of (page.capabilities.schedules ?? []).entries()) {
@@ -151,7 +154,7 @@ export class PageAutomation {
     for (const { page, run } of due) await this.startRun(page, run, 'schedule').catch(() => {})
   }
 
-  private async startRun(page: PageInfo, name: string, source: 'schedule' | 'trigger', context?: string) {
+  private async startRun(page: ArtifactInfo, name: string, source: 'schedule' | 'trigger', context?: string) {
     const declared = page.capabilities.runs?.[name]
     if (!declared) return
     const prompt = context ? `${declared.prompt}\n\n${context}` : declared.prompt
@@ -171,10 +174,10 @@ export class PageAutomation {
   }
 
   /** Called after a record is added or changed from the page, an agent or a webhook. */
-  recordChanged(pageId: string, record: PageRecord) {
-    let page: PageInfo
+  recordChanged(artifactId: string, record: ArtifactRecord) {
+    let page: ArtifactInfo
     try {
-      page = this.pages.get(pageId)
+      page = this.pages.get(artifactId)
     } catch {
       return
     }
@@ -183,7 +186,7 @@ export class PageAutomation {
       if (!triggerMatches(trigger, record)) continue
       if (trigger.notify && page.grants.notify)
         try {
-          this.pages.spend(pageId, 'notify')
+          this.pages.spend(artifactId, 'notify')
           this.notify(page, page.title, trigger.notify)
         } catch {}
       if (trigger.run && page.grants.ai)
@@ -240,7 +243,7 @@ export interface LibraryCheck {
  */
 export async function recheckLibraries(
   pages: PageStore,
-  pageId: string,
+  artifactId: string,
   checks: { action: 'click' | 'fill' | 'select' | 'check'; label: string; value?: string; expect: string }[],
   build: (files: NonNullable<ReturnType<PageStore['document']>['files']>, entry: string) => Promise<string>,
   preview: (
@@ -249,7 +252,7 @@ export async function recheckLibraries(
     network: ReturnType<PageStore['document']>['reference']['network'],
   ) => Promise<{ errors: string[]; checks: { label: string; passed: boolean; detail: string }[] }>,
 ): Promise<LibraryCheck> {
-  const document = pages.document(pageId)
+  const document = pages.document(artifactId)
   if (!document.files?.length) return { passed: true, detail: 'No bundled libraries' }
   const html = await build(document.files, document.files[0]!.path)
   const result = await preview(html, checks, document.reference.network)

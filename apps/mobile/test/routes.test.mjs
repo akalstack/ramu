@@ -8,7 +8,7 @@ const source = (path) => readFileSync(new URL(path, app), 'utf8')
 
 test('every tab trigger has a folder with its own stack and a first screen', () => {
   const triggers = [...source('(tabs)/_layout.tsx').matchAll(/Trigger name="([^"]+)"/g)].map((m) => m[1])
-  assert.deepEqual(triggers, ['(threads)', 'inbox', 'schedules', 'pages', 'compose'])
+  assert.deepEqual(triggers, ['(threads)', 'inbox', 'schedules', 'artifacts', 'compose'])
   for (const name of triggers) {
     assert.ok(has(`(tabs)/${name}/_layout.tsx`), `${name} layout`)
     assert.ok(has(`(tabs)/${name}/index.tsx`), `${name} screen`)
@@ -42,10 +42,7 @@ test('Search remains a root destination while New thread occupies the final tab'
   assert.ok(!source('(tabs)/_layout.tsx').includes('role="search"'))
 })
 
-test('ramu://artifact links open the artifact screen, and ramu://page links redirect to it', () => {
+test('ramu://artifact links open the artifact screen', () => {
   assert.ok(has('artifact/[computer]/[id].tsx'))
-  const old = source('page/[computer]/[id].tsx')
-  assert.match(old, /<Redirect/)
-  assert.match(old, /pathname: '\/artifact\/\[computer\]\/\[id\]'/)
-  assert.match(old, /share/)
+  assert.ok(!has('page/[computer]/[id].tsx'))
 })

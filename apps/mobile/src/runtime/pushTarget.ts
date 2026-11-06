@@ -4,7 +4,7 @@ export type PushRoute =
   | { kind: 'thread'; computerId: string; taskId: string }
   | { kind: 'schedules'; computerId: string }
   | { kind: 'recaps'; computerId: string }
-  | { kind: 'artifact'; computerId: string; pageId: string }
+  | { kind: 'artifact'; computerId: string; artifactId: string }
 
 /**
  * The screen a notification opens, from the data the host sent. A push about one thread carries its `taskId`; the two that
@@ -13,13 +13,12 @@ export type PushRoute =
  */
 export function pushTarget(data: unknown, knownComputers: readonly string[]): PushRoute | null {
   if (!data || typeof data !== 'object') return null
-  const { computerId, taskId, target, pageId } = data as Record<string, unknown>
+  const { computerId, taskId, target, artifactId } = data as Record<string, unknown>
   if (typeof computerId !== 'string' || !knownComputers.includes(computerId)) return null
   if (target === 'schedules') return { kind: 'schedules', computerId }
   if (target === 'recaps') return { kind: 'recaps', computerId }
-  // Hosts a release behind name an artifact `page`.
-  if ((target === 'artifact' || target === 'page') && typeof pageId === 'string' && /^[\w-]{1,80}$/.test(pageId))
-    return { kind: 'artifact', computerId, pageId }
+  if (target === 'artifact' && typeof artifactId === 'string' && /^[\w-]{1,80}$/.test(artifactId))
+    return { kind: 'artifact', computerId, artifactId }
   if (typeof taskId === 'string') return { kind: 'thread', computerId, taskId }
   return null
 }

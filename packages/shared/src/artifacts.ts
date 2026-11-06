@@ -1,31 +1,31 @@
 import type { InteractiveReference, InteractiveState, JsonValue } from './interactive'
 
-/** A field type in a page's record schema; a trailing `?` makes the field optional. */
-export type PageFieldType = 'string' | 'number' | 'boolean' | 'date' | 'file' | 'json'
-export type PageField = PageFieldType | `${PageFieldType}?`
+/** A field type in an artifact's record schema; a trailing `?` makes the field optional. */
+export type ArtifactFieldType = 'string' | 'number' | 'boolean' | 'date' | 'file' | 'json'
+export type ArtifactField = ArtifactFieldType | `${ArtifactFieldType}?`
 
-/** One named collection of records a page keeps on the host. */
-export interface PageCollection {
-  fields: Record<string, PageField>
+/** One named collection of records an artifact keeps on the host. */
+export interface ArtifactCollection {
+  fields: Record<string, ArtifactField>
   /** How records written by an earlier version fill fields this version adds or renames. */
   migrate?: Record<string, { from?: string; default?: JsonValue }>
 }
 
-/** A flow the page offers as a toolbar button, schedules can run and agents can start with page_run. */
-export interface PageRunDeclaration {
+/** A flow the artifact offers as a toolbar button, schedules can run and agents can start with artifact_run. */
+export interface ArtifactRunDeclaration {
   label: string
   prompt: string
 }
 
-export interface PageSchedule {
-  /** A declared run, started on the host without the page being open. */
+export interface ArtifactSchedule {
+  /** A declared run, started on the host without the artifact being open. */
   run: string
   every: 'hourly' | 'daily' | 'weekly'
   /** Local time for daily and weekly runs, HH:MM. */
   at?: string
 }
 
-export interface PageTrigger {
+export interface ArtifactTrigger {
   collection: string
   when: { field: string; op: '>' | '>=' | '<' | '<=' | '=' | '!='; value: string | number | boolean }
   /** A declared run to start, a notification to send, or both. */
@@ -33,7 +33,7 @@ export interface PageTrigger {
   notify?: string
 }
 
-export interface PageWidget {
+export interface ArtifactWidget {
   title: string
   collection: string
   kind: 'number' | 'list'
@@ -43,42 +43,42 @@ export interface PageWidget {
   label?: string
 }
 
-/** What a page declares it uses, in ramu.json or a `<meta name="ramu-capabilities">` tag. */
-export interface PageCapabilities {
-  records?: Record<string, PageCollection>
+/** What an artifact declares it uses, in ramu.json or a `<meta name="ramu-capabilities">` tag. */
+export interface ArtifactCapabilities {
+  records?: Record<string, ArtifactCollection>
   ai?: {
-    /** Why the page uses a model, in the person's words: shown in the grant sheet. */
+    /** Why the artifact uses a model, in the person's words: shown in the grant sheet. */
     purpose: string
     quality?: 'fast' | 'smart'
     /** Requests a day; at most 500. */
     daily?: number
-    /** Lets page runs search the web. */
+    /** Lets artifact runs search the web. */
     web?: boolean
     /** Shared MCP servers runs may use, each granted by the person. */
     mcp?: string[]
   }
   camera?: { purpose: string }
   notify?: { purpose: string; daily?: number }
-  runs?: Record<string, PageRunDeclaration>
-  schedules?: PageSchedule[]
-  triggers?: PageTrigger[]
-  widget?: PageWidget
+  runs?: Record<string, ArtifactRunDeclaration>
+  schedules?: ArtifactSchedule[]
+  triggers?: ArtifactTrigger[]
+  widget?: ArtifactWidget
   /** Records a webhook may add from outside, checked against the schema. */
   webhook?: { collection: string }
-  /** One project folder the page may read, never write. */
+  /** One project folder the artifact may read, never write. */
   folder?: { path: string }
   /** Figures the person already sees in Ramu, read-only, each source granted on its own. */
   ramu?: { purpose: string; sources: RamuDataSource[] }
 }
 
-/** Ramu's own figures a page may read: token activity by day, thread titles and states, and pull requests. */
+/** Ramu's own figures an artifact may read: token activity by day, thread titles and states, and pull requests. */
 export type RamuDataSource = 'activity' | 'threads' | 'pullRequests'
 
-export type PageCapability =
+export type ArtifactCapability =
   'records' | 'ai' | 'camera' | 'notify' | 'schedules' | 'triggers' | 'webhook' | 'folder' | 'ramu'
 
-/** What the person allowed. A capability the page declares and is not granted fails with a clear error. */
-export interface PageGrants {
+/** What the person allowed. A capability the artifact declares and is not granted fails with a clear error. */
+export interface ArtifactGrants {
   records?: boolean
   /** False when the person said no; absent until they answer. */
   ai?: { model: 'fast' | 'smart'; daily: number; web?: boolean; mcp?: string[] } | false
@@ -92,7 +92,7 @@ export interface PageGrants {
   ramu?: RamuDataSource[] | false
 }
 
-export interface PageError {
+export interface ArtifactError {
   message: string
   version: number
   at: number
@@ -102,7 +102,7 @@ export interface PageError {
   state?: InteractiveState | null
 }
 
-export interface PagePublication {
+export interface ArtifactPublication {
   target: string
   url: string
   version: number
@@ -111,10 +111,10 @@ export interface PagePublication {
   siteId?: string
 }
 
-/** What an artifact is. Every page kept so far is an App: interactive web content. */
+/** What an artifact is. An App is interactive web content. */
 export type ArtifactKind = 'app'
 
-export interface PageInfo {
+export interface ArtifactInfo {
   id: string
   kind: ArtifactKind
   title: string
@@ -127,19 +127,19 @@ export interface PageInfo {
   changedAt: number
   /** The thread that published the current version. */
   sessionId: string
-  capabilities: PageCapabilities
-  grants: PageGrants
+  capabilities: ArtifactCapabilities
+  grants: ArtifactGrants
   /** Capabilities the current version declares that the person has not answered yet. */
-  pendingGrants: PageCapability[]
-  lastError?: PageError
-  /** The project this page grew into, through Make it a project. */
+  pendingGrants: ArtifactCapability[]
+  lastError?: ArtifactError
+  /** The project this artifact grew into, through Make it a project. */
   grewInto?: { projectId: string; taskId?: string }
-  published?: PagePublication
-  /** Page this one was duplicated from. */
+  published?: ArtifactPublication
+  /** Artifact this one was duplicated from. */
   duplicatedFrom?: string
 }
 
-export interface PageVersion {
+export interface ArtifactVersion {
   reference: InteractiveReference
   /** Phone screenshot from its checks. */
   preview: string | null
@@ -147,7 +147,7 @@ export interface PageVersion {
   wide?: string | null
 }
 
-export interface PageRecord {
+export interface ArtifactRecord {
   id: string
   collection: string
   data: Record<string, JsonValue>
@@ -155,7 +155,7 @@ export interface PageRecord {
   updatedAt: number
 }
 
-export interface PageRecordQuery {
+export interface ArtifactRecordQuery {
   where?: { field: string; op: '>' | '>=' | '<' | '<=' | '=' | '!=' | 'contains'; value: JsonValue }[]
   sort?: { field: string; direction?: 'asc' | 'desc' }
   limit?: number
@@ -163,46 +163,46 @@ export interface PageRecordQuery {
   range?: { field?: string; from?: string | number; to?: string | number }
 }
 
-export interface PageRunStep {
+export interface ArtifactRunStep {
   at: number
   text: string
 }
 
-export interface PageRun {
+export interface ArtifactRun {
   id: string
-  pageId: string
+  artifactId: string
   name: string | null
   task: string
   status: 'running' | 'done' | 'failed' | 'stopped' | 'undone'
-  steps: PageRunStep[]
+  steps: ArtifactRunStep[]
   answer?: JsonValue
   error?: string
   /** Record changes it made, so Undo run puts them back together. */
   changes: number
   startedAt: number
   finishedAt?: number
-  source: 'page' | 'schedule' | 'trigger' | 'agent' | 'question'
-  /** A page function the open page should run now, answered with pages.runReply. */
+  source: 'artifact' | 'schedule' | 'trigger' | 'agent' | 'question'
+  /** An artifact function the open artifact should run now, answered with artifacts.runReply. */
   call?: { id: string; name: string; input: Record<string, JsonValue> }
-  /** Something only the person may allow, asked in the page's toolbar and answered with pages.runConfirm. */
+  /** Something only the person may allow, asked in the artifact's toolbar and answered with artifacts.runConfirm. */
   confirm?: { id: string; text: string }
 }
 
-export interface PageUsage {
+export interface ArtifactUsage {
   day: string
   ai: number
   notify: number
 }
 
-export interface PageShare {
+export interface ArtifactShare {
   token: string
-  pageId: string
+  artifactId: string
   canAdd: boolean
   createdAt: number
   expiresAt: number
 }
 
-export const PAGE_LIMITS = {
+export const ARTIFACT_LIMITS = {
   records: 10_000,
   bytes: 20_000_000,
   file: 2_000_000,
@@ -214,8 +214,8 @@ export const PAGE_LIMITS = {
 } as const
 
 /** The capability names a declaration uses, in the order the grant sheet lists them. */
-export function declaredCapabilities(capabilities: PageCapabilities): PageCapability[] {
-  const list: PageCapability[] = []
+export function declaredCapabilities(capabilities: ArtifactCapabilities): ArtifactCapability[] {
+  const list: ArtifactCapability[] = []
   if (capabilities.records && Object.keys(capabilities.records).length) list.push('records')
   if (capabilities.ai) list.push('ai')
   if (capabilities.camera) list.push('camera')
@@ -228,16 +228,16 @@ export function declaredCapabilities(capabilities: PageCapabilities): PageCapabi
   return list
 }
 
-/** Declared capabilities the grants do not answer yet: shown in the grant sheet the next time the page opens. */
-export function pendingGrants(capabilities: PageCapabilities, grants: PageGrants): PageCapability[] {
+/** Declared capabilities the grants do not answer yet: shown in the grant sheet the next time the artifact opens. */
+export function pendingGrants(capabilities: ArtifactCapabilities, grants: ArtifactGrants): ArtifactCapability[] {
   return declaredCapabilities(capabilities).filter((name) => grants[name] === undefined)
 }
 
 /** Checks a record against its collection's fields; returns the first problem, or null. */
-export function recordProblem(collection: PageCollection, data: Record<string, unknown>): string | null {
+export function recordProblem(collection: ArtifactCollection, data: Record<string, unknown>): string | null {
   for (const [name, declared] of Object.entries(collection.fields)) {
     const optional = declared.endsWith('?')
-    const type = declared.replace('?', '') as PageFieldType
+    const type = declared.replace('?', '') as ArtifactFieldType
     const value = data[name]
     if (value === undefined || value === null) {
       if (!optional) return `${name} is required`
@@ -256,7 +256,7 @@ export function recordProblem(collection: PageCollection, data: Record<string, u
 
 /** Records that do not fit a new version's schema after its migration, by first problem. */
 export function migrateRecord(
-  collection: PageCollection,
+  collection: ArtifactCollection,
   data: Record<string, JsonValue>,
 ): { data: Record<string, JsonValue>; problem: string | null } {
   const next: Record<string, JsonValue> = {}
@@ -268,14 +268,14 @@ export function migrateRecord(
   return { data: next, problem: recordProblem(collection, next) }
 }
 
-/** The page's shared state and the revision a write must name, so two devices never overwrite each other blindly. */
-export interface PageState {
+/** The artifact's shared state and the revision a write must name, so two devices never overwrite each other blindly. */
+export interface ArtifactState {
   state: InteractiveState | null
   revision: number
 }
 
-/** A page opened to people without Ramu: its own tunnel's state and address. */
-export interface PublicPageStatus {
+/** An artifact opened to people without Ramu: its own tunnel's state and address. */
+export interface PublicArtifactStatus {
   state: 'off' | 'starting' | 'running' | 'missing' | 'failed'
   url: string | null
   error: string | null
@@ -285,25 +285,23 @@ export interface PublicPageStatus {
 /** Where an artifact link points: a host, an artifact on it, and the token of a share link. */
 export interface ArtifactLink {
   computerId: string
-  pageId: string
+  artifactId: string
   share?: string
 }
 
 /** A `ramu://artifact/<host>/<id>` link (with `?share=` for a share link), as Share and Add to Home Screen copy. */
 export function artifactLink(link: ArtifactLink): string {
-  return `ramu://artifact/${encodeURIComponent(link.computerId)}/${encodeURIComponent(link.pageId)}${link.share ? `?share=${encodeURIComponent(link.share)}` : ''}`
+  return `ramu://artifact/${encodeURIComponent(link.computerId)}/${encodeURIComponent(link.artifactId)}${link.share ? `?share=${encodeURIComponent(link.share)}` : ''}`
 }
 
-/** Reads an artifact link, including the `ramu://page/…` form that earlier share links and home-screen icons carry. */
+/** Reads a `ramu://artifact/<host>/<id>` link, with the share token when it has one. */
 export function parseArtifactLink(url: string): ArtifactLink | null {
-  const match = /^ramu:\/\/(?:artifact|page)\/([^/?#]{1,120})\/([\w-]{1,80})(?:\?share=([\w-]{8,80}))?$/.exec(
-    url.trim(),
-  )
+  const match = /^ramu:\/\/artifact\/([^/?#]{1,120})\/([\w-]{1,80})(?:\?share=([\w-]{8,80}))?$/.exec(url.trim())
   if (!match) return null
   try {
     return {
       computerId: decodeURIComponent(match[1]!),
-      pageId: match[2]!,
+      artifactId: match[2]!,
       ...(match[3] ? { share: match[3] } : {}),
     }
   } catch {
@@ -311,27 +309,3 @@ export function parseArtifactLink(url: string): ArtifactLink | null {
     return null
   }
 }
-
-/**
- * The artifact tools under the names agents were given before artifacts. Both names call the same tool and read the
- * same in a transcript; agents are only told the current ones.
- */
-const OLD_ARTIFACT_TOOLS: Record<string, string> = {
-  preview_interactive: 'artifact_preview',
-  publish_interactive: 'artifact_publish',
-  interactive_read: 'artifact_read',
-  interactive_list: 'artifact_versions',
-  page_list: 'artifact_list',
-  page_get: 'artifact_get',
-  page_records: 'artifact_records',
-  page_published: 'artifact_published',
-  page_run: 'artifact_run',
-}
-
-/** The earlier name of an artifact tool, if it had one. */
-export const oldArtifactToolName = (name: string): string | undefined =>
-  Object.entries(OLD_ARTIFACT_TOOLS).find(([, current]) => current === name)?.[0]
-
-/** A tool's current name, whichever name it was called by. */
-export const currentToolName = (name: string): string =>
-  Object.hasOwn(OLD_ARTIFACT_TOOLS, name) ? OLD_ARTIFACT_TOOLS[name]! : name

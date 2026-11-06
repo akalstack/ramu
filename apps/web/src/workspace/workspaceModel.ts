@@ -73,7 +73,8 @@ export function activateWorkspaceContext(ui: WorkspaceUiState, context: string):
   return {
     ...ui,
     activeTaskId: context,
-    sidebar: ui.sidebar === 'inbox' || ui.sidebar === 'schedules' || ui.sidebar === 'pages' ? 'projects' : ui.sidebar,
+    sidebar:
+      ui.sidebar === 'inbox' || ui.sidebar === 'schedules' || ui.sidebar === 'artifacts' ? 'projects' : ui.sidebar,
   }
 }
 

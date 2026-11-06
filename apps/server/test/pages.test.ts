@@ -61,7 +61,7 @@ it('keeps a thread document as a page and takes versions from any thread', async
     previous: { id: page.id, version: 1 },
     changes: 'Adds a second line',
     acrossSessions: true,
-    pageId: page.id,
+    artifactId: page.id,
     onPublished: (published) => pages.addVersion(page.id, published),
   })
   expect(pages.get(page.id)).toMatchObject({ version: 2, sessionId: 'other' })
@@ -76,39 +76,26 @@ it('keeps a thread document as a page and takes versions from any thread', async
   expect(pages.has(page.id)).toBe(false)
 })
 
-it('answers every artifacts method under its earlier pages name too, with the same handler', async () => {
-  const { registerPageHandlers } = await import('../src/ipc/handlers/pages')
-  const { pages, page } = await setup()
-  const methods = registerPageHandlers({ pages, pageAi: {}, activity: { run: () => {} } } as never)
-  const old = Object.keys(methods).filter((name) => name.startsWith('pages.'))
-  expect(old.length).toBeGreaterThan(40)
-  for (const name of old) expect(methods[name.replace('pages.', 'artifacts.')], name).toBe(methods[name])
-  expect(Object.keys(methods)).toHaveLength(old.length * 2)
-  const listed = methods['artifacts.list']!.run() as { id: string; kind: string }[]
-  expect(listed).toEqual(methods['pages.list']!.run())
-  expect(listed).toMatchObject([{ id: page.id, kind: 'app' }])
-})
-
-it('offers the artifact tools to agents and still runs them under their earlier page names', async () => {
+it('lists artifacts as Apps through IPC and to agents through the artifact tools', async () => {
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
   const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js')
   const { ToolRegistry } = await import('../src/agent/toolRegistry')
   const { registerInteractiveTools } = await import('../src/interactive/tools')
   const { interactive, pages, page } = await setup()
+  const methods = registerArtifactHandlers({ pages, pageAi: {}, activity: { run: () => {} } } as never)
+  expect(Object.keys(methods).every((name) => name.startsWith('artifacts.'))).toBe(true)
+  expect(methods['artifacts.list']!.run()).toMatchObject([{ id: page.id, kind: 'app' }])
   const registry = new ToolRegistry(new McpServer({ name: 'test', version: '1' }), true)
   registerInteractiveTools(registry.server, interactive, 's', { pages, ai: {} as never, projectId: () => null })
   const extra = { signal: new AbortController().signal } as Parameters<typeof registry.invoke>[2]
-  const text = async (name: string, args: Record<string, unknown>) => {
-    const result = await registry.invoke(name, args, extra)
-    expect(result.isError, name).not.toBe(true)
-    return JSON.parse((result.content[0] as { text: string }).text) as unknown
-  }
-  const listed = await text('artifact_list', {})
-  expect(listed).toMatchObject([{ id: page.id, kind: 'app', title: 'My ledger' }])
-  expect(await text('page_list', {})).toEqual(listed)
-  expect(await text('page_get', { id: page.id })).toEqual(await text('artifact_get', { id: page.id }))
-  const names = registry.search('artifact', 30).map((tool) => tool.name)
-  expect(names).toEqual(expect.arrayContaining(['artifact_list', 'artifact_get', 'artifact_records', 'artifact_run']))
-  expect(names.some((name) => name.startsWith('page_') || name.endsWith('_interactive'))).toBe(false)
+  const result = await registry.invoke('artifact_list', {}, extra)
+  expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject([
+    { id: page.id, kind: 'app', title: 'My ledger' },
+  ])
+  expect((await registry.invoke('page_list', {}, extra)).isError).toBe(true)
+  expect(registry.search('artifact', 30).map((tool) => tool.name)).toEqual(
+    expect.arrayContaining(['artifact_list', 'artifact_get', 'artifact_records', 'artifact_run']),
+  )
 })
 
 it('shares state across devices without blind overwrites', async () => {
@@ -214,7 +201,7 @@ it('runs a page agent with record tools, waits for the person before deleting, a
     }
     return PageStore.prototype.saveRun.call(this, run)
   })
-  const run = await ai.run(page.id, 'Tidy my spending', { source: 'page' })
+  const run = await ai.run(page.id, 'Tidy my spending', { source: 'artifact' })
   changed.mockRestore()
   expect(run).toMatchObject({ status: 'done', answer: 'Added one, recategorized one.', changes: 2 })
   expect(run.steps.map((step) => step.text)).toEqual([
@@ -247,7 +234,7 @@ it('fires triggers on records, accepts webhook records and runs schedules once p
     read: () => ({ ...marks }),
     write: (next) => Object.assign(marks, next),
   })
-  pages.onRecord = (pageId, record) => automation.recordChanged(pageId, record)
+  pages.onRecord = (artifactId, record) => automation.recordChanged(artifactId, record)
   pages.addRecord(page.id, 'transactions', { date: '2026-11-05', amount: 500, category: 'rent' })
   pages.addRecord(page.id, 'transactions', { date: '2026-11-05', amount: 5, category: 'food' })
   expect(notify).toHaveBeenCalledTimes(1)
@@ -291,7 +278,7 @@ it('validates declared capabilities before preview', () => {
 it('shares a page through expiring, revocable links', async () => {
   const { pages, page } = await setup()
   const share = pages.share(page.id, true)
-  expect(pages.resolveShare(share.token)).toMatchObject({ pageId: page.id, canAdd: true })
+  expect(pages.resolveShare(share.token)).toMatchObject({ artifactId: page.id, canAdd: true })
   expect(pages.shares(page.id)).toHaveLength(1)
   pages.revokeShare(share.token)
   expect(() => pages.resolveShare(share.token)).toThrow('expired or was revoked')
@@ -311,7 +298,7 @@ it('reads only the granted project folder, read-only', async () => {
   const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
-  const { registerPageHandlers } = await import('../src/ipc/handlers/pages')
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
   const root = mkdtempSync(join(tmpdir(), 'ramu-page-folder-'))
   mkdirSync(join(root, 'data'))
   writeFileSync(join(root, 'data', 'a.json'), '{"ok":true}')
@@ -329,7 +316,7 @@ it('reads only the granted project folder, read-only', async () => {
     'r',
   )
   const page = pages.keep('s', v1.id, { projectId: 'p' })
-  const methods = registerPageHandlers({
+  const methods = registerArtifactHandlers({
     pages,
     pageAi: new PageAi(
       pages,
@@ -358,7 +345,7 @@ it('gives page runs web search and only the Shared MCP servers granted, each cal
   const { pages, page } = await setup()
   const capabilities = { ai: { purpose: 'Converts money', web: true, mcp: ['mail', 'bank'] } }
   const db = (pages as unknown as { db: Db }).db
-  db.prepare('UPDATE interactive_pages SET data=json_set(data, ?, json(?)) WHERE id=?').run(
+  db.prepare('UPDATE artifacts SET data=json_set(data, ?, json(?)) WHERE id=?').run(
     '$.capabilities',
     JSON.stringify(capabilities),
     page.id,
@@ -394,7 +381,7 @@ it('gives page runs web search and only the Shared MCP servers granted, each cal
     if (run.confirm) queueMicrotask(() => ai.answer(run.confirm!.id, true))
     return PageStore.prototype.saveRun.call(this, run)
   })
-  const run = await ai.run(page.id, 'Find my rate', { source: 'page' })
+  const run = await ai.run(page.id, 'Find my rate', { source: 'artifact' })
   save.mockRestore()
   expect(run.status).toBe('done')
   expect(opened).toHaveBeenCalledWith(['mail'])
@@ -514,13 +501,13 @@ it('publishes a page without records or AI to the web and updates the same site 
 })
 
 it('reads Ramu data only for the sources declared and allowed, scoped to the page project', async () => {
-  const { registerPageHandlers } = await import('../src/ipc/handlers/pages')
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
   const { interactive, pages } = await setup()
   const declared = { ramu: { purpose: 'My usage dashboard', sources: ['activity', 'threads'] } }
   const v = interactive.publish('s', (await interactive.preview('s', { ...input, html: html(declared) })).id, 'rd')
   const page = pages.keep('s', v.id, { projectId: 'p' })
   const listTasks = vi.fn(() => [{ title: 'Fix login', status: 'idle', doneAt: null, lastActiveAt: 0, id: 't' }])
-  const methods = registerPageHandlers({
+  const methods = registerArtifactHandlers({
     pages,
     pageAi: new PageAi(
       pages,

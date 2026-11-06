@@ -116,7 +116,7 @@ export interface PublishOptions {
   /** What the revision changes; required with previous. */
   changes?: string
   restoredFrom?: number
-  pageId?: string
+  artifactId?: string
   /** Pages take new versions from any thread, so their latest version is not this thread's. */
   acrossSessions?: boolean
   /** Runs inside the publication's transaction, so a page's own copy commits with the thread's event. */
@@ -271,12 +271,12 @@ export class InteractiveStore {
       ...(input.files ? { files: entryFirst(input.files, input.entry).map((file) => file.path) } : {}),
       ...(previous ? { changes: options.changes!.trim().slice(0, 300) } : {}),
       ...(options.restoredFrom ? { restoredFrom: options.restoredFrom } : {}),
-      ...(options.pageId ? { pageId: options.pageId } : {}),
+      ...(options.artifactId ? { artifactId: options.artifactId } : {}),
     }
     const html = preview.artifact ?? interactiveDocumentHtml(input)
     const files = input.files ? JSON.stringify(entryFirst(input.files, input.entry)) : null
     // The immutable version and its canonical event commit together. Reopening never resurrects a deliberately rewound event.
-    this.db.exec('SAVEPOINT publish_interactive')
+    this.db.exec('SAVEPOINT publish_artifact')
     try {
       this.insert(session, requestId, signature, reference, html, preview.screenshot, files, {
         wide: preview.wideScreenshot ?? null,
@@ -285,9 +285,9 @@ export class InteractiveStore {
       })
       options.onPublished?.({ reference, html, preview: preview.screenshot, files })
       this.record(session, reference)
-      this.db.exec('RELEASE publish_interactive')
+      this.db.exec('RELEASE publish_artifact')
     } catch (error) {
-      this.db.exec('ROLLBACK TO publish_interactive; RELEASE publish_interactive')
+      this.db.exec('ROLLBACK TO publish_artifact; RELEASE publish_artifact')
       throw error
     }
     return reference
@@ -337,7 +337,7 @@ export class InteractiveStore {
       createdAt: Date.now(),
       changes: `Restored v${version}`,
       restoredFrom: version,
-      ...(latest.pageId ? { pageId: latest.pageId } : {}),
+      ...(latest.artifactId ? { artifactId: latest.artifactId } : {}),
     }
     this.db.exec('SAVEPOINT restore_interactive')
     try {
