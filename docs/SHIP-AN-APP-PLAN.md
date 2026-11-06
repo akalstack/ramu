@@ -110,6 +110,26 @@ For someone who has a VPS or wants the app on the Ramu host:
 - The sheet checks what the stores need first (bundle identifier, icons, version, privacy text) and lists what only the person can do: enrolling in the Apple Developer Program and creating the Play app. Submitting to production review is always the person's action.
 - A build or submission that fails wakes the thread with its log, through the same deploy watch.
 
+### 11. Documentation and clean-up
+
+Each section updates the docs it changes when it lands. When the last one lands, one pass makes the whole set read as one product:
+
+- **New guide page** `docs/guide/shipping.md`: starting something new from Home, the questions and the stack, **Deploy** and each target, previews and CI, secrets sync, databases, domains, usage notices, uptime incidents, store releases and your own server. Linked from [docs/README.md](README.md) and the root README's **What it does**, which gets a **From idea to live app** group.
+- **Pages that change:** [Agents](guide/agents.md) (per-call model, isolation and role, helper status and stop, `project_create`), [Home and Inbox](guide/inbox.md) (New project choices, usage and uptime notices), [Git hosting](guide/git-hosting.md) (Set up CI, branch protection, CI secrets), [Background work](guide/background-work.md) (deploy watch, **Deployment failed** presets, uptime checks), [Remote hosts](guide/remote-hosts.md) (publishing an app through your tunnel, kept apart from Ramu's own port), [Providers](guide/providers.md#environment-variables) (where each variable is synced), [Configuration](guide/configuration.md) (project facts), the [mobile README](../apps/mobile/README.md) and [VERIFICATION.md](../apps/mobile/VERIFICATION.md) (Deployments on the phone), and [SECURITY.md](../SECURITY.md) (deploy tokens, the actions that always ask, tunnel isolation).
+- **Contributors:** [Architecture](contributing/architecture.md) gets the deploy boundary beside the forge one and **Adding a platform**: the adapter, its credentials file, its capabilities and the contract suite it must pass.
+- **Every string** goes through `t()` with its Indonesian translation ([Localization](contributing/localization.md)), and plain-language copy is reviewed as a whole for one voice.
+- **Clean-up:** agents use the deploy tools rather than running `vercel` or `netlify` as one-off risky commands, so the deploy-specific guidance in `agent/autoCommandRules.ts` points at the tools; any helper, type or doc text the new paths replaced is removed, with no unused exports left; docs pass the format and link checks; the live checks still to run move to [Acceptance](roadmap.md#acceptance); this plan and its roadmap line are deleted.
+
+### 12. The site
+
+The site (`apps/site`, one Astro page) is about keeping coding agents moving. With this plan, Ramu also takes someone from an idea to a live app, so the site gets new copy throughout, written once the features ship and only claiming what they do:
+
+- **Positioning:** two readers, one product. Someone with an idea and no code ("Describe it. Ramu builds it, puts it online and keeps it working, on accounts you own.") and a developer ("New project, deploy, CI and previews in one flow, with the agents you already use."). Draft several heroes and pick with the person; keep **free and open source**, **your accounts** and the phone companion.
+- **Sections, rewritten in order:** hero; **Idea to live app** (the person's path, five steps with real screenshots); **Every change, safely** (pull request, preview URL, CI, merge to deploy, roll back from the phone); **Your agents, your accounts** (providers, then hosting platforms and databases by name, with brand marks only where their guidelines allow); the existing agents, review, mobile and source sections tightened around the new story; download.
+- **Demo:** `components/demo.tsx` plays the new loop (one sentence, questions, the app in the preview, **Deploy**, the live URL) instead of today's thread-only demo.
+- **Around the page:** title, description and the social-sharing image; the README's opening lines match the hero; the sponsor links (GitHub Sponsors and Trakteer) stay.
+- **Claims:** no comparison with another app without matched-task evidence (the [evidence rule](roadmap.md#decisions-and-deferred-scope)), and no "anyone can ship an app" until the non-coder acceptance task has passed with real people.
+
 ## Safety
 
 - Production deploys, rollbacks, domain and DNS changes, deleting deployments or databases, plan and billing changes, store submissions and branch protection changes are the person's actions; agents ask through a card every time, in every access mode.
@@ -124,6 +144,7 @@ For someone who has a VPS or wants the app on the Ramu host:
 - **Broken production:** a merge that breaks the build wakes the thread with the log tail; the agent opens a fix and the person can roll back from the phone meanwhile.
 - **Data and uptime:** a booking app gets a Postgres database from the deploy sheet, preview deployments use their own branch, and stopping the database's endpoint opens an incident thread within ten minutes that recovers with a recap.
 - **Mobile:** an Expo app goes from **Release** to TestFlight and Play's internal track with only the store steps done by hand.
+- **Docs and site:** someone new to Ramu goes from the site to a deployed app using only the site and the guide, and every doc link and screenshot matches the shipped app.
 - **Orchestration:** a lead splits a task into a worktree helper on another model and a read-only reviewer, stops one that goes off track, and a resent tool call does not start a second helper.
 - Live checks for each platform with real accounts, and the VPS path on a real Ubuntu server, are listed under [Acceptance](roadmap.md#acceptance) until run.
 
