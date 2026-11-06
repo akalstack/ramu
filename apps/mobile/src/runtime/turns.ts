@@ -31,13 +31,14 @@ const settled = (item: TranscriptItem) =>
  */
 export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boolean): TranscriptItem[] {
   const turns: TranscriptItem[][] = []
+  // A message to a teammate opens a turn too, so the lead's answer above it is not folded into the work before it.
   for (const item of items) {
-    if (item.kind === 'user' || !turns.length) turns.push([])
+    if (item.kind === 'user' || item.kind === 'teammate-message' || !turns.length) turns.push([])
     turns.at(-1)!.push(item)
   }
   return groupTools(
     turns.flatMap((turn, index) => {
-      const user = turn[0]?.kind === 'user' ? turn[0] : undefined
+      const user = turn[0]?.kind === 'user' || turn[0]?.kind === 'teammate-message' ? turn[0] : undefined
       const notes = turn.filter((item) => item.kind === 'note')
       const body = turn.filter((item) => item !== user && item.kind !== 'end' && item.kind !== 'note')
       const ends = turn.filter((item): item is Extract<TranscriptItem, { kind: 'end' }> => item.kind === 'end')

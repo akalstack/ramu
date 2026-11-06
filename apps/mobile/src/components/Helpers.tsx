@@ -410,6 +410,43 @@ const REPORT_ICON = { finished: CircleCheck, failed: CircleX, stopped: CircleSla
  * What a sub-agent or teammate sent back, drawn like its row in the agents card: its model's icon, its name and role,
  * how it ended, then its words. Tapping it opens that agent, as tapping its row does.
  */
+/** "To Opus 5.5" above what you wrote to a teammate; pressing it opens that teammate. */
+export function TeammateTo({ teammateId, name, chat }: { teammateId: string; name: string; chat: Chat }) {
+  const { c } = useTheme()
+  const { language } = useStore()
+  const [open, setOpen] = useState(false)
+  let agent: Helper | undefined
+  for (const entry of chat.items)
+    if (entry.kind === 'agents')
+      for (const task of entry.agents) if ((task.agentId ?? task.id) === teammateId) agent = task
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        disabled={!agent}
+        hitSlop={6}
+        onPress={() => {
+          tap()
+          setOpen(true)
+        }}
+        style={{ alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 4 }}
+      >
+        {agent?.provider ? <ProviderIcon provider={agent.provider} size={12} /> : <Bot size={12} color={c.muted} />}
+        <T size={font.caption} tone="muted">
+          {translate(language, 'To {0}', { 0: name })}
+        </T>
+      </Pressable>
+      {open && agent ? (
+        <HelperDetails
+          task={{ ...agent, agentId: agent.agentId ?? agent.id }}
+          chat={chat}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
+  )
+}
+
 export function ReportCard({ item, chat }: { item: Extract<TranscriptItem, { kind: 'report' }>; chat: Chat }) {
   const { c } = useTheme()
   const { language } = useStore()

@@ -6,7 +6,7 @@ import { translate, type Language } from '@ramu/shared/i18n'
 import { toolVerb } from '@ramu/shared/chat/toolStatus'
 import { DiffLines } from './DiffLines'
 import { changedFile } from '../runtime/diff'
-import { Helpers, ReportCard } from './Helpers'
+import { Helpers, ReportCard, TeammateTo } from './Helpers'
 import { InteractiveContent } from './InteractiveContent'
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
@@ -672,6 +672,15 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <AgentsGroup item={item} chat={chat} />
     case 'report':
       return <ReportCard item={item} chat={chat} />
+    case 'teammate-message':
+      return (
+        <MessageActions text={item.text} from="user" markdown>
+          <View style={{ gap: space.xs }}>
+            <TeammateTo teammateId={item.teammateId} name={item.name} chat={chat} />
+            <UserBubble text={item.text} chat={chat} />
+          </View>
+        </MessageActions>
+      )
     case 'question':
       return <QuestionCard item={item} chatId={chat.id} />
     case 'permission':
