@@ -17,6 +17,8 @@ import { contentStorage } from '../../../storage'
 import { Header, HeaderButton, Screen } from '../../../components/Screen'
 import { Button, Card, Row, Sheet, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
+import { pageRunActivity } from '../../../runtime/pageRunActivity'
+import { WIDGET_PAGE_KEY, widgetPage } from '../../../components/PageWidgetSync'
 import {
   QUEUEABLE,
   pageCopy,
@@ -81,6 +83,11 @@ export default function PageScreen() {
   const follow = useRef(new Map<string, { requestId: string; stepRequestId?: string; shown: number }>())
   const waiting = useRef(new Map<string, string>())
   const nextMessage = useRef(0)
+  const activity = useRef(pageRunActivity('', store.language))
+  useEffect(() => {
+    const current = activity.current
+    return () => current.stop()
+  }, [])
   const post = useCallback((data: object) => {
     nextMessage.current += 1
     const id = nextMessage.current
@@ -116,6 +123,10 @@ export default function PageScreen() {
           store.invoke(computerId, 'pages.state', pageId),
         ])
         setPage(info)
+        activity.current =
+          activity.current.page === `${info.icon} ${info.title}`
+            ? activity.current
+            : pageRunActivity(`${info.icon} ${info.title}`, store.language)
         setDocument((before) => (before?.reference.version === current.reference.version && !saved ? before : current))
         savePageCopy(contentStorage, computerId, pageId, current)
         if (values.revision !== revision.current) {
@@ -163,6 +174,7 @@ export default function PageScreen() {
       const followed = follow.current.get(run.id)
       if (!followed) return
       setRunning(run.status === 'running' ? run : null)
+      activity.current.update(run)
       for (const step of run.steps.slice(followed.shown))
         if (followed.stepRequestId) post({ type: 'run-step', value: step, requestId: followed.stepRequestId })
       followed.shown = run.steps.length
@@ -606,6 +618,24 @@ export default function PageScreen() {
                 }
               >
                 <T>{say('Versions')}</T>
+              </Row>
+            ) : null}
+            {page?.capabilities.widget && !shared ? (
+              <Row
+                onPress={() => {
+                  setMenu(false)
+                  const current = widgetPage(store.drafts[WIDGET_PAGE_KEY])
+                  store.setDraft(
+                    WIDGET_PAGE_KEY,
+                    current?.pageId === pageId ? '' : JSON.stringify({ computerId, pageId }),
+                  )
+                }}
+              >
+                <T>
+                  {widgetPage(store.drafts[WIDGET_PAGE_KEY])?.pageId === pageId
+                    ? say('Remove from the home screen widget')
+                    : say('Show in the home screen widget')}
+                </T>
               </Row>
             ) : null}
             <Row

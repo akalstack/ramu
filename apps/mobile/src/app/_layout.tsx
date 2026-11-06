@@ -1,3 +1,4 @@
+import { PageWidgetSync } from '../components/PageWidgetSync'
 import { ComputerUseProvider } from '../runtime/computerUse'
 import { LiveActivityMonitor } from '../components/LiveActivityMonitor'
 import { StartupScreen } from '../components/StartupScreen'
@@ -52,6 +53,7 @@ function Navigator() {
       <ModelNewsToast />
       <PushRouting />
       <LiveActivityMonitor />
+      <PageWidgetSync />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <NavigationThemeProvider value={navigationTheme}>
         <Stack

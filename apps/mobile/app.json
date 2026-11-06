@@ -86,7 +86,21 @@
           "enablePushNotifications": true,
           "groupIdentifier": "group.com.akalstack.ramu",
           "bundleIdentifier": "com.akalstack.ramu.activities",
-          "widgets": []
+          "widgets": [
+            {
+              "name": "RamuPage",
+              "displayName": "Ramu page",
+              "description": "A number or short list from one of your Ramu pages.",
+              "supportedFamilies": ["systemSmall", "systemMedium"],
+              "android": {
+                "minWidth": 110,
+                "minHeight": 110,
+                "targetCellWidth": 2,
+                "targetCellHeight": 2,
+                "resizeMode": "both"
+              }
+            }
+          ]
         }
       ],
       "expo-sharing",
@@ -97,7 +111,9 @@
     },
     "icon": "./assets/icon.png",
     "extra": {
-      "eas": { "projectId": "ea7129b8-1f4d-4639-8cfb-c23750700bb9" }
+      "eas": {
+        "projectId": "ea7129b8-1f4d-4639-8cfb-c23750700bb9"
+      }
     }
   }
 }

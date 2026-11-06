@@ -5569,4 +5569,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Import a page…": "Impor halaman…",
   "Paste a share link from another host this desktop is connected to. The page’s code comes over; its records and values stay there.": "Tempel tautan berbagi dari host lain yang terhubung ke desktop ini. Kode halaman ikut disalin; catatan dan nilainya tetap di sana.",
   "Share link": "Tautan berbagi",
+  "Show in the home screen widget": "Tampilkan di widget layar utama",
+  "Remove from the home screen widget": "Hapus dari widget layar utama",
 }
