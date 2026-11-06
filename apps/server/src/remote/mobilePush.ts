@@ -11,7 +11,7 @@ export type PushCategory = (typeof PUSH_CATEGORIES)[number]
 /** Off until a phone asks for them: a registration that lists no categories does not get these. */
 export const OPT_IN_CATEGORIES: readonly PushCategory[] = ['digest']
 /** Where a tap on a push that is not about one thread goes; see `pushTarget` in the mobile app. */
-export type PushTarget = 'schedules' | 'recaps' | 'artifact'
+export type PushTarget = 'schedules' | 'recaps' | 'page'
 interface Registration {
   deviceId: string
   token: string
@@ -161,7 +161,8 @@ export class MobilePush {
       (registration) => ({
         computerId: registration.computerId,
         kind: 'pages',
-        target: 'artifact' satisfies PushTarget,
+        // Phones on the previous release only open `page`; this release's phone reads `page` and `artifact` alike.
+        target: 'page' satisfies PushTarget,
         pageId,
       }),
       title,
