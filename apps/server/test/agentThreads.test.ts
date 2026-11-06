@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentEvent, AgentSessionInfo, AgentSettings } from '@ramu/shared/types'
-import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
+import { DEFAULT_AGENT_SETTINGS, NO_PROJECT } from '@ramu/shared/types'
 import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import type { AgentService } from '../src/agent'
@@ -33,6 +33,7 @@ let approvals: boolean[], permissionDetails: string[]
 let submitted: { id: string; text: string; mode: string }[]
 let recorded: { id: string; threads: unknown[] }[]
 let calls: string[]
+let goals: { id: string; objective: string; verify?: string }[]
 let api: Project, web: Project, apiRoot: string
 let remote: RemoteThreads
 let hostCalls: { id: string; method: string; args: unknown[]; key?: string }[]
@@ -79,6 +80,7 @@ beforeEach(async () => {
   submitted = []
   recorded = []
   calls = []
+  goals = []
   const root = mkdtempSync(join(tmpdir(), 'ramu-agent-threads-'))
   for (const name of ['api', 'web']) mkdirSync(join(root, name))
   apiRoot = join(root, 'api')
@@ -116,6 +118,9 @@ beforeEach(async () => {
     getGoal: () => null,
     queued: () => [],
     continuationPrompt: (id: string) => `Transcript of ${id}`,
+    setGoal: vi.fn((id: string, objective: string, _fromUser: boolean, verify?: string) =>
+      goals.push({ id, objective, verify }),
+    ),
   } as unknown as AgentService
   const invoke = async (method: string, args: unknown[]) => {
     calls.push(method)
@@ -124,6 +129,12 @@ beforeEach(async () => {
     if (method === 'tasks.setup') return ws.setupTask(args[0] as string)
     if (method === 'tasks.rename') return ws.renameTask(args[0] as string, args[1] as string)
     if (method === 'folders.addProject') return ws.addProjectFromFolder(args[0] as string)
+    if (method === 'folders.create') {
+      // New projects go beside the test's own repositories, never into the real parent the service chose.
+      const target = join(apiRoot, '..', args[1] as string)
+      mkdirSync(target)
+      return target
+    }
     if (method === 'folders.clone') {
       // The test clones into its own temporary folder, never the real parent the service chose.
       const [, name] = args as [string, string]
@@ -341,6 +352,34 @@ describe('project_add', () => {
     await expect(tools('caller').call('project_add', { url: 'https://github.com/acme/..' })).rejects.toThrow(
       /Name the folder/,
     )
+  })
+})
+
+describe('project_create', () => {
+  it('creates a project from No project and continues there with this conversation and a goal', async () => {
+    await callerIn({ id: NO_PROJECT } as Project)
+    const { call } = tools('caller')
+    const input = { name: 'barbershop', brief: 'A booking page for a barbershop.', requestId: 'r1' }
+    const created = await call('project_create', input)
+    expect(created).toMatchObject({ name: 'barbershop', stack: null, thread: { projectName: 'barbershop' } })
+    expect(created.next).toMatch(/end your turn/)
+    expect(ws.listProjects().some((project) => project.id === created.projectId)).toBe(true)
+    expect(execFileSync('git', ['log', '--format=%s'], { cwd: created.path }).toString()).toContain('Start barbershop')
+    const startedPrompt = events.get('started-1')![0] as { text: string }
+    expect(startedPrompt.text).toContain('Transcript of caller')
+    expect(startedPrompt.text).toContain('A booking page for a barbershop.')
+    expect(goals).toEqual([{ id: 'started-1', objective: 'A booking page for a barbershop.', verify: undefined }])
+    // A resent call returns the first result instead of failing on the folder it already made.
+    expect(await call('project_create', input)).toEqual(created)
+  })
+
+  it('asks first outside Full access, naming the folder and the generator', async () => {
+    await callerIn(api, 'edits')
+    expect(
+      await tools('caller').call('project_create', { name: 'shop', stack: 'nextjs', brief: 'A shop.' }),
+    ).toMatchObject({ created: false })
+    expect(permissionDetails[0]).toMatch(/shop[\s\S]*create-next-app/)
+    expect(calls).not.toContain('folders.create')
   })
 })
 

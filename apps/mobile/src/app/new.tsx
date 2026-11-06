@@ -808,6 +808,25 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         >
           {choices?.some((choice) => choice.reason) ? null : (
             <SheetOption
+              icon={Sparkles}
+              title={say('New project')}
+              help={say('Create a project for it and continue there')}
+              onPress={() => {
+                const request = pending.current
+                setPicker(null)
+                // Starts in No project; the agent creates the project and continues there.
+                if (request)
+                  void startInAuto(
+                    say('Start a new project: {0}', { 0: request.text.trim() }),
+                    request.attachments as Send[2],
+                    request.context as Send[3],
+                    STANDALONE,
+                  ).catch(() => setPicker('choice'))
+              }}
+            />
+          )}
+          {choices?.some((choice) => choice.reason) ? null : (
+            <SheetOption
               icon={MessageCircle}
               title={say('Standalone')}
               help={

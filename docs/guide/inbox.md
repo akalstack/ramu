@@ -4,6 +4,8 @@
 
 Home is for starting work: the message box and, when something needs you, one line such as **2 need you · 5 finished** that opens Inbox.
 
+With **Auto**, a request that fits no project asks where to start. **New project** starts in No project and asks the agent to create one: it asks at most three questions, names the stack in one line, then creates the folder, runs the framework's own generator, commits, and continues in a thread in the new project with a goal checked by its build and tests. **No project** (on the phone, **Standalone**) is for something that needs no project yet, such as a page or a question. On the desktop, **New project…** in the Project picker does the same, and a host with no projects shows **Start something new** beside **Open a folder**.
+
 ## Inbox
 
 **Inbox** (⌘⇧I) answers "what needs me?" across every connected host. Its tabs are **Brief**, **Running**, **Recaps**, **Learned** and **Completed**, on desktop and phone. The badge counts what the Brief lists.

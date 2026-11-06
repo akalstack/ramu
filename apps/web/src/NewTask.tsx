@@ -5,7 +5,17 @@ import { WorkspaceNameDialog } from './workspace/WorkspaceNameDialog'
 import { t, useLanguage } from './i18n'
 import { clipText } from '@ramu/shared/text'
 import { useModelSets } from './models/ModelSets'
-import { ChevronRight, CircleDot, FolderClosed, GitBranch, Laptop, Monitor, Network, Settings } from 'lucide-react'
+import {
+  ChevronRight,
+  CircleDot,
+  FolderClosed,
+  GitBranch,
+  Laptop,
+  Monitor,
+  Network,
+  Settings,
+  Sparkles,
+} from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Spinner } from '@/components/ui/spinner'
 import { useEffect, useRef, useState } from 'react'
@@ -64,6 +74,9 @@ import { useOtherHostTargets } from './workspace/otherHostTargets'
 import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
 
 /** A task's title is the first line of what you asked for. */
+
+/** A choice that starts in No project and asks the agent to create the project. */
+const NEW_PROJECT = '__new-project__'
 export function titleFrom(prompt: string): string {
   const line = prompt.trim().split('\n')[0]!.trim()
   if (line.length <= 60) return line
@@ -260,6 +273,8 @@ export function NewTask({
   const [choices, setChoicesState] = useState<RouteCandidate[] | null>(null)
   // The router thought the request starts something new, so No project is offered as the suggestion.
   const [suggestNew, setSuggestNew] = useState(false)
+  // Start something new: the next message starts in No project and asks the agent to create the project.
+  const [startingNew, setStartingNew] = useState(false)
   const [routeNote, setRouteNote] = useState<string | null>(null)
   const routeRevision = useRef(0)
   // Auto also weighs projects on the other connected hosts; a request that belongs to one of them starts there.
@@ -410,8 +425,12 @@ export function NewTask({
   // `busy` is state and lags a frame; a double Enter must not create two chats.
   const sending = useRef(false)
   const creationRequest = useRef<{ fingerprint: string; id: string } | null>(null)
-  const send = async (context: FileContext[] = [], chosen?: string) => {
+  const send = async (context: FileContext[] = [], picked?: string) => {
     if (sending.current) throw new Error(t('A message is already being sent.'))
+    const startsProject = picked === NEW_PROJECT || startingNew
+    const chosen = startsProject ? NO_PROJECT : picked
+    // The agent reads this as the request to make a project; the person sees the same words in the thread.
+    const agentPrompt = startsProject ? t('Start a new project: {0}', { '0': prompt.trim() }) : prompt
     if (!general && !repos.length) throw new Error(t('Add a repository to this project first'))
     const messageTitle =
       title ||
@@ -465,6 +484,8 @@ export function NewTask({
       naming: namingIntent,
       branch: branchChoice,
     }
+    if (startsProject && !auto)
+      target = { ...target, projectId: NO_PROJECT, mode: 'current', workspaceId: undefined, branch: undefined }
     try {
       let sendSettings = await agentDraft.verify()
       if (auto) {
@@ -578,7 +599,7 @@ export function NewTask({
         host.id,
         target.projectId,
         messageTitle,
-        prompt,
+        agentPrompt,
         target.mode,
         target.workspaceId,
         target.branchPrefix,
@@ -611,13 +632,14 @@ export function NewTask({
       const session = await host.invoke(
         'agent.start',
         task.id,
-        prompt,
+        agentPrompt,
         sendSettings,
         attachments.map((file) => file.id),
         context,
       )
       created = null
       creationRequest.current = null
+      setStartingNew(false)
       if (!auto) rememberStartProject(projectId, hostStorageFor(host.id))
       clearDraftDestination(hostStorageFor(host.id))
       // The link lets this chat's pull request close the issue; losing it only loses that line.
@@ -655,6 +677,7 @@ export function NewTask({
     ...(preferences.autoProjectSelection || auto ? [{ value: AUTO_PROJECT, label: t('Auto') }] : []),
     { value: NO_PROJECT, label: t('No project') },
     ...ws.projects.map((p) => ({ value: p.id, label: p.name })),
+    { value: NEW_PROJECT, label: t('New project…') },
   ]
   const choiceLabels = routingLabels([
     ...ws.projects.map((p) => ({ id: p.id, name: p.name, host: currentHostName })),
@@ -718,6 +741,16 @@ export function NewTask({
             >
               <FolderClosed size={14} />
               {t('Open a folder')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="bg-fill hover:bg-fill-hover"
+              aria-pressed={startingNew}
+              onClick={() => setStartingNew((on) => !on)}
+            >
+              <Sparkles size={14} />
+              {t('Start something new')}
             </Button>
             <p className="muted text-muted-foreground small text-caption m-0">{t('or drop a folder here')}</p>
           </div>
@@ -826,12 +859,14 @@ export function NewTask({
               <Combobox
                 label={t('Project')}
                 searchPlaceholder={t('Search projects…')}
-                value={auto ? AUTO_PROJECT : (project?.id ?? NO_PROJECT)}
+                value={startingNew ? NEW_PROJECT : auto ? AUTO_PROJECT : (project?.id ?? NO_PROJECT)}
                 icon={<FolderClosed size={13} />}
                 bare
                 className={`${CHIP} max-w-[220px]`}
                 options={projectOptions}
                 onChange={(id) => {
+                  if (id === NEW_PROJECT) return setStartingNew(true)
+                  setStartingNew(false)
                   // The pick survives a restart with the draft, until that draft is sent.
                   rememberDraftDestination(id, hostStorageFor(host.id))
                   onProjectChange(id)
@@ -952,7 +987,13 @@ export function NewTask({
             }}
             onSubmit={send}
             disabled={busy || (!general && !repos.length)}
-            placeholder={general || repos.length ? t('Message the agent') : t('Add a repository to this project first')}
+            placeholder={
+              startingNew
+                ? t('Describe what to build')
+                : general || repos.length
+                  ? t('Message the agent')
+                  : t('Add a repository to this project first')
+            }
             submitLabel={t('Start thread')}
           />
         </ComposerStack>
@@ -971,6 +1012,17 @@ export function NewTask({
                   : t('No project matched. Choose where to start.')}
             </p>
             <div className="flex flex-wrap gap-1.5">
+              {!choices.some((choice) => choice.reason) && (
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  disabled={busy}
+                  title={t('Create a project for it and continue there')}
+                  onClick={() => void send([], NEW_PROJECT).catch((e) => setError(errorText(e)))}
+                >
+                  {t('New project')}
+                </Button>
+              )}
               {!choices.some((choice) => choice.reason) && (
                 <Button
                   variant="secondary"

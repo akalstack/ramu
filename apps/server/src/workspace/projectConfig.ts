@@ -2,6 +2,7 @@ import { closeSync, fstatSync, openSync, readFileSync, realpathSync } from 'node
 import { isAbsolute, join, relative } from 'node:path'
 import { z } from 'zod'
 import { appPreferences } from '../ipc/preferences'
+import { STACK_IDS } from '@ramu/shared/stacks'
 
 export const projectActionSchema = z.object({
   id: z.string().min(1).max(64),
@@ -35,6 +36,16 @@ export const projectConfigSchema = z.object({
         .preprocess((value) => (value === 'summary-slug' ? 'fixed' : value), z.enum(['fixed', 'semantic', 'custom']))
         .optional(),
       branchInstructions: appPreferences.shape.worktreeBranchInstructions.removeDefault().optional(),
+    })
+    .optional(),
+  /** What a new project was started with, so later threads know how to run, build, test and deploy it. */
+  stack: z
+    .object({
+      id: z.enum(STACK_IDS).optional(),
+      dev: z.string().trim().min(1).max(1000).optional(),
+      build: z.string().trim().min(1).max(1000).optional(),
+      test: z.string().trim().min(1).max(1000).optional(),
+      deployTarget: z.string().trim().min(1).max(40).optional(),
     })
     .optional(),
   commit: z

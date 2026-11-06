@@ -1,4 +1,5 @@
 import { terminalThreadRequest } from './background/agentThreads'
+import { NO_PROJECT_GUIDE, projectFactsText } from './workspace/projectCreate'
 import { HELPER_ROLES } from '@ramu/shared/chat/helperRoles'
 import { CustomAgentStore } from './agent/customAgents'
 import { TEST_DEVICE_GUIDE, TestDevices } from './testDevice/testDevices'
@@ -578,7 +579,17 @@ const projectOf = (session: AgentSessionInfo) => {
 }
 agents.memoryInstructions = (session) => memory.instructions(session, projectOf(session))
 const rules = new RuleStore(db)
-agents.rulesInstructions = (session) => rules.instructions(projectOf(session), session.provider)
+// The person's rules, then what the project's ramu.json says about its stack, or how to start one from No project.
+agents.rulesInstructions = (session) => {
+  const project = projectOf(session)
+  const facts =
+    !project || session.parentId
+      ? undefined
+      : project === NO_PROJECT
+        ? NO_PROJECT_GUIDE
+        : projectFactsText(workspace.projectConfiguration(project).config)
+  return [rules.instructions(project, session.provider), facts].filter(Boolean).join('\n\n') || undefined
+}
 agents.mcpDestination = (session, settings) => {
   const project = projectOf(session)
   return getSharedMcp().destinationAttention(

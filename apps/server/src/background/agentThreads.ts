@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { STACKS, STACK_IDS, commandLine, stackCheck, type StackId } from '@ramu/shared/stacks'
+import { PROJECT_NAME, createProjectFolder, runCommand } from '../workspace/projectCreate'
 import { RequestReplay } from '../agent/requestReplay'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
@@ -260,6 +262,29 @@ export class AgentThreadService {
           const project = await this.addProject(input)
           return { ...project, note: `Start work there with thread_start and project "${project.name}".` }
         }),
+    )
+    server.registerTool(
+      'project_create',
+      {
+        description: `Create a new project from scratch when the person wants to build something that needs its own folder and repository: a folder beside their other repositories, the stack's official generator (${STACK_IDS.join(', ')}; leave stack out to write the files yourself), a .gitignore, ramu.json with the stack's commands, and a first commit. Ask at most three questions first and say the stack in one line. With continue (the default) a thread starts in the new project with this conversation and brief as its start and a goal checked by the stack's build and tests; the work continues there, so end your turn after telling the person. Outside Full access the person approves first; if they decline, do not retry.`,
+        inputSchema: {
+          name: z.string().regex(PROJECT_NAME).describe('Folder and project name, such as barbershop-booking.'),
+          stack: z.enum(STACK_IDS).optional(),
+          brief: z
+            .string()
+            .min(1)
+            .max(20_000)
+            .describe(
+              'What to build, as a complete brief: the person’s answers, pages, data, and how to tell it is done.',
+            ),
+          continue: z.boolean().optional(),
+          requestId: REQUEST_ID,
+        },
+      },
+      (input, extra) =>
+        this.once(sessionId, 'project_create', input.requestId, () =>
+          this.createProject(sessionId, input, extra.signal),
+        ),
     )
     server.registerTool(
       'thread_start',
@@ -778,6 +803,105 @@ export class AgentThreadService {
       project: { id: string; name: string }
     }
     return { projectId: project.id, name: project.name, added: true }
+  }
+
+  /**
+   * project_create: a new folder with the stack's generator and a first commit, added as a project, then (by default)
+   * a thread there that carries this conversation and works toward a goal checked by the stack's build and tests.
+   */
+  private async createProject(
+    sessionId: string,
+    input: { name: string; stack?: StackId; brief: string; continue?: boolean },
+    signal?: AbortSignal,
+  ) {
+    const caller = this.agents.get(sessionId)
+    const parent = this.cloneParent()
+    const stack = input.stack ? STACKS[input.stack] : null
+    if (caller.settings.access !== 'full') {
+      const commands = stack?.generator.map(commandLine) ?? []
+      const allowed = await this.agents.requestPermission(
+        sessionId,
+        `creating the project ${input.name}`,
+        [
+          `Create ${join(parent, input.name)}${stack ? ` as ${stack.summary}` : ''}, commit it and add it as a project.`,
+          commands.length ? `Runs:\n${commands.join('\n')}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        signal,
+      )
+      if (!allowed) return { created: false, message: 'The person chose not to create this project. Do not retry.' }
+    }
+    const folder = await createProjectFolder(
+      { parent, name: input.name, ...(input.stack ? { stack: input.stack } : {}) },
+      {
+        create: async (at, name) => (await this.invoke('folders.create', [at, name])) as string,
+        run: runCommand,
+        ...(signal ? { signal } : {}),
+      },
+    )
+    const { project } = (await this.invoke('folders.addProject', [folder.path])) as {
+      project: { id: string; name: string }
+    }
+    const created = {
+      projectId: project.id,
+      name: project.name,
+      path: folder.path,
+      stack: folder.stack,
+      ran: folder.ran,
+    }
+    if (input.continue === false)
+      return { ...created, next: `Start work there with thread_start and project "${project.name}".` }
+    const check = stack ? stackCheck(stack) : null
+    const start = stack?.dev
+      ? `Start it with background_terminal_launch (${commandLine(stack.dev)})${stack.readyText ? `, wait for "${stack.readyText}" with background_terminal_wait` : ''} and open it in the browser so the person sees it.`
+      : ''
+    const brief = [
+      input.brief.trim(),
+      `This project was just created${stack ? ` with ${stack.name}` : ''} and committed. ${start}`.trim(),
+      check ? `The goal is checked with: ${check}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+    const callerTask = this.workspace.getTask(caller.taskId)
+    const conversation =
+      callerTask.projectId === NO_PROJECT
+        ? clipText(this.agents.continuationPrompt(sessionId), CONTINUATION_PROMPT_LIMIT)
+        : ''
+    const [started] = await this.start(
+      [
+        {
+          prompt: conversation ? `${conversation}\n\nNext: ${brief}` : brief,
+          title: callerTask.projectId === NO_PROJECT ? callerTask.title : project.name,
+          projectId: project.id,
+          projectName: project.name,
+          mode: 'current',
+        },
+      ],
+      {
+        source: { taskId: caller.taskId, sessionId },
+        settings: caller.settings,
+        context: `Started in the new project ${project.name}, created from the thread "${callerTask.title}".`,
+        depth: this.depthOf(caller.taskId),
+      },
+    )
+    if (!started || started.error)
+      return { ...created, thread: started, next: 'The project exists; start a thread there with thread_start.' }
+    const target = this.db
+      .prepare('SELECT target_session_id FROM thread_links WHERE target_task_id = ?')
+      .get(started.taskId) as { target_session_id: string | null } | undefined
+    // The goal is Ramu's, from the stack's own commands, so it may carry a verification command.
+    if (target?.target_session_id)
+      try {
+        this.agents.setGoal(target.target_session_id, clipText(input.brief.trim(), 8000), true, check ?? undefined)
+      } catch {
+        // A thread whose goal could not be set still works on the brief.
+      }
+    return {
+      ...created,
+      thread: { threadId: started.taskId, ...started },
+      next: 'The work continues in the new thread. Tell the person in one line where it is, then end your turn.',
+    }
   }
 
   /** Starts a thread a person sent here from another host. The start carries a key, so a lost reply finds the same one. */
