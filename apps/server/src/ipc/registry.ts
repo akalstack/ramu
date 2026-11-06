@@ -9,6 +9,7 @@ import { registerComputerHandlers } from './handlers/computer'
 import { registerHostBrowserHandlers } from './handlers/hostBrowser'
 import { registerFileHandlers } from './handlers/files'
 import { registerForgeHandlers } from './handlers/forge'
+import { registerDeployHandlers } from './handlers/deploy'
 import { registerGitHandlers } from './handlers/git'
 import { registerMemoryHandlers } from './handlers/memory'
 import { registerProviderHandlers } from './handlers/providers'
@@ -66,6 +67,7 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable => {
     registerThemeHandlers(ctx),
     registerGitHandlers(ctx),
     registerForgeHandlers(ctx),
+    registerDeployHandlers(ctx),
     registerFileHandlers(ctx),
     registerSearchHandlers(ctx),
     registerReviewHandlers(ctx),

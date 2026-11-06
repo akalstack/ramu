@@ -1,0 +1,276 @@
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import type { HostingAccount, HostingAccountsSummary, HostingPlatform, HostingSignIn } from '@ramu/shared/types'
+import { BrandIcon } from '@/components/brand-icon'
+import { Button } from '@/components/desktop-button'
+import { Input } from '@/components/desktop-input'
+import { SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { t } from '../i18n'
+import { invoke as openOnThisComputer } from '../ipc'
+import { errorText } from '../lib/errors'
+import { useSettingsInvoke } from './SettingsScope'
+
+/** What to pick on each platform's token page: the smallest scope it offers. */
+const SCOPE_HINT: Record<HostingPlatform, string> = {
+  vercel: 'Scope: the team your projects are in, not Full Account',
+  netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
+}
+
+/** The headline under a platform's name: who is connected and how, or what to do. */
+function deployAccountHeadline(account: HostingAccount): string {
+  if (!account.connected) return t('Not connected. Deploys and Publish to the web need an account.')
+  if (account.error) return account.error
+  const via = account.via === 'cli' ? t('signed in through its CLI') : t('token saved on this host')
+  const who = t('Connected as {0} ({1})', { 0: account.account ?? account.name, 1: via })
+  return account.expiresAt
+    ? `${who} · ${t('Expires {0}', { 0: new Date(account.expiresAt).toLocaleDateString() })}`
+    : who
+}
+
+/** Vercel and Netlify: the platform's own sign-in first, a guided token page otherwise. */
+export function DeployAccounts() {
+  const invoke = useSettingsInvoke()
+  const [summary, setSummary] = useState<HostingAccountsSummary | null>(null)
+  const [failed, setFailed] = useState<string | null>(null)
+  const request = useRef(0)
+  const load = useCallback(
+    (check: boolean) => {
+      const mine = ++request.current
+      setFailed(null)
+      void Promise.resolve(invoke('deploy.accounts', check)).then(
+        (next) => {
+          if (mine === request.current) setSummary(next)
+        },
+        (reason) => {
+          if (mine === request.current) setFailed(errorText(reason))
+        },
+      )
+    },
+    [invoke],
+  )
+  useEffect(() => {
+    setSummary(null)
+    load(false)
+  }, [load])
+  if (failed)
+    return (
+      <p role="alert" className="m-0 mb-3 px-4 text-caption text-destructive">
+        {failed}
+      </p>
+    )
+  return (
+    <>
+      {summary?.accounts.map((account) => (
+        <DeployAccountRow
+          key={account.platform}
+          account={account}
+          canAdminister={summary.canAdminister}
+          reload={load}
+        />
+      ))}
+      {summary && !summary.canAdminister && (
+        <p className="m-0 mb-3 px-4 text-caption text-muted-foreground">
+          {t('Connect Vercel and Netlify on the machine running this host.')}
+        </p>
+      )}
+    </>
+  )
+}
+
+function DeployAccountRow({
+  account,
+  canAdminister,
+  reload,
+}: {
+  account: HostingAccount
+  canAdminister: boolean
+  reload: (check: boolean) => void
+}) {
+  const invoke = useSettingsInvoke()
+  const [open, setOpen] = useState(false)
+  const [signIn, setSignIn] = useState<HostingSignIn | null>(null)
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const tokenId = useId()
+  const waiting = signIn?.state === 'starting' || signIn?.state === 'waiting'
+  const signInId = signIn?.id
+  useEffect(() => {
+    if (!waiting || !signInId) return
+    // The CLI runs on the host; its state is read until the person authorizes or it fails.
+    const timer = setInterval(() => {
+      void Promise.resolve(invoke('deploy.signInStatus', signInId)).then(
+        (next) => {
+          setSignIn(next)
+          if (next.state === 'connected') {
+            setOpen(false)
+            reload(false)
+          }
+        },
+        (reason) => setError(errorText(reason)),
+      )
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [waiting, signInId, invoke, reload])
+  const run = async (work: () => Promise<unknown>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await work()
+    } catch (reason) {
+      setError(errorText(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const close = () => {
+    if (signInId && waiting) void invoke('deploy.cancelSignIn', signInId)
+    setOpen(false)
+    setSignIn(null)
+    setToken('')
+    setError(null)
+  }
+  const help = account.broadScope
+    ? `${deployAccountHeadline(account)} · ${account.broadScope}`
+    : deployAccountHeadline(account)
+  return (
+    <>
+      <SettingsRow>
+        <SettingsLabel title={account.name} icon={<BrandIcon brand={account.platform} />} help={help} />
+        <span className="flex items-center gap-2">
+          {account.connected && (
+            <Button variant="secondary" size="sm" onClick={() => reload(true)}>
+              {t('Check connection')}
+            </Button>
+          )}
+          {canAdminister && !open && (
+            <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+              {account.connected ? t('Reconnect') : t('Connect')}
+            </Button>
+          )}
+          {canAdminister && account.connected && !open && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  await invoke('deploy.disconnect', account.platform)
+                  reload(false)
+                })
+              }
+            >
+              {t('Disconnect')}
+            </Button>
+          )}
+        </span>
+      </SettingsRow>
+      {open && (
+        <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
+          {account.cli && (
+            <section className="flex flex-col gap-2" aria-label={t('Sign in with {0}', { 0: account.name })}>
+              <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
+              <p className="m-0 text-muted-foreground">
+                {t(
+                  'Runs {0}’s own sign-in on the host. Authorize Ramu in the page it opens; the token stays in this host’s credential store and your own CLI login is not changed.',
+                  { 0: account.name },
+                )}
+              </p>
+              {signIn?.state === 'waiting' && signIn.url && (
+                <span className="flex flex-wrap items-center gap-2" role="status">
+                  <Button size="sm" onClick={() => void openOnThisComputer('app.openExternal', signIn.url!)}>
+                    {t('Open the sign-in page')}
+                  </Button>
+                  {signIn.code && (
+                    <span>
+                      {t('Code')} <strong className="font-mono">{signIn.code}</strong>
+                    </span>
+                  )}
+                  <span className="text-muted-foreground">{t('Waiting for you to authorize…')}</span>
+                </span>
+              )}
+              {signIn?.state === 'failed' && signIn.error && (
+                <p role="alert" className="m-0 text-destructive">
+                  {signIn.error}
+                </p>
+              )}
+              {!waiting && (
+                <span>
+                  <Button
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void run(async () => setSignIn(await invoke('deploy.signIn', account.platform)))}
+                  >
+                    {t('Sign in with {0}', { 0: account.name })}
+                  </Button>
+                </span>
+              )}
+            </section>
+          )}
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void run(async () => {
+                await invoke('deploy.saveToken', account.platform, token.trim())
+                setToken('')
+                setOpen(false)
+                reload(false)
+              })
+            }}
+          >
+            <strong>{account.cli ? t('Or use a token') : t('Connect with a token')}</strong>
+            <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
+              <li>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void openOnThisComputer('app.openExternal', account.tokenPage)}
+                >
+                  {t('Open {0}’s token page', { 0: account.name })}
+                </Button>
+              </li>
+              <li>{t('Name it Ramu.')}</li>
+              <li>{t(SCOPE_HINT[account.platform])}</li>
+              <li>{t('Set an expiry, then copy the token and paste it here.')}</li>
+            </ol>
+            <label htmlFor={tokenId} className="flex flex-col gap-1">
+              {t('API token')}
+              <Input
+                id={tokenId}
+                type="password"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                disabled={busy}
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+              />
+            </label>
+            <p className="m-0 text-muted-foreground">
+              {t(
+                'The token goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
+                {
+                  0: account.name,
+                },
+              )}
+            </p>
+            {error && (
+              <p role="alert" className="m-0 text-destructive">
+                {error}
+              </p>
+            )}
+            <span className="flex gap-2">
+              <Button type="submit" size="sm" disabled={busy || token.trim().length < 8}>
+                {busy ? t('Checking…') : t('Save')}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={close}>
+                {t('Cancel')}
+              </Button>
+            </span>
+          </form>
+        </div>
+      )}
+    </>
+  )
+}

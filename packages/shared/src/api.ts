@@ -19,6 +19,14 @@ import type { NearbyHostsState } from './discovery/tracker'
 import type { AgentSetupSnapshot } from './agentSetup'
 import type { AccountLogin, ProviderConfiguration, ProviderStatus } from './providers/providers'
 import type { AbilityCall, AbilityCheck } from './providers/abilities'
+import type {
+  HostingAccount,
+  HostingAccountsSummary,
+  HostingPlatform,
+  HostingSignIn,
+  ProjectDeployment,
+  Deployment,
+} from './types/deploy'
 import type { LimitRetryResult } from './chat/providerWait'
 import type { VoiceBridge } from './voice/bridge'
 import type {
@@ -304,8 +312,8 @@ interface ArtifactMethods {
     connected: boolean
   }[]
   /** `account` is the Cloudflare account ID, for a token limited to Pages that cannot list accounts. */
-  'artifacts.saveHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string, account?: string): void
-  'artifacts.removeHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages'): void
+  /** Netlify and Vercel use the hosting accounts in Settings; Cloudflare Pages keeps its own token. Host only. */
+  'artifacts.saveCloudflareToken'(token: string, account?: string): void
   /** Deploys the artifact's current version as a static site on the person's own account; updates the same site later. */
   'artifacts.publish'(
     artifactId: string,
@@ -1165,6 +1173,25 @@ export interface RamuMethods extends ArtifactMethods {
   'forge.saveGitlab'(input: { origin: string; token: string }): import('./types').GitlabSummary
   'forge.removeGitlab'(): import('./types').GitlabSummary
   /** Bitbucket Cloud's credential on this host; `check` asks Bitbucket whose it is. */
+  /** Hosting accounts for deploys on this host; `check` asks each platform who the saved sign-in is. */
+  'deploy.accounts'(check: boolean): HostingAccountsSummary
+  /** Starts the platform CLI's browser sign-in on the host. Host only. */
+  'deploy.signIn'(platform: HostingPlatform): HostingSignIn
+  'deploy.signInStatus'(id: string): HostingSignIn
+  'deploy.cancelSignIn'(id: string): void
+  /** Checks a token pasted on the guided token page and keeps it in the host's credential store. Host only. */
+  'deploy.saveToken'(platform: HostingPlatform, token: string): HostingAccount
+  'deploy.disconnect'(platform: HostingPlatform): HostingAccountsSummary
+  /** Where a project deploys, its live address and its latest deployments. */
+  'deploy.project'(projectId: string): ProjectDeployment
+  /** Links a repository of the project to a new or existing project on the platform, through its Git integration. */
+  'deploy.link'(projectId: string, platform: HostingPlatform, repoId: string): ProjectDeployment
+  /** Deploys the production branch; pressing Deploy in the sheet is the person's approval. */
+  'deploy.production'(projectId: string): Deployment
+  /** The end of one deployment's build log. */
+  'deploy.logs'(projectId: string, deploymentId: string): string
+  /** Makes an earlier production deployment live again. */
+  'deploy.rollback'(projectId: string, deploymentId: string): void
   'forge.bitbucket'(check: boolean): BitbucketSummary
   /** Checks and saves a Bitbucket API token (with its account email) or access token. Host only. */
   'forge.saveBitbucket'(input: { email?: string; token: string }): BitbucketSummary

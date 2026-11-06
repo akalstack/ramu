@@ -38,6 +38,8 @@ export interface Services {
   threadTitles?: import('../agent/threadTitles').ThreadTitles
   interactive?: import('../interactive/store').InteractiveStore
   pages?: import('../interactive/pages').PageStore
+  /** Hosting accounts, project deploy bindings and CLI sign-ins. */
+  deploys?: import('../workspace/deploy/deploys').Deploys
   pageAi?: import('../interactive/pageAi').PageAi
   /** Abilities: live checks per provider and calls routed to a provider that has one. */
   abilities?: import('../agent/abilities').AbilityService

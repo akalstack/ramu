@@ -143,6 +143,29 @@ async function accountEnvironmentFor(
   return origin === 'github.com' ? { GH_TOKEN: token } : { GH_HOST: origin, GH_ENTERPRISE_TOKEN: token }
 }
 
+/**
+ * The GitHub token this checkout's calls use (the saved account Settings chose, or the `gh` sign-in), for a hosting
+ * platform's Git link that must add a deploy key or webhook. Never stored or returned to a client.
+ */
+export async function repositoryToken(cwd: string): Promise<string> {
+  const executable = ghExecutable()
+  const account = executable ? await accountEnvironment(cwd, executable) : {}
+  const given = account.GH_TOKEN ?? account.GH_ENTERPRISE_TOKEN ?? (await directAccess(cwd))?.token
+  if (given) return given
+  if (!executable) throw new ForgeError('Connect GitHub in Settings → Git hosting first.', 'no-cli')
+  return new Promise((resolve, reject) => {
+    execFile(
+      executable,
+      ['auth', 'token', '--hostname', 'github.com'],
+      { encoding: 'utf8', timeout: 15_000, env: { ...process.env, GH_PROMPT_DISABLED: '1', NO_COLOR: '1' } },
+      (error, stdout) =>
+        error || !stdout.trim()
+          ? reject(new ForgeError('Sign in to GitHub on this host first.', 'signed-out'))
+          : resolve(stdout.trim()),
+    )
+  })
+}
+
 export async function gh(cwd: string, args: string[]): Promise<string> {
   const executable = ghExecutable()
   if (!executable) throw new ForgeError('Install the GitHub CLI (gh) to use pull requests and issues.', 'no-cli')

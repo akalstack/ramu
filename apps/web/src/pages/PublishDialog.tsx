@@ -8,11 +8,7 @@ import { useHost } from '../workspace/HostProvider'
 
 type Target = 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages'
 
-const TOKEN_HELP: Record<Exclude<Target, 'github-pages'>, string> = {
-  netlify: 'https://app.netlify.com/user/applications#personal-access-tokens',
-  vercel: 'https://vercel.com/account/tokens',
-  'cloudflare-pages': 'https://dash.cloudflare.com/profile/api-tokens',
-}
+const CLOUDFLARE_TOKENS = 'https://dash.cloudflare.com/profile/api-tokens'
 
 const message = (error: unknown) =>
   error instanceof Error
@@ -38,14 +34,19 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
       .catch(() => {})
   }, [invoke])
   const chosen = targets.find((entry) => entry.target === target)
-  const needsToken = !!chosen && !chosen.connected && target !== 'github-pages'
+  const needsToken = !!chosen && !chosen.connected && target === 'cloudflare-pages'
+  // Netlify and Vercel are connected once in Settings and shared with deploys.
+  const needsAccount = !!chosen && !chosen.connected && (target === 'netlify' || target === 'vercel')
   const update = page.published?.target === target
   return (
     <Dialog
       title={update ? t('Update live site') : t('Publish to the web')}
       confirmLabel={busy ? t('Publishing…') : update ? t('Update live site') : t('Publish')}
       confirmDisabled={
-        !chosen || (needsToken && token.trim().length < 8) || (target === 'github-pages' && !chosen.connected)
+        !chosen ||
+        (needsToken && token.trim().length < 8) ||
+        needsAccount ||
+        (target === 'github-pages' && !chosen.connected)
       }
       busy={busy}
       error={error}
@@ -54,8 +55,7 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
         setBusy(true)
         setError(null)
         void (async () => {
-          if (needsToken)
-            await invoke('artifacts.saveHostingToken', target as Exclude<Target, 'github-pages'>, token.trim())
+          if (needsToken) await invoke('artifacts.saveCloudflareToken', token.trim(), account.trim() || undefined)
           await invoke('artifacts.publish', page.id, target)
           onClose()
         })()
@@ -83,7 +83,9 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
                 ? t('Connected')
                 : entry.target === 'github-pages'
                   ? t('Connect GitHub in Settings → Git hosting')
-                  : t('Needs a token')}
+                  : entry.target === 'cloudflare-pages'
+                    ? t('Needs a token')
+                    : t('Connect it in Settings → Hosting accounts')}
             </span>
           </RowButton>
         ))}
@@ -98,19 +100,15 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
             value={token}
             onChange={(event) => setToken(event.target.value)}
           />
-          {target === 'cloudflare-pages' && (
-            <Input
-              autoComplete="off"
-              aria-label={t('Cloudflare account ID (for a token limited to Pages)')}
-              placeholder={t('Cloudflare account ID (for a token limited to Pages)')}
-              value={account}
-              onChange={(event) => setAccount(event.target.value)}
-            />
-          )}
+          <Input
+            autoComplete="off"
+            aria-label={t('Cloudflare account ID (for a token limited to Pages)')}
+            placeholder={t('Cloudflare account ID (for a token limited to Pages)')}
+            value={account}
+            onChange={(event) => setAccount(event.target.value)}
+          />
           <p className="m-0 text-caption text-muted-foreground">
-            {t('Kept in this host’s credential store. Create one at {url}', {
-              url: TOKEN_HELP[target as Exclude<Target, 'github-pages'>],
-            })}
+            {t('Kept in this host’s credential store. Create one at {url}', { url: CLOUDFLARE_TOKENS })}
           </p>
         </div>
       )}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { forgeStatusText } from '@ramu/shared/forgeStatus'
 import { translate } from '@ramu/shared/i18n'
-import type { ForgeConnectionSummary } from '@ramu/shared/types'
+import type { ForgeConnectionSummary, HostingAccount } from '@ramu/shared/types'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
 import { Card, Divider, SectionLabel, T } from './ui'
@@ -22,6 +22,7 @@ export function HostingStatus({ hostId }: { hostId: string }) {
   const words = forgeStatusText(t)
   const online = store.isOnline(hostId)
   const [summary, setSummary] = useState<ForgeConnectionSummary | null>(() => lastKnown.get(hostId) ?? null)
+  const [deploy, setDeploy] = useState<HostingAccount[]>([])
   const [failed, setFailed] = useState(false)
   const [stale, setStale] = useState(!online)
   const generation = useRef(0)
@@ -38,6 +39,9 @@ export function HostingStatus({ hostId }: { hostId: string }) {
       lastKnown.set(hostId, result)
       setSummary(result)
       setStale(false)
+      // A host without deploys yet simply shows no platforms.
+      const accounts = await runtime.current.invoke(hostId, 'deploy.accounts', false).catch(() => null)
+      if (mine === generation.current) setDeploy(accounts?.accounts ?? [])
     } catch {
       if (mine !== generation.current) return
       setFailed(true)
@@ -105,6 +109,20 @@ export function HostingStatus({ hostId }: { hostId: string }) {
               <T weight="600">{`${connection.login ?? t('Saved token')} · ${connection.origin}`}</T>
               <T size={font.caption} tone={connection.state === 'connected' ? 'muted' : 'warn'}>
                 {words.savedDetail(connection)}
+              </T>
+            </View>
+          </View>
+        ))}
+        {deploy.map((account) => (
+          <View key={account.platform}>
+            <Divider inset={space.l} />
+            <View style={{ padding: space.m, gap: space.xs, flexDirection: 'row', alignItems: 'center' }}>
+              <BrandIcon brand={account.platform} size={16} />
+              <T style={{ flex: 1 }} size={font.caption} tone={account.error ? 'warn' : 'muted'}>
+                {!account.connected
+                  ? t('{0}: not connected. Connect it in Ramu on the host computer.', { 0: account.name })
+                  : (account.error ??
+                    t('{0}: connected as {1}', { 0: account.name, 1: account.account ?? account.name }))}
               </T>
             </View>
           </View>

@@ -477,9 +477,12 @@ it('publishes a page without records or AI to the web and updates the same site 
     if (url.includes('/contents/') && !init?.method) return new Response('', { status: 404 })
     return new Response('{}')
   }) as typeof fetch
+  // Netlify and Vercel come from the hosting accounts deploys use; only Vercel is connected here.
+  const hosting = { connected: (target: string) => target === 'vercel' }
   const publisher = new PagePublisher(
     pages,
     () => forge as never,
+    hosting as never,
     (key, fallback) => (state.get(key) ?? fallback) as never,
     (key, value) => void state.set(key, value),
     fetcher,
@@ -498,6 +501,8 @@ it('publishes a page without records or AI to the web and updates the same site 
   await publisher.publish(trip.id, 'github-pages')
   expect(requests.some((request) => request.startsWith('POST') && request.endsWith('/user/repos'))).toBe(false)
   expect(publisher.targets().find((target) => target.target === 'github-pages')?.connected).toBe(true)
+  expect(publisher.targets().find((target) => target.target === 'vercel')?.connected).toBe(true)
+  expect(publisher.targets().find((target) => target.target === 'netlify')?.connected).toBe(false)
 })
 
 it('reads Ramu data only for the sources declared and allowed, scoped to the page project', async () => {
