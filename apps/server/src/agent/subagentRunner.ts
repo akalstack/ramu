@@ -29,6 +29,7 @@ import {
   teammateNotePrompt,
 } from '@ramu/shared/chat/agentTasks'
 import { applyIsolation, collectPatch, createIsolation, removeIsolation } from '../workspace/isolation'
+import { needsOwnCheckout } from './helperCheckout'
 import type { ChildRun, SubagentInput, SubagentResult } from './types'
 import { FOREGROUND_WAIT_MS, ASK_WAIT_MS } from './constants'
 import { str, errorMessage } from './util'
@@ -371,11 +372,22 @@ export class SubagentRunner {
       throw new Error('Sub-agent start was cancelled.')
     await this.host.validateSettings(target.settings)
     const name = clipText(input.name?.trim() || input.description.trim() || 'Sub-agent', 80)
-    // Its own copy of the checkout, when asked for: parallel helpers never overwrite each other or the chat.
+    // Its own copy of the checkout whenever it would write beside another writer, so parallel work never collides.
     const isolationRoot = this.host.isolationRoot()
+    const otherWriters = [...this.children].filter(
+      ([id, other]) =>
+        other.parentId === parentId &&
+        !other.readOnly &&
+        ['starting', 'running', 'needs-input'].includes(this.host.get(id).state),
+    ).length
     const isolation =
-      // A teammate works in the thread's own checkout, one writer at a time, so it can always be messaged.
-      this.host.preferences()?.subagents.isolate && isolationRoot && !input.teammate
+      isolationRoot &&
+      needsOwnCheckout({
+        background: !!input.background,
+        readOnly: !!input.custom?.readOnly,
+        teammate: !!input.teammate,
+        otherWriters,
+      })
         ? await createIsolation({
             cwd: parent.cwd,
             covers: parent.covers,
@@ -429,6 +441,7 @@ export class SubagentRunner {
         ? { teammate: input.teammate, seenParent: this.host.events(parentId).length, leadRevision: parentRevision }
         : {}),
       ...(isolation ? { isolation } : {}),
+      ...(input.custom?.readOnly ? { readOnly: true } : {}),
       ...(input.type ? { type: input.type } : {}),
       prompt: input.prompt,
       report: !!input.background,

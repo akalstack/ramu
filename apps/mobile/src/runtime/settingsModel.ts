@@ -481,13 +481,6 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         },
         {
           kind: 'toggle',
-          path: 'subagents.isolate',
-          title: 'Separate checkout for each',
-          help: 'Run each sub-agent in a separate checkout. Apply its changes back when finished; keep conflicts for review.',
-          words: 'subagent isolate worktree copy',
-        },
-        {
-          kind: 'toggle',
           path: 'subagents.shareContext',
           title: 'Share thread context',
           help: "Attach the thread's recent transcript to each sub-agent's task.",

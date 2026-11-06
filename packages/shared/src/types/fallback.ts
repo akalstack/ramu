@@ -40,8 +40,6 @@ export interface SubagentPreferences {
   switchAt: SwitchThreshold | 'same'
   /** Restart native sub-agents that hit a limit on the fallback chain. */
   continueNative: boolean
-  /** Give each writing sub-agent its own worktree. */
-  isolate: boolean
   /** Codex only: let a hook ask Ramu before Codex's own sub-agents start. Needs a one-time trust entry in Codex's config. */
   codexHook: boolean
   maxConcurrent: number
@@ -77,7 +75,6 @@ export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = {
   fallback: 'same',
   switchAt: 'same',
   continueNative: true,
-  isolate: false,
   codexHook: false,
   maxConcurrent: 3,
   shareContext: false,

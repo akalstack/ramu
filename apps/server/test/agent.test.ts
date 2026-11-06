@@ -3233,7 +3233,6 @@ describe('isolated sub-agents', () => {
         ...DEFAULT_APP_PREFERENCES.subagents,
         mode: 'single',
         single: { id: 'c', provider: 'codex', model: 'codex-test', effort: null },
-        isolate: true,
       },
     })
     const parent = svc.start('t', scopeOf(cwd), 'hello', full)

@@ -3430,8 +3430,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Title: 'Judul',
   'What should every agent remember?': 'Apa yang perlu diingat semua agen?',
   'Save memory': 'Simpan memori',
-  'Run each sub-agent in a separate checkout. Apply its changes back when finished; keep conflicts for review.':
-    'Jalankan tiap sub-agent di checkout terpisah. Terapkan perubahan saat selesai; simpan konflik untuk ditinjau.',
   'Commit & Sync to default branch?': 'Commit & Sync ke branch utama?',
   'Searched memory': 'Mencari di memori',
   'Searching memory': 'Mencari di memori',

@@ -496,7 +496,7 @@ export function SubagentSettings({
     return model ? stepFor(model) : null
   }
   const mainOrder = () => value.fallback.order ?? defaultOrder(catalogs)
-  const toggle = (key: 'continueNative' | 'isolate' | 'shareContext', title: string, description: string) => (
+  const toggle = (key: 'continueNative' | 'shareContext', title: string, description: string) => (
     <SettingsRow setting={`subagents.${key}`} className="settings-toggle">
       <span>
         <SettingsTitle>{title}</SettingsTitle>
@@ -704,11 +704,6 @@ export function SubagentSettings({
       <div className="settings-intro">
         <h4>{t('Running')}</h4>
       </div>
-      {toggle(
-        'isolate',
-        'Isolate sub-agents',
-        'Run each sub-agent in a separate checkout. Apply its changes back when finished; keep conflicts for review.',
-      )}
       {toggle(
         'shareContext',
         'Share thread context',

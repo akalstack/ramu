@@ -22,6 +22,8 @@ export interface ChildRun {
   held?: string
   promptSeen: boolean
   isolation?: Isolation
+  /** A read-only custom agent: it never writes, so it never counts as another writer in the checkout. */
+  readOnly?: boolean
   lastText: string
   toolUses: number
   startedAt: number

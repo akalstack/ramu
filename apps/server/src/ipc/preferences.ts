@@ -98,7 +98,6 @@ const subagentPreferences = z.object({
   order: order.optional(),
   switchAt: z.union([threshold, z.literal('same')]).default('same'),
   continueNative: z.boolean().default(true),
-  isolate: z.boolean().default(false),
   codexHook: z.boolean().default(false),
   maxConcurrent: z.number().int().min(1).max(8).default(3),
   shareContext: z.boolean().default(false),
