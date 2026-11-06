@@ -42,11 +42,13 @@ Before each message, a teammate gets a short catch-up on what the thread said an
 
 The main agent can also suggest a teammate, for example a second model to review risky changes. The suggestion is an approval card that says which model and login it would use; nothing joins until you allow it, and after a no it waits for your next message before suggesting again. **Let agents suggest teammates** (Settings → Threads) turns this off.
 
-After four teammate reports or notes without you writing, the exchange pauses; a message to any of them continues it.
+After four teammate reports or notes without you writing, the exchange pauses and the teammate shows **Paused for you**. Its latest report waits instead of reaching the main agent: **Continue** on its row, card or panel (on the phone, in its details) delivers it and allows four more rounds, and so does any message you write.
+
+A teammate that worked well can be kept: **Save as teammate** in its panel (on the phone, in its details) asks only for a name and saves its model, its brief and whether it may edit as a custom agent, so `@name` brings it into any thread.
 
 ## Custom agents
 
-**Settings → Goals & delegation → Custom agents** keeps reusable agents: a name, when to use it, instructions, an optional model and a read-only switch. **New agent** drafts one from a sentence for you to edit. The thread's agent uses one when a task fits, and its helper card shows **custom: ‹name›**. A teammate can start from one too.
+**Settings → Goals & delegation → Custom agents** keeps reusable agents: a name, when to use it, instructions, an optional model and a read-only switch. A new host starts with four you can use as teammates right away, edit or delete: `@security-reviewer`, `@test-writer` (may edit), `@second-opinion` and `@simplifier`. Give `second-opinion` a model from another provider for a truly independent look. **New agent** drafts one from a sentence for you to edit. The thread's agent uses one when a task fits, and its helper card shows **custom: ‹name›**. A teammate can start from one too.
 
 ## Threads started by agents
 

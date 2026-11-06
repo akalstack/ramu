@@ -151,9 +151,9 @@ export class SubagentRunner {
         return
       }
       if (run.teammate && !this.teammateRound(run.parentId)) {
-        this.host.updateTask(run.parentId, id, {
-          summary: `Paused after ${TEAMMATE_ROUNDS} rounds without you. Message either one to continue.`,
-        })
+        // Kept, not dropped: Continue, or the person's next message, delivers it.
+        run.held = taskReportPrompt(run.name, status, result.report)
+        this.host.updateTask(run.parentId, id, { paused: true })
         return
       }
       if (run.report) void this.reportToParent(run, taskReportPrompt(run.name, status, result.report))
@@ -173,6 +173,14 @@ export class SubagentRunner {
   resetTeammateRounds(parentId: string) {
     this.teammateRounds.delete(parentId)
     this.suggestionDeclined.delete(parentId)
+    for (const [id, run] of this.children) {
+      if (run.parentId !== parentId || run.held === undefined) continue
+      const held = run.held
+      run.held = undefined
+      this.host.updateTask(parentId, id, { paused: false })
+      this.teammateRound(parentId)
+      void this.reportToParent(run, held)
+    }
   }
 
   /** Leads whose teammate suggestion the person turned down; they may suggest again once the person writes. */

@@ -137,12 +137,15 @@ export function AgentsSection({
   onOpen,
   onOpenAll,
   onStop,
+  onContinue,
   readOnly,
 }: {
   agents: AgentTask[]
   onOpen: (agentId: string) => void
   onOpenAll?: () => void
   onStop: (task: AgentTask) => void
+  /** Lets a teammate exchange that paused for the person go on. */
+  onContinue?: () => void
   readOnly?: boolean
 }) {
   useLanguage()
@@ -204,6 +207,17 @@ export function AgentsSection({
                 {task.work ? ` · ${workSummary(task.work)}` : ''}
               </span>
             </RowButton>
+            {task.paused && onContinue && !readOnly && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="min-h-6 px-2 py-0 text-caption"
+                title={t('Let the exchange with the main agent go on')}
+                onClick={onContinue}
+              >
+                {t('Continue')}
+              </Button>
+            )}
             {helperActive(task) && !readOnly && (
               <Button
                 variant="ghost"

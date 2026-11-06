@@ -88,6 +88,7 @@ function TranscriptBlock({
               live={ctx.live}
               onOpen={() => ctx.onOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)}
               onStop={ctx.onStopTask}
+              onContinue={ctx.onContinueTeammates}
               readOnly={ctx.readOnly}
             />
           )

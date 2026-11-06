@@ -300,6 +300,8 @@ export interface AgentTask {
   taskType?: string
   /** Set for a teammate the person added, rather than a helper the agent started. */
   teammate?: TeammateMode
+  /** The exchange with this teammate paused for the person after a few rounds; its latest report waits until they continue. */
+  paused?: boolean
   /** A teammate's changes and usage so far, updated as each turn ends. */
   work?: AgentWork
   status: AgentTaskStatus

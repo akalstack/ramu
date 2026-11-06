@@ -13,6 +13,7 @@ import {
   sortHelpers,
 } from '@ramu/shared/chat/helperPresentation'
 import { translate } from '@ramu/shared/i18n'
+import { customAgentHandle, teammateRecipeName } from '@ramu/shared/customAgents'
 import type { AgentTask, AgentWork } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import { providerNames, type Chat, type TranscriptItem } from '../runtime/types'
@@ -35,6 +36,7 @@ const copy = (key: string, id: boolean) =>
         'Waiting for input': 'Menunggu jawaban',
         'Waiting for provider': 'Menunggu penyedia',
         'Recovered activity': 'Aktivitas dipulihkan',
+        'Paused for you': 'Dijeda untukmu',
       }[key] ?? key)
     : key
 /** What a helper is, beside its name: Teammate · Review, Sub-agent · Explore, Advisor, Command (as on the desktop). */
@@ -101,6 +103,8 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
   // The helper's whole output is on hand; the sheet shows its tail and reveals earlier parts a page at a time.
   const [shown, setShown] = useState(OUTPUT_PAGE)
   const [sending, setSending] = useState(false)
+  // The name while saving a teammate as a custom agent; null when not saving.
+  const [saveName, setSaveName] = useState<string | null>(null)
   const inFlight = useRef(false)
   const latestStore = useRef(store)
   latestStore.current = store
@@ -122,6 +126,43 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
     } catch (error) {
       Alert.alert(
         id ? 'Tidak dapat mengirim' : 'Could not send',
+        error instanceof Error ? error.message : String(error),
+      )
+    } finally {
+      inFlight.current = false
+      setSending(false)
+    }
+  }
+  const resume = () =>
+    writable() &&
+    chat.sessionId &&
+    void latestStore.current
+      .invoke(chat.computerId, 'agent.continueTeammates', chat.sessionId)
+      .catch((error) => Alert.alert(id ? 'Tidak dapat melanjutkan' : 'Could not continue', String(error)))
+  const saveTeammate = async () => {
+    if (!writable() || !chat.sessionId || !saveName?.trim() || inFlight.current) return
+    inFlight.current = true
+    setSending(true)
+    try {
+      const saved = await latestStore.current.invoke(
+        chat.computerId,
+        'customAgents.saveTeammate',
+        chat.sessionId,
+        task.agentId,
+        saveName.trim(),
+      )
+      setSaveName(null)
+      Alert.alert(
+        id ? 'Tersimpan sebagai rekan' : 'Saved as a teammate',
+        translate(
+          store.language,
+          'Start a message with @{0} in any thread to bring it in. Edit it in Settings → Custom agents.',
+          { 0: customAgentHandle(saved.name) },
+        ),
+      )
+    } catch (error) {
+      Alert.alert(
+        id ? 'Tidak dapat menyimpan' : 'Could not save',
         error instanceof Error ? error.message : String(error),
       )
     } finally {
@@ -262,6 +303,60 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
           </T>
         )}
         {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[id ? 'id' : 'en']}</T> : null}
+        {chat.sessionId && actions.canContinue && !viewOnly ? (
+          <>
+            <T tone="muted" size={font.caption}>
+              {id
+                ? 'Percakapan dengan agen utama dijeda setelah beberapa putaran tanpa kamu. Laporannya menunggu.'
+                : 'The exchange with the main agent paused after a few rounds without you. Its report is waiting.'}
+            </T>
+            <Button title={id ? 'Lanjut' : 'Continue'} onPress={resume} />
+          </>
+        ) : null}
+        {chat.sessionId && task.teammate && !viewOnly ? (
+          saveName === null ? (
+            <Button
+              kind="ghost"
+              title={id ? 'Simpan sebagai rekan' : 'Save as teammate'}
+              onPress={() => setSaveName(teammateRecipeName(task))}
+            />
+          ) : (
+            <View style={{ gap: space.s }}>
+              <T size={font.caption} tone="muted">
+                {translate(
+                  store.language,
+                  'Its model, its brief and what it may do are saved, so you can bring it into another thread.',
+                )}
+              </T>
+              <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
+                <TextInput
+                  accessibilityLabel={id ? 'Nama' : 'Name'}
+                  value={saveName}
+                  onChangeText={setSaveName}
+                  autoFocus
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={60}
+                  editable={!sending}
+                  onSubmitEditing={() => void saveTeammate()}
+                  style={{
+                    flex: 1,
+                    minHeight: 44,
+                    paddingHorizontal: space.m,
+                    color: c.text,
+                    backgroundColor: c.fill,
+                    borderRadius: radius.m,
+                  }}
+                />
+                <Button
+                  title={id ? 'Simpan' : 'Save'}
+                  disabled={!saveName.trim() || sending}
+                  onPress={() => void saveTeammate()}
+                />
+              </View>
+            </View>
+          )
+        ) : null}
         {/* A teammate stays in the thread until it is let go, even between turns, so it gets that instead of Stop. */}
         {chat.sessionId && task.teammate && !viewOnly && task.status !== 'stopped' && task.status !== 'failed' ? (
           <Button
@@ -406,10 +501,6 @@ export function Helpers({
 
 const REPORT_ICON = { finished: CircleCheck, failed: CircleX, stopped: CircleSlash } as const
 
-/**
- * What a sub-agent or teammate sent back, drawn like its row in the agents card: its model's icon, its name and role,
- * how it ended, then its words. Tapping it opens that agent, as tapping its row does.
- */
 /** "To Opus 5.5" above what you wrote to a teammate; pressing it opens that teammate. */
 export function TeammateTo({ teammateId, name, chat }: { teammateId: string; name: string; chat: Chat }) {
   const { c } = useTheme()
@@ -447,6 +538,10 @@ export function TeammateTo({ teammateId, name, chat }: { teammateId: string; nam
   )
 }
 
+/**
+ * What a sub-agent or teammate sent back, drawn like its row in the agents card: its model's icon, its name and role,
+ * how it ended, then its words. Tapping it opens that agent, as tapping its row does.
+ */
 export function ReportCard({ item, chat }: { item: Extract<TranscriptItem, { kind: 'report' }>; chat: Chat }) {
   const { c } = useTheme()
   const { language } = useStore()

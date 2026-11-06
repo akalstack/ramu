@@ -18,6 +18,8 @@ export interface ChildRun {
   /** A question to the parent that is waiting for its answer. */
   asking?: (answer: string) => void
   settled: boolean
+  /** A teammate report held back while the exchange is paused for the person; continuing delivers it. */
+  held?: string
   promptSeen: boolean
   isolation?: Isolation
   lastText: string

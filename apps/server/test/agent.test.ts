@@ -2740,6 +2740,26 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
+  it('holds the report that arrives after the pause and delivers it on Continue', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc)
+    const settings = { ...full, provider: 'codex' as const, model: 'codex-test', effort: 'high' as const }
+    const { agentId } = await svc.addTeammate(parent.id, settings, 'review', '')
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
+    for (const note of ['one', 'two', 'three', 'four']) await svc.teammateMessage(agentId, 'lead', note)
+    const reports = () =>
+      svc.events(parent.id).filter((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Codex test" finished]'))
+    const request = svc.events(parent.id).find((e) => e.kind === 'permission-request') as { requestId: string }
+    svc.replyPermission(parent.id, request.requestId, true)
+    await until(() => svc.task(parent.id, agentId)?.paused === true)
+    expect(reports()).toHaveLength(0)
+    expect(svc.task(parent.id, agentId)?.summary).not.toMatch(/Paused/)
+    svc.continueTeammates(parent.id)
+    expect(svc.task(parent.id, agentId)?.paused).toBe(false)
+    await until(() => reports().length === 1)
+    svc.stopAll()
+  })
+
   it("shows what the person wrote to a teammate in the lead's thread, without sending it to the lead", async () => {
     const svc = routed()
     const parent = await parentOf(svc)

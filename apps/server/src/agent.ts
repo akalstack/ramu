@@ -1014,6 +1014,11 @@ export class AgentService {
     }
   }
 
+  /** Continue on a paused exchange: the same as writing, without having to write anything. */
+  continueTeammates(sessionId: string) {
+    this.resetTeammateRounds(sessionId)
+  }
+
   /** The person wrote, so a teammate exchange that paused may continue. */
   resetTeammateRounds(sessionId: string) {
     this.parts.subagents.resetTeammateRounds(sessionId)

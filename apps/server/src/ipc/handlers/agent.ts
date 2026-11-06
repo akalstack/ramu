@@ -2,7 +2,7 @@ import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
 import type { AgentSettings, FileContext, PermissionScope, TeammateMode } from '@ramu/shared/types'
 import { MAX_ATTACHMENT_BYTES } from '../../attachments'
-import { draftPrompt, interpretDraft, type CustomAgent } from '@ramu/shared/customAgents'
+import { draftPrompt, interpretDraft, teammateRecipe, type CustomAgent } from '@ramu/shared/customAgents'
 import {
   chooseDuplicate,
   DUPLICATE_CHOICE_KEY,
@@ -298,6 +298,10 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.string().min(1).max(200)]),
       run: (s: string, agentId: string) => lockSession(ctx, s, () => agents.dismissTeammate(s, agentId)),
     },
+    'agent.continueTeammates': {
+      args: z.tuple([id]),
+      run: (s: string) => lockSession(ctx, s, async () => agents.continueTeammates(s)),
+    },
     'agent.messageTask': {
       args: z.tuple([id, z.string().min(1).max(200), z.string().min(1).max(100_000)]),
       run: (s: string, agentId: string, text: string) =>
@@ -327,6 +331,15 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       run: (input: Omit<CustomAgent, 'id' | 'updatedAt'> & { id?: string }) => {
         if (!ctx.customAgents) throw new Error('Custom agents are unavailable on this host.')
         return ctx.customAgents.save(input)
+      },
+    },
+    'customAgents.saveTeammate': {
+      args: z.tuple([id, z.string().min(1).max(200), z.string().trim().min(1).max(60)]),
+      run: (s: string, agentId: string, name: string) => {
+        if (!ctx.customAgents) throw new Error('Custom agents are unavailable on this host.')
+        const task = agents.task(s, agentId)
+        if (!task?.teammate) throw new Error('Only a teammate can be saved this way.')
+        return ctx.customAgents.save(teammateRecipe(task, name))
       },
     },
     'customAgents.delete': {

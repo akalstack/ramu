@@ -1255,11 +1255,18 @@ export interface RamuMethods {
     input: Omit<import('./customAgents').CustomAgent, 'id' | 'updatedAt'> & { id?: string },
   ): import('./customAgents').CustomAgent
   'customAgents.delete'(id: string): void
+  /**
+   * Saves a teammate in this thread as a custom agent named `name`: its model, its brief as instructions, and Review as
+   * read-only, so it can be brought into another thread with `@name`.
+   */
+  'customAgents.saveTeammate'(sessionId: string, agentId: string, name: string): import('./customAgents').CustomAgent
   /** Drafts a custom agent from one sentence; nothing is saved until the person saves it. */
   'customAgents.draft'(
     sentence: string,
     settings: AgentSettings,
   ): Omit<import('./customAgents').CustomAgent, 'id' | 'updatedAt' | 'model'>
+  /** Lets a teammate exchange that paused for the person go on, delivering the report it held back. */
+  'agent.continueTeammates'(sessionId: string): void
   /** Adds a teammate: a second model the person chose, working in this thread. One per thread. */
   'agent.addTeammate'(
     sessionId: string,

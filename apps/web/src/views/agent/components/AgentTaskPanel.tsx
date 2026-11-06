@@ -4,7 +4,7 @@ import { useHostConnection } from '../../../workspace/HostProvider'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { Button } from '@/components/desktop-button'
-import { ArrowLeft, Bot, Square, X, UserMinus } from 'lucide-react'
+import { ArrowLeft, BookmarkPlus, Bot, Square, X, UserMinus } from 'lucide-react'
 import { visibleText } from '../lib/messages'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
@@ -49,6 +49,8 @@ export function AgentTaskPanel({
   onClose,
   onStop,
   onDismiss,
+  onContinue,
+  onSave,
   readOnly = false,
   onMessage,
 }: {
@@ -66,6 +68,10 @@ export function AgentTaskPanel({
   onStop: (task: AgentTask) => void
   /** Takes a teammate out of the thread, working or not; nobody addresses it afterwards. */
   onDismiss?: (task: AgentTask) => void
+  /** Lets a teammate exchange that paused for the person go on. */
+  onContinue?: () => void
+  /** Saves a teammate as a custom agent, to bring into other threads. */
+  onSave?: (task: AgentTask) => void
   onMessage: (task: AgentTask, text: string) => Promise<void>
 }) {
   useLanguage()
@@ -119,7 +125,7 @@ export function AgentTaskPanel({
     const el = body.current
     if (el) el.scrollTop = el.scrollHeight
   }, [own.length])
-  const actions = task ? helperActions(task, !offline) : { canStop: false, canMessage: false }
+  const actions = task ? helperActions(task, !offline) : { canStop: false, canMessage: false, canContinue: false }
   const status = task ? effectiveStatus(task, live) : 'stopped'
   const working = !offline && !!task && helperActive(task)
   const meta = task ? taskMeta(task, status) : ''
@@ -182,6 +188,23 @@ export function AgentTaskPanel({
             <span className="grow flex-1 min-w-0 text-left" />
           </>
         )}
+        {task && actions.canContinue && onContinue && !readOnly && (
+          <Button variant="secondary" size="sm" onClick={onContinue}>
+            {translate('Continue')}
+          </Button>
+        )}
+        {task?.teammate && onSave && !readOnly && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={ICON_BUTTON_CLASS}
+            aria-label={translate('Save as teammate')}
+            title={translate('Save as teammate, to bring into other threads')}
+            onClick={() => onSave(task)}
+          >
+            <BookmarkPlus size={14} />
+          </Button>
+        )}
         {task?.teammate && onDismiss && !readOnly && task.status !== 'stopped' && task.status !== 'failed' ? (
           <Button variant="ghost" size="sm" className={GHOST_TEXT_BUTTON_CLASS} onClick={() => onDismiss(task)}>
             <UserMinus size={12} />
@@ -217,6 +240,7 @@ export function AgentTaskPanel({
               live={live}
               onOpen={() => onSelect(entry.agentId)}
               onStop={onStop}
+              onContinue={onContinue}
               readOnly={readOnly}
             />
           ))}

@@ -137,6 +137,16 @@ export const indonesian: Readonly<Record<string, string>> = {
   default: 'bawaan',
   'Touch and hold to see its work': 'Sentuh lama untuk melihat pekerjaannya',
   'To {0}': 'Ke {0}',
+  'Paused for you': 'Dijeda untukmu',
+  'Let the exchange with the main agent go on': 'Lanjutkan percakapan dengan agen utama',
+  'Save as teammate': 'Simpan sebagai rekan',
+  'Save as teammate, to bring into other threads': 'Simpan sebagai rekan, untuk dibawa ke thread lain',
+  'Save {0} as a teammate': 'Simpan {0} sebagai rekan',
+  'Its model, its brief and what it may do are saved, so you can bring it into another thread.':
+    'Model, tugas, dan izinnya disimpan, jadi kamu bisa membawanya ke thread lain.',
+  'Saved as a teammate': 'Tersimpan sebagai rekan',
+  'Start a message with @{0} in any thread to bring it in. Edit it in Settings → Custom agents.':
+    'Awali pesan dengan @{0} di thread mana pun untuk membawanya. Ubah di Pengaturan → Agen kustom.',
   'Add teammate…': 'Tambah rekan…',
   'Bring another model into this thread': 'Bawa model lain ke thread ini',
   "Starts a message to this thread's model; change the model and Review or Take over below":

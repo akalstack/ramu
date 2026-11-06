@@ -41,14 +41,16 @@ it('keeps parent-idle helpers active, preserves stopped, and only permits report
     failed: 1,
     completed: 1,
   })
-  expect(helperActions(task('a'), true)).toEqual({ canMessage: false, canStop: false })
+  expect(helperActions(task('a'), true)).toEqual({ canMessage: false, canStop: false, canContinue: false })
   expect(helperActions(task('a', 'running', { canMessage: true, canStop: true }), false)).toEqual({
     canMessage: false,
     canStop: false,
+    canContinue: false,
   })
   expect(helperActions(task('a', 'running', { canMessage: true, canStop: true }), true)).toEqual({
     canMessage: true,
     canStop: true,
+    canContinue: false,
   })
   expect(helperIdentity('a', 's', 'h')).not.toBe(helperIdentity('b', 's', 'h'))
 })

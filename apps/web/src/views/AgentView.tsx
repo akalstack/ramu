@@ -124,6 +124,7 @@ import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
 import { ChatStatus } from '../chat/ChatMotion'
 import { AsidePanel } from './agent/components/AsidePanel'
 import { AgentTaskPanel } from './agent/components/AgentTaskPanel'
+import { SaveTeammateDialog } from './agent/components/SaveTeammateDialog'
 import { SelectionActions } from './agent/components/SelectionActions'
 import { EditFromHereDialog } from './agent/components/EditFromHereDialog'
 import { MESSAGE_ACTION_EVENT, type MessageActionDetail } from './agent/components/MessageQuoteActions'
@@ -339,6 +340,8 @@ export const AgentView = memo(function AgentView({
   const runStopTask = (task: AgentTask) => void act(() => invoke('agent.stopTask', view.sessionId, task.agentId))
   // Background commands are processes, so ending one is confirmed; sub-agents stop at once.
   const stopTask = (task: AgentTask) => (task.taskType === 'local_bash' ? setStopping(task) : runStopTask(task))
+  const continueTeammates = () => void act(() => invoke('agent.continueTeammates', view.sessionId))
+  const [savingTeammate, setSavingTeammate] = useState<AgentTask | null>(null)
   const working = session?.state === 'running' || session?.state === 'starting'
   const compacting = session?.state !== 'stopped' && session?.state !== 'failed' && isCompacting(events)
   const activityLabel = compacting ? 'Compacting context…' : agentActivityLabel(session?.state, events)
@@ -700,6 +703,7 @@ export const AgentView = memo(function AgentView({
     claimArrival,
     onOpenAgent: setOpenAgent,
     onStopTask: stopTask,
+    onContinueTeammates: continueTeammates,
     onOpenQuestion: openQuestion,
     onReviewAccess: () => setMcpOpen(true),
     onRetry: viewOnly
@@ -960,6 +964,7 @@ export const AgentView = memo(function AgentView({
                         onOpen={(agentId) => setOpenAgent(agentId)}
                         onOpenAll={helperSelection.selected.length > 0 ? () => setOpenAgent('*') : undefined}
                         onStop={stopTask}
+                        onContinue={continueTeammates}
                       />
                     )}
                     {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
@@ -1162,8 +1167,17 @@ export const AgentView = memo(function AgentView({
                 setOpenAgent(null)
                 void act(() => invoke('agent.dismissTeammate', view.sessionId, task.agentId))
               }}
+              onContinue={continueTeammates}
+              onSave={setSavingTeammate}
               readOnly={viewOnly}
               onMessage={(task, text) => act(() => invoke('agent.messageTask', view.sessionId, task.agentId, text))}
+            />
+          )}
+          {savingTeammate && (
+            <SaveTeammateDialog
+              sessionId={view.sessionId}
+              task={savingTeammate}
+              onClose={() => setSavingTeammate(null)}
             />
           )}
         </div>
