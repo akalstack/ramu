@@ -18,7 +18,7 @@ Every enabled account of a provider is tried before another model.
 
 The agent can start helpers for parts of a task. Helper cards show progress; open one to read, message or stop it. Stopping the thread stops its helpers.
 
-- **Routing** (Settings → Goals & delegation → Sub-agents) can send helpers to another provider or model, or keep each provider's own.
+- **Helpers use** (Settings → Goals & delegation → Sub-agents) picks their model: **The thread's model** (default) keeps each provider's own helpers; **A model chosen for each task** has Ramu run each helper on the thread's provider with the model and effort that provider picks for it, after one short selection request; **A model I pick** runs every helper on one model, on any provider. At a usage limit, helpers follow the thread's fallback order and threshold, and a provider's own helper that stops at a limit continues on the next model with what it had done. Up to three helpers run at once per thread; more wait for a slot.
 - A helper that would write beside other work gets its own copy of the checkout: one running in the background while the thread goes on, or one started alongside another writing helper, including two the agent starts in the same step. Its changes come back when it finishes; any that conflict stay in its copy for review. A helper the thread waits for alone, a read-only helper and a teammate work in the thread's own checkout, so their edits show as they happen. A helper card says **Own copy** when it has one.
 
 ## Teammates

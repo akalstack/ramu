@@ -1,5 +1,4 @@
 import { DragHandle } from '@/components/drag-handle'
-import { SubagentSelectionSettings } from './SubagentSelectionSettings'
 import { SettingsField, SettingTitleHosts, useSettingsInvoke } from './SettingsScope'
 import { SettingsGroupTitle, SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
@@ -7,7 +6,6 @@ import { limitChoiceOf, limitChoiceSwitches } from '@ramu/shared/chat/limitPolic
 import { isModelListed } from '@ramu/shared/providers/modelVisibility'
 import { t, useLanguage } from '../i18n'
 import { Button } from '@/components/desktop-button'
-import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react'
 import {
@@ -38,15 +36,15 @@ import type {
   SwitchThreshold,
   UsageReading,
 } from '@ramu/shared/types'
-import { providerEnabled, providerName } from '@ramu/shared/providers/providers'
+import { providerName } from '@ramu/shared/providers/providers'
 import { useAppSettings } from './AppSettings'
 import { Dropdown } from '../Menu'
 import { effortDisplayName, modelDisplayName, useModelSets } from '../models/ModelSets'
-import { ProviderIcon } from '../models/ProviderIcon'
 import { peakUsage, usageTone, useUsage } from './Usage'
 import { defaultOrder } from '@ramu/shared/providers/routing'
 
-const NATIVE = '__native'
+// The picker's value while no model is chosen yet.
+const NO_STEP = '__none'
 const newId = () => crypto.randomUUID()
 
 function stepFor(model: AgentModel, previous?: FallbackStep | null): FallbackStep {
@@ -80,13 +78,11 @@ function StepPicker({
   label,
   step,
   onChange,
-  allowNative = false,
   disabled,
 }: {
   label: string
   step: FallbackStep | null
-  onChange: (step: FallbackStep | null) => void
-  allowNative?: boolean
+  onChange: (step: FallbackStep) => void
   disabled?: boolean
 }) {
   useLanguage()
@@ -97,10 +93,9 @@ function StepPicker({
         (entry) => entry.provider === step.provider && (entry.id === step.model || (!step.model && entry.isDefault)),
       )
     : undefined
-  const key = step ? `${step.provider}:${step.model}` : NATIVE
+  const key = step ? `${step.provider}:${step.model}` : NO_STEP
   const { visibleModels } = useAppSettings().preferences
   const options = [
-    ...(allowNative ? [{ value: NATIVE, label: t('Native') }] : []),
     ...models
       .filter((entry) => isModelListed(visibleModels, entry) || `${entry.provider}:${entry.id}` === key)
       .map((entry) => ({
@@ -126,7 +121,6 @@ function StepPicker({
         options={options}
         disabled={disabled}
         onChange={(value) => {
-          if (value === NATIVE) return onChange(null)
           const entry = models.find((m) => `${m.provider}:${m.id}` === value)
           if (entry) onChange(stepFor(entry, step))
         }}
@@ -344,19 +338,6 @@ const toThreshold = (value: string): SwitchThreshold =>
   value === '80' ? 80 : value === '90' ? 90 : value === '95' ? 95 : null
 const fromThreshold = (value: SwitchThreshold) => (value === null ? 'limit' : String(value))
 
-/** Providers that can be configured: everything with a catalogue, Claude and Codex first. */
-function useProviders(): AgentProvider[] {
-  useLanguage()
-  const { catalogs } = useModelSets()
-  const { preferences } = useAppSettings()
-  const installed = catalogs.filter((catalog) => catalog.models.length).map((catalog) => catalog.provider)
-  return (['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as AgentProvider[]).filter(
-    (provider) =>
-      providerEnabled(preferences.providerBinaries, provider) &&
-      (installed.includes(provider) || provider === 'claude-code' || provider === 'codex'),
-  )
-}
-
 /** Settings › Access & Fallback: when to switch, and the ranked model order. */
 export function FallbackSettings({
   value,
@@ -476,7 +457,7 @@ function CodexHookRow({
   )
 }
 
-/** Settings › Sub-agents: where sub-agents run, and how they fall back. */
+/** Settings › Sub-agents: one choice of model for the helpers an agent starts. Limits follow the thread's own fallback. */
 export function SubagentSettings({
   value,
   onChange,
@@ -488,242 +469,58 @@ export function SubagentSettings({
 }) {
   useLanguage()
   const { catalogs } = useModelSets()
-  const providers = useProviders()
   const sub = value.subagents
   const set = (patch: Partial<SubagentPreferences>) => onChange({ ...value, subagents: { ...sub, ...patch } })
   const firstStep = (): FallbackStep | null => {
     const model = catalogs.flatMap((catalog) => catalog.models).find((entry) => entry.isDefault)
     return model ? stepFor(model) : null
   }
-  const mainOrder = () => value.fallback.order ?? defaultOrder(catalogs)
-  const toggle = (key: 'continueNative' | 'shareContext', title: string, description: string) => (
-    <SettingsRow setting={`subagents.${key}`} className="settings-toggle">
-      <span>
-        <SettingsTitle>{title}</SettingsTitle>
-        <span className="muted text-muted-foreground block block small text-caption">{description}</span>
-      </span>
-      <Switch
-        aria-label={title}
-        checked={sub[key]}
-        disabled={busy}
-        onCheckedChange={(checked) => set({ [key]: checked })}
-      />
-    </SettingsRow>
-  )
   return (
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 subagent-settings mt-8">
       <SettingsGroupTitle>{t('Sub-agents')}</SettingsGroupTitle>
-      <p className="muted text-muted-foreground small text-caption">
-        {t('Choose where sub-agents run and how they handle usage limits.')}
-      </p>
-      <SettingsRow setting="subagents.mode" className="">
+      <SettingsRow setting="subagents.model" className="">
         <span>
-          <SettingsTitle>{t('Where sub-agents run')}</SettingsTitle>
+          <SettingsTitle>{t('Helpers use')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
-            {t('Use native sub-agents or route tasks to a selected model.')}
+            {sub.model === 'auto'
+              ? t(
+                  "Ramu runs each helper on the thread's provider, with the model and effort that provider picks for its task.",
+                )
+              : sub.model === 'pick'
+                ? t('Every helper runs on the model below.')
+                : t("Each provider's own helpers, on the thread's model.")}{' '}
+            {t("At a usage limit, helpers follow the thread's fallback.")}
           </span>
         </span>
         <Dropdown
-          label={t('Where sub-agents run')}
-          value={sub.mode}
+          label={t('Helpers use')}
+          value={sub.model}
           disabled={busy}
           options={[
-            { value: 'native', label: t('Native') },
-            { value: 'single', label: t('One provider for all') },
-            { value: 'per-provider', label: t('Per provider') },
+            { value: 'thread', label: t("The thread's model") },
+            { value: 'auto', label: t('A model chosen for each task') },
+            { value: 'pick', label: t('A model I pick') },
           ]}
-          onChange={(mode) =>
+          onChange={(model) =>
             set({
-              mode: mode === 'single' ? 'single' : mode === 'per-provider' ? 'per-provider' : 'native',
-              ...(mode === 'single' && !sub.single ? { single: firstStep() } : {}),
+              model: model === 'auto' ? 'auto' : model === 'pick' ? 'pick' : 'thread',
+              ...(model === 'pick' && !sub.step ? { step: firstStep() } : {}),
             })
           }
         />
       </SettingsRow>
-      {sub.mode === 'single' && (
+      {sub.model === 'pick' && (
         <SettingsRow
-          setting="subagents.single"
+          setting="subagents.step"
           className="subagent-route [&_.fallback-step-picker]:flex-1 [&_.fallback-step-picker]:max-w-[460px] items-center"
         >
           <span>
             <strong>{t('All sub-agents use')}</strong>
           </span>
-          <StepPicker
-            label={t('All sub-agents')}
-            step={sub.single}
-            disabled={busy}
-            onChange={(step) => set({ single: step })}
-          />
+          <StepPicker label={t('All sub-agents')} step={sub.step} disabled={busy} onChange={(step) => set({ step })} />
         </SettingsRow>
-      )}
-      {sub.mode === 'per-provider' && (
-        <div className="subagent-routes flex flex-col">
-          {providers.map((provider) => (
-            <SettingsRow
-              setting={`subagents.perProvider.${provider}`}
-              className="subagent-route [&_.fallback-step-picker]:flex-1 [&_.fallback-step-picker]:max-w-[460px] items-center"
-              key={provider}
-            >
-              <span className="subagent-route-label inline-flex items-center gap-[7px] whitespace-nowrap">
-                <ProviderIcon provider={provider} size={14} />
-                {t('When ')}
-                <strong>{providerName(provider)}</strong> {t(' starts one')}
-              </span>
-              <StepPicker
-                label={t('{0} sub-agents', { '0': providerName(provider) })}
-                allowNative
-                step={sub.perProvider[provider] ?? null}
-                disabled={busy}
-                onChange={(step) => set({ perProvider: { ...sub.perProvider, [provider]: step } })}
-              />
-            </SettingsRow>
-          ))}
-        </div>
-      )}
-      <SubagentSelectionSettings value={sub} onChange={set} busy={busy} />
-      <div className="settings-intro">
-        <h4>{t('By type')}</h4>
-        <p className="muted text-muted-foreground small text-caption">
-          {t('Override routing for matching task types, such as Explore or Plan.')}
-        </p>
-      </div>
-      {!sub.byType.length && (
-        <p className="muted m-0 mb-1 rounded-(--radius-m) bg-fill px-4 py-3 text-control text-muted-foreground">
-          {t('No type rules yet. Every sub-agent uses the routing above.')}
-        </p>
-      )}
-      {sub.byType.map((rule) => (
-        <SettingsRow
-          setting="subagents.byType"
-          className="subagent-route [&_.fallback-step-picker]:flex-1 [&_.fallback-step-picker]:max-w-[460px] items-center"
-          key={rule.id}
-        >
-          <Input
-            aria-label={t('Sub-agent type')}
-            placeholder={t('Type, e.g. Explore')}
-            value={rule.type}
-            maxLength={80}
-            disabled={busy}
-            className="subagent-type w-[160px] flex-none"
-            onChange={(event) =>
-              set({
-                byType: sub.byType.map((entry) =>
-                  entry.id === rule.id ? { ...entry, type: event.target.value } : entry,
-                ),
-              })
-            }
-          />
-          <StepPicker
-            label={t('{0} sub-agents', { '0': rule.type || 'Type' })}
-            allowNative
-            step={rule.step}
-            disabled={busy}
-            onChange={(step) =>
-              set({ byType: sub.byType.map((entry) => (entry.id === rule.id ? { ...entry, step } : entry)) })
-            }
-          />
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-            aria-label={t('Remove {0} rule', { '0': rule.type || 'type' })}
-            title={t('Remove')}
-            disabled={busy}
-            onClick={() => set({ byType: sub.byType.filter((entry) => entry.id !== rule.id) })}
-          >
-            <Trash2 size={13} />
-          </Button>
-        </SettingsRow>
-      ))}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="fallback-add mb-6 mt-2 h-10 w-full justify-center gap-1.5 rounded-(--radius-m) border border-dashed border-line bg-transparent text-control text-muted-foreground hover:border-solid hover:bg-hover hover:text-foreground"
-        disabled={busy || sub.byType.length >= 20}
-        onClick={() => set({ byType: [...sub.byType, { id: newId(), type: '', step: firstStep() }] })}
-      >
-        <Plus size={13} />
-        {t('Add type rule')}
-      </Button>
-
-      <div className="settings-intro">
-        <h4>{t('When a sub-agent is limited')}</h4>
-      </div>
-      <SettingsRow setting="subagents.fallback" className="">
-        <span>
-          <SettingsTitle>{t('Fallback order')}</SettingsTitle>
-          <span className="muted text-muted-foreground block block small text-caption">
-            {t('Use the main order or a separate one for sub-agents. Sub-agents only move down when they run out.')}
-          </span>
-        </span>
-        <Dropdown
-          label={t('Sub-agent fallback order')}
-          value={sub.fallback}
-          disabled={busy}
-          options={[
-            { value: 'same', label: t('Same as main') },
-            { value: 'separate', label: t('Separate list') },
-          ]}
-          onChange={(next) => set({ fallback: next === 'separate' ? 'separate' : 'same' })}
-        />
-      </SettingsRow>
-      <SettingsRow setting="subagents.switchAt" className="">
-        <span>
-          <SettingsTitle>{t('Switch sub-agents')}</SettingsTitle>
-          <span className="muted text-muted-foreground block block small text-caption">
-            {t('Choose when sub-agents switch to their fallback model.')}
-          </span>
-        </span>
-        <Dropdown
-          label={t('Switch sub-agents')}
-          value={sub.switchAt === 'same' ? 'same' : fromThreshold(sub.switchAt)}
-          disabled={busy}
-          options={[{ value: 'same', label: t('Same as main') }, ...THRESHOLDS]}
-          onChange={(next) => set({ switchAt: next === 'same' ? 'same' : toThreshold(next) })}
-        />
-      </SettingsRow>
-      {sub.fallback === 'separate' && (
-        <SettingsField path="subagents.order">
-          <OrderEditor
-            title={t('Sub-agents, best first')}
-            setting="subagents.order"
-            disabled={busy}
-            chain={sub.order ?? mainOrder()}
-            onChange={(order) => set({ order })}
-            onCopy={() => set({ order: mainOrder().map((step) => ({ ...step, id: newId() })) })}
-          />
-        </SettingsField>
       )}
       <CodexHookRow checked={sub.codexHook} busy={busy} onChange={(checked) => set({ codexHook: checked })} />
-      {toggle(
-        'continueNative',
-        'Continue limited native sub-agents',
-        "When a provider's own sub-agent hits a limit, restart its task on the fallback list with what it had done so far.",
-      )}
-
-      <div className="settings-intro">
-        <h4>{t('Running')}</h4>
-      </div>
-      {toggle(
-        'shareContext',
-        'Share thread context',
-        "Attach the thread's recent transcript to each sub-agent's task.",
-      )}
-      <SettingsRow setting="subagents.maxConcurrent" className="">
-        <span>
-          <SettingsTitle>{t('At once per thread')}</SettingsTitle>
-          <span className="muted text-muted-foreground block block small text-caption">
-            {t('Additional sub-agents wait for an available slot.')}
-          </span>
-        </span>
-        <Dropdown
-          label={t('Sub-agents at once per thread')}
-          value={String(sub.maxConcurrent)}
-          disabled={busy}
-          options={Array.from({ length: 8 }, (_, index) => ({ value: String(index + 1), label: String(index + 1) }))}
-          onChange={(next) => set({ maxConcurrent: Number(next) })}
-        />
-      </SettingsRow>
     </div>
   )
 }

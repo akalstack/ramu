@@ -381,7 +381,7 @@ export class GoalManager {
           (r.updatedAt > goal!.updatedAt || (r.resetsAt && r.resetsAt > goal!.updatedAt && r.resetsAt <= Date.now())),
       ) && !isOver(peakFor(readings, session.provider, session.settings.model), null)
     if (isLimitHold(goal) && session.settings.autoFallback && !freshAvailability && readings.length) {
-      const order = this.host.policyOf(session, await this.host.catalog(), this.host.preferences()).order
+      const order = this.host.policyOf(await this.host.catalog(), this.host.preferences()).order
       freshAvailability = order.some(
         (step) =>
           readings.some(

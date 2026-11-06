@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_AGENT_SETTINGS,
   DEFAULT_SUBAGENT_PREFERENCES,
   type AgentModel,
   type FallbackStep,
@@ -9,7 +8,6 @@ import {
 } from '../src/types'
 import { accountDisplayName, providerAccountOrder, providerAccountRows } from '../src/providers/providers'
 import {
-  capSubagentEffort,
   accountKey,
   defaultOrder,
   isOver,
@@ -20,7 +18,7 @@ import {
   planRoute,
   readingCounts,
   resolveStep,
-  subagentOrder,
+  ramuRunsHelpers,
   subagentTarget,
 } from '../src/providers/routing'
 
@@ -205,40 +203,17 @@ describe('planRoute', () => {
 
 describe('sub-agent routing', () => {
   const prefs = { ...DEFAULT_SUBAGENT_PREFERENCES }
-  it('is native by default and by mode', () => {
-    expect(subagentTarget(prefs, 'claude-code', 'Explore')).toBeNull()
-    expect(
-      subagentTarget({ ...prefs, mode: 'single', single: step('codex', 'gpt-sol') }, 'claude-code', undefined)
-        ?.provider,
-    ).toBe('codex')
-    expect(
-      subagentTarget(
-        { ...prefs, mode: 'per-provider', perProvider: { 'claude-code': step('codex', 'gpt-sol'), codex: null } },
-        'codex',
-        undefined,
-      ),
-    ).toBeNull()
+  it("keeps the providers' own helpers on the thread's model by default", () => {
+    expect(subagentTarget(prefs)).toBeNull()
+    expect(ramuRunsHelpers(prefs)).toBe(false)
   })
-  it('lets a type rule win over the mode, including a native rule', () => {
-    const rules = {
-      ...prefs,
-      mode: 'single' as const,
-      single: step('codex', 'gpt-sol'),
-      byType: [
-        { id: 'a', type: 'explore', step: step('claude-code', 'claude-haiku') },
-        { id: 'b', type: 'Plan', step: null },
-      ],
-    }
-    expect(subagentTarget(rules, 'claude-code', 'Explore')?.model).toBe('claude-haiku')
-    expect(subagentTarget(rules, 'claude-code', 'plan')).toBeNull()
-    expect(subagentTarget(rules, 'claude-code', 'other')?.provider).toBe('codex')
-  })
-  it('uses the separate order only when configured', () => {
-    const main = [step('codex', 'gpt-sol')],
-      own = [step('claude-code', 'claude-haiku')]
-    expect(subagentOrder({ ...prefs, order: own }, main)).toBe(main)
-    expect(subagentOrder({ ...prefs, fallback: 'separate', order: own }, main)).toBe(own)
-    expect(subagentOrder({ ...prefs, fallback: 'separate' }, main)).toBe(main)
+  it('runs every helper through Ramu for a model picked or chosen per task', () => {
+    const picked = { ...prefs, model: 'pick' as const, step: step('codex', 'gpt-sol') }
+    expect(subagentTarget(picked)?.provider).toBe('codex')
+    expect(ramuRunsHelpers(picked)).toBe(true)
+    expect(ramuRunsHelpers({ ...prefs, model: 'pick' })).toBe(false)
+    expect(subagentTarget({ ...prefs, model: 'auto' })).toBeNull()
+    expect(ramuRunsHelpers({ ...prefs, model: 'auto' })).toBe(true)
   })
 })
 
@@ -433,35 +408,5 @@ describe('account-aware routing across providers', () => {
     expect(
       planRoute(settings('codex'), [], { ...context, attemptedAccounts: new Set([accountKey('codex', 'b')]) }),
     ).toBeNull()
-  })
-})
-
-describe('sub-agent effort caps', () => {
-  const settings = { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' as const, model: 'gpt-sol', effort: 'xhigh' as const }
-  it('uses the stricter cap and never rounds upward across unsupported levels', () => {
-    expect(
-      capSubagentEffort(
-        settings,
-        { ...DEFAULT_SUBAGENT_PREFERENCES, maxEffort: 'high', modelMaxEffort: { 'codex:gpt-sol': 'medium' } },
-        catalogs,
-      ).effort,
-    ).toBe('medium')
-    expect(() =>
-      capSubagentEffort(settings, { ...DEFAULT_SUBAGENT_PREFERENCES, maxEffort: 'minimal' }, catalogs),
-    ).toThrow(/No supported effort/)
-    expect(capSubagentEffort(settings, DEFAULT_SUBAGENT_PREFERENCES, catalogs)).toEqual(settings)
-  })
-  it('caps model defaults and keeps provider model identities separate', () => {
-    expect(
-      capSubagentEffort({ ...settings, effort: null }, { ...DEFAULT_SUBAGENT_PREFERENCES, maxEffort: 'low' }, catalogs)
-        .effort,
-    ).toBe('low')
-    expect(
-      capSubagentEffort(
-        settings,
-        { ...DEFAULT_SUBAGENT_PREFERENCES, modelMaxEffort: { 'claude-code:gpt-sol': 'low' } },
-        catalogs,
-      ).effort,
-    ).toBe('xhigh')
   })
 })

@@ -257,8 +257,8 @@ test('computer use has its own page, found by search, and sub-agent, recall and 
   const paths = (section, settings) =>
     visibleGroups(section, settings).flatMap((group) => group.rows.map((row) => row.path))
   assert.deepEqual(
-    paths('workflows', [setting('subagents.maxConcurrent', 3, { type: 'integer', minimum: 1, maximum: 8 })]),
-    ['subagents.maxConcurrent'],
+    paths('workflows', [setting('subagents.model', 'thread', { type: 'string', enum: ['thread', 'auto', 'pick'] })]),
+    ['subagents.model'],
   )
   assert.deepEqual(paths('memory', [setting('intelligence.crossThreadRecall', true)]), [
     'intelligence.crossThreadRecall',

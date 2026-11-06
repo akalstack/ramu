@@ -236,7 +236,7 @@ export class ProviderWaits {
     const prefs = this.host.preferences()
     const steps = [
       session.settings,
-      ...(session.settings.autoFallback ? this.host.policyOf(session, catalogs, prefs).order : []),
+      ...(session.settings.autoFallback ? this.host.policyOf(catalogs, prefs).order : []),
     ]
     return steps.flatMap((step) => {
       const model = resolveStep({ ...step, id: 'retry', effort: null }, catalogs)?.model ?? step.model

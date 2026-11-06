@@ -75,7 +75,6 @@ export const fallbackStep = z.object({
   effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(),
   serviceTier: z.enum(['standard', 'fast']).optional(),
 })
-const effortCap = fallbackStep.shape.effort
 const threshold = z.union([z.literal(80), z.literal(90), z.literal(95), z.null()])
 const order = z.array(fallbackStep).max(10)
 const fallbackPreferences = z.object({
@@ -83,25 +82,24 @@ const fallbackPreferences = z.object({
   order: order.optional(),
   autoResume: z.boolean().default(true),
 })
-const subagentPreferences = z.object({
-  mode: z.enum(['native', 'single', 'per-provider']).default('native'),
-  autoSelect: z.enum(['off', 'model-and-effort', 'effort-only']).default('off'),
-  maxEffort: effortCap.default(null),
-  modelMaxEffort: z.record(z.string().max(400), effortCap.unwrap()).default({}),
-  single: fallbackStep.nullable().default(null),
-  perProvider: z.partialRecord(providerId, fallbackStep.nullable()).default({}),
-  byType: z
-    .array(z.object({ id: z.string().min(1).max(100), type: z.string().max(80), step: fallbackStep.nullable() }))
-    .max(20)
-    .default([]),
-  fallback: z.enum(['same', 'separate']).default('same'),
-  order: order.optional(),
-  switchAt: z.union([threshold, z.literal('same')]).default('same'),
-  continueNative: z.boolean().default(true),
-  codexHook: z.boolean().default(false),
-  maxConcurrent: z.number().int().min(1).max(8).default(3),
-  shareContext: z.boolean().default(false),
-})
+// Saved before the single choice: "One provider for all" with a model keeps that model; anything else uses the thread's.
+const legacySubagents = (value: unknown) => {
+  if (!value || typeof value !== 'object' || 'model' in value) return value
+  const old = value as { mode?: unknown; single?: unknown; codexHook?: unknown }
+  return {
+    model: old.mode === 'single' && old.single ? 'pick' : 'thread',
+    step: old.mode === 'single' ? (old.single ?? null) : null,
+    codexHook: old.codexHook === true,
+  }
+}
+const subagentPreferences = z.preprocess(
+  legacySubagents,
+  z.object({
+    model: z.enum(['thread', 'auto', 'pick']).default('thread'),
+    step: fallbackStep.nullable().default(null),
+    codexHook: z.boolean().default(false),
+  }),
+)
 const advisorPreferences = z.object({
   enabled: z.boolean().default(false),
   step: fallbackStep.nullable().default(null),

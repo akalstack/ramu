@@ -20,31 +20,16 @@ export interface FallbackPreferences {
    */
   autoResume: boolean
 }
+/**
+ * Which model the helpers an agent starts run on. thread: each provider's own helpers, on the thread's model. auto: Ramu
+ * runs each helper on the thread's provider with the model and effort that provider picks for its task. pick: every
+ * helper runs on `step`. At a usage limit a helper follows the thread's own fallback order and threshold.
+ */
 export interface SubagentPreferences {
-  /** native: each provider's own sub-agents. single: all run on one step. per-provider: a step (or native) per provider. */
-  mode: 'native' | 'single' | 'per-provider'
-  /** Ask the destination provider to choose for each cross-provider task. Off preserves configured routing. */
-  autoSelect: 'off' | 'model-and-effort' | 'effort-only'
-  maxEffort: ReasoningEffort | null
-  /** Provider-qualified model keys (provider:model). Both caps apply; the lower wins. */
-  modelMaxEffort: Record<string, ReasoningEffort>
-  single: FallbackStep | null
-  /** null means native for that provider. */
-  perProvider: Partial<Record<AgentProvider, FallbackStep | null>>
-  /** Optional routing by sub-agent type (Explore, Plan, …); null keeps native. Checked before the mode. */
-  byType: { id: string; type: string; step: FallbackStep | null }[]
-  /** same: a sub-agent falls back along the main order. separate: along its own. */
-  fallback: 'same' | 'separate'
-  order?: FallbackStep[]
-  /** 'same' follows the main switch threshold. */
-  switchAt: SwitchThreshold | 'same'
-  /** Restart native sub-agents that hit a limit on the fallback chain. */
-  continueNative: boolean
+  model: 'thread' | 'auto' | 'pick'
+  step: FallbackStep | null
   /** Codex only: let a hook ask Ramu before Codex's own sub-agents start. Needs a one-time trust entry in Codex's config. */
   codexHook: boolean
-  maxConcurrent: number
-  /** Attach the parent chat's recent transcript to a sub-agent's prompt. */
-  shareContext: boolean
 }
 /** Ramu's advisor: a model on any provider that main chat agents can consult. While on, Claude Code's own advisor is off in Ramu's Claude chats. */
 export interface AdvisorPreferences {
@@ -64,21 +49,7 @@ export interface AdviceStatus {
   note?: string
 }
 export const DEFAULT_FALLBACK_PREFERENCES: FallbackPreferences = { switchAt: null, autoResume: true }
-export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = {
-  mode: 'native',
-  autoSelect: 'off',
-  maxEffort: null,
-  modelMaxEffort: {},
-  single: null,
-  perProvider: {},
-  byType: [],
-  fallback: 'same',
-  switchAt: 'same',
-  continueNative: true,
-  codexHook: false,
-  maxConcurrent: 3,
-  shareContext: false,
-}
+export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = { model: 'thread', step: null, codexHook: false }
 
 /**
  * Where a thread's next message would run, derived by the host from the same routing the send uses.

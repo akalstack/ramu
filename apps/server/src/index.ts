@@ -1192,8 +1192,9 @@ const mcpHttp = createServer(async (req, res) => {
         session_id: z.string().optional(),
       },
     },
-    async (value) => {
-      const decision = await agents.codexSpawnDecision(source.id, value.tool_input).catch(() => null)
+    async () => {
+      // Every Codex sub-agent gets the same answer, so the hook's tool input is not needed.
+      const decision = await agents.codexSpawnDecision(source.id).catch(() => null)
       return result(
         decision
           ? {

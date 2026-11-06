@@ -473,18 +473,15 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
       rows: [
         {
           kind: 'choice',
-          path: 'subagents.maxConcurrent',
-          title: 'At once per thread',
-          help: 'Additional sub-agents wait for an available slot.',
-          words: 'subagent concurrent parallel helpers limit',
-          options: choice([1, 2, 3, 4, 5, 6, 7, 8], (n) => count(Number(n))),
-        },
-        {
-          kind: 'toggle',
-          path: 'subagents.shareContext',
-          title: 'Share thread context',
-          help: "Attach the thread's recent transcript to each sub-agent's task.",
-          words: 'subagent transcript context share',
+          path: 'subagents.model',
+          title: 'Helpers use',
+          help: "The model for helpers an agent starts. At a usage limit they follow the thread's fallback.",
+          words: 'subagent helper model routing cheaper automatic',
+          options: [
+            { value: 'thread', label: "The thread's model" },
+            { value: 'auto', label: 'A model chosen for each task' },
+            { value: 'pick', label: 'A model picked on the desktop' },
+          ],
         },
       ],
     },

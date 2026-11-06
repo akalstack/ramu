@@ -3,7 +3,6 @@ import type { CustomAgent } from '@ramu/shared/customAgents'
 import { redactSecrets } from '../memory/secrets'
 import { selectSubagentSettings } from './subagentSelection'
 import type { BackgroundAnalysis } from './backgroundAnalysis'
-import { capSubagentEffort } from '@ramu/shared/providers/routing'
 import { forwardedRequestId } from './childRequests'
 import { clipText, clipTextEnd } from '@ramu/shared/text'
 import { providerName } from '@ramu/shared/providers/providers'
@@ -20,7 +19,7 @@ import type {
   AgentSessionState,
   ProviderCatalog,
 } from '@ramu/shared/types'
-import { subagentTarget, settingsKey, accountKey, nextStep } from '@ramu/shared/providers/routing'
+import { ramuRunsHelpers, settingsKey, accountKey, nextStep } from '@ramu/shared/providers/routing'
 import {
   SUBAGENT_PREAMBLE,
   helperWork,
@@ -33,7 +32,7 @@ import { needsOwnCheckout, otherWriters } from './helperCheckout'
 import type { ChildRun, SubagentInput, SubagentResult } from './types'
 
 import { FOREGROUND_WAIT_MS, ASK_WAIT_MS } from './constants'
-import { str, errorMessage } from './util'
+import { errorMessage } from './util'
 import { transcriptOf } from './handoff'
 import type { CatalogService } from './catalogService'
 import type { MessageDispatcher } from './messageDispatcher'
@@ -49,6 +48,8 @@ import type { AgentService } from '../agent'
 
 /** How long a helper about to share the checkout waits for a sibling started in the same step to show up. */
 const SIBLING_SETTLE_MS = 150
+/** Helpers one thread runs at once; more wait their turn rather than crowd the host and its usage limits. */
+const HELPERS_AT_ONCE = 3
 
 /** What SubagentRunner needs from the rest of the service. */
 export interface SubagentRunnerHost
@@ -302,7 +303,7 @@ export class SubagentRunner {
     signal?: AbortSignal,
     forced?: { step: FallbackStep; reason: string },
   ): Promise<SubagentResult> {
-    const cap = this.host.preferences()?.subagents.maxConcurrent ?? 3
+    const cap = HELPERS_AT_ONCE
     const active = [...this.children.values()].filter((run) => run.parentId === parentId && !run.settled).length
     const pending = [...this.pendingStarts.values()].filter((id) => id === parentId).length
     if (active + pending >= cap)
@@ -335,7 +336,7 @@ export class SubagentRunner {
     // every session is only a transcript), a stop or a failure, its report revives the lead instead.
     const live = ['running', 'starting', 'idle', 'needs-input'].includes(parent.state)
     if (this.host.shutdown() || (!live && !input.teammate)) throw new Error('This thread is not running.')
-    const cap = this.host.preferences()?.subagents.maxConcurrent ?? 3
+    const cap = HELPERS_AT_ONCE
     if ([...this.children.values()].filter((run) => run.parentId === parentId && !run.settled).length >= cap)
       throw new Error(`${cap} sub-agents are already running. Wait for one to finish, then try again.`)
     const target = input.settings
@@ -349,26 +350,18 @@ export class SubagentRunner {
             reason: forced.reason,
             from: parent.provider,
           }
-        : await this.host.subagentSettings(parentId, input.type)
+        : await this.host.subagentSettings(parentId)
     const catalogs = await this.host.catalog()
-    const selectionPrefs = this.host.preferences()?.subagents
-    if (selectionPrefs && !input.settings) {
-      if (
-        target.settings.provider !== parent.provider &&
-        selectionPrefs.autoSelect &&
-        selectionPrefs.autoSelect !== 'off'
-      ) {
-        const selection = await selectSubagentSettings(
-          target.settings,
-          selectionPrefs,
-          catalogs,
-          `${input.description}\n${input.prompt}`,
-          (...args) => this.host.analyze(...args),
-          signal,
-        )
-        target.settings = selection.settings
-        target.reason = [target.reason, selection.note].filter(Boolean).join('; ')
-      } else target.settings = capSubagentEffort(target.settings, selectionPrefs, catalogs)
+    if (this.host.preferences()?.subagents.model === 'auto' && !input.settings && !forced) {
+      const selection = await selectSubagentSettings(
+        target.settings,
+        catalogs,
+        `${input.description}\n${input.prompt}`,
+        (...args) => this.host.analyze(...args),
+        signal,
+      )
+      target.settings = selection.settings
+      target.reason = [target.reason, selection.note].filter(Boolean).join('; ')
     }
     if (
       signal?.aborted ||
@@ -501,16 +494,13 @@ export class SubagentRunner {
           }
         : {}),
     })
-    const prefs = this.host.preferences()
     // Its own request follows the context as its brief, so the context leaves it out.
     const sofar = this.host
       .events(parentId)
       .filter((event) => !(event.kind === 'teammate-message' && event.teammateId === child.id))
     const context = input.teammate
       ? `<chat-context>\nThe conversation so far:\n${clipTextEnd(redactSecrets(transcriptOf(sofar)), 60_000)}\n</chat-context>\n\n`
-      : prefs?.subagents.shareContext
-        ? `<chat-context>\nThe conversation so far, for background only:\n${clipTextEnd(transcriptOf(this.host.events(parentId)), 20_000)}\n</chat-context>\n\n`
-        : ''
+      : ''
     this.host.launch(
       child.id,
       input.teammate
@@ -796,12 +786,7 @@ export class SubagentRunner {
   /** A native sub-agent died on a usage limit: pick its task up again on the next fallback, with what it had done. */
   continueNative(id: string, task: AgentTask): void {
     const prefs = this.host.preferences()
-    if (
-      !prefs?.subagents.continueNative ||
-      this.children.has(task.agentId) ||
-      task.taskType === 'local_bash' ||
-      task.taskType === 'advisor'
-    )
+    if (!prefs || this.children.has(task.agentId) || task.taskType === 'local_bash' || task.taskType === 'advisor')
       return
     const parent = this.host.get(id)
     if (!parent.settings.autoFallback || parent.parentId || this.continued.has(task.agentId)) return
@@ -810,7 +795,7 @@ export class SubagentRunner {
       const catalogs = await this.host.catalog()
       await this.host.freshAccountUsage(parent.provider)
       const routing = this.host.routing(parent.settings)
-      const policy = this.host.policyOf({ parentId: id }, catalogs, prefs)
+      const policy = this.host.policyOf(catalogs, prefs)
       const settings = { ...parent.settings, model: task.model ?? parent.settings.model }
       const account = routing
         ? this.host.otherAccount(
@@ -880,10 +865,9 @@ export class SubagentRunner {
           hooks: [
             async (input) => {
               if (input.hook_event_name !== 'PreToolUse') return {}
-              const type = str((input.tool_input as Record<string, unknown> | undefined)?.subagent_type)
               let decision: Awaited<ReturnType<FallbackRouter['subagentSettings']>>
               try {
-                decision = await this.host.subagentSettings(id, type)
+                decision = await this.host.subagentSettings(id)
               } catch {
                 return {}
               }
@@ -907,21 +891,12 @@ export class SubagentRunner {
    * Codex's hook asks before one of its own sub-agents starts. A refusal tells the model to call `ramu_agent` instead,
    * the same as for Claude's Agent tool; no answer lets Codex's own sub-agent run.
    */
-  async codexSpawnDecision(id: string, toolInput: unknown): Promise<{ deny: true; reason: string } | null> {
+  async codexSpawnDecision(id: string): Promise<{ deny: true; reason: string } | null> {
     const session = this.host.get(id)
     if (session.provider !== 'codex' || session.parentId) return null
-    let parsed = toolInput
-    if (typeof parsed === 'string') {
-      try {
-        parsed = JSON.parse(parsed)
-      } catch {
-        parsed = null
-      }
-    }
-    const input = (parsed && typeof parsed === 'object' ? parsed : {}) as Record<string, unknown>
     let decision: Awaited<ReturnType<FallbackRouter['subagentSettings']>>
     try {
-      decision = await this.host.subagentSettings(id, str(input.agent_type) ?? str(input.role) ?? str(input.agent_role))
+      decision = await this.host.subagentSettings(id)
     } catch {
       return null
     }
@@ -936,6 +911,6 @@ export class SubagentRunner {
   /** Whether Codex's own sub-agent tools should be off, so every sub-agent goes through `ramu_agent`. */
   nativeSubagentsOff(s: AgentSessionInfo): boolean {
     const prefs = this.host.preferences()
-    return !!prefs && !s.parentId && subagentTarget(prefs.subagents, s.provider, undefined) !== null
+    return !!prefs && !s.parentId && ramuRunsHelpers(prefs.subagents)
   }
 }

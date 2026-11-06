@@ -2538,7 +2538,7 @@ describe('sub-agents Ramu runs', () => {
     svc.usage = { list: () => usage, update: () => {} }
     svc.preferences = () => ({
       ...DEFAULT_APP_PREFERENCES,
-      subagents: { ...DEFAULT_APP_PREFERENCES.subagents, mode: 'single', single: codexStep, ...patch },
+      subagents: { ...DEFAULT_APP_PREFERENCES.subagents, model: 'pick', step: codexStep, ...patch },
     })
     return svc
   }
@@ -2809,9 +2809,10 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
-  it('selects effort on the destination provider and records the capped result', async () => {
-    const svc = routed({ autoSelect: 'effort-only', maxEffort: 'medium' })
-    const parent = await parentOf(svc)
+  it("chooses each helper's model and effort on the thread's provider", async () => {
+    const svc = routed({ model: 'auto', step: null })
+    const parent = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'codex', model: 'codex-test' })
+    await until(() => svc.get(parent.id).state === 'idle')
     const analyze = vi.spyOn(svc, 'analyze').mockResolvedValue({
       message: '{"model":"codex-test","effort":"low"}',
       provider: 'codex',
@@ -2824,24 +2825,21 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
-  it('reserves concurrency while selection runs and cancels before starting a stopped parent child', async () => {
-    const svc = routed({ autoSelect: 'effort-only', maxConcurrent: 1 })
+  it('reserves a slot while a model is chosen and cancels before starting a stopped parent child', async () => {
+    const svc = routed({ model: 'auto', step: null })
     const parent = await parentOf(svc)
-    let finish!: (result: { message: string; provider: 'codex'; model: string }) => void
-    vi.spyOn(svc, 'analyze').mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve
-        }),
+    const finishers: ((result: { message: string; provider: 'claude-code'; model: string }) => void)[] = []
+    vi.spyOn(svc, 'analyze').mockImplementation(() => new Promise((resolve) => finishers.push(resolve)))
+    const starts = ['One', 'Two', 'Three'].map((name) =>
+      svc.spawnSubagent(parent.id, { description: name, prompt: 'Review code' }),
     )
-    const start = svc.spawnSubagent(parent.id, { description: 'Review', prompt: 'Review code' })
-    await until(() => !!finish)
-    await expect(svc.spawnSubagent(parent.id, { description: 'Second', prompt: 'More' })).rejects.toThrow(
+    await until(() => finishers.length === 3)
+    await expect(svc.spawnSubagent(parent.id, { description: 'Fourth', prompt: 'More' })).rejects.toThrow(
       /already running/,
     )
     svc.stop(parent.id)
-    finish({ message: '{"model":"codex-test","effort":"low"}', provider: 'codex', model: 'codex-test' })
-    await expect(start).rejects.toThrow(/cancelled/)
+    for (const finish of finishers) finish({ message: 'bad JSON', provider: 'claude-code', model: '' })
+    for (const start of starts) await expect(start).rejects.toThrow(/cancelled/)
     svc.stopAll()
   })
 
@@ -2996,32 +2994,34 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
-  it('stops its sub-agents with the thread, and caps how many run at once', async () => {
-    const svc = routed({ maxConcurrent: 1 })
+  it('stops its sub-agents with the thread, and runs at most three at once', async () => {
+    const svc = routed()
     const parent = await parentOf(svc, 'edits')
-    const first = await svc.spawnSubagent(parent.id, { description: 'One', prompt: 'a', background: true })
-    await expect(svc.spawnSubagent(parent.id, { description: 'Two', prompt: 'b', background: true })).rejects.toThrow(
+    const started = []
+    for (const name of ['One', 'Two', 'Three'])
+      started.push(await svc.spawnSubagent(parent.id, { description: name, prompt: 'a', background: true }))
+    await expect(svc.spawnSubagent(parent.id, { description: 'Four', prompt: 'b', background: true })).rejects.toThrow(
       /already running/,
     )
     svc.stop(parent.id)
-    expect(svc.get(first.agentId).state).toBe('stopped')
-    expect(svc.task(parent.id, first.agentId)?.status).toBe('stopped')
+    for (const first of started) {
+      expect(svc.get(first.agentId).state).toBe('stopped')
+      expect(svc.task(parent.id, first.agentId)?.status).toBe('stopped')
+    }
   })
 
-  it('chooses where a sub-agent runs: type rules, then the fallback list when its provider is nearly out', async () => {
-    const native = routed({ mode: 'native', single: null })
+  it("chooses where a sub-agent runs: the setting, then the thread's fallback when its provider is nearly out", async () => {
+    const native = routed({ model: 'thread', step: null })
     const parent = await parentOf(native)
-    expect(await native.subagentSettings(parent.id, 'Explore')).toMatchObject({
+    expect(await native.subagentSettings(parent.id)).toMatchObject({
       redirect: false,
       settings: { provider: 'claude-code' },
     })
-    const typed = routed({ mode: 'native', single: null, byType: [{ id: 'x', type: 'explore', step: codexStep }] })
-    const typedParent = await parentOf(typed)
-    expect(await typed.subagentSettings(typedParent.id, 'Explore')).toMatchObject({
+    const auto = routed({ model: 'auto', step: null })
+    expect(await auto.subagentSettings((await parentOf(auto)).id)).toMatchObject({
       redirect: true,
-      settings: { provider: 'codex', effort: 'high' },
+      settings: { provider: 'claude-code' },
     })
-    expect(await typed.subagentSettings(typedParent.id, 'Plan')).toMatchObject({ redirect: false })
     const reading = (usedPercent: number): UsageReading => ({
       provider: 'claude-code',
       window: 'five_hour',
@@ -3030,22 +3030,28 @@ describe('sub-agents Ramu runs', () => {
       updatedAt: Date.now(),
       resetsAt: Date.now() + 1e6,
     })
-    const pressed = routed({ mode: 'native', single: null, switchAt: 80, fallback: 'separate', order: [codexStep] }, [
-      reading(85),
-    ])
-    const pressedParent = await parentOf(pressed)
-    expect(await pressed.subagentSettings(pressedParent.id)).toMatchObject({
+    const pressured = (switchAt: 80 | 90) => {
+      const svc = routed({ model: 'thread', step: null }, [reading(85)])
+      svc.preferences = () => ({
+        ...DEFAULT_APP_PREFERENCES,
+        fallback: { ...DEFAULT_APP_PREFERENCES.fallback, switchAt, order: [codexStep] },
+        subagents: { ...DEFAULT_APP_PREFERENCES.subagents },
+      })
+      return svc
+    }
+    const pressed = pressured(80)
+    expect(await pressed.subagentSettings((await parentOf(pressed)).id)).toMatchObject({
       redirect: true,
       settings: { provider: 'codex' },
       reason: expect.stringContaining('5-hour limit was at 85%'),
     })
-    // Below the sub-agents' own earlier threshold nothing moves.
-    const calm = routed({ mode: 'native', single: null, switchAt: 90 }, [reading(85)])
+    // Below the thread's own threshold nothing moves.
+    const calm = pressured(90)
     expect(await calm.subagentSettings((await parentOf(calm)).id)).toMatchObject({ redirect: false })
-    for (const svc of [native, typed, pressed, calm]) svc.stopAll()
+    for (const svc of [native, auto, pressed, calm]) svc.stopAll()
   })
 
-  it.each(['same', null] as const)('preserves the only-at-the-limit sub-agent policy (%s)', async (switchAt) => {
+  it("keeps a helper on its thread's provider until the limit when the thread switches only at the limit", async () => {
     const reading: UsageReading = {
       provider: 'claude-code',
       window: 'five_hour',
@@ -3054,11 +3060,11 @@ describe('sub-agents Ramu runs', () => {
       updatedAt: Date.now(),
       resetsAt: Date.now() + 1e6,
     }
-    const svc = routed({ mode: 'native', single: null, switchAt }, [reading])
+    const svc = routed({ model: 'thread', step: null }, [reading])
     svc.preferences = () => ({
       ...DEFAULT_APP_PREFERENCES,
-      fallback: { ...DEFAULT_APP_PREFERENCES.fallback, switchAt: switchAt === 'same' ? null : 80 },
-      subagents: { ...DEFAULT_APP_PREFERENCES.subagents, switchAt },
+      fallback: { ...DEFAULT_APP_PREFERENCES.fallback, switchAt: null },
+      subagents: { ...DEFAULT_APP_PREFERENCES.subagents },
     })
     const parent = await parentOf(svc)
     expect(await svc.subagentSettings(parent.id)).toMatchObject({
@@ -3101,7 +3107,7 @@ describe('sub-agents Ramu runs', () => {
   })
 
   it('continues a native sub-agent that hit a limit on the fallback list', async () => {
-    const svc = routed({ mode: 'native', single: null })
+    const svc = routed({ model: 'thread', step: null })
     const parent = await parentOf(svc)
     const update = (patch: Record<string, unknown>) =>
       (svc as unknown as { updateTask(id: string, agentId: string, patch: Record<string, unknown>): void }).updateTask(
@@ -3231,8 +3237,8 @@ describe('isolated sub-agents', () => {
       ...DEFAULT_APP_PREFERENCES,
       subagents: {
         ...DEFAULT_APP_PREFERENCES.subagents,
-        mode: 'single',
-        single: { id: 'c', provider: 'codex', model: 'codex-test', effort: null },
+        model: 'pick',
+        step: { id: 'c', provider: 'codex', model: 'codex-test', effort: null },
       },
     })
     const parent = svc.start('t', scopeOf(cwd), 'hello', full)
@@ -3297,8 +3303,8 @@ describe('helpers started together', () => {
       ...DEFAULT_APP_PREFERENCES,
       subagents: {
         ...DEFAULT_APP_PREFERENCES.subagents,
-        mode: 'single',
-        single: { id: 'c', provider: 'codex', model: 'codex-test', effort: null },
+        model: 'pick',
+        step: { id: 'c', provider: 'codex', model: 'codex-test', effort: null },
       },
     })
     const parent = svc.start('t', scopeOf(cwd), 'hello', full)
@@ -3779,21 +3785,19 @@ describe('Codex sub-agent control', () => {
   it("answers Codex's hook: refuse and point at ramu_agent when Ramu should run it, otherwise let it through", async () => {
     const svc = service()
     svc.usage = { list: () => [], update: () => {} }
-    svc.preferences = () => prefsWith({ mode: 'native' })
+    svc.preferences = () => prefsWith({ model: 'thread' })
     const s = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'codex', model: 'codex-test' })
     await until(() => svc.get(s.id).state === 'idle')
-    expect(await svc.codexSpawnDecision(s.id, { task_name: 'x' })).toBeNull()
-    svc.preferences = () => prefsWith({ mode: 'native', byType: [{ id: 'a', type: 'Explore', step: claudeStep }] })
-    expect(await svc.codexSpawnDecision(s.id, { agent_type: 'explore' })).toMatchObject({
-      deny: true,
-      reason: expect.stringContaining('ramu_agent'),
-    })
-    expect(await svc.codexSpawnDecision(s.id, JSON.stringify({ agent_type: 'explore' }))).toMatchObject({ deny: true })
-    expect(await svc.codexSpawnDecision(s.id, { agent_type: 'worker' })).toBeNull()
-    svc.preferences = () => prefsWith({ mode: 'single', single: claudeStep })
-    expect(await svc.codexSpawnDecision(s.id, undefined)).toMatchObject({
+    expect(await svc.codexSpawnDecision(s.id)).toBeNull()
+    svc.preferences = () => prefsWith({ model: 'pick', step: claudeStep })
+    expect(await svc.codexSpawnDecision(s.id)).toMatchObject({
       deny: true,
       reason: expect.stringContaining('Claude sonnet'),
+    })
+    svc.preferences = () => prefsWith({ model: 'auto' })
+    expect(await svc.codexSpawnDecision(s.id)).toMatchObject({
+      deny: true,
+      reason: expect.stringContaining('ramu_agent'),
     })
     svc.stopAll()
   })
@@ -3858,14 +3862,14 @@ describe('Codex sub-agent control', () => {
       },
     ])
     svc.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 't' })
-    let prefs = prefsWith({ mode: 'native' })
+    let prefs = prefsWith({ model: 'thread' })
     svc.preferences = () => prefs
     const s = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'opencode', model: 'a/m' })
     await until(() => svc.get(s.id).state === 'idle')
     await svc.send(s.id, 'again')
     await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toEqual([{ native: undefined, resume: null }])
-    prefs = prefsWith({ mode: 'single', single: claudeStep })
+    prefs = prefsWith({ model: 'pick', step: claudeStep })
     await svc.send(s.id, 'now with ramu agents')
     await until(() => svc.get(s.id).state === 'idle' && launches.length === 2)
     expect(launches[1]).toEqual({ native: false, resume: 'acp-session' })
@@ -3900,9 +3904,8 @@ describe('Codex sub-agent control', () => {
     const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
     vi.spyOn(svc, 'catalog').mockResolvedValue(catalog)
     svc.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 't' })
-    let usage: import('@ramu/shared/types').UsageReading[] = []
-    svc.usage = { list: () => usage, update: () => {} }
-    let prefs = prefsWith({ mode: 'native' })
+    svc.usage = { list: () => [], update: () => {} }
+    let prefs = prefsWith({ model: 'thread' })
     svc.preferences = () => prefs
     const s = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'codex', model: 'codex-test' })
     await until(() => svc.get(s.id).state === 'idle')
@@ -3912,34 +3915,21 @@ describe('Codex sub-agent control', () => {
     await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toHaveLength(1)
     // Routing now replaces Codex's own sub-agents: the next message starts a process without them.
-    prefs = prefsWith({ mode: 'single', single: claudeStep })
+    prefs = prefsWith({ model: 'pick', step: claudeStep })
     await svc.send(s.id, 'now with ramu agents')
     await until(() => svc.get(s.id).state === 'idle' && launches.length === 2)
     expect(launches[1]).toMatchObject({ nativeSubagents: false, interceptSubagents: false })
     expect(svc.get(s.id).providerSessionId).toBeDefined()
     // Installing the hook needs one restart; native tools stay available for per-type decisions.
-    prefs = prefsWith({ mode: 'native', codexHook: true })
+    prefs = prefsWith({ model: 'thread', codexHook: true })
     await svc.send(s.id, 'hook mode')
     await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toHaveLength(3)
     expect(launches[2]).toMatchObject({ nativeSubagents: undefined, interceptSubagents: true })
-    prefs = prefsWith({ mode: 'single', single: claudeStep, codexHook: true })
+    prefs = prefsWith({ model: 'pick', step: claudeStep, codexHook: true })
     await svc.send(s.id, 'hook decides')
     await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toHaveLength(3)
-    // Without the hook, the separate sub-agent threshold replaces native tools and recovers after reset.
-    const pressure = prefsWith({ mode: 'native', switchAt: 80 })
-    prefs = { ...pressure, fallback: { ...pressure.fallback, switchAt: 95 } }
-    usage = [{ provider: 'codex', window: 'five_hour', usedPercent: 85, status: 'warning', updatedAt: Date.now() }]
-    await svc.send(s.id, 'under pressure')
-    await until(() => svc.get(s.id).state === 'idle')
-    expect(launches).toHaveLength(4)
-    expect(launches[3]).toMatchObject({ nativeSubagents: false, interceptSubagents: false })
-    usage = []
-    await svc.send(s.id, 'recovered')
-    await until(() => svc.get(s.id).state === 'idle')
-    expect(launches).toHaveLength(5)
-    expect(launches[4]).toMatchObject({ nativeSubagents: undefined, interceptSubagents: false })
     svc.stopAll()
   })
 })

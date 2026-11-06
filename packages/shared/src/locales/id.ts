@@ -585,16 +585,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Pilih langkah yang diatur, atau pilih model dan sesuaikan effort yang didukung. Mengganti cara pemilihan tetap mempertahankan pilihan dan draf saat ini.',
 
   'Automatic selection': 'Pemilihan otomatis',
-  'For cross-provider tasks, ask the destination provider to choose. Adds a short selection request; unavailable selection uses the configured model and effort.':
-    'Untuk tugas lintas penyedia, minta penyedia tujuan memilih. Menambahkan permintaan pemilihan singkat; jika tidak tersedia, gunakan model dan effort yang diatur.',
-  'No cap': 'Tanpa batas',
-  'Maximum sub-agent effort': 'Effort maksimum sub-agent',
-  'Caps Ramu-managed sub-agents, including fallbacks. Native sub-agents keep their provider settings. The lower of the global and model caps applies.':
-    'Membatasi sub-agent yang dikelola Ramu, termasuk fallback. Sub-agent native mengikuti pengaturan penyedianya. Batas terendah antara global dan model berlaku.',
-  'Per-model effort caps': 'Batas effort per model',
-  'Configure model caps': 'Atur batas model',
-  'Maximum effort for {0}': 'Effort maksimum untuk {0}',
-  'No model cap': 'Tanpa batas model',
 
   'Default Markdown view': 'Tampilan Markdown bawaan',
   'Choose how Markdown files open. Links to a specific line open Source.':
@@ -1968,10 +1958,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Add at least two models. With one, the thread waits at the limit.':
     'Tambahkan minimal dua model. Dengan satu model, thread menunggu saat batas tercapai.',
   'Best first': 'Terbaik di atas',
-  'Sub-agents, best first': 'Sub-agent, terbaik di atas',
   'Model {0}': 'Model {0}',
-  'Use the main order or a separate one for sub-agents. Sub-agents only move down when they run out.':
-    'Gunakan urutan utama atau urutan khusus untuk sub-agent. Sub-agent hanya turun saat kuotanya habis.',
   'Higher in your order': 'Lebih tinggi di urutan',
   'Move up to {0}': 'Naik ke {0}',
   'Keeping {0}': 'Tetap di {0}',
@@ -2038,37 +2025,20 @@ export const indonesian: Readonly<Record<string, string>> = {
   Limited: 'Dibatasi',
   'Fallback continues the thread when a usage limit is reached.':
     'Fallback melanjutkan thread saat batas penggunaan tercapai.',
-  'Sub-agent type': 'Jenis sub-agent',
-  'Sub-agent fallback order': 'Urutan fallback sub-agent',
   'Where sub-agents run': 'Tempat sub-agent berjalan',
   Native: 'Bawaan provider',
   'Per provider': 'Per provider',
   'One provider for all': 'Satu provider untuk semua',
   'By type': 'Berdasarkan jenis',
-  'Type, e.g. Explore': 'Jenis, misalnya Explore',
-  'Add type rule': 'Tambah aturan jenis',
-  'Choose where sub-agents run and how they handle usage limits.':
-    'Pilih tempat sub-agent berjalan dan cara menangani batas penggunaan.',
-  'Use native sub-agents or route tasks to a selected model.':
-    'Gunakan sub-agent bawaan atau arahkan tugas ke model terpilih.',
-  'Override routing for matching task types, such as Explore or Plan.':
-    'Ganti rute untuk tipe tugas yang cocok, seperti Explore atau Plan.',
   'All sub-agents use': 'Semua sub-agent memakai',
   'When a sub-agent is limited': 'Saat sub-agent mencapai batas',
-  'Same as main': 'Sama dengan agen utama',
-  'Separate list': 'Daftar terpisah',
   'Copy from main': 'Salin dari agen utama',
-  'Switch sub-agents': 'Ganti sub-agent',
-  'Choose when sub-agents switch to their fallback model.': 'Pilih kapan sub-agent beralih ke model fallback.',
   'Decide before Codex starts its own sub-agents': 'Atur sebelum Codex memulai sub-agent-nya',
   'Codex trusts the hook.': 'Codex sudah memercayai hook.',
   'Codex does not trust the hook yet.': 'Codex belum memercayai hook.',
   'Route Codex sub-agents before they start. Enabling adds a trusted hook to ':
     'Arahkan sub-agent Codex sebelum dimulai. Mengaktifkannya menambahkan hook tepercaya ke ',
   '. Disabling leaves the inactive entry in place.': '. Menonaktifkannya menyisakan entri yang tidak aktif.',
-  'At once per thread': 'Sekaligus per thread',
-  'Sub-agents at once per thread': 'Sub-agent sekaligus per thread',
-  'Additional sub-agents wait for an available slot.': 'Sub-agent tambahan menunggu slot tersedia.',
   'Agent notifications': 'Notifikasi agen',
   'Continue threads after restart': 'Lanjutkan thread setelah mulai ulang',
   'Allow this thread to see and control your main display. Revoke it any time. Ramu cannot tell when you use your own mouse or keyboard, so choose Take control before you do.':
@@ -2974,7 +2944,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Remove step {0}': 'Hapus langkah {0}',
   'Remove {0}': 'Hapus {0}',
   'Remove {0} from favorites': 'Hapus {0} dari favorit',
-  'Remove {0} rule': 'Hapus aturan {0}',
   'Reorder {0}': 'Urutkan {0}',
   'Resolve {0} conflicted {1}, stage them, then continue.': 'Selesaikan konflik pada {0} {1}, stage, lalu lanjutkan.',
   'Resolve {0} conflicts in {1}': 'Selesaikan {0} konflik di {1}',
@@ -4016,8 +3985,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Into {0}. Your commits move to a new branch, which is published first. {0} itself is not changed.':
     'Ke {0}. Commit Anda dipindahkan ke branch baru yang dipublikasikan lebih dulu. {0} sendiri tidak berubah.',
   'New branch': 'Branch baru',
-  'No type rules yet. Every sub-agent uses the routing above.':
-    'Belum ada aturan tipe. Semua sub-agent memakai rute di atas.',
   'Commit, Push & PR': 'Commit, Push & PR',
   'Create a pull request after pushing': 'Buat pull request setelah push',
   'More commit actions': 'Aksi commit lainnya',
@@ -5422,4 +5389,15 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Continue in a new worktree': 'Lanjutkan di worktree baru',
   'Continue in a new worktree?': 'Lanjutkan di worktree baru?',
   'Continued in {0}': 'Dilanjutkan di {0}',
+  'Helpers use': 'Helper memakai',
+  "Ramu runs each helper on the thread's provider, with the model and effort that provider picks for its task.": 'Ramu menjalankan tiap helper di provider thread, dengan model dan effort yang dipilih provider itu untuk tugasnya.',
+  'Every helper runs on the model below.': 'Semua helper berjalan di model di bawah.',
+  "Each provider's own helpers, on the thread's model.": 'Helper bawaan tiap provider, dengan model thread.',
+  "At a usage limit, helpers follow the thread's fallback.": 'Saat mencapai batas pemakaian, helper mengikuti fallback thread.',
+  "The thread's model": 'Model thread',
+  'A model chosen for each task': 'Model yang dipilih per tugas',
+  'A model I pick': 'Model pilihanku',
+  'A model picked on the desktop': 'Model yang dipilih di desktop',
+  "The model for helpers an agent starts. At a usage limit they follow the thread's fallback.": 'Model untuk helper yang dimulai agen. Saat mencapai batas pemakaian, helper mengikuti fallback thread.',
+  'Model and effort chosen for this task': 'Model dan effort dipilih untuk tugas ini',
 }

@@ -22,10 +22,8 @@ import {
   type AgentEvent,
 } from '@ramu/shared/types'
 import {
-  capSubagentEffort,
   defaultOrder,
   resolveStep,
-  subagentOrder,
   subagentTarget,
   settingsKey,
   isOver,
@@ -282,7 +280,7 @@ export class FallbackRouter {
     const routing = this.routing(s.settings)
     if (!routing) return { state: 'unknown' }
     const catalogs = await this.host.catalog()
-    const policy = this.policyOf(s, catalogs, routing.prefs)
+    const policy = this.policyOf(catalogs, routing.prefs)
     const decision = planRoute(s.settings, policy.order, {
       usage: routing.usage,
       accounts: routing.accounts,
@@ -382,19 +380,12 @@ export class FallbackRouter {
     }"`
   }
 
-  /** Fallback order and threshold for a session: a sub-agent may use its own order and an earlier threshold. */
-  policyOf(
-    s: Pick<AgentSessionInfo, 'parentId'>,
-    catalogs: ProviderCatalog[],
-    prefs?: AppPreferences,
-  ): { order: FallbackStep[]; switchAt: SwitchThreshold } {
-    const main = this.orderOf(catalogs, prefs)
+  /** Fallback order and threshold for a session; a helper follows its thread's. */
+  policyOf(catalogs: ProviderCatalog[], prefs?: AppPreferences): { order: FallbackStep[]; switchAt: SwitchThreshold } {
     // null is the explicit "only at the limit" policy, not a missing preference.
-    const switchAt = prefs ? prefs.fallback.switchAt : DEFAULT_FALLBACK_PREFERENCES.switchAt
-    if (!s.parentId || !prefs) return { order: main, switchAt }
     return {
-      order: subagentOrder(prefs.subagents, main),
-      switchAt: prefs.subagents.switchAt === 'same' ? switchAt : prefs.subagents.switchAt,
+      order: this.orderOf(catalogs, prefs),
+      switchAt: prefs ? prefs.fallback.switchAt : DEFAULT_FALLBACK_PREFERENCES.switchAt,
     }
   }
 
@@ -457,7 +448,7 @@ export class FallbackRouter {
     let routing = this.routing(s.settings)
     if (!routing) return false
     const catalogs = await this.host.catalog()
-    const policy = this.policyOf(s, catalogs, routing.prefs)
+    const policy = this.policyOf(catalogs, routing.prefs)
     const model =
       resolveStep({ id: '', provider: s.provider, model: s.settings.model, effort: null }, catalogs)?.model ??
       s.settings.model
@@ -488,7 +479,7 @@ export class FallbackRouter {
       if (back) {
         this.attempted.delete(id)
         this.attemptedAccounts.delete(id)
-        await this.applySettings(id, this.cappedChildSettings(s, back.settings, catalogs), back.reason)
+        await this.applySettings(id, back.settings, back.reason)
         return true
       }
     }
@@ -505,7 +496,7 @@ export class FallbackRouter {
       this.attemptedAccounts.get(id)?.add(accountKey(decision.step.provider, decision.step.accountId))
     await this.applySettings(
       id,
-      this.cappedChildSettings(s, this.withStep(s.settings, decision.step), catalogs),
+      this.withStep(s.settings, decision.step),
       `${decision.reason} — continuing ${decision.step.provider === s.provider && decision.step.accountId !== s.settings.accountId ? `on ${this.accountName(s.provider, decision.step.accountId)}` : `with ${providerName(decision.step.provider)}`}`,
       true,
     )
@@ -626,9 +617,8 @@ export class FallbackRouter {
       if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
       resolveAttempted(catalogs)
       let routing = this.routing(s.settings)
-      const configured =
-        !!routing?.prefs.fallback.order || (!!s.parentId && routing?.prefs.subagents.fallback === 'separate')
-      const policy = this.policyOf(s, catalogs, routing?.prefs)
+      const configured = !!routing?.prefs.fallback.order
+      const policy = this.policyOf(catalogs, routing?.prefs)
       const tried = this.attemptedAccounts.get(id) ?? new Set<string>()
       tried.add(accountKey(s.settings.provider, s.settings.accountId))
       this.attemptedAccounts.set(id, tried)
@@ -712,7 +702,7 @@ export class FallbackRouter {
           const model = step.model
             ? models?.find((model) => model.id === step!.model)
             : (models?.find((model) => model.isDefault) ?? models?.[0])
-          const candidate = this.cappedChildSettings(s, this.withStep(s.settings, step), catalogs)
+          const candidate = this.withStep(s.settings, step)
           // A provider or login turned off since routing read its preferences is skipped like any refused option.
           await this.host.validateLaunch(candidate)
           plan = this.host.planTransition(id, candidate, 'limit', model?.contextWindow)
@@ -746,7 +736,7 @@ export class FallbackRouter {
         return
       }
       attempted.add(stepKey(step))
-      const settings = this.cappedChildSettings(s, this.withStep(s.settings, step), catalogs)
+      const settings = this.withStep(s.settings, step)
       const same = step.provider === s.provider
       const peak = peakFor(routing?.usage ?? [], s.provider, s.settings.model)
       const resume = plan?.resume ?? null
@@ -786,31 +776,22 @@ export class FallbackRouter {
     }
   }
 
-  private cappedChildSettings(
-    session: AgentSessionInfo,
-    settings: AgentSettings,
-    catalogs: ProviderCatalog[],
-  ): AgentSettings {
-    const prefs = this.host.preferences()?.subagents
-    return session.parentId && prefs ? capSubagentEffort(settings, prefs, catalogs) : settings
-  }
-
   /** The settings a new sub-agent of this chat should run on, and whether Ramu (not the provider) must run it. */
   async subagentSettings(
     parentId: string,
-    type?: string,
   ): Promise<{ settings: AgentSettings; reason?: string; redirect: boolean; from: AgentProvider }> {
     const parent = this.host.get(parentId)
     const prefs = this.host.preferences()
     const catalogs = await this.host.catalog()
-    const base = prefs ? subagentTarget(prefs.subagents, parent.provider, type) : null
+    const base = prefs ? subagentTarget(prefs.subagents) : null
     const resolved = base ? resolveStep(base, catalogs) : null
     let settings = resolved ? this.withStep(parent.settings, resolved) : parent.settings
     let reason: string | undefined
-    let redirect = !!resolved
+    // Chosen per task: Ramu runs it so the provider can pick the model and effort (see selectSubagentSettings).
+    let redirect = !!resolved || prefs?.subagents.model === 'auto'
     const routing = this.routing(settings)
     if (routing) {
-      const policy = this.policyOf({ parentId }, catalogs, routing.prefs)
+      const policy = this.policyOf(catalogs, routing.prefs)
       const decision = planRoute(settings, policy.order, {
         usage: routing.usage,
         accounts: routing.accounts,

@@ -211,28 +211,17 @@ export function settingsKey(settings: Pick<AgentSettings, 'provider' | 'model'>,
   })
 }
 
-/** A sub-agent's order: its own when configured as separate, else the main order. */
-export function subagentOrder(prefs: SubagentPreferences, mainOrder: FallbackStep[]): FallbackStep[] {
-  return prefs.fallback === 'separate' ? (prefs.order ?? mainOrder) : mainOrder
+/**
+ * The step a new helper runs on when Ramu must run it, or null when the provider's own helpers keep the thread's model.
+ * `auto` returns null too: Ramu runs those helpers on the thread's provider and lets that provider choose per task.
+ */
+export function subagentTarget(prefs: SubagentPreferences): FallbackStep | null {
+  return prefs.model === 'pick' ? prefs.step : null
 }
 
-/**
- * Which step a new sub-agent should use, or null for the provider's native sub-agents.
- * Type rules win over the mode; a rule or mode that says native keeps native.
- */
-export function subagentTarget(
-  prefs: SubagentPreferences,
-  parentProvider: AgentProvider,
-  type: string | undefined,
-): FallbackStep | null {
-  const rule = type
-    ? prefs.byType.find((entry) => entry.type.trim() && entry.type.trim().toLowerCase() === type.trim().toLowerCase())
-    : undefined
-  if (rule) return rule.step
-  if (prefs.mode === 'single') return prefs.single
-  if (prefs.mode === 'per-provider') return prefs.perProvider[parentProvider] ?? null
-  return null
-}
+/** Whether Ramu runs every helper itself, so the providers' own helper tools are switched off. */
+export const ramuRunsHelpers = (prefs: SubagentPreferences): boolean =>
+  prefs.model === 'auto' || (prefs.model === 'pick' && !!prefs.step)
 
 export const accountKey = (provider: AgentProvider, accountId: string | undefined) =>
   `${provider}:${accountId || 'default'}`
@@ -270,29 +259,4 @@ export function nextAccount(
     return account
   }
   return null
-}
-
-/** Apply both sub-agent caps without rounding above either ceiling. */
-export function capSubagentEffort(
-  settings: AgentSettings,
-  prefs: SubagentPreferences,
-  catalogs: ProviderCatalog[],
-): AgentSettings {
-  const model = catalogs
-    .find((c) => c.provider === settings.provider)
-    ?.models.find((m) => (settings.model ? m.id === settings.model : m.isDefault))
-  if (!model) return settings
-  const caps = [
-    prefs.maxEffort,
-    prefs.modelMaxEffort?.[stepKey({ provider: settings.provider, model: model.id })],
-  ].filter((e): e is ReasoningEffort => !!e)
-  if (!caps.length) return settings
-  const ceiling = Math.min(...caps.map((e) => EFFORT_ORDER.indexOf(e)))
-  const wanted = nearestEffort(settings.effort, model)
-  if (wanted === null || EFFORT_ORDER.indexOf(wanted) <= ceiling) return { ...settings, effort: wanted }
-  const effort = [...model.efforts]
-    .filter((e) => EFFORT_ORDER.indexOf(e) <= ceiling)
-    .sort((a, b) => EFFORT_ORDER.indexOf(b) - EFFORT_ORDER.indexOf(a))[0]
-  if (!effort) throw new Error(`No supported effort for ${model.id} is within the sub-agent effort cap.`)
-  return { ...settings, effort }
 }
