@@ -2,6 +2,7 @@
 
 export * from './types/agent'
 export * from './types/fallback'
+export * from './types/deploy'
 export * from './types/forge'
 export * from './types/rules'
 export * from './types/git'
