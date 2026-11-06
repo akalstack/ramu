@@ -210,3 +210,10 @@ it('uses exact versioned network origins', async () => {
   ])
     expect(() => interactiveOrigin(origin)).toThrow()
 })
+
+it('ships a bootstrap that parses in both page bridge modes', () => {
+  for (const mode of ['host', 'fake'] as const) {
+    const html = interactiveHtml('<p>x</p>', 'i', null, undefined, undefined, mode)
+    expect(() => new Function(/<script>([\s\S]*?)<\/script>/.exec(html)![1]!)).not.toThrow()
+  }
+})
