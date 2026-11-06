@@ -33,6 +33,12 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
   /** Pull and Sync follow the saved preference, so every entry point integrates the same way. */
   const savedPullMode = (): PullMode => storedPreferences().pullMode ?? DEFAULT_APP_PREFERENCES.pullMode
 
+  /** A push of the default branch from a thread is followed, so CI failing on it wakes that thread. */
+  const followPush = (taskId: string, cwd: string, repoId: string) =>
+    void ctx.pullRequestWatches?.watchPush(taskId, cwd, repoId).catch((error: unknown) => {
+      console.error('Could not follow the push:', error)
+    })
+
   const autoPull = (t: string, r: string) =>
     gitExclusive(ctx, t, r, async (cwd) => {
       if (!loadPreferences().autoPull || agents.activeWriter([cwd])) return false
@@ -312,7 +318,11 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
     'git.push': {
       args: z.tuple([id, id, branchName.optional(), z.string().min(1).max(255).optional()]),
       run: (t: string, r: string, expectedBranch?: string, remote?: string) =>
-        gitExclusive(ctx, t, r, (cwd) => git.push(cwd, expectedBranch, remote)),
+        gitExclusive(ctx, t, r, async (cwd) => {
+          const before = await git.status(cwd)
+          await git.push(cwd, expectedBranch, remote)
+          if (before.ahead > 0 || !before.upstream) followPush(t, cwd, r)
+        }),
     },
     /** The remotes to choose between before publishing the branch, or null when nothing needs choosing. */
     'git.remoteChoices': {
@@ -332,7 +342,10 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
       run: (t: string, r: string, approval?: SyncApproval) =>
         gitExclusive(ctx, t, r, async (cwd) => {
           assertNoActiveWriter(ctx, cwd, 'Stop the agent in this checkout before syncing.')
-          return git.sync(cwd, savedPullMode(), approval)
+          const before = await git.status(cwd)
+          await git.sync(cwd, savedPullMode(), approval)
+          // A sync that only pulled sent nothing of this thread's, so someone else's commit never wakes it.
+          if (before.ahead > 0) followPush(t, cwd, r)
         }),
     },
     'git.continueOperation': {

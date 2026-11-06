@@ -1,5 +1,6 @@
 import type {
   ForgeAccessReport,
+  ForgeCheck,
   ForgeRepositoryAccount,
   ForgeRepositorySummary,
   ForgeStatus,
@@ -35,6 +36,10 @@ export interface ForgeAdapter {
   createPullRequest(cwd: string, input: PullRequestInput): Promise<ForgeStatus>
   /** The prompt for fixing failing checks, with the end of each failed job's log where the service has one. */
   checksFeedback(cwd: string, url?: string): Promise<string>
+  /** The checks on one commit, for a push to the default branch; absent where the service is not followed. */
+  commitChecks?(cwd: string, sha: string): Promise<ForgeCheck[]>
+  /** The prompt for a default branch that a push broke, with the end of each failed job's log. */
+  commitChecksFeedback?(cwd: string, sha: string, branch: string): Promise<string>
   /** The repository's open pull requests, and the latest closed and merged ones when asked. */
   listPullRequests(cwd: string, options: { includeClosed: boolean }): Promise<PullRequestList>
   /** The merge methods the repository allows and what still blocks merging `url`. */

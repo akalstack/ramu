@@ -4,11 +4,20 @@ import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import type { AgentService } from '../src/agent'
 import { PullRequestWatchService } from '../src/background/pullRequestWatches'
-import { currentBranch } from '../src/workspace/git'
-import { pullRequestFeedback, pullRequestStatus, resolvedAccountChoice, reviewThreads } from '../src/workspace/forge'
+import { commitBranchInfo, currentBranch, headOid } from '../src/workspace/git'
+import {
+  commitChecks,
+  commitChecksFeedback,
+  pullRequestFeedback,
+  pullRequestStatus,
+  resolvedAccountChoice,
+  reviewThreads,
+} from '../src/workspace/forge'
 
-vi.mock('../src/workspace/git', () => ({ currentBranch: vi.fn() }))
+vi.mock('../src/workspace/git', () => ({ currentBranch: vi.fn(), commitBranchInfo: vi.fn(), headOid: vi.fn() }))
 vi.mock('../src/workspace/forge', () => ({
+  commitChecks: vi.fn(),
+  commitChecksFeedback: vi.fn(),
   pullRequestFeedback: vi.fn(),
   pullRequestStatus: vi.fn(),
   resolvedConnectionId: vi.fn(async () => null),
@@ -289,5 +298,79 @@ describe('automatic watches on PR creation', () => {
     vi.mocked(resolvedAccountChoice).mockResolvedValue('saved-token')
     await service.tick(60_000)
     expect(service.status('/repo', pr.url).sessionId).toBeNull()
+  })
+})
+
+describe('pushes to the default branch', () => {
+  const push = () => service.watchPush('task', '/repo', 'repo')
+  const failing = [{ name: 'CI', state: 'failure' as const, url: 'https://github.com/o/r/actions/runs/2/job/3' }]
+  beforeEach(() => {
+    vi.mocked(currentBranch).mockResolvedValue('main')
+    vi.mocked(commitBranchInfo).mockResolvedValue({ branch: 'main', defaultBranch: 'main' })
+    vi.mocked(headOid).mockResolvedValue('abc1234def')
+    vi.mocked(commitChecksFeedback).mockResolvedValue('CI failed on main after your push of abc1234.')
+  })
+
+  it('wakes the pushing thread once when CI fails on the pushed commit', async () => {
+    vi.mocked(commitChecks).mockResolvedValue([{ name: 'CI', state: 'pending', url: null }])
+    await push()
+    await service.tick(0)
+    expect(enqueue).not.toHaveBeenCalled()
+    vi.mocked(commitChecks).mockResolvedValue(failing)
+    await service.tick(60_000)
+    expect(queued()).toEqual([expect.objectContaining({ id: 'session', checkout: { cwd: '/repo', branch: 'main' } })])
+    expect(String(enqueue.mock.calls[0]![1])).toContain('CI failed on main')
+    expect(String(enqueue.mock.calls[0]![1])).toContain('external feedback')
+    expect(vi.mocked(commitChecks)).toHaveBeenCalledWith('/repo', 'abc1234def')
+    // Handed over once, also after a restart.
+    await service.stop()
+    service = createService()
+    await service.tick(120_000)
+    expect(enqueue).toHaveBeenCalledOnce()
+  })
+
+  it('stops following a commit whose checks pass, and ignores pushes of other branches', async () => {
+    vi.mocked(commitChecks).mockResolvedValue([{ name: 'CI', state: 'success', url: null }])
+    await push()
+    await service.tick(0)
+    vi.mocked(commitChecks).mockResolvedValue(failing)
+    await service.tick(60_000)
+    expect(enqueue).not.toHaveBeenCalled()
+    vi.mocked(commitBranchInfo).mockResolvedValue({ branch: 'feature', defaultBranch: 'main' })
+    await push()
+    await service.tick(120_000)
+    expect(enqueue).not.toHaveBeenCalled()
+  })
+
+  it('follows only the newest push of a branch and ends with the thread', async () => {
+    vi.mocked(commitChecks).mockResolvedValue(failing)
+    await push()
+    vi.mocked(headOid).mockResolvedValue('fff0000aaa')
+    await push()
+    service.stopForSession('session')
+    await service.tick(0)
+    expect(enqueue).not.toHaveBeenCalled()
+    await push()
+    await service.tick(60_000)
+    expect(enqueue).toHaveBeenCalledOnce()
+    expect(vi.mocked(commitChecks)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(commitChecks)).toHaveBeenCalledWith('/repo', 'fff0000aaa')
+  })
+
+  it('waits while the thread is paused and forgets services it cannot follow', async () => {
+    vi.mocked(commitChecks).mockResolvedValue(failing)
+    paused = true
+    await push()
+    await service.tick(0)
+    expect(enqueue).not.toHaveBeenCalled()
+    paused = false
+    await service.tick(60_000)
+    expect(enqueue).toHaveBeenCalledOnce()
+    vi.mocked(commitChecks).mockResolvedValue(null)
+    await push()
+    await service.tick(120_000)
+    await service.tick(180_000)
+    expect(vi.mocked(commitChecks)).toHaveBeenCalledTimes(3)
+    expect(enqueue).toHaveBeenCalledOnce()
   })
 })

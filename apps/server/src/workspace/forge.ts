@@ -3,6 +3,7 @@
 // `forge/route.ts` picks one from a checkout's remote.
 // The operations below dispatch through it; GitHub's account and connection helpers are exported as they are.
 import type {
+  ForgeCheck,
   ForgeRepositorySummary,
   ForgeStatus,
   IssueLink,
@@ -41,6 +42,16 @@ export async function pullRequestFeedback(cwd: string, kind: PullRequestFeedback
   const prompt = reviewThreadsPrompt(pr, threads)
   if (!prompt) throw new Error(`Pull request #${pr.number} has no open review comments.`)
   return prompt
+}
+/** The checks on one commit, or null where the repository's service is not followed. */
+export async function commitChecks(cwd: string, sha: string): Promise<ForgeCheck[] | null> {
+  const adapter = await adapterFor(cwd)
+  return adapter.commitChecks ? adapter.commitChecks(cwd, sha) : null
+}
+export async function commitChecksFeedback(cwd: string, sha: string, branch: string): Promise<string> {
+  const adapter = await adapterFor(cwd)
+  if (!adapter.commitChecksFeedback) throw new Error('Ramu does not follow this repository’s checks.')
+  return adapter.commitChecksFeedback(cwd, sha, branch)
 }
 export const listPullRequests = async (cwd: string, options: { includeClosed: boolean }) =>
   (await adapterFor(cwd)).listPullRequests(cwd, options)

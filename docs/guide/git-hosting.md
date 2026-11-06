@@ -57,6 +57,8 @@ Azure Repos remotes (`dev.azure.com`, `*.visualstudio.com` and their SSH forms) 
 
 The file arrives as a pull request from a new `ramu/set-up-ci` branch, made from the default branch on the server, so your checkout, branch and uncommitted work stay as they are. CI runs on that pull request, so you see it pass before merging. A default branch that already has the file is left alone. Pushing a workflow file to GitHub needs the `workflow` permission on the host's Git sign-in; when it is missing, Ramu says how to add it.
 
+**Keeping the default branch green:** when a thread's checkout pushes the default branch (**Push** or **Sync** in Source Control), Ramu follows CI on the pushed commit for up to three hours. If a check fails, the failing jobs and the end of their logs go to that thread's queue, asking for a fix committed on a new branch; the thread wakes like a [watched pull request](#github). A sync that only pulls follows nothing. This works on GitHub and GitLab.
+
 Agents use `ci_setup`: it writes the same file into the thread's checkout (or returns the one already there) for the agent to adjust (monorepo filters, a database service for tests) before it commits on a branch and opens a pull request.
 
 ## Conflicts

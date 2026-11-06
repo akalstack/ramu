@@ -48,6 +48,7 @@ import {
   type ApiAccess,
 } from './githubApi'
 import * as pulls from './githubPulls'
+import { brokenBranchPrompt } from './buildLogs'
 
 export class ForgeError extends Error {
   constructor(
@@ -894,9 +895,8 @@ export function actionsJobId(url: string | null): string | null {
   return url?.match(/\/actions\/runs\/\d+\/job\/(\d+)/)?.[1] ?? null
 }
 
-async function failedChecksFeedback(cwd: string, pr: PullRequestInfo): Promise<string> {
-  const failed = pr.checks.filter((check) => check.state === 'failure')
-  if (!failed.length) throw new Error(`No checks are failing on pull request #${pr.number}.`)
+/** One section per failed check, with the end of its Actions job log where there is one. */
+async function failedCheckSections(cwd: string, failed: ForgeCheck[]): Promise<string[]> {
   const sections: string[] = []
   for (const check of failed) {
     const job = actionsJobId(check.url)
@@ -916,13 +916,19 @@ async function failedChecksFeedback(cwd: string, pr: PullRequestInfo): Promise<s
       ].join('\n'),
     )
   }
+  return sections
+}
+
+async function failedChecksFeedback(cwd: string, pr: PullRequestInfo): Promise<string> {
+  const failed = pr.checks.filter((check) => check.state === 'failure')
+  if (!failed.length) throw new Error(`No checks are failing on pull request #${pr.number}.`)
   return [
     `Fix the failing checks on pull request #${pr.number} (${pr.url}).`,
     '',
     '<ramu-context>',
     `Branch: ${pr.headBranch} → ${pr.baseBranch}`,
     '',
-    ...sections,
+    ...(await failedCheckSections(cwd, failed)),
     '',
     'Work out the cause from the logs and the code, fix it, and run the same check locally when you can.',
     'Commit the fix on this branch. Do not push; I will review and push from Source Control.',
@@ -930,6 +936,46 @@ async function failedChecksFeedback(cwd: string, pr: PullRequestInfo): Promise<s
     'Say which checks you ran locally and their result. Remote CI cannot pass until the fix is pushed, so report it as pending rather than fixed.',
     '</ramu-context>',
   ].join('\n')
+}
+
+interface RawCheckRun {
+  name?: string
+  status?: string
+  conclusion?: string | null
+  html_url?: string
+  started_at?: string
+}
+
+/** The check runs on one commit, such as a push to the default branch, which no pull request reports. */
+export async function commitChecks(cwd: string, sha: string): Promise<ForgeCheck[]> {
+  const remote = await forgeRemoteOf(cwd)
+  if (!remote) throw new ForgeError('This repository has no GitHub remote.', 'no-remote')
+  const raw = await githubRest<{ check_runs?: RawCheckRun[] } | null>(
+    cwd,
+    'GET',
+    `/repos/${remote.owner}/${remote.repo}/commits/${sha}/check-runs?per_page=100`,
+  )
+  return parseCheckRuns(raw?.check_runs ?? [])
+}
+
+/** REST check runs (lowercase states) in the shape GraphQL's rollup is read in. */
+export function parseCheckRuns(runs: RawCheckRun[]): ForgeCheck[] {
+  return parseChecks(
+    runs.map((run) => ({
+      name: run.name,
+      status: run.status?.toUpperCase(),
+      conclusion: run.conclusion?.toUpperCase() ?? null,
+      detailsUrl: run.html_url,
+      startedAt: run.started_at,
+    })),
+  )
+}
+
+/** The prompt that hands a broken default branch to the thread that pushed it. */
+export async function commitChecksFeedback(cwd: string, sha: string, branch: string): Promise<string> {
+  const failed = (await commitChecks(cwd, sha)).filter((check) => check.state === 'failure')
+  if (!failed.length) throw new Error(`No checks are failing on ${sha.slice(0, 7)}.`)
+  return brokenBranchPrompt(sha, branch, await failedCheckSections(cwd, failed))
 }
 
 /** A prompt that hands the pull request's failing checks to an agent. */
@@ -1038,6 +1084,8 @@ registerForgeAdapter({
   pullRequestDraft,
   createPullRequest,
   checksFeedback,
+  commitChecks,
+  commitChecksFeedback,
   listIssues,
   issueDetails,
   publishRepository,

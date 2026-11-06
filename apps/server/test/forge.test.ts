@@ -57,6 +57,25 @@ describe('pull request parsing', () => {
     ])
   })
 
+  it('reads a commit’s REST check runs the same way', () => {
+    expect(
+      forge.parseCheckRuns([
+        {
+          name: 'CI',
+          status: 'completed',
+          conclusion: 'timed_out',
+          html_url: 'https://github.com/o/r/actions/runs/3/job/4',
+        },
+        { name: 'Lint', status: 'queued', conclusion: null },
+        { name: 'Docs', status: 'completed', conclusion: 'neutral' },
+      ]),
+    ).toEqual([
+      { name: 'CI', state: 'failure', url: 'https://github.com/o/r/actions/runs/3/job/4' },
+      { name: 'Docs', state: 'success', url: null },
+      { name: 'Lint', state: 'pending', url: null },
+    ])
+  })
+
   it('normalizes state, draft and review decision', () => {
     const parsed = forge.parsePullRequest({
       number: 3,

@@ -36,6 +36,7 @@ import { checksRollup } from '@ramu/shared/pullRequests'
 import { findExecutable } from '../../providers/providerBinaries'
 import { ForgeError, failureExcerpt, pullRequestDraft } from './github'
 import { savedGitlabCredential } from './gitlabCredentials'
+import { brokenBranchPrompt } from './buildLogs'
 
 /** Where `glab` keeps its sign-ins: its own config directory, then the platform defaults. */
 function glabConfigPaths(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -321,13 +322,8 @@ export async function createPullRequest(cwd: string, input: PullRequestInput): P
   return pullRequestStatus(cwd)
 }
 
-export async function checksFeedback(cwd: string, url?: string): Promise<string> {
-  const a = await access(cwd)
-  const raw = await mergeRequest(a, url)
-  if (!raw) throw new Error('This branch has no merge request.')
-  const mr = parseMergeRequest(raw, false, await checksOf(a, raw.iid))
-  const failed = mr.checks.filter((check) => check.state === 'failure')
-  if (!failed.length) throw new Error('No failing pipeline jobs.')
+/** One section per failed job, with the end of its trace. */
+async function failedJobSections(a: Access, failed: ForgeCheck[]): Promise<string[]> {
   const sections: string[] = []
   for (const check of failed.slice(0, 5)) {
     const id = check.url ? /\/-\/jobs\/(\d+)/.exec(check.url)?.[1] : undefined
@@ -342,9 +338,44 @@ export async function checksFeedback(cwd: string, url?: string): Promise<string>
       : ''
     sections.push(`### ${check.name}\n${log ? failureExcerpt(log) : 'No log available.'}`)
   }
+  return sections
+}
+
+export async function checksFeedback(cwd: string, url?: string): Promise<string> {
+  const a = await access(cwd)
+  const raw = await mergeRequest(a, url)
+  if (!raw) throw new Error('This branch has no merge request.')
+  const mr = parseMergeRequest(raw, false, await checksOf(a, raw.iid))
+  const failed = mr.checks.filter((check) => check.state === 'failure')
+  if (!failed.length) throw new Error('No failing pipeline jobs.')
   return redactSecrets(
-    [`Fix the failing pipeline jobs on merge request !${mr.number} (${mr.title}):`, '', ...sections].join('\n'),
+    [
+      `Fix the failing pipeline jobs on merge request !${mr.number} (${mr.title}):`,
+      '',
+      ...(await failedJobSections(a, failed)),
+    ].join('\n'),
   )
+}
+
+async function pipelineJobs(a: Access, sha: string): Promise<ForgeCheck[]> {
+  const pipelines = (await projectApi(a, `/pipelines?sha=${encode(sha)}&per_page=1`)) as { id: number }[]
+  const pipeline = pipelines[0]
+  if (!pipeline) return []
+  return parseJobs(
+    (await projectApi(a, `/pipelines/${pipeline.id}/jobs?per_page=100&include_retried=true`)) as RawJob[],
+  )
+}
+
+/** The latest pipeline's jobs on one commit, such as a push to the default branch. */
+export async function commitChecks(cwd: string, sha: string): Promise<ForgeCheck[]> {
+  return pipelineJobs(await access(cwd), sha)
+}
+
+export async function commitChecksFeedback(cwd: string, sha: string, branch: string): Promise<string> {
+  const a = await access(cwd)
+  const failed = (await pipelineJobs(a, sha)).filter((check) => check.state === 'failure')
+  if (!failed.length) throw new Error(`No pipeline jobs are failing on ${sha.slice(0, 7)}.`)
+  return redactSecrets(brokenBranchPrompt(sha, branch, await failedJobSections(a, failed)))
 }
 
 interface RawIssue {
@@ -929,6 +960,8 @@ registerForgeAdapter({
   pullRequestDraft,
   createPullRequest,
   checksFeedback,
+  commitChecks,
+  commitChecksFeedback,
   listPullRequests,
   mergeOptions,
   pullRequestAction,
