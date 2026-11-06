@@ -5,11 +5,10 @@ import { Activity, Bell, Inbox as InboxIcon, Loader, Newspaper, RefreshCw, Spark
 import type { LibrarySummary } from '@ramu/shared/types'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
-import { OperatorSheet } from '../../../components/OperatorSheet'
 import { useAutomation } from '../../../runtime/automation'
 import { buildInbox, INBOX_TABS, inboxTabOf, type InboxChat, type InboxTab } from '../../../runtime/inbox'
 import { STANDALONE, type Chat } from '../../../runtime/types'
-import { ago, useSay, useT, type Strings } from '../../../i18n'
+import { ago, useT, type Strings } from '../../../i18n'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { TopFade } from '../../../components/Glass'
 import { InboxBrief } from '../../../components/InboxBrief'
@@ -17,7 +16,7 @@ import { InboxThread } from '../../../components/InputRequests'
 import { Chips, Nothing, RecapCard, Section } from '../../../components/InboxParts'
 import { HostChip } from '../../../components/HostChip'
 import { useTabActions } from '../../../components/Overlays'
-import { Button, Divider, ROW_INSET, Row, T, tap } from '../../../components/ui'
+import { Divider, ROW_INSET, Row, T, tap } from '../../../components/ui'
 
 // Remembered for the session, so coming back to the tab shows the chip you left it on.
 let lastTab: InboxTab = 'brief'
@@ -37,7 +36,6 @@ export default function InboxScreen() {
   const t = useT()
   const router = useRouter()
   const store = useStore()
-  const [operatorOpen, setOperatorOpen] = useState(false)
   const auto = useAutomation()
   // As on Threads: every host at once by default, or the host picked from the host chip.
   const [allHosts, setAllHosts] = useState(true)
@@ -90,7 +88,6 @@ export default function InboxScreen() {
       : store.projects.find((p) => p.computerId === computerId && p.id === projectId)?.name
   const where = (computerId: string, projectId: string) =>
     [projectName(computerId, projectId), multi ? computerName(computerId) : undefined].filter(Boolean).join(' · ')
-  const say = useSay()
   const rows = (list: InboxChat[]) => (
     <View>
       {list.map((chat, i) => {
@@ -229,11 +226,6 @@ export default function InboxScreen() {
     brief: (
       <>
         <InboxBrief inbox={inbox} where={(chat) => where(chat.computerId, chat.projectId)} />
-        {store.appPreferences[store.selected]?.operator ? (
-          <View style={{ paddingHorizontal: space.l, paddingTop: space.m }}>
-            <Button kind="secondary" title={say('Ask the Operator')} onPress={() => setOperatorOpen(true)} />
-          </View>
-        ) : null}
         {missedSection}
       </>
     ),
@@ -339,7 +331,6 @@ export default function InboxScreen() {
         {body}
       </PageScrollView>
       {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}
-      <OperatorSheet open={operatorOpen} onClose={() => setOperatorOpen(false)} />
     </Screen>
   )
 }

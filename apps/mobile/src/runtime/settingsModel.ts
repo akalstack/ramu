@@ -285,13 +285,6 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         },
         {
           kind: 'toggle',
-          path: 'operator',
-          title: 'Operator',
-          help: 'Inbox gets a box where one sentence proposes actions across threads and schedules on connected hosts. Nothing runs until you confirm. Each request uses one short model call; it costs nothing otherwise.',
-          words: 'operator actions command inbox stop retry',
-        },
-        {
-          kind: 'toggle',
           path: 'agentThreads',
           title: 'Let agents start threads',
           help: "Agents can start threads in this project, other projects and hosts added for agents, and a paired host's agents can start threads here. Sub-agents are not affected. Turn off to start threads only yourself.",

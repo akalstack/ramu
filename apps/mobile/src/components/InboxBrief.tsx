@@ -13,7 +13,7 @@ import {
   type BriefRow,
   type InboxModel,
 } from '@ramu/shared/hostInbox'
-import { retryThread, stopIdleThreads } from '@ramu/shared/operator'
+import { retryThread, stopIdleThreads } from '@ramu/shared/chat/threadActions'
 import { gigabytes } from '@ramu/shared/resources'
 import { useSay } from '../i18n'
 import { useAutomation } from '../runtime/automation'

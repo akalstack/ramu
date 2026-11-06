@@ -11,7 +11,7 @@ import {
   type BriefRow,
   type InboxBlocker,
 } from '@ramu/shared/hostInbox'
-import { retryThread, stopIdleThreads } from '@ramu/shared/operator'
+import { retryThread, stopIdleThreads } from '@ramu/shared/chat/threadActions'
 import { gigabytes } from '@ramu/shared/resources'
 import { Button } from '@/components/desktop-button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -20,11 +20,9 @@ import { useViewOnly } from '../composer/useViewOnly'
 import { PendingInput } from '../HomeAgents'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
-import { useAppSettings } from '../settings/AppSettings'
 import { HostProvider, useHost } from '../workspace/HostProvider'
 import { useHostSelection } from '../workspace/HostSelection'
 import { invokeOn } from '../ipc'
-import { OperatorBox } from './OperatorBox'
 import { showInboxTab } from './navigation'
 import { useInboxModel } from './useBrief'
 
@@ -197,7 +195,6 @@ function BriefRowView({
 /** Inbox's first tab: the one list that answers "what needs me?", most urgent first, across every connected host. */
 export function Brief() {
   useLanguage()
-  const { preferences } = useAppSettings()
   const { model, hosts, computers, visit } = useInboxModel()
   const [all, setAll] = useState(false)
   const rows = useMemo(() => briefRows(model), [model])
@@ -304,7 +301,6 @@ export function Brief() {
           </EmptyHeader>
         </Empty>
       )}
-      {preferences.operator && <OperatorBox />}
     </div>
   )
 }

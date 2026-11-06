@@ -37,7 +37,6 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
     'autoProjectSelection',
     'agentThreads',
     'teammateSuggestions',
-    'operator',
     'hostDescription',
     'liveViewDesktop',
     'notifyAgentDone',

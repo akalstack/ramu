@@ -88,10 +88,6 @@ Hosts whose platform or description (**Settings → Threads → Describe this ho
 
 `ramu thread start|status|message|list` lets a terminal agent or script place work on this host. See [Remote hosts](remote-hosts.md#threads-from-a-terminal).
 
-## Operator
-
-**Operator** (Settings → Threads, off by default) turns one sentence into proposed actions across hosts: "stop everything on vps", "retry what failed". It can stop, retry, message, archive or finish threads and pause or run schedules. Nothing runs until you tick and confirm.
-
 ## Rules and MCP
 
 - **Settings → Agent setup → Rules** holds your own instructions. **Always** rules reach every new thread (24,000 characters per scope); **Manual** rules stay stored. Ramu also lists the instruction files providers read (`AGENTS.md`, `CLAUDE.md` and rules folders), read-only.

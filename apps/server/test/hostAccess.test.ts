@@ -18,7 +18,6 @@ it('lets a paired host start, check and message its threads and list projects, a
     'browser.activity',
     'network.status',
     'projects.list',
-    'operator.plan',
   ])
     expect(deviceMayInvoke(host, method)).toBe(false)
 })

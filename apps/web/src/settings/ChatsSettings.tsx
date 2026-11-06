@@ -48,12 +48,6 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         description="Send the active file or selection with each message, plus the paths of other open tabs. Unsaved edits are included."
       />
       <SettingsGroupTitle>{t('While agents work')}</SettingsGroupTitle>
-      <ToggleRow
-        {...toggleProps}
-        setting="operator"
-        title="Operator"
-        description="Inbox gets a box where one sentence proposes actions across threads and schedules on connected hosts. Nothing runs until you confirm. Each request uses one short model call; it costs nothing otherwise."
-      />
       <SettingsRow setting="hostDescription" className="settings-stack">
         <SettingsLabel
           title={t('Describe this host')}

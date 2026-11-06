@@ -2485,22 +2485,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Started by the agent in {0}': 'Dimulai oleh agen di {0}',
   'Started a thread': 'Memulai satu thread',
   'Started {0} threads': 'Memulai {0} thread',
-  Operator: 'Operator',
-  'Tell the Operator what to do': 'Beri tahu Operator apa yang harus dilakukan',
-  'Stop everything on vps, retry what failed…': 'Hentikan semua di vps, ulangi yang gagal…',
-  'Thinking…': 'Berpikir…',
-  'Do this': 'Lakukan ini',
-  'Do these {0}': 'Lakukan {0} ini',
-  '{0} of {1} done.': '{0} dari {1} selesai.',
-  'Ask the Operator': 'Tanya Operator',
-  'The Operator could not work that out. Try saying it another way.':
-    'Operator tidak bisa memahaminya. Coba katakan dengan cara lain.',
-  'Send message': 'Kirim pesan',
-  'Pause schedule': 'Jeda jadwal',
-  'Resume schedule': 'Lanjutkan jadwal',
-  'Run schedule now': 'Jalankan jadwal sekarang',
-  'Inbox gets a box where one sentence proposes actions across threads and schedules on connected hosts. Nothing runs until you confirm. Each request uses one short model call; it costs nothing otherwise.':
-    'Kotak masuk mendapat kotak tempat satu kalimat mengusulkan tindakan untuk thread dan jadwal di host yang terhubung. Tidak ada yang berjalan sampai Anda mengonfirmasi. Setiap permintaan memakai satu panggilan model singkat; selain itu tidak ada biaya.',
   'Let agents start threads': 'Izinkan agen memulai thread',
   "Agents can start threads in this project, other projects and hosts added for agents, and a paired host's agents can start threads here. Sub-agents are not affected. Turn off to start threads only yourself.":
     'Agen bisa memulai thread di proyek ini, proyek lain, dan host yang ditambahkan untuk agen, dan agen host terpasang bisa memulai thread di sini. Sub-agen tidak terpengaruh. Matikan agar hanya Anda yang memulai thread.',

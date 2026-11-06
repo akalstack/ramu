@@ -16,7 +16,6 @@ export type ToggleKey =
   | 'teammateSuggestions'
   | 'modelCatalogLookups'
   | 'newModelNotices'
-  | 'operator'
   | 'liveViewDesktop'
   | 'recapsEnabled'
   | 'notifyAgentDone'

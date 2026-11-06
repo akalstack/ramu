@@ -746,11 +746,6 @@ export interface RamuMethods {
     settings: AgentSettings,
     options?: { others?: RoutingCandidate[]; localHost?: string },
   ): RoutingOutcome
-  /** Proposes actions for one sentence from the client's snapshot; nothing runs here. Null when no proposal came back. */
-  'operator.plan'(
-    request: string,
-    snapshot: import('./operator').OperatorSnapshot,
-  ): import('./operator').OperatorPlan | null
   'projects.setup'(projectId: string | null): ProjectSetup
   'projects.create'(name: string): Project
   'projects.inspect'(dir: string): FolderInspection
