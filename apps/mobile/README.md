@@ -17,7 +17,7 @@ Use the host's LAN or VPN address, never `localhost`. The host must stay awake a
 - **Chat:** live transcripts, models and access, queue and steer, stop, approvals, questions and forms, goals and teammates.
 - **Inbox:** the Brief of what needs you across every host, plus Running, Recaps, Learned and Completed. The tab and app icon badges count what needs you.
 - **Schedules:** see, run, pause and edit schedules, on any host.
-- **Pages:** every page on your hosts, opened full screen without its thread, with the same values as the desktop. Add records offline and they sync when the host is back; **Add to Home Screen or share** shares a link that opens the page in Ramu. See [Pages and interactive content](../../docs/guide/pages.md).
+- **Pages:** every page on your hosts, opened full screen without its thread, with the same values as the desktop. Add records offline and they sync when the host is back; **Add to Home Screen or share** shares a link that opens the page in Ramu, and a page with a widget can show it on the home screen. See [Pages and interactive content](../../docs/guide/pages.md).
 - **Search:** threads on every host.
 - **Source Control:** status, staging, commits with AI drafts, branches, sync, stashes and undo.
 - **Files:** browse, view, edit and move files; add folders and clone projects on the host.

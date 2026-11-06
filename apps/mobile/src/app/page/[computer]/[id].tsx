@@ -728,6 +728,8 @@ function grantText(say: ReturnType<typeof useSay>, name: string, page: PageInfo)
       return say('Accepts records from outside services into {collection}', { collection: c.webhook?.collection ?? '' })
     case 'folder':
       return say('Reads one project folder: {path}', { path: c.folder?.path ?? '' })
+    case 'ramu':
+      return say('Reads what you see in Ramu, read-only: {purpose}', { purpose: c.ramu?.purpose ?? '' })
     case 'schedules':
       return say('Runs on its own: {list}', { list: (c.schedules ?? []).map((s) => s.run).join(', ') })
     default:
@@ -750,7 +752,9 @@ function allowAll(page: PageInfo) {
           }
         : name === 'webhook'
           ? { token: '' }
-          : true,
+          : name === 'ramu'
+            ? (page.capabilities.ramu?.sources ?? [])
+            : true,
     ]),
   )
 }

@@ -43,6 +43,8 @@ export function capabilityLine(name: PageCapability, page: Pick<PageInfo, 'capab
       return t('Accepts records from outside services into {collection}', { collection: c.webhook?.collection ?? '' })
     case 'folder':
       return t('Reads one project folder: {path}', { path: c.folder?.path ?? '' })
+    case 'ramu':
+      return t('Reads what you see in Ramu, read-only: {purpose}', { purpose: c.ramu?.purpose ?? '' })
   }
 }
 
@@ -75,6 +77,8 @@ function grantsOf(chosen: Record<string, boolean>, model: 'fast' | 'smart', dail
           }
         : false
     else if (name === 'webhook') grants.webhook = on ? { token: '' } : false
+    else if (name === 'ramu')
+      grants.ramu = on ? (page.capabilities.ramu?.sources ?? []).filter((source) => chosen[`ramu:${source}`]) : false
     else grants[name] = on
   }
   return grants
@@ -153,6 +157,23 @@ function GrantChoices({
                 onCheckedChange={(checked) => setChosen({ ...chosen, [`ai:mcp:${server}`]: checked === true })}
               />
               {t('Let its runs use {server}; each call asks you first', { server })}
+            </label>
+          ))}
+        </div>
+      )}
+      {names.includes('ramu') && chosen.ramu && (
+        <div className="ml-6 flex flex-col gap-1 text-caption">
+          {(page.capabilities.ramu?.sources ?? []).map((source) => (
+            <label key={source} className="flex items-center gap-2">
+              <Checkbox
+                checked={!!chosen[`ramu:${source}`]}
+                onCheckedChange={(checked) => setChosen({ ...chosen, [`ramu:${source}`]: checked === true })}
+              />
+              {source === 'activity'
+                ? t('Token use by day and provider')
+                : source === 'threads'
+                  ? t('Thread titles and states')
+                  : t('Pull requests on threads')}
             </label>
           ))}
         </div>

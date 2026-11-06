@@ -90,6 +90,15 @@ export const pageCapabilitiesSchema = z
           ),
       })
       .optional(),
+    ramu: z
+      .object({
+        purpose: z.string().trim().min(3).max(200),
+        sources: z
+          .array(z.enum(['activity', 'threads', 'pullRequests']))
+          .min(1)
+          .max(3),
+      })
+      .optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

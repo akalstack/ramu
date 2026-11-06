@@ -95,7 +95,7 @@ Hosts whose platform or description (**Settings → Threads → Describe this ho
 
 ## Pages
 
-Agents publish pages to keep with `publish_interactive` (`page: true`, or a page's id for a new version from any thread), find them with `page_list` and `page_get`, work with a page's records through `page_records`, start its runs with `page_run`, and record where one is live with `page_published`. Deleting a page stays your action. See [Pages and interactive content](pages.md).
+Agents publish pages to keep with `publish_interactive` (`page: true`, or a page's id for a new version from any thread), find them with `page_list` and `page_get`, work with a page's records through `page_records`, start its runs with `page_run`, and record where one is live with `page_published` (a page publishes itself through **Publish to the web**; this records a deploy an agent did from a project). Deleting a page stays your action. See [Pages and interactive content](pages.md).
 
 ## Rules and MCP
 

@@ -2,7 +2,7 @@ import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { z } from 'zod'
 import { INTERACTIVE_MAX_HTML, type InteractiveDocument, type JsonValue } from '@ramu/shared/interactive'
-import type { PageGrants, PageRecordQuery } from '@ramu/shared/pages'
+import type { PageGrants, PageRecordQuery, RamuDataSource } from '@ramu/shared/pages'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { id } from '../schemas'
 import type { HandlerContext, RegisterHandlers } from '../types'
@@ -75,6 +75,7 @@ const grants = z
     triggers: z.boolean().optional(),
     webhook: z.union([z.object({ token: z.string().max(80) }), z.literal(false)]).optional(),
     folder: z.boolean().optional(),
+    ramu: z.union([z.array(z.enum(['activity', 'threads', 'pullRequests'])).max(3), z.literal(false)]).optional(),
   })
   .strict()
 
@@ -101,6 +102,7 @@ const frameCall = z.discriminatedUnion('method', [
   z.object({ method: z.literal('notify'), args: z.tuple([z.string().max(80), z.string().max(240)]) }),
   z.object({ method: z.literal('folder.list'), args: z.tuple([z.string().max(400)]).or(z.tuple([])) }),
   z.object({ method: z.literal('folder.read'), args: z.tuple([z.string().min(1).max(400)]) }),
+  z.object({ method: z.literal('ramu.read'), args: z.tuple([z.enum(['activity', 'threads', 'pullRequests'])]) }),
 ])
 type FrameCall = z.infer<typeof frameCall>
 
@@ -137,6 +139,8 @@ function runFrameCall(ctx: HandlerContext, pageId: string, call: FrameCall): unk
       return readPageFolder(ctx, pageId, call.args[0] ?? '', 'list')
     case 'folder.read':
       return readPageFolder(ctx, pageId, call.args[0], 'read')
+    case 'ramu.read':
+      return readRamuData(ctx, pageId, call.args[0])
     case 'notify': {
       const page = pages.requireGrant(pageId, 'notify')
       pages.spend(pageId, 'notify')
@@ -172,6 +176,48 @@ async function readPageFolder(ctx: HandlerContext, pageId: string, path: string,
   if (!info.isFile()) throw new Error('That is not a file.')
   if (info.size > 200_000) throw new Error('That file is larger than 200 KB.')
   return readFile(target, 'utf8')
+}
+
+/**
+ * Figures the person already sees in Ramu, for a personal dashboard: token activity by day and provider, thread titles
+ * and states, and pull requests on threads. Threads and pull requests are those of the page's project when it has one.
+ * Never transcripts, files, credentials or settings.
+ */
+function readRamuData(ctx: HandlerContext, pageId: string, source: RamuDataSource) {
+  const page = ctx.pages!.get(pageId)
+  if (!page.capabilities.ramu?.sources.includes(source)) throw new Error(`This page did not declare Ramu ${source}.`)
+  if (!page.grants.ramu || !page.grants.ramu.includes(source))
+    throw new Error(`This page is not allowed to read Ramu ${source}. Allow it in Page settings.`)
+  if (source === 'activity') {
+    const since = new Date()
+    since.setHours(0, 0, 0, 0)
+    since.setDate(since.getDate() - 29)
+    return ctx.agents.activity(since.getTime())
+  }
+  const tasks = ctx.workspace.listTasks(page.projectId ?? undefined).slice(0, 500)
+  if (source === 'threads')
+    return tasks.map((task) => ({
+      title: task.title,
+      status: task.status,
+      done: !!task.doneAt,
+      lastActiveAt: new Date(task.lastActiveAt).toISOString(),
+    }))
+  return tasks.flatMap((task) => {
+    const pull = ctx.pullRequestIndex?.forTask(task)
+    return pull
+      ? [
+          {
+            thread: task.title,
+            number: pull.number,
+            title: pull.title,
+            state: pull.state,
+            draft: pull.draft,
+            stage: pull.stage,
+            url: pull.url,
+          },
+        ]
+      : []
+  })
 }
 
 /** Pages: kept documents with shared state, records, AI, runs, shares and the way to a project. */

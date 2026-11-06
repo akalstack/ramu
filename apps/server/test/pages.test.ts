@@ -477,3 +477,32 @@ it('publishes a page without records or AI to the web and updates the same site 
   expect(requests.some((request) => request.startsWith('POST') && request.endsWith('/user/repos'))).toBe(false)
   expect(publisher.targets().find((target) => target.target === 'github-pages')?.connected).toBe(true)
 })
+
+it('reads Ramu data only for the sources declared and allowed, scoped to the page project', async () => {
+  const { registerPageHandlers } = await import('../src/ipc/handlers/pages')
+  const { interactive, pages } = await setup()
+  const declared = { ramu: { purpose: 'My usage dashboard', sources: ['activity', 'threads'] } }
+  const v = interactive.publish('s', (await interactive.preview('s', { ...input, html: html(declared) })).id, 'rd')
+  const page = pages.keep('s', v.id, { projectId: 'p' })
+  const listTasks = vi.fn(() => [{ title: 'Fix login', status: 'idle', doneAt: null, lastActiveAt: 0, id: 't' }])
+  const methods = registerPageHandlers({
+    pages,
+    pageAi: new PageAi(
+      pages,
+      async () => ({ message: '', provider: 'codex', model: 'm' }),
+      () => DEFAULT_AGENT_SETTINGS,
+    ),
+    workspace: { listTasks },
+    agents: { activity: () => [{ day: '2026-11-06', provider: 'codex', tokens: 10 }] },
+    activity: { run: (_l: string, _d: string, work: () => unknown) => work() },
+  } as never)
+  const read = (source: string) => methods['pages.call']!.run(page.id, 'ramu.read', [source])
+  expect(() => read('activity')).toThrow('not allowed')
+  pages.grant(page.id, { ramu: ['threads'] })
+  expect(() => read('activity')).toThrow('not allowed')
+  expect(read('threads')).toEqual([
+    { title: 'Fix login', status: 'idle', done: false, lastActiveAt: '1970-01-01T00:00:00.000Z' },
+  ])
+  expect(listTasks).toHaveBeenCalledWith('p')
+  expect(() => read('pullRequests')).toThrow('did not declare')
+})

@@ -20,6 +20,7 @@ Page capabilities, declared in ramu.json (projects) or <meta name="ramu-capabili
 - camera: {"camera": {"purpose": "Photos of receipts"}} then const ref = await ramuContent.pickImage() (a downscaled photo kept with the page; store ref in a file field; ramuContent.files.get(ref) returns a data URL to show or send to ai.ask images).
 - notify: {"notify": {"purpose": "Tells you when spending passes your budget"}} then ramuContent.notify(title, body), a few per day.
 - widget: {"widget": {"title": "This month", "collection": "transactions", "kind": "number", "sum": "amount"}} for the phone's home screen. webhook: {"webhook": {"collection": "transactions"}} lets outside services add records. folder: {"folder": {"path": "data"}} gives read-only access to one folder of the page's project: await ramuContent.folder.list(subpath?) returns [{name, folder}], await ramuContent.folder.read(path) returns a text file up to 200 KB.
+- ramu: {"ramu": {"purpose": "Shows my agent usage", "sources": ["activity", "threads", "pullRequests"]}} then await ramuContent.ramu.read("activity") (tokens by day and provider for 30 days), read("threads") (titles, states, last activity) or read("pullRequests"), each source granted separately; threads and pull requests are the page's project's when it has one.
 Preview runs capability calls against an in-frame fake, so checks can exercise them; the declaration is validated before preview.`
 
 export function registerInteractiveTools(

@@ -5578,4 +5578,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Needs a token": "Perlu token",
   "Where": "Tempat",
   "{name} token": "Token {name}",
+  "Reads what you see in Ramu, read-only: {purpose}": "Membaca apa yang kamu lihat di Ramu, hanya baca: {purpose}",
+  "Token use by day and provider": "Pemakaian token per hari dan provider",
+  "Thread titles and states": "Judul dan status thread",
+  "Pull requests on threads": "Pull request di thread",
 }

@@ -67,9 +67,15 @@ export interface PageCapabilities {
   webhook?: { collection: string }
   /** One project folder the page may read, never write. */
   folder?: { path: string }
+  /** Figures the person already sees in Ramu, read-only, each source granted on its own. */
+  ramu?: { purpose: string; sources: RamuDataSource[] }
 }
 
-export type PageCapability = 'records' | 'ai' | 'camera' | 'notify' | 'schedules' | 'triggers' | 'webhook' | 'folder'
+/** Ramu's own figures a page may read: token activity by day, thread titles and states, and pull requests. */
+export type RamuDataSource = 'activity' | 'threads' | 'pullRequests'
+
+export type PageCapability =
+  'records' | 'ai' | 'camera' | 'notify' | 'schedules' | 'triggers' | 'webhook' | 'folder' | 'ramu'
 
 /** What the person allowed. A capability the page declares and is not granted fails with a clear error. */
 export interface PageGrants {
@@ -82,6 +88,8 @@ export interface PageGrants {
   triggers?: boolean
   webhook?: { token: string } | false
   folder?: boolean
+  /** The Ramu data sources allowed, or false when the person said no. */
+  ramu?: RamuDataSource[] | false
 }
 
 export interface PageError {
@@ -212,6 +220,7 @@ export function declaredCapabilities(capabilities: PageCapabilities): PageCapabi
   if (capabilities.triggers?.length) list.push('triggers')
   if (capabilities.webhook) list.push('webhook')
   if (capabilities.folder) list.push('folder')
+  if (capabilities.ramu?.sources.length) list.push('ramu')
   return list
 }
 

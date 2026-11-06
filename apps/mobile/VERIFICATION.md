@@ -48,4 +48,5 @@ Only checks that still need a physical phone, an account or a live provider. Tes
 - [ ] A page's notification arrives as a push and opens the page; the **Pages** alert switch turns them off.
 - [ ] **Add to Home Screen or share** produces a link that opens the page in Ramu, and says when the host is offline.
 - [ ] **Edit** on a page selects the tapped element and the request reaches a thread; **Fix this** after an error loads the fixed version.
-
+- [ ] A page with a widget shown from **Show in the home screen widget** appears on the iOS and Android home screen with its number or list, and updates after a record is added.
+- [ ] A page run lasting more than a few seconds shows a Live Activity on iOS that ends with the run.
