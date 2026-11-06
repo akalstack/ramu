@@ -11,7 +11,7 @@ export function sourceEvent(
       (event) =>
         'requestId' in event &&
         event.requestId === target.focusRequestId &&
-        ['question', 'permission-request', 'elicitation'].includes(event.kind),
+        ['question', 'permission-request', 'elicitation', 'secret-request'].includes(event.kind),
     )
   return target.sourceSeq === undefined ? undefined : events.find((event) => sequences.get(event) === target.sourceSeq)
 }

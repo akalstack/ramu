@@ -69,6 +69,9 @@ export function inputSummary(events: AgentEvent[], sessionId: string): ThreadInp
   for (const event of events) {
     if (event.agentId && !event.requestSource) continue
     if (event.kind === 'request-resolved') pending.delete(event.requestId)
+    // The person answers a secret in the thread, never from a list, so it waits as a question with no choices.
+    else if (event.kind === 'secret-request')
+      pending.set(event.requestId, { sessionId, requestId: event.requestId, kind: 'question', title: event.label })
     else if (event.kind === 'permission-request' || event.kind === 'question' || event.kind === 'elicitation') {
       pending.set(event.requestId, {
         sessionId,
@@ -101,6 +104,7 @@ export function changesThreadSummary(event: AgentEvent): boolean {
     'permission-request',
     'question',
     'elicitation',
+    'secret-request',
     'request-resolved',
     'recovery',
   ].includes(event.kind)

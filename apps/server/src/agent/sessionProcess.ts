@@ -409,6 +409,7 @@ export class SessionProcess {
             : 'blocking',
         background: (this.host.preferences()?.autoBackgroundSeconds ?? 1) !== 0,
         advisor: pins.advisor,
+        secrets: !s.parentId,
         goal: goalPolicy,
         nativeSubagentNote:
           // Antigravity's sub-agent tool cannot be switched off; Cursor's and OpenCode's are, at launch.

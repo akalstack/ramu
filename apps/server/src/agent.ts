@@ -537,6 +537,23 @@ export class AgentService {
     return this.parts.requests.requestPermission(...args)
   }
 
+  requestSecret(...args: Parameters<UserRequests['requestSecret']>) {
+    return this.parts.requests.requestSecret(...args)
+  }
+
+  pendingSecret(...args: Parameters<UserRequests['pendingSecret']>) {
+    return this.parts.requests.pendingSecret(...args)
+  }
+
+  answerSecret(...args: Parameters<UserRequests['answerSecret']>) {
+    return this.parts.requests.answerSecret(...args)
+  }
+
+  /** Where answered secrets are written for the agents' commands. */
+  set secretFiles(files: import('./agent/secretFiles').SecretFiles) {
+    this.parts.requests.secretFiles = files
+  }
+
   waitForAnswer(...args: Parameters<UserRequests['waitForAnswer']>) {
     return this.parts.requests.waitForAnswer(...args)
   }

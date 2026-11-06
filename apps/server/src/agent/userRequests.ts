@@ -1,5 +1,6 @@
 import type { ForwardedRequest } from './childRequests'
 import { randomUUID } from 'node:crypto'
+import { rm } from 'node:fs/promises'
 import { matchesCommand, PermissionApprovals } from './permissionApprovals'
 import type { AgentEvent, PermissionScope, AppPreferences } from '@ramu/shared/types'
 import {
@@ -20,6 +21,19 @@ import type { SessionRegistry } from './sessionRegistry'
 import type { SessionStore } from './sessionStore'
 import type { AgentService } from '../agent'
 import type { Db } from '../db'
+import type { SecretFiles } from './secretFiles'
+
+export interface SecretRequestInput {
+  label: string
+  reason: string
+  placeholder?: string
+  envName?: string
+  timeoutMs: number
+}
+export type SecretRequestResult =
+  { status: 'saved'; file: string; savedAs?: string } | { status: 'declined' | 'cancelled' | 'timed_out' }
+
+type SecretEvent = Extract<AgentEvent, { kind: 'secret-request' }>
 
 /** What UserRequests needs from the rest of the service. */
 export interface UserRequestsHost
@@ -41,6 +55,12 @@ export class UserRequests {
   ) {}
 
   private questionWaiters = new Map<string, Set<(cancel?: boolean) => void>>()
+  private secretWaiters = new Map<
+    string,
+    { sessionId: string; request: SecretEvent; finish: (result: SecretRequestResult) => boolean }
+  >()
+  /** Where answered secrets go; set by the server, absent in tests that never answer one. */
+  secretFiles: SecretFiles | undefined
   private appPermissions = new Map<
     string,
     { sessionId: string; finish: (allow: boolean, cancelled?: boolean) => void }
@@ -84,6 +104,73 @@ export class UserRequests {
       signal?.addEventListener('abort', abort, { once: true })
       if (signal?.aborted) abort()
     })
+  }
+
+  /** Shows a secret card in the thread and waits for the person, the timeout, or the run to end. */
+  requestSecret(id: string, input: SecretRequestInput, signal?: AbortSignal): Promise<SecretRequestResult> {
+    if (signal?.aborted || this.host.shutdown() || !WRITING_STATES.includes(this.host.get(id).state))
+      return Promise.reject(new Error('This thread is no longer working.'))
+    const request: SecretEvent = {
+      kind: 'secret-request',
+      requestId: randomUUID(),
+      label: input.label,
+      reason: input.reason,
+      ...(input.placeholder ? { placeholder: input.placeholder } : {}),
+      ...(input.envName ? { envName: input.envName } : {}),
+    }
+    return new Promise((resolve) => {
+      const abort = () => finish({ status: 'cancelled' })
+      const timer = setTimeout(() => finish({ status: 'timed_out' }), input.timeoutMs)
+      const finish = (result: SecretRequestResult) => {
+        if (!this.secretWaiters.delete(request.requestId)) return false
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', abort)
+        this.host.record(id, {
+          kind: 'request-resolved',
+          requestId: request.requestId,
+          outcome: result.status === 'saved' && result.savedAs ? 'saved-env' : result.status,
+        })
+        if (this.host.get(id).state === 'needs-input' && !this.hasBlockingQuestions(id))
+          this.host.setState(id, 'running')
+        resolve(result)
+        return true
+      }
+      this.secretWaiters.set(request.requestId, { sessionId: id, request, finish })
+      this.host.record(id, request)
+      this.host.setState(id, 'needs-input')
+      signal?.addEventListener('abort', abort, { once: true })
+      if (signal?.aborted) abort()
+    })
+  }
+
+  /** The secret card this thread still waits on; anything else is refused before a value is stored. */
+  pendingSecret(id: string, requestId: string): SecretEvent {
+    const waiter = this.secretWaiters.get(requestId)
+    if (!waiter || waiter.sessionId !== id) throw new Error('This secret request is no longer active.')
+    return waiter.request
+  }
+
+  /** Stores the value in an owner-only file and hands the agent its path; null declines. */
+  async answerSecret(
+    id: string,
+    requestId: string,
+    answer: { secret: string; savedAs?: string } | null,
+  ): Promise<void> {
+    const waiter = this.secretWaiters.get(requestId)
+    this.pendingSecret(id, requestId)
+    if (!answer) {
+      waiter!.finish({ status: 'declined' })
+      return
+    }
+    const secret = answer.secret.trim()
+    if (!secret) throw new Error('Enter the secret, or decline.')
+    if (!this.secretFiles) throw new Error('This host cannot store secrets.')
+    const file = await this.secretFiles.write(secret)
+    // The run may have ended while the file was written; nobody would receive its path.
+    if (!waiter!.finish({ status: 'saved', file, ...(answer.savedAs ? { savedAs: answer.savedAs } : {}) })) {
+      await rm(file, { force: true })
+      throw new Error('This secret request is no longer active.')
+    }
   }
 
   /** A child's pending approval or question, by request id: the parent's chat shows it and replies go to the child. */
@@ -181,6 +268,7 @@ export class UserRequests {
     const events = this.host.events(id)
     const outcomes = requestOutcomes(events)
     return events.some((e) => {
+      if (e.kind === 'secret-request') return !outcomes.has(e.requestId)
       if (e.kind !== 'question' && e.kind !== 'permission-request' && e.kind !== 'elicitation') return false
       if (e.kind === 'permission-request') return !outcomes.has(e.requestId)
       const state = questionState(events, e.requestId)
@@ -470,6 +558,8 @@ export class UserRequests {
   cancelWaiters(id: string): void {
     for (const permission of [...this.appPermissions.values()])
       if (permission.sessionId === id) permission.finish(false, true)
+    for (const secret of [...this.secretWaiters.values()])
+      if (secret.sessionId === id) secret.finish({ status: 'cancelled' })
     for (const [key, callbacks] of this.questionWaiters)
       if (key.startsWith(`${id}:`)) for (const cancel of [...callbacks]) cancel(true)
   }

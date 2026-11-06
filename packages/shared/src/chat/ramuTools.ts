@@ -15,6 +15,7 @@ export type RamuToolRow = {
 
 const KNOWN = new Set([
   'ask_user',
+  'request_secret',
   'question_status',
   'wait_for_answer',
   'close_question',
@@ -319,6 +320,8 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       ])
     case 'ask_user':
       return reply('Asked a question', 'Asking a question', 'message')
+    case 'request_secret':
+      return reply('Asked for a secret', 'Asking for a secret', 'message', text(args.label))
     case 'question_status':
       return reply('Checked a question', 'Checking a question', 'message')
     case 'wait_for_answer':

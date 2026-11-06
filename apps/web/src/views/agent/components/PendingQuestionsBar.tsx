@@ -4,7 +4,7 @@ import type { AgentEvent } from '@ramu/shared/types'
 import type { QuestionState } from '@ramu/shared/chat/questions'
 import { GHOST_TEXT_BUTTON_CLASS } from '../styles'
 
-type PendingQuestion = Extract<AgentEvent, { kind: 'question' | 'elicitation' }>
+type PendingQuestion = Extract<AgentEvent, { kind: 'question' | 'elicitation' | 'secret-request' }>
 
 /** The unanswered questions as chips above the transcript. A question opens its dock; an elicitation scrolls to its card. */
 export function PendingQuestionsBar({
@@ -39,14 +39,16 @@ export function PendingQuestionsBar({
             card?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus({ preventScroll: true })
           }}
         >
-          {question.kind === 'elicitation' ||
+          {question.kind !== 'question' ||
           states.get(question.requestId)?.waiting ||
           question.responseMode !== 'message'
             ? 'Waiting: '
             : 'Pending: '}
-          {question.kind === 'elicitation'
-            ? `${question.serverName}: ${question.message}`
-            : question.dependsOn || question.questions[0]?.question}
+          {question.kind === 'secret-request'
+            ? question.label
+            : question.kind === 'elicitation'
+              ? `${question.serverName}: ${question.message}`
+              : question.dependsOn || question.questions[0]?.question}
         </Button>
       ))}
     </div>

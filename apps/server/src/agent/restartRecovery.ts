@@ -82,7 +82,8 @@ export class RestartRecovery {
         this.helperRecoveryPending.add(id)
     for (const { id } of sessions)
       for (const event of this.host.events(id)) {
-        if (event.kind === 'elicitation') {
+        // A secret card's waiter lived in the old process; nobody can receive an answer now.
+        if (event.kind === 'elicitation' || event.kind === 'secret-request') {
           if (!questionState(this.host.events(id), event.requestId).outcome)
             this.host.record(id, { kind: 'request-resolved', requestId: event.requestId, outcome: 'cancelled' })
           continue

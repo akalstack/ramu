@@ -268,6 +268,8 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       })
     else if (e.kind === 'elicitation')
       items.push({ kind: 'elicitation', id: e.requestId, request: e, outcome: resolved.get(e.requestId) })
+    else if (e.kind === 'secret-request')
+      items.push({ kind: 'secret', id: e.requestId, request: e, outcome: resolved.get(e.requestId) })
     else if (e.kind === 'goal' && e.goal?.status === 'completed')
       items.push({
         kind: 'goal',

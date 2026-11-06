@@ -59,8 +59,8 @@ export function foldChatTurn(items: ChatBlock[], outcomes: Map<string, string>, 
         !event.teammate &&
         event.status === 'completed' &&
         !openGroup.has(block)) ||
-      ((event.kind === 'permission-request' || event.kind === 'elicitation') &&
-        ['approved', 'accepted', 'answered', 'allow', 'allowed'].some((val) => outcome.startsWith(val)))
+      ((event.kind === 'permission-request' || event.kind === 'elicitation' || event.kind === 'secret-request') &&
+        ['approved', 'accepted', 'answered', 'allow', 'allowed', 'saved'].some((val) => outcome.startsWith(val)))
     ;(foldable ? folded : kept).push(block)
   }
   return { folded, kept, answer: items.slice(start) }

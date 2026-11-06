@@ -46,6 +46,8 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerQuestionTools } from './agent/questionTools'
+import { registerSecretTools } from './agent/secretTools'
+import { SecretFiles } from './agent/secretFiles'
 import { usesRamuQuestionTools } from './agent/nativeFeatures'
 import { registerAdvisorTools } from './agent/advisor'
 import { registerGoalTools } from './agent/goals'
@@ -477,6 +479,9 @@ schedules.webhookBases = () =>
     ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []),
   ].map((candidate) => ({ url: candidate.url, via: candidate.interface }))
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
+const secretFiles = new SecretFiles(join(userData, 'secret-files'))
+agents.secretFiles = secretFiles
+secretFiles.start()
 schedules.recover()
 // eslint-disable-next-line prefer-const -- declared earlier because closures built before this point reference it
 reviews = new ReviewService(db, workspace, agents, join(userData, 'reviews'), changed)
@@ -717,6 +722,7 @@ async function stop(intentional = false, exitCode = 0) {
   tunnels.stop()
   await schedules.stop()
   await pullRequestWatches.stop()
+  secretFiles.stop()
   await agentThreads.stop()
   // Capture after the scheduler drains, so a chat that finished during that wait is not resumed.
   if (!intentional) agents.prepareForRestart()
@@ -1088,6 +1094,7 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
   if (!review) agentThreads.register(server, source.id)
+  if (!review && !source.parentId) registerSecretTools(server, agents, source.id)
   // A chat keeps the settings it launched with, so its tools match its instructions until it relaunches. Turning a
   // setting off mid-thread keeps its tools listed, and their handlers refuse.
   const launched = agents.launchSettings(source.id)

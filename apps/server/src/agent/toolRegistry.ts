@@ -14,6 +14,8 @@ const CORE = new Set([
   'question_status',
   'wait_for_answer',
   'close_question',
+  // Always loaded: an agent that never finds it asks for the secret in chat.
+  'request_secret',
   'set_goal',
   'get_goal',
   'update_goal',
@@ -27,6 +29,7 @@ const ALIASES: Record<string, string> = {
   review: 'diff feedback discussion',
   advisor: 'advice consult opinion',
   session: 'history transcript checkpoint',
+  request: 'secret token password credential key pin login',
   preview: 'interactive visual chart simulation calculator diagram prototype playground explorer walkthrough visualize',
   publish: 'interactive visual chart simulation calculator diagram prototype playground explorer walkthrough visualize',
   theme: 'palette colors colours appearance dark light look style',

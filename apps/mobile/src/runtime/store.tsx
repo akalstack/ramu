@@ -220,6 +220,8 @@ interface Store extends State {
     action: 'accept' | 'decline' | 'cancel',
     answers: Record<string, string>,
   ): void
+  /** Sends a secret, or a decline, straight to the host; the agent gets only a file path. */
+  answerSecret(id: string, request: string, answer: import('@ramu/shared/types').SecretAnswer): void
   toggleGoal(id: string): void
   clearGoal(id: string): void
   /** Sets, changes or (null) removes the goal's verification command; rejects with the host's reason so the editor can show it. */
@@ -1889,6 +1891,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       sessionAction(id, (pc, session) => invoke(pc, 'agent.forgetPermission', session, request, scope)),
     elicitation: (id, request, action, answers) =>
       sessionAction(id, (pc, session) => invoke(pc, 'agent.replyElicitation', session, request, action, answers)),
+    answerSecret: (id, request, answer) =>
+      sessionAction(id, (pc, session) => invoke(pc, 'agent.answerSecret', session, request, answer)),
     removeQueued: (id, message) =>
       sessionAction(id, (pc, session) => invoke(pc, 'agent.removeQueued', session, message)),
     sendQueuedNow: (id, message) =>

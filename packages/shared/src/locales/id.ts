@@ -5318,4 +5318,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Use your phone or another computer with this host over your network or VPN. You can change this later.': 'Pakai ponsel atau komputer lain dengan host ini lewat jaringan atau VPN-mu. Kamu bisa mengubahnya nanti.',
   'Nothing outside this computer can reach it yet. Turn on Allow other devices in Settings → Remote access; the address then appears here.': 'Belum ada yang bisa menjangkaunya dari luar komputer ini. Nyalakan Izinkan perangkat lain di Pengaturan → Akses jarak jauh; alamatnya lalu tampil di sini.',
   'Turn on Local network or VPN below first, so {0} can reach this computer.': 'Nyalakan dulu Jaringan lokal atau VPN di bawah, supaya {0} bisa menjangkau komputer ini.',
+  'Saved for this thread': 'Tersimpan untuk utas ini',
+  'Saved and kept as {0}': 'Tersimpan dan disimpan sebagai {0}',
+  'Keep as {0} for later threads': 'Simpan sebagai {0} untuk utas berikutnya',
+  'The agent gets a private file with the value, never the value itself. The file is deleted after a day.':
+    'Agen hanya menerima berkas pribadi berisi nilainya, bukan nilainya sendiri. Berkas itu dihapus setelah sehari.',
+  'Asked for a secret': 'Meminta rahasia',
+  'Asking for a secret': 'Meminta rahasia',
 }

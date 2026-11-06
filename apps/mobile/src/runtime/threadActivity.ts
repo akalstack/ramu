@@ -39,7 +39,8 @@ export function mobileThreadActivity(chat: Chat, connected: boolean) {
     (item) =>
       (item.kind === 'permission' && item.decision === undefined) ||
       (item.kind === 'question' && item.answers === undefined) ||
-      (item.kind === 'elicitation' && item.outcome === undefined),
+      (item.kind === 'elicitation' && item.outcome === undefined) ||
+      (item.kind === 'secret' && item.outcome === undefined),
   )
   const wait = chat.items.findLast((item) => item.kind === 'note' && item.wait)
   const waitIndex = wait ? chat.items.indexOf(wait) : -1
@@ -70,7 +71,11 @@ export function mobileThreadActivity(chat: Chat, connected: boolean) {
       working: chat.status === 'running' || Boolean(chat.compacting),
       helpers,
       advisors,
-      requests: requests.map((item) => ({ id: item.id, kind: item.kind as 'permission' | 'question' | 'elicitation' })),
+      // A secret counts as a question: it waits for the person, with no approval to give.
+      requests: requests.map((item) => ({
+        id: item.id,
+        kind: item.kind === 'secret' ? 'question' : (item.kind as 'permission' | 'question' | 'elicitation'),
+      })),
       providerWait: Boolean(wait) && !afterWait,
       queue: chat.queue.length,
       goal,
@@ -80,4 +85,5 @@ export function mobileThreadActivity(chat: Chat, connected: boolean) {
 export const pendingRequest = (item: TranscriptItem) =>
   (item.kind === 'permission' && item.decision === undefined) ||
   (item.kind === 'question' && item.answers === undefined) ||
-  (item.kind === 'elicitation' && item.outcome === undefined)
+  (item.kind === 'elicitation' && item.outcome === undefined) ||
+  (item.kind === 'secret' && item.outcome === undefined)

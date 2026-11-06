@@ -115,6 +115,12 @@ export type TranscriptItem = (
     }
   | { kind: 'elicitation'; id: string; request: import('@ramu/shared/types').AgentElicitation; outcome?: string }
   | {
+      kind: 'secret'
+      id: string
+      request: Extract<import('@ramu/shared/types').AgentEvent, { kind: 'secret-request' }>
+      outcome?: string
+    }
+  | {
       kind: 'changes'
       id: string
       /** The change review this card opens, as on the desktop's end-of-turn Changes card. */

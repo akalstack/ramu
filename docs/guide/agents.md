@@ -94,6 +94,12 @@ Hosts whose platform or description (**Settings → Threads → Describe this ho
 - **Settings → Agent setup → MCP servers** and **Skills** open on **All projects**: your own servers and skills, and one switch each that shares it with every provider and account in every project. Each says how many projects chose differently. Choose a project under **Applies to** to see its own servers and skills too; a switch there makes an exception for that project, and **Use the all-projects setting** drops it. **Connect through Ramu** is offered in a project. The phone shows the same lists read-only.
 - **/mcp** in a thread shows each MCP server's status. Repository `.mcp.json` files and Claude's local entries are shared with every provider.
 
+## Secrets agents ask for
+
+When an agent needs a token, password, PIN or pairing code only you can give, it asks with a masked card in the thread instead of in chat, on the desktop and the phone. **Save** sends the value to the host, which writes it to a private file only your user can read and gives the agent that file's path, never the value; the agent reads it inside the command that needs it. The value is not stored in the thread, and the file is deleted after a day. **Decline** tells the agent to go on without it. A card left unanswered for ten minutes, or still open when the run stops, closes, and the agent asks again only if it still needs it.
+
+When the agent names the variable a tool reads, such as `VERCEL_TOKEN`, the card on the host offers **Keep as VERCEL_TOKEN for later threads**. That adds it to [**Settings → Environment variables**](providers.md#environment-variables) for all providers, so new threads have it and do not ask again.
+
 ## Thread titles
 
 A thread is named from its first message, then once more after the first reply. **Rename** always wins; **Rename with AI** regenerates. A thread's hover card (and the phone's rename sheet) says where its title came from: your first message, Ramu, the provider, or you, and whether Ramu may still change it.

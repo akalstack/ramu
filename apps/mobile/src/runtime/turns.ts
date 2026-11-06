@@ -22,6 +22,7 @@ const settled = (item: TranscriptItem) =>
   (item.kind === 'plan' && item.entries.every((entry) => entry.status === 'completed')) ||
   (item.kind === 'permission' && item.decision === 'allow') ||
   (item.kind === 'elicitation' && item.outcome !== undefined) ||
+  (item.kind === 'secret' && !!item.outcome?.startsWith('saved')) ||
   (item.kind === 'question' && item.answers !== undefined)
 
 /**

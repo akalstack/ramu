@@ -13,6 +13,7 @@ import { ScheduleChatCard } from '../../../Automation'
 import { useHost } from '../../../workspace/HostProvider'
 import { errorText } from '../../../workspace/TaskPane'
 import { ElicitationCard } from '../../../chat/ElicitationCard'
+import { SecretRequestCard } from '../../../chat/SecretRequestCard'
 import { QuestionRow } from '../../../chat/QuestionCard'
 import { questionState, type QuestionState } from '@ramu/shared/chat/questions'
 import { notifyError } from '../../../chat/Notifications'
@@ -225,6 +226,15 @@ export function EventRow({
           request={e}
           status={questionStates.get(e.requestId) ?? questionState([], e.requestId)}
           pending={live && !outcomes.has(e.requestId)}
+        />
+      )
+    case 'secret-request':
+      return (
+        <SecretRequestCard
+          sessionId={sessionId}
+          request={e}
+          pending={live && !outcomes.has(e.requestId)}
+          outcome={outcomes.get(e.requestId)}
         />
       )
     case 'permission-request': {

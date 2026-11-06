@@ -687,6 +687,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <PermissionCard item={item} chatId={chat.id} />
     case 'elicitation':
       return <ElicitationCard item={item} chatId={chat.id} />
+    case 'secret':
+      return <SecretCard item={item} chatId={chat.id} />
     case 'changes':
       return <ChangesCard item={item} chatId={chat.id} />
     case 'goal':
@@ -1956,6 +1958,66 @@ function ElicitationCard({ item, chatId }: { item: Extract<TranscriptItem, { kin
           title={say('Submit')}
           disabled={item.request.fields.some((f) => f.required && !elicitationAnswered(f, answers[f.id] ?? ''))}
           onPress={() => elicitation(chatId, item.id, 'accept', answers)}
+        />
+      </View>
+    </Card>
+  )
+}
+
+/** One masked secret. Keeping it as an environment variable is offered only on the host itself. */
+function SecretCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 'secret' }>; chatId: string }) {
+  const say = useSay()
+  const { c } = useTheme()
+  const { answerSecret } = useStore()
+  const [secret, setSecret] = useState('')
+  if (item.outcome)
+    return (
+      <T tone="muted">
+        {item.request.label} ·{' '}
+        {item.outcome === 'saved'
+          ? say('Saved for this thread')
+          : item.outcome === 'saved-env'
+            ? say('Saved and kept as {0}', { 0: item.request.envName ?? '' })
+            : item.outcome === 'declined'
+              ? say('Declined')
+              : item.outcome === 'timed_out'
+                ? say('Timed out')
+                : say('Cancelled')}
+      </T>
+    )
+  return (
+    <Card style={{ padding: space.m, gap: space.m }}>
+      <T weight="600">{item.request.label}</T>
+      <T>{item.request.reason}</T>
+      <TextInput
+        accessibilityLabel={item.request.label}
+        placeholder={item.request.placeholder}
+        placeholderTextColor={c.muted}
+        value={secret}
+        maxLength={64 * 1024}
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        textContentType="password"
+        onChangeText={setSecret}
+        style={{ color: c.text, backgroundColor: c.fill, padding: space.m, borderRadius: radius.m }}
+      />
+      <T size={font.caption} tone="muted">
+        {say('The agent gets a private file with the value, never the value itself. The file is deleted after a day.')}
+      </T>
+      <View style={{ flexDirection: 'row', gap: space.s }}>
+        <Button
+          kind="secondary"
+          title={say('Decline')}
+          onPress={() => answerSecret(chatId, item.id, { type: 'decline' })}
+        />
+        <Button
+          title={say('Save')}
+          disabled={!secret.trim()}
+          onPress={() => {
+            answerSecret(chatId, item.id, { type: 'save', secret })
+            setSecret('')
+          }}
         />
       </View>
     </Card>

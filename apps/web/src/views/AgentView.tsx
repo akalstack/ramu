@@ -219,10 +219,10 @@ export const AgentView = memo(function AgentView({
   const latestAssistant = blocks.findLast((block) => block.kind === 'event' && block.event.kind === 'text')
   const live = session ? LIVE.includes(session.state) : false
   const pendingQuestions = events.filter(
-    (e): e is Extract<AgentEvent, { kind: 'question' | 'elicitation' }> =>
-      (e.kind === 'question' || e.kind === 'elicitation') &&
+    (e): e is Extract<AgentEvent, { kind: 'question' | 'elicitation' | 'secret-request' }> =>
+      (e.kind === 'question' || e.kind === 'elicitation' || e.kind === 'secret-request') &&
       !outcomes.has(e.requestId) &&
-      (e.kind === 'elicitation' ? live : e.responseMode === 'message' || live),
+      (e.kind === 'question' ? e.responseMode === 'message' || live : live),
   )
   const dockQuestions = useMemo(
     () => pendingQuestions.filter((e): e is Extract<AgentEvent, { kind: 'question' }> => e.kind === 'question'),

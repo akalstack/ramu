@@ -230,6 +230,8 @@ export interface AgentElicitation {
   schema?: Record<string, unknown>
 }
 export type ElicitationAction = 'accept' | 'decline' | 'cancel'
+/** The person's reply to a `secret-request`: the value, optionally kept as its environment variable, or a decline. */
+export type SecretAnswer = { type: 'save'; secret: string; remember?: boolean } | { type: 'decline' }
 
 export interface AgentQuestion {
   id?: string
@@ -446,6 +448,16 @@ type AgentEventBody =
       responseMode?: 'message' | 'ramu'
       grouping?: 'together' | 'independent'
       dependsOn?: string
+    }
+  /** A secret only the person can give. The value never enters events; the agent gets an owner-only file. */
+  | {
+      kind: 'secret-request'
+      requestId: string
+      label: string
+      reason: string
+      placeholder?: string
+      /** An environment variable the card offers to keep the value as, for later threads. */
+      envName?: string
     }
   | {
       kind: 'question-state'

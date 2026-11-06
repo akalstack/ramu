@@ -1288,6 +1288,7 @@ export interface RamuMethods {
   'agent.elicitationDraft'(sessionId: string, requestId: string, drafts: Record<string, string>): void
   'agent.questionDraft'(sessionId: string, requestId: string, drafts: Record<string, string>): void
   'agent.dismissQuestion'(sessionId: string, requestId: string): void
+  'agent.answerSecret'(sessionId: string, requestId: string, answer: import('./types').SecretAnswer): void
 }
 
 export type PushEvents = {

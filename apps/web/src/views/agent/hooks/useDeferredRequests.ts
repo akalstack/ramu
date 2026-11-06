@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentEvent } from '@ramu/shared/types'
 const request = (event: AgentEvent) =>
-  ['question', 'permission-request', 'elicitation'].includes(event.kind) && 'requestId' in event
+  ['question', 'permission-request', 'elicitation', 'secret-request'].includes(event.kind) && 'requestId' in event
     ? event.requestId
     : null
 /** New request cards wait for a quiet second; existing requests and all agent output stay live. */

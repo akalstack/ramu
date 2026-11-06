@@ -20,6 +20,7 @@ export function agentActivityLabel(state: AgentSessionState | undefined, events:
       case 'permission-request':
       case 'question':
       case 'elicitation':
+      case 'secret-request':
         return 'Working'
       case 'thinking':
         if (event.text.trim()) return 'Thinking'

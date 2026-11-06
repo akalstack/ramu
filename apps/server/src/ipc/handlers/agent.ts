@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
-import type { AgentSettings, FileContext, PermissionScope, TeammateMode } from '@ramu/shared/types'
+import type { AgentSettings, FileContext, PermissionScope, SecretAnswer, TeammateMode } from '@ramu/shared/types'
 import { MAX_ATTACHMENT_BYTES } from '../../attachments'
 import { draftPrompt, interpretDraft, teammateRecipe, type CustomAgent } from '@ramu/shared/customAgents'
 import {
@@ -31,7 +31,7 @@ function assertOpen(workspace: { getTask(id: string): { status: string } }, task
 }
 
 export const registerAgentHandlers: RegisterHandlers = (ctx) => {
-  const { host, workspace, agents, attachmentStore, withContext, rules, getSharedMcp } = ctx
+  const { host, workspace, agents, attachmentStore, withContext, rules, getSharedMcp, environment } = ctx
   return {
     'agent.all': { args: z.tuple([]), run: () => agents.all() },
     'agent.list': { args: z.tuple([id]), run: (taskId: string) => agents.list(taskId) },
@@ -404,6 +404,49 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.dismissQuestion': {
       args: z.tuple([id, z.string().min(1).max(300)]),
       run: (s: string, r: string) => agents.closeQuestion(s, r, 'dismissed'),
+    },
+    // Owner devices only (absent from the viewer allowlist). The value is never logged or recorded in the thread.
+    'agent.answerSecret': {
+      args: z.tuple([
+        id,
+        z.string().min(1).max(300),
+        z.discriminatedUnion('type', [
+          z.object({
+            type: z.literal('save'),
+            secret: z
+              .string()
+              .max(64 * 1024)
+              .refine((value) => value.trim().length > 0),
+            remember: z.boolean().optional(),
+          }),
+          z.object({ type: z.literal('decline') }),
+        ]),
+      ]),
+      run: async (s: string, r: string, answer: SecretAnswer) => {
+        const request = agents.pendingSecret(s, r)
+        if (answer.type === 'decline') return agents.answerSecret(s, r, null)
+        const secret = answer.secret.trim()
+        let savedAs: string | undefined
+        if (answer.remember) {
+          if (!request.envName) throw new Error('This request has no environment variable to keep.')
+          // Like API keys, kept variables are entered only on the host running Ramu.
+          if (host.canAdministerIntegrations?.() !== true)
+            throw new Error('Keep environment variables on the host running Ramu')
+          const status = environment.status(true)
+          if (status.state === 'unavailable')
+            throw new Error('The host credential store is locked. Unlock it and try again.')
+          const current = status.values ?? {}
+          await environment.save({
+            ...current,
+            global: [
+              ...(current.global ?? []).filter((entry) => entry.key !== request.envName),
+              { key: request.envName, value: secret },
+            ],
+          })
+          savedAs = request.envName
+        }
+        return agents.answerSecret(s, r, { secret, ...(savedAs ? { savedAs } : {}) })
+      },
     },
   }
 }
