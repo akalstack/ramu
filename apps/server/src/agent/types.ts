@@ -41,6 +41,8 @@ export interface SubagentInput {
   /** The person chose the model, so routing and automatic selection are skipped. */
   settings?: import('@ramu/shared/types').AgentSettings
   teammate?: import('@ramu/shared/types').TeammateMode
+  /** What the person wrote to bring a teammate in, shown in the lead's thread above its card. */
+  personRequest?: string
   /** The custom agent this helper runs: its instructions lead the prompt and read-only narrows its access. */
   custom?: import('@ramu/shared/customAgents').CustomAgent
 }

@@ -7,6 +7,7 @@ function renderLine(e: AgentEvent): string | null {
   if (e.kind === 'agent') return `SUB-AGENT ${e.name} (${e.status})${e.summary ? `: ${e.summary}` : ''}`
   if (e.kind === 'user')
     return `USER: ${e.text}${e.attachments?.length ? '\nAttached files: ' + e.attachments.map((file) => `${JSON.stringify(file.name)} saved at ${JSON.stringify(file.path)}`).join(', ') : ''}`
+  if (e.kind === 'teammate-message') return `USER TO TEAMMATE ${e.name}: ${e.text}`
   if (e.kind === 'interactive')
     return `INTERACTIVE CONTENT ${e.reference.id} v${e.reference.version}: ${e.reference.title} — ${e.reference.summary}`
   if (e.kind === 'theme') return `THEME DRAFT SHOWN TO THE USER: ${e.theme.name}`

@@ -21,6 +21,7 @@ import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { visibleText } from '../lib/messages'
 import { ThreadAgents } from '../lib/threadAgents'
 import { HelperIcon, RoleTag, TaskStatusIcon } from './TaskStatus'
+import { ProviderIcon } from '../../../models/ProviderIcon'
 import { REPORT_STATUS } from '@ramu/shared/chat/helperPresentation'
 import { MessageTime } from './MessageTime'
 import { CopyButton } from './CopyButton'
@@ -240,6 +241,51 @@ export function UserMessage({
   )
 }
 
+/**
+ * What the person wrote to a teammate, in their place on the right and addressed to it, so each report reads after the
+ * request it answers. The teammate's name opens its conversation.
+ */
+export function TeammateMessage({
+  event: e,
+  latest,
+  onOpenAgent,
+}: {
+  event: Extract<AgentEvent, { kind: 'teammate-message' }>
+  latest: boolean
+  onOpenAgent?: (agentId: string) => void
+}) {
+  useLanguage()
+  const agent = useContext(ThreadAgents).find((task) => task.agentId === e.teammateId)
+  return (
+    <UserShell
+      header={
+        <Button
+          variant="ghost"
+          size="xs"
+          type="button"
+          className="h-auto gap-1 px-1 py-0 text-caption font-normal text-muted-foreground disabled:opacity-100"
+          disabled={!agent || !onOpenAgent}
+          onClick={() => onOpenAgent?.(e.teammateId)}
+          title={agent ? translate('Open agent {0}', { 0: e.name }) : undefined}
+        >
+          {agent?.provider ? <ProviderIcon provider={agent.provider} size={12} /> : <Bot size={12} />}
+          {translate('To {0}', { 0: e.name })}
+        </Button>
+      }
+    >
+      <UserBubble>
+        <div className={USER_MARKDOWN_CLASS}>
+          <ReferenceText text={e.text} />
+        </div>
+      </UserBubble>
+      <MessageActions latest={latest} className="mt-0.5 mr-1">
+        <MessageTime at={e.at} />
+        <CopyButton text={e.text} />
+      </MessageActions>
+    </UserShell>
+  )
+}
+
 const REPORT_ICON: Record<string, AgentTask['status'] | undefined> = {
   finished: 'completed',
   failed: 'failed',
@@ -263,6 +309,8 @@ function TaskReport({
   const status = REPORT_ICON[report.verb]
   // A teammate replies turn after turn, so only a reply that went wrong needs a status.
   const showStatus = !(agent?.teammate && report.verb === 'finished')
+  // You asked a teammate yourself, so its answer is what you came to read; a helper's report is for the lead and folds
+  // to a preview.
   const [expanded, setExpanded] = useState(false)
   const [long, setLong] = useState(false)
   const body = useRef<HTMLDivElement>(null)
@@ -300,7 +348,7 @@ function TaskReport({
           className={`${MSG_CLASS} assistant w-full text-soft [&>:first-child]:mt-0 ${
             expanded
               ? ''
-              : `max-h-[7.5rem] overflow-hidden ${long ? '[mask-image:linear-gradient(to_bottom,black_55%,transparent)]' : ''}`
+              : `${agent?.teammate ? 'max-h-[24rem]' : 'max-h-[7.5rem]'} overflow-hidden ${long ? '[mask-image:linear-gradient(to_bottom,black_55%,transparent)]' : ''}`
           }`}
         >
           <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>

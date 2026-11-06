@@ -385,7 +385,8 @@ export const AgentView = memo(function AgentView({
     return () => clearInterval(timer)
   }, [])
   const turnDates = useMemo(() => turnDatesOf(turns), [turns])
-  const lastUserAt = turns.findLast((turn) => turn.user)?.startedAt
+  // A message to a teammate opens a turn too, but the lead's time runs from what it was asked.
+  const lastUserAt = turns.findLast((turn) => turn.user?.kind === 'event' && turn.user.event.kind === 'user')?.startedAt
   const elapsed = useElapsed(lastUserAt, working)
 
   const busyAgent = working || session?.state === 'needs-input'

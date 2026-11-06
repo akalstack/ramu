@@ -882,7 +882,13 @@ export class AgentService {
    * Brings a model the person chose into this thread as a teammate, named as the model menu names it (numbered when the
    * same model is already here). A thread holds up to four.
    */
-  async addTeammate(sessionId: string, settings: AgentSettings, mode: TeammateMode, request: string) {
+  async addTeammate(
+    sessionId: string,
+    settings: AgentSettings,
+    mode: TeammateMode,
+    request: string,
+    from: 'person' | 'lead' = 'person',
+  ) {
     const lead = this.get(sessionId)
     if (lead.parentId) throw new Error('Add a teammate to the main thread, not to a helper.')
     const here = activeTeammates(latestTasks(this.events(sessionId)))
@@ -908,6 +914,7 @@ export class AgentService {
       name,
       settings: { ...settings, access },
       teammate: mode,
+      ...(from === 'person' ? { personRequest: request } : {}),
     })
   }
 
@@ -999,7 +1006,8 @@ export class AgentService {
       this.parts.subagents.suggestionDeclined.add(sessionId)
       return { declined: true, message: 'The person chose not to add it. Do not suggest another until they write.' }
     }
-    const joined = await this.addTeammate(sessionId, settings, 'review', input.request)
+    // The approval card already shows the agent's request.
+    const joined = await this.addTeammate(sessionId, settings, 'review', input.request, 'lead')
     return {
       added: teammateHandle(joined.name),
       message: `${joined.name} joined in Review. Its report arrives as a message; reach it with teammate_ask or teammate_message.`,
@@ -1087,6 +1095,14 @@ export class AgentService {
 
   messageTask(...args: Parameters<AgentTasks['messageTask']>) {
     return this.parts.tasks.messageTask(...args)
+  }
+
+  /** The person writes to a helper. A teammate's message also shows in the lead's thread, above the report it gets. */
+  async messageFromPerson(sessionId: string, agentId: string, text: string) {
+    const task = this.task(sessionId, agentId)
+    if (task?.teammate && task.canMessage)
+      this.record(sessionId, { kind: 'teammate-message', teammateId: agentId, name: task.name, text: text.trim() })
+    await this.parts.tasks.messageTask(sessionId, agentId, text)
   }
 
   interrupt(...args: Parameters<SessionProcess['interrupt']>) {

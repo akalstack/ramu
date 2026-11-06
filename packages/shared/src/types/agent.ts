@@ -375,6 +375,11 @@ type AgentEventBody =
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
   /** Recorded on a teammate's own session: how it works beside the lead. Review is read-only whatever the thread allows. */
   | { kind: 'teammate'; mode: TeammateMode; name: string }
+  /**
+   * Recorded on the lead's session when the person writes to a teammate, so the thread shows what each report answers.
+   * Only shown: the teammate gets the message in its own session, and the lead never receives it.
+   */
+  | { kind: 'teammate-message'; teammateId: string; name: string; text: string }
   /** Recorded on a helper's session when it runs a custom agent, so its read-only choice holds across restarts. */
   | { kind: 'custom-agent'; name: string; readOnly: boolean }
   /** This thread continues on another host. The original stays and links to it. */

@@ -312,8 +312,10 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
         { label: 'Why', value: text(args.reason) ?? '' },
       ])
     case 'teammate_ask':
+      // The reply comes back inside the lead's turn, so this row is the only place the person can read it.
       return reply('Asked teammate', 'Asking teammate', 'message', text(args.to), [
         { label: 'Question', value: text(args.question) ?? '' },
+        { label: 'Reply', value: text(data.reply) ?? '' },
       ])
     case 'ask_user':
       return reply('Asked a question', 'Asking a question', 'message')

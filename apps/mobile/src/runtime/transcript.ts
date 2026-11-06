@@ -120,6 +120,9 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
                     detail: answers!.body,
                   } as TranscriptItem),
       )
+    } else if (e.kind === 'teammate-message') {
+      // What you wrote to a teammate, so its report reads after the request, as on the desktop.
+      items.push({ kind: 'note', id, title: `Message to ${e.name}`, detail: e.text })
     } else if (e.kind === 'goal' && goals.has(e)) {
       const { type, goal } = goals.get(e)!
       const verb = {

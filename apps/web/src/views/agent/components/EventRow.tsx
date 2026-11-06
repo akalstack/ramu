@@ -20,7 +20,7 @@ import { SettingsChange, SwitchBackLabel } from './SettingsChange'
 import { AssistantText } from './AssistantText'
 import { TurnDiff } from './TurnDiff'
 import { ThinkingRow } from './ThinkingRow'
-import { UserMessage } from './UserMessage'
+import { TeammateMessage, UserMessage } from './UserMessage'
 import { PlanCard } from './PlanCard'
 import { PermissionRequestCard } from './PermissionRequestCard'
 import { CONVERSATION_SEPARATOR_CLASS, GHOST_TEXT_BUTTON_CLASS, TURN_END_CLASS } from '../styles'
@@ -193,6 +193,8 @@ export function EventRow({
           onOpenAgent={onOpenAgent}
         />
       )
+    case 'teammate-message':
+      return <TeammateMessage event={e} latest={latest} onOpenAgent={onOpenAgent} />
     case 'text':
       return (
         <AssistantText

@@ -41,3 +41,31 @@ it('treats a turn the agent carried on from, after a steered message, as finishe
     ])[0],
   ).toEqual({ ended: false, interrupted: false })
 })
+
+it('gives a message to a teammate its own turn, so the lead’s answer above it stays the answer', () => {
+  const events: AgentEvent[] = [
+    { kind: 'user', text: 'add a reset flow' },
+    { kind: 'text', text: 'Added it.' },
+    result('Added it.'),
+    { kind: 'teammate-message', teammateId: 'mate', name: 'Opus 5.5', text: 'Review the reset flow' },
+    { kind: 'agent', agentId: 'mate', name: 'Opus 5.5', teammate: 'review', status: 'running' },
+  ]
+  const turns = toTurns(
+    events.map((event) => ({ kind: 'event' as const, event })),
+    events,
+  )
+  expect(turns.map((turn) => turn.user?.kind === 'event' && turn.user.event.kind)).toEqual(['user', 'teammate-message'])
+  expect(turns[0]!.items.map((block) => block.kind === 'event' && block.event.kind)).toEqual(['text', 'result'])
+  // Only the teammate works on it, so there is no lead turn left running.
+  expect(turns[1]).toMatchObject({ ended: true })
+})
+
+it('keeps the lead’s turn open after a message to a teammate when the lead is still working', () => {
+  expect(
+    turnsOf([
+      { kind: 'user', text: 'go' },
+      { kind: 'teammate-message', teammateId: 'mate', name: 'Opus 5.5', text: 'Review as it goes' },
+      { kind: 'text', text: 'still working' },
+    ]).at(-1),
+  ).toEqual({ ended: false, interrupted: false })
+})

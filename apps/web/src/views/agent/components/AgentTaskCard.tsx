@@ -37,7 +37,8 @@ export function AgentTaskCard({
     status === 'running'
       ? reportPreview(task.summary ?? '') ||
         (task.lastTool ? translate('Using {0}', { 0: toolLabel(task.lastTool) }) : translate('Starting…'))
-      : final && final.toLowerCase() !== TASK_STATUS[status].toLowerCase()
+      : // A teammate's report follows in the thread, so its card does not repeat it.
+        !task.teammate && final && final.toLowerCase() !== TASK_STATUS[status].toLowerCase()
         ? final
         : undefined
   return (

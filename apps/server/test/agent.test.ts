@@ -2740,6 +2740,32 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
+  it("shows what the person wrote to a teammate in the lead's thread, without sending it to the lead", async () => {
+    const svc = routed()
+    const parent = await parentOf(svc)
+    const settings = { ...full, provider: 'codex' as const, model: 'codex-test', effort: 'high' as const }
+    const { agentId } = await svc.addTeammate(parent.id, settings, 'review', 'Review the auth diff')
+    const shown = () => svc.events(parent.id).filter((e) => e.kind === 'teammate-message')
+    expect(shown()).toMatchObject([{ teammateId: agentId, name: 'Codex test', text: 'Review the auth diff' }])
+    // Ahead of the teammate's card, so the request heads its place in the thread.
+    const at = (match: (e: AgentEvent) => boolean) => svc.events(parent.id).findIndex(match)
+    expect(at((e) => e.kind === 'teammate-message')).toBeLessThan(
+      at((e) => e.kind === 'agent' && e.agentId === agentId),
+    )
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
+    await svc.messageFromPerson(parent.id, agentId, 'Check the token expiry too')
+    expect(shown().map((e) => e.kind === 'teammate-message' && e.text)).toEqual([
+      'Review the auth diff',
+      'Check the token expiry too',
+    ])
+    await until(() => JSON.stringify(svc.events(agentId)).includes('Check the token expiry too'))
+    // The teammate gets its own words once, not again in its catch-up.
+    expect(JSON.stringify(svc.events(agentId))).not.toContain('USER TO TEAMMATE')
+    // The lead never receives either message.
+    expect(svc.events(parent.id).some((e) => e.kind === 'user' && /auth diff|token expiry/.test(e.text))).toBe(false)
+    svc.stopAll()
+  })
+
   it('runs a custom agent named as the type, on its model, read-only, and shows which ran', async () => {
     const svc = routed()
     svc.customAgents = () => [

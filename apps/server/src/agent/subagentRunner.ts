@@ -404,6 +404,14 @@ export class SubagentRunner {
       // The note is informational; a helper still starts without it.
     }
     if (input.teammate) this.host.record(child.id, { kind: 'teammate', mode: input.teammate, name })
+    // Before the card, so the person's request heads the teammate's place in the thread.
+    if (input.personRequest?.trim())
+      this.host.record(parentId, {
+        kind: 'teammate-message',
+        teammateId: child.id,
+        name,
+        text: input.personRequest.trim(),
+      })
     if (input.custom)
       this.host.record(child.id, { kind: 'custom-agent', name: input.custom.name, readOnly: input.custom.readOnly })
     const run: ChildRun = {
@@ -454,8 +462,12 @@ export class SubagentRunner {
         : {}),
     })
     const prefs = this.host.preferences()
+    // Its own request follows the context as its brief, so the context leaves it out.
+    const sofar = this.host
+      .events(parentId)
+      .filter((event) => !(event.kind === 'teammate-message' && event.teammateId === child.id))
     const context = input.teammate
-      ? `<chat-context>\nThe conversation so far:\n${clipTextEnd(redactSecrets(transcriptOf(this.host.events(parentId))), 60_000)}\n</chat-context>\n\n`
+      ? `<chat-context>\nThe conversation so far:\n${clipTextEnd(redactSecrets(transcriptOf(sofar)), 60_000)}\n</chat-context>\n\n`
       : prefs?.subagents.shareContext
         ? `<chat-context>\nThe conversation so far, for background only:\n${clipTextEnd(transcriptOf(this.host.events(parentId)), 20_000)}\n</chat-context>\n\n`
         : ''

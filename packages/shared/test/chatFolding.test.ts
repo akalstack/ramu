@@ -53,3 +53,10 @@ it('retains pending or declined permissions, and folds approved ones', () => {
   expect(folded.kept).toEqual([pending, denied])
   expect(folded.folded).toEqual([allowed, allowedUser, allowedAuto])
 })
+it('keeps a teammate’s card in view once it reports, unlike a finished helper', () => {
+  const helper = event({ kind: 'agent', agentId: 'h', name: 'Explore', status: 'completed' })
+  const mate = event({ kind: 'agent', agentId: 'm', name: 'Opus 5.5', teammate: 'review', status: 'completed' })
+  const folded = foldChatTurn([helper, mate, answer], new Map(), new Map())
+  expect(folded.folded).toEqual([helper])
+  expect(folded.kept).toEqual([mate])
+})

@@ -167,7 +167,7 @@ export class AgentTasks {
     if (!task?.canMessage) throw new Error('This agent cannot receive messages.')
     if (task.teammate) this.host.wakeTeammate(id, agentId)
     const run = this.host.children.get(agentId)
-    if (run?.teammate && run.parentId === id) text = `${this.catchUp(id, run)}${text}`
+    if (run?.teammate && run.parentId === id) text = `${this.catchUp(id, agentId, run)}${text}`
     if (run?.parentId === id) {
       // Straight to the sub-agent; its next report comes back as a message.
       run.report = true
@@ -201,7 +201,7 @@ export class AgentTasks {
    * What the lead's thread said and changed since a teammate last took part. After a restart the cursor is gone, so the
    * last stretch of the conversation stands in for it.
    */
-  private catchUp(id: string, run: ChildRun): string {
+  private catchUp(id: string, agentId: string, run: ChildRun): string {
     const events = this.host.events(id)
     const since = Math.min(run.seenParent ?? Math.max(0, events.length - CATCH_UP_EVENTS), events.length)
     run.seenParent = events.length
@@ -209,7 +209,11 @@ export class AgentTasks {
     const own = [`[Sub-agent "${run.name.replace(/"/g, "'")}"`, `[Teammate "${run.name.replace(/"/g, "'")}"`]
     const missed = events
       .slice(since)
-      .filter((event) => !(event.kind === 'user' && own.some((prefix) => event.text.startsWith(prefix))))
+      .filter(
+        (event) =>
+          !(event.kind === 'user' && own.some((prefix) => event.text.startsWith(prefix))) &&
+          !(event.kind === 'teammate-message' && event.teammateId === agentId),
+      )
     const transcript = clipTextEnd(redactSecrets(transcriptOf(missed)), CATCH_UP_CHARS)
     return teammateCatchUp(transcript, helperWork(missed).paths)
   }

@@ -303,7 +303,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       run: (s: string, agentId: string, text: string) =>
         lockSession(ctx, s, () => {
           agents.resetTeammateRounds(s)
-          return agents.messageTask(s, agentId, text)
+          return agents.messageFromPerson(s, agentId, text)
         }),
     },
     'customAgents.list': { args: z.tuple([]), run: () => ctx.customAgents?.list() ?? [] },

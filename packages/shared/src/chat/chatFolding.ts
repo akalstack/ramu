@@ -55,6 +55,8 @@ export function foldChatTurn(items: ChatBlock[], outcomes: Map<string, string>, 
       (event.kind === 'plan' && event.entries.every((entry) => entry.status === 'completed')) ||
       (event.kind === 'agent' &&
         event.taskType !== 'advisor' &&
+        // A teammate stays in the thread across turns, so its card stays in view.
+        !event.teammate &&
         event.status === 'completed' &&
         !openGroup.has(block)) ||
       ((event.kind === 'permission-request' || event.kind === 'elicitation') &&
