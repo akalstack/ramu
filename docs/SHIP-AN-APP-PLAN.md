@@ -49,7 +49,7 @@ Left as they are: T3 Code's queue-editing tool and changing another thread's mod
 ### 2. New project from scratch
 
 - **`project_create`** (agent tool) and **projects.create** with a starter: a name, a folder beside the person's other repositories (the same parent `project_add` clones into), `git init`, an optional generator command run as an approved background command, a `.gitignore`, and a first commit. Outside Full access it shows one card naming the folder and the command. It returns the project for `thread_start`.
-- **Stack choice** is a pure function in `packages/shared` (`stacks.ts`): from the answers (web or phone, sign-in, data, expected traffic) to a stack, a generator command, a default deploy target and the commands for build, test and dev. The same table drives the deploy sheet's recommendation. It covers a handful of stacks well (static site, Next.js, Vite + React, Astro, Expo, a Node API) rather than many badly.
+- **Stack choice** is a pure function in `packages/shared` (`stacks.ts`): from the answers (web or phone, sign-in, data, expected traffic) to a stack, a generator command, a default deploy target and the commands for build, test and dev. The same table drives the deploy sheet's recommendation. It covers static sites, Next.js, Vite + React, Astro, Expo, a Node API, Python with Django or FastAPI, Rails and Go, each with its generator, a test command and a deploy target that runs it.
 - **Home → New app** runs the questions, `project_create` and the first thread with the goal and its verification command. The browser opens on the dev server's ready line, using the existing `background_terminal_wait` ready-text match.
 - **Project facts** saved in `projectConfig.ts`: the stack, the dev, build and test commands, and later the deploy target, so new threads in the project know them without being told.
 
@@ -82,11 +82,34 @@ For someone who has a VPS or wants the app on the Ramu host:
 
 ### 6. Domains
 
-**Add domain** on the Deployments section asks the platform to add it, shows the DNS records to create in plain words ("At your domain provider, add a CNAME record named www pointing to …"), and watches verification and the certificate, waking the thread when it's live. DNS providers' APIs (Cloudflare first) can create the records after a confirmation; that comes after the guided version works.
+**Add domain** on the Deployments section asks the platform to add it, shows the DNS records to create in plain words ("At your domain provider, add a CNAME record named www pointing to …"), and watches verification and the certificate, waking the thread when it's live. When the domain's DNS is at a provider with an API (Cloudflare first, then Vercel DNS and Netlify DNS), **Create records** makes them after one confirmation instead.
+
+### 7. Databases and storage
+
+- The stack choice says when the app needs a database, file storage or email. The deploy sheet then offers the platform's own option (Vercel Marketplace: Neon Postgres, Upstash Redis, Blob; Netlify and Cloudflare: D1, KV, R2) or a provider the person picks (Neon, Supabase, Resend for email), on the person's account.
+- **Provision** creates it through the platform's API, and its connection variables join the same secrets sync: this host for development, the platform's preview and production environments, and GitHub Actions when tests need it. Preview deployments get their own branch database where the provider has branching (Neon, Supabase).
+- Migrations run as a step of the deploy (the stack's migrate command), and a failed migration stops the deploy and wakes the thread with its output. Deleting a database is never an agent action.
+
+### 8. Cost and usage
+
+- The Deployments section shows what the platform reports for the current billing period (bandwidth, function time, build minutes, database storage) beside the plan's limit, read through the deploy adapter.
+- A notice in Inbox before a free-tier limit runs out (at 80% and 100%), naming what grows and the cheapest fix (cache a page, shrink images, raise the plan). The agent can read the same figures with `deploy_usage` and propose a change as a pull request.
+- Ramu never changes a plan or adds a payment method; **Open billing** goes to the platform's page.
+
+### 9. Uptime
+
+- **Watch the live URL** (on by default after the first production deploy) checks the production URL and one health path every five minutes from the host, using the schedule runner. Two failed checks in a row open a thread in the project with the status code, the response time, the last deployment and its logs, and send a phone notification.
+- The thread's first step is reading the logs and offering **Roll back** when the last deploy is the likely cause; the person decides. Recovery closes the incident with a recap. A host that is asleep reports the gap as unknown, not as downtime.
+
+### 10. Mobile store releases
+
+- For an Expo app, **Release** is a deploy target: EAS Build for iOS and Android, then EAS Submit to TestFlight and Play's internal track, on the person's Expo account (`EXPO_TOKEN` through `request_secret`). Over-the-air updates (EAS Update) are the preview channel for each pull request, with a QR code in the thread for Expo Go.
+- The sheet checks what the stores need first (bundle identifier, icons, version, privacy text) and lists what only the person can do: enrolling in the Apple Developer Program and creating the Play app. Submitting to production review is always the person's action.
+- A build or submission that fails wakes the thread with its log, through the same deploy watch.
 
 ## Safety
 
-- Production deploys, rollbacks, domain and DNS changes, deleting deployments and branch protection changes are the person's actions; agents ask through a card every time, in every access mode.
+- Production deploys, rollbacks, domain and DNS changes, deleting deployments or databases, plan and billing changes, store submissions and branch protection changes are the person's actions; agents ask through a card every time, in every access mode.
 - Tokens stay in `credentials/` on the host, scoped to the smallest permission the platform offers. A token is never written into a workflow file, a commit or the transcript, and a committed `.env` file blocks the push with an explanation.
 - Every new IPC input and agent tool is bounded with zod; the deploy adapter only talks to the project's own linked target and account.
 - Generated workflows pin actions to a major version and use `permissions:` with the least access the job needs.
@@ -96,13 +119,8 @@ For someone who has a VPS or wants the app on the Ramu host:
 - **Non-coder task:** someone who has never used a terminal asks for "a one-page site for my bakery with opening hours and a contact form", answers the questions, and opens the live URL on their phone without typing a command, in under 30 minutes. They then ask for a change; it arrives as a preview URL, and after **Merge** the live site shows it.
 - **Developer task:** for an existing Next.js repository with no CI, **Deploy** to Vercel and **Set up CI** together take one sheet and one pull request. Count steps and context switches against doing it by hand in the Vercel and GitHub dashboards.
 - **Broken production:** a merge that breaks the build wakes the thread with the log tail; the agent opens a fix and the person can roll back from the phone meanwhile.
+- **Data and uptime:** a booking app gets a Postgres database from the deploy sheet, preview deployments use their own branch, and stopping the database's endpoint opens an incident thread within ten minutes that recovers with a recap.
+- **Mobile:** an Expo app goes from **Release** to TestFlight and Play's internal track with only the store steps done by hand.
 - **Orchestration:** a lead splits a task into a worktree helper on another model and a read-only reviewer, stops one that goes off track, and a resent tool call does not start a second helper.
 - Live checks for each platform with real accounts, and the VPS path on a real Ubuntu server, are listed under [Acceptance](roadmap.md#acceptance) until run.
 
-## Later
-
-- More stacks (Python and Django, Rails, Go) when people ask for them.
-- Databases and storage provisioned through the platform (Vercel Marketplace, Neon, Supabase), with their variables synced the same way.
-- Cost and usage from the platform's API in the Deployments section, with a notice before a free tier runs out.
-- Uptime checks that open a thread when the live URL stops answering.
-- Mobile store releases (EAS Build and Submit) as a deploy target for Expo apps.
