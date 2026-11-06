@@ -15,6 +15,8 @@ export type RoutingOutcome =
   | { kind: 'resolved'; projectId: string; reason: string; via: 'name' | 'alias' | 'ai' }
   | { kind: 'ambiguous'; candidates: { projectId: string; reason: string }[] }
   | { kind: 'unknown' }
+  /** The request starts something new (a page, a site, an app, a question) that belongs to no listed project. */
+  | { kind: 'new'; reason: string }
   | { kind: 'unavailable'; reason: 'no-projects' | 'catalog-incomplete' | 'ai-failed' | 'invalid-ai-result' }
 
 /** Largest catalog sent to the classifier; a bigger one can never prove a unique match. */
@@ -84,6 +86,8 @@ export function routingCatalog(candidates: readonly RoutingCandidate[]): Routing
 export interface AiRoutingResult {
   projectIds?: unknown
   reason?: unknown
+  /** True when no project fits because the request starts something new. */
+  new?: unknown
 }
 
 /**
@@ -97,7 +101,7 @@ export function interpretAiRouting(result: AiRoutingResult, catalog: readonly Ro
   const byId = new Map(catalog.map((c) => [c.id, c]))
   if (ids.some((id) => !byId.has(id))) return { kind: 'unavailable', reason: 'invalid-ai-result' }
   const reason = typeof result.reason === 'string' ? result.reason.trim().slice(0, 240) : ''
-  if (!ids.length) return { kind: 'unknown' }
+  if (!ids.length) return result.new === true ? { kind: 'new', reason } : { kind: 'unknown' }
   if (ids.length > 1) return { kind: 'ambiguous', candidates: ids.map((projectId) => ({ projectId, reason })) }
   const chosen = byId.get(ids[0]!)!
   if (!reason || !groundedIn(reason, chosen))

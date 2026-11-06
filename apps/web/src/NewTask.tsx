@@ -258,6 +258,8 @@ export function NewTask({
   // Auto drafts share the project-free model and workspace scope until a destination is resolved.
   const scopeProject = auto ? NO_PROJECT : projectId
   const [choices, setChoicesState] = useState<RouteCandidate[] | null>(null)
+  // The router thought the request starts something new, so No project is offered as the suggestion.
+  const [suggestNew, setSuggestNew] = useState(false)
   const [routeNote, setRouteNote] = useState<string | null>(null)
   const routeRevision = useRef(0)
   // Auto also weighs projects on the other connected hosts; a request that belongs to one of them starts there.
@@ -480,6 +482,13 @@ export function NewTask({
             await startElsewhere(outcome.projectId, routed, sendSettings)
             return
           }
+          if (outcome.kind === 'new' || (outcome.kind === 'unavailable' && outcome.reason === 'no-projects')) {
+            // Something new may belong to no project yet; the person decides, with No project offered first.
+            setSuggestNew(true)
+            setChoices(ws.projects.filter((p) => p.id !== NO_PROJECT).map((p) => ({ projectId: p.id, reason: '' })))
+            return
+          }
+          setSuggestNew(false)
           if (outcome.kind === 'resolved') {
             destination = outcome.projectId
             setPending(
@@ -500,10 +509,10 @@ export function NewTask({
             )
             return
           } else if (outcome.kind === 'unknown') {
-            setChoices(ws.projects.map((p) => ({ projectId: p.id, reason: '' })))
+            setChoices(ws.projects.filter((p) => p.id !== NO_PROJECT).map((p) => ({ projectId: p.id, reason: '' })))
             return
           } else {
-            setChoices(ws.projects.map((p) => ({ projectId: p.id, reason: '' })))
+            setChoices(ws.projects.filter((p) => p.id !== NO_PROJECT).map((p) => ({ projectId: p.id, reason: '' })))
             setError(
               outcome.reason === 'no-projects'
                 ? t('Add a project first.')
@@ -512,45 +521,56 @@ export function NewTask({
             return
           }
         }
-        if (!ws.projects.some((p) => p.id === destination))
-          throw new Error(t('That project is no longer available. Choose a project.'))
-        if (!(ws.repos[destination] ?? []).length) throw new Error(t('Add a repository to this project first'))
-        // The destination's repository model defaults apply as if the project had been picked by hand.
-        const destinationDefaults = agentDraft.choice.selection
-          ? undefined
-          : await host.invoke('tasks.agentDefaults', destination, initialSettings.provider)
-        const routedSettings = routedAgentSettings(initialSettings, destinationDefaults, agentDraft.choice)
-        if (!routedSettings) {
-          // Stay in Auto so the draft remains visible; a model chosen here then wins over the project default.
-          setRouteNote(null)
-          throw new Error(
-            t("{name}'s model default can't be used. Choose a model, then send again.", {
-              name: ws.projects.find((p) => p.id === destination)?.name ?? '',
-            }),
-          )
-        }
-        sendSettings = routedSettings
-        const destinationOptions = await host.invoke('tasks.workspaceOptions', destination)
-        const checkout = resolveCheckoutMode({
-          defaultMode: destinationOptions.defaultCheckoutMode ?? 'current',
-          manual: null,
-          workspaceId: null,
-          projectFree: false,
-          worktreeUnavailable: destinationOptions.worktreeUnavailable,
-        })
-        if (checkout.blocked) throw new Error(checkout.reason ?? t('Workspace unavailable'))
-        const naming: BranchNamingIntent = {
-          strategy: destinationOptions.branchNaming ?? 'fixed',
-          instructions: destinationOptions.branchInstructions ?? '',
-          prompt: prompt.slice(0, 6000),
-        }
-        target = {
-          projectId: destination,
-          mode: checkout.mode,
-          workspaceId: undefined,
-          branchPrefix: destinationOptions.branchPrefix,
-          naming,
-          branch: checkout.mode === 'worktree' ? currentBranchChoice(undefined, title, naming) : undefined,
+        if (destination === NO_PROJECT) {
+          target = {
+            projectId: NO_PROJECT,
+            mode: 'current',
+            workspaceId: undefined,
+            branchPrefix: undefined,
+            naming: namingIntent,
+            branch: undefined,
+          }
+        } else {
+          if (!ws.projects.some((p) => p.id === destination))
+            throw new Error(t('That project is no longer available. Choose a project.'))
+          if (!(ws.repos[destination] ?? []).length) throw new Error(t('Add a repository to this project first'))
+          // The destination's repository model defaults apply as if the project had been picked by hand.
+          const destinationDefaults = agentDraft.choice.selection
+            ? undefined
+            : await host.invoke('tasks.agentDefaults', destination, initialSettings.provider)
+          const routedSettings = routedAgentSettings(initialSettings, destinationDefaults, agentDraft.choice)
+          if (!routedSettings) {
+            // Stay in Auto so the draft remains visible; a model chosen here then wins over the project default.
+            setRouteNote(null)
+            throw new Error(
+              t("{name}'s model default can't be used. Choose a model, then send again.", {
+                name: ws.projects.find((p) => p.id === destination)?.name ?? '',
+              }),
+            )
+          }
+          sendSettings = routedSettings
+          const destinationOptions = await host.invoke('tasks.workspaceOptions', destination)
+          const checkout = resolveCheckoutMode({
+            defaultMode: destinationOptions.defaultCheckoutMode ?? 'current',
+            manual: null,
+            workspaceId: null,
+            projectFree: false,
+            worktreeUnavailable: destinationOptions.worktreeUnavailable,
+          })
+          if (checkout.blocked) throw new Error(checkout.reason ?? t('Workspace unavailable'))
+          const naming: BranchNamingIntent = {
+            strategy: destinationOptions.branchNaming ?? 'fixed',
+            instructions: destinationOptions.branchInstructions ?? '',
+            prompt: prompt.slice(0, 6000),
+          }
+          target = {
+            projectId: destination,
+            mode: checkout.mode,
+            workspaceId: undefined,
+            branchPrefix: destinationOptions.branchPrefix,
+            naming,
+            branch: checkout.mode === 'worktree' ? currentBranchChoice(undefined, title, naming) : undefined,
+          }
         }
         setChoices(null)
       }
@@ -946,9 +966,23 @@ export function NewTask({
             <p className="m-0 text-caption text-muted-foreground">
               {choices.length === 1 || choices.some((c) => c.reason)
                 ? t('More than one project could fit. Choose where to start.')
-                : t('No project matched. Choose where to start.')}
+                : suggestNew
+                  ? t('This looks like something new. Choose where to start.')
+                  : t('No project matched. Choose where to start.')}
             </p>
             <div className="flex flex-wrap gap-1.5">
+              {!choices.some((choice) => choice.reason) && (
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  disabled={busy}
+                  title={t('Something new that needs no project yet')}
+                  onClick={() => void send([], NO_PROJECT).catch((e) => setError(errorText(e)))}
+                >
+                  {t('No project')}
+                  {suggestNew ? <span className="text-muted-foreground"> · {t('Suggested')}</span> : null}
+                </Button>
+              )}
               {choices.map((choice) => (
                 <Button
                   key={choice.projectId}
@@ -969,6 +1003,14 @@ export function NewTask({
                   {choice.reason ? <span className="text-muted-foreground"> · {choice.reason}</span> : null}
                 </Button>
               ))}
+              <Button
+                variant="ghost"
+                size="xs"
+                disabled={busy || addProject.busy}
+                onClick={() => void addProject.add()}
+              >
+                {t('Open a folder…')}
+              </Button>
               <Button variant="ghost" size="xs" disabled={busy} onClick={() => setChoices(null)}>
                 {t('Cancel')}
               </Button>

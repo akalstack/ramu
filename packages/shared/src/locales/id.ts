@@ -5591,4 +5591,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Cloudflare account ID (for a token limited to Pages)": "ID akun Cloudflare (untuk token yang terbatas ke Pages)",
   "Ramu hit a problem": "Ramu mengalami masalah",
   "Your drafts and threads are safe. Try again, and if it keeps happening, copy the details for a bug report.": "Draf dan thread kamu aman. Coba lagi, dan kalau masih terjadi, salin detailnya untuk laporan bug.",
+  "Something new that needs no project yet": "Sesuatu yang baru dan belum perlu proyek",
+  "Open a folder…": "Buka folder…",
+  "This looks like something new. Choose where to start.": "Ini tampak seperti sesuatu yang baru. Pilih tempat memulai.",
+  "Suggested · something new that needs no project yet": "Disarankan · sesuatu yang baru dan belum perlu proyek",
+  "Standalone": "Mandiri",
 }

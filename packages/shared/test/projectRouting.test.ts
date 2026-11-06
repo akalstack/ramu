@@ -54,6 +54,17 @@ describe('AI stage', () => {
     expect(interpretAiRouting({ projectIds: ['p3'], reason: 'seems right' }, catalog).kind).toBe('ambiguous')
     expect(interpretAiRouting({ projectIds: ['p3', 'p4'], reason: 'both' }, catalog).kind).toBe('ambiguous')
   })
+  it('starts new work outside a project only when the classifier says it is new', () => {
+    expect(interpretAiRouting({ projectIds: [], reason: 'A new page', new: true }, catalog)).toEqual({
+      kind: 'new',
+      reason: 'A new page',
+    })
+    expect(interpretAiRouting({ projectIds: [], reason: 'Unclear', new: false }, catalog)).toEqual({ kind: 'unknown' })
+    // A match always wins over a stray new flag.
+    expect(
+      interpretAiRouting({ projectIds: ['p3'], reason: 'Storefront handles checkout', new: true }, catalog).kind,
+    ).toBe('resolved')
+  })
   it('rejects ids outside the catalog and malformed output; none means unknown', () => {
     expect(interpretAiRouting({ projectIds: ['zzz'], reason: 'x' }, catalog)).toEqual({
       kind: 'unavailable',

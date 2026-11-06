@@ -129,6 +129,8 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   // Auto picks the project from the first message; an explicit choice always wins for this draft.
   const [auto, setAuto] = useState(!params.project && initialSelection().auto)
   const [choices, setChoices] = useState<{ projectId: string; reason: string }[] | null>(null)
+  // The router thought the request starts something new, so No project is the suggestion.
+  const [suggestNew, setSuggestNew] = useState(false)
   const pending = useRef<{ text: string; attachments: unknown; context: unknown } | null>(null)
   const routeRevision = useRef(0)
   const routingStart = useRef(false)
@@ -362,10 +364,12 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           const name = list.find((p) => rawId(p.id) === raw)?.name ?? ''
           setRouting((current) => current && { ...current, status: say('Starting in {0}…', { 0: name }) })
         } else {
+          // Something new may belong to no project yet; No project is offered first and the person decides.
+          setSuggestNew(outcome.kind === 'new' || (outcome.kind === 'unavailable' && outcome.reason === 'no-projects'))
           const candidates =
             outcome.kind === 'ambiguous'
               ? outcome.candidates
-              : list.map((p) => ({ projectId: rawId(p.id), reason: '' }))
+              : list.filter((p) => rawId(p.id) !== STANDALONE).map((p) => ({ projectId: rawId(p.id), reason: '' }))
           pending.current = { text, attachments, context }
           setChoices(candidates)
           storeRef.current.setDraft(
@@ -381,6 +385,26 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           setPicker('choice')
           return false
         }
+      }
+      if (raw === STANDALONE) {
+        // No project: nothing to check out and no project defaults, as when No project is picked by hand.
+        const id = await createChat({
+          computerId: selected,
+          projectId: STANDALONE,
+          text,
+          mode: 'current',
+          workspaceId: undefined,
+          attachments,
+          context,
+          ...asModelChoice(verified),
+        })
+        setChoices(null)
+        pending.current = null
+        storeRef.current.setDraft(routeChoiceKey, '')
+        if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
+        if (asTab) router.push({ pathname: '/chat/[id]', params: { id } })
+        else router.replace({ pathname: '/chat/[id]', params: { id } })
+        return
       }
       const destinationProject = list.find((p) => rawId(p.id) === raw)
       if (!destinationProject) throw new Error('That project is no longer available. Choose a project.')
@@ -764,9 +788,33 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           footer={say(
             choices?.some((choice) => choice.reason)
               ? 'More than one project could fit. Choose where to start.'
-              : 'No project matched. Choose where to start.',
+              : suggestNew
+                ? 'This looks like something new. Choose where to start.'
+                : 'No project matched. Choose where to start.',
           )}
         >
+          {choices?.some((choice) => choice.reason) ? null : (
+            <SheetOption
+              icon={MessageCircle}
+              title={say('Standalone')}
+              help={
+                suggestNew
+                  ? say('Suggested · something new that needs no project yet')
+                  : say('Something new that needs no project yet')
+              }
+              onPress={() => {
+                const request = pending.current
+                setPicker(null)
+                if (request)
+                  void startInAuto(
+                    request.text,
+                    request.attachments as Send[2],
+                    request.context as Send[3],
+                    STANDALONE,
+                  ).catch(() => setPicker('choice'))
+              }}
+            />
+          )}
           {choices?.map((choice) => {
             const match = list.find((p) => rawId(p.id) === choice.projectId)
             const remote = others.targets.get(choice.projectId)
