@@ -7,6 +7,7 @@ Agents can work in a browser, on your computer's screen or apps, and on iOS Simu
 **Settings → Browser** chooses the agent's browser: Ramu's integrated browser (default) or the provider's own tools.
 
 - In Full access the agent opens tabs, reads pages and clicks, types and scrolls. Other modes ask once per turn.
+- To check a responsive layout, the agent can lay a tab it controls out at a phone, tablet or desktop size. The size ends when you take control, and the page returns to its normal layout.
 - To check a page in both themes, the agent can switch a tab it controls to light or dark mode, the same setting as **Display → Appearance** in the phone's browser viewer; **System** follows the computer again.
 - **Take control** pauses the agent so you can sign in or click; **Give control** hands it back.
 - **Profiles:** **Default** keeps sign-ins on this host; **Temporary** is cleared after each run. **Import…** copies sign-in cookies from Chrome, Edge or Firefox into a new profile.

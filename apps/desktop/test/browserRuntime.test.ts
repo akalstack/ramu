@@ -322,6 +322,22 @@ describe('phone layout', () => {
     expect(adjust).toHaveBeenCalledTimes(2)
   })
 
+  it('lays a tab out at the size the run chose until a person takes control', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    const emulate = vi.fn(async () => {})
+    Object.assign(created[0]!.page, { emulate })
+    const phone = { width: 390, height: 844, mobile: true }
+    expect((await runtime.resizeForAgent(tab.id, run.runId, run, phone)).viewport).toEqual(phone)
+    expect(emulate).toHaveBeenLastCalledWith(phone)
+    await expect(
+      runtime.resizeForAgent(tab.id, run.runId, run, { width: 10, height: 10, mobile: false }),
+    ).rejects.toThrow('from 200 to 4000')
+    runtime.takeControl(tab.id, 'phone')
+    expect(emulate).toHaveBeenLastCalledWith(null)
+    expect(runtime.list(user).find((entry) => entry.id === tab.id)?.viewport).toBeUndefined()
+  })
+
   it('leaves a page shown on a desktop untouched', async () => {
     const { runtime } = setup()
     const { tab } = await runtime.open({ ...user }, 'https://a.test')

@@ -21,6 +21,7 @@ import type {
 } from '@ramu/shared/browserBridge'
 import { BROWSER_INPUT_KEY } from '@ramu/shared/browserBridge'
 import type { ElectronCookie } from '@ramu/shared/browserImport'
+import type { BrowserViewport } from '@ramu/shared/types/browser'
 import { browserGuestScript } from '@ramu/shared/browserGuestScript'
 import { HostDownloads } from './hostDownloads'
 import { browserFaviconFrom } from '@ramu/shared/browserLinks'
@@ -203,7 +204,12 @@ export class HostGuestFactory implements GuestFactory {
     let viewport = DEFAULT_VIEWPORT
     // Page zoom, as in a desktop browser: the page lays out in fewer CSS pixels, each drawn larger.
     let zoom = 1
-    const css = () => ({ width: Math.round(viewport.width / zoom), height: Math.round(viewport.height / zoom) })
+    // The agent's chosen layout size, which takes the place of the default and the zoom until it is cleared.
+    let emulated: BrowserViewport | null = null
+    const css = () =>
+      emulated
+        ? { width: emulated.width, height: emulated.height }
+        : { width: Math.round(viewport.width / zoom), height: Math.round(viewport.height / zoom) }
     const applyZoom = async () => {
       if (zoom === 1) return
       await cdp!.send('Emulation.setDeviceMetricsOverride', { ...css(), deviceScaleFactor: zoom, mobile: false })
@@ -364,6 +370,25 @@ export class HostGuestFactory implements GuestFactory {
           else await applyZoom()
           handlers.onChanged?.()
         }
+      },
+      emulate: async (next) => {
+        const page = await ready
+        emulated = next
+        if (next) {
+          await page.setViewportSize({ width: next.width, height: next.height })
+          await cdp!.send('Emulation.setDeviceMetricsOverride', {
+            width: next.width,
+            height: next.height,
+            deviceScaleFactor: 1,
+            mobile: next.mobile,
+          })
+        } else {
+          await page.setViewportSize(viewport)
+          if (zoom === 1)
+            await cdp!.send('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false })
+          else await applyZoom()
+        }
+        handlers.onChanged?.()
       },
       fit: async (size) => {
         const page = await ready

@@ -25,7 +25,7 @@ import type {
   BrowserPageSnapshot,
   BrowserHumanInput,
 } from '@ramu/shared/browserBridge'
-import type { BrowserTabInfo } from '@ramu/shared/types/browser'
+import type { BrowserTabInfo, BrowserViewport } from '@ramu/shared/types/browser'
 import { BrowserUploads } from './browserUploads'
 import { BrowserDownloads, type GuestDownload } from './browserDownloads'
 import { TEMPORARY_PROFILE_ID, resolveProfile, validProfileId } from '@ramu/shared/browser'
@@ -50,6 +50,8 @@ export interface GuestPage {
    * Absent where the page is also shown on a desktop, whose layout must not change under the person at the computer.
    */
   fit?(size: { width: number; height: number } | null): Promise<void>
+  /** Lays the page out at a size the agent chose; `null` restores whatever layout the page had before. */
+  emulate?(viewport: BrowserViewport | null): Promise<void>
   /** The kind of field that has focus, so the controlling phone can raise its keyboard. */
   focusedField?(): Promise<BrowserFieldFocus>
   /** Zoom, appearance, a hard reload or clearing the cache, as the controlling person asks. */
@@ -166,6 +168,8 @@ interface Tab {
   fit?: { deviceId: string; width: number; height: number }
   zoom?: number
   colorScheme?: 'light' | 'dark'
+  /** The agent's chosen layout size; dropped as soon as a person takes control, who gets the page as they left it. */
+  viewport?: BrowserViewport
   /** When anyone last used or changed this tab; the idle sweep closes an unused agent-owned tab. */
   lastActive: number
 }
@@ -221,6 +225,7 @@ export class BrowserRuntime {
       paused: tab.lease.paused,
       ...(tab.released ? { released: true } : {}),
       ...(tab.fit ? { fitted: true } : {}),
+      ...(tab.viewport ? { viewport: tab.viewport } : {}),
       ...(tab.zoom && tab.zoom !== 1 ? { zoom: tab.zoom } : {}),
       ...(tab.colorScheme ? { colorScheme: tab.colorScheme } : {}),
       ...(viewer !== undefined
@@ -431,6 +436,10 @@ export class BrowserRuntime {
     ) {
       tab.fit = undefined
       void tab.page.fit?.(null).catch(() => {})
+    }
+    if (tab.viewport && controller.kind === 'human') {
+      tab.viewport = undefined
+      void tab.page.emulate?.(null).catch(() => {})
     }
   }
 
@@ -1011,6 +1020,31 @@ export class BrowserRuntime {
     return this.agentAction(id, runId, tab.lease.generation, owner, async (page) => {
       this.invalidate(tab)
       await page[move]()
+      return this.info(tab)
+    })
+  }
+
+  /** Lays the page out at a phone, tablet or desktop size for the run that controls it; `null` restores it. */
+  async resizeForAgent(
+    id: string,
+    runId: string,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+    viewport: BrowserViewport | null,
+  ): Promise<TabInfo> {
+    if (
+      viewport &&
+      ![viewport.width, viewport.height].every((side) => Number.isInteger(side) && side >= 200 && side <= 4000)
+    )
+      throw new Error('Use a width and height from 200 to 4000 pixels.')
+    const tab = this.tab(id)
+    this.assertOwner(tab, owner)
+    tab.lease = observed(tab.lease, runId)
+    return this.agentAction(id, runId, tab.lease.generation, owner, async (page) => {
+      if (!page.emulate) throw new BrowserError('unavailable', 'Update Ramu on this computer to resize the page.')
+      await page.emulate(viewport)
+      this.invalidate(tab)
+      tab.viewport = viewport ? { width: viewport.width, height: viewport.height, mobile: viewport.mobile } : undefined
+      this.changed()
       return this.info(tab)
     })
   }

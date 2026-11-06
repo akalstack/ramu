@@ -257,7 +257,18 @@ export class ElectronGuestFactory implements GuestFactory {
         return { ok: true }
       },
       nextFrame: (after) => debuggerForPage().nextFrame(after),
+      emulate: (viewport) => debuggerForPage().emulatedViewport(viewport),
       screenshot: async (): Promise<BrowserScreenshot> => {
+        const browser = debuggerForPage()
+        const size = browser.emulatedSize
+        if (size) {
+          // Base64 of at most 128 KB, the same budget as a pane capture.
+          for (const quality of [50, 30, 15]) {
+            const data = await browser.captureJpeg(quality)
+            if (data.length <= 174_000) return { mimeType: 'image/jpeg', data, width: size.width, height: size.height }
+          }
+          throw new Error('This page image is too large. Use its text snapshot.')
+        }
         const capture = await contents.capturePage(undefined, { stayHidden: true, stayAwake: false })
         if (capture.isEmpty())
           throw new Error('The page has no rendered image yet. Show its pane and try capturing again.')

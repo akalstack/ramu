@@ -157,6 +157,7 @@ export type BrowserBridgeCommand =
   | { kind: 'wait'; tabId: string; text?: string; urlIncludes?: string; timeoutMs: number }
   | { kind: 'back' | 'forward' | 'reload'; tabId: string }
   | { kind: 'appearance'; tabId: string; colorScheme: NonNullable<BrowserTabAdjust['colorScheme']> }
+  | { kind: 'resize'; tabId: string; viewport: import('./types/browser').BrowserViewport | null }
   | { kind: 'close'; tabId: string }
   | { kind: 'end' }
 

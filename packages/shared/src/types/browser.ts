@@ -1,3 +1,18 @@
+/** A layout size in CSS pixels; `mobile` lays the page out as a phone browser would, honouring its viewport meta tag. */
+export interface BrowserViewport {
+  width: number
+  height: number
+  mobile: boolean
+}
+/** Common sizes an agent checks a layout at, so it needs no device dimensions of its own. */
+export const BROWSER_VIEWPORT_PRESETS = {
+  phone: { width: 390, height: 844, mobile: true },
+  'phone-landscape': { width: 844, height: 390, mobile: true },
+  tablet: { width: 820, height: 1180, mobile: true },
+  laptop: { width: 1280, height: 800, mobile: false },
+  desktop: { width: 1920, height: 1080, mobile: false },
+} as const satisfies Record<string, BrowserViewport>
+
 /** A tab in the integrated browser, as the workspace shows it. */
 export interface BrowserTabInfo {
   id: string
@@ -18,6 +33,8 @@ export interface BrowserTabInfo {
   released?: boolean
   /** The page is laid out at the controlling phone's screen size; it returns to the default when control changes. */
   fitted?: boolean
+  /** The size the agent laid the page out at, to check a phone or tablet layout. Ends when a person takes control. */
+  viewport?: BrowserViewport
   /** Page zoom when not 100%. */
   zoom?: number
   /** A forced light or dark appearance; absent follows the system. */

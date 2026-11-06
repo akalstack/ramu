@@ -5,6 +5,7 @@ import { z } from 'zod'
 import type { DesktopBrowserBroker } from './desktopBroker'
 import type { BrowserBridgeCommand } from '@ramu/shared/browserBridge'
 import { BROWSER_UPLOAD_CHUNK_BYTES } from '@ramu/shared/browserBridge'
+import { BROWSER_VIEWPORT_PRESETS } from '@ramu/shared/types/browser'
 import { readBrowserUpload } from './upload'
 import { saveBrowserDownload } from './download'
 
@@ -502,6 +503,34 @@ export function registerBrowserTools(
       { description: `${text} Read the page again afterwards.`, inputSchema: { tabId: tab } },
       async (args) => call({ kind: move, ...(await aim(args)) }),
     )
+  server.registerTool(
+    'browser_resize',
+    {
+      description:
+        'Lay out a tab this run controls at a phone, tablet or desktop size to check a responsive layout: a preset, or width and height in CSS pixels (mobile lays it out as a phone browser would). default restores the normal size. The size ends when the person takes control. Inspect or screenshot afterwards.',
+      inputSchema: {
+        tabId: tab,
+        preset: z.enum(['phone', 'phone-landscape', 'tablet', 'laptop', 'desktop', 'default']).optional(),
+        width: z.number().int().min(200).max(4000).optional(),
+        height: z.number().int().min(200).max(4000).optional(),
+        mobile: z.boolean().optional(),
+      },
+    },
+    async ({ preset, width, height, mobile, ...args }) => {
+      if (!preset && (width === undefined || height === undefined))
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Give a preset, or both width and height.' }],
+        }
+      const viewport =
+        preset === 'default'
+          ? null
+          : preset
+            ? BROWSER_VIEWPORT_PRESETS[preset]
+            : { width: width!, height: height!, mobile: mobile ?? width! < 768 }
+      return call({ kind: 'resize', viewport, ...(await aim(args)) })
+    },
+  )
   server.registerTool(
     'browser_set_appearance',
     {

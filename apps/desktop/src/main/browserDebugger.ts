@@ -1,6 +1,7 @@
 import { BrowserFrames, type CompositorFrame } from '@ramu/server/browserFrames'
 import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
+import type { BrowserViewport } from '@ramu/shared/types/browser'
 import type {
   BrowserDialog,
   BrowserDiagnostics,
@@ -280,17 +281,43 @@ export class BrowserDebugger {
       clickCount: input.clickCount,
     })
   }
+  private parked: { width: number; height: number } | null = null
+  private emulated: BrowserViewport | null = null
   /** A fixed layout size while the page's pane is hidden; `null` gives the page its pane's real size again. */
   async parkedViewport(size: { width: number; height: number } | null): Promise<void> {
+    this.parked = size
+    await this.applyMetrics()
+  }
+  /** The agent's chosen layout size, which wins over parking until it is cleared. */
+  async emulatedViewport(viewport: BrowserViewport | null): Promise<void> {
+    this.emulated = viewport
+    await this.applyMetrics()
+  }
+  get emulatedSize(): BrowserViewport | null {
+    return this.emulated
+  }
+  private async applyMetrics() {
     await this.ensure()
+    const size = this.emulated ?? this.parked
     if (size)
       await this.contents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
         width: size.width,
         height: size.height,
         deviceScaleFactor: 0,
-        mobile: false,
+        mobile: this.emulated?.mobile ?? false,
       })
     else await this.contents.debugger.sendCommand('Emulation.clearDeviceMetricsOverride')
+  }
+  /** The page as laid out at an emulated size, which a capture of the pane would crop or stretch. */
+  async captureJpeg(quality: number): Promise<string> {
+    await this.ensure()
+    const result = (await this.contents.debugger.sendCommand('Page.captureScreenshot', {
+      format: 'jpeg',
+      quality,
+    })) as {
+      data: string
+    }
+    return result.data
   }
   /** Follows the page's light or dark preference, or forces one, for this tab only. */
   async colorScheme(value: 'system' | 'light' | 'dark'): Promise<void> {
