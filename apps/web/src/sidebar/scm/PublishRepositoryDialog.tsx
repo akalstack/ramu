@@ -6,6 +6,7 @@ import { Dialog } from '../../Menu'
 import { t, useLanguage } from '../../i18n'
 import { errorText } from '../../workspace/TaskPane'
 import { useHost } from '../../workspace/HostProvider'
+import { BrandIcon } from '@/components/brand-icon'
 
 const NAME_PATTERN = /^([A-Za-z0-9-]{1,39}\/)?[A-Za-z0-9._-]{1,100}$/
 
@@ -82,7 +83,8 @@ export function PublishRepositoryDialog({
         <p className="muted text-muted-foreground small text-caption m-0">
           {t('Creates a GitHub repository with the GitHub CLI, adds it as origin and pushes the current branch.')}
         </p>
-        <p role="status" className="muted text-muted-foreground small text-caption m-0">
+        <p role="status" className="muted text-muted-foreground small text-caption m-0 flex items-center gap-1.5">
+          <BrandIcon brand="github" size={12} />
           {account?.ambiguous
             ? t('Several GitHub accounts are saved. Choose one in Settings before publishing.')
             : account?.login

@@ -11,6 +11,7 @@ import {
 } from '@ramu/shared/webhooks'
 import type { Schedule, ScheduleRun, WebhookDelivery } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
+import { BrandIcon } from '@/components/brand-icon'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dropdown } from './Menu'
@@ -49,6 +50,7 @@ export function WebhookFields({
         {t('Starts when')}
         <Dropdown
           label={t('Starts when')}
+          icon={preset && <BrandIcon brand={SOURCE_DEFAULTS[preset.source].brand} />}
           value={preset?.id ?? CUSTOM}
           onChange={(id) => {
             const next = WEBHOOK_PRESETS.find((entry) => entry.id === id)

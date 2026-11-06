@@ -1,15 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  CircleCheck,
-  CircleDot,
-  CircleX,
-  ExternalLink,
-  GitPullRequest,
-  MessageSquare,
-  PanelRight,
-  Wrench,
-} from 'lucide-react'
+import { CircleCheck, CircleDot, CircleX, GitPullRequest, MessageSquare, PanelRight, Wrench } from 'lucide-react'
 import type {
   AgentSettings,
   ForgeCheck,
@@ -31,6 +22,8 @@ import { ForgeAccessPanel } from './ForgeAccessPanel'
 import { startCheckoutChat } from './startCheckoutChat'
 import { useHost } from '../../workspace/HostProvider'
 import { queryInvokerFor } from '../../git/hostQuery'
+import { BrandIcon } from '@/components/brand-icon'
+import { forgeBrand } from '@ramu/shared/brands'
 
 const STATE_LABEL: Record<PullRequestInfo['state'], string> = { open: 'Open', closed: 'Closed', merged: 'Merged' }
 
@@ -251,7 +244,11 @@ export function PullRequestSection({
             <span className="truncate">
               #{pr.number} {pr.title}
             </span>
-            <ExternalLink size={11} className="flex-none text-muted-foreground" />
+            <BrandIcon
+              brand={forgeBrand(query.data.service ?? 'github')}
+              size={11}
+              className="flex-none text-muted-foreground"
+            />
           </a>
           <Button
             variant="ghost"

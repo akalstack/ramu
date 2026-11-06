@@ -6,6 +6,8 @@ import { t } from '../../i18n'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 import { accessLines } from '../../settings/hostingStatus'
+import { BrandIcon } from '@/components/brand-icon'
+import { forgeBrand } from '@ramu/shared/brands'
 
 /** Opens Settings → Git at the hosting accounts. Closing Settings returns to the repository that asked. */
 export const openHostingSettings = () =>
@@ -115,7 +117,10 @@ export function ForgeAccessPanel({
   return (
     <div className="flex flex-col gap-1.5">
       {unavailable && (
-        <p className="m-0 text-caption text-muted-foreground">{forgeUnavailableText(unavailable, service)}</p>
+        <p className="m-0 flex items-start gap-1.5 text-caption text-muted-foreground">
+          <BrandIcon brand={forgeBrand(service)} size={12} className="mt-0.5" />
+          <span>{forgeUnavailableText(unavailable, service)}</span>
+        </p>
       )}
       <div className="flex flex-wrap gap-1.5">
         <Button

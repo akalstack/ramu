@@ -68,6 +68,7 @@ Nothing for deploys exists in code yet. Platforms differ more than forges do (Ne
 - **IPC:** `deploy.*` handlers validated with zod and checked against the project's binding and account, like `forge.createPullRequest`. A deploy or rollback whose reply is lost reads the deployment list again before reporting, so a retry never deploys twice.
 - **Agent tools:** `deploy_status`, `deploy_logs` and `deploy_preview` (a preview deployment of the current branch). `deploy_production`, `deploy_rollback` and domain changes ask the person every time with a card that names the URL and what changes.
 - **Deploy watch:** after a deploy, and on every push to the default branch, the thread is woken once the deployment finishes: the URL on success, the log tail on failure. It reuses the pull request watch's wake and queue path (`background/pullRequestWatches.ts`) and adds **Deployment failed** presets for Vercel and Netlify to [webhook schedules](guide/background-work.md#when-a-request-arrives).
+- **Marks:** each hosting adapter and resource kind names its `BrandId` (`packages/shared/src/brands.ts`, which already carries Vercel, Netlify, Cloudflare, Fly, Railway, Docker, Neon, Supabase, Upstash, Resend, Postgres, Expo and the stores), and every place below shows its `BrandIcon` beside its name.
 - **UI:** a **Deployments** section in the project (target, live URL, the last deployments with status, **Open**, **Logs**, **Roll back**) and the URL on the pull request card when the preview is ready. On the phone the section is read-only plus **Roll back** with confirmation.
 
 ### 4. CI/CD
@@ -131,17 +132,6 @@ The site (`apps/site`, one Astro page) is about keeping coding agents moving. Wi
 - **Demo:** `components/demo.tsx` plays the new loop (one sentence, questions, the app in the preview, **Deploy**, the live URL) instead of today's thread-only demo.
 - **Around the page:** title, description and the social-sharing image; the README's opening lines match the hero; the sponsor links (GitHub Sponsors and Trakteer) stay.
 - **Claims:** no comparison with another app without matched-task evidence (the [evidence rule](roadmap.md#decisions-and-deferred-scope)), and no "anyone can ship an app" until the non-coder acceptance task has passed with real people.
-
-### 13. Brand marks
-
-Ramu shows provider marks (`models/ProviderIcon.tsx`, the phone's `components/Logos.tsx`, the site's `provider-logo.tsx`) and operating-system marks, but GitHub, GitLab, Bitbucket and Azure DevOps appear as words only, in Hosting accounts, Publish repository, Add project, the pull request section and the webhook presets. This section ships first, on its own, because the forge gap exists today; the deploy and database marks join as each adapter lands.
-
-- **One source folder:** `apps/web/src/assets/brands/*.svg`, beside `assets/os/`, taken from Simple Icons (CC0) where it has the mark and from the company's press kit otherwise (Azure DevOps, which Simple Icons no longer carries). Each file is the plain mark, one color where the brand allows it, so it follows the theme like the OpenAI and Cursor marks; brands that require their colors keep them. A short `assets/brands/SOURCES.md` records each mark's source and guideline link.
-- **Marks:** forges (GitHub, GitLab, Bitbucket, Azure DevOps), hosting (Vercel, Netlify, Cloudflare, GitHub Pages uses GitHub's, Fly, Railway, Docker for your own server), resources (Neon, Supabase, Upstash, Resend, Postgres), and the webhook presets' Sentry and the store releases' Expo, App Store and Google Play.
-- **Desktop:** a `BrandIcon` component in `apps/web/src/components/` (an app component, not in `ui/`) with the same mask-or-image rule as `ProviderIcon`, typed by a `BrandId` union in `packages/shared`. `ForgeService`, `HostingAdapter` ids and resource kinds map to a `BrandId`, so an adapter declares its mark and the UI never switches on names. A brand without a file falls back to a generic lucide icon (`GitBranch`, `Cloud`, `Database`), so a new adapter never breaks a screen.
-- **Phone:** `apps/mobile/scripts/gen-assets.mjs` also reads `assets/brands/`, and `Logos.tsx` gets the matching `BrandIcon`, as it does for providers and operating systems today.
-- **Site:** the site copies the same files at build time instead of keeping its own `public/providers/` copies, and the **Your agents, your accounts** section shows provider, hosting and database marks in the existing logo tiles.
-- **Where marks appear:** every place a forge, platform or provider is named as a choice or a status: Settings → Hosting accounts, Publish repository, Add project, pull request rows and cards, webhook presets, the deploy sheet, the Deployments section, resource rows and usage notices. Each mark sits next to its name, never instead of it, and is hidden from screen readers.
 
 ## Safety
 

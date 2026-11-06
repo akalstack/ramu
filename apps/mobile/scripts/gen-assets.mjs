@@ -1,9 +1,15 @@
 // Copies the desktop's brand and provider SVGs into a TS module for react-native-svg.
-// Run after changing assets/wordmark.svg, apps/web/src/assets/providers/*.svg or apps/web/src/assets/os/*.svg.
+// Run after changing assets/wordmark.svg or the SVGs in apps/web/src/assets/providers, os or brands.
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const root = new URL('../../../', import.meta.url)
 const read = (path) => readFileSync(new URL(path, root), 'utf8')
+// The brand list lives in TypeScript; read its literal entries rather than adding a TS loader to this script.
+const BRAND_IDS = [
+  ...read('packages/shared/src/brands.ts')
+    .match(/BRAND_IDS = \[([\s\S]*?)\] as const/)[1]
+    .matchAll(/'([a-z-]+)'/g),
+].map((match) => match[1])
 const clean = (svg) =>
   svg
     .replace(/<\?xml[^>]*>/g, '')
@@ -34,6 +40,8 @@ const svgs = {
       (mark) => [`os:${mark}`, clean(read(`apps/web/src/assets/os/${mark}.svg`))],
     ),
   ),
+  // Forge, hosting and service marks shared with the desktop's BrandIcon (see apps/web/src/assets/brands/SOURCES.md).
+  ...Object.fromEntries(BRAND_IDS.map((id) => [`brand:${id}`, clean(read(`apps/web/src/assets/brands/${id}.svg`))])),
 }
 
 const body = Object.entries(svgs)

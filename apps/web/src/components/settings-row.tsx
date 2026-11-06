@@ -65,10 +65,17 @@ export function SettingsTitle({ children }: { children: ReactNode }) {
   )
 }
 
-export function SettingsLabel({ title, help }: { title: string; help?: string }) {
+export function SettingsLabel({ title, help, icon }: { title: string; help?: string; icon?: ReactNode }) {
   return (
     <span>
-      <SettingsTitle>{title}</SettingsTitle>
+      {icon ? (
+        <span className="inline-flex items-center gap-1.5">
+          {icon}
+          <SettingsTitle>{title}</SettingsTitle>
+        </span>
+      ) : (
+        <SettingsTitle>{title}</SettingsTitle>
+      )}
       {help && <span className="muted text-muted-foreground block small text-caption">{help}</span>}
     </span>
   )

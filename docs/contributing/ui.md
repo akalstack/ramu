@@ -17,6 +17,7 @@ The desktop renderer (`apps/web`) uses shadcn/ui on Base UI, Tailwind 4 and Ramu
 
 - Base UI triggers use `render`, not `asChild`; dialogs use `onOpenChange(open, details)`.
 - `ui.css` maps colors and type to tokens; `styles.css` holds shared sizing. Tailwind preflight is off because Monaco and xterm style themselves.
+- Brand marks: `ProviderIcon` for agent providers, `DeviceIcon` for operating systems and `BrandIcon` (`components/brand-icon.tsx`) for forges, hosting platforms and services, typed by `BrandId` in `packages/shared/src/brands.ts`. A mark sits beside the brand's name, never instead of it. Add a mark to `assets/brands/` with its source in `SOURCES.md`, then run `node apps/mobile/scripts/gen-assets.mjs` so the phone gets it too.
 - Settings wait for **Save changes**. Settings stored outside app preferences stage through `useStagedValue` (`settings/stagedChanges.tsx`). Lists use `SettingsCard` and `usePaged`.
 
 ## Motion

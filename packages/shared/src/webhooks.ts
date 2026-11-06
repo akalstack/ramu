@@ -1,5 +1,6 @@
 // Webhook-started schedules: what a request must look like to start a run, how repeats are recognised, and how the
 // request reaches the agent. Pure, so the host, the desktop and the phone read a request the same way.
+import type { BrandId } from './brands'
 
 /** A request as the host received it: lower-case header names, and the body parsed as JSON when it is JSON. */
 export interface WebhookRequest {
@@ -192,20 +193,22 @@ const GITHUB_SIGNATURE: WebhookSignature = {
 }
 export const SOURCE_DEFAULTS: Record<
   WebhookSource,
-  { signature: WebhookSignature | null; replayKey: string | null; label: string }
+  { signature: WebhookSignature | null; replayKey: string | null; label: string; brand: BrandId | null }
 > = {
-  github: { signature: GITHUB_SIGNATURE, replayKey: '{{headers.x-github-delivery}}', label: 'GitHub' },
+  github: { signature: GITHUB_SIGNATURE, replayKey: '{{headers.x-github-delivery}}', label: 'GitHub', brand: 'github' },
   gitlab: {
     signature: { kind: 'token', header: 'x-gitlab-token' },
     replayKey: '{{headers.x-gitlab-event-uuid}}',
     label: 'GitLab',
+    brand: 'gitlab',
   },
   sentry: {
     signature: { kind: 'hmac', header: 'sentry-hook-signature', encoding: 'hex', prefix: '' },
     replayKey: '{{headers.request-id}}',
     label: 'Sentry',
+    brand: 'sentry',
   },
-  generic: { signature: null, replayKey: null, label: 'Any service' },
+  generic: { signature: null, replayKey: null, label: 'Any service', brand: null },
 }
 
 /** Ready-made triggers: the filters, the fields worth reading and a first prompt, so most people only pick one. */

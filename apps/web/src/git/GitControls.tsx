@@ -5,6 +5,7 @@ import { AlertTriangle, CloudUpload, GitBranch, RefreshCcw } from 'lucide-react'
 import { useEffect } from 'react'
 import type { GitBranchInfo, GitStatus, PullMode, RepositoryBinding } from '@ramu/shared/types'
 import { Combobox } from '../Menu'
+import { BrandIcon } from '@/components/brand-icon'
 
 export function BranchPicker({
   binding,
@@ -90,7 +91,7 @@ export function SyncButton({
         title={t('Create a GitHub repository for this folder and push {0}', { '0': status.branch })}
         onClick={onPublishRepository}
       >
-        <CloudUpload size={13} />
+        {showLabel ? <BrandIcon brand="github" size={13} /> : <CloudUpload size={13} />}
         <span>{showLabel ? t('Publish to GitHub') : t('Publish')}</span>
       </Button>
     ) : null

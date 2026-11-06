@@ -7,6 +7,8 @@ import type {
   GitlabSummary,
 } from '@ramu/shared/types'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { BrandIcon } from '@/components/brand-icon'
+import type { BrandId } from '@ramu/shared/brands'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
 import { Input } from '@/components/desktop-input'
@@ -205,7 +207,7 @@ export function HostingAccounts() {
     <>
       <SettingsGroupTitle>{t('Hosting accounts')}</SettingsGroupTitle>
       <SettingsRow>
-        <SettingsLabel title="GitHub" help={connectionHeadline(summary, failed)} />
+        <SettingsLabel title="GitHub" icon={<BrandIcon brand="github" />} help={connectionHeadline(summary, failed)} />
         <span className="flex items-center gap-2">
           <Button variant="secondary" size="sm" aria-busy={busy} onClick={check}>
             {busy ? t('Checking…') : t('Check connection')}
@@ -449,7 +451,7 @@ function GitlabRow({ canAdminister }: { canAdminister: boolean }) {
   return (
     <>
       <SettingsRow>
-        <SettingsLabel title="GitLab" help={gitlabHeadline(summary, failed)} />
+        <SettingsLabel title="GitLab" icon={<BrandIcon brand="gitlab" />} help={gitlabHeadline(summary, failed)} />
         <span className="flex items-center gap-2">
           <Button variant="secondary" size="sm" aria-busy={busy} disabled={!summary} onClick={() => load(true)}>
             {busy ? t('Checking…') : t('Check connection')}
@@ -617,6 +619,7 @@ function TokenForm({
 function TokenServiceRow<S extends TokenSummary>({
   canAdminister,
   title,
+  brand,
   disconnected,
   instructions,
   field,
@@ -628,6 +631,7 @@ function TokenServiceRow<S extends TokenSummary>({
 }: {
   canAdminister: boolean
   title: string
+  brand: BrandId
   disconnected: string
   instructions: string
   /** The one field beside the token: an account email, an organization. */
@@ -667,6 +671,7 @@ function TokenServiceRow<S extends TokenSummary>({
       <SettingsRow>
         <SettingsLabel
           title={title}
+          icon={<BrandIcon brand={brand} />}
           help={tokenHeadline(summary, failed, disconnected, summary ? shown(summary) : null)}
         />
         <span className="flex items-center gap-2">
@@ -716,6 +721,7 @@ function BitbucketRow({ canAdminister }: { canAdminister: boolean }) {
     <TokenServiceRow<BitbucketSummary>
       canAdminister={canAdminister}
       title="Bitbucket Cloud"
+      brand="bitbucket"
       disconnected={t('Not connected. Pull requests, builds and issues need an Atlassian API token.')}
       instructions={t(
         'Create an API token with Bitbucket scopes in your Atlassian account settings and enter it with your account email. For a workspace or repository access token, leave the email empty.',
@@ -737,6 +743,7 @@ function AzureRow({ canAdminister }: { canAdminister: boolean }) {
     <TokenServiceRow<AzureSummary>
       canAdminister={canAdminister}
       title="Azure DevOps"
+      brand="azure-devops"
       disconnected={t('Not connected. Pull requests, builds and work items need a personal access token.')}
       instructions={t(
         'Create a personal access token under User settings in Azure DevOps with Code (read and write), Build (read) and Work Items (read) scopes, and name its organization.',

@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
+import { View } from 'react-native'
 import { SvgXml } from 'react-native-svg'
 import type { AgentProvider } from '@ramu/shared/types'
+import type { BrandId } from '@ramu/shared/brands'
 import { svgs } from '../assets/svgs'
 import { useTheme } from '../theme'
 
@@ -34,4 +36,15 @@ export function ProviderIcon({
   const tint = muted ? c.muted : provider === 'claude-code' ? '#d97757' : c.soft
   const xml = useMemo(() => (keepsColors(provider) ? svgs[provider] : tinted(svgs[provider], tint)), [provider, tint])
   return <SvgXml xml={xml} width={size} height={size} />
+}
+
+/** A forge, hosting platform or service's mark beside its name, in the text color like the desktop's masks. */
+export function BrandIcon({ brand, size = 14 }: { brand: BrandId; size?: number }) {
+  const { c } = useTheme()
+  const xml = useMemo(() => tinted(svgs[`brand:${brand}`], c.soft), [brand, c.soft])
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <SvgXml xml={xml} width={size} height={size} />
+    </View>
+  )
 }

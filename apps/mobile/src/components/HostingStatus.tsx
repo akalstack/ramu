@@ -6,6 +6,7 @@ import type { ForgeConnectionSummary } from '@ramu/shared/types'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
 import { Card, Divider, SectionLabel, T } from './ui'
+import { BrandIcon } from './Logos'
 
 /** Last answer per host, so an unreachable host still shows what was known, marked as stale. */
 const lastKnown = new Map<string, ForgeConnectionSummary>()
@@ -73,9 +74,12 @@ export function HostingStatus({ hostId }: { hostId: string }) {
           </View>
         ) : (
           <View style={{ padding: space.m, gap: space.s }}>
-            <T accessibilityLiveRegion="polite" accessibilityRole={failed ? 'alert' : undefined}>
-              {!summary && !online ? t('Reconnect to check GitHub.') : words.connectionHeadline(summary, failed)}
-            </T>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+              <BrandIcon brand="github" size={16} />
+              <T style={{ flex: 1 }} accessibilityLiveRegion="polite" accessibilityRole={failed ? 'alert' : undefined}>
+                {!summary && !online ? t('Reconnect to check GitHub.') : words.connectionHeadline(summary, failed)}
+              </T>
+            </View>
             {stale && summary ? (
               <T size={font.caption} tone="muted">
                 {t('Showing the last result; the host is not reachable.')}

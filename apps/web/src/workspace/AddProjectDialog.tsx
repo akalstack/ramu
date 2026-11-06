@@ -19,6 +19,7 @@ import { ownHostId } from '../hosts'
 import { errorText } from './TaskPane'
 import { useClone } from './useClone'
 import { onFolderPick, onRepoChoice, type FolderPick, type RepoChoice } from './addProject'
+import { BrandIcon } from '@/components/brand-icon'
 
 /** Shown when a folder holds several repositories: every one starts ticked, and the user unticks any to leave out. */
 export function AddProjectDialog() {
@@ -297,7 +298,7 @@ function HostFolderDialog() {
               <FolderPlus size={14} /> {t('New folder')}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setCloning(true)}>
-              {t('Clone from GitHub')}
+              <BrandIcon brand="github" /> {t('Clone from GitHub')}
             </Button>
           </div>
         ) : undefined
