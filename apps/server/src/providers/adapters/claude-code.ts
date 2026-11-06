@@ -1,7 +1,7 @@
 import { existsSync, symlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { defineAdapter, npmLatest, runCli, selfUpdate } from '../adapter'
+import { defineAdapter, LONG_CONTEXT_TOKENS, npmLatest, runCli, selfUpdate } from '../adapter'
 
 export const claudeCodeAdapter = defineAdapter({
   id: 'claude-code',
@@ -55,7 +55,14 @@ export const claudeCodeAdapter = defineAdapter({
     }
   },
   loginArgs: ['auth', 'login'],
-  native: { advisor: true, blockingQuestions: true },
+  native: {
+    advisor: true,
+    blockingQuestions: true,
+    abilities: [
+      { ability: 'web_search', via: { tool: 'WebSearch' } },
+      { ability: 'long_context', via: { contextWindow: LONG_CONTEXT_TOKENS } },
+    ],
+  },
   // A local plugin adds the export as `ramu-managed:<skill>` without touching ~/.claude or the project.
   skillsLaunch: (exportDir) => ({ plugins: [exportDir] }),
   updatePlan: selfUpdate(['update']),

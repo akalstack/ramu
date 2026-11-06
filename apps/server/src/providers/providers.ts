@@ -72,6 +72,8 @@ export class ProviderService {
   private dismissed: Record<string, boolean>
   private updating = new Map<AgentProvider, Promise<ProviderStatus>>()
   private updateErrors = new Map<AgentProvider, string>()
+  /** Kept ability checks, shown with each provider's compatibility; the host sets this. */
+  abilityChecks: (provider: AgentProvider) => import('@ramu/shared/providers/abilities').AbilityCheck[] = () => []
   constructor(
     private preferences: () => Pick<AppPreferences, 'providerBinaries' | 'providerUpdateChecks'>,
     private read: <T>(key: string, fallback: T) => T,
@@ -486,6 +488,7 @@ export class ProviderService {
           ...(signIn ? { signIn } : {}),
           ...(compatibility ? { compatibility } : {}),
           ...(updateCompatibility ? { updateCompatibility } : {}),
+          ...(installed && this.abilityChecks(provider).length ? { abilities: this.abilityChecks(provider) } : {}),
           accountsSupported: supportsProviderAccounts(provider),
           updating: this.updating.has(provider),
           ...(this.updateErrors.has(provider) ? { updateError: this.updateErrors.get(provider) } : {}),

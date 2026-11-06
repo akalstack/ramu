@@ -5,6 +5,7 @@ import type { ProviderConfiguration, ProviderSignIn, ProviderStatus } from '@ram
 import type { AgentProvider } from '@ramu/shared/types'
 import type { SelectionTransition } from './selectionTransition'
 import type { ProviderBrowserCapability } from '@ramu/shared/browser'
+import type { Ability } from '@ramu/shared/providers/abilities'
 
 export const parseProviderVersion = (output: string): string | null =>
   output.match(/\b\d{4}\.\d{2}\.\d{2}-[a-z0-9]+\b/i)?.[0] ??
@@ -56,6 +57,18 @@ export interface SkillsLaunch {
 }
 
 /**
+ * An ability the runtime can provide and how Ramu invokes it: a built-in tool the model calls in a run limited to that
+ * tool, or any model whose context window reaches `contextWindow` tokens. A declaration is only a candidate: the host
+ * offers it after a live check on the installed version passes.
+ */
+export interface AbilityDeclaration {
+  ability: Ability
+  via: { tool: string } | { contextWindow: number }
+  /** Models that have it, by id; absent means the login's default model. */
+  models?: string[]
+}
+
+/**
  * Features the provider has itself. Ramu uses them by default and adds its own tool only where the native one cannot
  * follow Ramu's flow (another provider or model, async answers, fallback across providers).
  */
@@ -75,7 +88,12 @@ export interface NativeFeatures {
    * commands.
    */
   terminals?: boolean
+  /** Abilities other providers' threads can borrow through Ramu's ability tools, and that this provider's own threads have. */
+  abilities?: AbilityDeclaration[]
 }
+
+/** The smallest context window that counts as the long_context ability. */
+export const LONG_CONTEXT_TOKENS = 400_000
 
 /** Everything that varies per provider. Shared mechanics (spawning, caching, timeouts) stay in providers.ts / providerBinaries.ts. */
 export interface ProviderAdapter {

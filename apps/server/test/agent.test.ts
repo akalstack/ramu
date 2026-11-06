@@ -2831,6 +2831,31 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
+  it('starts a helper that needs an ability on a provider that has it, and refuses when none does', async () => {
+    const svc = routed()
+    const codexModel = (await svc.catalog()).flatMap((catalog) => catalog.models).find((m) => m.id === 'codex-test')!
+    svc.abilities = {
+      listing: () => ({ available: [], unavailable: [], off: [] }),
+      helperModel: async (needs) => {
+        if (needs.includes('video_generation')) throw new Error('No signed-in provider here has video generation.')
+        return codexModel
+      },
+      has: (provider) => provider === 'codex',
+    }
+    const parent = await parentOf(svc)
+    const started = await svc.spawnSubagent(parent.id, {
+      description: 'Screenshots',
+      prompt: 'Make six store screenshots',
+      needs: ['image_generation'],
+    })
+    expect(svc.get(started.agentId).settings).toMatchObject({ provider: 'codex', model: 'codex-test', access: 'full' })
+    await expect(
+      svc.spawnSubagent(parent.id, { description: 'X', prompt: 'Y', needs: ['video_generation'] }),
+    ).rejects.toThrow(/video generation/)
+    expect((await svc.agentModels()).abilities).toEqual({ available: [], unavailable: [], off: [] })
+    svc.stopAll()
+  })
+
   it('lets the lead check and stop only its own helpers, and tells it not to poll', async () => {
     const svc = routed()
     const parent = await parentOf(svc, 'edits')
@@ -4655,6 +4680,27 @@ describe('activity', () => {
     const turns = rows.reduce((sum, row) => sum + row.turns, 0)
     expect(rows.reduce((sum, row) => sum + (row.tokens ?? 0), 0)).toBe(1650)
     expect(rows.reduce((sum, row) => sum + (row.untokened ?? 0), 0)).toBe(turns - 2)
+    svc.stopAll()
+  })
+
+  it("counts an ability call under the provider that ran it, not the thread's", async () => {
+    const svc = service()
+    const s = svc.start('t', scopeOf(cwd), 'hello', full)
+    await until(() => svc.get(s.id).state === 'idle')
+    const call = {
+      id: 'c',
+      ability: 'image_generation' as const,
+      tool: 'generate_image' as const,
+      args: {},
+      sent: { prompt: 'Hero', inputs: [] },
+      summary: 'A hero image.',
+    }
+    svc.abilityCalled(s.id, { ...call, status: 'done', provider: 'codex', tokens: { input: 40, output: 10 } })
+    svc.abilityCalled(s.id, { ...call, id: 'd', status: 'refused', refusal: 'unavailable' })
+    svc.abilityCalled(s.id, { ...call, id: 'e', status: 'done', provider: 'ramu' })
+    expect(svc.activity(0).filter((row) => row.provider === 'codex')).toEqual([
+      expect.objectContaining({ turns: 1, tokens: 50, unpriced: 1 }),
+    ])
     svc.stopAll()
   })
 })

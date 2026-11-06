@@ -397,6 +397,11 @@ export class AgentService {
     this.record(sessionId, { kind: 'theme', theme })
   }
 
+  /** An ability call the thread's agent or the person made, shown as its own row with the result. */
+  abilityCalled(sessionId: string, call: import('@ramu/shared/providers/abilities').AbilityCall): void {
+    this.record(sessionId, { kind: 'ability', call })
+  }
+
   scheduleSaved(sessionId: string, schedule: Schedule): void {
     this.record(sessionId, { kind: 'schedule', schedule })
   }
@@ -1035,22 +1040,39 @@ export class AgentService {
 
   /** Finished turns per local day and provider since `since`, with cost and tokens where the provider reported them. */
   activity(since: number): ActivityRow[] {
+    // Ability calls count under the provider that ran them, not the thread's own.
     return this.db
       .prepare(
-        `SELECT date(json_extract(e.event, '$.at') / 1000, 'unixepoch', 'localtime') AS day, s.provider AS provider,
-           COUNT(*) AS turns, COALESCE(SUM(json_extract(e.event, '$.costUsd')), 0) AS costUsd,
-           SUM(json_extract(e.event, '$.costUsd') IS NULL) AS unpriced,
-           COALESCE(SUM(json_extract(e.event, '$.tokens.input') + json_extract(e.event, '$.tokens.output')), 0) AS tokens,
-           SUM(json_extract(e.event, '$.tokens') IS NULL) AS untokened
-         FROM agent_events e JOIN agent_sessions s ON s.id = e.session_id
-         WHERE json_extract(e.event, '$.kind') = 'result' AND json_extract(e.event, '$.at') >= ?
-         GROUP BY day, s.provider ORDER BY day`,
+        `SELECT day, provider, COUNT(*) AS turns, COALESCE(SUM(cost), 0) AS costUsd, SUM(cost IS NULL) AS unpriced,
+           COALESCE(SUM(tokens), 0) AS tokens, SUM(tokens IS NULL) AS untokened
+         FROM (
+           SELECT date(json_extract(e.event, '$.at') / 1000, 'unixepoch', 'localtime') AS day, s.provider AS provider,
+             json_extract(e.event, '$.costUsd') AS cost,
+             json_extract(e.event, '$.tokens.input') + json_extract(e.event, '$.tokens.output') AS tokens
+           FROM agent_events e JOIN agent_sessions s ON s.id = e.session_id
+           WHERE json_extract(e.event, '$.kind') = 'result' AND json_extract(e.event, '$.at') >= ?
+           UNION ALL
+           SELECT date(json_extract(e.event, '$.at') / 1000, 'unixepoch', 'localtime'),
+             json_extract(e.event, '$.call.provider'), NULL,
+             json_extract(e.event, '$.call.tokens.input') + json_extract(e.event, '$.call.tokens.output')
+           FROM agent_events e
+           WHERE json_extract(e.event, '$.kind') = 'ability' AND json_extract(e.event, '$.call.status') = 'done'
+             AND json_extract(e.event, '$.call.provider') != 'ramu' AND json_extract(e.event, '$.at') >= ?
+         )
+         GROUP BY day, provider ORDER BY day`,
       )
-      .all(since) as unknown as ActivityRow[]
+      .all(since, since) as unknown as ActivityRow[]
   }
 
   /** Custom agents the lead may use; set by the host, so tests and a bare service run without any. */
   customAgents: () => readonly CustomAgent[] = () => []
+
+  /** The host's abilities: what each provider offers, and the model for a helper that needs some. Set by the host. */
+  abilities?: {
+    listing(): import('@ramu/shared/providers/abilities').AbilityListing
+    helperModel(needs: readonly import('@ramu/shared/providers/abilities').Ability[]): Promise<AgentModel>
+    has(provider: AgentProvider, needs: readonly import('@ramu/shared/providers/abilities').Ability[]): boolean
+  }
 
   /** A model the agent named by handle or id, or an error listing the handles it can use. */
   private async modelNamed(handle: string): Promise<AgentModel> {
@@ -1062,7 +1084,8 @@ export class AgentService {
 
   /** agent_models: the host's providers and their current models, so the agent stops guessing handles. */
   async agentModels(query?: string) {
-    return agentModelList(await this.catalog(), query)
+    const providers = agentModelList(await this.catalog(), query)
+    return this.abilities ? { providers, abilities: this.abilities.listing() } : { providers }
   }
 
   /** ramu_agent_status: the caller's own helpers (not teammates), or one of them. */
@@ -1105,6 +1128,19 @@ export class AgentService {
   private async startHelper(...args: Parameters<SubagentRunner['spawnSubagent']>) {
     const [parentId, asked, ...rest] = args
     let input = asked
+    if (input.needs?.length && !input.settings) {
+      if (!this.abilities) throw new Error('This host cannot choose a helper by ability.')
+      const parent = this.get(parentId)
+      if (input.model) {
+        const named = await this.modelNamed(input.model)
+        if (!this.abilities.has(named.provider, input.needs))
+          throw new Error(
+            `${providerName(named.provider)} does not have every ability this helper needs here. Leave out model and Ramu picks a provider that does.`,
+          )
+        input = { ...input, settings: teammateSettings(parent.settings, named) }
+      } else
+        input = { ...input, settings: teammateSettings(parent.settings, await this.abilities.helperModel(input.needs)) }
+    }
     if (input.model && !input.settings) {
       const parent = this.get(parentId)
       // The parent's settings on the named model, so the helper keeps the parent's access and never gets more.

@@ -1,0 +1,359 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  DEFAULT_AGENT_SETTINGS,
+  DEFAULT_APP_PREFERENCES,
+  type AgentEvent,
+  type AgentProvider,
+  type AgentSessionInfo,
+  type AppPreferences,
+  type ProviderCatalog,
+} from '@ramu/shared/types'
+import type { AbilityCall, AbilityPreferences } from '@ramu/shared/providers/abilities'
+import { AbilityService, type AbilityHost } from '../src/agent/abilities'
+import type { AbilityRun } from '../src/agent/abilityRuns'
+import type { AbilityDeclaration } from '../src/providers/adapter'
+import { AttachmentStore } from '../src/attachments'
+import { configuredCodexServers, codexAbilityConfig } from '../src/providers/codexAbility'
+import { appPreferences } from '../src/ipc/preferences'
+
+const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex')
+
+const DECLARED: Partial<Record<AgentProvider, AbilityDeclaration[]>> = {
+  codex: [
+    { ability: 'image_generation', via: { tool: 'image_gen' } },
+    { ability: 'image_edit', via: { tool: 'image_gen' } },
+    { ability: 'web_search', via: { tool: 'web_search' } },
+  ],
+  'claude-code': [
+    { ability: 'web_search', via: { tool: 'WebSearch' } },
+    { ability: 'long_context', via: { contextWindow: 400_000 } },
+  ],
+}
+
+const catalogs: ProviderCatalog[] = [
+  {
+    provider: 'codex',
+    models: [{ provider: 'codex', id: 'gpt-x', name: 'GPT X', efforts: [], defaultEffort: null, isDefault: true }],
+  },
+  {
+    provider: 'claude-code',
+    models: [
+      {
+        provider: 'claude-code',
+        id: 'small',
+        name: 'Small',
+        efforts: [],
+        defaultEffort: null,
+        isDefault: true,
+        contextWindow: 200_000,
+      },
+      {
+        provider: 'claude-code',
+        id: 'wide',
+        name: 'Wide',
+        efforts: [],
+        defaultEffort: null,
+        isDefault: false,
+        contextWindow: 1_000_000,
+      },
+    ],
+  },
+]
+
+let root: string
+let cwd: string
+let stored: unknown[]
+let events: AgentEvent[]
+let preferences: AppPreferences
+let permission: ReturnType<typeof vi.fn<AbilityHost['requestPermission']>>
+let search: ReturnType<typeof vi.fn<AbilityHost['search']>>
+
+const session = (provider: AgentProvider = 'claude-code'): AgentSessionInfo =>
+  ({
+    id: 'thread',
+    taskId: 'task',
+    provider,
+    settings: { ...DEFAULT_AGENT_SETTINGS, provider },
+    cwd,
+  }) as AgentSessionInfo
+
+function service(
+  run: AbilityRun,
+  provider: AgentProvider = 'claude-code',
+  versions = { codex: '1.0.0', 'claude-code': '2.0.0' },
+) {
+  const host: AbilityHost = {
+    preferences: () => preferences,
+    catalog: async () => catalogs,
+    session: () => session(provider),
+    events: () => events,
+    record: (_id, event) => void events.push(event),
+    requestPermission: permission,
+    attachments: new AttachmentStore(join(root, 'attachments')),
+    search,
+    login: async (name) =>
+      name === 'codex' || name === 'claude-code'
+        ? { provider: name, accountId: 'default', version: versions[name], login: 'me@example.com' }
+        : null,
+    readChecks: () => stored,
+    writeChecks: (checks) => {
+      stored = checks
+    },
+  }
+  return new AbilityService(host, run, (name) => DECLARED[name] ?? [])
+}
+
+/** A fake provider: Codex makes images and searches; Claude searches and reads. */
+const working: AbilityRun = async (route, declaration, request) => {
+  if (request.ability === 'image_generation' || request.ability === 'image_edit')
+    return { text: 'A red apple.', images: [{ bytes: PNG, extension: 'png' }], sources: [] }
+  if (request.ability === 'web_search')
+    return {
+      text: `Answer from ${route.provider}`,
+      images: [],
+      sources: [{ title: 'Node', url: 'https://nodejs.org' }],
+    }
+  return { text: 'ready', images: [], sources: [], tokens: { input: 10, output: 2 } }
+}
+
+const withAbilities = (abilities: Partial<AbilityPreferences>) => {
+  preferences = { ...preferences, abilities: { ...preferences.abilities, ...abilities } }
+}
+
+beforeEach(() => {
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'ramu-abilities-')))
+  cwd = join(root, 'project')
+  mkdirSync(cwd)
+  stored = []
+  events = []
+  preferences = structuredClone(DEFAULT_APP_PREFERENCES)
+  permission = vi.fn<AbilityHost['requestPermission']>(async () => true)
+  search = vi.fn<AbilityHost['search']>(async () => [
+    { title: 'Result', url: 'https://example.com', snippet: 'Snippet' },
+  ])
+  vi.stubEnv('RAMU_FAKE_AGENT', '')
+  vi.stubEnv('RAMU_ABILITY_CHECKS', '')
+})
+afterEach(() => {
+  vi.unstubAllEnvs()
+  rmSync(root, { recursive: true, force: true })
+})
+
+describe('ability checks', () => {
+  it('runs each declared check once per version and sign-in, and offers only what passed', async () => {
+    const run = vi.fn(working)
+    const abilities = service(run)
+    await abilities.refresh()
+    const passed = abilities.checks.list().filter((check) => check.ok)
+    expect(passed.map((check) => `${check.provider}:${check.ability}`).sort()).toEqual([
+      'claude-code:long_context',
+      'claude-code:web_search',
+      'codex:image_edit',
+      'codex:image_generation',
+      'codex:web_search',
+    ])
+    // Long context runs on the widest model; the rest on the default.
+    expect(passed.find((check) => check.ability === 'long_context')?.model).toBe('wide')
+    expect(run).toHaveBeenCalledTimes(5)
+    // Check again runs one provider's checks anew.
+    await abilities.recheck('codex')
+    expect(run).toHaveBeenCalledTimes(8)
+    expect(abilities.native('codex', 'image_generation')).toBe(true)
+    expect(abilities.native('claude-code', 'image_generation')).toBe(false)
+  })
+
+  it('keeps a failure, skips the edit check without generation, and checks again after an update', async () => {
+    const run = vi.fn<AbilityRun>(async (route, declaration, request) =>
+      request.ability === 'image_generation'
+        ? { text: 'I cannot make images here.', images: [], sources: [] }
+        : working(route, declaration, request, new AbortController().signal, 1),
+    )
+    const versions = { codex: '1.0.0', 'claude-code': '2.0.0' }
+    const first = service(run, 'claude-code', versions)
+    await first.refresh()
+    const codex = first.checks.list('codex')
+    expect(codex.find((check) => check.ability === 'image_generation')).toMatchObject({ ok: false })
+    expect(codex.find((check) => check.ability === 'image_edit')).toMatchObject({
+      ok: false,
+      detail: 'Image generation did not pass its check.',
+    })
+    const calls = run.mock.calls.length
+    // A new service instance shares the kept results: nothing runs again for the same version.
+    await service(run, 'claude-code', versions).refresh()
+    expect(run.mock.calls.length).toBe(calls)
+    versions.codex = '1.1.0'
+    await service(run, 'claude-code', versions).refresh()
+    expect(run.mock.calls.length).toBe(calls + 2)
+    expect(stored.some((check) => (check as { login?: string }).login === undefined)).toBe(false)
+    expect(JSON.stringify(first.checks.list())).not.toContain('me@example.com')
+  })
+
+  it('never runs on a simulated host', async () => {
+    vi.stubEnv('RAMU_FAKE_AGENT', '1')
+    const run = vi.fn(working)
+    await service(run).refresh()
+    expect(run).not.toHaveBeenCalled()
+  })
+})
+
+describe('ability calls', () => {
+  it('runs an image on a provider that has it, saves it to the thread and records the row', async () => {
+    const run = vi.fn(working)
+    const abilities = service(run)
+    await abilities.refresh()
+    run.mockClear()
+    const answer = await abilities.call('thread', 'generate_image', { prompt: 'A calm workspace', size: 'landscape' })
+    expect(answer).toMatchObject({ status: 'done', ranOn: 'Codex (gpt-x)' })
+    expect(run).toHaveBeenCalledTimes(1)
+    const [route, , request] = run.mock.calls[0]!
+    expect(route).toEqual({ provider: 'codex', model: 'gpt-x', accountId: 'default' })
+    expect(request.prompt).toContain('A calm workspace')
+    expect(request.prompt).toContain('Shape: landscape.')
+    const call = (events.at(-1) as { call: AbilityCall }).call
+    expect(call).toMatchObject({ status: 'done', provider: 'codex', sent: { prompt: 'A calm workspace', inputs: [] } })
+    expect(call.attachments?.[0]).toMatchObject({ name: 'a-calm-workspace.png', mimeType: 'image/png' })
+    expect('files' in answer && answer.files?.[0]?.path).toBe(call.attachments?.[0]?.path)
+  })
+
+  it('refuses clearly when no provider has the ability, and when it is turned off', async () => {
+    const abilities = service(working)
+    expect(await abilities.call('thread', 'generate_image', { prompt: 'Hero' })).toMatchObject({
+      status: 'refused',
+      message: expect.stringContaining('No signed-in provider here has image generation'),
+    })
+    expect((events.at(-1) as { call: AbilityCall }).call.refusal).toBe('unavailable')
+    await abilities.refresh()
+    withAbilities({ choices: { image_generation: 'off' } })
+    expect(await abilities.call('thread', 'generate_image', { prompt: 'Hero' })).toMatchObject({
+      status: 'refused',
+      message: expect.stringContaining('turned off'),
+    })
+  })
+
+  it('moves on to the next provider at a usage limit, and never to another login of the same one', async () => {
+    await service(working, 'opencode').refresh()
+    const run = vi.fn<AbilityRun>(async (route, declaration, request, signal, timeout) => {
+      if (route.provider === 'claude-code') throw Object.assign(new Error('limited'), { code: 'usage_limit_reached' })
+      return working(route, declaration, request, signal, timeout)
+    })
+    const routed = service(run, 'opencode')
+    const answer = await routed.call('thread', 'web_search', { query: 'Node release' })
+    expect(answer).toMatchObject({ status: 'done', ranOn: 'Codex (gpt-x)' })
+    expect(run.mock.calls.map(([route]) => route.provider)).toEqual(['claude-code', 'codex'])
+    expect(run.mock.calls.every(([route]) => route.accountId === 'default')).toBe(true)
+  })
+
+  it("falls back to Ramu's own search when no provider can search", async () => {
+    const abilities = service(working)
+    const answer = await abilities.call('thread', 'web_search', { query: 'Node release' })
+    expect(answer).toMatchObject({
+      status: 'done',
+      ranOn: "Ramu's web search",
+      sources: [{ url: 'https://example.com' }],
+    })
+    expect(search).toHaveBeenCalledWith('Node release', expect.any(AbortSignal))
+  })
+
+  it('asks before using another provider when the person wants that, and stops when declined', async () => {
+    const run = vi.fn(working)
+    const abilities = service(run)
+    await abilities.refresh()
+    run.mockClear()
+    withAbilities({ askBeforeOtherProvider: true })
+    permission.mockResolvedValueOnce(false)
+    expect(await abilities.call('thread', 'generate_image', { prompt: 'Hero' })).toMatchObject({ status: 'refused' })
+    expect(permission).toHaveBeenCalledWith(
+      'thread',
+      'image generation with Codex',
+      expect.stringContaining('Hero'),
+      expect.any(AbortSignal),
+    )
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('sends only files inside the thread folder or attachments the thread holds', async () => {
+    const abilities = service(working)
+    await abilities.refresh()
+    writeFileSync(join(cwd, 'hero.png'), PNG)
+    writeFileSync(join(root, 'secret.png'), PNG)
+    expect(await abilities.call('thread', 'edit_image', { prompt: 'Recolor', images: ['hero.png'] })).toMatchObject({
+      status: 'done',
+    })
+    expect((events.at(-1) as { call: AbilityCall }).call.sent.inputs).toEqual(['hero.png'])
+    expect(
+      await abilities.call('thread', 'edit_image', { prompt: 'Recolor', images: [join(root, 'secret.png')] }),
+    ).toMatchObject({ status: 'failed', message: expect.stringContaining('outside') })
+    const foreign = new AttachmentStore(join(root, 'attachments')).add('other.png', PNG)
+    expect(await abilities.call('thread', 'edit_image', { prompt: 'Recolor', images: [foreign.id] })).toMatchObject({
+      status: 'failed',
+      message: 'That attachment is not in this thread.',
+    })
+  })
+
+  it('reads long files on the widest model and bounds the input', async () => {
+    const run = vi.fn(working)
+    const abilities = service(run)
+    await abilities.refresh()
+    run.mockClear()
+    writeFileSync(join(cwd, 'notes.md'), 'The launch is on Tuesday.')
+    expect(await abilities.call('thread', 'read_long', { question: 'When?', files: ['notes.md'] })).toMatchObject({
+      status: 'done',
+    })
+    expect(run.mock.calls[0]![0]).toMatchObject({ provider: 'claude-code', model: 'wide' })
+    expect(run.mock.calls[0]![2].prompt).toContain('The launch is on Tuesday.')
+    expect(
+      await abilities.call('thread', 'read_long', { question: 'When?', text: 'x'.repeat(1_300_000) }),
+    ).toMatchObject({
+      status: 'failed',
+    })
+  })
+
+  it('runs a recorded call again on another provider', async () => {
+    const run = vi.fn(working)
+    const abilities = service(run, 'opencode')
+    await abilities.refresh()
+    await abilities.call('thread', 'web_search', { query: 'Node release' })
+    const first = (events.at(-1) as { call: AbilityCall }).call
+    expect(first.provider).toBe('claude-code')
+    const again = await abilities.again('thread', first.id, true)
+    expect(again).toMatchObject({ status: 'done', provider: 'codex' })
+  })
+})
+
+describe('helpers by ability', () => {
+  it('picks a provider that has every need, or names what is missing', async () => {
+    const abilities = service(working)
+    await abilities.refresh()
+    expect(await abilities.helperModel(['image_generation'])).toMatchObject({ provider: 'codex', id: 'gpt-x' })
+    expect(abilities.has('codex', ['image_generation', 'web_search'])).toBe(true)
+    await expect(abilities.helperModel(['image_generation', 'long_context'])).rejects.toThrow('No single provider')
+    await expect(abilities.helperModel(['video_generation'])).rejects.toThrow('video generation')
+  })
+})
+
+describe('Codex ability runs', () => {
+  it('switch off every MCP server the login configures, and every tool but the one asked for', () => {
+    expect(
+      configuredCodexServers('[mcp_servers.figma]\nurl = "x"\n[mcp_servers."node-repl"]\n[mcp_servers.bad name]\n'),
+    ).toEqual(['figma', 'node-repl'])
+    const config = codexAbilityConfig('web_search', ['figma'])
+    expect(config).toContain('features.shell_tool=false')
+    expect(config).toContain('web_search="live"')
+    expect(config).toContain('features.image_generation=false')
+    expect(config).toContain('mcp_servers.figma.enabled=false')
+  })
+})
+
+describe('saved ability preferences', () => {
+  it('defaults to Auto without asking, and validates choices', () => {
+    const parse = (abilities: unknown) => appPreferences.parse({ ...DEFAULT_APP_PREFERENCES, abilities }).abilities
+    expect(parse({})).toEqual({ choices: {}, askBeforeOtherProvider: false })
+    expect(parse({ choices: { image_generation: { provider: 'codex', model: 'gpt-x' } } }).choices).toEqual({
+      image_generation: { provider: 'codex', model: 'gpt-x' },
+    })
+    expect(() => parse({ choices: { image_generation: 'sometimes' } })).toThrow()
+  })
+})

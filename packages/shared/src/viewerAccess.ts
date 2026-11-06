@@ -45,6 +45,7 @@ const viewerMethods = new Set([
   'ui.get',
   'notices.list',
   'activity.status',
+  'abilities.checks',
   'usage.get',
   'usage.accounts',
   'usage.activity',

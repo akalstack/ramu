@@ -23,11 +23,18 @@ import { MobileLiveActivities } from './remote/mobileLiveActivity'
 import { MobilePush } from './remote/mobilePush'
 import {
   DEFAULT_AGENT_SETTINGS,
+  DEFAULT_APP_PREFERENCES,
   DEFAULT_FALLBACK_PREFERENCES,
   type AppPreferences,
   type ModelPreferences,
 } from '@ramu/shared/types'
 import { InteractiveStore } from './interactive/store'
+import { ABILITIES, DEFAULT_ABILITY_PREFERENCES } from '@ramu/shared/providers/abilities'
+import { AbilityService } from './agent/abilities'
+import { abilityRunner } from './agent/abilityRuns'
+import { registerAbilityTools } from './agent/abilityTools'
+import { providerLogin } from './providers/abilityChecks'
+import { AttachmentStore } from './attachments'
 import { registerInteractiveTools } from './interactive/tools'
 import { PageStore } from './interactive/pages'
 import { PageAi, webSearch, type PageExternal, type PageExternalTool } from './interactive/pageAi'
@@ -663,6 +670,31 @@ const pageExternal: PageExternal = {
   },
 }
 const pageAi = new PageAi(pages, (...args) => agents.analyze(...args), pageSettings, pageExternal)
+const abilityPreferences = (): AppPreferences => {
+  const stored = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
+  return { ...DEFAULT_APP_PREFERENCES, ...stored, abilities: { ...DEFAULT_ABILITY_PREFERENCES, ...stored.abilities } }
+}
+const abilityAttachments = new AttachmentStore(join(userData, 'attachments'))
+const abilities = new AbilityService(
+  {
+    preferences: abilityPreferences,
+    catalog: () => agents.catalog(),
+    session: (sessionId) => agents.get(sessionId),
+    events: (sessionId) => agents.events(sessionId),
+    record: (sessionId, event) => event.kind === 'ability' && agents.abilityCalled(sessionId, event.call),
+    requestPermission: (sessionId, subject, detail, signal) =>
+      agents.requestPermission(sessionId, subject, detail, signal),
+    attachments: abilityAttachments,
+    search: (query, signal) => webSearch(query, signal),
+    login: (provider) => providerLogin(provider, abilityPreferences().providerBinaries),
+    readChecks: () => workspace.getAppState<unknown>('ability-checks', []),
+    writeChecks: (checks) => workspace.setAppState('ability-checks', checks),
+  },
+  abilityRunner(fake?.fakeQuery ?? query),
+)
+agents.abilities = abilities
+// Checks run once per provider version and sign-in, a little after start so they never delay it.
+setTimeout(() => void abilities.refresh(), 60_000).unref()
 const notifyPage = (page: ArtifactInfo, title: string, body: string) => {
   send('artifacts:changed', { artifactId: page.id, notice: { title: title.slice(0, 80), body: body.slice(0, 240) } })
   void mobilePush.deliverArtifact(page.id, title, body).catch(() => {})
@@ -847,6 +879,7 @@ const dispatcher = createDispatcher(
     interactive,
     pages,
     pageAi,
+    abilities,
     notifyPage,
     publicPages,
     publicPageTunnel,
@@ -880,6 +913,7 @@ async function stop(intentional = false, exitCode = 0) {
   await pullRequestWatches.stop()
   await pullRequestIndex.stop()
   secretFiles.stop()
+  abilities.stop()
   await agentThreads.stop()
   // Capture after the scheduler drains, so a chat that finished during that wait is not resumed.
   if (!intentional) agents.prepareForRestart()
@@ -1231,6 +1265,7 @@ const mcpHttp = createServer(async (req, res) => {
       (detail, signal) => agents.requestPermission(source.id, 'Background command', detail, signal),
     )
   if (!review) registerThemeTools(server, (theme) => agents.themeProposed(source.id, theme))
+  if (!review) registerAbilityTools(server, abilities, source)
   if (!review)
     registerBrowserTools(
       server,
@@ -1370,7 +1405,7 @@ const mcpHttp = createServer(async (req, res) => {
     server.registerTool(
       'ramu_agent',
       {
-        description: `Start a sub-agent through Ramu, which may run it on a different provider or model than you. Use it when told to, or when the Agent tool is refused. It takes a description, a prompt and optionally a type, a name and background. Without background it waits and returns the sub-agent's report; with background it returns at once and the report arrives later as a message. model picks the helper's model by handle (agent_models lists them); without it, the person's Sub-agents routing decides. isolation: worktree gives it its own copy of the checkout (with your uncommitted changes), shared keeps it in yours unless another helper is writing there. role: research and review read and report and never edit; implementation and test may edit. A helper never gets more access than you. requestId: any unique string; sending the same call again returns the first result instead of starting a second helper.${customAgentList(customAgents.list())}`,
+        description: `Start a sub-agent through Ramu, which may run it on a different provider or model than you. Use it when told to, or when the Agent tool is refused. It takes a description, a prompt and optionally a type, a name and background. Without background it waits and returns the sub-agent's report; with background it returns at once and the report arrives later as a message. model picks the helper's model by handle (agent_models lists them); without it, the person's Sub-agents routing decides. needs lists abilities the helper's whole job requires (such as image_generation); Ramu starts it on a provider that has all of them, or refuses naming what is missing. isolation: worktree gives it its own copy of the checkout (with your uncommitted changes), shared keeps it in yours unless another helper is writing there. role: research and review read and report and never edit; implementation and test may edit. A helper never gets more access than you. requestId: any unique string; sending the same call again returns the first result instead of starting a second helper.${customAgentList(customAgents.list())}`,
         inputSchema: {
           description: z.string().min(1).max(200),
           prompt: z.string().min(1).max(100000),
@@ -1378,6 +1413,7 @@ const mcpHttp = createServer(async (req, res) => {
           name: z.string().max(80).optional(),
           background: z.boolean().optional(),
           model: z.string().min(1).max(80).optional(),
+          needs: z.array(z.enum(ABILITIES)).min(1).max(ABILITIES.length).optional(),
           isolation: z.enum(['shared', 'worktree']).optional(),
           role: z.enum(HELPER_ROLES).optional(),
           requestId: z.string().min(1).max(120).optional(),
@@ -1399,7 +1435,7 @@ const mcpHttp = createServer(async (req, res) => {
       'agent_models',
       {
         description:
-          "List this host's providers and their current models with the handles ramu_agent's model and teammate_suggest take, at most eight per provider (the default first). query narrows by name, handle or provider. A provider marked unavailable cannot run a helper now.",
+          "List this host's providers and their current models with the handles ramu_agent's model and teammate_suggest take, at most eight per provider (the default first), and its abilities: which provider can make images, search the web or read very long documents, and the tool that calls each (generate_image, edit_image, web_search, read_long). Check it before planning work that needs one. query narrows models by name, handle or provider. A provider marked unavailable cannot run a helper now.",
         inputSchema: { query: z.string().max(80).optional() },
       },
       async ({ query }) => result(await agents.agentModels(query)),

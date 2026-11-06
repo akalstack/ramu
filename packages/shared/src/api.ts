@@ -18,6 +18,7 @@ import type { AppUpdateStatus } from './updates'
 import type { NearbyHostsState } from './discovery/tracker'
 import type { AgentSetupSnapshot } from './agentSetup'
 import type { AccountLogin, ProviderConfiguration, ProviderStatus } from './providers/providers'
+import type { AbilityCall, AbilityCheck } from './providers/abilities'
 import type { LimitRetryResult } from './chat/providerWait'
 import type { VoiceBridge } from './voice/bridge'
 import type {
@@ -1009,6 +1010,12 @@ export interface RamuMethods extends ArtifactMethods {
     key: string | null,
   ): Promise<void>
   'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
+  /** Live ability checks for each provider's chosen login on its installed version, plus whether checks are running. */
+  'abilities.checks'(): { checks: AbilityCheck[]; running: boolean }
+  /** Runs one provider's ability checks again (one small request per ability). */
+  'abilities.check'(provider: ProviderStatus['provider']): Promise<AbilityCheck[]>
+  /** Runs a finished ability call again with the same input, on any provider or only on one other than the first. */
+  'abilities.again'(sessionId: string, callId: string, otherProvider: boolean): Promise<AbilityCall>
   'providers.updates'(): Promise<ProviderStatus[]>
   'providers.dismissUpdate'(provider: ProviderStatus['provider'], binary: string, latestVersion: string): void
   'providers.environment'(retry?: boolean): Promise<ProviderEnvironmentStatus>

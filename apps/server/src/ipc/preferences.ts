@@ -13,6 +13,7 @@ import {
   SIDEBAR_WIDTH_RANGE,
 } from '@ramu/shared/types'
 import { agentSettings, id, pullMode, providerId } from './schemas'
+import { ABILITIES, DEFAULT_ABILITY_PREFERENCES } from '@ramu/shared/providers/abilities'
 
 export const providerBinaries = z
   .object(
@@ -100,6 +101,11 @@ const subagentPreferences = z.preprocess(
     codexHook: z.boolean().default(false),
   }),
 )
+const abilityChoice = z.union([z.enum(['auto', 'off']), z.object({ provider: providerId, model: z.string().max(200) })])
+const abilityPreferences = z.object({
+  choices: z.object(Object.fromEntries(ABILITIES.map((ability) => [ability, abilityChoice.optional()]))).default({}),
+  askBeforeOtherProvider: z.boolean().default(false),
+})
 const advisorPreferences = z.object({
   enabled: z.boolean().default(false),
   step: fallbackStep.nullable().default(null),
@@ -186,6 +192,7 @@ export const appPreferences = z.object({
   showUsageLimits: z.boolean().default(true),
   fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES),
   subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES),
+  abilities: abilityPreferences.default(DEFAULT_ABILITY_PREFERENCES),
   advisor: advisorPreferences.default(DEFAULT_ADVISOR_PREFERENCES),
   goals: goalPreferencesSchema.default(DEFAULT_GOAL_PREFERENCES),
   memory: z

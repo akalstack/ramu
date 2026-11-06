@@ -34,6 +34,18 @@ To pick a login yourself, open the model menu under the message box (on the phon
 
 Claude Code, Codex, Cursor and OpenCode logins can use an API key instead of a subscription: choose the key button on a login in **Settings → Providers** on the host. Usage is then billed to the key, and adding a login with a key gives a thread somewhere to continue when your plan's limit is reached. OpenCode asks which model provider the key is for. Codex keeps the key in its own login file; for the others the key stays in the host's OS credential store and reaches only that login's processes. **Remove key** returns the login to its subscription (for Codex, sign in again). Antigravity takes Gemini and Agent Platform keys in its own **Login** dialog.
 
+## Abilities
+
+A provider offers an [ability](agents.md#abilities) to other providers' threads only after a live check passes on the installed version: one small request with only that tool, run a minute after the host starts or when Settings asks, once per version and sign-in of the provider's chosen login. A failure is kept too, so it is not retried until the version or login changes. Each provider card in **Settings → Providers** lists the results under **Abilities**, with why one is not available and **Check again**.
+
+| Provider | Checked abilities |
+| --- | --- |
+| Codex | Web search (built-in search). Image generation and editing (built-in image tool) only where the login and model offer it. |
+| Claude Code | Web search (`WebSearch`). |
+| Both | Long documents, when a model reports a context window of 400,000 tokens or more. |
+
+OpenCode, Cursor and Antigravity declare no abilities yet.
+
 ## Artifacts using a provider
 
 An artifact you allow to use AI calls the host's signed-in providers, never a key of its own: **Fast** uses the maintenance model and **Smart** the default model. Each call counts against the artifact's daily limit, follows the same fallback at a usage limit as other background work, shows in **Activity** with the artifact's name, and is refused with a clear error when the provider is signed out or limited. See [Artifacts](artifacts.md#what-an-artifact-may-use).

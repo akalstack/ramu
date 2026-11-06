@@ -41,99 +41,121 @@ export const registerProviderHandlers: RegisterHandlers = ({
   agents,
   extraUsage,
   accountUsage,
-}) => ({
-  'providers.status': {
-    args: z.tuple([providerBinaries.optional(), z.boolean().optional(), z.boolean().optional()]),
-    run: (config?: ProviderConfiguration, latest?: boolean, refresh?: boolean) =>
-      providers.status(config, latest, true, refresh),
-  },
-  'providers.accountEmails': { args: z.tuple([]), run: () => providers.accountEmails() },
-  'providers.accountLogins': { args: z.tuple([]), run: () => providers.accountLogins() },
-  'providers.signIn': {
-    args: z.tuple([agentSettings.shape.provider, agentSettings.shape.accountId, antigravitySignIn.optional()]),
-    run: async (provider: ProviderStatus['provider'], accountId?: string, method?: AntigravitySignIn) => {
-      if (method && provider !== 'antigravity') throw new Error('This provider has one sign-in method')
-      const key = method?.apiKey?.trim()
-      if (method && key) {
-        // A key is a credential: it joins Antigravity's variables in the host credential store, like any other.
+  abilities,
+  activity,
+}) => {
+  if (abilities) {
+    abilities.track = (label, detail, work, cancel) => activity.run(label, detail, work, cancel)
+    providers.abilityChecks = (provider) => abilities.checks.list(provider)
+  }
+  const ability = () => {
+    if (!abilities) throw new Error('Abilities are not available on this host.')
+    return abilities
+  }
+  return {
+    'abilities.checks': { args: z.tuple([]), run: () => ability().status() },
+    'abilities.check': {
+      args: z.tuple([agentSettings.shape.provider]),
+      run: (provider: ProviderStatus['provider']) => ability().recheck(provider),
+    },
+    'abilities.again': {
+      args: z.tuple([z.string().min(1).max(200), z.string().uuid(), z.boolean()]),
+      run: (sessionId: string, callId: string, otherProvider: boolean) =>
+        ability().again(sessionId, callId, otherProvider),
+    },
+    'providers.status': {
+      args: z.tuple([providerBinaries.optional(), z.boolean().optional(), z.boolean().optional()]),
+      run: (config?: ProviderConfiguration, latest?: boolean, refresh?: boolean) =>
+        providers.status(config, latest, true, refresh),
+    },
+    'providers.accountEmails': { args: z.tuple([]), run: () => providers.accountEmails() },
+    'providers.accountLogins': { args: z.tuple([]), run: () => providers.accountLogins() },
+    'providers.signIn': {
+      args: z.tuple([agentSettings.shape.provider, agentSettings.shape.accountId, antigravitySignIn.optional()]),
+      run: async (provider: ProviderStatus['provider'], accountId?: string, method?: AntigravitySignIn) => {
+        if (method && provider !== 'antigravity') throw new Error('This provider has one sign-in method')
+        const key = method?.apiKey?.trim()
+        if (method && key) {
+          // A key is a credential: it joins Antigravity's variables in the host credential store, like any other.
+          if (host.canAdministerIntegrations?.() !== true) throw new Error('Enter API keys on the host running Ramu')
+          const name = antigravityKeyName(method.method)
+          const current = environment.status(true).values ?? {}
+          await environment.save({
+            ...current,
+            antigravity: [
+              ...(current.antigravity ?? []).filter((entry) => entry.key !== name),
+              { key: name, value: key },
+            ],
+          })
+        }
+        return providers.signIn(provider, accountId, method && { ...method, apiKey: undefined })
+      },
+    },
+    // Keys are credentials: only the execution host enters them; other clients see that a login uses one.
+    'providers.setApiKey': {
+      args: z.tuple([
+        agentSettings.shape.provider,
+        z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/),
+        z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+        z.string().max(MAX_API_KEY_LENGTH).nullable(),
+      ]),
+      run: (provider: ProviderStatus['provider'], accountId: string, variable: string, key: string | null) => {
         if (host.canAdministerIntegrations?.() !== true) throw new Error('Enter API keys on the host running Ramu')
-        const name = antigravityKeyName(method.method)
-        const current = environment.status(true).values ?? {}
-        await environment.save({
-          ...current,
-          antigravity: [
-            ...(current.antigravity ?? []).filter((entry) => entry.key !== name),
-            { key: name, value: key },
-          ],
-        })
-      }
-      return providers.signIn(provider, accountId, method && { ...method, apiKey: undefined })
+        return providers.setApiKey(provider, accountId, variable, key, apiKeys)
+      },
     },
-  },
-  // Keys are credentials: only the execution host enters them; other clients see that a login uses one.
-  'providers.setApiKey': {
-    args: z.tuple([
-      agentSettings.shape.provider,
-      z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/),
-      z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
-      z.string().max(MAX_API_KEY_LENGTH).nullable(),
-    ]),
-    run: (provider: ProviderStatus['provider'], accountId: string, variable: string, key: string | null) => {
-      if (host.canAdministerIntegrations?.() !== true) throw new Error('Enter API keys on the host running Ramu')
-      return providers.setApiKey(provider, accountId, variable, key, apiKeys)
+    'providers.loginCommand': {
+      args: z.tuple([agentSettings.shape.provider, providerBinaries.optional()]),
+      run: (provider: ProviderStatus['provider'], config?: ProviderConfiguration) =>
+        providers.loginCommand(provider, config),
     },
-  },
-  'providers.loginCommand': {
-    args: z.tuple([agentSettings.shape.provider, providerBinaries.optional()]),
-    run: (provider: ProviderStatus['provider'], config?: ProviderConfiguration) =>
-      providers.loginCommand(provider, config),
-  },
-  'providers.update': {
-    args: z.tuple([agentSettings.shape.provider]),
-    run: (provider: ProviderStatus['provider']) => providers.update(provider),
-  },
-  'providers.updates': { args: z.tuple([]), run: () => providers.updates() },
-  'providers.dismissUpdate': {
-    args: z.tuple([agentSettings.shape.provider, relPath, z.string().max(200)]),
-    run: (provider: ProviderStatus['provider'], binary: string, latestVersion: string) =>
-      providers.dismiss({ provider, binary, latestVersion } as ProviderStatus),
-  },
-  // Values are credentials: only the execution host reads or changes them; other clients see names.
-  'providers.environment': {
-    args: z.tuple([z.boolean().optional()]),
-    run: async (retry?: boolean) => {
-      if (retry) await environment.load()
-      return environment.status(host.canAdministerIntegrations?.() === true)
+    'providers.update': {
+      args: z.tuple([agentSettings.shape.provider]),
+      run: (provider: ProviderStatus['provider']) => providers.update(provider),
     },
-  },
-  'providers.setEnvironment': {
-    args: z.tuple([environmentValues]),
-    run: (values: ProviderEnvironmentValues) => {
-      if (host.canAdministerIntegrations?.() !== true)
-        throw new Error('Change environment variables on the host running Ramu')
-      return environment.save(values)
+    'providers.updates': { args: z.tuple([]), run: () => providers.updates() },
+    'providers.dismissUpdate': {
+      args: z.tuple([agentSettings.shape.provider, relPath, z.string().max(200)]),
+      run: (provider: ProviderStatus['provider'], binary: string, latestVersion: string) =>
+        providers.dismiss({ provider, binary, latestVersion } as ProviderStatus),
     },
-  },
-  'providers.pickBinary': { args: z.tuple([]), run: () => host.native('pickExecutable') },
-  'usage.get': { args: z.tuple([]), run: () => usage.list() },
-  'usage.accounts': { args: z.tuple([]), run: () => usage.all() },
-  'usage.activity': {
-    args: z.tuple([z.number().int().min(1).max(31)]),
-    run: (days: number) => {
-      const start = new Date()
-      start.setHours(0, 0, 0, 0)
-      start.setDate(start.getDate() - (days - 1))
-      return agents.activity(start.getTime())
+    // Values are credentials: only the execution host reads or changes them; other clients see names.
+    'providers.environment': {
+      args: z.tuple([z.boolean().optional()]),
+      run: async (retry?: boolean) => {
+        if (retry) await environment.load()
+        return environment.status(host.canAdministerIntegrations?.() === true)
+      },
     },
-  },
-  'usage.refresh': {
-    args: z.tuple([]),
-    run: async () => {
-      await Promise.all([agents.readClaudeUsage(), extraUsage.refresh(), accountUsage.refresh()])
-      return usage.list()
+    'providers.setEnvironment': {
+      args: z.tuple([environmentValues]),
+      run: (values: ProviderEnvironmentValues) => {
+        if (host.canAdministerIntegrations?.() !== true)
+          throw new Error('Change environment variables on the host running Ramu')
+        return environment.save(values)
+      },
     },
-  },
-  'codex.hook.status': { args: z.tuple([]), run: () => codexHookTrust(false) },
-  'codex.hook.trust': { args: z.tuple([]), run: () => codexHookTrust(true) },
-  'advisor.claude': { args: z.tuple([]), run: () => ({ model: claudeAdvisorModel() }) },
-})
+    'providers.pickBinary': { args: z.tuple([]), run: () => host.native('pickExecutable') },
+    'usage.get': { args: z.tuple([]), run: () => usage.list() },
+    'usage.accounts': { args: z.tuple([]), run: () => usage.all() },
+    'usage.activity': {
+      args: z.tuple([z.number().int().min(1).max(31)]),
+      run: (days: number) => {
+        const start = new Date()
+        start.setHours(0, 0, 0, 0)
+        start.setDate(start.getDate() - (days - 1))
+        return agents.activity(start.getTime())
+      },
+    },
+    'usage.refresh': {
+      args: z.tuple([]),
+      run: async () => {
+        await Promise.all([agents.readClaudeUsage(), extraUsage.refresh(), accountUsage.refresh()])
+        return usage.list()
+      },
+    },
+    'codex.hook.status': { args: z.tuple([]), run: () => codexHookTrust(false) },
+    'codex.hook.trust': { args: z.tuple([]), run: () => codexHookTrust(true) },
+    'advisor.claude': { args: z.tuple([]), run: () => ({ model: claudeAdvisorModel() }) },
+  }
+}

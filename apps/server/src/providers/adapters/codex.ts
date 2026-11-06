@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { defineAdapter, npmLatest, runCli } from '../adapter'
+import { defineAdapter, LONG_CONTEXT_TOKENS, npmLatest, runCli } from '../adapter'
 
 /** The login's email and ChatGPT plan, from the ID token Codex keeps; the plan is as of Codex's last token refresh. */
 function codexLogin(env: NodeJS.ProcessEnv): { email?: string; plan?: string } {
@@ -66,7 +66,16 @@ export const codexAdapter = defineAdapter({
       )
       child.stdin?.end(key === null ? '' : `${key}\n`)
     }),
-  native: { blockingQuestions: true },
+  native: {
+    blockingQuestions: true,
+    // Built-in tools of the app-server. Image generation depends on the login and model: the check decides.
+    abilities: [
+      { ability: 'image_generation', via: { tool: 'image_gen' } },
+      { ability: 'image_edit', via: { tool: 'image_gen' } },
+      { ability: 'web_search', via: { tool: 'web_search' } },
+      { ability: 'long_context', via: { contextWindow: LONG_CONTEXT_TOKENS } },
+    ],
+  },
   // The ACP adapter takes no skill roots from the client, but Codex scans `.agents/skills` in the chat's folder.
   skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.agents', 'skills')] : [] }),
   updatePlan({ config, binary, findExecutable, runtimeHome }) {

@@ -1,4 +1,5 @@
 import type { AgentEvent } from '../types'
+import { ABILITY_TOOLS } from '@ramu/shared/providers/abilities'
 
 type ToolUse = Extract<AgentEvent, { kind: 'tool-use' }>
 type CallSource = Pick<ToolUse, 'name' | 'summary'> & { input?: string }
@@ -67,6 +68,10 @@ const KNOWN = new Set([
   'ramu_agent_status',
   'ramu_agent_stop',
   'agent_models',
+  'generate_image',
+  'edit_image',
+  'web_search',
+  'read_long',
   'message_parent',
   'ask_parent',
   'answer_subagent',
@@ -106,6 +111,11 @@ const OWN_UI = new Set([
   'schedule_update',
   'ramu_agent',
   'codex_pre_tool_use',
+  // Ability calls record their own row, refusals and failures included.
+  'generate_image',
+  'edit_image',
+  'web_search',
+  'read_long',
 ])
 
 const record = (value: unknown): Record<string, unknown> =>
@@ -144,6 +154,12 @@ export function ramuTool(tool: CallSource): RamuToolCall | null {
       : { name, args }
   }
   return { name, args }
+}
+
+/** An ability call: its `ability` row stands for it, refusals and failures included. */
+export const isAbilityToolCall = (tool: CallSource): boolean => {
+  const name = ramuTool(tool)?.name
+  return !!name && Object.hasOwn(ABILITY_TOOLS, name)
 }
 
 /** True when the call is Ramu's own and its outcome already has a place in the chat. */

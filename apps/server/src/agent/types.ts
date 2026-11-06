@@ -51,6 +51,8 @@ export interface SubagentInput {
   custom?: import('@ramu/shared/customAgents').CustomAgent
   /** A model handle the agent asked for, such as `opus-5.5`; resolved to settings before the start. */
   model?: string
+  /** Abilities the helper's whole job needs; it starts on a provider that has every one of them. */
+  needs?: import('@ramu/shared/providers/abilities').Ability[]
   /** `worktree` gives it its own copy of the checkout; `shared` keeps it in the thread's unless another writer is there. */
   isolation?: 'shared' | 'worktree'
   role?: import('@ramu/shared/chat/helperRoles').HelperRole

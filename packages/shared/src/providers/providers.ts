@@ -77,6 +77,8 @@ export interface ProviderStatus {
   compatibility?: CompatibilityResult
   /** The newer release's compatibility under the same policy, present only when an update is available and a rule covers it. */
   updateCompatibility?: CompatibilityResult
+  /** Live ability checks for the chosen login on the installed version; only passed ones are offered. */
+  abilities?: import('./abilities').AbilityCheck[]
 }
 
 /**

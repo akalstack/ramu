@@ -39,6 +39,8 @@ export interface Services {
   interactive?: import('../interactive/store').InteractiveStore
   pages?: import('../interactive/pages').PageStore
   pageAi?: import('../interactive/pageAi').PageAi
+  /** Abilities: live checks per provider and calls routed to a provider that has one. */
+  abilities?: import('../agent/abilities').AbilityService
   /** Sends a page's notification to paired phones and this host's desktop. */
   notifyPage?: (page: import('@ramu/shared/artifacts').ArtifactInfo, title: string, body: string) => void
   /** Pages opened to people without Ramu, each on its own listener and tunnel. */

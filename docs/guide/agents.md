@@ -24,6 +24,18 @@ The agent can start helpers for parts of a task. Helper cards show progress; ope
 - The agent can check its own helpers and stop one that went off track (`ramu_agent_status`, `ramu_agent_stop`); it cannot reach another thread's helpers. Reports arrive as messages, so the agent is told to end its turn rather than check in a loop.
 - A provider that sends a call again after a dropped connection does not start a second helper, thread or project: the repeated call gets the first result back.
 
+## Abilities
+
+Some providers can do things others cannot: Codex can search the web and, on logins that offer it, make images; Claude can search the web. When a thread's provider lacks one, its agent asks Ramu, which runs just that step on one of your signed-in providers that has it and hands the result back. The thread keeps its own model.
+
+- **Tools:** `generate_image` and `edit_image` (one to four images, saved as attachments of the thread), `web_search` (an answer with cited sources) and `read_long` (one question about files in the thread's folder or pasted text, up to about 1.2 million characters, on the model with the largest context window). Each call is one bounded run with no files, shell, Git or MCP, and only the caller's prompt and the inputs it names are sent. A thread whose own provider has the ability natively does not get the tool and uses its own. `agent_models` lists which provider offers each ability on this host.
+- **The row:** each call shows as one row on the desktop and the phone, such as **Image made with Codex**, with the model, time, tokens, what was sent and the result: the image (open it full size), the answer and its sources. **Make another** runs the same request again, and **Use another provider** runs it on a provider other than the one that ran it. When no provider has the ability, the agent is told to carry on without it and say so, and the row offers **Set up a provider**.
+- **Settings → Models → Abilities:** each ability is **Auto** (every provider whose check passed, in your fallback order), one provider and model, or **Off**. The phone shows these choices read-only. **Ask before using another provider** (off by default, also on the phone under the **Change settings** permission) turns each call that would run on a provider other than the thread's into an approval card naming the provider and what is sent.
+- **Limits:** at a usage limit a call moves to the next provider with the ability, on that provider's chosen login. It never moves to another subscription login on its own, and when every provider is limited the call is refused with a clear message. `web_search` on **Auto** falls back to Ramu's own keyless search. Each call shows in **Activity** while it runs and counts in usage under the provider that ran it.
+- **Helpers by ability:** `ramu_agent` takes `needs`, such as `['image_generation']`, and starts the helper on a provider that has every listed ability: a fixed choice in Abilities first, then Sub-agents routing, then the fallback order. If none has them all, it refuses and names what is missing. The helper keeps the thread's access and never gets more.
+
+Which abilities each provider offers on your host is in [Providers](providers.md#abilities).
+
 ## Teammates
 
 A teammate is another model working in the thread beside its main agent, with its own session. Type `@` at the start of a message to choose who it goes to (desktop and phone):

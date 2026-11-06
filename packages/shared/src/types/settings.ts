@@ -9,6 +9,7 @@ import type { GoalPreferences } from './goal'
 import { DEFAULT_INTELLIGENCE_PREFERENCES } from './intelligence'
 import type { IntelligencePreferences } from './intelligence'
 import { DEFAULT_MEMORY_PREFERENCES } from './memory'
+import { DEFAULT_ABILITY_PREFERENCES, type AbilityPreferences } from '../providers/abilities'
 import type { MemoryPreferences } from './memory'
 
 export interface ModelStep {
@@ -122,6 +123,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   showUsageLimits: boolean
   fallback: FallbackPreferences
   subagents: SubagentPreferences
+  /** Which provider runs each ability for threads on other providers. */
+  abilities: AbilityPreferences
   advisor: AdvisorPreferences
   goals: GoalPreferences
   intelligence: IntelligencePreferences
@@ -177,6 +180,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   showUsageLimits: true,
   fallback: DEFAULT_FALLBACK_PREFERENCES,
   subagents: DEFAULT_SUBAGENT_PREFERENCES,
+  abilities: DEFAULT_ABILITY_PREFERENCES,
   advisor: DEFAULT_ADVISOR_PREFERENCES,
   goals: DEFAULT_GOAL_PREFERENCES,
   memory: DEFAULT_MEMORY_PREFERENCES,
