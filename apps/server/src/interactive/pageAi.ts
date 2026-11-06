@@ -89,7 +89,7 @@ export class PageAi {
   ) => work()
 
   private settings(page: PageInfo) {
-    return this.settingsFor(page.grants.ai?.model ?? page.capabilities.ai?.quality ?? 'fast')
+    return this.settingsFor((page.grants.ai && page.grants.ai.model) || page.capabilities.ai?.quality || 'fast')
   }
 
   async ask(

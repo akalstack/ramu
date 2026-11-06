@@ -10,6 +10,10 @@ export interface InteractiveFrameProps {
   theme: Record<string, string>
   onMessage(value: unknown): void
   onStop(): void
+  /** Messages for the document, delivered once each in id order: page replies, run steps, pick mode. */
+  messages?: readonly { id: number; data: object }[]
+  /** Larger messages a page may send, such as a photo it picked; documents in a thread stay small. */
+  maxMessage?: number
 }
 /** Browser companion stays a static fallback until a dedicated document origin is available. */
 export default function InteractiveFrame(_props: InteractiveFrameProps) {

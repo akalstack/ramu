@@ -74,7 +74,8 @@ export type PageCapability = 'records' | 'ai' | 'camera' | 'notify' | 'schedules
 /** What the person allowed. A capability the page declares and is not granted fails with a clear error. */
 export interface PageGrants {
   records?: boolean
-  ai?: { model: 'fast' | 'smart'; daily: number; web?: boolean; mcp?: string[] }
+  /** False when the person said no; absent until they answer. */
+  ai?: { model: 'fast' | 'smart'; daily: number; web?: boolean; mcp?: string[] } | false
   camera?: boolean
   notify?: boolean
   schedules?: boolean

@@ -11,6 +11,8 @@ export default function InteractiveFrame({
   theme,
   onMessage,
   onStop,
+  messages,
+  maxMessage = 40_000,
 }: InteractiveFrameProps) {
   const source = useMemo(() => ({ html, baseUrl: 'https://ramu-content.invalid/' }), [html])
   const view = useRef<WebView<object>>(null)
@@ -30,6 +32,15 @@ export default function InteractiveFrame({
     view.current?.injectJavaScript(`window.dispatchEvent(new MessageEvent('message',{data:${data}}));true;`)
   }, [snapshot, instance])
   useEffect(sendTheme, [theme, instance])
+  const delivered = useRef(0)
+  useEffect(() => {
+    for (const message of messages ?? []) {
+      if (message.id <= delivered.current) continue
+      delivered.current = message.id
+      const data = JSON.stringify({ ramuInteractive: 1, instance, ...message.data })
+      view.current?.injectJavaScript(`window.dispatchEvent(new MessageEvent('message',{data:${data}}));true;`)
+    }
+  }, [messages, instance])
   return (
     <View style={{ height, backgroundColor }}>
       <WebView<object>
@@ -61,7 +72,7 @@ export default function InteractiveFrame({
           (request.url === 'about:blank' || request.url === 'https://ramu-content.invalid/')
         }
         onMessage={(event) => {
-          if (event.nativeEvent.data.length > 40_000) return
+          if (event.nativeEvent.data.length > maxMessage) return
           try {
             const message = JSON.parse(event.nativeEvent.data)
             if (message?.ramuInteractive === 1 && message.instance === instance && message.type === 'painted') {

@@ -61,12 +61,10 @@ function grantsOf(chosen: Record<string, boolean>, model: 'fast' | 'smart', dail
   const grants: PageGrants = {}
   for (const name of declaredCapabilities(page.capabilities)) {
     const on = chosen[name] ?? false
-    if (name === 'ai') grants.ai = on ? { model, daily } : undefined
+    if (name === 'ai') grants.ai = on ? { model, daily } : false
     else if (name === 'webhook') grants.webhook = on ? { token: '' } : false
     else grants[name] = on
   }
-  // An AI capability left off is recorded as answered, so the sheet does not ask again.
-  if (page.capabilities.ai && !chosen.ai) grants.ai = { model, daily: 1 }
   return grants
 }
 
@@ -193,12 +191,10 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
   const { on } = useHostRuntime()
   const names = declaredCapabilities(page.capabilities)
   const [chosen, setChosen] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      names.map((name) => [name, name === 'ai' ? (page.grants.ai?.daily ?? 0) > 1 : !!page.grants[name]]),
-    ),
+    Object.fromEntries(names.map((name) => [name, !!page.grants[name]])),
   )
-  const [model, setModel] = useState<'fast' | 'smart'>(page.grants.ai?.model ?? 'fast')
-  const [daily, setDaily] = useState(page.grants.ai?.daily ?? 200)
+  const [model, setModel] = useState<'fast' | 'smart'>((page.grants.ai && page.grants.ai.model) || 'fast')
+  const [daily, setDaily] = useState((page.grants.ai && page.grants.ai.daily) || 200)
   const [usage, setUsage] = useState<PageUsage | null>(null)
   const [runs, setRuns] = useState<PageRun[]>([])
   const [shares, setShares] = useState<PageShare[]>([])

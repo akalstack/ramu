@@ -44,3 +44,12 @@ test('a delivered push leaves once its notice is read elsewhere, but not before 
   // A host whose inbox has not loaded decides nothing.
   assert.deepEqual(readPushes(presented, listed, {}), [])
 })
+
+test("a page's notification opens that page", () => {
+  assert.deepEqual(pushTarget({ computerId: 'host-a', kind: 'pages', target: 'page', pageId: 'p-1' }, hosts), {
+    kind: 'page',
+    computerId: 'host-a',
+    pageId: 'p-1',
+  })
+  assert.equal(pushTarget({ computerId: 'host-a', target: 'page', pageId: '../x' }, hosts), null)
+})

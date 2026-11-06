@@ -7,6 +7,7 @@ import { space, useTheme } from '../theme'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, Image, Platform, ScrollView, TextInput, View } from 'react-native'
 import { Expand, MoreHorizontal } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
 import type { InteractiveDocument, InteractiveReference, InteractiveState } from '@ramu/shared/interactive'
 import { interactiveFollowup, interactiveHtml, readInteractiveState } from '@ramu/shared/interactive'
 import { interactiveStorage } from '@ramu/shared/interactiveStorage'
@@ -120,6 +121,17 @@ export function InteractiveDocumentCard({
   const [mode, setMode] = useState<'preview' | 'code'>('preview')
   const [file, setFile] = useState(0)
   const [actionsOpen, setActionsOpen] = useState(false)
+  const router = useRouter()
+  // Whether this document is kept as a page, asked when the actions open rather than for every card.
+  const [kept, setKept] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!actionsOpen || kept !== null) return
+    void invoke(chat.computerId, 'pages.exists', reference.id).then(setKept, () => setKept(false))
+  }, [actionsOpen, kept, invoke, chat.computerId, reference.id])
+  const openPage = () => {
+    setActionsOpen(false)
+    router.push({ pathname: '/page/[computer]/[id]', params: { computer: chat.computerId, id: reference.id } })
+  }
   const [expanded, setExpanded] = useState(false)
   const live = !!document && (visible || expanded) && foreground && !failed && !evicted && mode === 'preview'
   const [generation, setGeneration] = useState(0)
@@ -393,6 +405,19 @@ export function InteractiveDocumentCard({
           <T tone="muted">{reference.checked ? t('Controls checked') : t('Rendering checked')}</T>
           <T tone="muted">{reference.summary}</T>
           <Card>
+            {kept ? (
+              <ContentAction title={t('Open page')} onPress={openPage} />
+            ) : kept === false && !copyFrom ? (
+              <ContentAction
+                title={t('Keep as page')}
+                onPress={() =>
+                  void invoke(chat.computerId, 'pages.keep', reference.sessionId, reference.id).then(
+                    () => openPage(),
+                    (e) => setError(e instanceof Error ? e.message : String(e)),
+                  )
+                }
+              />
+            ) : null}
             {onVersions && (
               <ContentAction
                 title={t('Versions')}

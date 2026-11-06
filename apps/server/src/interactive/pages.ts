@@ -451,7 +451,7 @@ export class PageStore {
     const usage = this.usage(pageId)
     const limit =
       kind === 'ai'
-        ? (page.grants.ai?.daily ?? 0)
+        ? (page.grants.ai ? page.grants.ai.daily : 0)
         : Math.min(PAGE_LIMITS.notifyDaily, page.capabilities.notify?.daily ?? PAGE_LIMITS.notifyDaily)
     if (usage[kind] >= limit)
       throw new Error(

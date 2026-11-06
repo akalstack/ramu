@@ -8,7 +8,7 @@ const source = (path) => readFileSync(new URL(path, app), 'utf8')
 
 test('every tab trigger has a folder with its own stack and a first screen', () => {
   const triggers = [...source('(tabs)/_layout.tsx').matchAll(/Trigger name="([^"]+)"/g)].map((m) => m[1])
-  assert.deepEqual(triggers, ['(threads)', 'inbox', 'schedules', 'compose'])
+  assert.deepEqual(triggers, ['(threads)', 'inbox', 'schedules', 'pages', 'compose'])
   for (const name of triggers) {
     assert.ok(has(`(tabs)/${name}/_layout.tsx`), `${name} layout`)
     assert.ok(has(`(tabs)/${name}/index.tsx`), `${name} screen`)
