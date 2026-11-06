@@ -5,6 +5,7 @@ import { PageStore, parseCsv, stripJpegMetadata } from '../src/interactive/pages
 import { PageAi, answerProblem, type Analyze } from '../src/interactive/pageAi'
 import { PageAutomation, scheduleSlot, triggerMatches } from '../src/interactive/pageAutomation'
 import { pageCapabilitiesOf } from '../src/interactive/capabilities'
+import { interactiveBrowserPath } from '../src/interactive/preview'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
 
 const databases: Db[] = []
@@ -310,4 +311,133 @@ it('reads only the granted project folder, read-only', async () => {
   expect(await call('folder.list', [])).toEqual([{ name: 'a.json', folder: false }])
   expect(await call('folder.read', ['a.json'])).toBe('{"ok":true}')
   await expect(call('folder.read', ['../secret.txt'])).rejects.toThrow('Only the granted folder')
+})
+
+it('gives page runs web search and only the Shared MCP servers granted, each call confirmed', async () => {
+  const { parseSearchResults } = await import('../src/interactive/pageAi')
+  expect(
+    parseSearchResults(
+      '<div class="result results_links"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Frate&amp;rut=x">USD &amp; IDR</a><a class="result__snippet">1 USD = 16,000 IDR</a></div>',
+    ),
+  ).toEqual([{ title: 'USD & IDR', url: 'https://example.com/rate', snippet: '1 USD = 16,000 IDR' }])
+  const { pages, page } = await setup()
+  const capabilities = { ai: { purpose: 'Converts money', web: true, mcp: ['mail', 'bank'] } }
+  const db = (pages as unknown as { db: Db }).db
+  db.prepare('UPDATE interactive_pages SET data=json_set(data, ?, json(?)) WHERE id=?').run(
+    '$.capabilities',
+    JSON.stringify(capabilities),
+    page.id,
+  )
+  pages.grant(page.id, { ai: { model: 'fast', daily: 20, web: true, mcp: ['mail'] } })
+  const opened = vi.fn()
+  const mailCall = vi.fn(async () => [{ type: 'text', text: 'statement found' }])
+  const external = {
+    search: vi.fn(async () => [{ title: 'rate', url: 'https://example.com', snippet: '16000' }]),
+    open: vi.fn(async (_page: unknown, _settings: unknown, servers: string[]) => {
+      opened(servers)
+      return {
+        tools: [{ name: 'find', server: 'mail', description: 'Find mail', inputSchema: {}, call: mailCall }],
+        close: async () => {},
+      }
+    }),
+  }
+  const steps = [
+    { tool: 'web_search', input: { query: 'usd idr' } },
+    { tool: 'mcp_0', input: { q: 'bank statement' } },
+    { answer: 'done' },
+  ]
+  const ai = new PageAi(
+    pages,
+    async (prompt) => {
+      if (steps.length === 3) expect(prompt).toContain('web_search')
+      return { message: JSON.stringify(steps.shift()), provider: 'codex', model: 'm' }
+    },
+    () => DEFAULT_AGENT_SETTINGS,
+    external as never,
+  )
+  const save = vi.spyOn(pages, 'saveRun').mockImplementation(function (this: PageStore, run) {
+    if (run.confirm) queueMicrotask(() => ai.answer(run.confirm!.id, true))
+    return PageStore.prototype.saveRun.call(this, run)
+  })
+  const run = await ai.run(page.id, 'Find my rate', { source: 'page' })
+  save.mockRestore()
+  expect(run.status).toBe('done')
+  expect(opened).toHaveBeenCalledWith(['mail'])
+  expect(external.search).toHaveBeenCalledWith('usd idr', expect.anything())
+  expect(mailCall).toHaveBeenCalledWith({ q: 'bank statement' }, expect.anything())
+})
+
+it.skipIf(!interactiveBrowserPath())(
+  'loads a page on the host so a scheduled run can call the functions it registers',
+  async () => {
+    const { openHeadlessPage } = await import('../src/interactive/pageHeadless')
+    const { pages, interactive } = await setup()
+    const source = `${html({ records: ledger.records, ai: ledger.ai })}<script>ramuContent.ai.tool('convert', {description: 'IDR to USD', input: {idr: 'number'}}, async ({idr}) => { const list = await ramuContent.records.list('transactions'); return {usd: idr / 16000, records: list.length} })</script>`
+    const v = interactive.publish('s', (await interactive.preview('s', { ...input, html: source })).id, 'h1')
+    const page = pages.keep('s', v.id)
+    pages.grant(page.id, { records: true })
+    pages.addRecord(page.id, 'transactions', { date: '2026-11-05', amount: 1, category: 'x' })
+    const frame = await openHeadlessPage(pages.get(page.id), pages)
+    try {
+      expect(frame.functions.map((fn) => fn.name)).toEqual(['convert'])
+      expect(await frame.call('convert', { idr: 32000 })).toEqual({ usd: 2, records: 1 })
+      // Edit's selector for the script's sibling paragraph; a screenshot of an element is a PNG.
+      expect((await frame.screenshot('p'))?.subarray(1, 4).toString()).toBe('PNG')
+      expect(await frame.screenshot('p > script; alert(1)')).toBeNull()
+    } finally {
+      await frame.close()
+    }
+  },
+  30_000,
+)
+
+it('runs kept checks once when the shipped libraries change, and reports a page they would break', async () => {
+  const { interactive, pages } = await setup()
+  const project = {
+    ...input,
+    html: undefined,
+    files: [
+      { path: 'index.html', content: '<div id="root"></div><script type="module" src="./main.js"></script>' },
+      { path: 'main.js', content: 'document.body.append("x")' },
+    ],
+  }
+  const v = interactive.publish('s', (await interactive.preview('s', project)).id, 'lib1')
+  const page = pages.keep('s', v.id)
+  const check = vi.fn(async () => ({ passed: false, detail: 'Check failed: Total' }))
+  const seen: Record<string, string> = {}
+  const automation = new PageAutomation(
+    pages,
+    {} as PageAi,
+    () => {},
+    { read: () => ({}), write: () => {} },
+    undefined,
+    {
+      pinned: () => ({ react: '99.0.0' }),
+      check,
+      seen: { read: () => ({ ...seen }), write: (next) => Object.assign(seen, next) },
+    },
+  )
+  await automation.checkLibraries()
+  await automation.checkLibraries()
+  expect(check).toHaveBeenCalledTimes(1)
+  expect(pages.get(page.id).lastError?.message).toContain('would break: Check failed: Total')
+})
+
+it('imports a page another host shared without its records, values or grants', async () => {
+  const { pages, page } = await setup()
+  pages.grant(page.id, { records: true })
+  pages.addRecord(page.id, 'transactions', { date: '2026-11-05', amount: 1, category: 'x' })
+  const document = pages.document(page.id)
+  const copy = pages.importPage(document, { title: 'Ledger from home', icon: '💸' })
+  expect(copy).toMatchObject({ title: 'Ledger from home', version: 1, grants: {}, projectId: null })
+  expect(copy.pendingGrants).toContain('records')
+  expect(pages.document(copy.id).html).toBe(document.html)
+  pages.grant(copy.id, { records: true })
+  expect(pages.records(copy.id, 'transactions')).toEqual([])
+  expect(() =>
+    pages.importPage(
+      { ...document, reference: { ...document.reference, network: { resources: ['http://10.0.0.1'], connect: [] } } },
+      { title: 'x', icon: 'x' },
+    ),
+  ).toThrow('HTTPS origin')
 })

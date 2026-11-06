@@ -63,7 +63,17 @@ function grantsOf(chosen: Record<string, boolean>, model: 'fast' | 'smart', dail
   const grants: PageGrants = {}
   for (const name of declaredCapabilities(page.capabilities)) {
     const on = chosen[name] ?? false
-    if (name === 'ai') grants.ai = on ? { model, daily } : false
+    if (name === 'ai')
+      grants.ai = on
+        ? {
+            model,
+            daily,
+            ...(page.capabilities.ai?.web ? { web: !!chosen['ai:web'] } : {}),
+            ...(page.capabilities.ai?.mcp?.length
+              ? { mcp: page.capabilities.ai.mcp.filter((server) => chosen[`ai:mcp:${server}`]) }
+              : {}),
+          }
+        : false
     else if (name === 'webhook') grants.webhook = on ? { token: '' } : false
     else grants[name] = on
   }
@@ -127,6 +137,24 @@ function GrantChoices({
               onChange={(event) => setDaily(Math.max(1, Math.min(500, Number(event.target.value) || 1)))}
             />
           </label>
+          {page.capabilities.ai?.web && (
+            <label className="flex basis-full items-center gap-2">
+              <Checkbox
+                checked={!!chosen['ai:web']}
+                onCheckedChange={(checked) => setChosen({ ...chosen, 'ai:web': checked === true })}
+              />
+              {t('Let its runs search the web')}
+            </label>
+          )}
+          {(page.capabilities.ai?.mcp ?? []).map((server) => (
+            <label key={server} className="flex basis-full items-center gap-2">
+              <Checkbox
+                checked={!!chosen[`ai:mcp:${server}`]}
+                onCheckedChange={(checked) => setChosen({ ...chosen, [`ai:mcp:${server}`]: checked === true })}
+              />
+              {t('Let its runs use {server}; each call asks you first', { server })}
+            </label>
+          ))}
         </div>
       )}
     </div>
@@ -137,9 +165,10 @@ function GrantChoices({
 export function GrantSheet({ page, onDone }: { page: PageInfo; onDone(): void }) {
   useLanguage()
   const { invoke } = useHost()
-  const [chosen, setChosen] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(page.pendingGrants.map((name) => [name, true])),
-  )
+  const [chosen, setChosen] = useState<Record<string, boolean>>(() => ({
+    ...Object.fromEntries(page.pendingGrants.map((name) => [name, true])),
+    'ai:web': true,
+  }))
   const [model, setModel] = useState<'fast' | 'smart'>(page.capabilities.ai?.quality ?? 'fast')
   const [daily, setDaily] = useState(page.capabilities.ai?.daily ?? 200)
   const [busy, setBusy] = useState(false)
@@ -192,9 +221,11 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
   const { invoke, id: hostId } = useHost()
   const { on } = useHostRuntime()
   const names = declaredCapabilities(page.capabilities)
-  const [chosen, setChosen] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(names.map((name) => [name, !!page.grants[name]])),
-  )
+  const [chosen, setChosen] = useState<Record<string, boolean>>(() => ({
+    ...Object.fromEntries(names.map((name) => [name, !!page.grants[name]])),
+    'ai:web': !!(page.grants.ai && page.grants.ai.web),
+    ...Object.fromEntries(((page.grants.ai && page.grants.ai.mcp) || []).map((server) => [`ai:mcp:${server}`, true])),
+  }))
   const [model, setModel] = useState<'fast' | 'smart'>((page.grants.ai && page.grants.ai.model) || 'fast')
   const [daily, setDaily] = useState((page.grants.ai && page.grants.ai.daily) || 200)
   const [usage, setUsage] = useState<PageUsage | null>(null)

@@ -208,9 +208,9 @@ export default function PageScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [document, instance],
   )
-  const startThread = async (prompt: string) => {
+  const startThread = async (prompt: string, selector?: string) => {
     try {
-      const started = await store.invoke(computerId, 'pages.startThread', pageId, prompt)
+      const started = await store.invoke(computerId, 'pages.startThread', pageId, prompt, selector)
       await store.refresh(computerId).catch(() => {})
       router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(computerId, started.taskId) } })
     } catch (failure) {
@@ -447,6 +447,7 @@ export default function PageScreen() {
                 onPress={() => {
                   void startThread(
                     `${change.trim()}\nChange only this element of the page (the person pointed at it): ${picked.selector}\nIts text: ${JSON.stringify(picked.text)}\nIts HTML: ${picked.html}`,
+                    picked.selector,
                   )
                   setPicked(null)
                   setChange('')
@@ -711,7 +712,12 @@ function allowAll(page: PageInfo) {
     page.pendingGrants.map((name) => [
       name,
       name === 'ai'
-        ? { model: page.capabilities.ai?.quality ?? 'fast', daily: page.capabilities.ai?.daily ?? 200 }
+        ? {
+            model: page.capabilities.ai?.quality ?? 'fast',
+            daily: page.capabilities.ai?.daily ?? 200,
+            // Shared MCP servers are granted one by one in Page settings on the desktop.
+            ...(page.capabilities.ai?.web ? { web: true } : {}),
+          }
         : name === 'webhook'
           ? { token: '' }
           : true,

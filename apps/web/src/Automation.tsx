@@ -1,3 +1,4 @@
+import { PageSchedules } from './pages/PageSchedules'
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { useSettingsEvents, useSettingsInvoke } from './settings/SettingsScope'
 import { ContentSkeleton } from '@/components/content-skeleton'
@@ -224,6 +225,7 @@ export function SchedulesPage({
             ))}
           </div>
         )}
+        {!editing && showOwn && <PageSchedules />}
         {!editing &&
           others.map((computer) => (
             <HostProvider key={computer.id} hostId={computer.id}>

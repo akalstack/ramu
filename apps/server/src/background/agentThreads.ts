@@ -87,6 +87,7 @@ interface Planned extends ThreadRequest {
   projectId: string
   projectName: string
   mode: 'current' | 'worktree'
+  attachments?: string[]
 }
 
 export interface StartOptions {
@@ -594,13 +595,18 @@ export class AgentThreadService {
   async startInProject(
     input: { projectId: string; title: string; prompt: string },
     settings: AgentSettings,
+    /** Stored attachment ids the first message carries, such as a page element's screenshot. */
+    attachments?: string[],
   ): Promise<StartedThread> {
     const planned = await this.plan(
       [{ prompt: input.prompt, title: input.title, project: input.projectId }],
       null,
       settings,
     )
-    const [started] = await this.start(planned, { source: null, settings, depth: 0 })
+    const [started] = await this.start(
+      planned.map((entry) => ({ ...entry, attachments })),
+      { source: null, settings, depth: 0 },
+    )
     if (!started) throw new Error('The thread did not start.')
     return started
   }
@@ -910,7 +916,12 @@ export class AgentThreadService {
         const carried =
           entry.bringChanges && options.source ? await this.carryChanges(options.source.taskId, task.id) : ''
         const brief = briefOf(entry.prompt, options.context, carried)
-        const session = (await this.invoke('agent.start', [task.id, brief, options.settings])) as AgentSessionInfo
+        const session = (await this.invoke('agent.start', [
+          task.id,
+          brief,
+          options.settings,
+          ...(entry.attachments?.length ? [entry.attachments] : []),
+        ])) as AgentSessionInfo
         this.db
           .prepare('UPDATE thread_links SET target_session_id = ? WHERE target_task_id = ?')
           .run(session.id, task.id)

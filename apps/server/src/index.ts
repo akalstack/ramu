@@ -28,8 +28,13 @@ import {
 import { InteractiveStore } from './interactive/store'
 import { registerInteractiveTools } from './interactive/tools'
 import { PageStore } from './interactive/pages'
-import { PageAi } from './interactive/pageAi'
-import { PageAutomation } from './interactive/pageAutomation'
+import { PageAi, webSearch, type PageExternal, type PageExternalTool } from './interactive/pageAi'
+import type { JsonValue } from '@ramu/shared/interactive'
+import { PageAutomation, recheckLibraries } from './interactive/pageAutomation'
+import { compileInteractive, pinnedLibraries } from './interactive/compile'
+import { resolveInteractiveKit } from './interactive/kit'
+import { previewInteractive } from './interactive/preview'
+import { openHeadlessPage } from './interactive/pageHeadless'
 import type { PageInfo } from '@ramu/shared/pages'
 import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
@@ -595,15 +600,84 @@ const pageSettings = (quality: 'fast' | 'smart') => {
 const pages = new PageStore(db, interactive, (pageId, run) =>
   send('pages:changed', { pageId, ...(run ? { run } : {}) }),
 )
-const pageAi = new PageAi(pages, (...args) => agents.analyze(...args), pageSettings)
+/**
+ * Page runs reach the web through a keyless search and Shared MCP servers through their own gateway, bound to the
+ * page's model login and project and limited to the servers the person granted the page by name. Each call is also
+ * confirmed in the page before it is made.
+ */
+const pageExternal: PageExternal = {
+  search: (query, signal) => webSearch(query, signal),
+  open: async (page, settings, servers, signal) => {
+    const service = getSharedMcp()
+    const connections = service.policy
+      .snapshot()
+      .connections.filter((item) => item.enabled && servers.includes(item.name))
+    const gateway = service.gateway(
+      `page:${page.id}`,
+      {
+        hostId: service.storage.hostId,
+        provider: settings.provider,
+        accountId: settings.accountId ?? 'default',
+        projectId: page.projectId,
+        role: 'background',
+        externalToolsAllowed: true,
+        connectionIds: connections.map((item) => item.id),
+      },
+      // The run already asked the person in the page before this call.
+      async () => true,
+    )
+    const tools: PageExternalTool[] = []
+    for (const connection of connections) {
+      try {
+        const found = await gateway.discover(connection.id, signal)
+        for (const tool of found.tools)
+          tools.push({
+            name: tool.name,
+            server: connection.name,
+            description: tool.description ?? tool.name,
+            inputSchema: tool.inputSchema,
+            call: async (args, callSignal) => {
+              const result = await gateway.invoke(connection.id, found.catalogRevision, tool.name, args, callSignal)
+              return JSON.parse(JSON.stringify(result.content ?? [])).slice(0, 20) as JsonValue
+            },
+          })
+      } catch {
+        // A server not approved for this login or project offers nothing.
+      }
+    }
+    return { tools, close: () => gateway.close() }
+  },
+}
+const pageAi = new PageAi(pages, (...args) => agents.analyze(...args), pageSettings, pageExternal)
 const notifyPage = (page: PageInfo, title: string, body: string) => {
   send('pages:changed', { pageId: page.id, notice: { title: title.slice(0, 80), body: body.slice(0, 240) } })
   void mobilePush.deliverPage(page.id, title, body).catch(() => {})
 }
-const pageAutomation = new PageAutomation(pages, pageAi, (page, title, body) => notifyPage(page, title, body), {
-  read: () => workspace.getAppState<Record<string, number>>('page-schedule-marks', {}),
-  write: (marks) => workspace.setAppState('page-schedule-marks', marks),
-})
+const pageAutomation = new PageAutomation(
+  pages,
+  pageAi,
+  (page, title, body) => notifyPage(page, title, body),
+  {
+    read: () => workspace.getAppState<Record<string, number>>('page-schedule-marks', {}),
+    write: (marks) => workspace.setAppState('page-schedule-marks', marks),
+  },
+  (page) => openHeadlessPage(page, pages),
+  {
+    pinned: pinnedLibraries,
+    check: (page) =>
+      recheckLibraries(
+        pages,
+        page.id,
+        interactive.media(page.id, page.version).checks,
+        async (files, entry) => resolveInteractiveKit(await compileInteractive(files, entry)),
+        (html, checks, network) => previewInteractive(html, checks, undefined, network),
+      ),
+    seen: {
+      read: () => workspace.getAppState<Record<string, string>>('page-library-checks', {}),
+      write: (seen) => workspace.setAppState('page-library-checks', seen),
+    },
+  },
+)
 pages.onRecord = (pageId, record) => pageAutomation.recordChanged(pageId, record)
 pageAutomation.start()
 let sharedMcp: SharedMcpService | undefined

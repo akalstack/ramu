@@ -11,7 +11,7 @@ import {
 import { previewInteractive } from './preview'
 import { bundleInteractive } from './bundle'
 import { resolveInteractiveKit } from './kit'
-import { compileInteractive, INTERACTIVE_MAX_ARTIFACT } from './compile'
+import { compileInteractive, INTERACTIVE_MAX_ARTIFACT, pinnedLibraries } from './compile'
 import { pageCapabilitiesOf } from './capabilities'
 
 export const interactiveInput = z.object({
@@ -266,9 +266,7 @@ export class InteractiveStore {
       createdAt: Date.now(),
       checked: preview.checks.length > 0,
       network: input.network ?? OFFLINE_NETWORK,
-      ...(input.files
-        ? { libraries: { react: '19.3.0', 'react-dom': '19.3.0', 'chart.js': '4.6.1', '@dagrejs/dagre': '2.0.4' } }
-        : {}),
+      ...(input.files ? { libraries: pinnedLibraries() } : {}),
       ...(input.stateSchema ? { stateSchema: input.stateSchema } : {}),
       ...(input.files ? { files: entryFirst(input.files, input.entry).map((file) => file.path) } : {}),
       ...(previous ? { changes: options.changes!.trim().slice(0, 300) } : {}),

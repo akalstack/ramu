@@ -2,6 +2,7 @@ import type { JsonValue } from '@ramu/shared/interactive'
 import type { PageInfo, PageRecord, PageSchedule, PageTrigger } from '@ramu/shared/pages'
 import type { PageStore } from './pages'
 import type { PageAi } from './pageAi'
+import { registersFunctions, type HeadlessPage } from './pageHeadless'
 
 /** When a schedule last ran, by page and schedule index; kept in memory and in app state by the caller. */
 export type ScheduleMarks = Record<string, number>
@@ -82,11 +83,49 @@ export class PageAutomation {
     private readonly ai: PageAi,
     private readonly notify: (page: PageInfo, title: string, body: string) => void,
     private readonly marks: { read(): ScheduleMarks; write(marks: ScheduleMarks): void },
+    /** Loads a page on the host so a run nobody opened can still call the functions it registers. */
+    private readonly headless?: (page: PageInfo) => Promise<HeadlessPage>,
+    private readonly libraries?: {
+      pinned(): Record<string, string>
+      check(page: PageInfo): Promise<LibraryCheck>
+      seen: { read(): Record<string, string>; write(seen: Record<string, string>): void }
+    },
   ) {}
+
+  /**
+   * Once after the libraries this host ships change, runs each project page's kept checks against them. A page that
+   * would break says so with Fix this, before anyone publishes a version built with them.
+   */
+  async checkLibraries() {
+    if (!this.libraries) return
+    const pinned = JSON.stringify(this.libraries.pinned())
+    const seen = this.libraries.seen.read()
+    let changed = false
+    for (const page of this.pages.list()) {
+      const document = this.pages.document(page.id)
+      const built = JSON.stringify(document.reference.libraries ?? null)
+      const key = `${page.id}:${page.version}`
+      if (!document.files?.length || built === pinned || seen[key] === pinned) continue
+      seen[key] = pinned
+      changed = true
+      const result = await this.libraries
+        .check(page)
+        .catch((error: Error) => ({ passed: false, detail: error.message }))
+      if (!result.passed)
+        this.pages.reportError(page.id, {
+          message: `With the libraries this host now ships, v${page.version} would break: ${result.detail}`,
+          version: page.version,
+          device: 'host library check',
+        })
+    }
+    if (changed) this.libraries.seen.write(seen)
+  }
 
   start() {
     this.timer ??= setInterval(() => void this.tick(), 60_000)
     this.timer.unref?.()
+    // After startup settles, so a library update is checked once without slowing the host's start.
+    setTimeout(() => void this.checkLibraries().catch(() => {}), 60_000).unref?.()
   }
   stop() {
     clearInterval(this.timer)
@@ -115,7 +154,20 @@ export class PageAutomation {
   private async startRun(page: PageInfo, name: string, source: 'schedule' | 'trigger', context?: string) {
     const declared = page.capabilities.runs?.[name]
     if (!declared) return
-    await this.ai.run(page.id, context ? `${declared.prompt}\n\n${context}` : declared.prompt, { name, source })
+    const prompt = context ? `${declared.prompt}\n\n${context}` : declared.prompt
+    const frame =
+      this.headless && registersFunctions(this.pages.document(page.id).html)
+        ? await this.headless(page).catch(() => null)
+        : null
+    try {
+      await this.ai.run(page.id, prompt, {
+        name,
+        source,
+        ...(frame?.functions.length ? { functions: frame.functions, callFunction: frame.call } : {}),
+      })
+    } finally {
+      await frame?.close()
+    }
   }
 
   /** Called after a record is added or changed from the page, an agent or a webhook. */
@@ -173,4 +225,36 @@ export class PageAutomation {
     }
     return { status: 200, body: { added } }
   }
+}
+
+/** What a page's kept checks said when run against the libraries this host now ships. */
+export interface LibraryCheck {
+  passed: boolean
+  detail: string
+}
+
+/**
+ * Rebuilds a project page from its sources with the libraries this host now ships and runs the checks kept with its
+ * current version. A page whose bytes were built with other versions keeps working as published; this tells the person
+ * before a new version would break it.
+ */
+export async function recheckLibraries(
+  pages: PageStore,
+  pageId: string,
+  checks: { action: 'click' | 'fill' | 'select' | 'check'; label: string; value?: string; expect: string }[],
+  build: (files: NonNullable<ReturnType<PageStore['document']>['files']>, entry: string) => Promise<string>,
+  preview: (
+    html: string,
+    checks: { action: 'click' | 'fill' | 'select' | 'check'; label: string; value?: string; expect: string }[],
+    network: ReturnType<PageStore['document']>['reference']['network'],
+  ) => Promise<{ errors: string[]; checks: { label: string; passed: boolean; detail: string }[] }>,
+): Promise<LibraryCheck> {
+  const document = pages.document(pageId)
+  if (!document.files?.length) return { passed: true, detail: 'No bundled libraries' }
+  const html = await build(document.files, document.files[0]!.path)
+  const result = await preview(html, checks, document.reference.network)
+  const failed = result.checks.find((check) => !check.passed)
+  if (result.errors.length) return { passed: false, detail: result.errors[0]!.slice(0, 300) }
+  if (failed) return { passed: false, detail: `Check failed: ${failed.label}` }
+  return { passed: true, detail: `${result.checks.length} checks passed` }
 }

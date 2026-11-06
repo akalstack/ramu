@@ -139,9 +139,9 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
     window.addEventListener('message', receive)
     return () => window.removeEventListener('message', receive)
   }, [instance])
-  const startThread = async (prompt: string) => {
+  const startThread = async (prompt: string, selector?: string) => {
     try {
-      const started = await invoke('pages.startThread', pageId, prompt)
+      const started = await invoke('pages.startThread', pageId, prompt, selector)
       await ws.refresh()
       ws.openTask(started.taskId)
     } catch (error) {
@@ -383,6 +383,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
             if (!input) return
             void startThread(
               `${input}\nChange only this element of the page (the person pointed at it): ${picked.selector}\nIts text: ${JSON.stringify(picked.text)}\nIts HTML: ${picked.html}`,
+              picked.selector,
             )
             setPicked(null)
           }}

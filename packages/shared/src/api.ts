@@ -504,7 +504,8 @@ export interface RamuMethods {
   'pages.widget'(pageId: string): { title: string; value: string; items: string[] } | null
   'pages.webhookUrls'(pageId: string): string[]
   /** Hands work the page cannot do itself to a new thread, with the page attached. */
-  'pages.startThread'(pageId: string, prompt: string): StartedThread
+  /** `selector` is an element Edit pointed at; the host attaches its screenshot. */
+  'pages.startThread'(pageId: string, prompt: string, selector?: string): StartedThread
   'pages.makeProject'(pageId: string, name?: string): { projectId: string; folder: string; thread: StartedThread }
   'pages.share'(pageId: string, canAdd: boolean): import('./pages').PageShare
   'pages.shares'(pageId: string): import('./pages').PageShare[]
@@ -517,6 +518,11 @@ export interface RamuMethods {
     state: import('./pages').PageState
   }
   'pages.shareCall'(token: string, method: string, args: unknown[]): unknown
+  /** Copies a page another host shared into a new page here, with no records, values or grants. */
+  'pages.import'(
+    document: import('./interactive').InteractiveDocument,
+    from: { title: string; icon: string },
+  ): import('./pages').PageInfo
 
   'onboarding.get'(): { needed: boolean }
   'onboarding.complete'(): void

@@ -1,6 +1,7 @@
 import { build, type Loader } from 'esbuild'
 import { createRequire } from 'node:module'
-import { posix } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join, posix } from 'node:path'
 import type { InteractiveFile } from '@ramu/shared/interactive'
 import { bundleInteractive, validateInteractiveFiles } from './bundle'
 
@@ -16,6 +17,37 @@ export const INTERACTIVE_LIBRARIES = [
   '@dagrejs/dagre',
 ] as const
 export const INTERACTIVE_MAX_ARTIFACT = 1_500_000
+
+/** Versions this build shipped with, used when a library cannot be read where the host runs. */
+const SHIPPED_LIBRARIES: Record<string, string> = {
+  react: '19.3.0',
+  'react-dom': '19.3.0',
+  'chart.js': '4.6.1',
+  '@dagrejs/dagre': '2.0.4',
+}
+/** The versions the bundled libraries actually are, recorded with each version so a change can be noticed. */
+export function pinnedLibraries(): Record<string, string> {
+  const versions: Record<string, string> = {}
+  for (const [name, shipped] of Object.entries(SHIPPED_LIBRARIES)) {
+    versions[name] = shipped
+    try {
+      // Some packages do not export package.json; find it beside their entry instead.
+      let dir = dirname(require.resolve(name))
+      for (let depth = 0; depth < 5; depth++, dir = dirname(dir)) {
+        const file = join(dir, 'package.json')
+        if (!existsSync(file)) continue
+        const pkg = JSON.parse(readFileSync(file, 'utf8')) as { name?: string; version?: string }
+        if (pkg.name === name && pkg.version) {
+          versions[name] = pkg.version
+          break
+        }
+      }
+    } catch {
+      // Keep the shipped version.
+    }
+  }
+  return versions
+}
 const text = (file: InteractiveFile) =>
   file.encoding === 'base64' ? Buffer.from(file.content, 'base64').toString('utf8') : file.content
 const attr = (attrs: string, name: string) =>

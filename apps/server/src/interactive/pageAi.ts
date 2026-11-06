@@ -36,6 +36,29 @@ export interface PageFunction {
   input: Record<string, PageField>
 }
 
+/** A Shared MCP tool a run may call, already scoped to the servers the person granted this page. */
+export interface PageExternalTool {
+  name: string
+  server: string
+  description: string
+  inputSchema: unknown
+  call(args: Record<string, unknown>, signal: AbortSignal): Promise<JsonValue>
+}
+
+/**
+ * What a page run can reach beyond the page: web search, and the Shared MCP servers the person granted this page by
+ * name. The host builds both; a run never names a server it was not granted.
+ */
+export interface PageExternal {
+  search(query: string, signal: AbortSignal): Promise<JsonValue>
+  open(
+    page: PageInfo,
+    settings: AgentSettings,
+    servers: string[],
+    signal: AbortSignal,
+  ): Promise<{ tools: PageExternalTool[]; close(): Promise<void> }>
+}
+
 interface Pending {
   resolve(value: JsonValue): void
   reject(error: Error): void
@@ -74,11 +97,13 @@ export class PageAi {
   private readonly active = new Map<string, AbortController>()
   private readonly calls = new Map<string, Pending>()
   private readonly confirmations = new Map<string, (allowed: boolean) => void>()
+  private readonly direct = new Map<string, (name: string, input: Record<string, JsonValue>) => Promise<JsonValue>>()
 
   constructor(
     private readonly pages: PageStore,
     private readonly analyze: Analyze,
     readonly settingsFor: (quality: 'fast' | 'smart') => AgentSettings,
+    private readonly external?: PageExternal,
   ) {}
 
   /** Shows work in Activity with the page's name, where it can be stopped; the host's dispatcher sets this. */
@@ -175,6 +200,8 @@ export class PageAi {
       maxSteps?: number
       source: PageRun['source']
       readOnly?: boolean
+      /** Runs a page function in a frame the host holds, for runs with no page open on a device. */
+      callFunction?: (name: string, input: Record<string, JsonValue>) => Promise<JsonValue>
     },
   ): Promise<PageRun> {
     const page = this.pages.requireGrant(pageId, 'ai')
@@ -203,7 +230,12 @@ export class PageAi {
     return this.track(
       'Page run',
       `${page.title}: ${options.name ?? task.slice(0, 60)}`,
-      () => this.loop(run, page, task, options, controller, timer, save, step),
+      () => {
+        if (options.callFunction) this.direct.set(run.id, options.callFunction)
+        return this.loop(run, page, task, options, controller, timer, save, step).finally(() =>
+          this.direct.delete(run.id),
+        )
+      },
       () => this.stop(run.id),
     )
   }
@@ -222,6 +254,16 @@ export class PageAi {
     const collections = page.grants.records ? Object.keys(page.capabilities.records ?? {}) : []
     const functions = (options.functions ?? []).slice(0, 16)
     const connect = this.pages.document(pageId).reference.network.connect
+    const ai = page.grants.ai ? page.grants.ai : null
+    const web = !!(this.external && ai?.web && page.capabilities.ai?.web)
+    const servers = (ai?.mcp ?? []).filter((name) => page.capabilities.ai?.mcp?.includes(name))
+    const opened =
+      this.external && servers.length
+        ? await this.external
+            .open(page, this.settings(page), servers, controller.signal)
+            .catch(() => ({ tools: [] as PageExternalTool[], close: async () => {} }))
+        : null
+    const external = (opened?.tools ?? []).slice(0, 40)
     const tools = [
       ...(collections.length
         ? [
@@ -240,6 +282,11 @@ export class PageAi {
       ...(connect.length
         ? [`fetch {url}: GET an HTTPS URL on ${connect.join(', ')}; returns up to 20,000 characters.`]
         : []),
+      ...(web ? ['web_search {query}: search the web; returns titles, links and snippets.'] : []),
+      ...external.map(
+        (entry, index) =>
+          `mcp_${index} ${JSON.stringify(entry.inputSchema).slice(0, 1500)}: [${entry.server}] ${entry.description.slice(0, 300)} (the person confirms each call)`,
+      ),
     ]
     const history: string[] = []
     const maxSteps = Math.min(options.maxSteps ?? PAGE_LIMITS.runSteps, PAGE_LIMITS.runSteps)
@@ -293,7 +340,19 @@ export class PageAi {
             throw new Error('This run only reads records.')
           if (['records_add', 'records_update', 'records_delete'].includes(tool) && ++writes > PAGE_LIMITS.runWrites)
             throw new Error('This run reached its limit of record changes.')
-          result = await this.tool(run, tool, input, functions, connect)
+          if (tool === 'web_search' && web) {
+            result = await this.external!.search(String(input.query ?? '').slice(0, 300), controller.signal)
+          } else if (/^mcp_\d+$/.test(tool) && external[Number(tool.slice(4))]) {
+            const entry = external[Number(tool.slice(4))]!
+            // Anything that leaves the host through a server asks the person, whatever the grant.
+            const allowed = await this.confirm(
+              run,
+              `Use ${entry.server}: ${entry.name} with ${JSON.stringify(input).slice(0, 200)}?`,
+            )
+            result = allowed
+              ? await entry.call(input as Record<string, unknown>, controller.signal)
+              : { declined: true, note: 'The person did not allow this call.' }
+          } else result = await this.tool(run, tool, input, functions, connect)
           if (tool.startsWith('records_') && tool !== 'records_query' && tool !== 'records_sum') save()
         } catch (error) {
           result = { error: (error as Error).message }
@@ -312,6 +371,7 @@ export class PageAi {
       run.error = controller.signal.aborted ? undefined : (error as Error).message
     } finally {
       clearTimeout(timer)
+      void opened?.close().catch(() => {})
       this.active.delete(run.id)
       for (const [id, pending] of this.calls)
         if (id.startsWith(`${run.id}:`)) {
@@ -409,6 +469,8 @@ export class PageAi {
 
   /** Sends a call to the open page's frame through its pages:changed run event and waits for the frame's reply. */
   private callFunction(run: PageRun, name: string, input: Record<string, JsonValue>): Promise<JsonValue> {
+    const direct = this.direct.get(run.id)
+    if (direct) return direct(name, input)
     const id = `${run.id}:${randomUUID()}`
     return new Promise<JsonValue>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -497,4 +559,54 @@ async function pageFetch(value: string, connect: string[]): Promise<JsonValue> {
       }
     }
   return { status: response.status, body: text.slice(0, 20_000) }
+}
+
+/**
+ * A keyless web search through DuckDuckGo's HTML results, with the same vetted DNS and size bounds as fetch. Returns
+ * at most eight results as data for the run.
+ */
+export async function webSearch(query: string, signal: AbortSignal): Promise<JsonValue> {
+  if (!query.trim()) throw new Error('Give a search query.')
+  fetcher ??= new Agent({ connections: 4, connect: { lookup: sharedMcpLookup(false), timeout: 10_000 } })
+  const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+    dispatcher: fetcher,
+    redirect: 'manual',
+    headers: { 'user-agent': 'Ramu page run', accept: 'text/html' },
+    signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+  })
+  const html = (await response.text()).slice(0, 400_000)
+  return parseSearchResults(html)
+}
+
+const decodeHtml = (text: string) =>
+  text
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+export function parseSearchResults(html: string): { title: string; url: string; snippet: string }[] {
+  const results: { title: string; url: string; snippet: string }[] = []
+  const blocks = html.split(/class="result__body"|class="result results_links/).slice(1)
+  for (const block of blocks) {
+    const link = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/.exec(block)
+    if (!link) continue
+    let url = link[1]!.replace(/&amp;/g, '&')
+    const target = /[?&]uddg=([^&]+)/.exec(url)
+    if (target) url = decodeURIComponent(target[1]!)
+    if (url.startsWith('//')) url = `https:${url}`
+    if (!/^https?:\/\//.test(url)) continue
+    const snippet = /class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div|td)>/.exec(block)
+    results.push({
+      title: decodeHtml(link[2]!).slice(0, 200),
+      url: url.slice(0, 500),
+      snippet: decodeHtml(snippet?.[1] ?? '').slice(0, 400),
+    })
+    if (results.length >= 8) break
+  }
+  return results
 }

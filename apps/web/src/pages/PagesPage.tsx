@@ -11,6 +11,9 @@ import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { PageView } from './PageView'
 import { takePendingPage } from './openPage'
+import { ImportPageDialog } from './ImportPageDialog'
+import { Button } from '../components/desktop-button'
+import { useViewOnly } from '../composer/useViewOnly'
 
 /** Every page kept on this host, newest first with pinned ones on top. */
 export function usePages() {
@@ -36,6 +39,8 @@ export function PagesPage() {
   const pages = usePages()
   const ws = useWorkspace()
   const [query, setQuery] = useState('')
+  const [importing, setImporting] = useState(false)
+  const viewOnly = useViewOnly()
   const [open, setOpen] = useState<string | null>(() => takePendingPage())
   useEffect(() => {
     const select = (event: Event) => {
@@ -51,13 +56,18 @@ export function PagesPage() {
   return (
     <div className="h-full w-full overflow-auto">
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 px-6 pt-6 pb-10">
-        <header>
-          <h1 className="m-[0_0_4px] text-heading font-semibold tracking-[-0.01em]">{t('Pages')}</h1>
-          <p className="m-0 text-control text-muted-foreground">
-            {t(
-              'Sites agents made for you to keep. Open them here or on your phone, and change one by asking in any thread.',
-            )}
-          </p>
+        <header className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="m-[0_0_4px] text-heading font-semibold tracking-[-0.01em]">{t('Pages')}</h1>
+            <p className="m-0 text-control text-muted-foreground">
+              {t(
+                'Sites agents made for you to keep. Open them here or on your phone, and change one by asking in any thread.',
+              )}
+            </p>
+          </div>
+          <Button variant="outline" className="flex-none" disabled={viewOnly} onClick={() => setImporting(true)}>
+            {t('Import a page…')}
+          </Button>
         </header>
         {pages && pages.length > 0 && (
           <SearchInput
@@ -80,6 +90,7 @@ export function PagesPage() {
             </EmptyHeader>
           </Empty>
         )}
+        {importing && <ImportPageDialog onClose={() => setImporting(false)} />}
         <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
           {shown.map((page) => {
             const uses = declaredCapabilities(page.capabilities)

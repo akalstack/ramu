@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import type { Db } from '../db'
 import type { InteractiveDocument, InteractiveReference, JsonValue } from '@ramu/shared/interactive'
-import { readInteractiveState } from '@ramu/shared/interactive'
+import { interactiveOrigin, readInteractiveState } from '@ramu/shared/interactive'
 import {
   PAGE_LIMITS,
   declaredCapabilities,
@@ -371,6 +371,62 @@ export class PageStore {
       this.db.exec('RELEASE duplicate_page')
     } catch (error) {
       this.db.exec('ROLLBACK TO duplicate_page; RELEASE duplicate_page')
+      throw error
+    }
+    this.changed(id)
+    return this.get(id)
+  }
+
+  /**
+   * A copy of a page another host shared: its code, capabilities and screenshot as a new page here, with none of its
+   * records, values, grants or history. The bytes still run only in the sandboxed frame, and every capability asks again.
+   */
+  importPage(document: InteractiveDocument, from: { title: string; icon: string }): PageInfo {
+    const id = randomUUID()
+    const now = Date.now()
+    const network = {
+      resources: document.reference.network.resources.map(interactiveOrigin).slice(0, 12),
+      connect: document.reference.network.connect.map(interactiveOrigin).slice(0, 12),
+    }
+    const files = document.files ? JSON.stringify(document.files) : null
+    const capabilities = this.declared(id, 1, { html: document.html, files })
+    const reference: InteractiveReference = {
+      id,
+      version: 1,
+      sessionId: '',
+      title: clipTitle(from.title),
+      summary: document.reference.summary.slice(0, 3000),
+      digest: document.reference.digest.slice(0, 128),
+      createdAt: now,
+      checked: false,
+      network,
+      pageId: id,
+      ...(document.reference.files ? { files: document.reference.files.slice(0, 40) } : {}),
+      ...(document.reference.libraries ? { libraries: document.reference.libraries } : {}),
+    }
+    const data: PageData = {
+      title: clipTitle(from.title),
+      icon: pageIcon(from.icon),
+      projectId: null,
+      sessionId: '',
+      capabilities,
+      grants: {},
+    }
+    this.db.exec('SAVEPOINT import_page')
+    try {
+      this.db
+        .prepare(
+          'INSERT INTO interactive_pages(id,data,current_version,pinned,created_at,changed_at) VALUES(?,?,1,0,?,?)',
+        )
+        .run(id, JSON.stringify(data), now, now)
+      this.db
+        .prepare(
+          'INSERT INTO interactive_page_versions(page_id,version,reference,html,preview,files) VALUES(?,1,?,?,?,?)',
+        )
+        .run(id, JSON.stringify(reference), document.html, document.preview, files)
+      this.db.exec('RELEASE import_page')
+    } catch (error) {
+      this.db.exec('ROLLBACK TO import_page; RELEASE import_page')
       throw error
     }
     this.changed(id)

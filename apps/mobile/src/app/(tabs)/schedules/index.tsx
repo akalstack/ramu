@@ -21,6 +21,7 @@ import { Nothing } from '../../../components/InboxParts'
 import { openNeedComputer, useTabActions } from '../../../components/Overlays'
 import { HostChip } from '../../../components/HostChip'
 import { ScheduleRow } from '../../../components/ScheduleRow'
+import { PageScheduleRows } from '../../../components/PageScheduleRows'
 import { T } from '../../../components/ui'
 
 export default function SchedulesScreen() {
@@ -137,6 +138,7 @@ export default function SchedulesScreen() {
             ) : null}
           </View>
         ) : null}
+        <PageScheduleRows hosts={hosts.filter((host) => host.status === 'online').map((host) => host.id)} />
       </PageScrollView>
       {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}
     </Screen>
