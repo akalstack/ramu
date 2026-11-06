@@ -53,7 +53,7 @@ Left as they are: T3 Code's queue-editing tool and changing another thread's mod
 - **No new screen.** Starting an app is a thread like any other, so Home stays the one start box. Three additions: **New project** in the Auto "No project matched" choices (and **New project…** in the Project picker), **Start something new** in the no-projects state beside **Open a folder**, and Auto's project routing recognizing a request to build something new. The agent then runs the questions, `project_create` and the goal with its verification command, and the thread moves from No project into the new project's checkout, the same handoff **Continue in a new worktree** uses. The browser opens on the dev server's ready line, using the existing `background_terminal_wait` ready-text match.
 - **Project facts** saved in `projectConfig.ts`: the stack, the dev, build and test commands, and later the deploy target, so new threads in the project know them without being told.
 
-A request that needs no backend, shared data or domain becomes a page instead of a project ([Pages](PAGES-PLAN.md)); a page that outgrows itself returns here through **Make it a project**, and **Publish to the web** reuses the hosting adapters below.
+A request that needs no backend, shared data or domain becomes a page instead of a project ([Pages](guide/pages.md)): the stack choice sends "a page that adds up my monthly costs" to a page, so the smallest thing that works is made first. A page that outgrows itself arrives here through **Make it a project**, which already writes its sources, record fields and records to a new project and starts a thread; **Publish to the web** (today a thread deploying the page's HTML) moves onto the hosting adapters below once they exist.
 
 ### 3. Deploy targets
 

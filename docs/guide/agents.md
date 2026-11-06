@@ -93,6 +93,10 @@ Hosts whose platform or description (**Settings → Threads → Describe this ho
 
 `ramu thread start|status|message|list` lets a terminal agent or script place work on this host. See [Remote hosts](remote-hosts.md#threads-from-a-terminal).
 
+## Pages
+
+Agents publish pages to keep with `publish_interactive` (`page: true`, or a page's id for a new version from any thread), find them with `page_list` and `page_get`, work with a page's records through `page_records`, start its runs with `page_run`, and record where one is live with `page_published`. Deleting a page stays your action. See [Pages and interactive content](pages.md).
+
 ## Rules and MCP
 
 - **Settings → Agent setup → Rules** holds your own instructions. **Always** rules reach every new thread (24,000 characters per scope); **Manual** rules stay stored. Ramu also lists the instruction files providers read (`AGENTS.md`, `CLAUDE.md` and rules folders), read-only.

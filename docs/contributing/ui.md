@@ -37,7 +37,7 @@ Commands and their keys live in `apps/web/src/commands.tsx`. Show the shortcut i
 
 ## Isolated content
 
-Theme previews run on a `ramu-theme:` origin and interactive documents on `ramu-content:`. Never render generated documents through terminal or Markdown HTML ([Interactive content](../guide/interactive-content.md)).
+Theme previews run on a `ramu-theme:` origin and interactive documents on `ramu-content:`. Never render generated documents through terminal or Markdown HTML ([Pages and interactive content](../guide/pages.md)).
 
 ## Testing UI
 

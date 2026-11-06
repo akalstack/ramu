@@ -34,6 +34,10 @@ To pick a login yourself, open the model menu under the message box (on the phon
 
 Claude Code, Codex, Cursor and OpenCode logins can use an API key instead of a subscription: choose the key button on a login in **Settings → Providers** on the host. Usage is then billed to the key, and adding a login with a key gives a thread somewhere to continue when your plan's limit is reached. OpenCode asks which model provider the key is for. Codex keeps the key in its own login file; for the others the key stays in the host's OS credential store and reaches only that login's processes. **Remove key** returns the login to its subscription (for Codex, sign in again). Antigravity takes Gemini and Agent Platform keys in its own **Login** dialog.
 
+## Pages using a provider
+
+A page you allow to use AI calls the host's signed-in providers, never a key of its own: **Fast** uses the maintenance model and **Smart** the default model. Each call counts against the page's daily limit, follows the same fallback at a usage limit as other background work, shows in **Activity** with the page's name, and is refused with a clear error when the provider is signed out or limited. See [Pages and interactive content](pages.md#what-a-page-may-use).
+
 ## Environment variables
 
 **Settings → Environment variables** adds variables to every provider process on the host, for all providers or one. Paste `.env` text to fill several rows. Values stay in the host's OS credential store and paired devices see only names. `RAMU_*` names are reserved.

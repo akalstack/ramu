@@ -38,3 +38,14 @@ Only checks that still need a physical phone, an account or a live provider. Tes
 - [ ] Background push from two hosts to a suspended phone opens the right thread once, including from a stopped app; revoked registrations stop.
 - [ ] Real APNs delivery and Dynamic Island and Lock Screen rendering on a provisioned iPhone; Android notification permission and channels.
 - [ ] Against a really limited host: Try again → Still limited → reset and resume, auto-resume off, queued messages, and the limit tray with large text.
+
+## Pages
+
+- [ ] The Pages tab lists a host's pages; one opens full screen, shows values entered on the desktop, and its grant sheet allows or refuses each capability.
+- [ ] A page with records and AI: typing "coffee 35k yesterday" and photographing a receipt both become records through the host's model; the photo picker opens the camera and library on iOS and Android.
+- [ ] Records added in airplane mode show as queued and sync in order when the phone reconnects; a refused one is listed.
+- [ ] A page run shows its steps, **Stop** ends it, and a deletion waits for **Allow**.
+- [ ] A page's notification arrives as a push and opens the page; the **Pages** alert switch turns them off.
+- [ ] **Add to Home Screen or share** produces a link that opens the page in Ramu, and says when the host is offline.
+- [ ] **Edit** on a page selects the tapped element and the request reaches a thread; **Fix this** after an error loads the fixed version.
+
