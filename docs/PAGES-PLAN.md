@@ -1,6 +1,6 @@
 # Pages: sites made in a thread, kept and opened anywhere
 
-A person asks an agent for a small site (a trip planner, a price calculator, a dashboard of their spending, a one-page invitation) and gets a page they keep: listed in one place, opened later on the desktop or the phone, updated by asking again, shared with a link, and turned into a real deployed project when it outgrows a page. A page can also keep its own records on the host and use the host's AI providers, so an expense dashboard can turn "coffee 35k yesterday" or a receipt photo into a transaction without the person filling in a form. Document shipped behavior in [Interactive content](guide/interactive-content.md) (renamed **Pages and interactive content**) and delete this plan when implementation and acceptance are finished.
+A person asks an agent for a small site (a trip planner, a price calculator, a dashboard of their spending, a one-page invitation) and gets a page they keep: listed in one place, opened later on the desktop or the phone, updated by asking again, shared with a link, and turned into a real deployed project when it outgrows a page. A page can also keep its own records on the host and use the host's AI providers, so an expense dashboard can turn "coffee 35k yesterday" or a receipt photo into a transaction without the person filling in a form. Document shipped behavior in [Interactive content](guide/interactive-content.md) (renamed **Pages and interactive content**) and delete this plan when implementation and acceptance are finished. Section 1 fixes how revisions show in a thread today and ships before the rest.
 
 ## The need
 
@@ -36,14 +36,28 @@ Anything a page cannot be (a backend, many files, more than 512 KB, a public sit
 
 ## Delivery
 
-### 1. Pages on the host
+### 1. Revising a document in a thread
+
+This ships first and on its own, because it hurts today. Every `publish_interactive` revision adds a full new card to the transcript and leaves each older version at full size above it, so after three revisions the person scrolls past three similar documents, cannot tell which one is current, and may enter values in an old one. Saved state does not follow the new version unless they copy it from the menu.
+
+- **One live card per document.** The newest version is the only full card. Each older card collapses in place to one row: the title, "v2 · replaced by v4", a one-line summary of what changed, and **Go to latest**. Expanding a collapsed row shows that version read-only with **Restore**. Collapsing keeps the transcript's order, so what the agent saw and said at each step stays where it happened.
+- **Updating in place while the agent works.** While a revision is being previewed, the current card shows "Updating…" with the preview's progress instead of a new card appearing only at the end; a failed preview leaves the current version untouched and says why.
+- **What changed.** The new card's header says "Updated · v4" with the agent's change summary (a required, short `changes` field on revisions) and **Compare**, which shows the previous and new versions' phone or desktop screenshots side by side, with the source diff one click away.
+- **State carries over.** When the new version's saved-state shape matches (`canCopyInteractiveState` already decides this), the person's values move to it automatically, with **Undo** on the notice; when it does not, the card says the values could not carry over and offers the previous version's values to copy by hand.
+- **Values in an old version are not lost.** Entering values in an expanded old version is not possible; **Restore** publishes it as a new version, so the newest card is always the one in use.
+- **Phone.** The same rule in the phone transcript: one live card, older versions as rows, **Go to latest** scrolls to it. The private browser always opens the latest version unless an older one was expanded.
+- **Pages.** A kept page's card in any thread always shows the page's current version, with "Updated in another thread" when that thread changed it.
+
+Server and shared changes: a `changes` field on `publish_interactive` revisions, a latest-version lookup per document for both clients, and the transcript grouping in `packages/shared` so desktop and phone collapse the same events. Tests cover grouping, state carry-over and restore.
+
+### 2. Pages on the host
 
 - **Storage:** an `interactive_pages` table (id, title, icon, project id or none, pinned, current version, created and changed times) beside the existing publication tables; a page's versions are the publications it owns, so nothing is copied. Deleting a page is the person's action and keeps the threads' cards as "Page deleted".
 - **Shared state:** `window.ramuContent.setState()` on a page saves to the host (bounded, per page, last write wins with a version check) instead of only the viewing device, so the desktop and phone see the same values. Thread cards keep today's per-view state.
 - **IPC:** `pages.list`, `pages.get`, `pages.update` (title, icon, pin, project), `pages.delete`, `pages.keep` (from a publication) and `pages.restoreVersion`, validated with zod and limited to the paired device's permissions like the rest of the host API.
 - **Agent tools:** `publish_interactive` gains optional `page` (`true` for a new page, or a page id for a new version) and `title`; `page_list` and `page_get` return pages (titles, ids, current sources) so an agent in any thread can update one by name. Deleting pages is not an agent action.
 
-### 2. Capabilities
+### 3. Capabilities
 
 A page declares what it uses in `ramu.json` (or a `<meta name="ramu-capabilities">` tag for a single file); `preview_interactive` validates it and checks each call against fakes, so a broken capability fails before publication. Each call goes through the frame's message channel to the host, which checks the grant, the bounds and the page id; the page never sees credentials or other pages' data.
 
@@ -71,7 +85,7 @@ A page can also expose its own flows: a **Run** declared in `ramu.json` with a n
 
 Agents get the matching instructions in `tools.ts`: when to use records instead of saved state, schemas first, choosing ask, run or a thread by the work, schemas on every AI result, page functions for anything the page already knows how to do, and never calling AI on every keystroke.
 
-### 3. What only Ramu can do
+### 4. What only Ramu can do
 
 These come from what Ramu already has (an always-on host, agents that can fix code, a phone app with widgets and Live Activities, projects with Git), and each removes a step the person would otherwise take by hand.
 
@@ -87,31 +101,31 @@ These come from what Ramu already has (an always-on host, agents that can fix co
 - **Duplicate as a template.** **Duplicate** copies a page with its code and capabilities but empty records, so a household ledger becomes a club's ledger in one step, and another host can import it from a share link.
 - **Your data stays on your host.** Records, photos and run history never leave the host except to the provider a call uses, and the grant sheet says which provider sees what.
 
-### 4. Desktop
+### 5. Desktop
 
 - **Pages** in the left sidebar under Inbox and Schedules (no right sidebar), opening a list built from the existing list rows, and a page view that reuses the interactive card's frame at full size with its toolbar (Fit, Tablet, Phone, **Versions**, **Ask about this**, **Share link**, **Export**, the page menu).
 - **Keep as page** on every interactive card; a kept card shows the page's title and **Open page**.
 - Projects show their pages in the project's menu, so a page made for a project is found from both places.
 
-### 5. Phone
+### 6. Phone
 
 - A **Pages** tab entry listing the host's pages (with the existing host filter), opening a page in the private browser already used for interactive content, now loaded from the host by page id so it works without the thread.
 - **Add to Home Screen** through the phone's share sheet with the page's title and icon; the link opens the Ramu app at that page and asks to reconnect when the host is unreachable, never showing a stale copy as current.
 - Offline: the last opened version is cached on the phone and marked "Saved copy" until the host answers.
 
-### 6. Share link
+### 7. Share link
 
 - **Share link** makes a link to the current version for anyone using a device paired with this host, opened in the same sandbox, read-only by default; **Can add records** lets a household share one ledger. AI calls from a shared link use the owner's grant and count against the same daily limit. It names the host, can be revoked, and expires after 30 days unless renewed.
 - Opening a page to people without Ramu goes through the host's own tunnel ([Your own tunnel](guide/remote-hosts.md#your-own-tunnel)) on a separate hostname serving only that page's static bytes, never Ramu's API. It needs a security review before it ships, like the tunnelled app in the ship-an-app plan's **Own server**; until then the path for outsiders is **Publish to the web**.
 
-### 7. Connection with shipping an app
+### 8. Connection with shipping an app
 
 - **Publish to the web** exports the page's tested bytes as a static site and deploys it through the ship-an-app plan's `HostingAdapter` (GitHub Pages, Cloudflare Pages, Netlify or Vercel), on the person's account, with the same one-time approval for the first production deploy. The page remembers the target and live URL; a new version offers **Update live site**. This needs only the deploy targets from that plan, not a repository or CI.
 - A page with records or AI cannot be published to the web as is: the sheet says so and offers **Make it a project**, where the ship-an-app plan gives it a database and a server-side model call on the person's own accounts.
 - **Make it a project** writes the page's sources and its record schemas (as a database schema and seed data) (they are already kept with each publication) into a new project through `project_create`, using the Vite + React stack when the page uses React and a static site otherwise, then follows that plan's path from **Building** onward.
 - Ship-an-app's stack choice sends a request like "a page that adds up my monthly costs" to a page instead of a project when it needs no backend, data shared between people or a domain, so the smallest thing that works is made first.
 
-### 8. Documentation
+### 9. Documentation
 
 - Rename and extend [Interactive content](guide/interactive-content.md) to **Pages and interactive content**: keeping a page, the Pages list, opening on the phone, shared state, versions, share links, publishing to the web and making it a project. Document each capability with a worked example (the expense dashboard). Update [Agents](guide/agents.md) (`page`, `page_list`, `page_get`, `page_records`), [Providers](guide/providers.md) (pages using a provider, and where their usage shows), the [mobile README](../apps/mobile/README.md) and [VERIFICATION.md](../apps/mobile/VERIFICATION.md), and [SECURITY.md](../SECURITY.md) (share links and tunnel isolation).
 - Every string through `t()` with its Indonesian translation.
@@ -129,6 +143,7 @@ These come from what Ramu already has (an always-on host, agents that can fix co
 
 ## Acceptance
 
+- **Revise in a thread:** ask for a calculator, then three changes. The transcript shows one full card (the latest, with what changed and the values entered earlier), three one-line older versions in their places, and **Restore** on v1 brings it back as v5.
 - **Keep and reopen:** ask for "a page to split trip costs between four people", enter amounts on the desktop, then open it from the phone's Pages list a day later from another network over a tunnel and see the same amounts, without finding the thread.
 - **Expense dashboard:** ask for "a dashboard where I add transactions and see spending by category each month". On the phone, type "coffee 35k yesterday" and photograph a receipt; both become categorized transactions through the host's model. A month later the dashboard shows the totals, a daily summary arrives as a notification, **Monthly review** runs as a page agent that reads the records, converts currencies through a page function and adds a note, with its steps visible and **Stop** working from the phone; **Undo run** removes its changes. A request to add a bank import hands off to a thread that publishes a new version.
 - **Fix and edit without words for code:** a page that throws on the phone shows **Fix this**, and the fixed version loads there without the person describing the error; tapping the total and saying "make this bigger" changes that element only.
